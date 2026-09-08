@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getProductionRegistrations: vi.fn(),
   ensureProduction: vi.fn(),
   ensureStorage: vi.fn(),
+  getStorage: vi.fn(),
   withLock: vi.fn(async (_key: string, fn: () => Promise<unknown>) => fn()),
   client: { get: vi.fn(), post: vi.fn() },
 }));
@@ -44,6 +45,10 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => ({
 }));
 vi.mock("./production-batches", () => ({
   ensureProductionBatchesForCreditBatches: mocks.ensureProduction,
+}));
+vi.mock("@/data-access/certifier-storage-locations", () => ({
+  getStorageLocationRegistration: mocks.getStorage,
+  withCertifierExternalProjectLocks: vi.fn(async (_ctx, _provider, _ids, fn) => fn()),
 }));
 vi.mock("./storage-locations", () => ({
   ensureStorageLocation: mocks.ensureStorage,
@@ -232,12 +237,14 @@ function ensureVersion(args: {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.registration = null;
+  mocks.getStorage.mockResolvedValue({ id: "storage-journal-1", externalStorageLocationId: "slc-test" });
   mocks.events.length = 0;
   mocks.getRegistration.mockImplementation(async () => mocks.registration);
   mocks.claim.mockImplementation(async (_ctx, input) => {
     mocks.registration = registration(input.submittedPayload, {
       removalSubmissionId: input.removalSubmissionId,
       supplierReference: input.supplierReference,
+      externalStorageLocationId: input.externalStorageLocationId,
     });
     return mocks.registration;
   });
@@ -276,6 +283,44 @@ beforeEach(() => {
 });
 
 describe("ensureRemovalBiocharApplications", () => {
+  it("blocks a Storage Location replacement between dependency resolution and the Biochar Application lock", async () => {
+    mocks.getStorage.mockResolvedValue({ id: "storage-journal-1", externalStorageLocationId: "slc-newer" });
+    await expect(ensure()).rejects.toThrow(/Storage Location changed while/);
+    expect(mocks.claim).not.toHaveBeenCalled();
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
+  it("uses a recovered Storage Location for an unclaimed Biochar Application", async () => {
+    mocks.ensureStorage.mockResolvedValue({
+      registration: { id: "storage-journal-1" }, externalStorageLocationId: "slc-replacement", drifted: false,
+    });
+    mocks.getStorage.mockResolvedValue({ id: "storage-journal-1", externalStorageLocationId: "slc-replacement" });
+    mocks.client.get.mockResolvedValue(page([]));
+    mocks.client.post.mockResolvedValue({ ...canonicalRemote(), storage_location_id: "slc-replacement" });
+    await ensure();
+    expect(mocks.client.post).toHaveBeenCalledWith("/biochar_applications", expect.objectContaining({ storage_site_id: "slc-replacement" }));
+    expect(mocks.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["creating", "confirmed"] as const)("retains %s claim history and blocks submission after Storage Location replacement", async (lifecycleStatus) => {
+    const old = registration(submittedBody(), { lifecycleStatus });
+    mocks.registration = old;
+    mocks.ensureStorage.mockResolvedValue({
+      externalStorageLocationId: "slc-replacement",
+      drifted: false,
+      registration: { id: "storage-journal-1" },
+    });
+    mocks.getStorage.mockResolvedValue({ id: "storage-journal-1", externalStorageLocationId: "slc-replacement" });
+    await expect(ensure()).rejects.toThrow(/Storage Location was replaced/);
+    expect(mocks.registration).toEqual(old);
+    expect(mocks.markDrift).toHaveBeenCalledWith(
+      orgCtx, old.id, "storage_location_replaced",
+    );
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+  });
+
   it("accepts canonical units on immediate POST readback after its dependencies", async () => {
     mocks.client.get.mockResolvedValue(page([]));
     mocks.client.post.mockImplementation(async () => {

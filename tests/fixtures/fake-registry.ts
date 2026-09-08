@@ -102,7 +102,9 @@ interface Page<T> {
 export class FakeIsometricRegistry {
   readonly datapoints: FakeRegistryRecord[] = [];
   readonly measurementSamples: FakeRegistryRecord[] = [];
+  readonly productionBatches: FakeRegistryRecord[] = [];
   readonly ghgEntries: FakeRegistryRecord[] = [];
+  readonly biocharApplications: FakeRegistryRecord[] = [];
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
 
@@ -168,6 +170,25 @@ export class FakeIsometricRegistry {
   }
 
   /** Injects a draft statement directly (e.g. the second draft of an ambiguous period). */
+  /** A registry-side GHG Entry that an earlier (interrupted) submit created. */
+  seedGhgEntry(record: Omit<FakeRegistryRecord, "id"> = {}): FakeRegistryRecord {
+    const entry: FakeRegistryRecord = { ...record, id: this.nextId("gge") };
+    this.ghgEntries.push(entry);
+    return entry;
+  }
+
+  /** A registry-side Biochar Application linked to a seeded GHG Entry. */
+  seedBiocharApplication(
+    record: Omit<FakeRegistryRecord, "id"> = {},
+  ): FakeRegistryRecord {
+    const application: FakeRegistryRecord = {
+      ...record,
+      id: this.nextId("bse"),
+    };
+    this.biocharApplications.push(application);
+    return application;
+  }
+
   seedGhgStatement(args: {
     projectId: string;
     endOn: string | null;
@@ -308,9 +329,42 @@ export class FakeIsometricRegistry {
         query,
       );
     }
+    if (method === "GET" && path === "/production_batches") {
+      return paginateSlice(this.filterRecords(this.productionBatches, query), query);
+    }
+    const productionBatchById = path.match(/^\/production_batches\/([^/]+)$/);
+    if (method === "GET" && productionBatchById) {
+      return this.findById(
+        this.productionBatches,
+        decodeURIComponent(productionBatchById[1]),
+        method,
+        path,
+        ApiError,
+      );
+    }
+    if (method === "DELETE" && productionBatchById) {
+      this.removeById(
+        this.productionBatches,
+        decodeURIComponent(productionBatchById[1]),
+        method,
+        path,
+        ApiError,
+      );
+      return undefined;
+    }
     const measurementSampleById = path.match(
       /^\/measurement_samples\/([^/]+)$/,
     );
+    if (method === "DELETE" && measurementSampleById) {
+      this.removeById(
+        this.measurementSamples,
+        decodeURIComponent(measurementSampleById[1]),
+        method,
+        path,
+        ApiError,
+      );
+      return undefined;
+    }
     if (method === "GET" && measurementSampleById) {
       return this.findById(
         this.measurementSamples,
@@ -322,6 +376,32 @@ export class FakeIsometricRegistry {
     }
     if (method === "GET" && path === "/ghg_entries") {
       return paginateSlice(this.filterRecords(this.ghgEntries, query), query);
+    }
+    const deletedGhgEntry = path.match(/^\/ghg_entries\/([^/]+)$/);
+    if (method === "DELETE" && deletedGhgEntry) {
+      // The real endpoint refuses non-DRAFT entries; tests model that with
+      // failNext("DELETE /ghg_entries/<id>", "reject-before-commit").
+      this.removeById(
+        this.ghgEntries,
+        decodeURIComponent(deletedGhgEntry[1]),
+        method,
+        path,
+        ApiError,
+      );
+      return undefined;
+    }
+    const deletedBiocharApplication = path.match(
+      /^\/biochar_applications\/([^/]+)$/,
+    );
+    if (method === "DELETE" && deletedBiocharApplication) {
+      this.removeById(
+        this.biocharApplications,
+        decodeURIComponent(deletedBiocharApplication[1]),
+        method,
+        path,
+        ApiError,
+      );
+      return undefined;
     }
     const componentAttributions = path.match(
       /^\/ghg_entries\/([^/]+)\/component_attributions$/,
@@ -477,6 +557,17 @@ export class FakeIsometricRegistry {
       response,
       ApiError,
     );
+  }
+
+  private removeById(
+    collection: FakeRegistryRecord[],
+    id: string,
+    method: string,
+    path: string,
+    ApiError: ApiErrorCtor,
+  ): void {
+    const record = this.findById(collection, id, method, path, ApiError);
+    collection.splice(collection.indexOf(record), 1);
   }
 
   private findById(
