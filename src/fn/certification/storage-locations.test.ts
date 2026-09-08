@@ -682,6 +682,17 @@ describe("missing Storage Location recovery", () => {
     expect(mocks.replaceRegistration).not.toHaveBeenCalled();
   });
 
+  it("refuses a stale reference lookup that returns the same missing identity", async () => {
+    const { old, candidates, supplierReference } = await missingRegistration();
+    candidates.push(remote(supplierReference, old.externalStorageLocationId));
+    await expect(ensure()).rejects.toThrow(/lists the Storage Location but cannot load it/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+    expect(mocks.appendEvent).not.toHaveBeenCalledWith(orgCtx, expect.objectContaining({
+      operation: "storage-location:recovered",
+    }));
+  });
+
   it.each([{ project_id: "prj-other" }, { latitude: -4 }, { name: "Different field" }])(
     "refuses a replacement with mismatched facts: %s", async (patch) => {
       const { candidates, supplierReference } = await missingRegistration();
@@ -716,6 +727,26 @@ describe("missing Storage Location recovery", () => {
     const { IsometricApiError } = await import("@/lib/isometric/client");
     mocks.client.get.mockRejectedValue(new IsometricApiError("missing", 404));
     await expect(ensure()).rejects.toThrow();
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceRegistration).not.toHaveBeenCalled();
+  });
+
+  it("keeps confirmed absence visible when replacement lookup fails", async () => {
+    const { old } = await missingRegistration();
+    const originalGet = mocks.client.get.getMockImplementation()!;
+    mocks.client.get.mockImplementation(async (path: string) => {
+      if (path.endsWith("/storage_locations")) throw new Error("lookup unavailable");
+      return originalGet(path);
+    });
+    await expect(ensure()).rejects.toThrow("lookup unavailable");
+    expect(mocks.setDrift).toHaveBeenCalledWith(orgCtx, old.id, {
+      status: "drifted",
+      details: expect.objectContaining({
+        registeredPayloadHash: old.payloadHash,
+        registeredExternalProjectId: old.externalProjectId,
+        remoteDriftReason: expect.stringContaining("no longer exists"),
+      }),
+    });
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.replaceRegistration).not.toHaveBeenCalled();
   });

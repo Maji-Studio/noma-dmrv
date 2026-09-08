@@ -8,6 +8,20 @@ Current interpretation pin: Biochar Protocol v1.1 with the five module versions
 in [`docs/isometric/versions.json`](./isometric/versions.json). Resolved or
 retired questions do not belong in this file.
 
+### Biochar Application claims retain a replaced Storage Location (`isometric/biochar-application-storage-location-replaced`, opened 2026-09-08, `needs-registry-check`)
+
+- **Observed** — `src/data-access/certifier-storage-locations.ts:replaceMissingStorageLocationRegistration`
+  preserves dependent Biochar Application payloads and external IDs and marks
+  them `review_required` with reason `storage_location_replaced`.
+  `src/fn/certification/biochar-applications.ts:ensureBiocharApplication`
+  blocks reuse of those claims, including ambiguous in-flight creates.
+- **Current handling** — support must inspect the saved claim and registry
+  records before choosing a correction. The recovery path does not repoint
+  existing claims automatically; unclaimed Applications use the replacement.
+- **To resolve** — verify the registry's correction or supersession contract
+  and provide an explicit recovery path that preserves the original journal
+  and prevents duplicate Biochar Applications after an ambiguous POST.
+
 ### Biochar Application Source attachment is never read back (`isometric/biochar-application-source-readback`, opened 2026-09-08, `needs-registry-check`)
 
 - **Observed** — `CreateBiocharApplicationRequest` accepts `source_ids`, but

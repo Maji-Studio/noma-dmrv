@@ -264,6 +264,22 @@ async function registerStorageLocation(
   input: StorageLocationCreationInput,
   missingRegistration?: CertifierStorageLocation,
 ): Promise<EnsureStorageLocationResult> {
+  if (missingRegistration) {
+    // The locked GET confirmed absence. Keep that fact visible if reference
+    // lookup or creation fails before the replacement can be persisted.
+    await setStorageLocationDrift(input.args.orgCtx, missingRegistration.id, {
+      status: "drifted",
+      details: {
+        registeredPayloadHash: missingRegistration.payloadHash,
+        currentPayloadHash: input.currentPayloadHash,
+        registeredExternalProjectId: missingRegistration.externalProjectId,
+        currentExternalProjectId: input.externalProjectId,
+        missingFacts: [],
+        remoteDriftReason:
+          "The registered Isometric Storage Location no longer exists. Recovery has not completed.",
+      },
+    });
+  }
   const client = await getIsometricClientForOrg(
     input.args.orgCtx.organizationId,
   );
@@ -300,6 +316,13 @@ async function registerStorageLocation(
         input.supplierReference,
       );
       if (remote) {
+        if (remote.id === missingRegistration?.externalStorageLocationId) {
+          return {
+            found: "refused" as const,
+            message:
+              "Isometric lists the Storage Location but cannot load it. Check again before retrying.",
+          };
+        }
         const mismatch = storageLocationMismatchMessage(remote, input.body);
         if (
           (missingRegistration && mismatch !== null) ||

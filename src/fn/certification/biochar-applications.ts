@@ -38,6 +38,7 @@ import {
   type RegistryExternalMutationReporter,
 } from "./registry-create";
 import { ensureStorageLocation } from "./storage-locations";
+import { ISOMETRIC_PROVIDER } from "./shared";
 
 export async function ensureRemovalBiocharApplications(args: {
   orgCtx: OrgContext;
@@ -382,7 +383,7 @@ async function withBiocharApplicationDependencyLocks<T>(
     () =>
       withCertifierExternalProjectLocks(
         args.orgCtx,
-        "isometric",
+        ISOMETRIC_PROVIDER,
         [args.intent.externalProjectId],
         fn,
       ),

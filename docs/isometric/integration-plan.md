@@ -129,7 +129,9 @@ customer location, and submitted site snapshot remain. Changed local facts,
 live remote mismatches, duplicate matches, and inconclusive reads fail closed
 or retain the existing drift review. Authentication and transient errors never
 establish absence. Lost POST responses and persistence failures reconcile by
-reference before retrying creation.
+reference before retrying creation. Confirmed remote absence remains recorded
+as drift if recovery cannot complete, including inconclusive or contradictory
+reference lookups.
 
 Biochar Application journals retain their original dependency IDs and payloads.
 Replacing a Storage Location marks dependent claims for review atomically,
