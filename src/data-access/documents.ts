@@ -22,7 +22,10 @@ import {
   transportLegs,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
-import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
+import {
+  acquireMirrorLock,
+  acquireMirrorLocksSorted,
+} from "@/lib/isometric/utils/source-lock";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import {
   DOCUMENT_ENTITY_TYPES,
@@ -30,9 +33,11 @@ import {
 } from "@/schemas/documents";
 import { requireOrgScope } from "./utils";
 import {
+  SOURCE_RELEASE_RACE_ERROR,
   deleteDocumentUploadByDocument,
   getDocumentUploadByDocument,
   isExternalSourceReferencedInSnapshots,
+  submissionIsNotDeleted,
 } from "./certifier-document-uploads";
 import {
   enqueueStorageObjectDeletion,
@@ -440,6 +445,71 @@ export async function deleteDocumentRow(
   return row ?? null;
 }
 
+const MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE =
+  "Cannot delete this record while one of its documents is mirrored to a certification provider. Remove or replace that document from this record first; submitted certification history cannot be deleted.";
+
+/**
+ * A document named in a live submission's reviewed evidence candidates is
+ * part of a Removal evidence review. Ledger rows stamped by Removal deletion
+ * are skipped: their review belongs to registry records that are gone.
+ */
+async function isReviewedCertificationEvidence(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  documentId: string,
+): Promise<boolean> {
+  const [reviewedEvidence] = await tx
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        submissionIsNotDeleted(),
+        sql`jsonb_path_exists(${certificationSubmissions.metadata}, '$.evidenceRefreshCandidates[*].documentId ? (@ == $id)', jsonb_build_object('id', ${documentId}::text))`,
+      ),
+    )
+    .limit(1);
+  return Boolean(reviewedEvidence);
+}
+
+type IsometricMappingRelease = "released" | "reviewed-evidence" | "referenced";
+
+/**
+ * Retire the document's Isometric Source mapping unless live certification
+ * history still needs it, under the caller's mirror lock. Returns why the
+ * mapping must stay instead of throwing, so each caller can word the refusal
+ * for its own record. The remote Source is deliberately untouched. The
+ * recheck after the delete guards against a future submission entry point
+ * that forgets to take the mirror lock.
+ */
+async function releaseUnreferencedIsometricMapping(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  documentId: string,
+): Promise<IsometricMappingRelease> {
+  if (await isReviewedCertificationEvidence(ctx, tx, documentId)) {
+    return "reviewed-evidence";
+  }
+  const mapping = await getDocumentUploadByDocument(
+    ctx,
+    ISOMETRIC_PROVIDER,
+    documentId,
+    tx,
+  );
+  if (!mapping) return "released";
+  const referenced = () =>
+    isExternalSourceReferencedInSnapshots(
+      ctx,
+      ISOMETRIC_PROVIDER,
+      mapping.externalDocumentId,
+      tx,
+    );
+  if (await referenced()) return "referenced";
+  await deleteDocumentUploadByDocument(ctx, ISOMETRIC_PROVIDER, documentId, tx);
+  if (await referenced()) throw new SafeError(SOURCE_RELEASE_RACE_ERROR);
+  return "released";
+}
+
 /**
  * Delete one owning-record document while preserving certification history.
  *
@@ -468,54 +538,14 @@ export async function deleteDocumentWithCertificationSafety(
       .for("update");
     if (!row) return { deleted: null, queued: false };
 
-    const [reviewedEvidence] = await tx.select({ id: certificationSubmissions.id })
-      .from(certificationSubmissions)
-      .where(and(
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-        sql`jsonb_path_exists(${certificationSubmissions.metadata}, '$.evidenceRefreshCandidates[*].documentId ? (@ == $id)', jsonb_build_object('id', ${id}::text))`,
-      )).limit(1);
-    if (reviewedEvidence) {
+    const release = await releaseUnreferencedIsometricMapping(ctx, tx, id);
+    if (release === "reviewed-evidence") {
       throw new SafeError("This document belongs to reviewed certification evidence and cannot be deleted or replaced.");
     }
-
-    const isometricMapping = await getDocumentUploadByDocument(
-      ctx,
-      ISOMETRIC_PROVIDER,
-      id,
-      tx,
-    );
-    if (isometricMapping) {
-      const referenced = await isExternalSourceReferencedInSnapshots(
-        ctx,
-        ISOMETRIC_PROVIDER,
-        isometricMapping.externalDocumentId,
-        tx,
+    if (release === "referenced") {
+      throw new SafeError(
+        "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.",
       );
-      if (referenced) {
-        throw new SafeError(
-          "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.",
-        );
-      }
-
-      await deleteDocumentUploadByDocument(
-        ctx,
-        ISOMETRIC_PROVIDER,
-        id,
-        tx,
-      );
-
-      const referencedAfterDelete =
-        await isExternalSourceReferencedInSnapshots(
-          ctx,
-          ISOMETRIC_PROVIDER,
-          isometricMapping.externalDocumentId,
-          tx,
-        );
-      if (referencedAfterDelete) {
-        throw new SafeError(
-          "A Removal submission committed concurrently and now references this document. Deletion was aborted; retry once submission completes.",
-        );
-      }
     }
 
     // Isometric is the only provider whose local mapping may be retired by
@@ -573,11 +603,13 @@ export async function deleteDocumentWithCertificationSafety(
  * Retire documents owned by entities that are about to be hard-deleted.
  *
  * Call this as the final operation inside the parent's delete transaction,
- * after every FK-constrained database delete has succeeded. Document rows are
- * locked before the mirror check, which makes the FK from
- * certifier_document_uploads the race backstop. Managed storage objects are
- * queued durably in this transaction; callers drain that queue only after the
- * outer parent transaction commits.
+ * after every FK-constrained database delete has succeeded. Mirror locks are
+ * taken first, then the document rows are locked; an Isometric mapping no
+ * live certification history cites is released under those locks, any other
+ * mapping refuses the delete, and the FK from certifier_document_uploads is
+ * the backstop for a mirror that lands in between. Managed storage objects
+ * are queued durably in this transaction; callers drain that queue only after
+ * the outer parent transaction commits.
  */
 export async function retireDocumentsForEntities(
   ctx: OrgContext,
@@ -602,6 +634,22 @@ export async function retireDocumentsForEntities(
     ),
   );
 
+  // Mirror locks first, then the row locks: the same order as the
+  // single-document delete and the mirror flow, so the three never deadlock
+  // on a shared document.
+  const candidateIds = (
+    await tx
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.organizationId, ctx.organizationId),
+          or(...ownershipConditions),
+        ),
+      )
+  ).map((document) => document.id);
+  await acquireMirrorLocksSorted(tx, candidateIds);
+
   const ownedDocuments = await tx
     .select()
     .from(documents)
@@ -616,21 +664,38 @@ export async function retireDocumentsForEntities(
   if (ownedDocuments.length === 0) return;
 
   const documentIds = ownedDocuments.map((document) => document.id);
-  const [mirror] = await tx
-    .select({ documentId: certifierDocumentUploads.documentId })
+  const lockedIds = new Set(candidateIds);
+  if (documentIds.some((id) => !lockedIds.has(id))) {
+    throw new SafeError(
+      "Someone added a document to this record during deletion. Refresh the page and try again.",
+    );
+  }
+
+  const mirrors = await tx
+    .select({
+      documentId: certifierDocumentUploads.documentId,
+      provider: certifierDocumentUploads.provider,
+    })
     .from(certifierDocumentUploads)
     .where(
       and(
         eq(certifierDocumentUploads.organizationId, ctx.organizationId),
         inArray(certifierDocumentUploads.documentId, documentIds),
       ),
-    )
-    .limit(1);
-
-  if (mirror) {
-    throw new SafeError(
-      "Cannot delete this record while one of its documents is mirrored to a certification provider. Remove or replace that document from this record first; submitted certification history cannot be deleted.",
     );
+
+  // Isometric is the only provider whose local mapping may be retired here,
+  // and only while no live certification history references the Source. A
+  // mapping a deleted Removal left behind is released; one a real submission
+  // still cites, or any other provider's mapping, keeps the record in place.
+  for (const mirror of mirrors) {
+    const release =
+      mirror.provider === ISOMETRIC_PROVIDER
+        ? await releaseUnreferencedIsometricMapping(ctx, tx, mirror.documentId)
+        : "referenced";
+    if (release !== "released") {
+      throw new SafeError(MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE);
+    }
   }
 
   for (const document of ownedDocuments) {

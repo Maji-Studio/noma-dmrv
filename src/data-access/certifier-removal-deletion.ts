@@ -23,6 +23,10 @@ import { LOCK_TTL_MS, isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
 import { logger } from "@/lib/log";
 import { FINALIZED_SUBMISSION_STATUSES } from "./certification-submissions";
+import {
+  releaseDocumentUploadsReferencedOnlyBySubmissions,
+  type ReleasedDocumentUpload,
+} from "./certifier-document-uploads";
 import { requireOrgScope } from "./utils";
 
 /**
@@ -60,7 +64,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const DELETED_REGISTRATION_STATUS = "deleted" as const;
 const DRAFT_LEDGER_STATUS = "draft" as const;
 const DELETED_LEDGER_STATUS = "rejected" as const;
-const DELETION_METADATA_KEY = "deletion";
+const DELETION_METADATA_KEY = SUBMISSION_METADATA_KEYS.deletion;
 const REMOVAL_SUPPLIER_REF_ROLE = "removal" as const;
 
 export const REMOVAL_DELETE_SUBMITTED_ERROR =
@@ -412,11 +416,17 @@ async function assertLedgerUnchangedSinceClaim(
   }
 }
 
+export interface RemovalDeletionFinalizeResult {
+  releasedSliceCount: number;
+  /** Local Source mappings only the deleted submissions still referenced. */
+  releasedDocumentMirrors: ReleasedDocumentUpload[];
+}
+
 export async function finalizeRemovalDeletion(
   ctx: OrgContext,
   claim: RemovalDeletionClaim,
   registry: RemovalDeletionRegistryOutcome,
-): Promise<{ releasedSliceCount: number }> {
+): Promise<RemovalDeletionFinalizeResult> {
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
@@ -431,6 +441,7 @@ export async function finalizeRemovalDeletion(
 
     await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
 
+    let releasedDocumentMirrors: ReleasedDocumentUpload[] = [];
     if (claim.submissionIds.length > 0) {
       // Registration rows go, not just their status: the supplier reference
       // is keyed on Application, credit batch, and submission version, so a
@@ -448,6 +459,16 @@ export async function finalizeRemovalDeletion(
           ),
         );
 
+      // The evidence these submissions mirrored keeps its local mapping only
+      // while a live snapshot still references it; otherwise the mapping
+      // would block deleting the Application or Delivery that owns the file.
+      releasedDocumentMirrors =
+        await releaseDocumentUploadsReferencedOnlyBySubmissions(
+          ctx,
+          claim.submissionIds,
+          tx,
+        );
+
       // Ledger rows stay as history: the external IDs they carry are the audit
       // trail for the registry records this deletion removed.
       const deletionPatch = JSON.stringify({
@@ -459,6 +480,7 @@ export async function finalizeRemovalDeletion(
           absentBiocharApplicationIds: registry.absentBiocharApplicationIds,
           unresolvedBiocharApplicationReferences:
             registry.unresolvedBiocharApplicationReferences,
+          releasedDocumentMirrors,
         },
       });
       await tx
@@ -537,9 +559,10 @@ export async function finalizeRemovalDeletion(
         deletedBiocharApplicationCount:
           registry.deletedBiocharApplicationIds.length,
         releasedSliceCount: released.length,
+        releasedDocumentMirrorCount: releasedDocumentMirrors.length,
       },
       "certifier removal deleted",
     );
-    return { releasedSliceCount: released.length };
+    return { releasedSliceCount: released.length, releasedDocumentMirrors };
   });
 }

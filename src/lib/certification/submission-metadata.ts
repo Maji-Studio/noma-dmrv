@@ -7,6 +7,10 @@ export const SUBMISSION_METADATA_KEYS = {
   lastError: "lastError",
   lastAttemptOutcome: "lastAttemptOutcome",
   externalMutation: "externalMutation",
+  // Written by Removal deletion. A ledger row carrying it describes registry
+  // records that no longer exist, so its snapshot is history only and pins
+  // nothing (document mirrors, reviewed evidence).
+  deletion: "deletion",
 } as const;
 
 export const SUBMISSION_ATTEMPT_OUTCOMES = {

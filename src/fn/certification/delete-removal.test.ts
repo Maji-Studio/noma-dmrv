@@ -89,7 +89,10 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
 
 beforeEach(() => {
   for (const mock of Object.values(state)) mock.mockReset();
-  state.finalize.mockResolvedValue({ releasedSliceCount: 2 });
+  state.finalize.mockResolvedValue({
+    releasedSliceCount: 2,
+    releasedDocumentMirrors: [],
+  });
   state.deleteGhgEntry.mockResolvedValue(undefined);
   state.deleteBiocharApplication.mockResolvedValue(undefined);
   state.findBiocharApplicationBySupplierReference.mockResolvedValue(null);
@@ -118,6 +121,7 @@ describe("deleteRemoval", () => {
       deletedGhgEntryIds: ["gge_1"],
       deletedBiocharApplicationIds: ["bse_1", "bse_2"],
       releasedSliceCount: 2,
+      releasedDocumentMirrorCount: 0,
     });
     expect(state.finalize).toHaveBeenCalledWith(ORG_CTX, claim(), {
       deletedGhgEntryIds: ["gge_1"],
