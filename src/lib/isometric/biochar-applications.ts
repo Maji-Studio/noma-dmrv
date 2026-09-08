@@ -288,14 +288,18 @@ export function biocharApplicationMismatchMessage(
 /**
  * Compares the reviewed Source set against the registry readback when the
  * readback exposes one. Certify's documented Biochar Application response
- * omits `source_ids`, so an absent array is not drift: the accepted create
- * request already carried the reviewed set.
+ * omits `source_ids`, so an omitted field is not drift: the accepted create
+ * request already carried the reviewed set. A present but non-array value is
+ * an unexpected response shape and is reported as drift, never trusted.
  */
 function sourceSetMismatchMessage(
   remote: IsometricBiocharApplication,
   expected: CreateBiocharApplicationRequest,
 ): string | null {
-  if (!Array.isArray(remote.source_ids)) return null;
+  if (remote.source_ids === undefined) return null;
+  if (!Array.isArray(remote.source_ids)) {
+    return `Isometric Biochar Application ${remote.id} returned an unreadable Source set. Refresh and reconcile its supporting evidence before retrying.`;
+  }
   const expectedSources = expected.source_ids ?? [];
   const remoteSources = new Set(remote.source_ids);
   const expectedSourceSet = new Set(expectedSources);

@@ -7,11 +7,12 @@
   `BiocharApplication` response (POST and GET), `Source`, and `GET /sources`
   expose no Application-to-Source link. Only the GraphQL `BiocharSpreadEvent`
   type (`biocharSpreadEventSources`) does.
-- Reconciliation no longer refuses a readback that omits `source_ids`. A 200
-  from `POST /biochar_applications` carrying the reviewed Source set is treated
-  as the attachment contract; the immutable submission snapshot retains the IDs
-  sent. When a response does return `source_ids`, the exact reviewed set is
-  still required.
+- Reconciliation no longer refuses a readback that omits `source_ids`. The
+  accepted `POST /biochar_applications` request carries the reviewed Source
+  set and is the attachment contract; the 200 response only confirms
+  acceptance. The immutable submission snapshot retains the IDs sent. When a
+  response does return `source_ids`, the exact reviewed set is still required,
+  and a present but non-array value is reported as drift.
 - The strict readback guard introduced on 2026-09-07 blocked every
   evidence-bearing Removal on staging. Authoritative GraphQL readback remains
   tracked in issue #737.

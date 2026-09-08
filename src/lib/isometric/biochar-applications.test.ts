@@ -244,6 +244,14 @@ describe("Biochar Application evidence reconciliation", () => {
     ).toContain("does not match this application");
   });
 
+  it("rejects a present but non-array Source set instead of trusting the request", () => {
+    const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-proof"] });
+    const nullSources = remote({ source_ids: null as unknown as string[] });
+    expect(biocharApplicationMismatchMessage(nullSources, expected)).toContain("Source");
+    const stringSources = remote({ source_ids: "src-proof" as unknown as string[] });
+    expect(biocharApplicationMismatchMessage(stringSources, expected)).toContain("Source");
+  });
+
   it("refuses a readback that exposes Source links but lost a requested Source", () => {
     const expected = buildCreateBiocharApplicationRequest({ ...BASE, sourceIds: ["src-proof"] });
     expect(biocharApplicationMismatchMessage(remote({ source_ids: [] }), expected)).toContain("Source");
