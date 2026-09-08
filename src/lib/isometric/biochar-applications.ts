@@ -16,7 +16,8 @@ export type IsometricBiocharApplication =
     // 2026-09-08). When a response does carry them, the reviewed set is
     // compared exactly; when it omits them, the accepted create request is
     // the attachment contract. See issue #737 for an authoritative readback.
-    source_ids?: string[];
+    // Typed as the untrusted wire value: `sourceSetMismatchMessage` narrows.
+    source_ids?: unknown;
   };
 export type CreateBiocharApplicationRequest =
   components["schemas"]["CreateBiocharApplicationRequest"];
@@ -288,20 +289,20 @@ export function biocharApplicationMismatchMessage(
 /**
  * Compares the reviewed Source set against the registry readback when the
  * readback exposes one. Certify's documented Biochar Application response
- * omits `source_ids`, so an omitted field is not drift: the accepted create
- * request already carried the reviewed set. A present but non-array value is
- * an unexpected response shape and is reported as drift, never trusted.
+ * omits `source_ids`, so an omitted or null field is not drift: the accepted
+ * create request already carried the reviewed set. Any other non-array value
+ * is an unexpected response shape and is reported as drift, never trusted.
  */
 function sourceSetMismatchMessage(
   remote: IsometricBiocharApplication,
   expected: CreateBiocharApplicationRequest,
 ): string | null {
-  if (remote.source_ids === undefined) return null;
+  if (remote.source_ids == null) return null;
   if (!Array.isArray(remote.source_ids)) {
     return `Isometric Biochar Application ${remote.id} returned an unreadable Source set. Refresh and reconcile its supporting evidence before retrying.`;
   }
   const expectedSources = expected.source_ids ?? [];
-  const remoteSources = new Set(remote.source_ids);
+  const remoteSources = new Set<unknown>(remote.source_ids);
   const expectedSourceSet = new Set(expectedSources);
   if (
     remoteSources.size !== expectedSourceSet.size ||

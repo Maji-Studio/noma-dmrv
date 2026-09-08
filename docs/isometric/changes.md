@@ -11,8 +11,10 @@
   accepted `POST /biochar_applications` request carries the reviewed Source
   set and is the attachment contract; the 200 response only confirms
   acceptance. The immutable submission snapshot retains the IDs sent. When a
-  response does return `source_ids`, the exact reviewed set is still required,
-  and a present but non-array value is reported as drift.
+  response does return `source_ids`, the exact reviewed set is still required;
+  a null value counts as omitted and any other non-array value is reported
+  as drift. Recorded as `isometric/biochar-application-source-readback` in
+  `docs/open-questions-isometric.md`.
 - The strict readback guard introduced on 2026-09-07 blocked every
   evidence-bearing Removal on staging. Authoritative GraphQL readback remains
   tracked in issue #737.
