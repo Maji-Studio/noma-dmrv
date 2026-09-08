@@ -1,5 +1,20 @@
 # Isometric Docs Change Log
 
+## 2026-09-08: recover deleted Storage Locations and report evidence failures accurately
+
+- `src/fn/certification/storage-locations.ts:ensureStorageLocation` now
+  rechecks a confirmed 404 under registration locks, reconciles the unchanged
+  supplier reference, and adopts an exact replacement or creates one.
+- `src/data-access/certifier-storage-locations.ts:replaceMissingStorageLocationRegistration`
+  replaces only the external ID and atomically flags dependent Biochar
+  Application journals for review, preserving submitted payloads and IDs.
+  Correction of those existing claims remains tracked as
+  `isometric/biochar-application-storage-location-replaced` in
+  `docs/open-questions-isometric.md`.
+- `src/fn/certification/submit-removal.ts` completes the creation progress
+  step before evidence reconciliation begins. A later artifact failure now
+  appears on the evidence step without leaving a spinner active.
+
 ## 2026-09-08: Removal deletion releases the evidence mirrors it orphaned
 
 - Deleting a never-finalized Removal now also releases the local
