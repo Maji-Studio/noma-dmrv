@@ -8,6 +8,21 @@ Current interpretation pin: Biochar Protocol v1.1 with the five module versions
 in [`docs/isometric/versions.json`](./isometric/versions.json). Resolved or
 retired questions do not belong in this file.
 
+### Biochar Application Source attachment is never read back (`isometric/biochar-application-source-readback`, opened 2026-09-08, `needs-registry-check`)
+
+- **Observed** — `CreateBiocharApplicationRequest` accepts `source_ids`, but
+  the `BiocharApplication` response (POST and GET) and `GET /sources` expose
+  no Application-to-Source link (public Certify OpenAPI, checked 2026-09-08).
+  Only the GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field does.
+- **Decision** — the accepted create request is the attachment contract:
+  `src/lib/isometric/biochar-applications.ts:sourceSetMismatchMessage`
+  compares the reviewed set only when a readback carries `source_ids`, treats
+  an omitted or null field as nothing to verify, and reports any other shape
+  as drift. The immutable submission snapshot keeps the IDs sent. A strict
+  readback guard had blocked every evidence-bearing Removal on staging.
+- **To resolve** — read the attachment back through GraphQL (issue #737) and
+  make the exact-set comparison unconditional again.
+
 ### Removal deletion leaves per-submission registry inputs behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
 
 - **Observed** — deleting a never-finalized Removal

@@ -135,12 +135,14 @@ persisted Biochar Application; null is accepted and recorded, while any present
 association must match the current GHG Entry. The journal row and supplier
 reference are versioned by immutable Removal submission: supersession creates a
 fresh Biochar Application for the new GHG Entry and leaves the prior registry
-artifact intact. The current provider response type does not expose
-`source_ids`. Requests with Sources therefore fail closed at reconciliation until
-Isometric provides authoritative attachment readback; local intent alone does not
-prove remote membership. Returned Source IDs, when available, must match the exact
-reviewed set. The immutable local intent and submission snapshot retain the IDs
-sent. Registry failure
+artifact intact. The documented provider response omits
+`source_ids` on both create and GET, and no REST endpoint exposes the reverse
+link. The accepted create request is therefore the attachment contract: a
+readback without `source_ids` is not drift. Returned Source IDs, when a response
+does include them, must match the exact reviewed set. The immutable local intent
+and submission snapshot retain the IDs sent. Authoritative readback through the
+GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field is tracked in
+issue #737. Registry failure
 blocks Removal submission and leaves the claim safely retryable. There is no
 gate or placeholder lifecycle.
 
