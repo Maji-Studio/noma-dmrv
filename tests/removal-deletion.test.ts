@@ -37,6 +37,9 @@ import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import {
+  claimRemovalDeletion,
+  finalizeRemovalDeletion,
+  REMOVAL_DELETE_CHANGED_ERROR,
   REMOVAL_DELETE_IN_FLIGHT_ERROR,
   REMOVAL_DELETE_SUBMITTED_ERROR,
 } from "@/data-access/certifier-removal-deletion";
@@ -181,11 +184,12 @@ async function createFixture(): Promise<Fixture> {
 async function insertLedgerRow(
   fixture: Fixture,
   args: {
-    status: "draft" | "submitted";
+    status: "draft" | "submitted" | "rejected";
     externalId: string | null;
     lockedAt?: Date | null;
     metadata?: Record<string, unknown> | null;
     reserveBatch?: boolean;
+    version?: number;
   },
 ): Promise<string> {
   const [row] = await db
@@ -196,7 +200,7 @@ async function insertLedgerRow(
       submissionType: "removal",
       localEntityType: "removal",
       localEntityId: fixture.removalId,
-      version: SUBMISSION_VERSION,
+      version: args.version ?? SUBMISSION_VERSION,
       status: args.status,
       externalId: args.externalId,
       lockedAt: args.lockedAt ?? null,
@@ -332,6 +336,43 @@ describe("deleteRemoval", () => {
 
     expect(result.deletedGhgEntryIds).toEqual([]);
     expect(await removalExists(fixture.removalId)).toBe(false);
+  });
+
+  it("refuses to finalize when a submission ran between claim and finalize", async () => {
+    // Only a rejected row: the claim re-locks nothing, so the window between
+    // the two transactions is open. A submit that claims a new draft in that
+    // window must keep the Removal.
+    const fixture = await createFixture();
+    const rejectedId = await insertLedgerRow(fixture, {
+      status: "rejected",
+      externalId: null,
+      metadata: { lastError: "Creating Removal in Isometric failed" },
+    });
+    const ctx = makeTestOrgContext();
+    const claim = await claimRemovalDeletion(
+      ctx,
+      fixture.facilityId,
+      fixture.removalId,
+    );
+    expect(claim.submissionIds).toEqual([rejectedId]);
+    expect(claim.lockedSubmission).toBeNull();
+
+    const concurrentDraftId = await insertLedgerRow(fixture, {
+      status: "draft",
+      externalId: null,
+      lockedAt: new Date(),
+      version: SUBMISSION_VERSION + 1,
+    });
+
+    await expect(
+      finalizeRemovalDeletion(ctx, claim, {
+        deletedGhgEntryIds: [],
+        deletedBiocharApplicationIds: [],
+      }),
+    ).rejects.toThrow(REMOVAL_DELETE_CHANGED_ERROR);
+    expect(await removalExists(fixture.removalId)).toBe(true);
+    expect((await ledgerRow(concurrentDraftId)).status).toBe("draft");
+    expect((await ledgerRow(rejectedId)).status).toBe("rejected");
   });
 
   it("refuses a submitted Removal and leaves everything in place", async () => {

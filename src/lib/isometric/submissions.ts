@@ -36,12 +36,6 @@ export function createGhgEntry(client: IsometricClient, body: CreateGhgEntryRequ
   return client.post<GhgEntry>("/ghg_entries", body);
 }
 
-// Reads back a submitted GHG entry (removal) so the UI can show the registry's
-// verified accounting — net removed, the pre-uncertainty figure, the standard
-// deviation behind the uncertainty discount, and the buffer-pool split. The
-// detailed Sequestrations/Activities component split lives behind
-// `/ghg_entries/{id}/component_attributions`; this entry-level read carries the
-// netted figures we surface in the removal breakdown card.
 // DELETE /ghg_entries/{id}: irreversible, and the registry refuses it unless
 // the GHG Entry is still in DRAFT status (verified against the public Certify
 // OpenAPI on 2026-09-08). Callers must tolerate a 404 on retry.
@@ -49,6 +43,12 @@ export function deleteGhgEntry(client: IsometricClient, id: string): Promise<voi
   return client.delete<void>(`/ghg_entries/${encodeURIComponent(id)}`);
 }
 
+// Reads back a submitted GHG entry (removal) so the UI can show the registry's
+// verified accounting — net removed, the pre-uncertainty figure, the standard
+// deviation behind the uncertainty discount, and the buffer-pool split. The
+// detailed Sequestrations/Activities component split lives behind
+// `/ghg_entries/{id}/component_attributions`; this entry-level read carries the
+// netted figures we surface in the removal breakdown card.
 export function getGhgEntry(client: IsometricClient, id: string): Promise<GhgEntry> {
   return client.get<GhgEntry>(`/ghg_entries/${id}`);
 }

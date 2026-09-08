@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certificationSubmissions,
@@ -38,9 +38,11 @@ import { requireOrgScope } from "./utils";
  *      the `deleting` attempt outcome so a concurrent submit is refused for
  *      the lock TTL.
  *   2. The caller deletes the registry records.
- *   3. `finalizeRemovalDeletion` marks the ledger and Biochar Application
- *      registrations, releases production-claim reservations and credit
- *      batch slices, and deletes the Removal row.
+ *   3. `finalizeRemovalDeletion` re-reads the ledger to prove nothing was
+ *      submitted in between, marks the ledger rows, removes the Biochar
+ *      Application registrations so their supplier references are free for a
+ *      later Removal, releases production-claim reservations and credit batch
+ *      slices, and deletes the Removal row.
  * `releaseRemovalDeletionClaim` undoes step 1 when step 2 fails.
  *
  * Eligibility is the inverse of "submitted successfully": any ledger row in
@@ -56,6 +58,7 @@ const FINALIZED_SUBMISSION_STATUSES = [
   "superseded",
 ] as const;
 const DELETED_REGISTRATION_STATUS = "deleted" as const;
+const DRAFT_LEDGER_STATUS = "draft" as const;
 const DELETED_LEDGER_STATUS = "rejected" as const;
 const DELETION_METADATA_KEY = "deletion";
 
@@ -67,7 +70,7 @@ export const REMOVAL_DELETE_IN_FLIGHT_ERROR =
   "A submission attempt is still running for this Removal. Wait for it to finish, then try again.";
 const REMOVAL_DELETE_MISSING_ERROR =
   "This Removal no longer exists. Refresh the page.";
-const REMOVAL_DELETE_CHANGED_ERROR =
+export const REMOVAL_DELETE_CHANGED_ERROR =
   "This Removal changed while it was being deleted. Refresh the page and review its status.";
 
 export interface RemovalDeletionClaim {
@@ -83,10 +86,16 @@ export interface RemovalDeletionClaim {
   } | null;
   /** Registry GHG Entry IDs recorded on the ledger rows. */
   externalRemovalIds: string[];
-  /** Biochar Applications this Removal created on the registry. */
+  /**
+   * Biochar Application registrations this Removal opened. A confirmed one
+   * carries the registry ID; a `creating` one only carries the supplier
+   * reference its interrupted POST used, which the caller resolves against
+   * the registry before deciding whether anything exists to delete.
+   */
   biocharApplications: Array<{
     registrationId: string;
-    externalApplicationId: string;
+    externalApplicationId: string | null;
+    supplierReference: string;
   }>;
 }
 
@@ -172,7 +181,7 @@ export async function claimRemovalDeletion(
       throw new SafeError(REMOVAL_DELETE_SUBMITTED_ERROR);
     }
 
-    const drafts = rows.filter((row) => row.status === "draft");
+    const drafts = rows.filter((row) => row.status === DRAFT_LEDGER_STATUS);
     for (const draft of drafts) {
       if (
         isLockedInFlight(draft) &&
@@ -183,8 +192,8 @@ export async function claimRemovalDeletion(
     }
 
     let lockedSubmission: RemovalDeletionClaim["lockedSubmission"] = null;
+    const lockedAt = new Date();
     for (const draft of drafts) {
-      const lockedAt = new Date();
       const priorOutcome = getMetadataValue(
         draft.metadata,
         SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
@@ -204,7 +213,7 @@ export async function claimRemovalDeletion(
           and(
             eq(certificationSubmissions.id, draft.id),
             eq(certificationSubmissions.organizationId, ctx.organizationId),
-            eq(certificationSubmissions.status, "draft"),
+            eq(certificationSubmissions.status, DRAFT_LEDGER_STATUS),
           ),
         )
         .returning({ id: certificationSubmissions.id });
@@ -226,6 +235,7 @@ export async function claimRemovalDeletion(
               registrationId: certifierBiocharApplications.id,
               externalApplicationId:
                 certifierBiocharApplications.externalApplicationId,
+              supplierReference: certifierBiocharApplications.supplierReference,
             })
             .from(certifierBiocharApplications)
             .where(
@@ -242,7 +252,6 @@ export async function claimRemovalDeletion(
                   certifierBiocharApplications.lifecycleStatus,
                   DELETED_REGISTRATION_STATUS,
                 ),
-                isNotNull(certifierBiocharApplications.externalApplicationId),
               ),
             );
 
@@ -256,16 +265,7 @@ export async function claimRemovalDeletion(
           rows.flatMap((row) => (row.externalId ? [row.externalId] : [])),
         ),
       ],
-      biocharApplications: biocharApplications.flatMap((row) =>
-        row.externalApplicationId
-          ? [
-              {
-                registrationId: row.registrationId,
-                externalApplicationId: row.externalApplicationId,
-              },
-            ]
-          : [],
-      ),
+      biocharApplications,
     };
   });
 }
@@ -295,6 +295,60 @@ export async function releaseRemovalDeletionClaim(
     );
 }
 
+/**
+ * The claim transaction's locks are gone once it commits. When the claim
+ * re-locked a draft ledger row, the `deleting` outcome keeps a concurrent
+ * submit out for the lock TTL; without one (no ledger, or only rejected rows)
+ * nothing does. Either way the ledger is re-read here under the row and
+ * artifact locks: any row the claim did not see, any finalized status, or a
+ * lock that is not ours means a submit ran in between and the Removal must
+ * stay.
+ */
+async function assertLedgerUnchangedSinceClaim(
+  ctx: OrgContext,
+  tx: Tx,
+  claim: RemovalDeletionClaim,
+): Promise<void> {
+  const rows = await tx
+    .select({
+      id: certificationSubmissions.id,
+      status: certificationSubmissions.status,
+      lockedAt: certificationSubmissions.lockedAt,
+    })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER),
+        eq(certificationSubmissions.submissionType, REMOVAL_ENTITY_TYPE),
+        eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
+        eq(certificationSubmissions.localEntityId, claim.removalId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    );
+  const claimed = new Set(claim.submissionIds);
+  if (
+    rows.length !== claimed.size ||
+    rows.some((row) => !claimed.has(row.id))
+  ) {
+    throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
+  }
+  if (
+    rows.some((row) =>
+      (FINALIZED_SUBMISSION_STATUSES as readonly string[]).includes(row.status),
+    )
+  ) {
+    throw new SafeError(REMOVAL_DELETE_SUBMITTED_ERROR);
+  }
+  const locked = claim.lockedSubmission;
+  for (const row of rows) {
+    if (row.status !== DRAFT_LEDGER_STATUS) continue;
+    const ours =
+      locked !== null &&
+      row.lockedAt?.getTime() === locked.lockedAt.getTime();
+    if (!ours) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
+  }
+}
+
 export async function finalizeRemovalDeletion(
   ctx: OrgContext,
   claim: RemovalDeletionClaim,
@@ -312,32 +366,15 @@ export async function finalizeRemovalDeletion(
       },
     ]);
 
-    if (claim.submissionIds.length > 0) {
-      if (claim.lockedSubmission) {
-        const [still] = await tx
-          .select({ id: certificationSubmissions.id })
-          .from(certificationSubmissions)
-          .where(
-            and(
-              eq(certificationSubmissions.id, claim.lockedSubmission.id),
-              eq(certificationSubmissions.organizationId, ctx.organizationId),
-              eq(certificationSubmissions.status, "draft"),
-              eq(
-                certificationSubmissions.lockedAt,
-                claim.lockedSubmission.lockedAt,
-              ),
-            ),
-          )
-          .limit(1);
-        if (!still) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
-      }
+    await assertLedgerUnchangedSinceClaim(ctx, tx, claim);
 
+    if (claim.submissionIds.length > 0) {
+      // Registration rows go, not just their status: the supplier reference
+      // is keyed on Application, credit batch, and submission version, so a
+      // retained row would collide with the same slice grouped into a new
+      // Removal. The ledger row's deletion record keeps the registry IDs.
       await tx
-        .update(certifierBiocharApplications)
-        .set({
-          lifecycleStatus: DELETED_REGISTRATION_STATUS,
-          updatedAt: sql`now()`,
-        })
+        .delete(certifierBiocharApplications)
         .where(
           and(
             inArray(

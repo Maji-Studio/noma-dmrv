@@ -13,12 +13,19 @@
   `DRAFT` (public Certify OpenAPI, checked on this date). A refusal releases
   the deletion claim and changes nothing locally. A 404 counts as already
   deleted so a retry after a partial cleanup converges.
-- Local cleanup marks the ledger rows `rejected` with a `deletion` metadata
-  record, marks Biochar Application registrations `deleted`, releases
-  production-claim reservations and credit batch slices, and deletes the
-  Removal row. Datapoints, Measurement Samples, Production Batches, Storage
-  Locations, and Sources stay on the registry (see `docs/open-questions.md`).
-- Code: `src/fn/certification/delete-removal.ts`,
+- A Biochar Application registration still `creating` (its POST was
+  interrupted before the registry ID came back) is resolved by supplier
+  reference through `GET /biochar_applications` and deleted when found.
+- Local cleanup re-reads the ledger under the Removal locks and refuses if a
+  submission ran between claim and finalize, then marks the ledger rows
+  `rejected` with a `deletion` metadata record, removes the Biochar
+  Application registration rows so their supplier references are free for a
+  later Removal, releases production-claim reservations and credit batch
+  slices, and deletes the Removal row. Datapoints, Measurement Samples,
+  Production Batches, Storage Locations, and Sources stay on the registry (see
+  `isometric/removal-deletion-orphans` in `docs/open-questions-isometric.md`).
+- Code: `src/fn/certification/delete-removal.ts` (core),
+  `src/fn/certification/delete-removal-action.ts` (server action),
   `src/data-access/certifier-removal-deletion.ts`.
 
 ## 2026-09-07: fail-closed Application evidence and safe recovery

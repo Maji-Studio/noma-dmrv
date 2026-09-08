@@ -1,16 +1,17 @@
-"use server";
-
 import {
   claimRemovalDeletion,
   finalizeRemovalDeletion,
   releaseRemovalDeletionClaim,
   type RemovalDeletionClaim,
 } from "@/data-access/certifier-removal-deletion";
-import { requireOrgFacility } from "@/data-access/utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import { deleteBiocharApplication, deleteGhgEntry } from "@/lib/isometric";
+import {
+  deleteBiocharApplication,
+  deleteGhgEntry,
+  findBiocharApplicationBySupplierReference,
+} from "@/lib/isometric";
 import {
   getIsometricClientForOrg,
   IsometricApiError,
@@ -22,13 +23,8 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { logger } from "@/lib/log";
-import {
-  deleteRemovalSchema,
-  type DeleteRemovalInput,
-} from "@/schemas/certification";
-import type { ActionResult } from "@/types/actions";
+import type { DeleteRemovalInput } from "@/schemas/certification";
 import { appendSyncEventBestEffort } from "./shared";
-import { withAction } from "../with-action";
 
 /**
  * Deletes a Removal that never finalized, cleaning up the registry first.
@@ -36,8 +32,14 @@ import { withAction } from "../with-action";
  * Order matters: the GHG Entry goes first because the registry only deletes
  * it while it is still DRAFT. A refusal there means the Removal progressed on
  * the registry side without our ledger knowing, so nothing else is touched
- * and the claim is released. Biochar Applications follow. Every DELETE
- * tolerates a 404 so a retry after a partial cleanup converges.
+ * and the claim is released. Biochar Applications follow; a registration
+ * whose POST was interrupted before the registry ID came back is resolved by
+ * its supplier reference first. Every DELETE tolerates a 404 so a retry after
+ * a partial cleanup converges.
+ *
+ * This module is deliberately not a `"use server"` file: the core takes a
+ * caller-supplied `OrgContext`, so it must never be registered as a callable
+ * server action. The action lives in `delete-removal-action.ts`.
  */
 
 export interface RemovalDeletionResult {
@@ -142,18 +144,39 @@ async function deleteRegistryRecords(
     if (outcome === "deleted") out.deletedGhgEntryIds.push(ghgEntryId);
   }
   for (const application of claim.biocharApplications) {
+    const externalApplicationId =
+      application.externalApplicationId ??
+      (await resolveUnconfirmedBiocharApplication(
+        client,
+        application.supplierReference,
+      ));
+    if (externalApplicationId === null) continue;
     const outcome = await deleteRegistryRecord(
       orgCtx,
       claim.removalId,
       "removal:delete:biochar-application",
-      application.externalApplicationId,
-      `Biochar Application ${application.externalApplicationId}`,
-      () => deleteBiocharApplication(client, application.externalApplicationId),
+      externalApplicationId,
+      `Biochar Application ${externalApplicationId}`,
+      () => deleteBiocharApplication(client, externalApplicationId),
     );
     if (outcome === "deleted") {
-      out.deletedBiocharApplicationIds.push(application.externalApplicationId);
+      out.deletedBiocharApplicationIds.push(externalApplicationId);
     }
   }
+}
+
+// A `creating` registration means the POST may or may not have landed. The
+// supplier reference is the only handle, so ask the registry whether a
+// Biochar Application carries it before deciding there is nothing to delete.
+async function resolveUnconfirmedBiocharApplication(
+  client: IsometricClient,
+  supplierReference: string,
+): Promise<string | null> {
+  const remote = await findBiocharApplicationBySupplierReference(
+    client,
+    supplierReference,
+  );
+  return remote?.id ?? null;
 }
 
 async function deleteRegistryRecord(
@@ -214,14 +237,4 @@ function registryDeleteRefusalMessage(error: unknown, label?: string): string {
     return `Isometric did not delete ${target}. ${describeIsometricApiError(error)} Only draft registry records can be deleted. Nothing was removed locally.`;
   }
   return `Isometric did not delete ${target}. Nothing was removed locally. Try again.`;
-}
-
-export async function deleteRemovalAction(
-  input: DeleteRemovalInput,
-): Promise<ActionResult<RemovalDeletionResult>> {
-  return withAction(async (ctx) => {
-    const parsed = deleteRemovalSchema.parse(input);
-    await requireOrgFacility(ctx, parsed.facilityId);
-    return deleteRemoval(ctx, parsed);
-  });
 }

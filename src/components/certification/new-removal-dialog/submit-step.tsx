@@ -32,6 +32,13 @@ import {
   useRemovalCompilation,
 } from "@/hooks/use-certification";
 import { canDeleteRemovalRow } from "@/components/certification/removal-list-state";
+import {
+  REMOVAL_DELETE_TITLE,
+  REMOVAL_DELETED_TOAST,
+  REMOVAL_DISCARD_TITLE,
+  REMOVAL_DISCARDED_TOAST,
+  removalDeleteMessage,
+} from "@/components/certification/removal-deletion-copy";
 import { isSubmissionAttemptInterrupted } from "@/lib/certification/submission-metadata";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import type { useSubmitRemoval } from "@/hooks/use-certification";
@@ -123,12 +130,8 @@ export function SubmitStep({
   const discardDialog = (
     <DeleteConfirmDialog
       isOpen={discardConfirmOpen}
-      title={hasRegistryHistory ? "Delete Removal?" : "Discard Removal draft?"}
-      message={
-        hasRegistryHistory
-          ? "This deletes the draft GHG Entry and its Biochar Applications from Isometric, then releases the credit batches. Registry records that are no longer drafts cannot be deleted. This action cannot be undone."
-          : "This releases its credit batches so you can group them into separate Removals. This action cannot be undone."
-      }
+      title={hasRegistryHistory ? REMOVAL_DELETE_TITLE : REMOVAL_DISCARD_TITLE}
+      message={removalDeleteMessage(hasRegistryHistory)}
       onCancel={() => {
         setDiscardConfirmOpen(false);
         discardMutation.reset();
@@ -141,8 +144,8 @@ export function SubmitStep({
               setDiscardConfirmOpen(false);
               toast.success(
                 hasRegistryHistory
-                  ? "Removal deleted. Credit batches are available again."
-                  : "Removal draft discarded. Credit batches are available again.",
+                  ? REMOVAL_DELETED_TOAST
+                  : REMOVAL_DISCARDED_TOAST,
               );
               onDone();
             },

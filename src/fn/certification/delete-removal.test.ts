@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   release: vi.fn(),
   deleteGhgEntry: vi.fn(),
   deleteBiocharApplication: vi.fn(),
+  findBiocharApplicationBySupplierReference: vi.fn(),
   appendSyncEvent: vi.fn(),
 }));
 
@@ -34,6 +35,8 @@ vi.mock("@/data-access/certifier-removal-deletion", () => ({
 vi.mock("@/lib/isometric", () => ({
   deleteGhgEntry: state.deleteGhgEntry,
   deleteBiocharApplication: state.deleteBiocharApplication,
+  findBiocharApplicationBySupplierReference:
+    state.findBiocharApplicationBySupplierReference,
 }));
 vi.mock("@/lib/isometric/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/isometric/client")>()),
@@ -67,8 +70,16 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
     },
     externalRemovalIds: ["gge_1"],
     biocharApplications: [
-      { registrationId: "reg-1", externalApplicationId: "bse_1" },
-      { registrationId: "reg-2", externalApplicationId: "bse_2" },
+      {
+        registrationId: "reg-1",
+        externalApplicationId: "bse_1",
+        supplierReference: "ref-1",
+      },
+      {
+        registrationId: "reg-2",
+        externalApplicationId: "bse_2",
+        supplierReference: "ref-2",
+      },
     ],
     ...overrides,
   };
@@ -79,6 +90,7 @@ beforeEach(() => {
   state.finalize.mockResolvedValue({ releasedSliceCount: 2 });
   state.deleteGhgEntry.mockResolvedValue(undefined);
   state.deleteBiocharApplication.mockResolvedValue(undefined);
+  state.findBiocharApplicationBySupplierReference.mockResolvedValue(null);
   state.appendSyncEvent.mockResolvedValue(undefined);
 });
 
@@ -154,6 +166,55 @@ describe("deleteRemoval", () => {
 
     expect(state.deleteGhgEntry).not.toHaveBeenCalled();
     expect(state.deleteBiocharApplication).not.toHaveBeenCalled();
+    expect(state.finalize).toHaveBeenCalledOnce();
+  });
+
+  it("resolves an unconfirmed registration by supplier reference before deleting it", async () => {
+    state.claim.mockResolvedValue(
+      claim({
+        biocharApplications: [
+          {
+            registrationId: "reg-3",
+            externalApplicationId: null,
+            supplierReference: "ref-3",
+          },
+        ],
+      }),
+    );
+    state.findBiocharApplicationBySupplierReference.mockResolvedValue({
+      id: "bse_3",
+    });
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(state.findBiocharApplicationBySupplierReference).toHaveBeenCalledWith(
+      { fake: true },
+      "ref-3",
+    );
+    expect(state.deleteBiocharApplication).toHaveBeenCalledWith(
+      { fake: true },
+      "bse_3",
+    );
+    expect(result.deletedBiocharApplicationIds).toEqual(["bse_3"]);
+  });
+
+  it("skips an unconfirmed registration the registry never received", async () => {
+    state.claim.mockResolvedValue(
+      claim({
+        biocharApplications: [
+          {
+            registrationId: "reg-3",
+            externalApplicationId: null,
+            supplierReference: "ref-3",
+          },
+        ],
+      }),
+    );
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(state.deleteBiocharApplication).not.toHaveBeenCalled();
+    expect(result.deletedBiocharApplicationIds).toEqual([]);
     expect(state.finalize).toHaveBeenCalledOnce();
   });
 
