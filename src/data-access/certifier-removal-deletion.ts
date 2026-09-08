@@ -7,7 +7,6 @@ import {
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgRole } from "@/lib/auth/server";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   SUBMISSION_ATTEMPT_OUTCOMES,
@@ -53,13 +52,10 @@ import { requireOrgScope } from "./utils";
  * a finalized status refuses deletion. Membership in a GHG Statement refuses
  * it too.
  *
- * Role floor: releasing a Removal that never touched the registry is open to
- * every member, as the discard path it replaced was. Once a ledger row exists
- * (a recorded GHG Entry, a Biochar Application registration, or a POST that
- * landed without its response) or the Removal carries the pre-ledger
- * `submissionExternalMutationPossible` marker (Source mirroring opened the
- * registry boundary before any ledger row), the claim requires an Admin: the
- * cleanup is irreversible on the registry side.
+ * No role floor for now: any organization member may delete, registry
+ * cleanup included (decision of 2026-09-08, tracked in issue #746). The claim
+ * still reports whether the Removal may have touched the registry so the
+ * surfaces can word the confirmation accurately.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -68,7 +64,6 @@ const DELETED_REGISTRATION_STATUS = "deleted" as const;
 const DRAFT_LEDGER_STATUS = "draft" as const;
 const DELETED_LEDGER_STATUS = "rejected" as const;
 const DELETION_METADATA_KEY = "deletion";
-const REGISTRY_CLEANUP_MIN_ROLE = "admin" as const;
 const REMOVAL_SUPPLIER_REF_ROLE = "removal" as const;
 
 export const REMOVAL_DELETE_SUBMITTED_ERROR =
@@ -186,7 +181,7 @@ export async function claimRemovalDeletion(
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
-    const removal = await lockRemovalRow(ctx, tx, facilityId, removalId);
+    await lockRemovalRow(ctx, tx, facilityId, removalId);
     // Same lock order as discard and submit: Removal row, then the shared
     // artifact lock, so a concurrent submit either finishes its claim first
     // (and we see its in-flight lock) or waits for this decision.
@@ -288,10 +283,6 @@ export async function claimRemovalDeletion(
                 ),
               ),
             );
-    if (submissionIds.length > 0 || removal.registryBoundaryOpened) {
-      requireOrgRole(ctx, REGISTRY_CLEANUP_MIN_ROLE);
-    }
-
     // Every row gets the same fresh lock, rejected ones included: the submit
     // path resumes a rejected row with an unchanged payload hash, and its
     // resume CAS refuses any row whose lock is still fresh.

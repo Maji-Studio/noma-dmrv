@@ -92,10 +92,8 @@ export function buildRemovalListRows(
  * Whether deleting this Removal may touch the registry: true as soon as a
  * ledger row exists (a submission attempt may have created records before it
  * recorded their IDs) or a submit attempt opened the registry boundary before
- * any ledger row. Drives the confirmation copy and the role gate on both
- * delete surfaces: a Removal that never touched the registry can be released
- * by any member, anything else needs an Admin (mirrors
- * `claimRemovalDeletion`).
+ * any ledger row. Drives the confirmation copy on both delete surfaces. No
+ * role gate for now (issue #746).
  */
 export function removalDeletionTouchesRegistry(
   row: Pick<RemovalListRow, "local" | "registryBoundaryOpened">,
@@ -127,17 +125,3 @@ export function canDeleteRemovalRow(row: RemovalDeleteFacts): boolean {
   return neverFinalized && !attemptRunning;
 }
 
-/**
- * The full client-side gate both delete surfaces use: eligible, and either
- * no registry exposure or a viewer who may manage the registry connection.
- * Mirrors the role floor in `claimRemovalDeletion`.
- */
-export function canViewerDeleteRemoval(
-  row: RemovalDeleteFacts,
-  viewerCanManage: boolean,
-): boolean {
-  return (
-    canDeleteRemovalRow(row) &&
-    (!removalDeletionTouchesRegistry(row) || viewerCanManage)
-  );
-}

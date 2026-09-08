@@ -41,7 +41,7 @@ import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
 import {
-  canViewerDeleteRemoval,
+  canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
   type RemovalListRow,
 } from "./removal-list-state";
@@ -194,15 +194,11 @@ export function RemovalDetailSheet({
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
 
-  // Deletion mirrors the server rule: never-finalized only, and Admin-only
-  // once registry records exist. With registry history the draft GHG Entry
-  // and Biochar Applications are removed from Isometric before the local
-  // record goes.
+  // Deletion mirrors the server rule: never-finalized only. With registry
+  // history the draft GHG Entry and Biochar Applications are removed from
+  // Isometric before the local record goes. No role gate yet (issue #746).
   const touchesRegistry = removalDeletionTouchesRegistry(summary);
-  const canDelete = canViewerDeleteRemoval(
-    summary,
-    certifierSummary?.viewerCanManage ?? false,
-  );
+  const canDelete = canDeleteRemovalRow(summary);
   const deleteCopy = removalDeletionCopy(touchesRegistry);
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();

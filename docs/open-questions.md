@@ -227,9 +227,10 @@ Pure starter residue; org scoping came later via ADR 0010.
   `tests/certification-submissions.test.ts` as the lock-protocol fixture.
   The `submissionExternalMutationPossible` Removal marker it used to consult
   is **not** dead: `claimRemovalDeletion` reads it as the pre-ledger
-  registry-exposure signal for the Admin floor, and both delete surfaces
-  gate on it as `registryBoundaryOpened`
-  (`src/lib/certification/removal-external-mutation.ts`).
+  registry-exposure signal, and both delete surfaces use it as
+  `registryBoundaryOpened` for the confirmation copy
+  (`src/lib/certification/removal-external-mutation.ts`); issue #746 decides
+  whether it also becomes a role gate.
 - **To resolve:** retire `discardLocalRemovalDraft` and port the three
   fixtures onto `claimRemovalDeletion` (which takes the same Removal row and
   artifact locks), or record why the discard seam stays. The marker and its

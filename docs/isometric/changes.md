@@ -6,11 +6,9 @@
   row, or a `draft`/`rejected` row) can be deleted from the Removal detail
   sheet and the New Removal wizard. Submitted, accepted, and superseded
   Removals, and any Removal in a GHG Statement, refuse deletion. Any member
-  may release a Removal that never touched the registry; once a ledger row
-  exists, or the Removal carries the pre-ledger external-mutation marker that
-  Source mirroring sets, the claim requires an Admin, because the attempt may
-  have created registry records. The client gate also refuses when any
-  earlier ledger version finalized, which the latest row alone cannot show.
+  may delete, registry cleanup included; the authorization question is
+  deferred to issue #746. The client gate refuses when any earlier ledger
+  version finalized, which the latest row alone cannot show.
 - A ledger row that never recorded a GHG Entry ID is reconciled by its
   supplier reference through `GET /ghg_entries` before the cleanup decides
   nothing is there, because the POST may have landed without its response.

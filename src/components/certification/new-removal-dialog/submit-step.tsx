@@ -29,11 +29,10 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   useDeleteRemoval,
-  useFacilityCertifierSummary,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
 import {
-  canViewerDeleteRemoval,
+  canDeleteRemovalRow,
   removalDeletionTouchesRegistry,
 } from "@/components/certification/removal-list-state";
 import { removalDeletionCopy } from "@/components/certification/removal-deletion-copy";
@@ -83,7 +82,6 @@ export function SubmitStep({
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
   const deleteMutation = useDeleteRemoval();
-  const { data: certifierSummary } = useFacilityCertifierSummary(facilityId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -111,8 +109,7 @@ export function SubmitStep({
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
   // Anything short of "Submission complete" may be deleted. Once a ledger
   // row exists the server removes whatever the attempt created on Isometric
-  // before releasing the batches, and only an Admin may do that; a Removal
-  // with no ledger row can be released by any member.
+  // before releasing the batches. No role gate yet (issue #746).
   const deleteFacts = {
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight: ctx.latestSubmission
@@ -128,10 +125,7 @@ export function SubmitStep({
   const canDeleteRemoval =
     ctx.linkedGhgStatement === null &&
     !submitMutation.isPending &&
-    canViewerDeleteRemoval(
-      deleteFacts,
-      certifierSummary?.viewerCanManage ?? false,
-    );
+    canDeleteRemovalRow(deleteFacts);
   const deleteCopy = removalDeletionCopy(hasRegistryHistory);
 
   const deleteDialog = (

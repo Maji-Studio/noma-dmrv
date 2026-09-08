@@ -43,8 +43,7 @@ import { appendSyncEventBestEffort } from "./shared";
  * failure after it was taken, registry or local, so the Removal never stays
  * frozen behind a `deleting` lock.
  *
- * Role floor lives in `claimRemovalDeletion`: any member may release a
- * Removal with no ledger row, anything with ledger history needs an Admin.
+ * No role floor for now: any member may delete (issue #746).
  *
  * This module is deliberately not a `"use server"` file: the core takes a
  * caller-supplied `OrgContext`, so it must never be registered as a callable
