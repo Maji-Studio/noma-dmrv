@@ -22,7 +22,10 @@ import {
   transportLegs,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
-import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
+import {
+  acquireMirrorLock,
+  acquireMirrorLocksSorted,
+} from "@/lib/isometric/utils/source-lock";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import {
   DOCUMENT_ENTITY_TYPES,
@@ -33,6 +36,7 @@ import {
   deleteDocumentUploadByDocument,
   getDocumentUploadByDocument,
   isExternalSourceReferencedInSnapshots,
+  submissionIsNotDeleted,
 } from "./certifier-document-uploads";
 import {
   enqueueStorageObjectDeletion,
@@ -440,6 +444,62 @@ export async function deleteDocumentRow(
   return row ?? null;
 }
 
+const MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE =
+  "Cannot delete this record while one of its documents is mirrored to a certification provider. Remove or replace that document from this record first; submitted certification history cannot be deleted.";
+
+/**
+ * A document named in a live submission's reviewed evidence candidates is
+ * part of a Removal evidence review. Ledger rows stamped by Removal deletion
+ * are skipped: their review belongs to registry records that are gone.
+ */
+async function isReviewedCertificationEvidence(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  documentId: string,
+): Promise<boolean> {
+  const [reviewedEvidence] = await tx
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        submissionIsNotDeleted(),
+        sql`jsonb_path_exists(${certificationSubmissions.metadata}, '$.evidenceRefreshCandidates[*].documentId ? (@ == $id)', jsonb_build_object('id', ${documentId}::text))`,
+      ),
+    )
+    .limit(1);
+  return Boolean(reviewedEvidence);
+}
+
+/**
+ * Retire an Isometric Source mapping that no live certification history
+ * still needs, under the caller's mirror lock. Returns false when the
+ * mapping must stay. The remote Source is deliberately untouched.
+ */
+async function releaseUnreferencedIsometricMapping(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  documentId: string,
+): Promise<boolean> {
+  if (await isReviewedCertificationEvidence(ctx, tx, documentId)) return false;
+  const mapping = await getDocumentUploadByDocument(
+    ctx,
+    ISOMETRIC_PROVIDER,
+    documentId,
+    tx,
+  );
+  if (!mapping) return true;
+  const referenced = await isExternalSourceReferencedInSnapshots(
+    ctx,
+    ISOMETRIC_PROVIDER,
+    mapping.externalDocumentId,
+    tx,
+  );
+  if (referenced) return false;
+  await deleteDocumentUploadByDocument(ctx, ISOMETRIC_PROVIDER, documentId, tx);
+  return true;
+}
+
 /**
  * Delete one owning-record document while preserving certification history.
  *
@@ -468,13 +528,7 @@ export async function deleteDocumentWithCertificationSafety(
       .for("update");
     if (!row) return { deleted: null, queued: false };
 
-    const [reviewedEvidence] = await tx.select({ id: certificationSubmissions.id })
-      .from(certificationSubmissions)
-      .where(and(
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-        sql`jsonb_path_exists(${certificationSubmissions.metadata}, '$.evidenceRefreshCandidates[*].documentId ? (@ == $id)', jsonb_build_object('id', ${id}::text))`,
-      )).limit(1);
-    if (reviewedEvidence) {
+    if (await isReviewedCertificationEvidence(ctx, tx, id)) {
       throw new SafeError("This document belongs to reviewed certification evidence and cannot be deleted or replaced.");
     }
 
@@ -602,6 +656,22 @@ export async function retireDocumentsForEntities(
     ),
   );
 
+  // Mirror locks first, then the row locks: the same order as the
+  // single-document delete and the mirror flow, so the three never deadlock
+  // on a shared document.
+  const candidateIds = (
+    await tx
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.organizationId, ctx.organizationId),
+          or(...ownershipConditions),
+        ),
+      )
+  ).map((document) => document.id);
+  await acquireMirrorLocksSorted(tx, candidateIds);
+
   const ownedDocuments = await tx
     .select()
     .from(documents)
@@ -616,21 +686,37 @@ export async function retireDocumentsForEntities(
   if (ownedDocuments.length === 0) return;
 
   const documentIds = ownedDocuments.map((document) => document.id);
-  const [mirror] = await tx
-    .select({ documentId: certifierDocumentUploads.documentId })
+  const lockedIds = new Set(candidateIds);
+  if (documentIds.some((id) => !lockedIds.has(id))) {
+    throw new SafeError(
+      "Documents were added to this record while it was being deleted. Refresh and retry.",
+    );
+  }
+
+  const mirrors = await tx
+    .select({
+      documentId: certifierDocumentUploads.documentId,
+      provider: certifierDocumentUploads.provider,
+    })
     .from(certifierDocumentUploads)
     .where(
       and(
         eq(certifierDocumentUploads.organizationId, ctx.organizationId),
         inArray(certifierDocumentUploads.documentId, documentIds),
       ),
-    )
-    .limit(1);
-
-  if (mirror) {
-    throw new SafeError(
-      "Cannot delete this record while one of its documents is mirrored to a certification provider. Remove or replace that document from this record first; submitted certification history cannot be deleted.",
     );
+
+  // Isometric is the only provider whose local mapping may be retired here,
+  // and only while no live certification history references the Source. A
+  // mapping a deleted Removal left behind is released; one a real submission
+  // still cites, or any other provider's mapping, keeps the record in place.
+  for (const mirror of mirrors) {
+    const released =
+      mirror.provider === ISOMETRIC_PROVIDER &&
+      (await releaseUnreferencedIsometricMapping(ctx, tx, mirror.documentId));
+    if (!released) {
+      throw new SafeError(MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE);
+    }
   }
 
   for (const document of ownedDocuments) {

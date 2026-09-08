@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
+  certificationSubmissions,
   certifierDocumentUploads,
   customerLocations,
   customers,
@@ -164,7 +165,127 @@ async function createOutboxOrganizationFixture(
   };
 }
 
+async function insertRemovalSnapshot(args: {
+  sourceId: string;
+  deleted: boolean;
+}): Promise<string> {
+  const [row] = await db
+    .insert(certificationSubmissions)
+    .values({
+      organizationId: TEST_ORG_ID,
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: crypto.randomUUID(),
+      version: 1,
+      status: "rejected",
+      externalId: null,
+      payloadSnapshot: { sourceBindingPlan: [{ sourceId: args.sourceId }] },
+      metadata: args.deleted
+        ? { deletion: { deletedAt: new Date().toISOString() } }
+        : null,
+    })
+    .returning({ id: certificationSubmissions.id });
+  return row.id;
+}
+
 describe("parent document retirement", () => {
+  it.each([
+    { label: "unreferenced", snapshot: null },
+    { label: "cited only by a deleted Removal", snapshot: { deleted: true } },
+  ])(
+    "releases an Isometric mirror that is $label and deletes the record",
+    async ({ snapshot }) => {
+      const tag = crypto.randomUUID().slice(0, 8);
+      const fixture = await createReactorFixture(tag);
+      const key = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
+      const documentId = await insertManagedDocument("reactor", fixture.reactorId, key);
+      const sourceId = `src_${tag}`;
+      let submissionId: string | null = null;
+
+      try {
+        await db.insert(certifierDocumentUploads).values({
+          organizationId: TEST_ORG_ID,
+          documentId,
+          provider: "isometric",
+          externalDocumentId: sourceId,
+        });
+        if (snapshot) {
+          submissionId = await insertRemovalSnapshot({ sourceId, deleted: snapshot.deleted });
+        }
+
+        await deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId);
+        await processPendingStorageObjectDeletions(makeTestOrgContext(TEST_USER_ID));
+
+        expect(provider.objects.has(key)).toBe(false);
+        expect(
+          await db
+            .select()
+            .from(certifierDocumentUploads)
+            .where(eq(certifierDocumentUploads.documentId, documentId)),
+        ).toHaveLength(0);
+        expect(
+          await db.select().from(documents).where(eq(documents.id, documentId)),
+        ).toHaveLength(0);
+      } finally {
+        if (submissionId) {
+          await db
+            .delete(certificationSubmissions)
+            .where(eq(certificationSubmissions.id, submissionId));
+        }
+        await db
+          .delete(certifierDocumentUploads)
+          .where(eq(certifierDocumentUploads.documentId, documentId));
+        await db.delete(documents).where(eq(documents.id, documentId));
+        await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
+        await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      }
+    },
+  );
+
+  it("blocks an Isometric mirror that a live Removal snapshot still cites", async () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const fixture = await createReactorFixture(tag);
+    const key = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
+    const documentId = await insertManagedDocument("reactor", fixture.reactorId, key);
+    const sourceId = `src_${tag}`;
+    let submissionId: string | null = null;
+
+    try {
+      await db.insert(certifierDocumentUploads).values({
+        organizationId: TEST_ORG_ID,
+        documentId,
+        provider: "isometric",
+        externalDocumentId: sourceId,
+      });
+      submissionId = await insertRemovalSnapshot({ sourceId, deleted: false });
+
+      await expect(
+        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
+      ).rejects.toThrow(/certification provider/);
+
+      expect(provider.deleteCalls).toEqual([]);
+      expect(provider.objects.has(key)).toBe(true);
+      expect(
+        await db
+          .select()
+          .from(certifierDocumentUploads)
+          .where(eq(certifierDocumentUploads.documentId, documentId)),
+      ).toHaveLength(1);
+    } finally {
+      if (submissionId) {
+        await db
+          .delete(certificationSubmissions)
+          .where(eq(certificationSubmissions.id, submissionId));
+      }
+      await db
+        .delete(certifierDocumentUploads)
+        .where(eq(certifierDocumentUploads.documentId, documentId));
+      await db.delete(documents).where(eq(documents.id, documentId));
+      await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
+      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    }
+  });
   it("deletes managed and external evidence while preserving another organization's rows", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
@@ -804,13 +925,16 @@ describe("parent document retirement", () => {
       .returning({ id: transportLegs.id });
     const key = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
     const documentId = await insertManagedDocument("transport_leg", leg.id, key);
+    const sourceId = `derived-source-${tag}`;
+    let submissionId: string | null = null;
     try {
       await db.insert(certifierDocumentUploads).values({
         organizationId: TEST_ORG_ID,
         documentId,
         provider: "isometric",
-        externalDocumentId: `derived-source-${tag}`,
+        externalDocumentId: sourceId,
       });
+      submissionId = await insertRemovalSnapshot({ sourceId, deleted: false });
 
       await expect(
         db.transaction((tx) =>
@@ -826,9 +950,12 @@ describe("parent document retirement", () => {
         await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id)),
       ).toHaveLength(1);
 
+      // Once no live snapshot cites the Source, the sync releases the
+      // mapping itself and retires the stale leg's evidence.
       await db
-        .delete(certifierDocumentUploads)
-        .where(eq(certifierDocumentUploads.documentId, documentId));
+        .delete(certificationSubmissions)
+        .where(eq(certificationSubmissions.id, submissionId));
+      submissionId = null;
       await db.transaction((tx) =>
         syncFeedstockTransportLeg(
           makeTestOrgContext(TEST_USER_ID),
@@ -841,9 +968,20 @@ describe("parent document retirement", () => {
       );
       expect(provider.objects.has(key)).toBe(false);
       expect(
+        await db
+          .select()
+          .from(certifierDocumentUploads)
+          .where(eq(certifierDocumentUploads.documentId, documentId)),
+      ).toHaveLength(0);
+      expect(
         await db.select().from(documents).where(eq(documents.id, documentId)),
       ).toHaveLength(0);
     } finally {
+      if (submissionId) {
+        await db
+          .delete(certificationSubmissions)
+          .where(eq(certificationSubmissions.id, submissionId));
+      }
       await db
         .delete(certifierDocumentUploads)
         .where(eq(certifierDocumentUploads.documentId, documentId));

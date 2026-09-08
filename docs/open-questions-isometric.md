@@ -32,6 +32,13 @@ retired questions do not belong in this file.
   submission created. Production Batches and Storage Locations are shared
   across Removals and must stay. The orphans are keyed by version-specific
   supplier references, so a later Removal never collides with them.
+- **Local side is settled (2026-09-08)** — the deletion releases the
+  `certifier_document_uploads` mapping of every Source that only the deleted
+  submissions cited (`releaseDocumentUploadsReferencedOnlyBySubmissions`),
+  records them under the ledger row's `deletion.releasedDocumentMirrors`, and
+  the snapshot-reference guards skip deletion-stamped rows. The owning
+  Application or Delivery can then be deleted; a later submission mirrors a
+  fresh Source. Only the remote Source cleanup remains open here.
 - **Why it matters** — sandbox and production projects accumulate unused
   inputs after each abandoned submission. Nothing reads them, but a reviewer
   opening the project in Certify sees records with no GHG Entry.

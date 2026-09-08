@@ -1,9 +1,11 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { certifierDocumentUploads } from "@/db/schema/certification";
 import { certificationSubmissions } from "@/db/schema/certification";
 import { documents } from "@/db/schema/documentation";
 import type { OrgContext } from "@/lib/auth/server";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
+import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 type DbClient = DbTransaction | typeof db;
@@ -158,20 +160,66 @@ export async function deleteDocumentUploadByDocument(
     );
 }
 
-// Checks whether any persisted submission payload references the given
-// Isometric Source id. Used as the unlink-safety guard: if a Source landed in
-// any materialized Datapoint body or immutable source binding plan, the local
-// mapping cannot be deleted without orphaning the audit trail. Scans every
-// status because rejected/superseded snapshots are still real history.
+// Every place a Source id can land in a persisted Removal payload: a
+// materialized Datapoint body, the immutable source binding plan, or a
+// Biochar Application intent.
 //
 // jsonb_path_exists is the canonical Postgres idiom for "any element of any
 // nested array equals X"; using `@>` containment is awkward across nested
-// arrays.
+// arrays of objects. The explicit ::text cast on $val is required: without
+// it, Postgres raises `42P18 — could not determine data type of parameter`
+// because jsonb_build_object accepts any, and the planner can't infer the
+// type from context. Columns are table-qualified so the predicate also works
+// inside a correlated subquery.
+function snapshotReferencesSource(sourceId: SQL): SQL {
+  const snapshot = certificationSubmissions.payloadSnapshot;
+  return sql`(
+    jsonb_path_exists(
+      ${snapshot},
+      '$.transport.datapointBodies[*].body.source_ids[*] ? (@ == $val)',
+      jsonb_build_object('val', ${sourceId})
+    )
+    OR jsonb_path_exists(
+      ${snapshot},
+      '$.sourceBindingPlan[*].sourceId ? (@ == $val)',
+      jsonb_build_object('val', ${sourceId})
+    )
+    OR jsonb_path_exists(
+      ${snapshot},
+      '$.transport.biocharApplicationIntents[*].sourceIds[*] ? (@ == $val)',
+      jsonb_build_object('val', ${sourceId})
+    )
+  )`;
+}
+
+// A ledger row stamped by Removal deletion describes registry records that
+// are gone. Its snapshot stays as the audit trail but pins nothing.
+export function submissionIsNotDeleted(): SQL {
+  return sql`NOT jsonb_exists(coalesce(${certificationSubmissions.metadata}, '{}'::jsonb), ${SUBMISSION_METADATA_KEYS.deletion}::text)`;
+}
+
+export interface SourceReferenceCheckOptions {
+  /**
+   * Ledger rows to leave out of the check. Removal deletion passes the rows
+   * it is about to stamp as deleted, so it can decide the release before
+   * writing the stamp.
+   */
+  ignoreSubmissionIds?: readonly string[];
+}
+
+// Checks whether any live submission payload references the given Isometric
+// Source id. Used as the unlink-safety guard: if a Source landed in any
+// materialized Datapoint body or immutable source binding plan, the local
+// mapping cannot be deleted without orphaning the audit trail. Scans every
+// status because rejected/superseded snapshots are still real history; only
+// rows stamped by Removal deletion are skipped, since the registry records
+// their snapshot describes no longer exist.
 export async function isExternalSourceReferencedInSnapshots(
   ctx: OrgContext,
   provider: CertifierProvider,
   externalDocumentId: string,
   txOrDb: DbClient = db,
+  options: SourceReferenceCheckOptions = {},
 ): Promise<boolean> {
   requireOrgScope(ctx);
   // Provider scoping is forward-compat: only `isometric` issues source_ids
@@ -179,33 +227,91 @@ export async function isExternalSourceReferencedInSnapshots(
   // structurally prevents two providers from generating the same source_id
   // string. Without this filter, unlink on provider A could refuse because
   // provider B's payload mentioned the same id.
-  // The explicit ::text cast on $val is required: without it, Postgres
-  // raises `42P18 — could not determine data type of parameter` because
-  // jsonb_build_object accepts any, and the planner can't infer the type
-  // from context.
+  const ignored = options.ignoreSubmissionIds ?? [];
   const result = await txOrDb.execute<{ found: number }>(sql`
     SELECT 1 AS found
     FROM ${certificationSubmissions}
     WHERE ${eq(certificationSubmissions.provider, provider)}
       AND ${eq(certificationSubmissions.organizationId, ctx.organizationId)}
-      AND (
-        jsonb_path_exists(
-          payload_snapshot,
-          '$.transport.datapointBodies[*].body.source_ids[*] ? (@ == $val)',
-          jsonb_build_object('val', ${externalDocumentId}::text)
-        )
-        OR jsonb_path_exists(
-          payload_snapshot,
-          '$.sourceBindingPlan[*].sourceId ? (@ == $val)',
-          jsonb_build_object('val', ${externalDocumentId}::text)
-        )
-        OR jsonb_path_exists(
-          payload_snapshot,
-          '$.transport.biocharApplicationIntents[*].sourceIds[*] ? (@ == $val)',
-          jsonb_build_object('val', ${externalDocumentId}::text)
-        )
-      )
+      AND ${submissionIsNotDeleted()}
+      ${ignored.length > 0 ? sql`AND ${notInArray(certificationSubmissions.id, [...ignored])}` : sql``}
+      AND ${snapshotReferencesSource(sql`${externalDocumentId}::text`)}
     LIMIT 1
   `);
   return result.rows.length > 0;
+}
+
+export interface ReleasedDocumentUpload {
+  documentId: string;
+  externalDocumentId: string;
+}
+
+/**
+ * Retire the local Source mappings that only the given ledger rows still
+ * reference. Removal deletion calls this for the rows it is stamping as
+ * deleted: a mapping those snapshots reference and no live snapshot does is
+ * released so the owning record (an Application, a Delivery) can be deleted
+ * afterwards. The remote Source is deliberately untouched, matching the
+ * single-document delete; a later mirror mints a fresh one.
+ *
+ * Runs under the per-document mirror locks so a concurrent submit that is
+ * reusing the mapping either finishes first (and its snapshot keeps the
+ * mapping) or waits for this decision.
+ */
+export async function releaseDocumentUploadsReferencedOnlyBySubmissions(
+  ctx: OrgContext,
+  provider: CertifierProvider,
+  submissionIds: readonly string[],
+  tx: DbTransaction,
+): Promise<ReleasedDocumentUpload[]> {
+  requireOrgScope(ctx);
+  if (submissionIds.length === 0) return [];
+
+  const candidates = await tx.execute<{
+    document_id: string;
+    external_document_id: string;
+  }>(sql`
+    SELECT ${certifierDocumentUploads.documentId} AS document_id,
+           ${certifierDocumentUploads.externalDocumentId} AS external_document_id
+    FROM ${certifierDocumentUploads}
+    WHERE ${eq(certifierDocumentUploads.provider, provider)}
+      AND ${eq(certifierDocumentUploads.organizationId, ctx.organizationId)}
+      AND EXISTS (
+        SELECT 1
+        FROM ${certificationSubmissions}
+        WHERE ${inArray(certificationSubmissions.id, [...submissionIds])}
+          AND ${eq(certificationSubmissions.organizationId, ctx.organizationId)}
+          AND ${snapshotReferencesSource(sql`${certifierDocumentUploads.externalDocumentId}`)}
+      )
+    ORDER BY ${certifierDocumentUploads.documentId}
+  `);
+  if (candidates.rows.length === 0) return [];
+
+  await acquireMirrorLocksSorted(
+    tx,
+    candidates.rows.map((row) => row.document_id),
+  );
+
+  const released: ReleasedDocumentUpload[] = [];
+  for (const candidate of candidates.rows) {
+    const stillReferenced = await isExternalSourceReferencedInSnapshots(
+      ctx,
+      provider,
+      candidate.external_document_id,
+      tx,
+      { ignoreSubmissionIds: submissionIds },
+    );
+    if (stillReferenced) continue;
+    await deleteDocumentUploadByDocument(
+      ctx,
+      provider,
+      candidate.document_id,
+      tx,
+    );
+    released.push({
+      documentId: candidate.document_id,
+      externalDocumentId: candidate.external_document_id,
+    });
+  }
+  return released;
 }
