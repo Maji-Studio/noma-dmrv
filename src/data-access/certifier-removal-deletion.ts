@@ -123,16 +123,6 @@ async function lockRemovalRow(
   return removal;
 }
 
-function removalLedgerScope(ctx: OrgContext, removalId: string) {
-  return and(
-    eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER),
-    eq(certificationSubmissions.submissionType, REMOVAL_ENTITY_TYPE),
-    eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
-    eq(certificationSubmissions.localEntityId, removalId),
-    eq(certificationSubmissions.organizationId, ctx.organizationId),
-  );
-}
-
 export async function claimRemovalDeletion(
   ctx: OrgContext,
   facilityId: string,
@@ -162,7 +152,15 @@ export async function claimRemovalDeletion(
         metadata: certificationSubmissions.metadata,
       })
       .from(certificationSubmissions)
-      .where(removalLedgerScope(ctx, removalId));
+      .where(
+        and(
+          eq(certificationSubmissions.provider, ISOMETRIC_PROVIDER),
+          eq(certificationSubmissions.submissionType, REMOVAL_ENTITY_TYPE),
+          eq(certificationSubmissions.localEntityType, REMOVAL_ENTITY_TYPE),
+          eq(certificationSubmissions.localEntityId, removalId),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
+        ),
+      );
 
     if (
       rows.some((row) =>
