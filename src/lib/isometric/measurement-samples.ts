@@ -238,11 +238,36 @@ export async function createMeasurementSample(
 export async function findMeasurementSampleBySupplierRef(
   client: IsometricClient,
   supplierReferenceId: string,
+  options: { requireUnique?: boolean } = {},
+): Promise<IsometricMeasurementSample | null> {
+  let match: IsometricMeasurementSample | null = null;
+  for await (const sample of client.paginate<IsometricMeasurementSample>(
+    "/measurement_samples",
+  )) {
+    if (sample.supplier_reference_id !== supplierReferenceId) continue;
+    if (!options.requireUnique) return sample;
+    if (match && match.id !== sample.id) {
+      throw new SafeError("Multiple registry measurements use this supplier reference. Ask support to resolve them before continuing.");
+    }
+    match = sample;
+  }
+  return match;
+}
+
+/** Deletes only the addressed registry artifact. Missing-resource handling belongs to the caller. */
+export async function deleteMeasurementSample(client: IsometricClient, id: string): Promise<void> {
+  await client.delete(`/measurement_samples/${encodeURIComponent(id)}`);
+}
+
+/** Certify exposes DELETE, but no GET, at /measurement_samples/{id}. */
+export async function getMeasurementSample(
+  client: IsometricClient,
+  id: string,
 ): Promise<IsometricMeasurementSample | null> {
   for await (const sample of client.paginate<IsometricMeasurementSample>(
     "/measurement_samples",
   )) {
-    if (sample.supplier_reference_id === supplierReferenceId) return sample;
+    if (sample.id === id) return sample;
   }
   return null;
 }

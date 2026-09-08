@@ -1,3 +1,6 @@
+import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeletionLeaseTimestamp } from "@/lib/certification/removal-deletion-lease";
+import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
+import { removalProductionBatchTargets, clearDeletedRemovalProductionBatches, type RemovalProductionBatch, type ProductionBatchDeletionOutcome } from "./removal-production-batch-deletion";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -40,7 +43,8 @@ import { requireOrgScope } from "./utils";
  * The flow has three seams so the network calls never run inside a database
  * transaction:
  *   1. `claimRemovalDeletion` verifies eligibility under the Removal row lock
- *      and the shared artifact lock, then stamps every ledger row (draft or
+ *      and shared artifact lock, leases the Removal even without ledger rows,
+ *      then stamps every ledger row (draft or
  *      rejected) with a fresh lock and the `deleting` attempt outcome so a
  *      concurrent submit can neither resume nor reclaim one for the lock TTL.
  *   2. The caller deletes the registry records.
@@ -83,9 +87,11 @@ export const REMOVAL_DELETE_CHANGED_ERROR =
 export interface RemovalDeletionClaim {
   removalId: string;
   facilityId: string;
+  productionBatches?: RemovalProductionBatch[];
+  measurementSamples?: RemovalOwnedMeasurement[];
   /** Every ledger row for this Removal; all are draft or rejected. */
   submissionIds: string[];
-  /** The lock timestamp stamped on every ledger row for the deletion window. */
+  /** Ownership timestamp on the Removal lease and every ledger row. */
   lockedAt: Date;
   /** Each ledger row's prior lock and attempt outcome, restored when the claim is released. */
   lockedSubmissions: Array<{
@@ -115,6 +121,8 @@ export interface RemovalDeletionClaim {
 }
 
 export interface RemovalDeletionRegistryOutcome {
+  productionBatches?: ProductionBatchDeletionOutcome[];
+  measurementSamples?: Array<RemovalOwnedMeasurement & { outcome: "deleted" | "absent" }>;
   deletedGhgEntryIds: string[];
   deletedBiocharApplicationIds: string[];
   /** Records the registry reported as already gone (404), kept for the audit trail. */
@@ -133,11 +141,12 @@ async function lockRemovalRow(
   tx: Tx,
   facilityId: string,
   removalId: string,
-): Promise<{ id: string; ghgStatementId: string | null }> {
+): Promise<{ id: string; ghgStatementId: string | null; metadata: unknown }> {
   const [removal] = await tx
     .select({
       id: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
+      metadata: certifierRemovals.metadata,
     })
     .from(certifierRemovals)
     .where(
@@ -176,7 +185,10 @@ export async function claimRemovalDeletion(
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
-    await lockRemovalRow(ctx, tx, facilityId, removalId);
+    const removal = await lockRemovalRow(ctx, tx, facilityId, removalId);
+    if (hasFreshRemovalDeletionLease(removal.metadata)) {
+      throw new SafeError(REMOVAL_DELETE_ALREADY_DELETING_ERROR);
+    }
     // Same lock order as discard and submit: Removal row, then the shared
     // artifact lock, so a concurrent submit either finishes its claim first
     // (and we see its in-flight lock) or waits for this decision.
@@ -193,6 +205,7 @@ export async function claimRemovalDeletion(
         id: certificationSubmissions.id,
         status: certificationSubmissions.status,
         version: certificationSubmissions.version,
+        payloadSnapshot: certificationSubmissions.payloadSnapshot,
         externalId: certificationSubmissions.externalId,
         lockedAt: certificationSubmissions.lockedAt,
         metadata: certificationSubmissions.metadata,
@@ -236,6 +249,13 @@ export async function claimRemovalDeletion(
       throw new SafeError(REMOVAL_DELETE_ALREADY_DELETING_ERROR);
     }
 
+    const measurementSamples = removalOwnedMeasurements(removalId, rows);
+    const productionBatches = (await removalProductionBatchTargets(ctx, removalId, tx))
+      .filter((batch) => rows.length > 0 || batch.registrationId !== null);
+    // Serialize with createRemoval membership decisions before publishing deleting markers.
+    if (productionBatches.length) await tx.select({ id: creditBatches.id }).from(creditBatches)
+      .where(and(inArray(creditBatches.id, productionBatches.map((batch) => batch.creditBatchId)), eq(creditBatches.organizationId, ctx.organizationId)))
+      .orderBy(creditBatches.id).for("update");
     const submissionIds = rows.map((row) => row.id);
     const externalRemovalIds = [
       ...new Set(
@@ -282,6 +302,10 @@ export async function claimRemovalDeletion(
     // path resumes a rejected row with an unchanged payload hash, and its
     // resume CAS refuses any row whose lock is still fresh.
     const lockedAt = new Date();
+    await tx.update(certifierRemovals).set({
+      metadata: sql`coalesce(${certifierRemovals.metadata}, '{}'::jsonb) || ${JSON.stringify({ [REMOVAL_DELETION_LEASE_KEY]: lockedAt.toISOString() })}::jsonb`,
+    }).where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
+
     const lockedSubmissions: RemovalDeletionClaim["lockedSubmissions"] = [];
     const patch = JSON.stringify({
       [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]:
@@ -332,6 +356,8 @@ export async function claimRemovalDeletion(
       externalRemovalIds,
       unconfirmedRemovalSupplierRefs,
       biocharApplications,
+      productionBatches,
+      measurementSamples,
     };
   });
 }
@@ -344,33 +370,44 @@ export async function releaseRemovalDeletionClaim(
   claim: RemovalDeletionClaim,
 ): Promise<void> {
   requireOrgScope(ctx);
-  for (const locked of claim.lockedSubmissions) {
-    const restore =
-      locked.priorAttemptOutcome === null
-        ? sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`
-        : sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify({ [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]: locked.priorAttemptOutcome })}::jsonb`;
-    await db
-      .update(certificationSubmissions)
-      .set({
-        lockedAt: locked.priorLockedAt,
-        metadata: restore,
-        updatedAt: sql`now()`,
-      })
-      .where(
-        and(
-          eq(certificationSubmissions.id, locked.id),
-          eq(certificationSubmissions.organizationId, ctx.organizationId),
-          eq(certificationSubmissions.lockedAt, claim.lockedAt),
-        ),
-      );
-  }
+  await db.transaction(async (tx) => {
+    const released = await tx.update(certifierRemovals).set({
+      metadata: sql`coalesce(${certifierRemovals.metadata}, '{}'::jsonb) - ${REMOVAL_DELETION_LEASE_KEY}::text`,
+    }).where(and(
+      eq(certifierRemovals.id, claim.removalId),
+      eq(certifierRemovals.facilityId, claim.facilityId),
+      eq(certifierRemovals.organizationId, ctx.organizationId),
+      sql`${certifierRemovals.metadata}->>${REMOVAL_DELETION_LEASE_KEY} = ${claim.lockedAt.toISOString()}`,
+    )).returning({ id: certifierRemovals.id });
+    if (!released.length) return;
+    for (const locked of claim.lockedSubmissions) {
+      const restore =
+        locked.priorAttemptOutcome === null
+          ? sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`
+          : sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify({ [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]: locked.priorAttemptOutcome })}::jsonb`;
+      await tx
+        .update(certificationSubmissions)
+        .set({
+          lockedAt: locked.priorLockedAt,
+          metadata: restore,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(certificationSubmissions.id, locked.id),
+            eq(certificationSubmissions.organizationId, ctx.organizationId),
+            eq(certificationSubmissions.lockedAt, claim.lockedAt),
+          ),
+        );
+    }
+  });
 }
 
 /**
  * The claim transaction's locks are gone once it commits; the `deleting`
- * stamp on every ledger row keeps a concurrent submit from resuming one for
- * the lock TTL, but a submit with a changed payload can still open a new
- * version. The ledger is therefore re-read here under the row and artifact
+ * lease on the Removal blocks submission claims for the lock TTL. Once it
+ * expires, another submission or deletion may claim the artifact. Ownership
+ * and the ledger are therefore re-read here under the row and artifact
  * locks: any row the claim did not see, any finalized status, or a lock that
  * is not ours means a submit ran in between and the Removal must stay.
  */
@@ -430,7 +467,10 @@ export async function finalizeRemovalDeletion(
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
-    await lockRemovalRow(ctx, tx, claim.facilityId, claim.removalId);
+    const removal = await lockRemovalRow(ctx, tx, claim.facilityId, claim.removalId);
+    if (removalDeletionLeaseTimestamp(removal.metadata) !== claim.lockedAt.toISOString()) {
+      throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
+    }
     await acquireCertificationArtifactLocksSorted(tx, [
       {
         provider: ISOMETRIC_PROVIDER,
@@ -459,6 +499,8 @@ export async function finalizeRemovalDeletion(
           ),
         );
 
+      await clearDeletedRemovalProductionBatches(ctx, claim, registry.productionBatches ?? [], tx);
+
       // The evidence these submissions mirrored keeps its local mapping only
       // while a live snapshot still references it; otherwise the mapping
       // would block deleting the Application or Delivery that owns the file.
@@ -474,6 +516,8 @@ export async function finalizeRemovalDeletion(
       const deletionPatch = JSON.stringify({
         [DELETION_METADATA_KEY]: {
           deletedAt: new Date().toISOString(),
+          productionBatches: registry.productionBatches ?? [],
+          measurementSamples: registry.measurementSamples ?? [],
           deletedGhgEntryIds: registry.deletedGhgEntryIds,
           deletedBiocharApplicationIds: registry.deletedBiocharApplicationIds,
           absentGhgEntryIds: registry.absentGhgEntryIds,
@@ -514,6 +558,8 @@ export async function finalizeRemovalDeletion(
           ),
         );
     }
+
+    if (!claim.submissionIds.length) await clearDeletedRemovalProductionBatches(ctx, claim, registry.productionBatches ?? [], tx);
 
     await tx
       .update(creditBatches)

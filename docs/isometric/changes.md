@@ -829,3 +829,17 @@ snapshot by design.
 - GHG statement creates now persist the interrupted marker (`lastError`,
   `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
   reached the registry, matching the Removal pipeline.
+
+## Production batch identity readback and recovery
+
+Before binding durability measurements, read the exact persisted ProductionBatch
+ID ([GET Production Batch](https://docs.isometric.com/api-reference/certify/get-production-batch.md)).
+Verify its ID, stable supplier reference and saved facility; a live identity with
+a changed current project/facility mapping blocks submission. Preserve local
+payload-drift reporting and legacy date-hash migration for live same-mapping batches.
+Only a 404 or the provider 400 detail naming exactly the requested missing ID
+permits recovery. Reconcile the stable reference before POST, refuse duplicate
+references, and validate the complete current payload (including supported legacy
+windows). Keep the old journal until confirmation, then replace it with an
+organization/provider/batch/old-ID and row-version compare-and-set. Audit the old
+and new IDs. Other read errors never trigger replacement.

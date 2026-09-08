@@ -11,9 +11,9 @@ export const REMOVAL_DELETE_TITLE = "Delete Removal?";
 export const REMOVAL_DISCARD_TITLE = "Discard Removal draft?";
 
 export const REMOVAL_DELETE_WITH_REGISTRY_MESSAGE =
-  "This deletes from Isometric any draft GHG Entry and Biochar Applications this Removal created, then releases the credit batches. Registry records that are no longer drafts cannot be deleted. This action cannot be undone.";
+  "This deletes the draft GHG Entry, Biochar Applications and registry measurements owned by this Removal. It also deletes registry Production Batches that no other Removal uses, so the next Removal uploads them again. Local credit batches, production records and Samples stay. This action cannot be undone.";
 export const REMOVAL_DELETE_LOCAL_ONLY_MESSAGE =
-  "This releases its credit batches so you can group them into separate Removals. This action cannot be undone.";
+  "This releases its credit batches for another Removal and removes any unused registry Production Batches linked to them. Local credit batches and Samples are kept. This action cannot be undone.";
 
 export const REMOVAL_DELETED_TOAST =
   "Removal deleted. Credit batches are available again.";

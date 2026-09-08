@@ -102,6 +102,7 @@ interface Page<T> {
 export class FakeIsometricRegistry {
   readonly datapoints: FakeRegistryRecord[] = [];
   readonly measurementSamples: FakeRegistryRecord[] = [];
+  readonly productionBatches: FakeRegistryRecord[] = [];
   readonly ghgEntries: FakeRegistryRecord[] = [];
   readonly biocharApplications: FakeRegistryRecord[] = [];
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
@@ -328,9 +329,42 @@ export class FakeIsometricRegistry {
         query,
       );
     }
+    if (method === "GET" && path === "/production_batches") {
+      return paginateSlice(this.filterRecords(this.productionBatches, query), query);
+    }
+    const productionBatchById = path.match(/^\/production_batches\/([^/]+)$/);
+    if (method === "GET" && productionBatchById) {
+      return this.findById(
+        this.productionBatches,
+        decodeURIComponent(productionBatchById[1]),
+        method,
+        path,
+        ApiError,
+      );
+    }
+    if (method === "DELETE" && productionBatchById) {
+      this.removeById(
+        this.productionBatches,
+        decodeURIComponent(productionBatchById[1]),
+        method,
+        path,
+        ApiError,
+      );
+      return undefined;
+    }
     const measurementSampleById = path.match(
       /^\/measurement_samples\/([^/]+)$/,
     );
+    if (method === "DELETE" && measurementSampleById) {
+      this.removeById(
+        this.measurementSamples,
+        decodeURIComponent(measurementSampleById[1]),
+        method,
+        path,
+        ApiError,
+      );
+      return undefined;
+    }
     if (method === "GET" && measurementSampleById) {
       return this.findById(
         this.measurementSamples,

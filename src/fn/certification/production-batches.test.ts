@@ -5,6 +5,7 @@ import type { Logger } from "@/lib/log";
 import type { ProductionBatchRegistryInput } from "@/data-access/certifier-production-batches";
 import type { IsometricProductionBatch } from "@/lib/isometric/production-batches";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
+import { IsometricApiError } from "@/lib/isometric/client";
 import type { PerformRegistryCreateArgs } from "./registry-create";
 import type { DurabilityMeasurementSampleSubmission } from "./durability-measurement-samples";
 
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getProductionBatchRegistrations: vi.fn(),
   migrateProductionBatchPayloadHash: vi.fn(),
   upsertProductionBatchRegistration: vi.fn(),
+  replaceMissingProductionBatchRegistration: vi.fn(),
   appendSyncEventBestEffort: vi.fn(),
   client: {
     get: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("@/data-access/certifier-production-batches", () => ({
   getProductionBatchRegistrations: mocks.getProductionBatchRegistrations,
   migrateProductionBatchPayloadHash: mocks.migrateProductionBatchPayloadHash,
   upsertProductionBatchRegistration: mocks.upsertProductionBatchRegistration,
+  replaceMissingProductionBatchRegistration: mocks.replaceMissingProductionBatchRegistration,
 }));
 
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
@@ -73,7 +76,7 @@ import {
   applyProductionBatchIds,
   creditBatchIdsForMeasurementSamples,
 } from "./durability-measurement-samples";
-import { ensureProductionBatchesForCreditBatches } from "./production-batches";
+import { bindProductionBatchesToMeasurementSamples, ensureProductionBatchesForCreditBatches } from "./production-batches";
 import { performRegistryCreate } from "./registry-create";
 
 const CREDIT_BATCH_ID = "11111111-1111-4111-8111-111111111111";
@@ -170,6 +173,10 @@ beforeEach(() => {
   mocks.upsertProductionBatchRegistration.mockImplementation(
     upsertReturning(PRODUCTION_BATCH_ID),
   );
+  mocks.client.get.mockImplementation(async () => remoteBatch(await currentSupplierRef()));
+  mocks.replaceMissingProductionBatchRegistration.mockImplementation(
+    async (_ctx: unknown, _expected: unknown, input: object) => input,
+  );
   mocks.client.post.mockImplementation(
     async (_path: string, body: { supplier_reference_id: string }) =>
       remoteBatch(body.supplier_reference_id),
@@ -178,6 +185,147 @@ beforeEach(() => {
 });
 
 describe("ensureProductionBatchesForCreditBatches", () => {
+  it("recovers a missing registered batch before binding durability measurements", async () => {
+    const missingId = "ptb_1M203VTR2SBXHRRC";
+    const supplierReference = await currentSupplierRef();
+    const row = await upsertReturning(missingId)(orgCtx, { supplierReference });
+    mocks.getProductionBatchRegistrations.mockResolvedValue([
+      { ...row, payloadHash: await currentPayloadHash() },
+    ]);
+    mocks.client.get.mockRejectedValue(
+      new IsometricApiError(
+        `Could not find 'ProductionBatch' with IDs '${missingId}'`,
+        404,
+      ),
+    );
+
+    const registered = await ensure();
+
+    // A stale ID here becomes the user's 400 at POST /measurement_samples.
+    expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    expect(registered.get(CREDIT_BATCH_ID)).not.toBe(missingId);
+  });
+
+  async function missingRegistration() {
+    const row = await upsertReturning("ptb_missing")(orgCtx, {
+      supplierReference: await currentSupplierRef(),
+    });
+    mocks.getProductionBatchRegistrations.mockResolvedValue([row]);
+    mocks.client.get.mockRejectedValue(new IsometricApiError("missing", 404));
+    return row;
+  }
+
+  it.each([
+    new IsometricApiError("unauthorized", 401),
+    new IsometricApiError("forbidden", 403),
+    new IsometricApiError("server", 500),
+    new IsometricApiError("bad request", 400, { detail: "unrelated" }),
+    new IsometricApiError("bad request", 400, { detail: "Could not find 'ProductionBatch' with IDs 'ptb_other'" }),
+    new IsometricApiError("timeout", undefined, undefined, "network"),
+  ])("does not write on an inconclusive read: %s", async (error) => {
+    await missingRegistration();
+    mocks.client.get.mockRejectedValue(error);
+    await expect(ensure()).rejects.toBe(error);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceMissingProductionBatchRegistration).not.toHaveBeenCalled();
+    expect(mocks.upsertProductionBatchRegistration).not.toHaveBeenCalled();
+    expect(mocks.appendSyncEventBestEffort).not.toHaveBeenCalled();
+  });
+
+  it("binds the recovered identity to the outgoing measurement body", async () => {
+    await missingRegistration();
+    const bound = await bindProductionBatchesToMeasurementSamples({
+      orgCtx, removalId: "removal-1", submissionRow: { id: "submission-1" }, log,
+      submissions: [{ creditBatchId: CREDIT_BATCH_ID, body: { production_batch_id: null } } as DurabilityMeasurementSampleSubmission],
+    });
+    expect(bound[0].body.production_batch_id).toBe(PRODUCTION_BATCH_ID);
+  });
+
+  it.each([
+    { id: "ptb_wrong" },
+    { supplier_reference_id: "nm-ptb-wrong" },
+    { facility_id: "fcl_wrong" },
+  ])("refuses a live remote identity mismatch: %s", async (patch) => {
+    const old = await missingRegistration();
+    mocks.client.get.mockResolvedValue(remoteBatch(await currentSupplierRef(), old.externalProductionBatchId, patch));
+    await expect(ensure()).rejects.toThrow(/saved identity/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceMissingProductionBatchRegistration).not.toHaveBeenCalled();
+  });
+
+  it("recovers the exact provider missing-ID 400", async () => {
+    await missingRegistration();
+    mocks.client.get.mockRejectedValue(new IsometricApiError("bad request", 400, {
+      detail: "Could not find 'ProductionBatch' with IDs 'ptb_missing'",
+    }));
+    expect((await ensure()).get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    expect(mocks.client.get).toHaveBeenCalledWith("/production_batches/ptb_missing");
+    expect(mocks.upsertProductionBatchRegistration).not.toHaveBeenCalled();
+  });
+
+  it("reconciles an already recreated batch before replacing the journal", async () => {
+    const old = await missingRegistration();
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef());
+    });
+    expect((await ensure()).get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceMissingProductionBatchRegistration).toHaveBeenCalledWith(
+      orgCtx, old, expect.objectContaining({ externalProductionBatchId: PRODUCTION_BATCH_ID }),
+    );
+  });
+
+  it("refuses duplicate supplier references without replacing or POSTing", async () => {
+    await missingRegistration();
+    mocks.client.paginate.mockImplementation(async function* () {
+      yield remoteBatch(await currentSupplierRef());
+      yield remoteBatch(await currentSupplierRef(), "ptb_duplicate");
+    });
+    await expect(ensure()).rejects.toThrow(/Multiple production batches/);
+    expect(mocks.client.post).not.toHaveBeenCalled();
+    expect(mocks.replaceMissingProductionBatchRegistration).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("allows changed mapping only when the old batch is missing: %s", async (missing) => {
+    const old = await missingRegistration();
+    mocks.getProductionBatchRegistryInputs.mockResolvedValue([
+      registryInput({ externalFacilityId: "fcl_new", externalProjectId: "prj_new" }),
+    ]);
+    if (!missing) mocks.client.get.mockResolvedValue(remoteBatch(await currentSupplierRef(), old.externalProductionBatchId));
+    mocks.client.post.mockImplementation(async (_path, body) => remoteBatch(body.supplier_reference_id, PRODUCTION_BATCH_ID, { facility_id: "fcl_new" }));
+    if (missing) {
+      expect((await ensure()).get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    } else {
+      await expect(ensure()).rejects.toThrow(/mapping changed/);
+      expect(mocks.client.post).not.toHaveBeenCalled();
+    }
+  });
+
+  it("fails closed on a replacement CAS conflict", async () => {
+    await missingRegistration();
+    mocks.replaceMissingProductionBatchRegistration.mockResolvedValue(null);
+    await expect(ensure()).rejects.toThrow(/already registered/);
+  });
+
+  it("retains the old journal when replacement POST fails", async () => {
+    await missingRegistration();
+    mocks.client.post.mockRejectedValue(new IsometricApiError("refused", 400));
+    await expect(ensure()).rejects.toThrow("refused");
+    expect(mocks.replaceMissingProductionBatchRegistration).not.toHaveBeenCalled();
+    expect(mocks.upsertProductionBatchRegistration).not.toHaveBeenCalled();
+  });
+
+  it("creates a fresh registry batch after Removal cleanup removes the saved registration", async () => {
+    mocks.getProductionBatchRegistrations.mockResolvedValue([]);
+    mocks.client.paginate.mockImplementation(async function* () {});
+    const registered = await ensure();
+    expect(registered.get(CREDIT_BATCH_ID)).toBe(PRODUCTION_BATCH_ID);
+    expect(mocks.client.post).toHaveBeenCalledOnce();
+    expect(mocks.upsertProductionBatchRegistration).toHaveBeenCalledWith(orgCtx,
+      expect.objectContaining({ creditBatchId: CREDIT_BATCH_ID, externalProductionBatchId: PRODUCTION_BATCH_ID }));
+    expect(mocks.replaceMissingProductionBatchRegistration).not.toHaveBeenCalled();
+  });
+
   it("registers the batch with the dry-mass payload and journals the id", async () => {
     const registered = await ensure();
 
@@ -297,11 +445,14 @@ describe("ensureProductionBatchesForCreditBatches", () => {
     ).toEqual([expect.stringContaining("CB-2026-001 (nm-ptb-"), expect.stringContaining("CB-2026-002 (nm-ptb-")]);
   });
 
-  it("reuses a persisted registration without touching the registry", async () => {
+  it("reads a persisted registration before reuse without POSTing", async () => {
     mocks.getProductionBatchRegistrations.mockResolvedValue([
       {
         creditBatchId: CREDIT_BATCH_ID,
         externalProductionBatchId: PRODUCTION_BATCH_ID,
+        supplierReference: await currentSupplierRef(),
+        externalProjectId: registryInput().externalProjectId,
+        externalFacilityId: registryInput().externalFacilityId,
         payloadHash: await currentPayloadHash(),
       },
     ]);
@@ -319,6 +470,9 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       {
         creditBatchId: CREDIT_BATCH_ID,
         externalProductionBatchId: PRODUCTION_BATCH_ID,
+        supplierReference: await currentSupplierRef(),
+        externalProjectId: registryInput().externalProjectId,
+        externalFacilityId: registryInput().externalFacilityId,
         payloadHash: "a-stale-hash",
       },
     ]);
@@ -339,6 +493,9 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       {
         creditBatchId: CREDIT_BATCH_ID,
         externalProductionBatchId: PRODUCTION_BATCH_ID,
+        supplierReference: await currentSupplierRef(),
+        externalProjectId: registryInput().externalProjectId,
+        externalFacilityId: registryInput().externalFacilityId,
         payloadHash: payloadHash(current),
       },
     ]);
@@ -365,6 +522,9 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       {
         creditBatchId: CREDIT_BATCH_ID,
         externalProductionBatchId: PRODUCTION_BATCH_ID,
+        supplierReference: await currentSupplierRef(),
+        externalProjectId: registryInput().externalProjectId,
+        externalFacilityId: registryInput().externalFacilityId,
         payloadHash: await currentPayloadHash(),
       },
     ]);
@@ -384,6 +544,9 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       {
         creditBatchId: CREDIT_BATCH_ID,
         externalProductionBatchId: PRODUCTION_BATCH_ID,
+        supplierReference: await currentSupplierRef(),
+        externalProjectId: registryInput().externalProjectId,
+        externalFacilityId: registryInput().externalFacilityId,
         payloadHash: payloadHash(legacyBody),
       },
     ]);
@@ -403,6 +566,9 @@ describe("ensureProductionBatchesForCreditBatches", () => {
       {
         creditBatchId: CREDIT_BATCH_ID,
         externalProductionBatchId: PRODUCTION_BATCH_ID,
+        supplierReference: await currentSupplierRef(),
+        externalProjectId: registryInput().externalProjectId,
+        externalFacilityId: registryInput().externalFacilityId,
         payloadHash: payloadHash(legacyBody),
       },
     ]);
@@ -415,12 +581,15 @@ describe("ensureProductionBatchesForCreditBatches", () => {
 
   it("reuses a registration whose local data no longer builds a payload", async () => {
     mocks.getProductionBatchRegistryInputs.mockResolvedValue([
-      registryInput({ externalFacilityId: null }),
+      registryInput({ isometricFeedstockTypeId: null }),
     ]);
     mocks.getProductionBatchRegistrations.mockResolvedValue([
       {
         creditBatchId: CREDIT_BATCH_ID,
         externalProductionBatchId: PRODUCTION_BATCH_ID,
+        supplierReference: await currentSupplierRef(),
+        externalProjectId: registryInput().externalProjectId,
+        externalFacilityId: registryInput().externalFacilityId,
         payloadHash: "a-stale-hash",
       },
     ]);

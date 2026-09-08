@@ -1,12 +1,43 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { IsometricClient } from "./client";
 import {
   buildMeasurementSampleReference,
   captureMeasurementSampleDatapointIds,
   findMeasurementSampleBySupplierRef,
+  getMeasurementSample,
   mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
 } from "./measurement-samples";
+
+describe("getMeasurementSample", () => {
+  it("finds a saved ID through the supported list endpoint", async () => {
+    const sample = { id: "mts-saved", supplier_reference_id: "ref-saved" };
+    const client = {
+      get: vi.fn(),
+      paginate: vi.fn(async function* () {
+        yield { id: "mts-other" };
+        yield sample;
+      }),
+    };
+    expect(await getMeasurementSample(client as unknown as IsometricClient, sample.id))
+      .toBe(sample);
+    expect(client.paginate).toHaveBeenCalledWith("/measurement_samples");
+    expect(client.get).not.toHaveBeenCalled();
+  });
+
+  it("returns absent only after a successful list scan", async () => {
+    const client = { paginate: async function* () {} };
+    expect(await getMeasurementSample(client as unknown as IsometricClient, "mts-missing"))
+      .toBeNull();
+    const failure = new Error("registry unavailable");
+    const failedClient = {
+      paginate: () => ({ [Symbol.asyncIterator]: () => ({ next: async () => { throw failure; } }) }),
+    };
+    await expect(getMeasurementSample(failedClient as unknown as IsometricClient, "mts-missing"))
+      .rejects.toBe(failure);
+  });
+});
 
 describe("buildMeasurementSampleReference", () => {
   it("is deterministic, versioned, and unique at local-Sample grain", () => {

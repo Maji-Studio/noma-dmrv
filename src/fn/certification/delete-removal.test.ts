@@ -12,6 +12,13 @@ const state = vi.hoisted(() => ({
   claim: vi.fn(),
   finalize: vi.fn(),
   release: vi.fn(),
+  shared: vi.fn(),
+  getProductionBatch: vi.fn(),
+  findProductionBatch: vi.fn(),
+  getMeasurement: vi.fn(),
+  findMeasurement: vi.fn(),
+  deleteMeasurement: vi.fn(),
+  deleteProductionBatch: vi.fn(),
   deleteGhgEntry: vi.fn(),
   deleteBiocharApplication: vi.fn(),
   findBiocharApplicationBySupplierReference: vi.fn(),
@@ -19,6 +26,9 @@ const state = vi.hoisted(() => ({
   appendSyncEvent: vi.fn(),
 }));
 
+vi.mock("@/data-access/removal-production-batch-deletion", () => ({ isRemovalProductionBatchShared: state.shared }));
+vi.mock("@/lib/isometric/production-batches", () => ({ deleteProductionBatch: state.deleteProductionBatch, getProductionBatch: state.getProductionBatch, findProductionBatchBySupplierRef: state.findProductionBatch }));
+vi.mock("@/lib/isometric/measurement-samples", () => ({ deleteMeasurementSample: state.deleteMeasurement, getMeasurementSample: state.getMeasurement, findMeasurementSampleBySupplierRef: state.findMeasurement }));
 vi.mock("../with-action", () => ({
   withAction: async (run: (ctx: OrgContext) => Promise<unknown>) => ({
     success: true,
@@ -34,6 +44,7 @@ vi.mock("@/data-access/certifier-removal-deletion", () => ({
   releaseRemovalDeletionClaim: state.release,
 }));
 vi.mock("@/lib/isometric", () => ({
+  deleteProductionBatch: state.deleteProductionBatch,
   deleteGhgEntry: state.deleteGhgEntry,
   deleteBiocharApplication: state.deleteBiocharApplication,
   findBiocharApplicationBySupplierReference:
@@ -89,6 +100,11 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
 
 beforeEach(() => {
   for (const mock of Object.values(state)) mock.mockReset();
+  state.shared.mockResolvedValue(false);
+  state.getProductionBatch.mockResolvedValue({ id: "ptb_1", supplier_reference_id: "batch-ref", facility_id: "fcl_1" });
+  state.findProductionBatch.mockResolvedValue(null);
+  state.findMeasurement.mockResolvedValue(null);
+  state.getMeasurement.mockResolvedValue(null);
   state.finalize.mockResolvedValue({
     releasedSliceCount: 2,
     releasedDocumentMirrors: [],
@@ -101,6 +117,19 @@ beforeEach(() => {
 });
 
 describe("deleteRemoval", () => {
+  it("deletes an exclusive production batch and finalizes its saved registration", async () => {
+    state.claim.mockResolvedValue({ ...claim(), productionBatches: [{
+      creditBatchId: "batch-1", registrationId: "registration-1",
+      externalProductionBatchId: "ptb_1", supplierReference: "batch-ref",
+      externalFacilityId: "fcl_1",
+    }] });
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(state.deleteProductionBatch).toHaveBeenCalledWith({ fake: true }, "ptb_1");
+    expect(state.finalize.mock.calls[0]?.[2]).toMatchObject({
+      productionBatches: [expect.objectContaining({ externalId: "ptb_1", outcome: "deleted" })],
+    });
+  });
+
   it("deletes the GHG Entry before the Biochar Applications, then finalizes", async () => {
     state.claim.mockResolvedValue(claim());
     const order: string[] = [];
@@ -129,6 +158,8 @@ describe("deleteRemoval", () => {
       absentGhgEntryIds: [],
       absentBiocharApplicationIds: [],
       unresolvedBiocharApplicationReferences: [],
+      productionBatches: [],
+      measurementSamples: [],
     });
     expect(state.release).not.toHaveBeenCalled();
   });
@@ -396,4 +427,111 @@ describe("deleteRemoval", () => {
     await expect(attempt).rejects.not.toThrow(/Try again/);
   });
 
+});
+
+const batchTarget = {
+  creditBatchId: "batch-1", registrationId: "registration-1",
+  externalProductionBatchId: "ptb_1", supplierReference: "batch-ref", externalFacilityId: "fcl_1",
+};
+const measurementTarget = { submissionId: "sub-1", supplierReference: "measurement-ref", externalId: "mts_1" };
+
+describe("Removal artifact cleanup", () => {
+  beforeEach(() => {
+    state.claim.mockResolvedValue(claim({ productionBatches: [batchTarget], measurementSamples: [measurementTarget] }));
+    state.findMeasurement.mockResolvedValue({ id: "mts_1", supplier_reference_id: "measurement-ref" });
+  });
+
+  it("deletes GHG Entries, applications, owned measurements, then exclusive batches", async () => {
+    const order: string[] = [];
+    for (const [name, mock] of [["ghg", state.deleteGhgEntry], ["application", state.deleteBiocharApplication],
+      ["measurement", state.deleteMeasurement], ["batch", state.deleteProductionBatch], ["finalize", state.finalize]] as const) {
+      mock.mockImplementation(async () => {
+        order.push(name);
+        return { releasedSliceCount: 2, releasedDocumentMirrors: [] };
+      });
+    }
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(order).toEqual(["ghg", "application", "application", "measurement", "batch", "finalize"]);
+  });
+
+  it("retains shared batches while deleting only this Removal's measurements", async () => {
+    state.shared.mockResolvedValue(true);
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(state.deleteMeasurement).toHaveBeenCalledOnce();
+    expect(state.deleteProductionBatch).not.toHaveBeenCalled();
+    expect(state.getProductionBatch).not.toHaveBeenCalled();
+    expect(state.finalize.mock.calls[0][2].productionBatches).toEqual([{ creditBatchId: "batch-1", externalId: "ptb_1", outcome: "retained" }]);
+  });
+
+  it("retains a batch that becomes shared during registry readback", async () => {
+    state.shared.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(state.deleteProductionBatch).not.toHaveBeenCalled();
+    expect(state.finalize.mock.calls[0][2].productionBatches[0].outcome).toBe("retained");
+  });
+
+  it("stops all child cleanup when GHG Entry deletion is refused", async () => {
+    state.deleteGhgEntry.mockRejectedValue(new IsometricApiError("refused", 409, null, "http"));
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("GHG Entry");
+    expect(state.deleteMeasurement).not.toHaveBeenCalled();
+    expect(state.deleteProductionBatch).not.toHaveBeenCalled();
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
+
+  it.each([404, 400])("tolerates exact missing-resource retries (%s)", async (status) => {
+    state.deleteMeasurement.mockRejectedValue(new IsometricApiError("gone", status,
+      { detail: "Could not find 'MeasurementSample' with IDs 'mts_1'" }, "http"));
+    state.deleteProductionBatch.mockRejectedValue(new IsometricApiError("gone", status,
+      { detail: "Could not find 'ProductionBatch' with IDs 'ptb_1'" }, "http"));
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(state.finalize.mock.calls[0][2]).toMatchObject({
+      measurementSamples: [expect.objectContaining({ outcome: "absent" })],
+      productionBatches: [expect.objectContaining({ outcome: "absent" })],
+    });
+  });
+
+  it.each([400, 401, 500])("keeps journals and releases the claim on normal registry refusal (%s)", async (status) => {
+    state.deleteProductionBatch.mockRejectedValue(new IsometricApiError("refused", status, { detail: "not deletable" }, "http"));
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("Run Delete Removal again");
+    expect(state.release).toHaveBeenCalledOnce();
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
+
+  it("reconciles unjournaled measurement and production batch POSTs", async () => {
+    state.claim.mockResolvedValue(claim({ productionBatches: [{ ...batchTarget, registrationId: null, externalProductionBatchId: null }],
+      measurementSamples: [{ ...measurementTarget, externalId: null }] }));
+    state.findProductionBatch.mockResolvedValue({ id: "ptb_1", facility_id: "fcl_1", supplier_reference_id: "batch-ref" });
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(state.findProductionBatch).toHaveBeenCalledWith({ fake: true }, "batch-ref");
+    expect(state.findMeasurement).toHaveBeenCalledWith({ fake: true }, "measurement-ref", { requireUnique: true });
+    expect(state.deleteProductionBatch).toHaveBeenCalledOnce();
+    expect(state.deleteMeasurement).toHaveBeenCalledOnce();
+  });
+
+  it("does not delete an unmatched journal ID when supplier lookup is absent", async () => {
+    state.findMeasurement.mockResolvedValue(null);
+    state.getMeasurement.mockResolvedValue({ id: "mts_1", supplier_reference_id: "another-version" });
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("does not match");
+    expect(state.deleteMeasurement).not.toHaveBeenCalled();
+  });
+
+  it("records confirmed absence without deleting another resource", async () => {
+    state.findMeasurement.mockResolvedValue(null);
+    state.getProductionBatch.mockResolvedValue(null);
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(state.deleteMeasurement).not.toHaveBeenCalled();
+    expect(state.deleteProductionBatch).not.toHaveBeenCalled();
+    expect(state.finalize.mock.calls[0][2].productionBatches[0].outcome).toBe("absent");
+  });
+
+  it.each([
+    { id: "ptb_wrong", supplier_reference_id: "batch-ref", facility_id: "fcl_1" },
+    { id: "ptb_1", supplier_reference_id: "another-ref", facility_id: "fcl_1" },
+    { id: "ptb_1", supplier_reference_id: "batch-ref", facility_id: "another-facility" },
+  ])("refuses inconsistent batch identity", async (remote) => {
+    state.getProductionBatch.mockResolvedValue(remote);
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("does not match");
+    expect(state.deleteProductionBatch).not.toHaveBeenCalled();
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
 });
