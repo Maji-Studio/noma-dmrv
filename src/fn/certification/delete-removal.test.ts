@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   claim: vi.fn(),
   finalize: vi.fn(),
   release: vi.fn(),
+  mutation: vi.fn(),
   shared: vi.fn(),
   getProductionBatch: vi.fn(),
   findProductionBatch: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock("@/data-access/certifier-removal-deletion", () => ({
   claimRemovalDeletion: state.claim,
   finalizeRemovalDeletion: state.finalize,
   releaseRemovalDeletionClaim: state.release,
+  withRemovalDeletionMutation: state.mutation,
 }));
 vi.mock("@/lib/isometric", () => ({
   deleteProductionBatch: state.deleteProductionBatch,
@@ -100,6 +102,7 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
 
 beforeEach(() => {
   for (const mock of Object.values(state)) mock.mockReset();
+  state.mutation.mockImplementation((_ctx, _claim, run) => run({ guarded: true }));
   state.shared.mockResolvedValue(false);
   state.getProductionBatch.mockResolvedValue({ id: "ptb_1", supplier_reference_id: "batch-ref", facility_id: "fcl_1" });
   state.findProductionBatch.mockResolvedValue(null);
@@ -117,6 +120,59 @@ beforeEach(() => {
 });
 
 describe("deleteRemoval", () => {
+  it.each([new Error("database connection failed"), new SafeError("The deletion claim changed")])("does not invent a provider attempt for a local fence error", async (error) => {
+    state.claim.mockResolvedValue(claim());
+    state.mutation.mockRejectedValue(error);
+    const deletion = deleteRemoval(ORG_CTX, INPUT);
+    await expect(deletion).rejects.toThrow(error instanceof SafeError ? error.message : "could not be removed locally");
+    expect(state.deleteGhgEntry).not.toHaveBeenCalled();
+    expect(state.appendSyncEvent).not.toHaveBeenCalled();
+    expect(state.finalize).not.toHaveBeenCalled();
+    expect(state.release).toHaveBeenCalledOnce();
+  });
+
+  it("audits a real delete before propagating a subsequent local commit failure", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.mutation.mockImplementation(async (_ctx, _claim, run) => {
+      await run({ guarded: true });
+      throw new Error("database commit failed");
+    });
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("could not be removed locally");
+    expect(state.deleteGhgEntry).toHaveBeenCalledOnce();
+    expect(state.appendSyncEvent).toHaveBeenCalledOnce();
+    expect(state.appendSyncEvent.mock.calls[0][1]).toMatchObject({
+      operation: "removal:delete:ghg-entry", status: "succeeded",
+      responsePayload: { id: "gge_1", outcome: "deleted" },
+    });
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
+
+  it("audits a generic failure thrown during the actual provider request", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteGhgEntry.mockRejectedValue(new Error("request failed"));
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow("Isometric did not delete");
+    expect(state.appendSyncEvent).toHaveBeenCalledOnce();
+    expect(state.appendSyncEvent.mock.calls[0][1]).toMatchObject({ operation: "removal:delete:ghg-entry", status: "failed" });
+    expect(state.finalize).not.toHaveBeenCalled();
+  });
+
+  it.each(["absent", "retained"] as const)("audits %s artifacts for a Removal without ledger history", async (outcome) => {
+    state.claim.mockResolvedValue(claim({ submissionIds: [], lockedSubmissions: [],
+      externalRemovalIds: [], biocharApplications: [], productionBatches: [{
+        creditBatchId: "batch-1", registrationId: "registration-1",
+        externalProductionBatchId: "ptb_1", supplierReference: "batch-ref", externalFacilityId: "fcl_1",
+      }] }));
+    state.shared.mockResolvedValue(outcome === "retained");
+    state.getProductionBatch.mockResolvedValue(null);
+    await deleteRemoval(ORG_CTX, INPUT);
+    expect(state.appendSyncEvent).toHaveBeenCalledWith(ORG_CTX, expect.objectContaining({
+      operation: "removal:delete", responsePayload: expect.objectContaining({
+        production_batches: [{ creditBatchId: "batch-1", externalId: "ptb_1", outcome }],
+        measurement_samples: [], absent_ghg_entry_ids: [], absent_biochar_application_ids: [],
+      }),
+    }), { removalId: INPUT.removalId });
+  });
+
   it("deletes an exclusive production batch and finalizes its saved registration", async () => {
     state.claim.mockResolvedValue({ ...claim(), productionBatches: [{
       creditBatchId: "batch-1", registrationId: "registration-1",
@@ -145,6 +201,7 @@ describe("deleteRemoval", () => {
     const result = await deleteRemoval(ORG_CTX, INPUT);
 
     expect(order).toEqual(["gge_1", "bse_1", "bse_2"]);
+    expect(state.mutation).toHaveBeenCalledTimes(3);
     expect(result).toEqual({
       removalId: "removal-1",
       deletedGhgEntryIds: ["gge_1"],
@@ -441,6 +498,33 @@ describe("Removal artifact cleanup", () => {
     state.findMeasurement.mockResolvedValue({ id: "mts_1", supplier_reference_id: "measurement-ref" });
   });
 
+  it.each(["deleted", "absent", "failed"] as const)("audits %s registry calls only after releasing mutation locks", async (result) => {
+    let locked = false;
+    state.mutation.mockImplementation(async (_ctx, _claim, run) => {
+      locked = true;
+      try { return await run({ guarded: true }); }
+      finally { locked = false; }
+    });
+    for (const remove of [state.deleteGhgEntry, state.deleteBiocharApplication, state.deleteMeasurement, state.deleteProductionBatch]) {
+      remove.mockImplementation(async () => { expect(locked).toBe(true); });
+    }
+    if (result !== "deleted") state.deleteProductionBatch.mockImplementation(async () => {
+      expect(locked).toBe(true);
+      throw new IsometricApiError("refused", result === "absent" ? 404 : 500, null, "http");
+    });
+    state.appendSyncEvent.mockImplementation(async () => { expect(locked).toBe(false); });
+    const deletion = deleteRemoval(ORG_CTX, INPUT);
+    if (result === "failed") {
+      await expect(deletion).rejects.toThrow("did not delete");
+      expect(state.finalize).not.toHaveBeenCalled();
+    } else await deletion;
+    const events = state.appendSyncEvent.mock.calls.filter((call) => call[1].operation === "removal:delete:production-batch");
+    expect(events).toHaveLength(1);
+    expect(events[0][1]).toMatchObject(result === "failed"
+      ? { status: "failed" }
+      : { status: "succeeded", responsePayload: { outcome: result } });
+  });
+
   it("deletes GHG Entries, applications, owned measurements, then exclusive batches", async () => {
     const order: string[] = [];
     for (const [name, mock] of [["ghg", state.deleteGhgEntry], ["application", state.deleteBiocharApplication],
@@ -468,6 +552,7 @@ describe("Removal artifact cleanup", () => {
     await deleteRemoval(ORG_CTX, INPUT);
     expect(state.deleteProductionBatch).not.toHaveBeenCalled();
     expect(state.finalize.mock.calls[0][2].productionBatches[0].outcome).toBe("retained");
+    expect(state.appendSyncEvent.mock.calls.some((call) => call[1].operation === "removal:delete:production-batch")).toBe(false);
   });
 
   it("stops all child cleanup when GHG Entry deletion is refused", async () => {

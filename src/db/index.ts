@@ -8,11 +8,16 @@ import { env } from "@/config/env";
 import { getPgPoolConfig } from "@/lib/pg-pool-config";
 import * as schema from "./schema";
 
+const DEFAULT_POOL_LOCK_TIMEOUT_MS = 1_000;
+
 const pool = new Pool({
   ...getPgPoolConfig(env.DATABASE_URL),
   max: env.DB_POOL_MAX ?? 1,
   idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT_MS ?? 10_000,
   connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000,
+  // Fail a waiting pooled statement before it monopolizes a scarce pool slot.
+  // Dedicated remote-mutation connections must keep their locks until completion.
+  lock_timeout: env.DB_POOL_LOCK_TIMEOUT_MS ?? DEFAULT_POOL_LOCK_TIMEOUT_MS,
 });
 
 export const db = drizzle(pool, { schema });

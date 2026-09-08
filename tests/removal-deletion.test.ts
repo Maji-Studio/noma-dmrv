@@ -1,8 +1,9 @@
+import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
 import { REMOVAL_DELETION_LEASE_KEY } from "@/lib/certification/removal-deletion-lease";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { claimSubmissionDraft } from "@/data-access/certification-submissions";
 import { createRemovalWithCreditBatches, discardLocalRemovalDraft } from "@/data-access/certifier-removals";
-import { assertNoRemovalBatchDeletion } from "@/data-access/removal-production-batch-deletion";
+import { isRemovalProductionBatchShared, assertNoRemovalBatchDeletion } from "@/data-access/removal-production-batch-deletion";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -21,7 +22,7 @@ import {
  * Requires a real Postgres (`.env.test`).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/isometric/client")>();
@@ -140,88 +141,9 @@ afterAll(async () => {
       .where(inArray(feedstockTypes.id, createdFeedstockTypeIds));
   }
 });
-interface Fixture {
-  facilityId: string;
-  removalId: string;
-  creditBatchId: string;
-  certifierProjectId: string;
-  externalProjectId: string;
-  runId: string;
-}
-async function createFixture(): Promise<Fixture> {
-  const runId = crypto.randomUUID().slice(0, RUN_ID_LENGTH);
-  const [facility] = await db
-    .insert(facilities)
-    .values({
-      organizationId: TEST_ORG_ID,
-      name: `Deletion Facility ${runId}`,
-      code: `FAC-DEL-${runId}`,
-      durabilityOption: "200_year",
-    })
-    .returning({ id: facilities.id });
-  createdFacilityIds.push(facility.id);
-  const externalProjectId = `prj_deletion_${runId}`;
-  const [project] = await db
-    .insert(certifierProjects)
-    .values({
-      organizationId: TEST_ORG_ID,
-      facilityId: facility.id,
-      provider: "isometric",
-      externalProjectId,
-    })
-    .returning({ id: certifierProjects.id });
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({
-      organizationId: TEST_ORG_ID,
-      facilityId: facility.id,
-      provider: "isometric",
-    })
-    .returning({ id: certifierRemovals.id });
-  createdRemovalIds.push(removal.id);
-  const [feedstockType] = await db
-    .insert(feedstockTypes)
-    .values({
-      organizationId: TEST_ORG_ID,
-      code: `FT-DEL-${runId}`,
-      name: `Deletion Feedstock ${runId}`,
-      category: "forestry",
-      usage: "pyrolysis",
-    })
-    .returning({ id: feedstockTypes.id });
-  createdFeedstockTypeIds.push(feedstockType.id);
-  const [productionProcess] = await db
-    .insert(productionProcesses)
-    .values({
-      organizationId: TEST_ORG_ID,
-      facilityId: facility.id,
-      feedstockTypeId: feedstockType.id,
-    })
-    .returning({ id: productionProcesses.id });
-  const [batch] = await db
-    .insert(creditBatches)
-    .values({
-      organizationId: TEST_ORG_ID,
-      code: `CB-DEL-${runId}`,
-      facilityId: facility.id,
-      feedstockTypeId: feedstockType.id,
-      productionProcessId: productionProcess.id,
-      status: "pending",
-      startDate: "2026-01-01",
-      endDate: "2026-01-31",
-      certifier: "isometric",
-    })
-    .returning({ id: creditBatches.id });
-  createdBatchIds.push(batch.id);
-  return {
-    facilityId: facility.id,
-    removalId: removal.id,
-    creditBatchId: batch.id,
-    certifierProjectId: project.id,
-    externalProjectId,
-    runId,
-  };
-}
+const createFixture = () => createRemovalDeletionFixture({
+  createdFacilityIds, createdRemovalIds, createdBatchIds, createdFeedstockTypeIds,
+});
 async function insertRegistration(
   fixture: Fixture,
   chain: BiocharApplicationChain,
@@ -271,42 +193,6 @@ async function registrationRowsFor(submissionId: string) {
     })
     .from(certifierBiocharApplications)
     .where(eq(certifierBiocharApplications.removalSubmissionId, submissionId));
-}
-async function insertLedgerRow(
-  fixture: Fixture,
-  args: {
-    status: "draft" | "submitted" | "rejected";
-    externalId: string | null;
-    lockedAt?: Date | null;
-    metadata?: Record<string, unknown> | null;
-    payloadSnapshot?: Record<string, unknown> | null;
-    reserveBatch?: boolean;
-    version?: number;
-  },
-): Promise<string> {
-  const [row] = await db
-    .insert(certificationSubmissions)
-    .values({
-      organizationId: TEST_ORG_ID,
-      provider: "isometric",
-      submissionType: "removal",
-      localEntityType: "removal",
-      localEntityId: fixture.removalId,
-      version: args.version ?? SUBMISSION_VERSION,
-      status: args.status,
-      externalId: args.externalId,
-      lockedAt: args.lockedAt ?? null,
-      metadata: args.metadata ?? null,
-      payloadSnapshot: args.payloadSnapshot ?? null,
-    })
-    .returning({ id: certificationSubmissions.id });
-  if (args.reserveBatch) {
-    await db
-      .update(creditBatches)
-      .set({ productionEmissionsClaimReservedBySubmissionId: row.id })
-      .where(eq(creditBatches.id, fixture.creditBatchId));
-  }
-  return row.id;
 }
 function interruptedMetadata(): Record<string, unknown> {
   return {
@@ -975,4 +861,102 @@ it.each([false, true])("rechecks the lease after the optimistic submission read 
   } finally { releaseMapping(); }
   await holder;
   await expect(submission).resolves.toMatchObject({ kind: "blocked", reason: "in-flight" });
+});
+
+
+it("serializes concurrent retained-batch finalizers and preserves the last Removal for retry", async () => {
+  const first = await createFixture();
+  const [other] = await db.insert(certifierRemovals).values({
+    organizationId: TEST_ORG_ID, facilityId: first.facilityId, provider: "isometric",
+  }).returning({ id: certifierRemovals.id });
+  createdRemovalIds.push(other.id);
+  const fixtures = [first, { ...first, removalId: other.id }];
+  const chain = await createBiocharApplicationChain({ ...first, tag: first.runId });
+  createdChains.push(chain);
+  await db.update(certifierProductionBatches).set({
+    supplierReference: buildProductionBatchReference({ creditBatchId: first.creditBatchId }),
+  }).where(eq(certifierProductionBatches.id, chain.productionBatchRegistrationId));
+  // Separate application slices in the same batch belong to the two Removals.
+  const [application] = await db.select().from(applications).where(eq(applications.id, chain.applicationId));
+  const [secondApplication] = await db.insert(applications).values({
+    ...application, id: crypto.randomUUID(), code: `AP-RACE-${first.runId}`,
+  }).returning({ id: applications.id });
+  try {
+    for (const [index, fixture] of fixtures.entries()) {
+      await db.insert(creditBatchApplications).values({
+        organizationId: TEST_ORG_ID, creditBatchId: first.creditBatchId,
+        applicationId: index === 0 ? chain.applicationId : secondApplication.id,
+        removalId: fixture.removalId, allocatedWetMassKg: 12_000, allocatedDryMassKg: 10_800,
+      });
+      await insertLedgerRow(fixture, { status: "rejected", externalId: null });
+    }
+    const ctx = makeTestOrgContext();
+    const claims = await Promise.all(fixtures.map((fixture) =>
+      claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId)));
+    const outcomes = claims.map((claim) => ({
+      deletedGhgEntryIds: [], deletedBiocharApplicationIds: [], absentGhgEntryIds: [],
+      absentBiocharApplicationIds: [], unresolvedBiocharApplicationReferences: [],
+      productionBatches: claim.productionBatches!.map((target) => ({
+        creditBatchId: target.creditBatchId, externalId: target.externalProductionBatchId,
+        outcome: "retained" as const,
+      })),
+    }));
+    for (const claim of claims) {
+      expect(await isRemovalProductionBatchShared(ctx, claim, claim.productionBatches![0])).toBe(true);
+    }
+    const journals = await Promise.all(claims.map((claim) => ledgerRow(claim.submissionIds[0])));
+    let unlock!: () => void;
+    let locked!: (pid: number) => void;
+    const release = new Promise<void>((resolve) => { unlock = resolve; });
+    const ready = new Promise<number>((resolve) => { locked = resolve; });
+    const holder = db.transaction(async (tx) => {
+      await tx.select({ id: creditBatches.id }).from(creditBatches)
+        .where(eq(creditBatches.id, first.creditBatchId)).for("update");
+      const result = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      locked(result.rows[0].pid);
+      await release;
+    });
+    const pid = await ready;
+    const finalizers = Promise.allSettled(claims.map((claim, index) =>
+      finalizeRemovalDeletion(ctx, claim, outcomes[index])));
+    try {
+      // Both real transactions must reach the shared batch lock before either proceeds.
+      await expect.poll(async () => {
+        const result = await db.execute<{ count: number }>(sql`
+          with recursive waiters(pid) as (
+            select pid from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))
+            union
+            select activity.pid from pg_stat_activity activity
+            join waiters on waiters.pid = any(pg_blocking_pids(activity.pid))
+          )
+          select count(*)::int as count from waiters
+        `);
+        return result.rows[0].count;
+      }).toBe(2);
+    } finally {
+      unlock();
+      await holder;
+    }
+    const results = await finalizers;
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const loser = results.findIndex((result) => result.status === "rejected");
+    expect(results[loser]).toMatchObject({ reason: expect.any(SafeError) });
+    expect((results[loser] as PromiseRejectedResult).reason.message).toContain("Run Delete Removal again");
+    const claim = claims[loser];
+    expect(await removalExists(claim.removalId)).toBe(true);
+    expect(await db.select().from(creditBatchApplications)
+      .where(eq(creditBatchApplications.removalId, claim.removalId))).toHaveLength(1);
+    expect(await ledgerRow(claim.submissionIds[0])).toEqual(journals[loser]);
+    expect(await db.select().from(certifierProductionBatches)
+      .where(eq(certifierProductionBatches.id, chain.productionBatchRegistrationId))).toHaveLength(1);
+    await releaseRemovalDeletionClaim(ctx, claim);
+    // The normal retry discovers the now-unshared registry batch and completes cleanup.
+    await deleteRemoval(ctx, { facilityId: first.facilityId, removalId: claim.removalId });
+    expect(await removalExists(claim.removalId)).toBe(false);
+    expect(await db.select().from(certifierProductionBatches)
+      .where(eq(certifierProductionBatches.id, chain.productionBatchRegistrationId))).toHaveLength(0);
+  } finally {
+    await db.delete(creditBatchApplications).where(eq(creditBatchApplications.applicationId, secondApplication.id));
+    await db.delete(applications).where(eq(applications.id, secondApplication.id));
+  }
 });

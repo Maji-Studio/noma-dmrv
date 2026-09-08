@@ -56,7 +56,8 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
   resets the database first so the full migration chain and admin bootstrap run
   before schema verification.
 - `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
-- Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, and `DB_POOL_LOCK_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
 
 ## Soft Delete — Facility and Storage-Bin Archive
 

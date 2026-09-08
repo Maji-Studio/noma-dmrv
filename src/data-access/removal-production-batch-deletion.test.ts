@@ -68,10 +68,17 @@ describe("Removal production batch data access", () => {
     expect(compiled.sql).toContain("date_trunc('milliseconds'");
     expect(state.delete).toHaveBeenCalledOnce();
   });
-  it("never clears a retained batch", async () => {
+  it("never clears a retained batch with a surviving owner", async () => {
+    state.select.mockReturnValueOnce(query([{ removalId: "other" }]));
     for (const outcomes of [[{ creditBatchId: "batch-1", externalId: "ptb_1", outcome: "retained" as const }]]) {
       await clearDeletedRemovalProductionBatches(ctx, { ...claim, productionBatches: [target] }, outcomes, tx);
     }
+    expect(state.delete).not.toHaveBeenCalled();
+  });
+  it("requires retry when a retained batch loses its surviving owner", async () => {
+    unshared();
+    await expect(clearDeletedRemovalProductionBatches(ctx, { ...claim, productionBatches: [target] },
+      [{ creditBatchId: "batch-1", externalId: "ptb_1", outcome: "retained" }], tx)).rejects.toThrow("Run Delete Removal again");
     expect(state.delete).not.toHaveBeenCalled();
   });
   it("refuses an unconfirmed cleanup outcome", async () => {
