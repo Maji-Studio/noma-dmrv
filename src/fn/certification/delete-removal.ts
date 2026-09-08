@@ -77,7 +77,8 @@ const REGISTRY_STATE_REFUSAL_STATUSES: ReadonlySet<number> = new Set([
 const PARTIAL_CLEANUP_NOTE =
   "Some registry records were already deleted. Run Delete Removal again to finish the cleanup.";
 const LOCAL_FAILURE_MESSAGE =
-  "The Removal could not be removed locally. Nothing was removed locally. Try again.";
+  "The Removal could not be removed locally. Nothing changed. Try again.";
+const RETRY_SUFFIX = " Try again.";
 
 export async function deleteRemoval(
   orgCtx: OrgContext,
@@ -92,6 +93,7 @@ export async function deleteRemoval(
     deletedBiocharApplicationIds: [],
     absentGhgEntryIds: [],
     absentBiocharApplicationIds: [],
+    unresolvedBiocharApplicationReferences: [],
   };
 
   let releasedSliceCount: number;
@@ -106,7 +108,20 @@ export async function deleteRemoval(
       registry,
     ));
   } catch (error) {
-    await releaseRemovalDeletionClaim(orgCtx, claim);
+    // The release is TTL-bounded, so a failure here must not hide the
+    // original error behind a raw database error.
+    try {
+      await releaseRemovalDeletionClaim(orgCtx, claim);
+    } catch (releaseError) {
+      log.error(
+        {
+          errorName:
+            releaseError instanceof Error ? releaseError.name : typeof releaseError,
+          errorMessage: sanitizeErrorMessage(releaseError),
+        },
+        "removal deletion claim could not be released; lock expires with the TTL",
+      );
+    }
     log.warn(
       {
         lockedSubmissionCount: claim.lockedSubmissions.length,
@@ -169,7 +184,15 @@ async function deleteRegistryRecords(
 ): Promise<void> {
   const ghgEntryIds = [...claim.externalRemovalIds];
   for (const supplierRef of claim.unconfirmedRemovalSupplierRefs) {
-    const found = await reconcileRemoval(client, { supplierRefId: supplierRef });
+    const found = await auditedLookup(
+      orgCtx,
+      {
+        removalId: claim.removalId,
+        operation: "removal:delete:ghg-entry",
+        supplierReference: supplierRef,
+      },
+      () => reconcileRemoval(client, { supplierRefId: supplierRef }),
+    );
     if (found.found && !ghgEntryIds.includes(found.externalId)) {
       ghgEntryIds.push(found.externalId);
     }
@@ -191,11 +214,25 @@ async function deleteRegistryRecords(
   for (const application of claim.biocharApplications) {
     const externalApplicationId =
       application.externalApplicationId ??
-      (await resolveUnconfirmedBiocharApplication(
-        client,
-        application.supplierReference,
+      (await auditedLookup(
+        orgCtx,
+        {
+          removalId: claim.removalId,
+          operation: "removal:delete:biochar-application",
+          supplierReference: application.supplierReference,
+        },
+        () =>
+          resolveUnconfirmedBiocharApplication(
+            client,
+            application.supplierReference,
+          ),
       ));
-    if (externalApplicationId === null) continue;
+    if (externalApplicationId === null) {
+      out.unresolvedBiocharApplicationReferences.push(
+        application.supplierReference,
+      );
+      continue;
+    }
     const outcome = await deleteRegistryRecord(
       orgCtx,
       {
@@ -211,6 +248,38 @@ async function deleteRegistryRecords(
     } else {
       out.absentBiocharApplicationIds.push(externalApplicationId);
     }
+  }
+}
+
+// A supplier-reference lookup can be refused deterministically (duplicate
+// references, pagination limit). Record that on the sync-event log before it
+// propagates so the operator sees why the deletion stopped.
+async function auditedLookup<T>(
+  orgCtx: OrgContext,
+  target: { removalId: string; operation: string; supplierReference: string },
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    await appendSyncEventBestEffort(
+      orgCtx,
+      {
+        provider: ISOMETRIC_PROVIDER,
+        entityType: REMOVAL_ENTITY_TYPE,
+        entityId: target.removalId,
+        operation: target.operation,
+        status: "failed",
+        requestPayload: { supplier_reference_id: target.supplierReference },
+        responsePayload:
+          error instanceof IsometricApiError
+            ? (sanitizeIsometricErrorBody(error.body) ?? null)
+            : null,
+        errorMessage: sanitizeErrorMessage(error),
+      },
+      { removalId: target.removalId },
+    );
+    throw error;
   }
 }
 
@@ -321,5 +390,10 @@ function toDeletionError(
   const partial =
     registry.deletedGhgEntryIds.length > 0 ||
     registry.deletedBiocharApplicationIds.length > 0;
-  return new SafeError(partial ? `${base} ${PARTIAL_CLEANUP_NOTE}` : base);
+  if (!partial) return new SafeError(base);
+  // One next action only: the partial note replaces a generic retry prompt.
+  const withoutRetry = base.endsWith(RETRY_SUFFIX)
+    ? base.slice(0, -RETRY_SUFFIX.length)
+    : base;
+  return new SafeError(`${withoutRetry} ${PARTIAL_CLEANUP_NOTE}`);
 }

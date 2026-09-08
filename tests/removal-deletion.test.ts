@@ -32,6 +32,7 @@ import {
   certifierRemovals,
   certifierSyncEvents,
 } from "@/db/schema/certification";
+import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
@@ -51,6 +52,12 @@ import {
 } from "@/lib/certification/submission-metadata";
 import { SafeError } from "@/lib/errors";
 import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
+import { buildCreateBiocharApplicationRequest } from "@/lib/isometric/biochar-applications";
+import { payloadHash } from "@/lib/isometric/utils/payload-hash";
+import {
+  createBiocharApplicationChain,
+  type BiocharApplicationChain,
+} from "./helpers/biochar-application-chain";
 import {
   installFakeRegistry,
   type FakeIsometricRegistry,
@@ -63,6 +70,7 @@ const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
 const createdBatchIds: string[] = [];
 const createdFeedstockTypeIds: string[] = [];
+const createdChains: BiocharApplicationChain[] = [];
 
 let registry: FakeIsometricRegistry;
 
@@ -75,6 +83,12 @@ beforeEach(() => {
 });
 
 afterAll(async () => {
+  for (const chain of createdChains.reverse()) {
+    await db
+      .delete(certifierBiocharApplications)
+      .where(eq(certifierBiocharApplications.applicationId, chain.applicationId));
+    await chain.cleanup();
+  }
   if (createdBatchIds.length > 0) {
     await db
       .delete(creditBatches)
@@ -113,6 +127,9 @@ interface Fixture {
   facilityId: string;
   removalId: string;
   creditBatchId: string;
+  certifierProjectId: string;
+  externalProjectId: string;
+  runId: string;
 }
 
 async function createFixture(): Promise<Fixture> {
@@ -127,12 +144,16 @@ async function createFixture(): Promise<Fixture> {
     })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
-  await db.insert(certifierProjects).values({
-    organizationId: TEST_ORG_ID,
-    facilityId: facility.id,
-    provider: "isometric",
-    externalProjectId: `prj_deletion_${runId}`,
-  });
+  const externalProjectId = `prj_deletion_${runId}`;
+  const [project] = await db
+    .insert(certifierProjects)
+    .values({
+      organizationId: TEST_ORG_ID,
+      facilityId: facility.id,
+      provider: "isometric",
+      externalProjectId,
+    })
+    .returning({ id: certifierProjects.id });
   const [removal] = await db
     .insert(certifierRemovals)
     .values({
@@ -180,7 +201,62 @@ async function createFixture(): Promise<Fixture> {
     facilityId: facility.id,
     removalId: removal.id,
     creditBatchId: batch.id,
+    certifierProjectId: project.id,
+    externalProjectId,
+    runId,
   };
+}
+
+async function insertRegistration(
+  fixture: Fixture,
+  chain: BiocharApplicationChain,
+  args: {
+    submissionId: string;
+    supplierReference: string;
+    externalApplicationId: string | null;
+    lifecycleStatus: "creating" | "confirmed" | "deleted";
+  },
+): Promise<string> {
+  const body = buildCreateBiocharApplicationRequest({
+    applicationCode: `AP-${fixture.runId}`,
+    applicationDate: "2026-04-05",
+    applicationWetMassKg: 12_000,
+    fieldSizeHa: 4,
+    externalProjectId: fixture.externalProjectId,
+    externalProductionBatchId: chain.externalProductionBatchId,
+    externalStorageLocationId: chain.externalStorageLocationId,
+    supplierReferenceId: args.supplierReference,
+    sourceIds: [],
+  });
+  const [row] = await db
+    .insert(certifierBiocharApplications)
+    .values({
+      organizationId: TEST_ORG_ID,
+      applicationId: chain.applicationId,
+      creditBatchId: fixture.creditBatchId,
+      removalSubmissionId: args.submissionId,
+      productionBatchRegistrationId: chain.productionBatchRegistrationId,
+      storageLocationRegistrationId: chain.storageLocationRegistrationId,
+      externalProductionBatchId: chain.externalProductionBatchId,
+      externalStorageLocationId: chain.externalStorageLocationId,
+      externalApplicationId: args.externalApplicationId,
+      supplierReference: args.supplierReference,
+      submittedPayload: body,
+      payloadHash: payloadHash(body),
+      lifecycleStatus: args.lifecycleStatus,
+    })
+    .returning({ id: certifierBiocharApplications.id });
+  return row.id;
+}
+
+async function registrationRowsFor(submissionId: string) {
+  return db
+    .select({
+      id: certifierBiocharApplications.id,
+      lifecycleStatus: certifierBiocharApplications.lifecycleStatus,
+    })
+    .from(certifierBiocharApplications)
+    .where(eq(certifierBiocharApplications.removalSubmissionId, submissionId));
 }
 
 async function insertLedgerRow(
@@ -308,6 +384,76 @@ describe("deleteRemoval", () => {
         { operation: "removal:delete", status: "succeeded" },
       ]),
     );
+  });
+
+  it("deletes confirmed Biochar Applications and removes every registration row", async () => {
+    const fixture = await createFixture();
+    const chain = await createBiocharApplicationChain({
+      tag: `DEL-${fixture.runId}`,
+      facilityId: fixture.facilityId,
+      creditBatchId: fixture.creditBatchId,
+      certifierProjectId: fixture.certifierProjectId,
+      externalProjectId: fixture.externalProjectId,
+    });
+    createdChains.push(chain);
+    const entry = registry.seedGhgEntry({ status: "DRAFT" });
+    const submissionId = await insertLedgerRow(fixture, {
+      status: "draft",
+      externalId: entry.id,
+      metadata: interruptedMetadata(),
+    });
+    const remoteApplication = registry.seedBiocharApplication({
+      ghg_entry_id: entry.id,
+    });
+    const confirmedReference = `nm-isometric-sandbox-bca-${fixture.runId}-v1`;
+    await insertRegistration(fixture, chain, {
+      submissionId,
+      supplierReference: confirmedReference,
+      externalApplicationId: remoteApplication.id,
+      lifecycleStatus: "confirmed",
+    });
+    // An earlier attempt's tombstoned registration on its own ledger version:
+    // no registry call for it, but its row must go too.
+    const priorSubmissionId = await insertLedgerRow(fixture, {
+      status: "rejected",
+      externalId: null,
+      version: SUBMISSION_VERSION + 1,
+      metadata: { lastError: "Creating Removal in Isometric failed" },
+    });
+    await insertRegistration(fixture, chain, {
+      submissionId: priorSubmissionId,
+      supplierReference: `nm-isometric-sandbox-bca-${fixture.runId}-s2-v1`,
+      externalApplicationId: null,
+      lifecycleStatus: "deleted",
+    });
+
+    const result = await deleteRemoval(makeTestOrgContext(), {
+      facilityId: fixture.facilityId,
+      removalId: fixture.removalId,
+    });
+
+    expect(result.deletedGhgEntryIds).toEqual([entry.id]);
+    expect(result.deletedBiocharApplicationIds).toEqual([remoteApplication.id]);
+    expect(
+      registry.requestCount("DELETE", `/biochar_applications/${remoteApplication.id}`),
+    ).toBe(1);
+    expect(registry.biocharApplications).toHaveLength(0);
+    // The GHG Entry goes before its Applications.
+    const deletes = registry.requests
+      .filter((request) => request.method === "DELETE")
+      .map((request) => request.path);
+    expect(deletes).toEqual([
+      `/ghg_entries/${entry.id}`,
+      `/biochar_applications/${remoteApplication.id}`,
+    ]);
+    // Rows are removed, not tombstoned, so the supplier reference is free.
+    expect(await registrationRowsFor(submissionId)).toEqual([]);
+    expect(await registrationRowsFor(priorSubmissionId)).toEqual([]);
+    expect(await removalExists(fixture.removalId)).toBe(false);
+    const row = await ledgerRow(submissionId);
+    expect((row.metadata as { deletion: unknown }).deletion).toMatchObject({
+      deletedBiocharApplicationIds: [remoteApplication.id],
+    });
   });
 
   it("removes a Removal with no ledger without touching the registry", async () => {
@@ -444,6 +590,7 @@ describe("deleteRemoval", () => {
         deletedBiocharApplicationIds: [],
         absentGhgEntryIds: [],
         absentBiocharApplicationIds: [],
+        unresolvedBiocharApplicationReferences: [],
       }),
     ).rejects.toThrow(REMOVAL_DELETE_CHANGED_ERROR);
     expect(await removalExists(fixture.removalId)).toBe(true);

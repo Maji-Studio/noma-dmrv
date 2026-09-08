@@ -122,6 +122,7 @@ describe("deleteRemoval", () => {
       deletedBiocharApplicationIds: ["bse_1", "bse_2"],
       absentGhgEntryIds: [],
       absentBiocharApplicationIds: [],
+      unresolvedBiocharApplicationReferences: [],
     });
     expect(state.release).not.toHaveBeenCalled();
   });
@@ -340,6 +341,53 @@ describe("deleteRemoval", () => {
     expect(state.deleteBiocharApplication).not.toHaveBeenCalled();
     expect(result.deletedBiocharApplicationIds).toEqual([]);
     expect(state.finalize).toHaveBeenCalledOnce();
+    expect(state.finalize.mock.calls[0]?.[2]).toMatchObject({
+      unresolvedBiocharApplicationReferences: ["ref-3"],
+    });
+  });
+
+  it("records a failed sync event when a supplier-reference lookup is refused", async () => {
+    state.claim.mockResolvedValue(
+      claim({
+        externalRemovalIds: [],
+        unconfirmedRemovalSupplierRefs: ["nm-rmv-abc-removal-v1"],
+        biocharApplications: [],
+      }),
+    );
+    state.reconcileRemoval.mockRejectedValue(
+      new SafeError("Multiple GHG Entries use this stable reference"),
+    );
+
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow(/stable reference/);
+    const failed = state.appendSyncEvent.mock.calls.find(
+      (call) => call[1]?.status === "failed",
+    );
+    expect(failed?.[1]).toMatchObject({
+      operation: "removal:delete:ghg-entry",
+      requestPayload: { supplier_reference_id: "nm-rmv-abc-removal-v1" },
+    });
+    expect(state.release).toHaveBeenCalledOnce();
+  });
+
+  it("still reports the original error when releasing the claim fails", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.finalize.mockRejectedValue(new SafeError("changed"));
+    state.release.mockRejectedValue(new Error("connection reset"));
+
+    const attempt = deleteRemoval(ORG_CTX, INPUT);
+    await expect(attempt).rejects.toBeInstanceOf(SafeError);
+    await expect(attempt).rejects.toThrow(/changed/);
+  });
+
+  it("gives one next action when the cleanup was partial", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteBiocharApplication.mockImplementationOnce(async () => {
+      throw new IsometricApiError("upstream", 502, null, "http");
+    });
+
+    const attempt = deleteRemoval(ORG_CTX, INPUT);
+    await expect(attempt).rejects.toThrow(/Run Delete Removal again/);
+    await expect(attempt).rejects.not.toThrow(/Try again/);
   });
 
 });

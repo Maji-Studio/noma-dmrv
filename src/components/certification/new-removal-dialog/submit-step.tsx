@@ -36,13 +36,7 @@ import {
   canViewerDeleteRemoval,
   removalDeletionTouchesRegistry,
 } from "@/components/certification/removal-list-state";
-import {
-  REMOVAL_DELETE_TITLE,
-  REMOVAL_DELETED_TOAST,
-  REMOVAL_DISCARD_TITLE,
-  REMOVAL_DISCARDED_TOAST,
-  removalDeleteMessage,
-} from "@/components/certification/removal-deletion-copy";
+import { removalDeletionCopy } from "@/components/certification/removal-deletion-copy";
 import { isSubmissionAttemptInterrupted } from "@/lib/certification/submission-metadata";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import type { useSubmitRemoval } from "@/hooks/use-certification";
@@ -138,13 +132,13 @@ export function SubmitStep({
       deleteFacts,
       certifierSummary?.viewerCanManage ?? false,
     );
-  const deleteLabel = hasRegistryHistory ? "Delete Removal" : "Discard draft";
+  const deleteCopy = removalDeletionCopy(hasRegistryHistory);
 
   const deleteDialog = (
     <DeleteConfirmDialog
       isOpen={deleteConfirmOpen}
-      title={hasRegistryHistory ? REMOVAL_DELETE_TITLE : REMOVAL_DISCARD_TITLE}
-      message={removalDeleteMessage(hasRegistryHistory)}
+      title={deleteCopy.title}
+      message={deleteCopy.message}
       onCancel={() => {
         setDeleteConfirmOpen(false);
         deleteMutation.reset();
@@ -155,11 +149,7 @@ export function SubmitStep({
           {
             onSuccess: () => {
               setDeleteConfirmOpen(false);
-              toast.success(
-                hasRegistryHistory
-                  ? REMOVAL_DELETED_TOAST
-                  : REMOVAL_DISCARDED_TOAST,
-              );
+              toast.success(deleteCopy.successToast);
               onDone();
             },
           },
@@ -171,8 +161,8 @@ export function SubmitStep({
           ? deleteMutation.error.message
           : undefined
       }
-      confirmLabel={deleteLabel}
-      pendingLabel={hasRegistryHistory ? "Deleting..." : "Discarding..."}
+      confirmLabel={deleteCopy.actionLabel}
+      pendingLabel={deleteCopy.pendingLabel}
     />
   );
 
@@ -425,7 +415,7 @@ export function SubmitStep({
             onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}
           >
-            {deleteLabel}
+            {deleteCopy.actionLabel}
           </Button>
         ) : (
           <span />

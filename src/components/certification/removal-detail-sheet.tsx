@@ -45,13 +45,7 @@ import {
   removalDeletionTouchesRegistry,
   type RemovalListRow,
 } from "./removal-list-state";
-import {
-  REMOVAL_DELETE_TITLE,
-  REMOVAL_DELETED_TOAST,
-  REMOVAL_DISCARD_TITLE,
-  REMOVAL_DISCARDED_TOAST,
-  removalDeleteMessage,
-} from "./removal-deletion-copy";
+import { removalDeletionCopy } from "./removal-deletion-copy";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -209,7 +203,7 @@ export function RemovalDetailSheet({
     summary,
     certifierSummary?.viewerCanManage ?? false,
   );
-  const deleteLabel = touchesRegistry ? "Delete Removal" : "Discard draft";
+  const deleteCopy = removalDeletionCopy(touchesRegistry);
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -333,7 +327,7 @@ export function RemovalDetailSheet({
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
               >
-                {deleteLabel}
+                {deleteCopy.actionLabel}
               </Button>
             )}
             <RemovalReviewAction
@@ -355,8 +349,8 @@ export function RemovalDetailSheet({
           confirmation as a nested dialog of the sheet. */}
       <DeleteConfirmDialog
         isOpen={deleteConfirmOpen}
-        title={touchesRegistry ? REMOVAL_DELETE_TITLE : REMOVAL_DISCARD_TITLE}
-        message={removalDeleteMessage(touchesRegistry)}
+        title={deleteCopy.title}
+        message={deleteCopy.message}
         onCancel={() => {
           setDeleteConfirmOpen(false);
           deleteMutation.reset();
@@ -367,11 +361,7 @@ export function RemovalDetailSheet({
             {
               onSuccess: () => {
                 setDeleteConfirmOpen(false);
-                toast.success(
-                  touchesRegistry
-                    ? REMOVAL_DELETED_TOAST
-                    : REMOVAL_DISCARDED_TOAST,
-                );
+                toast.success(deleteCopy.successToast);
                 onClose();
               },
             },
@@ -383,8 +373,8 @@ export function RemovalDetailSheet({
             ? deleteMutation.error.message
             : undefined
         }
-        confirmLabel={deleteLabel}
-        pendingLabel={touchesRegistry ? "Deleting..." : "Discarding..."}
+        confirmLabel={deleteCopy.actionLabel}
+        pendingLabel={deleteCopy.pendingLabel}
       />
     </>
   );

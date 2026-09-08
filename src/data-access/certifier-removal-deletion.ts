@@ -121,6 +121,12 @@ export interface RemovalDeletionRegistryOutcome {
   /** Records the registry reported as already gone (404), kept for the audit trail. */
   absentGhgEntryIds: string[];
   absentBiocharApplicationIds: string[];
+  /**
+   * Supplier references of `creating` registrations the registry did not
+   * know. Their POST never landed as far as we can tell; recorded so a later
+   * reconciliation onto an orphan can be traced back here.
+   */
+  unresolvedBiocharApplicationReferences: string[];
 }
 
 async function lockRemovalRow(
@@ -462,6 +468,8 @@ export async function finalizeRemovalDeletion(
           deletedBiocharApplicationIds: registry.deletedBiocharApplicationIds,
           absentGhgEntryIds: registry.absentGhgEntryIds,
           absentBiocharApplicationIds: registry.absentBiocharApplicationIds,
+          unresolvedBiocharApplicationReferences:
+            registry.unresolvedBiocharApplicationReferences,
         },
       });
       await tx

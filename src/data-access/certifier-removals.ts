@@ -561,6 +561,9 @@ export async function createRemovalWithCreditBatches(
 // have crossed the registry boundary makes recovery ineligible. The row lock
 // serializes this decision against submission and GHG Statement membership,
 // while the single transaction prevents partially released slice ownership.
+// No production caller since Removal deletion replaced the discard control
+// (`certification/discard-draft-retirement` in docs/open-questions.md). Kept
+// as the lock-protocol fixture for three DB-backed specs until retired.
 export async function discardLocalRemovalDraft(
   ctx: OrgContext,
   facilityId: string,
