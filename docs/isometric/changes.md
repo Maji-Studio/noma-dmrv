@@ -1,5 +1,30 @@
 # Isometric Docs Change Log
 
+## 2026-09-08: Removal deletion releases the evidence mirrors it orphaned
+
+- Deleting a never-finalized Removal now also releases the local
+  `certifier_document_uploads` mapping of every Source that only the deleted
+  ledger rows cite. The release runs inside the finalize transaction under
+  the per-document mirror locks, rechecks after each delete, and records the
+  released `documentId` / `externalDocumentId` pairs under the ledger row's
+  `deletion.releasedDocumentMirrors`. The remote Source still stays on the
+  registry (`isometric/removal-deletion-orphans`); a later submission mirrors
+  a fresh one.
+- A ledger row stamped with the `deletion` metadata record no longer pins
+  anything: the snapshot-reference guard behind document unlink and delete,
+  and the reviewed-evidence lock from 2026-09-07, both skip such rows. Their
+  snapshot remains the audit trail for registry records that no longer exist.
+- Deleting a parent record (Application, Delivery, transport leg, and the
+  other document owners) releases an Isometric mapping that no live snapshot
+  cites, the same way single-document delete already did, instead of refusing
+  on any mirror row. Mappings for other providers and Sources a live snapshot
+  cites still refuse the delete. This also frees records orphaned by
+  deletions that ran before this change.
+- Code: `src/data-access/certifier-document-uploads.ts`
+  (`releaseDocumentUploadsReferencedOnlyBySubmissions`),
+  `src/data-access/certifier-removal-deletion.ts`,
+  `src/data-access/documents.ts`.
+
 ## 2026-09-08: accepted create request is the Application evidence contract
 
 - Re-verified on this date against the public Certify OpenAPI and the `how_to`
@@ -53,7 +78,8 @@
   later Removal, releases production-claim reservations and credit batch
   slices, and deletes the Removal row. Datapoints, Measurement Samples,
   Production Batches, Storage Locations, and Sources stay on the registry (see
-  `isometric/removal-deletion-orphans` in `docs/open-questions-isometric.md`).
+  `isometric/removal-deletion-orphans` in `docs/open-questions-isometric.md`);
+  the local Source mappings are released since the later 2026-09-08 entry.
 - Code: `src/fn/certification/delete-removal.ts` (core),
   `src/fn/certification/delete-removal-action.ts` (server action),
   `src/data-access/certifier-removal-deletion.ts`.
@@ -61,7 +87,7 @@
 ## 2026-09-07: fail-closed Application evidence and safe recovery
 
 - The public [Certify OpenAPI schema](https://docs.isometric.com/api-reference/certify/mrv.openapi.json), checked on this date, accepts `source_ids` in `CreateBiocharApplicationRequest` but omits it from `BiocharApplication`. Evidence-bearing Removal finalization remains blocked until an authoritative attachment readback exists. When Source IDs are returned, reconciliation requires the exact reviewed set.
-- Evidence refresh preserves the prior snapshot and locks reviewed documents against deletion. Only an explicitly mutation-free interrupted attempt may rebuild versioned inputs; possible or confirmed registry mutations require exact retry/reconciliation first.
+- Evidence refresh preserves the prior snapshot and locks reviewed documents against deletion (ledger rows stamped by Removal deletion no longer count, see 2026-09-08). Only an explicitly mutation-free interrupted attempt may rebuild versioned inputs; possible or confirmed registry mutations require exact retry/reconciliation first.
 - A finite pending GHG Statement total, including zero, represents pending changes under the provider's documented null-versus-number contract. Failed verification retains its own status.
 - The incomplete sandbox scenarios and external verifier report delivery remain acceptance blockers documented in the [retest record](../archive/qa/2026-09-07-isometric-blockers-retest.md).
 

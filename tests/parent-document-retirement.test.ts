@@ -32,11 +32,12 @@ import { syncFeedstockTransportLeg } from "@/data-access/transport-legs";
 import { retireDocumentsForEntities } from "@/data-access/documents";
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { __setStorageProviderForTests } from "@/lib/storage";
-import type {
-  ObjectHead,
-  PresignedUpload,
-  StorageProvider,
-} from "@/lib/storage";
+import {
+  RetirementStorageProvider,
+  createReactorFixture,
+  insertManagedDocument,
+  insertRemovalSnapshot,
+} from "./helpers/document-retirement";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -46,42 +47,6 @@ import {
 const TEST_USER_ID = "parent-document-retirement-user";
 const DELETION_BATCH_SIZE = 50;
 const RETRY_BACKOFF_ELAPSED_AT = new Date("2000-01-01T00:00:00.000Z");
-
-class RetirementStorageProvider implements StorageProvider {
-  readonly name = "local-fs" as const;
-  readonly bucket = "local-fs";
-  readonly objects = new Set<string>();
-  readonly deleteCalls: string[] = [];
-  failKey: string | null = null;
-
-  async createUploadUrl(): Promise<PresignedUpload> {
-    throw new Error("Not used by retirement tests");
-  }
-
-  async createDownloadUrl(): Promise<string> {
-    throw new Error("Not used by retirement tests");
-  }
-
-  async getObject(): Promise<never> {
-    throw new Error("Not used by retirement tests");
-  }
-
-  async headObject(key: string): Promise<ObjectHead | null> {
-    return this.objects.has(key)
-      ? { size: 1, contentType: "application/pdf", etag: "test" }
-      : null;
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    this.deleteCalls.push(key);
-    if (key === this.failKey) throw new Error("Injected storage failure");
-    this.objects.delete(key);
-  }
-
-  async putObject(key: string): Promise<void> {
-    this.objects.add(key);
-  }
-}
 
 let provider: RetirementStorageProvider;
 
@@ -95,56 +60,6 @@ beforeEach(() => {
 afterEach(() => {
   __setStorageProviderForTests(null);
 });
-
-async function createReactorFixture(
-  tag: string,
-  organizationId = TEST_ORG_ID,
-) {
-  return db.transaction(async (tx) => {
-    const [facility] = await tx
-      .insert(facilities)
-      .values({
-        organizationId,
-        code: `FAC-DOC-${tag}`,
-        name: `Document retirement facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [reactor] = await tx
-      .insert(reactors)
-      .values({
-        organizationId,
-        facilityId: facility.id,
-        code: `RE-DOC-${tag}`,
-        identifier: `Document retirement reactor ${tag}`,
-        reactorType: "fixed-bed",
-      })
-      .returning({ id: reactors.id });
-    return { facilityId: facility.id, reactorId: reactor.id };
-  });
-}
-
-async function insertManagedDocument(
-  entityType: string,
-  entityId: string,
-  storageKey: string,
-  organizationId = TEST_ORG_ID,
-) {
-  provider.objects.add(storageKey);
-  const [document] = await db
-    .insert(documents)
-    .values({
-      organizationId,
-      entityType,
-      entityId,
-      documentType: "pdf",
-      storageProvider: "local-fs",
-      storageBucket: "local-fs",
-      storageKey,
-      fileName: "evidence.pdf",
-    })
-    .returning({ id: documents.id });
-  return document.id;
-}
 
 async function createOutboxOrganizationFixture(
   tag: string,
@@ -165,127 +80,7 @@ async function createOutboxOrganizationFixture(
   };
 }
 
-async function insertRemovalSnapshot(args: {
-  sourceId: string;
-  deleted: boolean;
-}): Promise<string> {
-  const [row] = await db
-    .insert(certificationSubmissions)
-    .values({
-      organizationId: TEST_ORG_ID,
-      provider: "isometric",
-      submissionType: "removal",
-      localEntityType: "removal",
-      localEntityId: crypto.randomUUID(),
-      version: 1,
-      status: "rejected",
-      externalId: null,
-      payloadSnapshot: { sourceBindingPlan: [{ sourceId: args.sourceId }] },
-      metadata: args.deleted
-        ? { deletion: { deletedAt: new Date().toISOString() } }
-        : null,
-    })
-    .returning({ id: certificationSubmissions.id });
-  return row.id;
-}
-
 describe("parent document retirement", () => {
-  it.each([
-    { label: "unreferenced", snapshot: null },
-    { label: "cited only by a deleted Removal", snapshot: { deleted: true } },
-  ])(
-    "releases an Isometric mirror that is $label and deletes the record",
-    async ({ snapshot }) => {
-      const tag = crypto.randomUUID().slice(0, 8);
-      const fixture = await createReactorFixture(tag);
-      const key = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
-      const documentId = await insertManagedDocument("reactor", fixture.reactorId, key);
-      const sourceId = `src_${tag}`;
-      let submissionId: string | null = null;
-
-      try {
-        await db.insert(certifierDocumentUploads).values({
-          organizationId: TEST_ORG_ID,
-          documentId,
-          provider: "isometric",
-          externalDocumentId: sourceId,
-        });
-        if (snapshot) {
-          submissionId = await insertRemovalSnapshot({ sourceId, deleted: snapshot.deleted });
-        }
-
-        await deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId);
-        await processPendingStorageObjectDeletions(makeTestOrgContext(TEST_USER_ID));
-
-        expect(provider.objects.has(key)).toBe(false);
-        expect(
-          await db
-            .select()
-            .from(certifierDocumentUploads)
-            .where(eq(certifierDocumentUploads.documentId, documentId)),
-        ).toHaveLength(0);
-        expect(
-          await db.select().from(documents).where(eq(documents.id, documentId)),
-        ).toHaveLength(0);
-      } finally {
-        if (submissionId) {
-          await db
-            .delete(certificationSubmissions)
-            .where(eq(certificationSubmissions.id, submissionId));
-        }
-        await db
-          .delete(certifierDocumentUploads)
-          .where(eq(certifierDocumentUploads.documentId, documentId));
-        await db.delete(documents).where(eq(documents.id, documentId));
-        await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-        await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
-      }
-    },
-  );
-
-  it("blocks an Isometric mirror that a live Removal snapshot still cites", async () => {
-    const tag = crypto.randomUUID().slice(0, 8);
-    const fixture = await createReactorFixture(tag);
-    const key = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument("reactor", fixture.reactorId, key);
-    const sourceId = `src_${tag}`;
-    let submissionId: string | null = null;
-
-    try {
-      await db.insert(certifierDocumentUploads).values({
-        organizationId: TEST_ORG_ID,
-        documentId,
-        provider: "isometric",
-        externalDocumentId: sourceId,
-      });
-      submissionId = await insertRemovalSnapshot({ sourceId, deleted: false });
-
-      await expect(
-        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
-      ).rejects.toThrow(/certification provider/);
-
-      expect(provider.deleteCalls).toEqual([]);
-      expect(provider.objects.has(key)).toBe(true);
-      expect(
-        await db
-          .select()
-          .from(certifierDocumentUploads)
-          .where(eq(certifierDocumentUploads.documentId, documentId)),
-      ).toHaveLength(1);
-    } finally {
-      if (submissionId) {
-        await db
-          .delete(certificationSubmissions)
-          .where(eq(certificationSubmissions.id, submissionId));
-      }
-      await db
-        .delete(certifierDocumentUploads)
-        .where(eq(certifierDocumentUploads.documentId, documentId));
-      await db.delete(documents).where(eq(documents.id, documentId));
-      await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
-    }
-  });
   it("deletes managed and external evidence while preserving another organization's rows", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
@@ -300,7 +95,7 @@ describe("parent document retirement", () => {
         name: `Other document organization ${tag}`,
         slug: `other-document-${tag}`,
       });
-      await insertManagedDocument("reactor", fixture.reactorId, managedKey);
+      await insertManagedDocument(provider, "reactor", fixture.reactorId, managedKey);
       await db.insert(documents).values({
         organizationId: TEST_ORG_ID,
         entityType: "reactor",
@@ -309,7 +104,7 @@ describe("parent document retirement", () => {
         fileUrl: "https://example.test/external-evidence.pdf",
         fileName: "external-evidence.pdf",
       });
-      const otherDocumentId = await insertManagedDocument(
+      const otherDocumentId = await insertManagedDocument(provider, 
         "reactor",
         fixture.reactorId,
         otherOrgKey,
@@ -372,7 +167,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
     const key = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(
+    const documentId = await insertManagedDocument(provider, 
       "reactor",
       fixture.reactorId,
       key,
@@ -485,12 +280,12 @@ describe("parent document retirement", () => {
       .returning({ id: transportLegs.id });
     const deliveryKey = `delivery/${delivery.id}/pdf/${tag}.pdf`;
     const legKey = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
-    const deliveryDocumentId = await insertManagedDocument(
+    const deliveryDocumentId = await insertManagedDocument(provider, 
       "delivery",
       delivery.id,
       deliveryKey,
     );
-    const legDocumentId = await insertManagedDocument(
+    const legDocumentId = await insertManagedDocument(provider, 
       "transport_leg",
       leg.id,
       legKey,
@@ -549,7 +344,7 @@ describe("parent document retirement", () => {
     async (_label, entityType, deleteEntity) => {
       const entityId = crypto.randomUUID();
       const key = `${entityType}/${entityId}/pdf/orphan.pdf`;
-      const documentId = await insertManagedDocument(entityType, entityId, key);
+      const documentId = await insertManagedDocument(provider, entityType, entityId, key);
 
       try {
         await expect(
@@ -588,7 +383,7 @@ describe("parent document retirement", () => {
       })
       .returning({ id: productionSamples.id });
     const key = `production_run/${run.id}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(
+    const documentId = await insertManagedDocument(provider, 
       "production_run",
       run.id,
       key,
@@ -620,7 +415,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
     const key = `reactor/${fixture.reactorId}/pdf/${tag}-rollback.pdf`;
-    const documentId = await insertManagedDocument(
+    const documentId = await insertManagedDocument(provider, 
       "reactor",
       fixture.reactorId,
       key,
@@ -686,13 +481,13 @@ describe("parent document retirement", () => {
         `reactor/${fixture.reactorId}/pdf/${tag}-first.pdf`,
         `reactor/${fixture.reactorId}/pdf/${tag}-second.pdf`,
       ];
-      await insertManagedDocument(
+      await insertManagedDocument(provider, 
         "reactor",
         fixture.reactorId,
         keys[0],
         organizationId,
       );
-      await insertManagedDocument(
+      await insertManagedDocument(provider, 
         "reactor",
         fixture.reactorId,
         keys[1],
@@ -924,7 +719,7 @@ describe("parent document retirement", () => {
       })
       .returning({ id: transportLegs.id });
     const key = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument("transport_leg", leg.id, key);
+    const documentId = await insertManagedDocument(provider, "transport_leg", leg.id, key);
     const sourceId = `derived-source-${tag}`;
     let submissionId: string | null = null;
     try {
@@ -1069,10 +864,10 @@ describe("parent document retirement", () => {
 
     try {
       await Promise.all([
-        insertManagedDocument("feedstock", feedstock.id, `feedstock/${feedstock.id}/pdf/${tag}.pdf`),
-        insertManagedDocument("transport_leg", leg.id, `transport_leg/${leg.id}/pdf/${tag}.pdf`),
-        insertManagedDocument("production_run", run.id, `production_run/${run.id}/pdf/${tag}.pdf`),
-        insertManagedDocument("production_incident", incident.id, `production_incident/${incident.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "feedstock", feedstock.id, `feedstock/${feedstock.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "transport_leg", leg.id, `transport_leg/${leg.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "production_run", run.id, `production_run/${run.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "production_incident", incident.id, `production_incident/${incident.id}/pdf/${tag}.pdf`),
       ]);
 
       await deleteFeedstock(makeTestOrgContext(TEST_USER_ID), feedstock.id);

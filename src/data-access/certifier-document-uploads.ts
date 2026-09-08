@@ -5,6 +5,8 @@ import { certificationSubmissions } from "@/db/schema/certification";
 import { documents } from "@/db/schema/documentation";
 import type { OrgContext } from "@/lib/auth/server";
 import { SUBMISSION_METADATA_KEYS } from "@/lib/certification/submission-metadata";
+import { SafeError } from "@/lib/errors";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
@@ -246,72 +248,111 @@ export interface ReleasedDocumentUpload {
   externalDocumentId: string;
 }
 
+export const SOURCE_RELEASE_RACE_ERROR =
+  "A Removal submission committed concurrently and now references this document. Deletion was aborted; retry once submission completes.";
+
+const SNAPSHOT_SOURCE_ID_PATHS = [
+  "$.transport.datapointBodies[*].body.source_ids[*]",
+  "$.sourceBindingPlan[*].sourceId",
+  "$.transport.biocharApplicationIntents[*].sourceIds[*]",
+] as const;
+
+// Every distinct Source id the given ledger rows' snapshots cite. Bounded by
+// the rows named, not by the organization's mapping count.
+async function listSourceIdsCitedBySubmissions(
+  ctx: OrgContext,
+  submissionIds: readonly string[],
+  tx: DbTransaction,
+): Promise<string[]> {
+  const result = await tx.execute<{ source_id: string }>(sql`
+    SELECT DISTINCT cited.value #>> '{}' AS source_id
+    FROM ${certificationSubmissions}
+    CROSS JOIN LATERAL (
+      ${sql.join(
+        SNAPSHOT_SOURCE_ID_PATHS.map(
+          (path) =>
+            sql`SELECT jsonb_path_query(${certificationSubmissions.payloadSnapshot}, ${path}::jsonpath) AS value`,
+        ),
+        sql` UNION ALL `,
+      )}
+    ) AS cited
+    WHERE ${inArray(certificationSubmissions.id, [...submissionIds])}
+      AND ${eq(certificationSubmissions.organizationId, ctx.organizationId)}
+      AND jsonb_typeof(cited.value) = 'string'
+  `);
+  return result.rows.map((row) => row.source_id);
+}
+
 /**
- * Retire the local Source mappings that only the given ledger rows still
- * reference. Removal deletion calls this for the rows it is stamping as
- * deleted: a mapping those snapshots reference and no live snapshot does is
+ * Retire the local Isometric Source mappings that only the given ledger rows
+ * still reference. Removal deletion calls this for the rows it is stamping
+ * as deleted: a mapping those snapshots cite and no live snapshot does is
  * released so the owning record (an Application, a Delivery) can be deleted
  * afterwards. The remote Source is deliberately untouched, matching the
  * single-document delete; a later mirror mints a fresh one.
  *
  * Runs under the per-document mirror locks so a concurrent submit that is
  * reusing the mapping either finishes first (and its snapshot keeps the
- * mapping) or waits for this decision.
+ * mapping) or waits for this decision. The recheck after each delete guards
+ * against a future submission entry point that forgets to take that lock.
  */
 export async function releaseDocumentUploadsReferencedOnlyBySubmissions(
   ctx: OrgContext,
-  provider: CertifierProvider,
   submissionIds: readonly string[],
   tx: DbTransaction,
 ): Promise<ReleasedDocumentUpload[]> {
   requireOrgScope(ctx);
   if (submissionIds.length === 0) return [];
 
-  const candidates = await tx.execute<{
-    document_id: string;
-    external_document_id: string;
-  }>(sql`
-    SELECT ${certifierDocumentUploads.documentId} AS document_id,
-           ${certifierDocumentUploads.externalDocumentId} AS external_document_id
-    FROM ${certifierDocumentUploads}
-    WHERE ${eq(certifierDocumentUploads.provider, provider)}
-      AND ${eq(certifierDocumentUploads.organizationId, ctx.organizationId)}
-      AND EXISTS (
-        SELECT 1
-        FROM ${certificationSubmissions}
-        WHERE ${inArray(certificationSubmissions.id, [...submissionIds])}
-          AND ${eq(certificationSubmissions.organizationId, ctx.organizationId)}
-          AND ${snapshotReferencesSource(sql`${certifierDocumentUploads.externalDocumentId}`)}
-      )
-    ORDER BY ${certifierDocumentUploads.documentId}
-  `);
-  if (candidates.rows.length === 0) return [];
+  const citedSourceIds = await listSourceIdsCitedBySubmissions(
+    ctx,
+    submissionIds,
+    tx,
+  );
+  if (citedSourceIds.length === 0) return [];
+
+  const candidates = await tx
+    .select({
+      documentId: certifierDocumentUploads.documentId,
+      externalDocumentId: certifierDocumentUploads.externalDocumentId,
+    })
+    .from(certifierDocumentUploads)
+    .where(
+      and(
+        eq(certifierDocumentUploads.provider, ISOMETRIC_PROVIDER),
+        eq(certifierDocumentUploads.organizationId, ctx.organizationId),
+        inArray(certifierDocumentUploads.externalDocumentId, citedSourceIds),
+      ),
+    )
+    .orderBy(certifierDocumentUploads.documentId);
+  if (candidates.length === 0) return [];
 
   await acquireMirrorLocksSorted(
     tx,
-    candidates.rows.map((row) => row.document_id),
+    candidates.map((row) => row.documentId),
   );
 
   const released: ReleasedDocumentUpload[] = [];
-  for (const candidate of candidates.rows) {
-    const stillReferenced = await isExternalSourceReferencedInSnapshots(
-      ctx,
-      provider,
-      candidate.external_document_id,
-      tx,
-      { ignoreSubmissionIds: submissionIds },
-    );
-    if (stillReferenced) continue;
+  for (const candidate of candidates) {
+    const referencedElsewhere = (ignore: boolean) =>
+      isExternalSourceReferencedInSnapshots(
+        ctx,
+        ISOMETRIC_PROVIDER,
+        candidate.externalDocumentId,
+        tx,
+        ignore ? { ignoreSubmissionIds: submissionIds } : {},
+      );
+    if (await referencedElsewhere(true)) continue;
     await deleteDocumentUploadByDocument(
       ctx,
-      provider,
-      candidate.document_id,
+      ISOMETRIC_PROVIDER,
+      candidate.documentId,
       tx,
     );
-    released.push({
-      documentId: candidate.document_id,
-      externalDocumentId: candidate.external_document_id,
-    });
+    if (await referencedElsewhere(true)) {
+      throw new SafeError(SOURCE_RELEASE_RACE_ERROR);
+    }
+    released.push(candidate);
   }
   return released;
 }

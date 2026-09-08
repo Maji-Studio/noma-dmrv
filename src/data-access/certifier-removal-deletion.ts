@@ -465,7 +465,6 @@ export async function finalizeRemovalDeletion(
       releasedDocumentMirrors =
         await releaseDocumentUploadsReferencedOnlyBySubmissions(
           ctx,
-          ISOMETRIC_PROVIDER,
           claim.submissionIds,
           tx,
         );
