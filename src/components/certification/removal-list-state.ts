@@ -24,6 +24,7 @@ export interface RemovalListRow {
   local: RemovalPreflightSummary["local"];
   lockInFlight: boolean;
   submissionInterrupted: boolean;
+  hasFinalizedSubmission: boolean;
   readiness: RemovalPreflightSummary["readiness"] | null;
   evidenceHealth: RemovalPreflightSummary["evidenceHealth"];
   submissionWarnings: string[];
@@ -70,6 +71,9 @@ export function buildRemovalListRows(
           identity.latestSubmission,
           { startedOn, completedOn },
         ),
+      hasFinalizedSubmission:
+        lifecycleData?.hasFinalizedSubmission ??
+        identity.hasFinalizedSubmission,
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
@@ -80,12 +84,6 @@ export function buildRemovalListRows(
   });
 }
 
-/**
- * A Removal may be deleted until a submission finalizes. `null` means no
- * ledger row; `draft` and `rejected` never reached "Submission complete". An
- * attempt still holding its lock is left alone unless it is known to be
- * interrupted. The server re-checks every rule under its own locks.
- */
 /**
  * Whether deleting this Removal may touch the registry: true as soon as a
  * ledger row exists, because a submission attempt may have created records
@@ -100,11 +98,37 @@ export function removalDeletionTouchesRegistry(
   return row.local !== null;
 }
 
-export function canDeleteRemovalRow(
-  row: Pick<RemovalListRow, "local" | "lockInFlight" | "submissionInterrupted">,
-): boolean {
+type RemovalDeleteFacts = Pick<
+  RemovalListRow,
+  "local" | "lockInFlight" | "submissionInterrupted" | "hasFinalizedSubmission"
+>;
+
+/**
+ * A Removal may be deleted until a submission finalizes. `null` means no
+ * ledger row; `draft` and `rejected` never reached "Submission complete", but
+ * an earlier version may have, which `hasFinalizedSubmission` carries. An
+ * attempt still holding its lock is left alone unless it is known to be
+ * interrupted. The server re-checks every rule under its own locks.
+ */
+export function canDeleteRemovalRow(row: RemovalDeleteFacts): boolean {
   const neverFinalized =
-    row.local === null || row.local === "draft" || row.local === "rejected";
+    !row.hasFinalizedSubmission &&
+    (row.local === null || row.local === "draft" || row.local === "rejected");
   const attemptRunning = row.lockInFlight && !row.submissionInterrupted;
   return neverFinalized && !attemptRunning;
+}
+
+/**
+ * The full client-side gate both delete surfaces use: eligible, and either
+ * no registry exposure or a viewer who may manage the registry connection.
+ * Mirrors the role floor in `claimRemovalDeletion`.
+ */
+export function canViewerDeleteRemoval(
+  row: RemovalDeleteFacts,
+  viewerCanManage: boolean,
+): boolean {
+  return (
+    canDeleteRemovalRow(row) &&
+    (!removalDeletionTouchesRegistry(row) || viewerCanManage)
+  );
 }

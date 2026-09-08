@@ -409,6 +409,7 @@ function makeContext(
       appliedDryKg: biocharMassKg,
     },
     latestSubmission: null,
+    hasFinalizedSubmission: false,
     linkedGhgStatement: null,
     isProduction: false,
     lineages: [

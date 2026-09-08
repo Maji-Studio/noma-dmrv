@@ -23,6 +23,7 @@ import {
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
 import { logger } from "@/lib/log";
+import { removalMayHaveExternalMutation } from "./certifier-removals";
 import { requireOrgScope } from "./utils";
 
 /**
@@ -36,9 +37,9 @@ import { requireOrgScope } from "./utils";
  * The flow has three seams so the network calls never run inside a database
  * transaction:
  *   1. `claimRemovalDeletion` verifies eligibility under the Removal row lock
- *      and the shared artifact lock, then re-locks the draft ledger row with
- *      the `deleting` attempt outcome so a concurrent submit is refused for
- *      the lock TTL.
+ *      and the shared artifact lock, then stamps every ledger row (draft or
+ *      rejected) with a fresh lock and the `deleting` attempt outcome so a
+ *      concurrent submit can neither resume nor reclaim one for the lock TTL.
  *   2. The caller deletes the registry records.
  *   3. `finalizeRemovalDeletion` re-reads the ledger to prove nothing was
  *      submitted in between, marks the ledger rows, removes the Biochar
@@ -51,12 +52,13 @@ import { requireOrgScope } from "./utils";
  * a finalized status refuses deletion. Membership in a GHG Statement refuses
  * it too.
  *
- * Role floor: releasing a Removal that never opened a ledger row is open to
+ * Role floor: releasing a Removal that never touched the registry is open to
  * every member, as the discard path it replaced was. Once a ledger row exists
- * the registry may have been touched (a recorded GHG Entry, a Biochar
- * Application registration, or a POST that landed without its response), so
- * the claim requires an Admin: the cleanup is irreversible on the registry
- * side.
+ * (a recorded GHG Entry, a Biochar Application registration, or a POST that
+ * landed without its response) or the Removal carries the pre-ledger
+ * `submissionExternalMutationPossible` marker (Source mirroring opened the
+ * registry boundary before any ledger row), the claim requires an Admin: the
+ * cleanup is irreversible on the registry side.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -89,12 +91,13 @@ export interface RemovalDeletionClaim {
   facilityId: string;
   /** Every ledger row for this Removal; all are draft or rejected. */
   submissionIds: string[];
-  /** The draft ledger row re-locked for the deletion window, if one existed. */
-  lockedSubmission: {
+  /** The lock timestamp stamped on every ledger row for the deletion window. */
+  lockedAt: Date;
+  /** Each ledger row's prior attempt outcome, restored when the claim is released. */
+  lockedSubmissions: Array<{
     id: string;
-    lockedAt: Date;
     priorAttemptOutcome: string | null;
-  } | null;
+  }>;
   /** Registry GHG Entry IDs recorded on the ledger rows. */
   externalRemovalIds: string[];
   /**
@@ -119,6 +122,9 @@ export interface RemovalDeletionClaim {
 export interface RemovalDeletionRegistryOutcome {
   deletedGhgEntryIds: string[];
   deletedBiocharApplicationIds: string[];
+  /** Records the registry reported as already gone (404), kept for the audit trail. */
+  absentGhgEntryIds: string[];
+  absentBiocharApplicationIds: string[];
 }
 
 async function lockRemovalRow(
@@ -126,11 +132,16 @@ async function lockRemovalRow(
   tx: Tx,
   facilityId: string,
   removalId: string,
-): Promise<{ id: string; ghgStatementId: string | null }> {
+): Promise<{
+  id: string;
+  ghgStatementId: string | null;
+  registryBoundaryOpened: boolean;
+}> {
   const [removal] = await tx
     .select({
       id: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
+      metadata: certifierRemovals.metadata,
     })
     .from(certifierRemovals)
     .where(
@@ -146,7 +157,11 @@ async function lockRemovalRow(
   if (removal.ghgStatementId !== null) {
     throw new SafeError(REMOVAL_DELETE_STATEMENT_ERROR);
   }
-  return removal;
+  return {
+    id: removal.id,
+    ghgStatementId: removal.ghgStatementId,
+    registryBoundaryOpened: removalMayHaveExternalMutation(removal.metadata),
+  };
 }
 
 export async function claimRemovalDeletion(
@@ -157,7 +172,7 @@ export async function claimRemovalDeletion(
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
-    await lockRemovalRow(ctx, tx, facilityId, removalId);
+    const removal = await lockRemovalRow(ctx, tx, facilityId, removalId);
     // Same lock order as discard and submit: Removal row, then the shared
     // artifact lock, so a concurrent submit either finishes its claim first
     // (and we see its in-flight lock) or waits for this decision.
@@ -254,21 +269,24 @@ export async function claimRemovalDeletion(
                 ),
               ),
             );
-    if (submissionIds.length > 0) {
+    if (submissionIds.length > 0 || removal.registryBoundaryOpened) {
       requireOrgRole(ctx, REGISTRY_CLEANUP_MIN_ROLE);
     }
 
-    let lockedSubmission: RemovalDeletionClaim["lockedSubmission"] = null;
+    // Every row gets the same fresh lock, rejected ones included: the submit
+    // path resumes a rejected row with an unchanged payload hash, and its
+    // resume CAS refuses any row whose lock is still fresh.
     const lockedAt = new Date();
-    for (const draft of drafts) {
+    const lockedSubmissions: RemovalDeletionClaim["lockedSubmissions"] = [];
+    const patch = JSON.stringify({
+      [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]:
+        SUBMISSION_ATTEMPT_OUTCOMES.deleting,
+    });
+    for (const row of rows) {
       const priorOutcome = getMetadataValue(
-        draft.metadata,
+        row.metadata,
         SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
       );
-      const patch = JSON.stringify({
-        [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]:
-          SUBMISSION_ATTEMPT_OUTCOMES.deleting,
-      });
       const [locked] = await tx
         .update(certificationSubmissions)
         .set({
@@ -278,26 +296,26 @@ export async function claimRemovalDeletion(
         })
         .where(
           and(
-            eq(certificationSubmissions.id, draft.id),
+            eq(certificationSubmissions.id, row.id),
             eq(certificationSubmissions.organizationId, ctx.organizationId),
-            eq(certificationSubmissions.status, DRAFT_LEDGER_STATUS),
+            eq(certificationSubmissions.status, row.status),
           ),
         )
         .returning({ id: certificationSubmissions.id });
       if (!locked) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
-      lockedSubmission = {
-        id: draft.id,
-        lockedAt,
+      lockedSubmissions.push({
+        id: row.id,
         priorAttemptOutcome:
           typeof priorOutcome === "string" ? priorOutcome : null,
-      };
+      });
     }
 
     return {
       removalId,
       facilityId,
       submissionIds,
-      lockedSubmission,
+      lockedAt,
+      lockedSubmissions,
       externalRemovalIds,
       unconfirmedRemovalSupplierRefs,
       biocharApplications,
@@ -305,39 +323,39 @@ export async function claimRemovalDeletion(
   });
 }
 
-// Registry cleanup failed: reopen the draft exactly as the claim found it so
-// the next submit or delete attempt sees the same interrupted state.
+// Cleanup stopped: reopen every ledger row exactly as the claim found it so
+// the next submit or delete attempt sees the same interrupted state. The CAS
+// on our lock timestamp makes this a no-op for any row someone else re-locked.
 export async function releaseRemovalDeletionClaim(
   ctx: OrgContext,
   claim: RemovalDeletionClaim,
 ): Promise<void> {
   requireOrgScope(ctx);
-  const locked = claim.lockedSubmission;
-  if (!locked) return;
-  const restore =
-    locked.priorAttemptOutcome === null
-      ? sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`
-      : sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify({ [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]: locked.priorAttemptOutcome })}::jsonb`;
-  await db
-    .update(certificationSubmissions)
-    .set({ lockedAt: null, metadata: restore, updatedAt: sql`now()` })
-    .where(
-      and(
-        eq(certificationSubmissions.id, locked.id),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-        eq(certificationSubmissions.lockedAt, locked.lockedAt),
-      ),
-    );
+  for (const locked of claim.lockedSubmissions) {
+    const restore =
+      locked.priorAttemptOutcome === null
+        ? sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text`
+        : sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify({ [SUBMISSION_METADATA_KEYS.lastAttemptOutcome]: locked.priorAttemptOutcome })}::jsonb`;
+    await db
+      .update(certificationSubmissions)
+      .set({ lockedAt: null, metadata: restore, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(certificationSubmissions.id, locked.id),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
+          eq(certificationSubmissions.lockedAt, claim.lockedAt),
+        ),
+      );
+  }
 }
 
 /**
- * The claim transaction's locks are gone once it commits. When the claim
- * re-locked a draft ledger row, the `deleting` outcome keeps a concurrent
- * submit out for the lock TTL; without one (no ledger, or only rejected rows)
- * nothing does. Either way the ledger is re-read here under the row and
- * artifact locks: any row the claim did not see, any finalized status, or a
- * lock that is not ours means a submit ran in between and the Removal must
- * stay.
+ * The claim transaction's locks are gone once it commits; the `deleting`
+ * stamp on every ledger row keeps a concurrent submit from resuming one for
+ * the lock TTL, but a submit with a changed payload can still open a new
+ * version. The ledger is therefore re-read here under the row and artifact
+ * locks: any row the claim did not see, any finalized status, or a lock that
+ * is not ours means a submit ran in between and the Removal must stay.
  */
 async function assertLedgerUnchangedSinceClaim(
   ctx: OrgContext,
@@ -374,13 +392,10 @@ async function assertLedgerUnchangedSinceClaim(
   ) {
     throw new SafeError(REMOVAL_DELETE_SUBMITTED_ERROR);
   }
-  const locked = claim.lockedSubmission;
   for (const row of rows) {
-    if (row.status !== DRAFT_LEDGER_STATUS) continue;
-    const ours =
-      locked !== null &&
-      row.lockedAt?.getTime() === locked.lockedAt.getTime();
-    if (!ours) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
+    if (row.lockedAt?.getTime() !== claim.lockedAt.getTime()) {
+      throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
+    }
   }
 }
 
@@ -427,6 +442,8 @@ export async function finalizeRemovalDeletion(
           deletedAt: new Date().toISOString(),
           deletedGhgEntryIds: registry.deletedGhgEntryIds,
           deletedBiocharApplicationIds: registry.deletedBiocharApplicationIds,
+          absentGhgEntryIds: registry.absentGhgEntryIds,
+          absentBiocharApplicationIds: registry.absentBiocharApplicationIds,
         },
       });
       await tx

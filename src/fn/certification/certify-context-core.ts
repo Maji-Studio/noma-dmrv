@@ -7,7 +7,10 @@ import {
   type CertifierProjectRow,
 } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
-import { getLatestSubmission } from "@/data-access/certification-submissions";
+import {
+  getLatestSubmission,
+  hasFinalizedSubmission,
+} from "@/data-access/certification-submissions";
 import {
   getCertifierRemovalById,
   getCreditBatchesByRemovalId,
@@ -167,6 +170,10 @@ export interface RemovalCertifyContext {
   // submitted without shipping the heavy `runs` array.
   runSummary: RemovalRunSummary;
   latestSubmission: CertificationSubmissionRow | null;
+  // Any ledger version reached submitted/accepted/superseded. The latest row
+  // alone cannot say (a superseding draft sits above a submitted prior); the
+  // delete gate needs it because the server refuses on any finalized row.
+  hasFinalizedSubmission: boolean;
   // The GHG Statement this removal rolls into + its verifier status, or null
   // when the removal isn't linked to one. See `LinkedGhgStatementStatus`.
   linkedGhgStatement: LinkedGhgStatementStatus | null;
@@ -536,7 +543,8 @@ export async function buildRemovalContext(
   }));
 
   // Load removal-owned facts up-front so every short-circuit carries them.
-  const [latestSubmission, linkedGhgStatement] = await Promise.all([
+  const [latestSubmission, hasFinalized, linkedGhgStatement] =
+    await Promise.all([
       scope.removalId
         ? getLatestSubmission(orgCtx, {
             provider: ISOMETRIC_PROVIDER,
@@ -545,6 +553,14 @@ export async function buildRemovalContext(
             localEntityId: scope.removalId,
           })
         : Promise.resolve(null),
+      scope.removalId
+        ? hasFinalizedSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(false),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
     ]);
   const supportingDocuments = await loadEvidenceMirrorSummaryForScope(
@@ -647,6 +663,7 @@ export async function buildRemovalContext(
       supportingDocuments,
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
+      hasFinalizedSubmission: hasFinalized,
       linkedGhgStatement,
       isProduction,
       lineages: [],
@@ -743,6 +760,7 @@ export async function buildRemovalContext(
     supportingDocuments,
     runSummary,
     latestSubmission,
+    hasFinalizedSubmission: hasFinalized,
     linkedGhgStatement,
     isProduction,
     lineages,
@@ -801,6 +819,7 @@ function projectUiContext(
     supportingDocuments: ctx.supportingDocuments,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
+    hasFinalizedSubmission: ctx.hasFinalizedSubmission,
     linkedGhgStatement: ctx.linkedGhgStatement,
     isProduction: ctx.isProduction,
   };
@@ -902,6 +921,7 @@ export interface RemovalHubEntry {
   removal: CertifierRemovalRow;
   memberBatches: Pick<MemberCreditBatch, "id" | "code">[];
   latestSubmission: CertificationSubmissionRow | null;
+  hasFinalizedSubmission: boolean;
 }
 
 export interface RemovalsHubData {
@@ -928,19 +948,22 @@ export async function loadRemovalsForFacility(
     for (let i = 0; i < removalRows.length; i += FANOUT_CONCURRENCY) {
       const chunk = await Promise.all(
         removalRows.slice(i, i + FANOUT_CONCURRENCY).map(async (removal) => {
-          const [batches, latestSubmission] = await Promise.all([
+          const key = {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: removal.id,
+          };
+          const [batches, latestSubmission, finalized] = await Promise.all([
             getCreditBatchesByRemovalId(orgCtx, removal.id),
-            getLatestSubmission(orgCtx, {
-              provider: ISOMETRIC_PROVIDER,
-              submissionType: REMOVAL_SUBMISSION_TYPE,
-              localEntityType: REMOVAL_ENTITY_TYPE,
-              localEntityId: removal.id,
-            }),
+            getLatestSubmission(orgCtx, key),
+            hasFinalizedSubmission(orgCtx, key),
           ]);
           return {
             removal,
             memberBatches: batches.map((b) => ({ id: b.id, code: b.code })),
             latestSubmission,
+            hasFinalizedSubmission: finalized,
           };
         }),
       );

@@ -6,9 +6,11 @@
   row, or a `draft`/`rejected` row) can be deleted from the Removal detail
   sheet and the New Removal wizard. Submitted, accepted, and superseded
   Removals, and any Removal in a GHG Statement, refuse deletion. Any member
-  may release a Removal that never opened a ledger row; once a ledger row
-  exists the claim requires an Admin, because the attempt may have created
-  registry records.
+  may release a Removal that never touched the registry; once a ledger row
+  exists, or the Removal carries the pre-ledger external-mutation marker that
+  Source mirroring sets, the claim requires an Admin, because the attempt may
+  have created registry records. The client gate also refuses when any
+  earlier ledger version finalized, which the latest row alone cannot show.
 - A ledger row that never recorded a GHG Entry ID is reconciled by its
   supplier reference through `GET /ghg_entries` before the cleanup decides
   nothing is there, because the POST may have landed without its response.
@@ -22,9 +24,14 @@
 - A Biochar Application registration still `creating` (its POST was
   interrupted before the registry ID came back) is resolved by supplier
   reference through `GET /biochar_applications` and deleted when found.
-- Local cleanup re-reads the ledger under the Removal locks and refuses if a
-  submission ran between claim and finalize, then marks the ledger rows
-  `rejected` with a `deletion` metadata record, removes the Biochar
+- The claim stamps every ledger row, rejected ones included, with a fresh
+  lock and the `deleting` outcome; the submit path's resume CAS now refuses
+  any row whose lock is fresh, so a retry cannot adopt a GHG Entry that the
+  cleanup is about to delete. Local cleanup re-reads the ledger under the
+  Removal locks and refuses if a submission ran between claim and finalize,
+  then marks the ledger rows
+  `rejected` with a `deletion` metadata record (deleted and already-absent
+  registry IDs both listed), removes the Biochar
   Application registration rows so their supplier references are free for a
   later Removal, releases production-claim reservations and credit batch
   slices, and deletes the Removal row. Datapoints, Measurement Samples,

@@ -41,7 +41,7 @@ const REMOVAL_EXTERNAL_MUTATION_POSSIBLE_PATCH = JSON.stringify({
   [REMOVAL_EXTERNAL_MUTATION_POSSIBLE_KEY]: true,
 });
 
-function removalMayHaveExternalMutation(metadata: unknown): boolean {
+export function removalMayHaveExternalMutation(metadata: unknown): boolean {
   return (
     metadata !== null &&
     typeof metadata === "object" &&

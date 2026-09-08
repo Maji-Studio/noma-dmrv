@@ -64,8 +64,12 @@ interface RegistryDeleteTarget {
   externalId: string;
 }
 
-const HTTP_CLIENT_ERROR_MIN = 400;
-const HTTP_CLIENT_ERROR_MAX = 499;
+// Certify signals "this record is not in a deletable state" with a request
+// or conflict error; auth, rate-limit, and not-found refusals say nothing
+// about the record's status.
+const REGISTRY_STATE_REFUSAL_STATUSES: ReadonlySet<number> = new Set([
+  400, 409, 422,
+]);
 
 const PARTIAL_CLEANUP_NOTE =
   "Some registry records were already deleted. Run Delete Removal again to finish the cleanup.";
@@ -78,9 +82,11 @@ export async function deleteRemoval(
   const log = logger.child({ op: "removal:delete", removalId });
 
   const claim = await claimRemovalDeletion(orgCtx, facilityId, removalId);
-  const registry = {
-    deletedGhgEntryIds: [] as string[],
-    deletedBiocharApplicationIds: [] as string[],
+  const registry: RemovalDeletionRegistryOutcome = {
+    deletedGhgEntryIds: [],
+    deletedBiocharApplicationIds: [],
+    absentGhgEntryIds: [],
+    absentBiocharApplicationIds: [],
   };
 
   let releasedSliceCount: number;
@@ -98,7 +104,7 @@ export async function deleteRemoval(
     await releaseRemovalDeletionClaim(orgCtx, claim);
     log.warn(
       {
-        submissionId: claim.lockedSubmission?.id ?? null,
+        lockedSubmissionCount: claim.lockedSubmissions.length,
         deletedGhgEntryCount: registry.deletedGhgEntryIds.length,
         deletedBiocharApplicationCount:
           registry.deletedBiocharApplicationIds.length,
@@ -173,6 +179,7 @@ async function deleteRegistryRecords(
       () => deleteGhgEntry(client, ghgEntryId),
     );
     if (outcome === "deleted") out.deletedGhgEntryIds.push(ghgEntryId);
+    else out.absentGhgEntryIds.push(ghgEntryId);
   }
   for (const application of claim.biocharApplications) {
     const externalApplicationId =
@@ -194,6 +201,8 @@ async function deleteRegistryRecords(
     );
     if (outcome === "deleted") {
       out.deletedBiocharApplicationIds.push(externalApplicationId);
+    } else {
+      out.absentBiocharApplicationIds.push(externalApplicationId);
     }
   }
 }
@@ -271,9 +280,7 @@ function registryDeleteRefusalMessage(
   if (error instanceof IsometricApiError) {
     if (error.code === "not_configured") return error.message;
     const detail = describeIsometricApiError(error);
-    // Only a client-side refusal can mean "no longer a draft"; a server or
-    // network failure says nothing about the record's status.
-    if (isClientError(error)) {
+    if (isRegistryStateRefusal(error)) {
       return `Isometric did not delete ${label}. ${detail} Only draft registry records can be deleted. Nothing was removed locally.`;
     }
     return `Isometric did not delete ${label}. ${detail} Nothing was removed locally. Try again.`;
@@ -281,11 +288,10 @@ function registryDeleteRefusalMessage(
   return `Isometric did not delete ${label}. Nothing was removed locally. Try again.`;
 }
 
-function isClientError(error: IsometricApiError): boolean {
+function isRegistryStateRefusal(error: IsometricApiError): boolean {
   return (
     error.status !== undefined &&
-    error.status >= HTTP_CLIENT_ERROR_MIN &&
-    error.status <= HTTP_CLIENT_ERROR_MAX
+    REGISTRY_STATE_REFUSAL_STATUSES.has(error.status)
   );
 }
 

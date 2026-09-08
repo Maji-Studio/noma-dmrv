@@ -625,6 +625,7 @@ export function makeContext(
       appliedDryKg: biocharMassKg,
     },
     latestSubmission: latest,
+    hasFinalizedSubmission: false,
     linkedGhgStatement: null,
     isProduction: false,
     lineages: [makeLineage({ biocharMassKg })],

@@ -33,7 +33,7 @@ import {
   useRemovalCompilation,
 } from "@/hooks/use-certification";
 import {
-  canDeleteRemovalRow,
+  canViewerDeleteRemoval,
   removalDeletionTouchesRegistry,
 } from "@/components/certification/removal-list-state";
 import {
@@ -88,11 +88,11 @@ export function SubmitStep({
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
-  const discardMutation = useDeleteRemoval();
+  const deleteMutation = useDeleteRemoval();
   const { data: certifierSummary } = useFacilityCertifierSummary(facilityId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
   const [attemptIsResubmission, setAttemptIsResubmission] = useState(
@@ -119,38 +119,41 @@ export function SubmitStep({
   // row exists the server removes whatever the attempt created on Isometric
   // before releasing the batches, and only an Admin may do that; a Removal
   // with no ledger row can be released by any member.
-  const hasRegistryHistory = removalDeletionTouchesRegistry({
+  const deleteFacts = {
     local: ctx.latestSubmission?.status ?? null,
-  });
-  const canDiscardLocalDraft =
+    lockInFlight: ctx.latestSubmission
+      ? isLockedInFlight(ctx.latestSubmission)
+      : false,
+    submissionInterrupted: ctx.latestSubmission
+      ? isSubmissionAttemptInterrupted(ctx.latestSubmission.metadata)
+      : false,
+    hasFinalizedSubmission: ctx.hasFinalizedSubmission,
+  };
+  const hasRegistryHistory = removalDeletionTouchesRegistry(deleteFacts);
+  const canDeleteRemoval =
     ctx.linkedGhgStatement === null &&
     !submitMutation.isPending &&
-    (!hasRegistryHistory || (certifierSummary?.viewerCanManage ?? false)) &&
-    (ctx.latestSubmission === null ||
-      canDeleteRemovalRow({
-        local: ctx.latestSubmission.status,
-        lockInFlight: isLockedInFlight(ctx.latestSubmission),
-        submissionInterrupted: isSubmissionAttemptInterrupted(
-          ctx.latestSubmission.metadata,
-        ),
-      }));
-  const discardLabel = hasRegistryHistory ? "Delete Removal" : "Discard draft";
+    canViewerDeleteRemoval(
+      deleteFacts,
+      certifierSummary?.viewerCanManage ?? false,
+    );
+  const deleteLabel = hasRegistryHistory ? "Delete Removal" : "Discard draft";
 
-  const discardDialog = (
+  const deleteDialog = (
     <DeleteConfirmDialog
-      isOpen={discardConfirmOpen}
+      isOpen={deleteConfirmOpen}
       title={hasRegistryHistory ? REMOVAL_DELETE_TITLE : REMOVAL_DISCARD_TITLE}
       message={removalDeleteMessage(hasRegistryHistory)}
       onCancel={() => {
-        setDiscardConfirmOpen(false);
-        discardMutation.reset();
+        setDeleteConfirmOpen(false);
+        deleteMutation.reset();
       }}
       onConfirm={() => {
-        discardMutation.mutate(
+        deleteMutation.mutate(
           { facilityId, removalId },
           {
             onSuccess: () => {
-              setDiscardConfirmOpen(false);
+              setDeleteConfirmOpen(false);
               toast.success(
                 hasRegistryHistory
                   ? REMOVAL_DELETED_TOAST
@@ -161,13 +164,13 @@ export function SubmitStep({
           },
         );
       }}
-      isPending={discardMutation.isPending || submitMutation.isPending}
+      isPending={deleteMutation.isPending || submitMutation.isPending}
       errorMessage={
-        discardMutation.error instanceof Error
-          ? discardMutation.error.message
+        deleteMutation.error instanceof Error
+          ? deleteMutation.error.message
           : undefined
       }
-      confirmLabel={discardLabel}
+      confirmLabel={deleteLabel}
       pendingLabel={hasRegistryHistory ? "Deleting..." : "Discarding..."}
     />
   );
@@ -415,13 +418,13 @@ export function SubmitStep({
       {submitError && <ServerError message={submitError} />}
 
       <div className="flex items-center justify-between gap-12">
-        {canDiscardLocalDraft ? (
+        {canDeleteRemoval ? (
           <Button
             variant="default"
-            onClick={() => setDiscardConfirmOpen(true)}
+            onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}
           >
-            {discardLabel}
+            {deleteLabel}
           </Button>
         ) : (
           <span />
@@ -438,7 +441,7 @@ export function SubmitStep({
       </div>
 
       {confirmDialog}
-      {discardDialog}
+      {deleteDialog}
     </div>
   );
 }

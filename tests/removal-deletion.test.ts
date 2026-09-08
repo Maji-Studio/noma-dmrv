@@ -391,6 +391,14 @@ describe("deleteRemoval", () => {
 
     expect(result.deletedGhgEntryIds).toEqual([]);
     expect(await removalExists(fixture.removalId)).toBe(false);
+    const [audit] = await db
+      .select({ metadata: certificationSubmissions.metadata })
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.localEntityId, fixture.removalId));
+    expect((audit.metadata as { deletion: unknown }).deletion).toMatchObject({
+      deletedGhgEntryIds: [],
+      absentGhgEntryIds: [`gge_gone_${fixture.removalId.slice(0, RUN_ID_LENGTH)}`],
+    });
   });
 
   it("refuses to finalize when a submission ran between claim and finalize", async () => {
@@ -410,7 +418,17 @@ describe("deleteRemoval", () => {
       fixture.removalId,
     );
     expect(claim.submissionIds).toEqual([rejectedId]);
-    expect(claim.lockedSubmission).toBeNull();
+    expect(claim.lockedSubmissions).toEqual([
+      { id: rejectedId, priorAttemptOutcome: null },
+    ]);
+    // The rejected row now carries the deletion lock so a submit cannot
+    // resume it while the registry cleanup runs.
+    const lockedRow = await ledgerRow(rejectedId);
+    expect(lockedRow.status).toBe("rejected");
+    expect(lockedRow.lockedAt?.getTime()).toBe(claim.lockedAt.getTime());
+    expect((lockedRow.metadata as Record<string, unknown>).lastAttemptOutcome).toBe(
+      SUBMISSION_ATTEMPT_OUTCOMES.deleting,
+    );
 
     const concurrentDraftId = await insertLedgerRow(fixture, {
       status: "draft",
@@ -423,6 +441,8 @@ describe("deleteRemoval", () => {
       finalizeRemovalDeletion(ctx, claim, {
         deletedGhgEntryIds: [],
         deletedBiocharApplicationIds: [],
+        absentGhgEntryIds: [],
+        absentBiocharApplicationIds: [],
       }),
     ).rejects.toThrow(REMOVAL_DELETE_CHANGED_ERROR);
     expect(await removalExists(fixture.removalId)).toBe(true);

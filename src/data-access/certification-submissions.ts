@@ -16,7 +16,7 @@
  *
  * Plan: docs/archive/plans/2026-06-10-certification-reliability-track.md (Phase 1).
  */
-import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
@@ -84,6 +84,12 @@ export interface InsertDraftSubmissionInput extends SubmissionKey {
  * must surface that loudly, because a confirmed external write would
  * otherwise be silently forgotten.
  */
+const FINALIZED_SUBMISSION_STATUSES = [
+  "submitted",
+  "accepted",
+  "superseded",
+] as const;
+
 export async function markSubmissionInterrupted(
   ctx: OrgContext,
   id: string,
@@ -526,6 +532,36 @@ async function createDraft<H>(
 // Ledger reads
 // =====================================================================
 
+/**
+ * Whether any ledger version for this key reached a finalized status
+ * (submitted, accepted, or superseded). The latest row alone cannot say: a
+ * superseding draft sits above a still-submitted prior version until the new
+ * version completes.
+ */
+export async function hasFinalizedSubmission(
+  ctx: OrgContext,
+  key: SubmissionKey,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const [row] = await db
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, key.provider),
+        eq(certificationSubmissions.submissionType, key.submissionType),
+        eq(certificationSubmissions.localEntityType, key.localEntityType),
+        eq(certificationSubmissions.localEntityId, key.localEntityId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        inArray(certificationSubmissions.status, [
+          ...FINALIZED_SUBMISSION_STATUSES,
+        ]),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function getLatestSubmission(
   ctx: OrgContext,
   key: SubmissionKey,
@@ -757,8 +793,10 @@ async function resetSubmissionToDraftCas(
               sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
               sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
             )
-          : or(
-              ne(certificationSubmissions.status, "draft"),
+          : // A fresh lock blocks resumption whatever the status: a rejected
+            // row carries one only while a Removal deletion is cleaning up
+            // the registry records it may have created.
+            or(
               isNull(certificationSubmissions.lockedAt),
               lt(
                 certificationSubmissions.lockedAt,

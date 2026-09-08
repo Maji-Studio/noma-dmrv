@@ -65,11 +65,8 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
     removalId: INPUT.removalId,
     facilityId: INPUT.facilityId,
     submissionIds: ["sub-1"],
-    lockedSubmission: {
-      id: "sub-1",
-      lockedAt: new Date("2026-09-08T00:00:00Z"),
-      priorAttemptOutcome: "interrupted",
-    },
+    lockedAt: new Date("2026-09-08T00:00:00Z"),
+    lockedSubmissions: [{ id: "sub-1", priorAttemptOutcome: "interrupted" }],
     externalRemovalIds: ["gge_1"],
     unconfirmedRemovalSupplierRefs: [],
     biocharApplications: [
@@ -123,6 +120,8 @@ describe("deleteRemoval", () => {
     expect(state.finalize).toHaveBeenCalledWith(ORG_CTX, claim(), {
       deletedGhgEntryIds: ["gge_1"],
       deletedBiocharApplicationIds: ["bse_1", "bse_2"],
+      absentGhgEntryIds: [],
+      absentBiocharApplicationIds: [],
     });
     expect(state.release).not.toHaveBeenCalled();
   });
@@ -137,6 +136,20 @@ describe("deleteRemoval", () => {
 
     expect(result.deletedBiocharApplicationIds).toEqual(["bse_2"]);
     expect(state.finalize).toHaveBeenCalledOnce();
+    expect(state.finalize.mock.calls[0]?.[2]).toMatchObject({
+      absentBiocharApplicationIds: ["bse_1"],
+    });
+  });
+
+  it("does not blame DRAFT status for an auth or rate-limit refusal", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteGhgEntry.mockRejectedValue(
+      new IsometricApiError("forbidden", 403, null, "http"),
+    );
+
+    const attempt = deleteRemoval(ORG_CTX, INPUT);
+    await expect(attempt).rejects.toThrow(/Try again/);
+    await expect(attempt).rejects.not.toThrow(/Only draft registry records/);
   });
 
   it("releases the claim and skips local cleanup when the registry refuses", async () => {
@@ -237,7 +250,7 @@ describe("deleteRemoval", () => {
         unconfirmedRemovalSupplierRefs: [],
         biocharApplications: [],
         submissionIds: [],
-        lockedSubmission: null,
+        lockedSubmissions: [],
       }),
     );
 

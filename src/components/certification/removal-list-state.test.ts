@@ -15,6 +15,7 @@ function identity(
     },
     memberBatches: [{ id: `${id}-batch`, code: batchCode }],
     latestSubmission: null,
+    hasFinalizedSubmission: false,
   } as RemovalHubEntry;
 }
 
@@ -31,6 +32,7 @@ function enrichment(
     local: null,
     lockInFlight: false,
     submissionInterrupted: false,
+    hasFinalizedSubmission: false,
     readiness: { state: "ready", reasons: [], advisories: [] },
     evidenceHealth: null,
     submissionWarnings: [],
@@ -139,19 +141,23 @@ describe("buildRemovalListRows", () => {
 
 describe("canDeleteRemovalRow", () => {
   it("allows removals that never finalized a submission", () => {
-    expect(canDeleteRemovalRow({ local: null, lockInFlight: false, submissionInterrupted: false })).toBe(true);
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false })).toBe(true);
-    expect(canDeleteRemovalRow({ local: "rejected", lockInFlight: false, submissionInterrupted: false })).toBe(true);
+    expect(canDeleteRemovalRow({ local: null, lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(true);
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(true);
+    expect(canDeleteRemovalRow({ local: "rejected", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(true);
+  });
+
+  it("refuses when an earlier version finalized even if the latest is a draft", () => {
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: true })).toBe(false);
   });
 
   it("refuses removals whose submission completed", () => {
-    expect(canDeleteRemovalRow({ local: "submitted", lockInFlight: false, submissionInterrupted: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "accepted", lockInFlight: false, submissionInterrupted: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "superseded", lockInFlight: false, submissionInterrupted: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "submitted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "accepted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "superseded", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
   });
 
   it("waits for a running attempt but not for an interrupted one", () => {
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: true })).toBe(true);
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: true, hasFinalizedSubmission: false })).toBe(true);
   });
 });

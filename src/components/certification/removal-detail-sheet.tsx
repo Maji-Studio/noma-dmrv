@@ -41,7 +41,7 @@ import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
 import {
-  canDeleteRemovalRow,
+  canViewerDeleteRemoval,
   removalDeletionTouchesRegistry,
   type RemovalListRow,
 } from "./removal-list-state";
@@ -203,9 +203,10 @@ export function RemovalDetailSheet({
   // and Biochar Applications are removed from Isometric before the local
   // record goes.
   const touchesRegistry = removalDeletionTouchesRegistry(summary);
-  const canDelete =
-    canDeleteRemovalRow(summary) &&
-    (!touchesRegistry || (certifierSummary?.viewerCanManage ?? false));
+  const canDelete = canViewerDeleteRemoval(
+    summary,
+    certifierSummary?.viewerCanManage ?? false,
+  );
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
