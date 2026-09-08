@@ -331,6 +331,24 @@ describe("claimSubmissionDraft — create path", () => {
     expect(outcome).toEqual({ kind: "blocked", reason: "invalid-changed-hash" });
   });
 
+  it("does not resume a rejected row while a Removal deletion holds its lock", async () => {
+    const fixture = await createFixture();
+    await seedRow(fixture.key, {
+      version: 1,
+      status: "rejected",
+      payloadHash: hashOf({ value: "v-original" }),
+      externalId: null,
+      lockedAt: new Date(),
+      metadata: { lastAttemptOutcome: "deleting" },
+    });
+
+    const outcome = await claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
+
+    expect(outcome).toEqual({ kind: "blocked", reason: "in-flight" });
+    const [row] = await listRows(fixture.key);
+    expect(row.status).toBe("rejected");
+  });
+
   it("blocks a rejected row that already has an external id", async () => {
     const fixture = await createFixture();
     await seedRow(fixture.key, {

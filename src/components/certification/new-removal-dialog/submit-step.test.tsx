@@ -62,7 +62,7 @@ vi.mock("@/components/forms", () => ({
 }));
 
 vi.mock("@/hooks/use-certification", () => ({
-  useDiscardRemovalDraft: () => ({
+  useDeleteRemoval: () => ({
     mutate: state.discardMutate,
     isPending: false,
     error: null,
@@ -267,7 +267,7 @@ describe("SubmitStep", () => {
     await act(async () => renderer?.unmount());
   });
 
-  it("does not offer discard after submission history exists", async () => {
+  it("offers deletion for an interrupted draft with registry history", async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
@@ -279,7 +279,11 @@ describe("SubmitStep", () => {
           ctx={
             {
               ...CONTEXT,
-              latestSubmission: { status: "draft" },
+              latestSubmission: {
+                status: "draft",
+                lockedAt: null,
+                metadata: { lastAttemptOutcome: "interrupted" },
+              },
             } as RemovalCertifyContext
           }
           onDone={vi.fn()}
@@ -298,6 +302,56 @@ describe("SubmitStep", () => {
     });
 
     expect(findButton(renderer!, "Discard draft")).toBeUndefined();
+    expect(findButton(renderer!, "Delete Removal")).toBeDefined();
+
+    await act(async () => {
+      findButton(renderer!, "Delete Removal")?.props.onClick();
+    });
+    await act(async () => {
+      findButton(renderer!, "Confirm discard")?.props.onClick();
+    });
+    const options = state.discardMutate.mock.calls[0]?.[1] as {
+      onSuccess: () => void;
+    };
+    await act(async () => options.onSuccess());
+    expect(state.toastSuccess).toHaveBeenCalledWith(
+      "Removal deleted. Credit batches are available again.",
+    );
+    await act(async () => renderer?.unmount());
+  });
+
+  it("does not offer deletion once a submission completed", async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <SubmitStep
+          removalId="removal-1"
+          facilityId="facility-1"
+          facilityName="Tanzania facility"
+          ctx={
+            {
+              ...CONTEXT,
+              latestSubmission: { status: "submitted", lockedAt: null, metadata: null },
+            } as RemovalCertifyContext
+          }
+          onDone={vi.fn()}
+          submitMutation={
+            {
+              mutate: vi.fn(),
+              isPending: false,
+              isSuccess: false,
+              data: undefined,
+              error: null,
+              reset: vi.fn(),
+            } as never
+          }
+        />,
+      );
+    });
+
+    expect(findButton(renderer!, "Discard draft")).toBeUndefined();
+    expect(findButton(renderer!, "Delete Removal")).toBeUndefined();
     await act(async () => renderer?.unmount());
   });
 

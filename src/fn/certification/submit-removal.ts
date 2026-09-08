@@ -942,6 +942,7 @@ async function runRemovalSubmission({
         log,
       })
     ).externalId;
+  onProgress?.({ step: "removal.creating", state: "complete" });
   onProgress?.({ step: "removal.verifying_evidence", state: "active" });
   await reconcileRemovalRegistryArtifacts({
     client,
@@ -956,7 +957,6 @@ async function runRemovalSubmission({
       recordRemovalExternalMutation(attempt, state),
     log,
   });
-  onProgress?.({ step: "removal.creating", state: "complete" });
 
   if (resumed) {
     await appendSyncEventBestEffort(
