@@ -1,0 +1,167 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { OrgContext } from "@/lib/auth/server";
+import type { RemovalDeletionClaim } from "@/data-access/certifier-removal-deletion";
+
+/**
+ * Orchestration order for a Removal deletion with registry history: the GHG
+ * Entry is deleted before its Biochar Applications, a 404 counts as already
+ * gone, and any other refusal releases the claim without local cleanup.
+ */
+
+const state = vi.hoisted(() => ({
+  claim: vi.fn(),
+  finalize: vi.fn(),
+  release: vi.fn(),
+  deleteGhgEntry: vi.fn(),
+  deleteBiocharApplication: vi.fn(),
+  appendSyncEvent: vi.fn(),
+}));
+
+vi.mock("../with-action", () => ({
+  withAction: async (run: (ctx: OrgContext) => Promise<unknown>) => ({
+    success: true,
+    data: await run(ORG_CTX),
+  }),
+}));
+vi.mock("@/data-access/utils", () => ({
+  requireOrgFacility: vi.fn(async () => undefined),
+}));
+vi.mock("@/data-access/certifier-removal-deletion", () => ({
+  claimRemovalDeletion: state.claim,
+  finalizeRemovalDeletion: state.finalize,
+  releaseRemovalDeletionClaim: state.release,
+}));
+vi.mock("@/lib/isometric", () => ({
+  deleteGhgEntry: state.deleteGhgEntry,
+  deleteBiocharApplication: state.deleteBiocharApplication,
+}));
+vi.mock("@/lib/isometric/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/isometric/client")>()),
+  getIsometricClientForOrg: vi.fn(async () => ({ fake: true })),
+}));
+vi.mock("./shared", () => ({
+  appendSyncEventBestEffort: state.appendSyncEvent,
+}));
+
+import { IsometricApiError } from "@/lib/isometric/client";
+import { SafeError } from "@/lib/errors";
+import { deleteRemoval } from "./delete-removal";
+
+const ORG_CTX: OrgContext = {
+  userId: "user-1",
+  organizationId: "org-1",
+  orgRole: "admin",
+  isPlatformAdmin: false,
+};
+const INPUT = { facilityId: "facility-1", removalId: "removal-1" };
+
+function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionClaim {
+  return {
+    removalId: INPUT.removalId,
+    facilityId: INPUT.facilityId,
+    submissionIds: ["sub-1"],
+    lockedSubmission: {
+      id: "sub-1",
+      lockedAt: new Date("2026-09-08T00:00:00Z"),
+      priorAttemptOutcome: "interrupted",
+    },
+    externalRemovalIds: ["gge_1"],
+    biocharApplications: [
+      { registrationId: "reg-1", externalApplicationId: "bse_1" },
+      { registrationId: "reg-2", externalApplicationId: "bse_2" },
+    ],
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  for (const mock of Object.values(state)) mock.mockReset();
+  state.finalize.mockResolvedValue({ releasedSliceCount: 2 });
+  state.deleteGhgEntry.mockResolvedValue(undefined);
+  state.deleteBiocharApplication.mockResolvedValue(undefined);
+  state.appendSyncEvent.mockResolvedValue(undefined);
+});
+
+describe("deleteRemoval", () => {
+  it("deletes the GHG Entry before the Biochar Applications, then finalizes", async () => {
+    state.claim.mockResolvedValue(claim());
+    const order: string[] = [];
+    state.deleteGhgEntry.mockImplementation(async (_c, id: string) => {
+      order.push(id);
+    });
+    state.deleteBiocharApplication.mockImplementation(
+      async (_c, id: string) => {
+        order.push(id);
+      },
+    );
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(order).toEqual(["gge_1", "bse_1", "bse_2"]);
+    expect(result).toEqual({
+      removalId: "removal-1",
+      deletedGhgEntryIds: ["gge_1"],
+      deletedBiocharApplicationIds: ["bse_1", "bse_2"],
+      releasedSliceCount: 2,
+    });
+    expect(state.finalize).toHaveBeenCalledWith(ORG_CTX, claim(), {
+      deletedGhgEntryIds: ["gge_1"],
+      deletedBiocharApplicationIds: ["bse_1", "bse_2"],
+    });
+    expect(state.release).not.toHaveBeenCalled();
+  });
+
+  it("counts a 404 as already gone and keeps going", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteBiocharApplication.mockImplementationOnce(async () => {
+      throw new IsometricApiError("gone", 404, null, "http");
+    });
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(result.deletedBiocharApplicationIds).toEqual(["bse_2"]);
+    expect(state.finalize).toHaveBeenCalledOnce();
+  });
+
+  it("releases the claim and skips local cleanup when the registry refuses", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteGhgEntry.mockRejectedValue(
+      new IsometricApiError(
+        "refused",
+        422,
+        { errors: [{ detail: "GHG entry is not in DRAFT status" }] },
+        "http",
+      ),
+    );
+
+    const attempt = deleteRemoval(ORG_CTX, INPUT);
+    await expect(attempt).rejects.toBeInstanceOf(SafeError);
+    await expect(attempt).rejects.toThrow(
+      /GHG Entry gge_1.*not in DRAFT status.*Nothing was removed locally/,
+    );
+
+    expect(state.release).toHaveBeenCalledWith(ORG_CTX, claim());
+    expect(state.finalize).not.toHaveBeenCalled();
+    expect(state.deleteBiocharApplication).not.toHaveBeenCalled();
+  });
+
+  it("skips the registry entirely when the claim carries no external records", async () => {
+    state.claim.mockResolvedValue(
+      claim({ externalRemovalIds: [], biocharApplications: [], submissionIds: [], lockedSubmission: null }),
+    );
+
+    await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(state.deleteGhgEntry).not.toHaveBeenCalled();
+    expect(state.deleteBiocharApplication).not.toHaveBeenCalled();
+    expect(state.finalize).toHaveBeenCalledOnce();
+  });
+
+  it("requires an admin", async () => {
+    state.claim.mockResolvedValue(claim());
+    await expect(
+      deleteRemoval({ ...ORG_CTX, orgRole: "member" }, INPUT),
+    ).rejects.toThrow();
+    expect(state.claim).not.toHaveBeenCalled();
+  });
+});

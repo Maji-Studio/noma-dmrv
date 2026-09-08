@@ -15,6 +15,7 @@ import {
   createGhgStatementDraft,
   approveGhgStatementReport,
   createRemovalWithBatchesAction,
+  deleteRemovalAction,
   discardRemovalDraftAction,
   deleteFacilityCertifierMapping,
   loadBatchHealth,
@@ -61,6 +62,7 @@ import { invalidateOnboardingProgress } from "./use-onboarding";
 import type {
   CreateGhgStatementInput,
   CreateRemovalWithBatchesInput,
+  DeleteRemovalInput,
   DiscardRemovalDraftInput,
   FacilityEmissionConfigFormData,
   RegistrySourceVisibilityInput,
@@ -705,6 +707,21 @@ export function useDiscardRemovalDraft() {
   return useMutation({
     mutationFn: async (input: DiscardRemovalDraftInput) => {
       const result = await discardRemovalDraftAction(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () =>
+      invalidateCertificationReadiness(queryClient, {
+        creditBatchPreviews: true,
+      }),
+  });
+}
+
+export function useDeleteRemoval() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: DeleteRemovalInput) => {
+      const result = await deleteRemovalAction(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

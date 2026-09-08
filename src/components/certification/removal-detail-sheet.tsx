@@ -14,10 +14,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import {
+  useDeleteRemoval,
+  useFacilityCertifierSummary,
+} from "@/hooks/use-certification";
 import {
   deriveRemovalWorkflowStatus,
   type RemovalWorkflowStatus,
@@ -34,7 +40,7 @@ import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
-import type { RemovalListRow } from "./removal-list-state";
+import { canDeleteRemovalRow, type RemovalListRow } from "./removal-list-state";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -183,6 +189,14 @@ export function RemovalDetailSheet({
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
 
+  // Deletion mirrors the server rule: never-finalized only. With registry
+  // history the draft GHG Entry and Biochar Applications are removed from
+  // Isometric before the local record goes.
+  const canDelete = canDeleteRemovalRow(summary);
+  const deleteMutation = useDeleteRemoval();
+  const toast = useToast();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
   // The legacy `/removals/[id]/review` route only redirects here (dropping any
   // `?step=`), so we skip the hop and build the resume URL it resolves to.
@@ -197,6 +211,7 @@ export function RemovalDetailSheet({
       : "Set when submitted";
 
   return (
+    <>
     <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <SlideOverPanel.Content size="default">
         <SlideOverPanel.Header showClose>
@@ -294,6 +309,16 @@ export function RemovalDetailSheet({
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer className="justify-stretch">
+          {canDelete && (
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={deleteMutation.isPending}
+            >
+              Delete Removal
+            </Button>
+          )}
           <RemovalReviewAction
             isActionable={isActionable}
             reviewHref={reviewHref}
@@ -309,5 +334,43 @@ export function RemovalDetailSheet({
         </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
+      {/* Sibling of the sheet, not a child, so Base UI does not treat the
+          confirmation as a nested dialog of the sheet. */}
+      <DeleteConfirmDialog
+        isOpen={deleteConfirmOpen}
+        title="Delete Removal?"
+        message={
+          summary.externalId
+            ? "This deletes the draft GHG Entry and its Biochar Applications from Isometric, then releases the credit batches. Registry records that are no longer drafts cannot be deleted. This action cannot be undone."
+            : "This releases its credit batches so you can group them into separate Removals. This action cannot be undone."
+        }
+        onCancel={() => {
+          setDeleteConfirmOpen(false);
+          deleteMutation.reset();
+        }}
+        onConfirm={() => {
+          deleteMutation.mutate(
+            { facilityId, removalId: summary.removalId },
+            {
+              onSuccess: () => {
+                setDeleteConfirmOpen(false);
+                toast.success(
+                  "Removal deleted. Credit batches are available again.",
+                );
+                onClose();
+              },
+            },
+          );
+        }}
+        isPending={deleteMutation.isPending}
+        errorMessage={
+          deleteMutation.error instanceof Error
+            ? deleteMutation.error.message
+            : undefined
+        }
+        confirmLabel="Delete Removal"
+        pendingLabel="Deleting..."
+      />
+    </>
   );
 }

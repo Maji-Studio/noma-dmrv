@@ -79,3 +79,18 @@ export function buildRemovalListRows(
     };
   });
 }
+
+/**
+ * A Removal may be deleted until a submission finalizes. `null` means no
+ * ledger row; `draft` and `rejected` never reached "Submission complete". An
+ * attempt still holding its lock is left alone unless it is known to be
+ * interrupted. The server re-checks every rule under its own locks.
+ */
+export function canDeleteRemovalRow(
+  row: Pick<RemovalListRow, "local" | "lockInFlight" | "submissionInterrupted">,
+): boolean {
+  const neverFinalized =
+    row.local === null || row.local === "draft" || row.local === "rejected";
+  const attemptRunning = row.lockInFlight && !row.submissionInterrupted;
+  return neverFinalized && !attemptRunning;
+}

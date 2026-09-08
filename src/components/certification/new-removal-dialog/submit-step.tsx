@@ -28,9 +28,12 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
-  useDiscardRemovalDraft,
+  useDeleteRemoval,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
+import { canDeleteRemovalRow } from "@/components/certification/removal-list-state";
+import { isSubmissionAttemptInterrupted } from "@/lib/certification/submission-metadata";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import type { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import {
@@ -74,7 +77,7 @@ export function SubmitStep({
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
-  const discardMutation = useDiscardRemovalDraft();
+  const discardMutation = useDeleteRemoval();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
@@ -100,16 +103,32 @@ export function SubmitStep({
   );
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
+  // Anything short of "Submission complete" may be deleted. With registry
+  // history the server removes the draft GHG Entry and Biochar Applications
+  // from Isometric before releasing the batches.
+  const hasRegistryHistory = ctx.latestSubmission !== null;
   const canDiscardLocalDraft =
-    ctx.latestSubmission === null &&
     ctx.linkedGhgStatement === null &&
-    !submitMutation.isPending;
+    !submitMutation.isPending &&
+    (ctx.latestSubmission === null ||
+      canDeleteRemovalRow({
+        local: ctx.latestSubmission.status,
+        lockInFlight: isLockedInFlight(ctx.latestSubmission),
+        submissionInterrupted: isSubmissionAttemptInterrupted(
+          ctx.latestSubmission.metadata,
+        ),
+      }));
+  const discardLabel = hasRegistryHistory ? "Delete Removal" : "Discard draft";
 
   const discardDialog = (
     <DeleteConfirmDialog
       isOpen={discardConfirmOpen}
-      title="Discard Removal draft?"
-      message="This releases its credit batches so you can group them into separate Removals. This action cannot be undone."
+      title={hasRegistryHistory ? "Delete Removal?" : "Discard Removal draft?"}
+      message={
+        hasRegistryHistory
+          ? "This deletes the draft GHG Entry and its Biochar Applications from Isometric, then releases the credit batches. Registry records that are no longer drafts cannot be deleted. This action cannot be undone."
+          : "This releases its credit batches so you can group them into separate Removals. This action cannot be undone."
+      }
       onCancel={() => {
         setDiscardConfirmOpen(false);
         discardMutation.reset();
@@ -121,7 +140,9 @@ export function SubmitStep({
             onSuccess: () => {
               setDiscardConfirmOpen(false);
               toast.success(
-                "Removal draft discarded. Credit batches are available again.",
+                hasRegistryHistory
+                  ? "Removal deleted. Credit batches are available again."
+                  : "Removal draft discarded. Credit batches are available again.",
               );
               onDone();
             },
@@ -134,8 +155,8 @@ export function SubmitStep({
           ? discardMutation.error.message
           : undefined
       }
-      confirmLabel="Discard draft"
-      pendingLabel="Discarding..."
+      confirmLabel={discardLabel}
+      pendingLabel={hasRegistryHistory ? "Deleting..." : "Discarding..."}
     />
   );
 
@@ -388,7 +409,7 @@ export function SubmitStep({
             onClick={() => setDiscardConfirmOpen(true)}
             disabled={submitMutation.isPending}
           >
-            Discard draft
+            {discardLabel}
           </Button>
         ) : (
           <span />

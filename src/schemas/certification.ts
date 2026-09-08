@@ -144,6 +144,12 @@ export type DiscardRemovalDraftInput = z.infer<
   typeof discardRemovalDraftSchema
 >;
 
+// Deleting a Removal shares the discard identity: the server decides whether
+// registry cleanup is needed from the ledger, not from the caller.
+export const deleteRemovalSchema = discardRemovalDraftSchema;
+
+export type DeleteRemovalInput = z.infer<typeof deleteRemovalSchema>;
+
 const submitGhgStatementFieldsSchema = z.object({
   reportId: z.string().uuid().optional(),
   externalReportUrl: httpsUrlSchema.optional(),

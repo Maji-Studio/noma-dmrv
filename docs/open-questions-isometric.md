@@ -8,6 +8,25 @@ Current interpretation pin: Biochar Protocol v1.1 with the five module versions
 in [`docs/isometric/versions.json`](./isometric/versions.json). Resolved or
 retired questions do not belong in this file.
 
+### Removal deletion leaves per-submission registry inputs behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
+
+- **Observed** — deleting a never-finalized Removal
+  (`src/fn/certification/delete-removal.ts:deleteRemoval`) removes the draft
+  GHG Entry and its Biochar Applications from the registry, but not the
+  Datapoints, Measurement Samples, or evidence-ledger Sources that the same
+  submission created. Production Batches and Storage Locations are shared
+  across Removals and must stay. The orphans are keyed by version-specific
+  supplier references, so a later Removal never collides with them.
+- **Why it matters** — sandbox and production projects accumulate unused
+  inputs after each abandoned submission. Nothing reads them, but a reviewer
+  opening the project in Certify sees records with no GHG Entry.
+- **To resolve** — decide whether cleanup should extend to
+  `DELETE /datapoints/{id}` (refused while a Component still uses it),
+  `DELETE /measurement_samples/{id}`, and `DELETE /sources/{id}`. Needs a
+  sandbox probe of what the GHG Entry delete already cascades
+  (`needs-registry-check`), then a follow-up on the deletion claim in
+  `src/data-access/certifier-removal-deletion.ts:claimRemovalDeletion`.
+
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
 
 - **Decision needed** — where should the "this template component carries this

@@ -78,6 +78,9 @@ export {
 // each selected batch's health before atomically creating the removal.
 export { createRemovalWithBatchesAction } from "./create-removal-with-batches";
 export { discardRemovalDraftAction } from "./discard-removal-draft";
+// Deletes a never-finalized Removal, removing its draft GHG Entry and Biochar
+// Applications from the registry first.
+export { deleteRemovalAction } from "./delete-removal";
 // GHG Statement flow — wired live by Phase 4.5. A GHG Statement is an
 // independent, period-anchored artifact that rolls up multiple Removals
 // (ADR 0003).

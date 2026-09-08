@@ -1,5 +1,26 @@
 # Isometric Docs Change Log
 
+## 2026-09-08: never-finalized Removals can be deleted, registry first
+
+- A Removal whose submission never reached "Submission complete" (no ledger
+  row, or a `draft`/`rejected` row) can be deleted from the Removal detail
+  sheet and the New Removal wizard. Submitted, accepted, and superseded
+  Removals, and any Removal in a GHG Statement, refuse deletion.
+- Deletion removes the registry records first: `DELETE /ghg_entries/{id}` for
+  the GHG Entry the ledger recorded, then `DELETE /biochar_applications/{id}`
+  for each confirmed Biochar Application registration. Both endpoints are
+  irreversible and the GHG Entry delete is refused unless the entry is still
+  `DRAFT` (public Certify OpenAPI, checked on this date). A refusal releases
+  the deletion claim and changes nothing locally. A 404 counts as already
+  deleted so a retry after a partial cleanup converges.
+- Local cleanup marks the ledger rows `rejected` with a `deletion` metadata
+  record, marks Biochar Application registrations `deleted`, releases
+  production-claim reservations and credit batch slices, and deletes the
+  Removal row. Datapoints, Measurement Samples, Production Batches, Storage
+  Locations, and Sources stay on the registry (see `docs/open-questions.md`).
+- Code: `src/fn/certification/delete-removal.ts`,
+  `src/data-access/certifier-removal-deletion.ts`.
+
 ## 2026-09-07: fail-closed Application evidence and safe recovery
 
 - The public [Certify OpenAPI schema](https://docs.isometric.com/api-reference/certify/mrv.openapi.json), checked on this date, accepts `source_ids` in `CreateBiocharApplicationRequest` but omits it from `BiocharApplication`. Evidence-bearing Removal finalization remains blocked until an authoritative attachment readback exists. When Source IDs are returned, reconciliation requires the exact reviewed set.

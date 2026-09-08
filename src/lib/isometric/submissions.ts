@@ -42,6 +42,13 @@ export function createGhgEntry(client: IsometricClient, body: CreateGhgEntryRequ
 // detailed Sequestrations/Activities component split lives behind
 // `/ghg_entries/{id}/component_attributions`; this entry-level read carries the
 // netted figures we surface in the removal breakdown card.
+// DELETE /ghg_entries/{id}: irreversible, and the registry refuses it unless
+// the GHG Entry is still in DRAFT status (verified against the public Certify
+// OpenAPI on 2026-09-08). Callers must tolerate a 404 on retry.
+export function deleteGhgEntry(client: IsometricClient, id: string): Promise<void> {
+  return client.delete<void>(`/ghg_entries/${encodeURIComponent(id)}`);
+}
+
 export function getGhgEntry(client: IsometricClient, id: string): Promise<GhgEntry> {
   return client.get<GhgEntry>(`/ghg_entries/${id}`);
 }
