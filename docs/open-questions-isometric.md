@@ -23,6 +23,44 @@ retired questions do not belong in this file.
 - **To resolve** — read the attachment back through GraphQL (issue #737) and
   make the exact-set comparison unconditional again.
 
+### Removal deletion leaves per-submission registry inputs behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
+
+- **Observed** — deleting a never-finalized Removal
+  (`src/fn/certification/delete-removal.ts:deleteRemoval`) removes the draft
+  GHG Entry and its Biochar Applications from the registry, but not the
+  Datapoints, Measurement Samples, or evidence-ledger Sources that the same
+  submission created. Production Batches and Storage Locations are shared
+  across Removals and must stay. The orphans are keyed by version-specific
+  supplier references, so a later Removal never collides with them.
+- **Why it matters** — sandbox and production projects accumulate unused
+  inputs after each abandoned submission. Nothing reads them, but a reviewer
+  opening the project in Certify sees records with no GHG Entry.
+- **To resolve** — decide whether cleanup should extend to
+  `DELETE /datapoints/{id}` (refused while a Component still uses it),
+  `DELETE /measurement_samples/{id}`, and `DELETE /sources/{id}`. Needs a
+  sandbox probe of what the GHG Entry delete already cascades
+  (`needs-registry-check`), then a follow-up on the deletion claim in
+  `src/data-access/certifier-removal-deletion.ts:claimRemovalDeletion`.
+
+### Partial registry cleanup leaves a Removal that submits badly before it deletes cleanly (`isometric/removal-deletion-partial-cleanup`, opened 2026-09-08)
+
+- **Observed** — `src/fn/certification/delete-removal.ts:deleteRegistryRecords`
+  deletes the GHG Entry before the Biochar Applications. If a later DELETE is
+  refused, the claim is released and the ledger row keeps the now-deleted GHG
+  Entry ID. A second Delete Removal converges (every DELETE tolerates a 404,
+  and the operator message says to run it again). An ordinary submit retry
+  instead reuses `row.externalId`
+  (`src/fn/certification/submit-removal.ts`) and fails on the readback as
+  registry drift before the operator is pointed back at deletion.
+- **Why it matters** — the interrupted state is recoverable but the wrong
+  button gives a confusing detour.
+- **To resolve** — decide whether a partial deletion should persist a
+  deletion-only recovery state on the ledger row (blocking submit until the
+  deletion completes) or whether submit should treat a 404 on a recorded GHG
+  Entry as "recreate". Either way the ledger `deletion` metadata written by
+  `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion` is
+  the natural carrier.
+
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
 
 - **Decision needed** — where should the "this template component carries this

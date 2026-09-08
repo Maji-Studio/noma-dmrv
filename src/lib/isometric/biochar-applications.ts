@@ -197,6 +197,17 @@ export function getBiocharApplication(
   );
 }
 
+// DELETE /biochar_applications/{id}: irreversible. Callers must tolerate a
+// 404 on retry because a prior attempt may have already removed the record.
+export function deleteBiocharApplication(
+  client: IsometricClient,
+  biocharApplicationId: string,
+): Promise<void> {
+  return client.delete<void>(
+    `/biochar_applications/${encodeURIComponent(biocharApplicationId)}`,
+  );
+}
+
 export async function findBiocharApplicationBySupplierReference(
   client: IsometricClient,
   supplierReferenceId: string,
