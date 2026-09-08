@@ -1,3 +1,4 @@
+import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { assertNoRemovalBatchDeletion } from "./removal-production-batch-deletion";
 import { and, asc, desc, eq, exists, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -599,7 +600,8 @@ export async function discardLocalRemovalDraft(
       removal.ghgStatementId !== null ||
       removal.startedOn !== null ||
       removal.completedOn !== null ||
-      removalMayHaveExternalMutation(removal.metadata)
+      removalMayHaveExternalMutation(removal.metadata) ||
+      hasFreshRemovalDeletionLease(removal.metadata)
     ) {
       throw new SafeError(DISCARD_REMOVAL_ERROR);
     }

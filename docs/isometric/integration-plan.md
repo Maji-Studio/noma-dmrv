@@ -159,8 +159,12 @@ production lineage or lab samples.
 Batch candidates come from the Removal's application-by-credit-batch membership,
 including failures before Biochar Application creation. Other memberships,
 registrations, immutable submission references and production-claim reservations
-retain shared batches and their journal. Membership creation checks durable
-deletion markers under the credit-batch locks. Sharing is checked again after
+retain shared batches and their journal. Every deletion claim stores a lease on
+the Removal, including Removals without submission ledger rows. Membership
+creation checks that lease under the credit-batch locks; submission creation and
+resume check it under the artifact lock. Abandoned leases expire with the shared
+submission lock TTL. Release and finalization compare the claim timestamp so an
+older caller cannot release or finalize a replacement claim. Sharing is checked again after
 registry readback and during finalization. Registry child-reference enforcement
 remains the final guard against an already-running concurrent child POST;
 production-batch recovery handles disappearance before that POST on retry.

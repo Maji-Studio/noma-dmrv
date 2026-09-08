@@ -34,7 +34,7 @@ function query(rows: unknown[], table?: unknown) {
 beforeEach(() => {
   vi.resetAllMocks(); predicates.length = 0; patches.length = 0; order.length = 0;
   mocks.transaction.mockImplementation(async (run) => run(mocks));
-  mocks.select.mockReturnValueOnce(query([{ id: claim.removalId, ghgStatementId: null }]))
+  mocks.select.mockReturnValueOnce(query([{ id: claim.removalId, ghgStatementId: null, metadata: { removalDeletionLockedAt: lockedAt.toISOString() } }]))
     .mockReturnValueOnce(query([{ id: "sub-1", status: "draft", lockedAt }]));
   mocks.delete.mockImplementation((table) => {
     if (table === certifierBiocharApplications) order.push("applications");

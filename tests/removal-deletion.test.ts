@@ -1,3 +1,8 @@
+import { REMOVAL_DELETION_LEASE_KEY } from "@/lib/certification/removal-deletion-lease";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { claimSubmissionDraft } from "@/data-access/certification-submissions";
+import { createRemovalWithCreditBatches, discardLocalRemovalDraft } from "@/data-access/certifier-removals";
+import { assertNoRemovalBatchDeletion } from "@/data-access/removal-production-batch-deletion";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -17,14 +22,12 @@ import {
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
-
 vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@/lib/isometric/client")>();
   const { createFakeClientModule } = await import("./fixtures/fake-registry");
   return createFakeClientModule(actual);
 });
-
 import { db } from "@/db";
 import {
   certificationSubmissions,
@@ -71,27 +74,21 @@ import {
   installFakeRegistry,
   type FakeIsometricRegistry,
 } from "./fixtures/fake-registry";
-
 const RUN_ID_LENGTH = 8;
 const SUBMISSION_VERSION = 1;
-
 const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
 const createdBatchIds: string[] = [];
 const createdFeedstockTypeIds: string[] = [];
 const createdChains: BiocharApplicationChain[] = [];
 const createdDocumentIds: string[] = [];
-
 let registry: FakeIsometricRegistry;
-
 beforeAll(async () => {
   await ensureTestOrg();
 });
-
 beforeEach(() => {
   registry = installFakeRegistry();
 });
-
 afterAll(async () => {
   if (createdDocumentIds.length > 0) {
     await db
@@ -143,7 +140,6 @@ afterAll(async () => {
       .where(inArray(feedstockTypes.id, createdFeedstockTypeIds));
   }
 });
-
 interface Fixture {
   facilityId: string;
   removalId: string;
@@ -152,7 +148,6 @@ interface Fixture {
   externalProjectId: string;
   runId: string;
 }
-
 async function createFixture(): Promise<Fixture> {
   const runId = crypto.randomUUID().slice(0, RUN_ID_LENGTH);
   const [facility] = await db
@@ -227,7 +222,6 @@ async function createFixture(): Promise<Fixture> {
     runId,
   };
 }
-
 async function insertRegistration(
   fixture: Fixture,
   chain: BiocharApplicationChain,
@@ -269,7 +263,6 @@ async function insertRegistration(
     .returning({ id: certifierBiocharApplications.id });
   return row.id;
 }
-
 async function registrationRowsFor(submissionId: string) {
   return db
     .select({
@@ -279,7 +272,6 @@ async function registrationRowsFor(submissionId: string) {
     .from(certifierBiocharApplications)
     .where(eq(certifierBiocharApplications.removalSubmissionId, submissionId));
 }
-
 async function insertLedgerRow(
   fixture: Fixture,
   args: {
@@ -316,7 +308,6 @@ async function insertLedgerRow(
   }
   return row.id;
 }
-
 function interruptedMetadata(): Record<string, unknown> {
   return {
     lastAttemptOutcome: SUBMISSION_ATTEMPT_OUTCOMES.interrupted,
@@ -324,7 +315,6 @@ function interruptedMetadata(): Record<string, unknown> {
     lastError: "Creating Removal in Isometric failed",
   };
 }
-
 async function insertMirroredDocument(
   fixture: Fixture,
   args: { entityType: "application" | "delivery"; entityId: string; sourceId: string },
@@ -349,7 +339,6 @@ async function insertMirroredDocument(
   });
   return document.id;
 }
-
 async function mirrorExists(documentId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: certifierDocumentUploads.id })
@@ -358,7 +347,6 @@ async function mirrorExists(documentId: string): Promise<boolean> {
     .limit(1);
   return Boolean(row);
 }
-
 async function removalExists(removalId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: certifierRemovals.id })
@@ -367,7 +355,6 @@ async function removalExists(removalId: string): Promise<boolean> {
     .limit(1);
   return Boolean(row);
 }
-
 async function ledgerRow(id: string) {
   const [row] = await db
     .select({
@@ -381,7 +368,6 @@ async function ledgerRow(id: string) {
     .limit(1);
   return row;
 }
-
 describe("deleteRemoval", () => {
   it("deletes the draft GHG Entry, releases the reservation, and removes the Removal", async () => {
     const fixture = await createFixture();
@@ -392,17 +378,14 @@ describe("deleteRemoval", () => {
       metadata: interruptedMetadata(),
       reserveBatch: true,
     });
-
     const result = await deleteRemoval(makeTestOrgContext(), {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
     });
-
     expect(result.deletedGhgEntryIds).toEqual([entry.id]);
     expect(registry.ghgEntries).toHaveLength(0);
     expect(registry.requestCount("DELETE", `/ghg_entries/${entry.id}`)).toBe(1);
     expect(await removalExists(fixture.removalId)).toBe(false);
-
     const row = await ledgerRow(submissionId);
     expect(row.status).toBe("rejected");
     expect(row.lockedAt).toBeNull();
@@ -414,7 +397,6 @@ describe("deleteRemoval", () => {
       deletedGhgEntryIds: [entry.id],
       deletedBiocharApplicationIds: [],
     });
-
     const [batch] = await db
       .select({
         reserved: creditBatches.productionEmissionsClaimReservedBySubmissionId,
@@ -422,7 +404,6 @@ describe("deleteRemoval", () => {
       .from(creditBatches)
       .where(eq(creditBatches.id, fixture.creditBatchId));
     expect(batch.reserved).toBeNull();
-
     const events = await db
       .select({
         operation: certifierSyncEvents.operation,
@@ -442,7 +423,6 @@ describe("deleteRemoval", () => {
       ]),
     );
   });
-
   it.each([false, true])("cleans up owned uploads and retains a shared batch: %s", async (shared) => {
     const fixture = await createFixture();
     const chain = await createBiocharApplicationChain({
@@ -540,12 +520,10 @@ describe("deleteRemoval", () => {
       externalApplicationId: null,
       lifecycleStatus: "deleted",
     });
-
     const result = await deleteRemoval(makeTestOrgContext(), {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
     });
-
     expect(result.deletedGhgEntryIds).toEqual([entry.id]);
     expect(result.deletedBiocharApplicationIds).toEqual([remoteApplication.id]);
     expect(
@@ -579,7 +557,6 @@ describe("deleteRemoval", () => {
       deletedBiocharApplicationIds: [remoteApplication.id],
     });
   });
-
   it("releases the evidence mirrors only the deleted submission cited, so the Application and Delivery can be deleted", async () => {
     const fixture = await createFixture();
     const chain = await createBiocharApplicationChain({
@@ -618,12 +595,10 @@ describe("deleteRemoval", () => {
         },
       },
     });
-
     const result = await deleteRemoval(makeTestOrgContext(), {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
     });
-
     expect(result.releasedDocumentMirrorCount).toBe(2);
     expect(await mirrorExists(applicationDocumentId)).toBe(false);
     expect(await mirrorExists(deliveryDocumentId)).toBe(false);
@@ -636,7 +611,6 @@ describe("deleteRemoval", () => {
         { documentId: deliveryDocumentId, externalDocumentId: deliverySourceId },
       ]),
     );
-
     const ctx = makeTestOrgContext();
     await expect(deleteApplication(ctx, chain.applicationId)).resolves.toBeUndefined();
     await expect(deleteDelivery(ctx, application.deliveryId!)).resolves.toBeUndefined();
@@ -647,7 +621,6 @@ describe("deleteRemoval", () => {
         .where(inArray(documents.id, [applicationDocumentId, deliveryDocumentId])),
     ).toHaveLength(0);
   });
-
   it("keeps a mirror that a live submission of another Removal still cites", async () => {
     const fixture = await createFixture();
     const other = await createFixture();
@@ -677,32 +650,26 @@ describe("deleteRemoval", () => {
       externalId: null,
       payloadSnapshot: { sourceBindingPlan: [{ sourceId: sharedSourceId }] },
     });
-
     const result = await deleteRemoval(makeTestOrgContext(), {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
     });
-
     expect(result.releasedDocumentMirrorCount).toBe(0);
     expect(await mirrorExists(documentId)).toBe(true);
     await expect(
       deleteApplication(makeTestOrgContext(), chain.applicationId),
     ).rejects.toThrow(/certification provider/);
   });
-
   it("removes a Removal with no ledger without touching the registry", async () => {
     const fixture = await createFixture();
-
     const result = await deleteRemoval(makeTestOrgContext(), {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
     });
-
     expect(result.deletedGhgEntryIds).toEqual([]);
     expect(registry.requests).toHaveLength(0);
     expect(await removalExists(fixture.removalId)).toBe(false);
   });
-
   it("lets any member delete, registry cleanup included", async () => {
     const member = { ...makeTestOrgContext(), orgRole: "member" as const };
     const fixture = await createFixture();
@@ -712,17 +679,14 @@ describe("deleteRemoval", () => {
       externalId: entry.id,
       metadata: interruptedMetadata(),
     });
-
     const result = await deleteRemoval(member, {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
     });
-
     expect(result.deletedGhgEntryIds).toEqual([entry.id]);
     expect(registry.ghgEntries).toHaveLength(0);
     expect(await removalExists(fixture.removalId)).toBe(false);
   });
-
   it("finds and deletes a GHG Entry whose POST landed without a recorded ID", async () => {
     const fixture = await createFixture();
     const supplierRef = buildRemovalSupplierRef({
@@ -739,17 +703,14 @@ describe("deleteRemoval", () => {
       externalId: null,
       metadata: { lastError: "Removal POST failed: response lost" },
     });
-
     const result = await deleteRemoval(makeTestOrgContext(), {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
     });
-
     expect(result.deletedGhgEntryIds).toEqual([entry.id]);
     expect(registry.ghgEntries).toHaveLength(0);
     expect(await removalExists(fixture.removalId)).toBe(false);
   });
-
   it("treats an already-deleted GHG Entry as absent and still completes", async () => {
     const fixture = await createFixture();
     await insertLedgerRow(fixture, {
@@ -757,7 +718,6 @@ describe("deleteRemoval", () => {
       externalId: `gge_gone_${fixture.removalId.slice(0, RUN_ID_LENGTH)}`,
       metadata: interruptedMetadata(),
     });
-
     const result = await deleteRemoval(makeTestOrgContext(), {
       facilityId: fixture.facilityId,
       removalId: fixture.removalId,
@@ -929,4 +889,90 @@ describe("deleteRemoval", () => {
       );
     expect(failure.status).toBe("failed");
   });
+});
+
+
+describe("ledger-free deletion lease", () => {
+  it.each(["release", "expire"])("blocks concurrent work, then permits it after %s", async (mode) => {
+    const fixture = await createFixture();
+    const ctx = makeTestOrgContext();
+    const chain = await createBiocharApplicationChain({ ...fixture, tag: `LEASE-${fixture.runId}` });
+    createdChains.push(chain);
+    await db.update(certifierProductionBatches).set({ supplierReference: buildProductionBatchReference({ creditBatchId: fixture.creditBatchId }) })
+      .where(eq(certifierProductionBatches.id, chain.productionBatchRegistrationId));
+    await db.insert(creditBatchApplications).values({ organizationId: TEST_ORG_ID, creditBatchId: fixture.creditBatchId,
+      applicationId: chain.applicationId, removalId: fixture.removalId, allocatedWetMassKg: 12_000, allocatedDryMassKg: 10_800 });
+    const submit = () => claimSubmissionDraft(ctx, {
+      key: { provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: fixture.removalId },
+      guard: { facilityId: fixture.facilityId, provider: "isometric", expectedExternalProjectId: fixture.externalProjectId },
+      policy: { onSubmittedHashChanged: "supersede" }, tentativeInputs: {}, hashOf: () => "lease-test",
+      buildSnapshot: () => ({ payloadSnapshot: {} }),
+    });
+    const claims = await Promise.allSettled([claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId),
+      claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId)]);
+    expect(claims.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const winner = claims.find((result) => result.status === "fulfilled");
+    if (!winner || winner.status !== "fulfilled") throw new Error("No deletion winner");
+    const claim = winner.value;
+    expect(claim.submissionIds).toEqual([]);
+    expect(claim.productionBatches).toHaveLength(1);
+    await expect(createRemovalWithCreditBatches(ctx, fixture.facilityId, [fixture.creditBatchId])).rejects.toThrow("being deleted");
+    await expect(submit()).resolves.toMatchObject({ kind: "blocked", reason: "in-flight" });
+    await expect(discardLocalRemovalDraft(ctx, fixture.facilityId, fixture.removalId)).rejects.toThrow();
+    if (mode === "release") await releaseRemovalDeletionClaim(ctx, claim);
+    else {
+      const expiredAt = new Date(Date.now() - LOCK_TTL_MS - 1);
+      await db.update(certifierRemovals).set({ metadata: { [REMOVAL_DELETION_LEASE_KEY]: expiredAt.toISOString() } })
+        .where(eq(certifierRemovals.id, fixture.removalId));
+      const oldClaim = { ...claim, lockedAt: expiredAt };
+      const reclaimed = await claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId);
+      await releaseRemovalDeletionClaim(ctx, oldClaim);
+      await expect(finalizeRemovalDeletion(ctx, oldClaim, { deletedGhgEntryIds: [], deletedBiocharApplicationIds: [],
+        absentGhgEntryIds: [], absentBiocharApplicationIds: [], unresolvedBiocharApplicationReferences: [] })).rejects.toThrow(REMOVAL_DELETE_CHANGED_ERROR);
+      await expect(submit()).resolves.toMatchObject({ kind: "blocked" });
+      await db.update(certifierRemovals).set({ metadata: { [REMOVAL_DELETION_LEASE_KEY]: expiredAt.toISOString() } })
+        .where(eq(certifierRemovals.id, fixture.removalId));
+      expect(reclaimed.lockedAt.getTime()).toBeGreaterThan(oldClaim.lockedAt.getTime());
+    }
+    await db.transaction(async (tx) => {
+      await tx.select({ id: creditBatches.id }).from(creditBatches).where(eq(creditBatches.id, fixture.creditBatchId)).for("update");
+      await expect(assertNoRemovalBatchDeletion(ctx, [fixture.creditBatchId], tx)).resolves.toBeUndefined();
+    });
+    await expect(submit()).resolves.toMatchObject({ kind: "claimed", resumed: false });
+  });
+});
+
+
+it.each([false, true])("rechecks the lease after the optimistic submission read (resume=%s)", async (resume) => {
+  const fixture = await createFixture();
+  const ctx = makeTestOrgContext();
+  if (resume) {
+    const id = await insertLedgerRow(fixture, { status: "rejected", externalId: null });
+    await db.update(certificationSubmissions).set({ payloadHash: "lease-race" }).where(eq(certificationSubmissions.id, id));
+  }
+  let signalRead!: () => void;
+  let releaseMapping!: () => void;
+  let signalMapping!: () => void;
+  const read = new Promise<void>((resolve) => { signalRead = resolve; });
+  const release = new Promise<void>((resolve) => { releaseMapping = resolve; });
+  const mapping = new Promise<void>((resolve) => { signalMapping = resolve; });
+  const holder = db.transaction(async (tx) => {
+    await tx.select({ id: certifierProjects.id }).from(certifierProjects)
+      .where(eq(certifierProjects.id, fixture.certifierProjectId)).for("update");
+    signalMapping();
+    await release;
+  });
+  await mapping;
+  const submission = claimSubmissionDraft(ctx, {
+    key: { provider: "isometric", submissionType: "removal", localEntityType: "removal", localEntityId: fixture.removalId },
+    guard: { facilityId: fixture.facilityId, provider: "isometric", expectedExternalProjectId: fixture.externalProjectId },
+    policy: { onSubmittedHashChanged: "supersede" }, tentativeInputs: {},
+    hashOf: () => { signalRead(); return "lease-race"; }, buildSnapshot: () => ({ payloadSnapshot: {} }),
+  });
+  try {
+    await read;
+    await claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId);
+  } finally { releaseMapping(); }
+  await holder;
+  await expect(submission).resolves.toMatchObject({ kind: "blocked", reason: "in-flight" });
 });

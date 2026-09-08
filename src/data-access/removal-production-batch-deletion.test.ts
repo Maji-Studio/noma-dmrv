@@ -94,9 +94,9 @@ describe("Removal production batch data access", () => {
     await expect(clearDeletedRemovalProductionBatches(ctx, { ...claim, productionBatches: [target] }, [{ creditBatchId: "batch-1", externalId: "ptb_1", outcome: "absent" }], tx)).rejects.toThrow("changed during deletion");
   });
   it("blocks new membership while deletion is marked", async () => {
-    state.select.mockReturnValue(query([{ id: "deleting-sub" }]));
+    state.select.mockReturnValue(query([{ metadata: { removalDeletionLockedAt: new Date().toISOString() } }]));
     await expect(assertNoRemovalBatchDeletion(ctx, ["batch-1"], tx)).rejects.toThrow("being deleted");
-    expect(new PgDialect().sqlToQuery(predicates[0]).sql).toContain("lastAttemptOutcome");
+    expect(new PgDialect().sqlToQuery(predicates[0]).params).toContain("org-1");
   });
   it("derives candidates from slices even before application registration", async () => {
     state.select.mockReturnValue(query([{ creditBatchId: "batch-1", registrationId: null, externalProductionBatchId: null,

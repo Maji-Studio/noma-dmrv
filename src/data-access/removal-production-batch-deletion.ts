@@ -1,6 +1,7 @@
+import { hasFreshRemovalDeletionLease } from "@/lib/certification/removal-deletion-lease";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
-import { certificationSubmissions, certifierProjects } from "@/db/schema/certification";
+import { certificationSubmissions, certifierRemovals, certifierProjects } from "@/db/schema/certification";
 import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
@@ -120,9 +121,8 @@ export async function clearDeletedRemovalProductionBatches(ctx: OrgContext, clai
 export async function assertNoRemovalBatchDeletion(ctx: OrgContext, creditBatchIds: string[], tx: DbTransaction): Promise<void> {
   requireOrgScope(ctx);
   if (!creditBatchIds.length) return;
-  const rows = await tx.select({ id: certificationSubmissions.id }).from(creditBatchApplications)
-    .innerJoin(certificationSubmissions, and(eq(certificationSubmissions.localEntityId, creditBatchApplications.removalId), eq(certificationSubmissions.organizationId, ctx.organizationId)))
-    .where(and(inArray(creditBatchApplications.creditBatchId, creditBatchIds), eq(creditBatchApplications.organizationId, ctx.organizationId),
-      sql`${certificationSubmissions.metadata}->>'lastAttemptOutcome' = 'deleting'`)).limit(1);
-  if (rows.length) throw new SafeError("A Removal using this credit batch is being deleted. Finish that cleanup before creating another Removal.");
+  const rows = await tx.select({ metadata: certifierRemovals.metadata }).from(creditBatchApplications)
+    .innerJoin(certifierRemovals, and(eq(certifierRemovals.id, creditBatchApplications.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)))
+    .where(and(inArray(creditBatchApplications.creditBatchId, creditBatchIds), eq(creditBatchApplications.organizationId, ctx.organizationId)));
+  if (rows.some((row) => hasFreshRemovalDeletionLease(row.metadata))) throw new SafeError("A Removal using this credit batch is being deleted. Finish that cleanup before creating another Removal.");
 }
