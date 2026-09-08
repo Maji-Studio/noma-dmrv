@@ -1,5 +1,24 @@
 # Isometric Docs Change Log
 
+## 2026-09-08: accepted create request is the Application evidence contract
+
+- Re-verified on this date against the public Certify OpenAPI and the `how_to`
+  MCP tool: `CreateBiocharApplicationRequest` accepts `source_ids`; the
+  `BiocharApplication` response (POST and GET), `Source`, and `GET /sources`
+  expose no Application-to-Source link. Only the GraphQL `BiocharSpreadEvent`
+  type (`biocharSpreadEventSources`) does.
+- Reconciliation no longer refuses a readback that omits `source_ids`. The
+  accepted `POST /biochar_applications` request carries the reviewed Source
+  set and is the attachment contract; the 200 response only confirms
+  acceptance. The immutable submission snapshot retains the IDs sent. When a
+  response does return `source_ids`, the exact reviewed set is still required;
+  a null value counts as omitted and any other non-array value is reported
+  as drift. Recorded as `isometric/biochar-application-source-readback` in
+  `docs/open-questions-isometric.md`.
+- The strict readback guard introduced on 2026-09-07 blocked every
+  evidence-bearing Removal on staging. Authoritative GraphQL readback remains
+  tracked in issue #737.
+
 ## 2026-09-08: never-finalized Removals can be deleted, registry first
 
 - A Removal whose submission never reached "Submission complete" (no ledger
