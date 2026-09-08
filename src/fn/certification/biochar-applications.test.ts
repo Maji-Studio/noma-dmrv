@@ -314,6 +314,9 @@ describe("ensureRemovalBiocharApplications", () => {
     mocks.getStorage.mockResolvedValue({ id: "storage-journal-1", externalStorageLocationId: "slc-replacement" });
     await expect(ensure()).rejects.toThrow(/Storage Location was replaced/);
     expect(mocks.registration).toEqual(old);
+    expect(mocks.markDrift).toHaveBeenCalledWith(
+      orgCtx, old.id, "storage_location_replaced",
+    );
     expect(mocks.confirm).not.toHaveBeenCalled();
     expect(mocks.client.post).not.toHaveBeenCalled();
   });
