@@ -33,6 +33,7 @@ import {
 } from "@/schemas/documents";
 import { requireOrgScope } from "./utils";
 import {
+  SOURCE_RELEASE_RACE_ERROR,
   deleteDocumentUploadByDocument,
   getDocumentUploadByDocument,
   isExternalSourceReferencedInSnapshots,
@@ -471,33 +472,42 @@ async function isReviewedCertificationEvidence(
   return Boolean(reviewedEvidence);
 }
 
+type IsometricMappingRelease = "released" | "reviewed-evidence" | "referenced";
+
 /**
- * Retire an Isometric Source mapping that no live certification history
- * still needs, under the caller's mirror lock. Returns false when the
- * mapping must stay. The remote Source is deliberately untouched.
+ * Retire the document's Isometric Source mapping unless live certification
+ * history still needs it, under the caller's mirror lock. Returns why the
+ * mapping must stay instead of throwing, so each caller can word the refusal
+ * for its own record. The remote Source is deliberately untouched. The
+ * recheck after the delete guards against a future submission entry point
+ * that forgets to take the mirror lock.
  */
 async function releaseUnreferencedIsometricMapping(
   ctx: OrgContext,
   tx: DbTransaction,
   documentId: string,
-): Promise<boolean> {
-  if (await isReviewedCertificationEvidence(ctx, tx, documentId)) return false;
+): Promise<IsometricMappingRelease> {
+  if (await isReviewedCertificationEvidence(ctx, tx, documentId)) {
+    return "reviewed-evidence";
+  }
   const mapping = await getDocumentUploadByDocument(
     ctx,
     ISOMETRIC_PROVIDER,
     documentId,
     tx,
   );
-  if (!mapping) return true;
-  const referenced = await isExternalSourceReferencedInSnapshots(
-    ctx,
-    ISOMETRIC_PROVIDER,
-    mapping.externalDocumentId,
-    tx,
-  );
-  if (referenced) return false;
+  if (!mapping) return "released";
+  const referenced = () =>
+    isExternalSourceReferencedInSnapshots(
+      ctx,
+      ISOMETRIC_PROVIDER,
+      mapping.externalDocumentId,
+      tx,
+    );
+  if (await referenced()) return "referenced";
   await deleteDocumentUploadByDocument(ctx, ISOMETRIC_PROVIDER, documentId, tx);
-  return true;
+  if (await referenced()) throw new SafeError(SOURCE_RELEASE_RACE_ERROR);
+  return "released";
 }
 
 /**
@@ -528,48 +538,14 @@ export async function deleteDocumentWithCertificationSafety(
       .for("update");
     if (!row) return { deleted: null, queued: false };
 
-    if (await isReviewedCertificationEvidence(ctx, tx, id)) {
+    const release = await releaseUnreferencedIsometricMapping(ctx, tx, id);
+    if (release === "reviewed-evidence") {
       throw new SafeError("This document belongs to reviewed certification evidence and cannot be deleted or replaced.");
     }
-
-    const isometricMapping = await getDocumentUploadByDocument(
-      ctx,
-      ISOMETRIC_PROVIDER,
-      id,
-      tx,
-    );
-    if (isometricMapping) {
-      const referenced = await isExternalSourceReferencedInSnapshots(
-        ctx,
-        ISOMETRIC_PROVIDER,
-        isometricMapping.externalDocumentId,
-        tx,
+    if (release === "referenced") {
+      throw new SafeError(
+        "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.",
       );
-      if (referenced) {
-        throw new SafeError(
-          "This document belongs to submitted certification history and cannot be deleted or replaced. The Isometric Source and audit history remain unchanged.",
-        );
-      }
-
-      await deleteDocumentUploadByDocument(
-        ctx,
-        ISOMETRIC_PROVIDER,
-        id,
-        tx,
-      );
-
-      const referencedAfterDelete =
-        await isExternalSourceReferencedInSnapshots(
-          ctx,
-          ISOMETRIC_PROVIDER,
-          isometricMapping.externalDocumentId,
-          tx,
-        );
-      if (referencedAfterDelete) {
-        throw new SafeError(
-          "A Removal submission committed concurrently and now references this document. Deletion was aborted; retry once submission completes.",
-        );
-      }
     }
 
     // Isometric is the only provider whose local mapping may be retired by
@@ -627,11 +603,13 @@ export async function deleteDocumentWithCertificationSafety(
  * Retire documents owned by entities that are about to be hard-deleted.
  *
  * Call this as the final operation inside the parent's delete transaction,
- * after every FK-constrained database delete has succeeded. Document rows are
- * locked before the mirror check, which makes the FK from
- * certifier_document_uploads the race backstop. Managed storage objects are
- * queued durably in this transaction; callers drain that queue only after the
- * outer parent transaction commits.
+ * after every FK-constrained database delete has succeeded. Mirror locks are
+ * taken first, then the document rows are locked; an Isometric mapping no
+ * live certification history cites is released under those locks, any other
+ * mapping refuses the delete, and the FK from certifier_document_uploads is
+ * the backstop for a mirror that lands in between. Managed storage objects
+ * are queued durably in this transaction; callers drain that queue only after
+ * the outer parent transaction commits.
  */
 export async function retireDocumentsForEntities(
   ctx: OrgContext,
@@ -689,7 +667,7 @@ export async function retireDocumentsForEntities(
   const lockedIds = new Set(candidateIds);
   if (documentIds.some((id) => !lockedIds.has(id))) {
     throw new SafeError(
-      "Documents were added to this record while it was being deleted. Refresh and retry.",
+      "Someone added a document to this record during deletion. Refresh the page and try again.",
     );
   }
 
@@ -711,10 +689,11 @@ export async function retireDocumentsForEntities(
   // mapping a deleted Removal left behind is released; one a real submission
   // still cites, or any other provider's mapping, keeps the record in place.
   for (const mirror of mirrors) {
-    const released =
-      mirror.provider === ISOMETRIC_PROVIDER &&
-      (await releaseUnreferencedIsometricMapping(ctx, tx, mirror.documentId));
-    if (!released) {
+    const release =
+      mirror.provider === ISOMETRIC_PROVIDER
+        ? await releaseUnreferencedIsometricMapping(ctx, tx, mirror.documentId)
+        : "referenced";
+    if (release !== "released") {
       throw new SafeError(MIRRORED_DOCUMENT_BLOCKS_PARENT_DELETE_MESSAGE);
     }
   }
