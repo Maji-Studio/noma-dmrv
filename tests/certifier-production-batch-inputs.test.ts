@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certifierProjects,
@@ -11,7 +11,13 @@ import {
   productionRuns,
   reactors,
 } from "@/db/schema";
-import { getProductionBatchRegistryInputs } from "@/data-access/certifier-production-batches";
+import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
+import {
+  getProductionBatchRegistrations,
+  getProductionBatchRegistryInputs,
+  replaceMissingProductionBatchRegistration,
+  upsertProductionBatchRegistration,
+} from "@/data-access/certifier-production-batches";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -92,6 +98,9 @@ describe("getProductionBatchRegistryInputs", () => {
         .where(inArray(productionRuns.id, productionRunIds));
     }
     if (creditBatchIds.length > 0) {
+      await db
+        .delete(certifierProductionBatches)
+        .where(inArray(certifierProductionBatches.creditBatchId, creditBatchIds));
       await db.delete(creditBatches).where(inArray(creditBatches.id, creditBatchIds));
     }
     await db.delete(certifierProjects).where(eq(certifierProjects.facilityId, facilityId));
@@ -216,5 +225,64 @@ describe("getProductionBatchRegistryInputs", () => {
       totalDryMassKg: 70,
       runsMissingEndTime: 1,
     });
+  });
+
+  it("replaces a missing registry identity once, preserving a concurrent winner", async () => {
+    const [batch] = await db
+      .insert(creditBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CB-PTB-CAS-${tag}`,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId,
+        startDate: "2026-03-01",
+        endDate: "2026-03-31",
+      })
+      .returning({ id: creditBatches.id });
+    creditBatchIds.push(batch.id);
+    const registration = {
+      creditBatchId: batch.id,
+      externalProductionBatchId: `ptb_old_${tag}`,
+      supplierReference: `nm-ptb-cas-${tag}`,
+      externalProjectId: `prj_${tag}`,
+      externalFacilityId: `fcl_${tag}`,
+      massKg: 100,
+      startedOn: "2026-03-01",
+      endedOn: "2026-03-31",
+      payloadHash: "old-payload",
+    };
+    await upsertProductionBatchRegistration(ctx, registration);
+    // PostgreSQL can retain microseconds that a JavaScript Date cannot.
+    await db
+      .update(certifierProductionBatches)
+      .set({ updatedAt: sql`timestamp '2026-09-08 13:00:00.123456'` })
+      .where(eq(certifierProductionBatches.creditBatchId, batch.id));
+    const [observed] = await getProductionBatchRegistrations(ctx, [batch.id]);
+    const replacement = {
+      ...registration,
+      externalProductionBatchId: `ptb_new_${tag}`,
+      payloadHash: "new-payload",
+    };
+
+    expect(
+      await replaceMissingProductionBatchRegistration(ctx, observed, replacement),
+    ).toMatchObject(replacement);
+    expect(
+      await replaceMissingProductionBatchRegistration(ctx, observed, {
+        ...replacement,
+        externalProductionBatchId: `ptb_loser_${tag}`,
+      }),
+    ).toBeNull();
+    await expect(
+      replaceMissingProductionBatchRegistration(
+        { ...ctx, organizationId: "33333333-3333-4333-8333-333333333333" },
+        observed,
+        replacement,
+      ),
+    ).rejects.toThrow();
+    expect(await getProductionBatchRegistrations(ctx, [batch.id])).toEqual([
+      expect.objectContaining(replacement),
+    ]);
   });
 });

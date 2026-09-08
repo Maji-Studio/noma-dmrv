@@ -1,3 +1,4 @@
+import { isRemovalDeletionLeased } from "./removal-deletion-lease";
 /**
  * Submission ledger — claim choreography.
  *
@@ -16,7 +17,7 @@
  *
  * Plan: docs/archive/plans/2026-06-10-certification-reliability-track.md (Phase 1).
  */
-import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
@@ -49,6 +50,13 @@ import {
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
+
+/** Ledger statuses that mean "a submission finalized"; deletion refuses on any of them. */
+export const FINALIZED_SUBMISSION_STATUSES = [
+  "submitted",
+  "accepted",
+  "superseded",
+] as const;
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 
@@ -351,6 +359,7 @@ async function resumeDraft<H>(
   const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
     await lockAndVerifyMapping(ctx, tx, args.guard);
     await lockSubmissionArtifact(tx, args.key);
+    if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
 
     const latest = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
     const decided = decideSubmissionClaim({
@@ -417,6 +426,7 @@ async function createDraft<H>(
     const run = async (tx: DbTransaction): Promise<ClaimOutcome> => {
       await lockAndVerifyMapping(ctx, tx, args.guard);
       await lockSubmissionArtifact(tx, args.key);
+      if (await isRemovalDeletionLeased(ctx, args.key, tx)) return { kind: "blocked", reason: "in-flight" };
       // Recovery may delete a purely local Removal after the optimistic
       // anchor read above but before this authoritative claim lock. Re-check
       // under the shared artifact lock so a concurrent discard cannot leave
@@ -525,6 +535,36 @@ async function createDraft<H>(
 // =====================================================================
 // Ledger reads
 // =====================================================================
+
+/**
+ * Whether any ledger version for this key reached a finalized status
+ * (submitted, accepted, or superseded). The latest row alone cannot say: a
+ * superseding draft sits above a still-submitted prior version until the new
+ * version completes.
+ */
+export async function hasFinalizedSubmission(
+  ctx: OrgContext,
+  key: SubmissionKey,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const [row] = await db
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, key.provider),
+        eq(certificationSubmissions.submissionType, key.submissionType),
+        eq(certificationSubmissions.localEntityType, key.localEntityType),
+        eq(certificationSubmissions.localEntityId, key.localEntityId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        inArray(certificationSubmissions.status, [
+          ...FINALIZED_SUBMISSION_STATUSES,
+        ]),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
 
 export async function getLatestSubmission(
   ctx: OrgContext,
@@ -757,8 +797,10 @@ async function resetSubmissionToDraftCas(
               sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text = ${SUBMISSION_ATTEMPT_OUTCOMES.interrupted}`,
               sql`${certificationSubmissions.metadata} ->> ${SUBMISSION_METADATA_KEYS.externalMutation}::text = ${SUBMISSION_EXTERNAL_MUTATIONS.confirmed}`,
             )
-          : or(
-              ne(certificationSubmissions.status, "draft"),
+          : // A fresh lock blocks resumption whatever the status: a rejected
+            // row carries one only while a Removal deletion is cleaning up
+            // the registry records it may have created.
+            or(
               isNull(certificationSubmissions.lockedAt),
               lt(
                 certificationSubmissions.lockedAt,

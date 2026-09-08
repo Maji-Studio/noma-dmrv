@@ -11,9 +11,13 @@ import {
 
 export type IsometricBiocharApplication =
   components["schemas"]["BiocharApplication"] & {
-    // Certify may omit this field on older responses. Requested evidence must
-    // be observable before we can claim it is attached.
-    source_ids?: string[];
+    // Certify accepts `source_ids` on create but its documented response and
+    // GET readback omit them (verified against the public OpenAPI on
+    // 2026-09-08). When a response does carry them, the reviewed set is
+    // compared exactly; when it omits them, the accepted create request is
+    // the attachment contract. See issue #737 for an authoritative readback.
+    // Typed as the untrusted wire value: `sourceSetMismatchMessage` narrows.
+    source_ids?: unknown;
   };
 export type CreateBiocharApplicationRequest =
   components["schemas"]["CreateBiocharApplicationRequest"];
@@ -193,6 +197,17 @@ export function getBiocharApplication(
   );
 }
 
+// DELETE /biochar_applications/{id}: irreversible. Callers must tolerate a
+// 404 on retry because a prior attempt may have already removed the record.
+export function deleteBiocharApplication(
+  client: IsometricClient,
+  biocharApplicationId: string,
+): Promise<void> {
+  return client.delete<void>(
+    `/biochar_applications/${encodeURIComponent(biocharApplicationId)}`,
+  );
+}
+
 export async function findBiocharApplicationBySupplierReference(
   client: IsometricClient,
   supplierReferenceId: string,
@@ -255,16 +270,8 @@ export function biocharApplicationMismatchMessage(
   remote: IsometricBiocharApplication,
   expected: CreateBiocharApplicationRequest,
 ): string | null {
-  const expectedSources = expected.source_ids ?? [];
-  if (expectedSources.length > 0 && !Array.isArray(remote.source_ids)) {
-    return `Isometric does not expose Source links for Biochar Application ${remote.id}. Its requested evidence cannot be verified. Ask Isometric to expose the Source IDs before retrying.`;
-  }
-  const remoteSources = new Set(remote.source_ids ?? []);
-  const expectedSourceSet = new Set(expectedSources);
-  if (remoteSources.size !== expectedSourceSet.size ||
-    expectedSources.some((id) => !remoteSources.has(id))) {
-    return `Isometric Biochar Application ${remote.id} does not match the reviewed Source set. Refresh and reconcile its supporting evidence before retrying.`;
-  }
+  const sourceMismatch = sourceSetMismatchMessage(remote, expected);
+  if (sourceMismatch) return sourceMismatch;
   const matches =
     remote.supplier_reference_id === expected.supplier_reference_id &&
     remote.production_batch_id === expected.production_batch_id &&
@@ -288,6 +295,33 @@ export function biocharApplicationMismatchMessage(
   return matches
     ? null
     : `Isometric Biochar Application ${remote.id} does not match this application's Production Batch, Storage Location, date, rate, or application mass. Resolve the registry drift before retrying.`;
+}
+
+/**
+ * Compares the reviewed Source set against the registry readback when the
+ * readback exposes one. Certify's documented Biochar Application response
+ * omits `source_ids`, so an omitted or null field is not drift: the accepted
+ * create request already carried the reviewed set. Any other non-array value
+ * is an unexpected response shape and is reported as drift, never trusted.
+ */
+function sourceSetMismatchMessage(
+  remote: IsometricBiocharApplication,
+  expected: CreateBiocharApplicationRequest,
+): string | null {
+  if (remote.source_ids == null) return null;
+  if (!Array.isArray(remote.source_ids)) {
+    return `Isometric Biochar Application ${remote.id} returned an unreadable Source set. Refresh and reconcile its supporting evidence before retrying.`;
+  }
+  const expectedSources = expected.source_ids ?? [];
+  const remoteSources = new Set<unknown>(remote.source_ids);
+  const expectedSourceSet = new Set(expectedSources);
+  if (
+    remoteSources.size !== expectedSourceSet.size ||
+    expectedSources.some((id) => !remoteSources.has(id))
+  ) {
+    return `Isometric Biochar Application ${remote.id} does not match the reviewed Source set. Refresh and reconcile its supporting evidence before retrying.`;
+  }
+  return null;
 }
 
 function quantitiesMatch(

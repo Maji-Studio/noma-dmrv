@@ -121,6 +121,26 @@ Location, then creates or reconciles the Biochar Applications in the configured
 Isometric environment. Multiple Applications may share a Delivery subject to
 the existing allocation and capacity rules.
 
+When a registered Storage Location GET returns 404, explicit **Check again**
+and Removal submission recheck under the site/project locks, reconcile the
+unchanged stable supplier reference, and adopt an exact replacement or create
+one if absent. Recovery replaces only the external ID; the local Application,
+customer location, and submitted site snapshot remain. Changed local facts,
+live remote mismatches, duplicate matches, and inconclusive reads fail closed
+or retain the existing drift review. Authentication and transient errors never
+establish absence. Lost POST responses and persistence failures reconcile by
+reference before retrying creation. Absence confirmed by the locked GET remains
+recorded as drift if recovery cannot complete, including inconclusive or
+contradictory reference lookups.
+
+Biochar Application journals retain their original dependency IDs and payloads.
+Replacing a Storage Location marks dependent claims for review atomically,
+including unconfirmed claims whose POST may already have reached Isometric.
+Those stale claims block Removal submission with a dependency-specific error;
+recovery does not silently repoint confirmed history. New, unclaimed Biochar
+Applications use the replacement. Biochar Application creation holds the same
+external-project lock and rechecks the storage registration before using it.
+
 For the provider request, `truck_mass_on_arrival` is exactly the slice's
 allocated wet kg and `truck_mass_on_departure` is zero kg. These fields encode
 the applied slice mass convention, not Delivery weighing observations.
@@ -135,14 +155,55 @@ persisted Biochar Application; null is accepted and recorded, while any present
 association must match the current GHG Entry. The journal row and supplier
 reference are versioned by immutable Removal submission: supersession creates a
 fresh Biochar Application for the new GHG Entry and leaves the prior registry
-artifact intact. The current provider response type does not expose
-`source_ids`. Requests with Sources therefore fail closed at reconciliation until
-Isometric provides authoritative attachment readback; local intent alone does not
-prove remote membership. Returned Source IDs, when available, must match the exact
-reviewed set. The immutable local intent and submission snapshot retain the IDs
-sent. Registry failure
+artifact intact. The documented provider response omits
+`source_ids` on both create and GET, and no REST endpoint exposes the reverse
+link. The accepted create request is therefore the attachment contract: a
+readback without `source_ids` is not drift. Returned Source IDs, when a response
+does include them, must match the exact reviewed set. The immutable local intent
+and submission snapshot retain the IDs sent. Authoritative readback through the
+GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field is tracked in
+issue #737. Registry failure
 blocks Removal submission and leaves the claim safely retryable. There is no
 gate or placeholder lifecycle.
+
+## Deleting a never-finalized Removal
+
+Deletion removes draft GHG Entries first (a registry refusal stops all cleanup),
+then Biochar Applications, exact version-owned MeasurementSamples, and unshared
+Production Batches. Measurement ownership comes from immutable durability
+submissions and their journal, with exact supplier-reference reconciliation for
+interrupted POSTs. Legacy snapshots without measurements remain deletable;
+inconsistent identities fail closed. This never deletes local credit batches,
+production lineage or lab samples.
+
+Batch candidates come from the Removal's application-by-credit-batch membership,
+including failures before Biochar Application creation. Other memberships,
+registrations, immutable submission references and production-claim reservations
+retain shared batches and their journal. Every deletion claim stores a lease on
+the Removal, including Removals without submission ledger rows. Membership
+creation checks that lease under the credit-batch locks; submission creation and
+resume check it under the artifact lock. Abandoned leases expire with the shared
+submission lock TTL. Release and finalization compare the claim timestamp so an
+older caller cannot release or finalize a replacement claim. Each destructive
+registry call revalidates exact claim ownership and the ledger while holding
+the Removal row, artifact lock, and ordered credit-batch row locks on a dedicated
+connection. The final batch sharing check uses that same transaction before
+DELETE, preventing membership or submission takeover during the request even
+after lease expiry. Registry lookups remain outside these locks; per-artifact
+audit writes use the application pool after the protected mutation releases its
+locks. Finalization also locks the batches and rechecks retained outcomes; if the other owner has
+gone, it keeps the Removal available for a cleanup retry.
+Pooled contenders use the application's bounded database lock wait, so a request
+waiting for cleanup cannot hold a pool slot indefinitely. The dedicated mutation
+connection keeps its locks through the remote call and is not subject to that timeout.
+
+Only confirmed remote deletion or absence permits exact, organization-scoped
+journal removal, after the owning Biochar Application journal rows are removed.
+The retained ledger records deleted, absent and retained artifacts. The final
+deletion sync event includes these outcomes even without submission ledger rows. A partial
+failure releases the claim and keeps local state retryable; it never reports
+completed cleanup. Auth/network errors and generic 400s fail. A 404 or the exact
+provider missing-resource 400 for the addressed batch or measurement is absence.
 
 ## Template and input contract
 

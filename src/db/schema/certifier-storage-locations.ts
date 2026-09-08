@@ -20,7 +20,9 @@ import {
 import { customerLocations } from "./parties";
 
 /**
- * Immutable registry identity for one reusable agricultural application site.
+ * Registry identity for one reusable agricultural application site. Confirmed
+ * remote absence permits replacement of the external ID under registration locks;
+ * dependent journals retain their original external IDs and submitted history.
  * Mutable customer-location facts are compared with submittedPayload; drift is
  * journaled for operator review and never PATCHed automatically.
  */
