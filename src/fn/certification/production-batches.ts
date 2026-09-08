@@ -29,13 +29,15 @@
  * production batch, so the registered figures stay authoritative until someone
  * resolves it in Isometric. Consistently with that, payload validation gates
  * only the batches that still need a POST — a registered batch whose local
- * facts have gone invalid is reused, never blocked.
+ * facts have gone invalid can be reused after remote identity and mapping
+ * verification.
  */
 
 import {
   getProductionBatchRegistrations,
   getProductionBatchRegistryInputs,
   migrateProductionBatchPayloadHash,
+  replaceMissingProductionBatchRegistration,
   upsertProductionBatchRegistration,
   type ProductionBatchRegistryInput,
 } from "@/data-access/certifier-production-batches";
@@ -49,6 +51,7 @@ import {
   buildProductionBatchReference,
   createProductionBatch,
   findProductionBatchBySupplierRef,
+  getProductionBatch,
   productionBatchMassUnitsMatch,
   type CreateProductionBatchRequest,
   type IsometricProductionBatch,
@@ -199,15 +202,33 @@ export async function ensureProductionBatchesForCreditBatches(
 
   const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
 
-  // Payloads are built INSIDE the loop, per batch that still needs a POST: an
-  // already-registered batch needs no payload, so local data that has since
-  // drifted to invalid (facility mapping cleared, feedstock link removed, a
-  // member run's mass edited away) must not block a resubmission of a batch the
-  // registry already holds. Only batches that actually reach the registry are
-  // validated.
+  // Live identities retain their registered payload; missing identities require
+  // current validated facts and supplier-reference reconciliation before POST.
   for (const input of sortByCreditBatchId(inputs)) {
     const existing = existingByCreditBatchId.get(input.creditBatchId);
-    if (existing) {
+    const remote = existing
+      ? await getProductionBatch(client, existing.externalProductionBatchId)
+      : null;
+    if (existing && remote) {
+      if (
+        remote.id !== existing.externalProductionBatchId ||
+        remote.supplier_reference_id !== existing.supplierReference ||
+        existing.supplierReference !==
+          buildProductionBatchReference({ creditBatchId: input.creditBatchId }) ||
+        remote.facility_id !== existing.externalFacilityId
+      ) {
+        throw new SafeError(
+          "The registered production batch does not match its saved identity. Ask support to check the registry record.",
+        );
+      }
+      if (
+        input.externalProjectId !== existing.externalProjectId ||
+        input.externalFacilityId !== existing.externalFacilityId
+      ) {
+        throw new SafeError(
+          "The project or facility mapping changed for an existing Isometric production batch. Restore the mapping or ask support to resolve the registry record before submitting.",
+        );
+      }
       const current = tryBuildProductionBatchSubmission(input, args.log);
       if (current && current.payloadHash !== existing.payloadHash) {
         if (
@@ -289,7 +310,7 @@ export async function ensureProductionBatchesForCreditBatches(
         );
       },
       onConfirmed: async (confirmedId) => {
-        const row = await upsertProductionBatchRegistration(args.orgCtx, {
+        const registration = {
           creditBatchId: submission.creditBatchId,
           externalProductionBatchId: confirmedId,
           supplierReference: submission.supplierRefId,
@@ -299,10 +320,34 @@ export async function ensureProductionBatchesForCreditBatches(
           startedOn: submission.startedOn,
           endedOn: submission.endedOn,
           payloadHash: submission.payloadHash,
-        });
-        if (row.externalProductionBatchId !== confirmedId) {
+        };
+        const row = existing
+          ? await replaceMissingProductionBatchRegistration(
+              args.orgCtx,
+              existing,
+              registration,
+            )
+          : await upsertProductionBatchRegistration(args.orgCtx, registration);
+        if (!row || row.externalProductionBatchId !== confirmedId) {
           throw new SafeError(
             `Credit batch ${submission.creditBatchCode} is already registered as a different production batch in Isometric. Check the registry record before submitting again.`,
+          );
+        }
+        if (existing) {
+          await appendSyncEventBestEffort(
+            args.orgCtx,
+            {
+              provider: ISOMETRIC_PROVIDER,
+              entityType: REMOVAL_ENTITY_TYPE,
+              entityId: args.removalId,
+              operation: `production-batch:recovered:${submission.creditBatchId}`,
+              status: "succeeded",
+              responsePayload: {
+                oldId: existing.externalProductionBatchId,
+                newId: confirmedId,
+              },
+            },
+            { submissionId: args.submissionRow.id },
           );
         }
         if (reconciledLegacyBatch) {

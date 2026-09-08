@@ -1,9 +1,93 @@
 # Isometric Docs Change Log
 
+## 2026-09-08: Removal deletion releases the evidence mirrors it orphaned
+
+- Deleting a never-finalized Removal now also releases the local
+  `certifier_document_uploads` mapping of every Source that only the deleted
+  ledger rows cite. The release runs inside the finalize transaction under
+  the per-document mirror locks, rechecks after each delete, and records the
+  released `documentId` / `externalDocumentId` pairs under the ledger row's
+  `deletion.releasedDocumentMirrors`. The remote Source still stays on the
+  registry (`isometric/removal-deletion-orphans`); a later submission that
+  mirrors the same document reconciles onto it by supplier reference.
+- A ledger row stamped with the `deletion` metadata record no longer pins
+  anything: the snapshot-reference guard behind document unlink and delete,
+  and the reviewed-evidence lock from 2026-09-07, both skip such rows. Their
+  snapshot remains the audit trail for registry records that no longer exist.
+- Deleting a parent record (Application, Delivery, transport leg, and the
+  other document owners) releases an Isometric mapping that no live snapshot
+  cites, the same way single-document delete already did, instead of refusing
+  on any mirror row. Mappings for other providers and Sources a live snapshot
+  cites still refuse the delete. This also frees records orphaned by
+  deletions that ran before this change.
+- Code: `src/data-access/certifier-document-uploads.ts`
+  (`releaseDocumentUploadsReferencedOnlyBySubmissions`),
+  `src/data-access/certifier-removal-deletion.ts`,
+  `src/data-access/documents.ts`.
+
+## 2026-09-08: accepted create request is the Application evidence contract
+
+- Re-verified on this date against the public Certify OpenAPI and the `how_to`
+  MCP tool: `CreateBiocharApplicationRequest` accepts `source_ids`; the
+  `BiocharApplication` response (POST and GET), `Source`, and `GET /sources`
+  expose no Application-to-Source link. Only the GraphQL `BiocharSpreadEvent`
+  type (`biocharSpreadEventSources`) does.
+- Reconciliation no longer refuses a readback that omits `source_ids`. The
+  accepted `POST /biochar_applications` request carries the reviewed Source
+  set and is the attachment contract; the 200 response only confirms
+  acceptance. The immutable submission snapshot retains the IDs sent. When a
+  response does return `source_ids`, the exact reviewed set is still required;
+  a null value counts as omitted and any other non-array value is reported
+  as drift. Recorded as `isometric/biochar-application-source-readback` in
+  `docs/open-questions-isometric.md`.
+- The strict readback guard introduced on 2026-09-07 blocked every
+  evidence-bearing Removal on staging. Authoritative GraphQL readback remains
+  tracked in issue #737.
+
+## 2026-09-08: never-finalized Removals can be deleted, registry first
+
+- A Removal whose submission never reached "Submission complete" (no ledger
+  row, or a `draft`/`rejected` row) can be deleted from the Removal detail
+  sheet and the New Removal wizard. Submitted, accepted, and superseded
+  Removals, and any Removal in a GHG Statement, refuse deletion. Any member
+  may delete, registry cleanup included; the authorization question is
+  deferred to issue #746. The client gate refuses when any earlier ledger
+  version finalized, which the latest row alone cannot show.
+- A ledger row that never recorded a GHG Entry ID is reconciled by its
+  supplier reference through `GET /ghg_entries` before the cleanup decides
+  nothing is there, because the POST may have landed without its response.
+- Deletion removes the registry records first: `DELETE /ghg_entries/{id}` for
+  the GHG Entry the ledger recorded, then `DELETE /biochar_applications/{id}`
+  for each confirmed Biochar Application registration. Both endpoints are
+  irreversible and the GHG Entry delete is refused unless the entry is still
+  `DRAFT` (public Certify OpenAPI, checked on this date). A refusal releases
+  the deletion claim and changes nothing locally. A 404 counts as already
+  deleted so a retry after a partial cleanup converges.
+- A Biochar Application registration still `creating` (its POST was
+  interrupted before the registry ID came back) is resolved by supplier
+  reference through `GET /biochar_applications` and deleted when found.
+- The claim stamps every ledger row, rejected ones included, with a fresh
+  lock and the `deleting` outcome; the submit path's resume CAS now refuses
+  any row whose lock is fresh, so a retry cannot adopt a GHG Entry that the
+  cleanup is about to delete. Local cleanup re-reads the ledger under the
+  Removal locks and refuses if a submission ran between claim and finalize,
+  then marks the ledger rows
+  `rejected` with a `deletion` metadata record (deleted and already-absent
+  registry IDs both listed), removes the Biochar
+  Application registration rows so their supplier references are free for a
+  later Removal, releases production-claim reservations and credit batch
+  slices, and deletes the Removal row. Datapoints, Measurement Samples,
+  Production Batches, Storage Locations, and Sources stay on the registry (see
+  `isometric/removal-deletion-orphans` in `docs/open-questions-isometric.md`);
+  the local Source mappings are released since the later 2026-09-08 entry.
+- Code: `src/fn/certification/delete-removal.ts` (core),
+  `src/fn/certification/delete-removal-action.ts` (server action),
+  `src/data-access/certifier-removal-deletion.ts`.
+
 ## 2026-09-07: fail-closed Application evidence and safe recovery
 
 - The public [Certify OpenAPI schema](https://docs.isometric.com/api-reference/certify/mrv.openapi.json), checked on this date, accepts `source_ids` in `CreateBiocharApplicationRequest` but omits it from `BiocharApplication`. Evidence-bearing Removal finalization remains blocked until an authoritative attachment readback exists. When Source IDs are returned, reconciliation requires the exact reviewed set.
-- Evidence refresh preserves the prior snapshot and locks reviewed documents against deletion. Only an explicitly mutation-free interrupted attempt may rebuild versioned inputs; possible or confirmed registry mutations require exact retry/reconciliation first.
+- Evidence refresh preserves the prior snapshot and locks reviewed documents against deletion (ledger rows stamped by Removal deletion no longer count, see 2026-09-08). Only an explicitly mutation-free interrupted attempt may rebuild versioned inputs; possible or confirmed registry mutations require exact retry/reconciliation first.
 - A finite pending GHG Statement total, including zero, represents pending changes under the provider's documented null-versus-number contract. Failed verification retains its own status.
 - The incomplete sandbox scenarios and external verifier report delivery remain acceptance blockers documented in the [retest record](../archive/qa/2026-09-07-isometric-blockers-retest.md).
 
@@ -745,3 +829,17 @@ snapshot by design.
 - GHG statement creates now persist the interrupted marker (`lastError`,
   `lastAttemptOutcome`, `externalMutation`) when a timeout/5xx may have
   reached the registry, matching the Removal pipeline.
+
+## Production batch identity readback and recovery
+
+Before binding durability measurements, read the exact persisted ProductionBatch
+ID ([GET Production Batch](https://docs.isometric.com/api-reference/certify/get-production-batch.md)).
+Verify its ID, stable supplier reference and saved facility; a live identity with
+a changed current project/facility mapping blocks submission. Preserve local
+payload-drift reporting and legacy date-hash migration for live same-mapping batches.
+Only a 404 or the provider 400 detail naming exactly the requested missing ID
+permits recovery. Reconcile the stable reference before POST, refuse duplicate
+references, and validate the complete current payload (including supported legacy
+windows). Keep the old journal until confirmation, then replace it with an
+organization/provider/batch/old-ID and row-version compare-and-set. Audit the old
+and new IDs. Other read errors never trigger replacement.
