@@ -49,6 +49,7 @@ import {
   SUBMISSION_EXTERNAL_MUTATIONS,
 } from "@/lib/certification/submission-metadata";
 import { SafeError } from "@/lib/errors";
+import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
 import {
   installFakeRegistry,
   type FakeIsometricRegistry,
@@ -318,6 +319,60 @@ describe("deleteRemoval", () => {
 
     expect(result.deletedGhgEntryIds).toEqual([]);
     expect(registry.requests).toHaveLength(0);
+    expect(await removalExists(fixture.removalId)).toBe(false);
+  });
+
+  it("lets a member release a purely local draft but not registry records", async () => {
+    const member = { ...makeTestOrgContext(), orgRole: "member" as const };
+    const local = await createFixture();
+    await deleteRemoval(member, {
+      facilityId: local.facilityId,
+      removalId: local.removalId,
+    });
+    expect(await removalExists(local.removalId)).toBe(false);
+
+    const withRegistry = await createFixture();
+    const entry = registry.seedGhgEntry({ status: "DRAFT" });
+    await insertLedgerRow(withRegistry, {
+      status: "draft",
+      externalId: entry.id,
+      metadata: interruptedMetadata(),
+    });
+    await expect(
+      deleteRemoval(member, {
+        facilityId: withRegistry.facilityId,
+        removalId: withRegistry.removalId,
+      }),
+    ).rejects.toThrow(/permission/);
+    expect(registry.requests).toHaveLength(0);
+    expect(registry.ghgEntries).toHaveLength(1);
+    expect(await removalExists(withRegistry.removalId)).toBe(true);
+  });
+
+  it("finds and deletes a GHG Entry whose POST landed without a recorded ID", async () => {
+    const fixture = await createFixture();
+    const supplierRef = buildRemovalSupplierRef({
+      removalId: fixture.removalId,
+      role: "removal",
+      version: SUBMISSION_VERSION,
+    });
+    const entry = registry.seedGhgEntry({
+      status: "DRAFT",
+      supplier_reference_id: supplierRef,
+    });
+    await insertLedgerRow(fixture, {
+      status: "rejected",
+      externalId: null,
+      metadata: { lastError: "Removal POST failed: response lost" },
+    });
+
+    const result = await deleteRemoval(makeTestOrgContext(), {
+      facilityId: fixture.facilityId,
+      removalId: fixture.removalId,
+    });
+
+    expect(result.deletedGhgEntryIds).toEqual([entry.id]);
+    expect(registry.ghgEntries).toHaveLength(0);
     expect(await removalExists(fixture.removalId)).toBe(false);
   });
 

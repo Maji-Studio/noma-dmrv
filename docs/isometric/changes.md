@@ -5,7 +5,13 @@
 - A Removal whose submission never reached "Submission complete" (no ledger
   row, or a `draft`/`rejected` row) can be deleted from the Removal detail
   sheet and the New Removal wizard. Submitted, accepted, and superseded
-  Removals, and any Removal in a GHG Statement, refuse deletion.
+  Removals, and any Removal in a GHG Statement, refuse deletion. Any member
+  may release a Removal that never opened a ledger row; once a ledger row
+  exists the claim requires an Admin, because the attempt may have created
+  registry records.
+- A ledger row that never recorded a GHG Entry ID is reconciled by its
+  supplier reference through `GET /ghg_entries` before the cleanup decides
+  nothing is there, because the POST may have landed without its response.
 - Deletion removes the registry records first: `DELETE /ghg_entries/{id}` for
   the GHG Entry the ledger recorded, then `DELETE /biochar_applications/{id}`
   for each confirmed Biochar Application registration. Both endpoints are

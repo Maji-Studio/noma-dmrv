@@ -7,6 +7,7 @@ import {
 import { certifierBiocharApplications } from "@/db/schema/certifier-biochar-applications";
 import { creditBatchApplications, creditBatches } from "@/db/schema/credits";
 import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgRole } from "@/lib/auth/server";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   SUBMISSION_ATTEMPT_OUTCOMES,
@@ -20,6 +21,7 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
 import { logger } from "@/lib/log";
 import { requireOrgScope } from "./utils";
 
@@ -48,6 +50,13 @@ import { requireOrgScope } from "./utils";
  * Eligibility is the inverse of "submitted successfully": any ledger row in
  * a finalized status refuses deletion. Membership in a GHG Statement refuses
  * it too.
+ *
+ * Role floor: releasing a Removal that never opened a ledger row is open to
+ * every member, as the discard path it replaced was. Once a ledger row exists
+ * the registry may have been touched (a recorded GHG Entry, a Biochar
+ * Application registration, or a POST that landed without its response), so
+ * the claim requires an Admin: the cleanup is irreversible on the registry
+ * side.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -61,6 +70,8 @@ const DELETED_REGISTRATION_STATUS = "deleted" as const;
 const DRAFT_LEDGER_STATUS = "draft" as const;
 const DELETED_LEDGER_STATUS = "rejected" as const;
 const DELETION_METADATA_KEY = "deletion";
+const REGISTRY_CLEANUP_MIN_ROLE = "admin" as const;
+const REMOVAL_SUPPLIER_REF_ROLE = "removal" as const;
 
 export const REMOVAL_DELETE_SUBMITTED_ERROR =
   "This Removal was submitted to Isometric and cannot be deleted.";
@@ -86,6 +97,12 @@ export interface RemovalDeletionClaim {
   } | null;
   /** Registry GHG Entry IDs recorded on the ledger rows. */
   externalRemovalIds: string[];
+  /**
+   * Supplier references of ledger rows that never recorded a GHG Entry ID.
+   * The POST may still have landed, so the caller reconciles each against
+   * the registry before deciding nothing is there to delete.
+   */
+  unconfirmedRemovalSupplierRefs: string[];
   /**
    * Biochar Application registrations this Removal opened. A confirmed one
    * carries the registry ID; a `creating` one only carries the supplier
@@ -156,6 +173,7 @@ export async function claimRemovalDeletion(
       .select({
         id: certificationSubmissions.id,
         status: certificationSubmissions.status,
+        version: certificationSubmissions.version,
         externalId: certificationSubmissions.externalId,
         lockedAt: certificationSubmissions.lockedAt,
         metadata: certificationSubmissions.metadata,
@@ -182,6 +200,9 @@ export async function claimRemovalDeletion(
     }
 
     const drafts = rows.filter((row) => row.status === DRAFT_LEDGER_STATUS);
+    // The ledger holds at most one open draft per Removal; more than one is
+    // a state this claim cannot re-lock and release as a unit.
+    if (drafts.length > 1) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
     for (const draft of drafts) {
       if (
         isLockedInFlight(draft) &&
@@ -189,6 +210,52 @@ export async function claimRemovalDeletion(
       ) {
         throw new SafeError(REMOVAL_DELETE_IN_FLIGHT_ERROR);
       }
+    }
+
+    const submissionIds = rows.map((row) => row.id);
+    const externalRemovalIds = [
+      ...new Set(
+        rows.flatMap((row) => (row.externalId ? [row.externalId] : [])),
+      ),
+    ];
+    const unconfirmedRemovalSupplierRefs = rows
+      .filter((row) => row.externalId === null)
+      .map((row) =>
+        buildRemovalSupplierRef({
+          removalId,
+          role: REMOVAL_SUPPLIER_REF_ROLE,
+          version: row.version,
+        }),
+      );
+    const biocharApplications =
+      submissionIds.length === 0
+        ? []
+        : await tx
+            .select({
+              registrationId: certifierBiocharApplications.id,
+              externalApplicationId:
+                certifierBiocharApplications.externalApplicationId,
+              supplierReference: certifierBiocharApplications.supplierReference,
+            })
+            .from(certifierBiocharApplications)
+            .where(
+              and(
+                inArray(
+                  certifierBiocharApplications.removalSubmissionId,
+                  submissionIds,
+                ),
+                eq(
+                  certifierBiocharApplications.organizationId,
+                  ctx.organizationId,
+                ),
+                ne(
+                  certifierBiocharApplications.lifecycleStatus,
+                  DELETED_REGISTRATION_STATUS,
+                ),
+              ),
+            );
+    if (submissionIds.length > 0) {
+      requireOrgRole(ctx, REGISTRY_CLEANUP_MIN_ROLE);
     }
 
     let lockedSubmission: RemovalDeletionClaim["lockedSubmission"] = null;
@@ -226,45 +293,13 @@ export async function claimRemovalDeletion(
       };
     }
 
-    const submissionIds = rows.map((row) => row.id);
-    const biocharApplications =
-      submissionIds.length === 0
-        ? []
-        : await tx
-            .select({
-              registrationId: certifierBiocharApplications.id,
-              externalApplicationId:
-                certifierBiocharApplications.externalApplicationId,
-              supplierReference: certifierBiocharApplications.supplierReference,
-            })
-            .from(certifierBiocharApplications)
-            .where(
-              and(
-                inArray(
-                  certifierBiocharApplications.removalSubmissionId,
-                  submissionIds,
-                ),
-                eq(
-                  certifierBiocharApplications.organizationId,
-                  ctx.organizationId,
-                ),
-                ne(
-                  certifierBiocharApplications.lifecycleStatus,
-                  DELETED_REGISTRATION_STATUS,
-                ),
-              ),
-            );
-
     return {
       removalId,
       facilityId,
       submissionIds,
       lockedSubmission,
-      externalRemovalIds: [
-        ...new Set(
-          rows.flatMap((row) => (row.externalId ? [row.externalId] : [])),
-        ),
-      ],
+      externalRemovalIds,
+      unconfirmedRemovalSupplierRefs,
       biocharApplications,
     };
   });

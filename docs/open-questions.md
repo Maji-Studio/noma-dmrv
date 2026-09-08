@@ -215,6 +215,25 @@ Pure starter residue; org scoping came later via ADR 0010.
   existing invitation-accept URLs, which embed the invitation id rather than the
   slug — so probably none, but confirm before assuming.
 
+### Discard-draft data access has no caller since Removal deletion (`certification/discard-draft-retirement`, opened 2026-09-08)
+
+- Removal deletion (`src/fn/certification/delete-removal.ts:deleteRemoval`)
+  replaced the wizard's discard control, and the discard hook and server
+  action were removed with it. The data-access seam
+  `src/data-access/certifier-removals.ts:discardLocalRemovalDraft` and the
+  `submissionExternalMutationPossible` Removal marker that only it consumed
+  (`markRemovalSubmissionExternalMutationPossible`, written by
+  `src/fn/certification/submit-removal.ts`) remain, exercised only by
+  `tests/registry-boundary-removal.test.ts`,
+  `tests/removal-application-slice-assignment.test.ts`, and
+  `tests/certification-submissions.test.ts` as the lock-protocol fixture.
+- **To resolve:** either retire `discardLocalRemovalDraft`, the marker write,
+  and the three fixtures together (the deletion path already re-reads the
+  ledger under the same locks), or keep the marker as a fail-closed signal
+  and have `claimRemovalDeletion` consult it. Deciding needs a view on whether
+  a Removal whose Source mirroring may have started, but whose ledger never
+  opened, should be deletable by a member.
+
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
 - The certifier settings pane replaces keys by typing over a masked field, and

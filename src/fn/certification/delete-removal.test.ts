@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   deleteGhgEntry: vi.fn(),
   deleteBiocharApplication: vi.fn(),
   findBiocharApplicationBySupplierReference: vi.fn(),
+  reconcileRemoval: vi.fn(),
   appendSyncEvent: vi.fn(),
 }));
 
@@ -37,6 +38,7 @@ vi.mock("@/lib/isometric", () => ({
   deleteBiocharApplication: state.deleteBiocharApplication,
   findBiocharApplicationBySupplierReference:
     state.findBiocharApplicationBySupplierReference,
+  reconcileRemoval: state.reconcileRemoval,
 }));
 vi.mock("@/lib/isometric/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/isometric/client")>()),
@@ -69,6 +71,7 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
       priorAttemptOutcome: "interrupted",
     },
     externalRemovalIds: ["gge_1"],
+    unconfirmedRemovalSupplierRefs: [],
     biocharApplications: [
       {
         registrationId: "reg-1",
@@ -91,6 +94,7 @@ beforeEach(() => {
   state.deleteGhgEntry.mockResolvedValue(undefined);
   state.deleteBiocharApplication.mockResolvedValue(undefined);
   state.findBiocharApplicationBySupplierReference.mockResolvedValue(null);
+  state.reconcileRemoval.mockResolvedValue({ found: false });
   state.appendSyncEvent.mockResolvedValue(undefined);
 });
 
@@ -157,9 +161,84 @@ describe("deleteRemoval", () => {
     expect(state.deleteBiocharApplication).not.toHaveBeenCalled();
   });
 
+  it("does not blame DRAFT status for a server-side failure", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteGhgEntry.mockRejectedValue(
+      new IsometricApiError("upstream", 502, null, "http"),
+    );
+
+    const attempt = deleteRemoval(ORG_CTX, INPUT);
+    await expect(attempt).rejects.toThrow(/Try again/);
+    await expect(attempt).rejects.not.toThrow(/Only draft registry records/);
+  });
+
+  it("releases the claim and names the partial cleanup when a later delete fails", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteBiocharApplication.mockImplementationOnce(async () => {
+      throw new IsometricApiError("refused", 409, null, "http");
+    });
+
+    const attempt = deleteRemoval(ORG_CTX, INPUT);
+    await expect(attempt).rejects.toBeInstanceOf(SafeError);
+    await expect(attempt).rejects.toThrow(
+      /Biochar Application bse_1.*Run Delete Removal again/,
+    );
+    expect(state.deleteGhgEntry).toHaveBeenCalledOnce();
+    expect(state.release).toHaveBeenCalledWith(ORG_CTX, claim());
+    expect(state.finalize).not.toHaveBeenCalled();
+
+    // The retry converges: the GHG Entry is now absent and the rest proceeds.
+    state.release.mockClear();
+    state.deleteGhgEntry.mockRejectedValueOnce(
+      new IsometricApiError("gone", 404, null, "http"),
+    );
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+    expect(result.deletedGhgEntryIds).toEqual([]);
+    expect(result.deletedBiocharApplicationIds).toEqual(["bse_1", "bse_2"]);
+    expect(state.release).not.toHaveBeenCalled();
+    expect(state.finalize).toHaveBeenCalledOnce();
+  });
+
+  it("releases the claim when local finalization refuses", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.finalize.mockRejectedValue(new SafeError("changed"));
+
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toThrow(/changed/);
+    expect(state.release).toHaveBeenCalledWith(ORG_CTX, claim());
+  });
+
+  it("reconciles a GHG Entry whose POST landed without a recorded ID", async () => {
+    state.claim.mockResolvedValue(
+      claim({
+        externalRemovalIds: [],
+        unconfirmedRemovalSupplierRefs: ["nm-rmv-abc-removal-v1"],
+        biocharApplications: [],
+      }),
+    );
+    state.reconcileRemoval.mockResolvedValue({
+      found: true,
+      externalId: "gge_recovered",
+    });
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(state.reconcileRemoval).toHaveBeenCalledWith(
+      { fake: true },
+      { supplierRefId: "nm-rmv-abc-removal-v1" },
+    );
+    expect(state.deleteGhgEntry).toHaveBeenCalledWith({ fake: true }, "gge_recovered");
+    expect(result.deletedGhgEntryIds).toEqual(["gge_recovered"]);
+  });
+
   it("skips the registry entirely when the claim carries no external records", async () => {
     state.claim.mockResolvedValue(
-      claim({ externalRemovalIds: [], biocharApplications: [], submissionIds: [], lockedSubmission: null }),
+      claim({
+        externalRemovalIds: [],
+        unconfirmedRemovalSupplierRefs: [],
+        biocharApplications: [],
+        submissionIds: [],
+        lockedSubmission: null,
+      }),
     );
 
     await deleteRemoval(ORG_CTX, INPUT);
@@ -218,11 +297,4 @@ describe("deleteRemoval", () => {
     expect(state.finalize).toHaveBeenCalledOnce();
   });
 
-  it("requires an admin", async () => {
-    state.claim.mockResolvedValue(claim());
-    await expect(
-      deleteRemoval({ ...ORG_CTX, orgRole: "member" }, INPUT),
-    ).rejects.toThrow();
-    expect(state.claim).not.toHaveBeenCalled();
-  });
 });

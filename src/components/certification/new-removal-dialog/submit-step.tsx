@@ -29,9 +29,13 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
   useDeleteRemoval,
+  useFacilityCertifierSummary,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
-import { canDeleteRemovalRow } from "@/components/certification/removal-list-state";
+import {
+  canDeleteRemovalRow,
+  removalDeletionTouchesRegistry,
+} from "@/components/certification/removal-list-state";
 import {
   REMOVAL_DELETE_TITLE,
   REMOVAL_DELETED_TOAST,
@@ -85,6 +89,7 @@ export function SubmitStep({
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
   const discardMutation = useDeleteRemoval();
+  const { data: certifierSummary } = useFacilityCertifierSummary(facilityId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
@@ -110,13 +115,17 @@ export function SubmitStep({
   );
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
-  // Anything short of "Submission complete" may be deleted. With registry
-  // history the server removes the draft GHG Entry and Biochar Applications
-  // from Isometric before releasing the batches.
-  const hasRegistryHistory = ctx.latestSubmission !== null;
+  // Anything short of "Submission complete" may be deleted. Once a ledger
+  // row exists the server removes whatever the attempt created on Isometric
+  // before releasing the batches, and only an Admin may do that; a Removal
+  // with no ledger row can be released by any member.
+  const hasRegistryHistory = removalDeletionTouchesRegistry({
+    local: ctx.latestSubmission?.status ?? null,
+  });
   const canDiscardLocalDraft =
     ctx.linkedGhgStatement === null &&
     !submitMutation.isPending &&
+    (!hasRegistryHistory || (certifierSummary?.viewerCanManage ?? false)) &&
     (ctx.latestSubmission === null ||
       canDeleteRemovalRow({
         local: ctx.latestSubmission.status,

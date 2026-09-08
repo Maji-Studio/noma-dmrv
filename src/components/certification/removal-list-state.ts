@@ -86,6 +86,20 @@ export function buildRemovalListRows(
  * attempt still holding its lock is left alone unless it is known to be
  * interrupted. The server re-checks every rule under its own locks.
  */
+/**
+ * Whether deleting this Removal may touch the registry: true as soon as a
+ * ledger row exists, because a submission attempt may have created records
+ * before it recorded their IDs. Drives the confirmation copy and the role
+ * gate on both delete surfaces: a Removal with no ledger row can be released
+ * by any member, anything with ledger history needs an Admin (mirrors
+ * `claimRemovalDeletion`).
+ */
+export function removalDeletionTouchesRegistry(
+  row: Pick<RemovalListRow, "local">,
+): boolean {
+  return row.local !== null;
+}
+
 export function canDeleteRemovalRow(
   row: Pick<RemovalListRow, "local" | "lockInFlight" | "submissionInterrupted">,
 ): boolean {

@@ -3,14 +3,15 @@ import {
   finalizeRemovalDeletion,
   releaseRemovalDeletionClaim,
   type RemovalDeletionClaim,
+  type RemovalDeletionRegistryOutcome,
 } from "@/data-access/certifier-removal-deletion";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
   deleteBiocharApplication,
   deleteGhgEntry,
   findBiocharApplicationBySupplierReference,
+  reconcileRemoval,
 } from "@/lib/isometric";
 import {
   getIsometricClientForOrg,
@@ -32,10 +33,15 @@ import { appendSyncEventBestEffort } from "./shared";
  * Order matters: the GHG Entry goes first because the registry only deletes
  * it while it is still DRAFT. A refusal there means the Removal progressed on
  * the registry side without our ledger knowing, so nothing else is touched
- * and the claim is released. Biochar Applications follow; a registration
- * whose POST was interrupted before the registry ID came back is resolved by
- * its supplier reference first. Every DELETE tolerates a 404 so a retry after
- * a partial cleanup converges.
+ * and the claim is released. Biochar Applications follow. A GHG Entry or
+ * registration whose POST was interrupted before the registry ID came back is
+ * resolved by its supplier reference first. Every DELETE tolerates a 404 so a
+ * retry after a partial cleanup converges; the claim is released on any
+ * failure after it was taken, registry or local, so the Removal never stays
+ * frozen behind a `deleting` lock.
+ *
+ * Role floor lives in `claimRemovalDeletion`: any member may release a
+ * Removal with no ledger row, anything with ledger history needs an Admin.
  *
  * This module is deliberately not a `"use server"` file: the core takes a
  * caller-supplied `OrgContext`, so it must never be registered as a callable
@@ -51,46 +57,57 @@ export interface RemovalDeletionResult {
 
 type RegistryDeleteOutcome = "deleted" | "absent";
 
+interface RegistryDeleteTarget {
+  removalId: string;
+  operation: string;
+  kind: "GHG Entry" | "Biochar Application";
+  externalId: string;
+}
+
+const HTTP_CLIENT_ERROR_MIN = 400;
+const HTTP_CLIENT_ERROR_MAX = 499;
+
+const PARTIAL_CLEANUP_NOTE =
+  "Some registry records were already deleted. Run Delete Removal again to finish the cleanup.";
+
 export async function deleteRemoval(
   orgCtx: OrgContext,
   input: DeleteRemovalInput,
 ): Promise<RemovalDeletionResult> {
-  requireOrgRole(orgCtx, "admin");
   const { facilityId, removalId } = input;
   const log = logger.child({ op: "removal:delete", removalId });
 
   const claim = await claimRemovalDeletion(orgCtx, facilityId, removalId);
-  const deletedGhgEntryIds: string[] = [];
-  const deletedBiocharApplicationIds: string[] = [];
+  const registry = {
+    deletedGhgEntryIds: [] as string[],
+    deletedBiocharApplicationIds: [] as string[],
+  };
 
-  if (
-    claim.externalRemovalIds.length > 0 ||
-    claim.biocharApplications.length > 0
-  ) {
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
-    try {
-      await deleteRegistryRecords(orgCtx, client, claim, {
-        deletedGhgEntryIds,
-        deletedBiocharApplicationIds,
-      });
-    } catch (error) {
-      await releaseRemovalDeletionClaim(orgCtx, claim);
-      const message =
-        error instanceof SafeError
-          ? error.message
-          : registryDeleteRefusalMessage(error);
-      log.warn(
-        { submissionId: claim.lockedSubmission?.id ?? null },
-        "removal delete stopped before local cleanup",
-      );
-      throw error instanceof SafeError ? error : new SafeError(message);
+  let releasedSliceCount: number;
+  try {
+    if (claimNeedsRegistryCleanup(claim)) {
+      const client = await getIsometricClientForOrg(orgCtx.organizationId);
+      await deleteRegistryRecords(orgCtx, client, claim, registry);
     }
+    ({ releasedSliceCount } = await finalizeRemovalDeletion(
+      orgCtx,
+      claim,
+      registry,
+    ));
+  } catch (error) {
+    await releaseRemovalDeletionClaim(orgCtx, claim);
+    log.warn(
+      {
+        submissionId: claim.lockedSubmission?.id ?? null,
+        deletedGhgEntryCount: registry.deletedGhgEntryIds.length,
+        deletedBiocharApplicationCount:
+          registry.deletedBiocharApplicationIds.length,
+      },
+      "removal delete stopped before local cleanup",
+    );
+    throw toDeletionError(error, registry);
   }
-
-  const { releasedSliceCount } = await finalizeRemovalDeletion(orgCtx, claim, {
-    deletedGhgEntryIds,
-    deletedBiocharApplicationIds,
-  });
+  const { deletedGhgEntryIds, deletedBiocharApplicationIds } = registry;
   await appendSyncEventBestEffort(
     orgCtx,
     {
@@ -123,22 +140,36 @@ export async function deleteRemoval(
   };
 }
 
+function claimNeedsRegistryCleanup(claim: RemovalDeletionClaim): boolean {
+  return (
+    claim.externalRemovalIds.length > 0 ||
+    claim.unconfirmedRemovalSupplierRefs.length > 0 ||
+    claim.biocharApplications.length > 0
+  );
+}
+
 async function deleteRegistryRecords(
   orgCtx: OrgContext,
   client: IsometricClient,
   claim: RemovalDeletionClaim,
-  out: {
-    deletedGhgEntryIds: string[];
-    deletedBiocharApplicationIds: string[];
-  },
+  out: RemovalDeletionRegistryOutcome,
 ): Promise<void> {
-  for (const ghgEntryId of claim.externalRemovalIds) {
+  const ghgEntryIds = [...claim.externalRemovalIds];
+  for (const supplierRef of claim.unconfirmedRemovalSupplierRefs) {
+    const found = await reconcileRemoval(client, { supplierRefId: supplierRef });
+    if (found.found && !ghgEntryIds.includes(found.externalId)) {
+      ghgEntryIds.push(found.externalId);
+    }
+  }
+  for (const ghgEntryId of ghgEntryIds) {
     const outcome = await deleteRegistryRecord(
       orgCtx,
-      claim.removalId,
-      "removal:delete:ghg-entry",
-      ghgEntryId,
-      `GHG Entry ${ghgEntryId}`,
+      {
+        removalId: claim.removalId,
+        operation: "removal:delete:ghg-entry",
+        kind: "GHG Entry",
+        externalId: ghgEntryId,
+      },
       () => deleteGhgEntry(client, ghgEntryId),
     );
     if (outcome === "deleted") out.deletedGhgEntryIds.push(ghgEntryId);
@@ -153,10 +184,12 @@ async function deleteRegistryRecords(
     if (externalApplicationId === null) continue;
     const outcome = await deleteRegistryRecord(
       orgCtx,
-      claim.removalId,
-      "removal:delete:biochar-application",
-      externalApplicationId,
-      `Biochar Application ${externalApplicationId}`,
+      {
+        removalId: claim.removalId,
+        operation: "removal:delete:biochar-application",
+        kind: "Biochar Application",
+        externalId: externalApplicationId,
+      },
       () => deleteBiocharApplication(client, externalApplicationId),
     );
     if (outcome === "deleted") {
@@ -181,12 +214,10 @@ async function resolveUnconfirmedBiocharApplication(
 
 async function deleteRegistryRecord(
   orgCtx: OrgContext,
-  removalId: string,
-  operation: string,
-  externalId: string,
-  label: string,
+  target: RegistryDeleteTarget,
   run: () => Promise<void>,
 ): Promise<RegistryDeleteOutcome> {
+  const { removalId, operation, externalId } = target;
   let outcome: RegistryDeleteOutcome;
   try {
     await run();
@@ -195,7 +226,7 @@ async function deleteRegistryRecord(
     if (error instanceof IsometricApiError && error.status === 404) {
       outcome = "absent";
     } else {
-      const message = registryDeleteRefusalMessage(error, label);
+      const message = registryDeleteRefusalMessage(error, target);
       await appendSyncEventBestEffort(
         orgCtx,
         {
@@ -230,11 +261,46 @@ async function deleteRegistryRecord(
   return outcome;
 }
 
-function registryDeleteRefusalMessage(error: unknown, label?: string): string {
-  const target = label ? `${label}` : "the registry records";
+function registryDeleteRefusalMessage(
+  error: unknown,
+  target?: RegistryDeleteTarget,
+): string {
+  const label = target
+    ? `${target.kind} ${target.externalId}`
+    : "the registry records";
   if (error instanceof IsometricApiError) {
     if (error.code === "not_configured") return error.message;
-    return `Isometric did not delete ${target}. ${describeIsometricApiError(error)} Only draft registry records can be deleted. Nothing was removed locally.`;
+    const detail = describeIsometricApiError(error);
+    // Only a client-side refusal can mean "no longer a draft"; a server or
+    // network failure says nothing about the record's status.
+    if (isClientError(error)) {
+      return `Isometric did not delete ${label}. ${detail} Only draft registry records can be deleted. Nothing was removed locally.`;
+    }
+    return `Isometric did not delete ${label}. ${detail} Nothing was removed locally. Try again.`;
   }
-  return `Isometric did not delete ${target}. Nothing was removed locally. Try again.`;
+  return `Isometric did not delete ${label}. Nothing was removed locally. Try again.`;
+}
+
+function isClientError(error: IsometricApiError): boolean {
+  return (
+    error.status !== undefined &&
+    error.status >= HTTP_CLIENT_ERROR_MIN &&
+    error.status <= HTTP_CLIENT_ERROR_MAX
+  );
+}
+
+// Anything thrown after the claim reaches the operator through here. A
+// partial registry cleanup is called out so the next step is obvious.
+function toDeletionError(
+  error: unknown,
+  registry: RemovalDeletionRegistryOutcome,
+): SafeError {
+  const base =
+    error instanceof SafeError
+      ? error.message
+      : registryDeleteRefusalMessage(error);
+  const partial =
+    registry.deletedGhgEntryIds.length > 0 ||
+    registry.deletedBiocharApplicationIds.length > 0;
+  return new SafeError(partial ? `${base} ${PARTIAL_CLEANUP_NOTE}` : base);
 }

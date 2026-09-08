@@ -40,7 +40,11 @@ import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
-import { canDeleteRemovalRow, type RemovalListRow } from "./removal-list-state";
+import {
+  canDeleteRemovalRow,
+  removalDeletionTouchesRegistry,
+  type RemovalListRow,
+} from "./removal-list-state";
 import {
   REMOVAL_DELETE_TITLE,
   REMOVAL_DELETED_TOAST,
@@ -194,11 +198,14 @@ export function RemovalDetailSheet({
   // anyway; this just stops offering a dead-end control).
   const isActionable = workflowStatus.isActionable;
 
-  // Deletion mirrors the server rule: never-finalized only, and only for
-  // Owners and Admins. With registry history the draft GHG Entry and Biochar
-  // Applications are removed from Isometric before the local record goes.
+  // Deletion mirrors the server rule: never-finalized only, and Admin-only
+  // once registry records exist. With registry history the draft GHG Entry
+  // and Biochar Applications are removed from Isometric before the local
+  // record goes.
+  const touchesRegistry = removalDeletionTouchesRegistry(summary);
   const canDelete =
-    (certifierSummary?.viewerCanManage ?? false) && canDeleteRemovalRow(summary);
+    canDeleteRemovalRow(summary) &&
+    (!touchesRegistry || (certifierSummary?.viewerCanManage ?? false));
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -345,7 +352,7 @@ export function RemovalDetailSheet({
       <DeleteConfirmDialog
         isOpen={deleteConfirmOpen}
         title={REMOVAL_DELETE_TITLE}
-        message={removalDeleteMessage(summary.externalId !== null)}
+        message={removalDeleteMessage(touchesRegistry)}
         onCancel={() => {
           setDeleteConfirmOpen(false);
           deleteMutation.reset();
