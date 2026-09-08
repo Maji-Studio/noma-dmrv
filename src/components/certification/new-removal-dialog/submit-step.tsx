@@ -128,6 +128,7 @@ export function SubmitStep({
       ? isSubmissionAttemptInterrupted(ctx.latestSubmission.metadata)
       : false,
     hasFinalizedSubmission: ctx.hasFinalizedSubmission,
+    registryBoundaryOpened: ctx.registryBoundaryOpened,
   };
   const hasRegistryHistory = removalDeletionTouchesRegistry(deleteFacts);
   const canDeleteRemoval =

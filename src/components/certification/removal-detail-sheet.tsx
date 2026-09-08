@@ -48,6 +48,8 @@ import {
 import {
   REMOVAL_DELETE_TITLE,
   REMOVAL_DELETED_TOAST,
+  REMOVAL_DISCARD_TITLE,
+  REMOVAL_DISCARDED_TOAST,
   removalDeleteMessage,
 } from "./removal-deletion-copy";
 
@@ -207,6 +209,7 @@ export function RemovalDetailSheet({
     summary,
     certifierSummary?.viewerCanManage ?? false,
   );
+  const deleteLabel = touchesRegistry ? "Delete Removal" : "Discard draft";
   const deleteMutation = useDeleteRemoval();
   const toast = useToast();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -330,7 +333,7 @@ export function RemovalDetailSheet({
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleteMutation.isPending}
               >
-                Delete Removal
+                {deleteLabel}
               </Button>
             )}
             <RemovalReviewAction
@@ -352,7 +355,7 @@ export function RemovalDetailSheet({
           confirmation as a nested dialog of the sheet. */}
       <DeleteConfirmDialog
         isOpen={deleteConfirmOpen}
-        title={REMOVAL_DELETE_TITLE}
+        title={touchesRegistry ? REMOVAL_DELETE_TITLE : REMOVAL_DISCARD_TITLE}
         message={removalDeleteMessage(touchesRegistry)}
         onCancel={() => {
           setDeleteConfirmOpen(false);
@@ -364,7 +367,11 @@ export function RemovalDetailSheet({
             {
               onSuccess: () => {
                 setDeleteConfirmOpen(false);
-                toast.success(REMOVAL_DELETED_TOAST);
+                toast.success(
+                  touchesRegistry
+                    ? REMOVAL_DELETED_TOAST
+                    : REMOVAL_DISCARDED_TOAST,
+                );
                 onClose();
               },
             },
@@ -376,8 +383,8 @@ export function RemovalDetailSheet({
             ? deleteMutation.error.message
             : undefined
         }
-        confirmLabel="Delete Removal"
-        pendingLabel="Deleting..."
+        confirmLabel={deleteLabel}
+        pendingLabel={touchesRegistry ? "Deleting..." : "Discarding..."}
       />
     </>
   );

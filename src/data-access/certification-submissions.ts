@@ -50,6 +50,13 @@ import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { acquireFacilityCertificationBoundaryLock } from "./facility-certification-boundary-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
+/** Ledger statuses that mean "a submission finalized"; deletion refuses on any of them. */
+export const FINALIZED_SUBMISSION_STATUSES = [
+  "submitted",
+  "accepted",
+  "superseded",
+] as const;
+
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 
 export interface SubmissionKey {
@@ -84,12 +91,6 @@ export interface InsertDraftSubmissionInput extends SubmissionKey {
  * must surface that loudly, because a confirmed external write would
  * otherwise be silently forgotten.
  */
-const FINALIZED_SUBMISSION_STATUSES = [
-  "submitted",
-  "accepted",
-  "superseded",
-] as const;
-
 export async function markSubmissionInterrupted(
   ctx: OrgContext,
   id: string,

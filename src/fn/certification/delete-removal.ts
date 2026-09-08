@@ -18,12 +18,15 @@ import {
   IsometricApiError,
   type IsometricClient,
 } from "@/lib/isometric/client";
-import { describeIsometricApiError } from "@/lib/isometric/error-utils";
+import {
+  describeIsometricApiError,
+  sanitizeIsometricErrorBody,
+} from "@/lib/isometric/error-utils";
 import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
-import { logger } from "@/lib/log";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import type { DeleteRemovalInput } from "@/schemas/certification";
 import { appendSyncEventBestEffort } from "./shared";
 
@@ -73,6 +76,8 @@ const REGISTRY_STATE_REFUSAL_STATUSES: ReadonlySet<number> = new Set([
 
 const PARTIAL_CLEANUP_NOTE =
   "Some registry records were already deleted. Run Delete Removal again to finish the cleanup.";
+const LOCAL_FAILURE_MESSAGE =
+  "The Removal could not be removed locally. Nothing was removed locally. Try again.";
 
 export async function deleteRemoval(
   orgCtx: OrgContext,
@@ -108,6 +113,8 @@ export async function deleteRemoval(
         deletedGhgEntryCount: registry.deletedGhgEntryIds.length,
         deletedBiocharApplicationCount:
           registry.deletedBiocharApplicationIds.length,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: sanitizeErrorMessage(error),
       },
       "removal delete stopped before local cleanup",
     );
@@ -246,7 +253,9 @@ async function deleteRegistryRecord(
           status: "failed",
           requestPayload: { id: externalId },
           responsePayload:
-            error instanceof IsometricApiError ? (error.body ?? null) : null,
+            error instanceof IsometricApiError
+              ? (sanitizeIsometricErrorBody(error.body) ?? null)
+              : null,
           errorMessage: message,
         },
         { removalId },
@@ -295,8 +304,10 @@ function isRegistryStateRefusal(error: IsometricApiError): boolean {
   );
 }
 
-// Anything thrown after the claim reaches the operator through here. A
-// partial registry cleanup is called out so the next step is obvious.
+// Anything thrown after the claim reaches the operator through here. Only a
+// registry error is described as a registry refusal; a local failure (the
+// finalize transaction, client setup) says so. A partial registry cleanup is
+// called out so the next step is obvious.
 function toDeletionError(
   error: unknown,
   registry: RemovalDeletionRegistryOutcome,
@@ -304,7 +315,9 @@ function toDeletionError(
   const base =
     error instanceof SafeError
       ? error.message
-      : registryDeleteRefusalMessage(error);
+      : error instanceof IsometricApiError
+        ? registryDeleteRefusalMessage(error)
+        : LOCAL_FAILURE_MESSAGE;
   const partial =
     registry.deletedGhgEntryIds.length > 0 ||
     registry.deletedBiocharApplicationIds.length > 0;

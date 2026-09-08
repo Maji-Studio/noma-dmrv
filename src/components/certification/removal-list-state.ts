@@ -25,6 +25,7 @@ export interface RemovalListRow {
   lockInFlight: boolean;
   submissionInterrupted: boolean;
   hasFinalizedSubmission: boolean;
+  registryBoundaryOpened: boolean;
   readiness: RemovalPreflightSummary["readiness"] | null;
   evidenceHealth: RemovalPreflightSummary["evidenceHealth"];
   submissionWarnings: string[];
@@ -74,6 +75,9 @@ export function buildRemovalListRows(
       hasFinalizedSubmission:
         lifecycleData?.hasFinalizedSubmission ??
         identity.hasFinalizedSubmission,
+      registryBoundaryOpened:
+        lifecycleData?.registryBoundaryOpened ??
+        identity.registryBoundaryOpened,
       readiness: lifecycleData?.readiness ?? null,
       evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
@@ -86,21 +90,26 @@ export function buildRemovalListRows(
 
 /**
  * Whether deleting this Removal may touch the registry: true as soon as a
- * ledger row exists, because a submission attempt may have created records
- * before it recorded their IDs. Drives the confirmation copy and the role
- * gate on both delete surfaces: a Removal with no ledger row can be released
- * by any member, anything with ledger history needs an Admin (mirrors
+ * ledger row exists (a submission attempt may have created records before it
+ * recorded their IDs) or a submit attempt opened the registry boundary before
+ * any ledger row. Drives the confirmation copy and the role gate on both
+ * delete surfaces: a Removal that never touched the registry can be released
+ * by any member, anything else needs an Admin (mirrors
  * `claimRemovalDeletion`).
  */
 export function removalDeletionTouchesRegistry(
-  row: Pick<RemovalListRow, "local">,
+  row: Pick<RemovalListRow, "local" | "registryBoundaryOpened">,
 ): boolean {
-  return row.local !== null;
+  return row.local !== null || row.registryBoundaryOpened;
 }
 
 type RemovalDeleteFacts = Pick<
   RemovalListRow,
-  "local" | "lockInFlight" | "submissionInterrupted" | "hasFinalizedSubmission"
+  | "local"
+  | "lockInFlight"
+  | "submissionInterrupted"
+  | "hasFinalizedSubmission"
+  | "registryBoundaryOpened"
 >;
 
 /**

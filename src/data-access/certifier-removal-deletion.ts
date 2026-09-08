@@ -20,10 +20,11 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
-import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { LOCK_TTL_MS, isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
 import { logger } from "@/lib/log";
-import { removalMayHaveExternalMutation } from "./certifier-removals";
+import { removalMayHaveExternalMutation } from "@/lib/certification/removal-external-mutation";
+import { FINALIZED_SUBMISSION_STATUSES } from "./certification-submissions";
 import { requireOrgScope } from "./utils";
 
 /**
@@ -63,11 +64,6 @@ import { requireOrgScope } from "./utils";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-const FINALIZED_SUBMISSION_STATUSES = [
-  "submitted",
-  "accepted",
-  "superseded",
-] as const;
 const DELETED_REGISTRATION_STATUS = "deleted" as const;
 const DRAFT_LEDGER_STATUS = "draft" as const;
 const DELETED_LEDGER_STATUS = "rejected" as const;
@@ -164,6 +160,18 @@ async function lockRemovalRow(
   };
 }
 
+function isDeletionInFlight(row: {
+  lockedAt: Date | null;
+  metadata: unknown;
+}): boolean {
+  return (
+    row.lockedAt !== null &&
+    Date.now() - row.lockedAt.getTime() < LOCK_TTL_MS &&
+    getMetadataValue(row.metadata, SUBMISSION_METADATA_KEYS.lastAttemptOutcome) ===
+      SUBMISSION_ATTEMPT_OUTCOMES.deleting
+  );
+}
+
 export async function claimRemovalDeletion(
   ctx: OrgContext,
   facilityId: string,
@@ -225,6 +233,11 @@ export async function claimRemovalDeletion(
       ) {
         throw new SafeError(REMOVAL_DELETE_IN_FLIGHT_ERROR);
       }
+    }
+    // Another deletion of this Removal may be mid-cleanup: its stamp sits on
+    // rejected rows too, which `isLockedInFlight` does not consider.
+    if (rows.some(isDeletionInFlight)) {
+      throw new SafeError(REMOVAL_DELETE_IN_FLIGHT_ERROR);
     }
 
     const submissionIds = rows.map((row) => row.id);
@@ -305,8 +318,13 @@ export async function claimRemovalDeletion(
       if (!locked) throw new SafeError(REMOVAL_DELETE_CHANGED_ERROR);
       lockedSubmissions.push({
         id: row.id,
+        // A stale `deleting` marker (an expired earlier claim) is not a state
+        // worth restoring.
         priorAttemptOutcome:
-          typeof priorOutcome === "string" ? priorOutcome : null,
+          typeof priorOutcome === "string" &&
+          priorOutcome !== SUBMISSION_ATTEMPT_OUTCOMES.deleting
+            ? priorOutcome
+            : null,
       });
     }
 

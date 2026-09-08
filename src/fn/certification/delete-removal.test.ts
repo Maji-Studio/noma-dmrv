@@ -220,6 +220,38 @@ describe("deleteRemoval", () => {
     expect(state.release).toHaveBeenCalledWith(ORG_CTX, claim());
   });
 
+  it("reports a local database failure as local, not as a registry refusal", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.finalize.mockRejectedValue(new Error("connection reset"));
+
+    const attempt = deleteRemoval(ORG_CTX, INPUT);
+    await expect(attempt).rejects.toBeInstanceOf(SafeError);
+    await expect(attempt).rejects.toThrow(/could not be removed locally.*Run Delete Removal again/);
+    await expect(attempt).rejects.not.toThrow(/Isometric did not delete/);
+    expect(state.release).toHaveBeenCalledWith(ORG_CTX, claim());
+  });
+
+  it("records a sanitized registry error body on the failed sync event", async () => {
+    state.claim.mockResolvedValue(claim());
+    state.deleteGhgEntry.mockRejectedValue(
+      new IsometricApiError(
+        "refused",
+        422,
+        { errors: [{ detail: "not draft" }], authorization: "Bearer secret" },
+        "http",
+      ),
+    );
+
+    await expect(deleteRemoval(ORG_CTX, INPUT)).rejects.toBeInstanceOf(SafeError);
+    const failed = state.appendSyncEvent.mock.calls.find(
+      (call) => call[1]?.status === "failed",
+    );
+    expect(failed?.[1]?.responsePayload).not.toMatchObject({
+      authorization: "Bearer secret",
+    });
+    expect(JSON.stringify(failed?.[1]?.responsePayload)).not.toContain("secret");
+  });
+
   it("reconciles a GHG Entry whose POST landed without a recorded ID", async () => {
     state.claim.mockResolvedValue(
       claim({

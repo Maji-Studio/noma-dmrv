@@ -39,6 +39,7 @@ import { productionProcesses } from "@/db/schema/production-processes";
 import {
   claimRemovalDeletion,
   finalizeRemovalDeletion,
+  releaseRemovalDeletionClaim,
   REMOVAL_DELETE_CHANGED_ERROR,
   REMOVAL_DELETE_IN_FLIGHT_ERROR,
   REMOVAL_DELETE_SUBMITTED_ERROR,
@@ -448,6 +449,35 @@ describe("deleteRemoval", () => {
     expect(await removalExists(fixture.removalId)).toBe(true);
     expect((await ledgerRow(concurrentDraftId)).status).toBe("draft");
     expect((await ledgerRow(rejectedId)).status).toBe("rejected");
+  });
+
+  it("refuses a second deletion claim while the first still holds rejected rows", async () => {
+    const fixture = await createFixture();
+    const rejectedId = await insertLedgerRow(fixture, {
+      status: "rejected",
+      externalId: null,
+      metadata: { lastError: "Creating Removal in Isometric failed" },
+    });
+    const ctx = makeTestOrgContext();
+    const first = await claimRemovalDeletion(
+      ctx,
+      fixture.facilityId,
+      fixture.removalId,
+    );
+
+    await expect(
+      claimRemovalDeletion(ctx, fixture.facilityId, fixture.removalId),
+    ).rejects.toThrow(REMOVAL_DELETE_IN_FLIGHT_ERROR);
+    expect((await ledgerRow(rejectedId)).lockedAt?.getTime()).toBe(
+      first.lockedAt.getTime(),
+    );
+
+    await releaseRemovalDeletionClaim(ctx, first);
+    const released = await ledgerRow(rejectedId);
+    expect(released.lockedAt).toBeNull();
+    expect(
+      (released.metadata as Record<string, unknown>).lastAttemptOutcome,
+    ).toBeUndefined();
   });
 
   it("refuses a submitted Removal and leaves everything in place", async () => {

@@ -16,6 +16,7 @@ function identity(
     memberBatches: [{ id: `${id}-batch`, code: batchCode }],
     latestSubmission: null,
     hasFinalizedSubmission: false,
+    registryBoundaryOpened: false,
   } as RemovalHubEntry;
 }
 
@@ -33,6 +34,7 @@ function enrichment(
     lockInFlight: false,
     submissionInterrupted: false,
     hasFinalizedSubmission: false,
+    registryBoundaryOpened: false,
     readiness: { state: "ready", reasons: [], advisories: [] },
     evidenceHealth: null,
     submissionWarnings: [],
@@ -141,23 +143,23 @@ describe("buildRemovalListRows", () => {
 
 describe("canDeleteRemovalRow", () => {
   it("allows removals that never finalized a submission", () => {
-    expect(canDeleteRemovalRow({ local: null, lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(true);
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(true);
-    expect(canDeleteRemovalRow({ local: "rejected", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(true);
+    expect(canDeleteRemovalRow({ local: null, lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
+    expect(canDeleteRemovalRow({ local: "rejected", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
   });
 
   it("refuses when an earlier version finalized even if the latest is a draft", () => {
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: true })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: true, registryBoundaryOpened: false })).toBe(false);
   });
 
   it("refuses removals whose submission completed", () => {
-    expect(canDeleteRemovalRow({ local: "submitted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "accepted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "superseded", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "submitted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "accepted", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "superseded", lockInFlight: false, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
   });
 
   it("waits for a running attempt but not for an interrupted one", () => {
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: false, hasFinalizedSubmission: false })).toBe(false);
-    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: true, hasFinalizedSubmission: false })).toBe(true);
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: false, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(false);
+    expect(canDeleteRemovalRow({ local: "draft", lockInFlight: true, submissionInterrupted: true, hasFinalizedSubmission: false, registryBoundaryOpened: false })).toBe(true);
   });
 });
