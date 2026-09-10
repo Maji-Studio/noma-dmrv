@@ -65,8 +65,16 @@ export async function findSourceBySupplierRef(
   return null;
 }
 
-// DELETE /sources/{id} intentionally not exported in Phase 3.5.
-// Source IDs land in certification_submissions.payloadSnapshot — remote
-// deletion would break submission audit/resume. Before submission, evidence
-// replacement retires only the unreferenced local mapping from its owning
-// record; the remote Source remains intact.
+// Verified against the public Certify OpenAPI and the `how_to` MCP tool on
+// 2026-09-10: `DELETE /sources/{id}` returns 204 and is irreversible; the
+// registry refuses a Source that locked Datapoints, validated assets, or a
+// verified GHG Statement still use. Deleting a draft GHG Entry does not
+// cascade to its Sources. The only caller is Removal deletion, for Sources
+// whose local mapping the deletion released; a Source a live snapshot still
+// cites keeps its mapping and is never deleted here.
+export function deleteSource(
+  client: IsometricClient,
+  id: string,
+): Promise<void> {
+  return client.delete<void>(`/sources/${encodeURIComponent(id)}`);
+}

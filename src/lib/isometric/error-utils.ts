@@ -10,7 +10,7 @@ const REDACTED = "[REDACTED]";
 /** Exact provider absence evidence; transport and unrelated request errors propagate. */
 export function isMissingIsometricResource(
   error: unknown,
-  kind: "ProductionBatch" | "MeasurementSample" | null,
+  kind: "ProductionBatch" | "MeasurementSample" | "Source" | null,
   id: string,
 ): boolean {
   if (!(error instanceof IsometricApiError) || error.code === "network") return false;
