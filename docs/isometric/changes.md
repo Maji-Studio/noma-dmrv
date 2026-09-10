@@ -1,5 +1,32 @@
 # Isometric Docs Change Log
 
+## 2026-09-10: Removal deletion deletes the Sources it released
+
+- Verified through the `how_to` MCP tool and the public Certify OpenAPI:
+  `DELETE /sources/{id}` returns 204 and is irreversible; deleting a draft
+  GHG Entry does not cascade to its Sources or Datapoints; the registry
+  refuses a Source that locked Datapoints, validated assets, or a verified
+  GHG Statement still use.
+- After `finalizeRemovalDeletion` commits, `deleteRemoval` sends one
+  `DELETE /sources/{id}` per released mirror
+  (`deletion.releasedDocumentMirrors`), each fenced by the document's mirror
+  lock through `withReleasedDocumentMirrorLock`. A mirror of the same
+  document that reconciled onto the Source first keeps it (`retained`); one
+  that queues behind the delete creates a new Source. A 404 counts as
+  absent. Any other refusal is recorded as a failed `removal:delete:source`
+  sync event with the registry detail and does not fail the deletion, since
+  the local side is already consistent and the Source stayed on the
+  registry before this change too. The `removal:delete` event and the
+  action result carry `deleted_source_ids` / `deletedSourceIds`.
+- The single-document and parent-record delete paths still leave the remote
+  Source in place. `isometric/removal-deletion-orphans` in
+  `docs/open-questions-isometric.md` is narrowed to Datapoints.
+- Code: `src/lib/isometric/sources.ts` (`deleteSource`),
+  `src/data-access/certifier-removal-deletion.ts`
+  (`withReleasedDocumentMirrorLock`), `src/fn/certification/delete-removal.ts`
+  (`deleteReleasedSources`), `tests/fixtures/fake-registry.ts` (Sources and
+  `DELETE /sources/{id}`).
+
 ## 2026-09-08: recover deleted Storage Locations and report evidence failures accurately
 
 - `src/fn/certification/storage-locations.ts:ensureStorageLocation` now

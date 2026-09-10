@@ -26,7 +26,9 @@ import { LOCK_TTL_MS, isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { buildRemovalSupplierRef } from "@/lib/isometric/utils/supplier-ref";
 import { logger } from "@/lib/log";
 import { FINALIZED_SUBMISSION_STATUSES } from "./certification-submissions";
+import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import {
+  getDocumentUploadByDocument,
   releaseDocumentUploadsReferencedOnlyBySubmissions,
   type ReleasedDocumentUpload,
 } from "./certifier-document-uploads";
@@ -491,6 +493,36 @@ export async function withRemovalDeletionMutation<T>(
     // Exact ownership is sufficient while these locks fence takeover. Requiring
     // TTL freshness here would make a long successful lookup impossible to finish.
     return run(tx);
+  });
+}
+
+/**
+ * Fence the remote deletion of one released Source mirror with the same
+ * per-document mirror lock that mirroring, submit, and document deletion
+ * take. The release decision was made inside finalize, but a mirror of the
+ * same document that ran between that commit and the DELETE reconciles onto
+ * the remote Source by supplier reference and maps it again. Holding the
+ * lock serializes the two: a mirror that got there first leaves a mapping
+ * and the Source is retained; one that queues behind this call finds the
+ * Source gone and creates a new one. Runs on a dedicated connection so the
+ * registry call never holds a pooled slot.
+ */
+export async function withReleasedDocumentMirrorLock<T>(
+  ctx: OrgContext,
+  documentId: string,
+  run: () => Promise<T>,
+): Promise<T | "retained"> {
+  requireOrgScope(ctx);
+  return withDedicatedLockConnection(async (tx) => {
+    await acquireMirrorLock(tx, documentId);
+    const mapping = await getDocumentUploadByDocument(
+      ctx,
+      ISOMETRIC_PROVIDER,
+      documentId,
+      tx,
+    );
+    if (mapping) return "retained";
+    return run();
   });
 }
 

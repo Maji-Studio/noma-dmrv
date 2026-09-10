@@ -105,6 +105,7 @@ export class FakeIsometricRegistry {
   readonly productionBatches: FakeRegistryRecord[] = [];
   readonly ghgEntries: FakeRegistryRecord[] = [];
   readonly biocharApplications: FakeRegistryRecord[] = [];
+  readonly sources: FakeRegistryRecord[] = [];
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
 
@@ -187,6 +188,13 @@ export class FakeIsometricRegistry {
     };
     this.biocharApplications.push(application);
     return application;
+  }
+
+  /** A registry-side Source that an earlier mirror created. */
+  seedSource(record: Omit<FakeRegistryRecord, "id"> = {}): FakeRegistryRecord {
+    const source: FakeRegistryRecord = { ...record, id: this.nextId("src") };
+    this.sources.push(source);
+    return source;
   }
 
   seedGhgStatement(args: {
@@ -397,6 +405,19 @@ export class FakeIsometricRegistry {
       this.removeById(
         this.biocharApplications,
         decodeURIComponent(deletedBiocharApplication[1]),
+        method,
+        path,
+        ApiError,
+      );
+      return undefined;
+    }
+    const deletedSource = path.match(/^\/sources\/([^/]+)$/);
+    if (method === "DELETE" && deletedSource) {
+      // The real endpoint refuses a Source that locked Datapoints or a
+      // verified statement still use; tests model that with failNext.
+      this.removeById(
+        this.sources,
+        decodeURIComponent(deletedSource[1]),
         method,
         path,
         ApiError,
