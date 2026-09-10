@@ -63,6 +63,7 @@ export {
 export { buildSourceSupplierRef } from "./utils/source-ref";
 export {
   createSource,
+  deleteSource,
   requestSignedUploadUrl,
   findSourceBySupplierRef,
   type CreateDocumentSourceRequest,

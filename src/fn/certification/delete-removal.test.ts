@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   finalize: vi.fn(),
   release: vi.fn(),
   mutation: vi.fn(),
+  mirrorLock: vi.fn(),
   shared: vi.fn(),
   getProductionBatch: vi.fn(),
   findProductionBatch: vi.fn(),
@@ -22,6 +23,7 @@ const state = vi.hoisted(() => ({
   deleteProductionBatch: vi.fn(),
   deleteGhgEntry: vi.fn(),
   deleteBiocharApplication: vi.fn(),
+  deleteSource: vi.fn(),
   findBiocharApplicationBySupplierReference: vi.fn(),
   reconcileRemoval: vi.fn(),
   appendSyncEvent: vi.fn(),
@@ -43,12 +45,14 @@ vi.mock("@/data-access/certifier-removal-deletion", () => ({
   claimRemovalDeletion: state.claim,
   finalizeRemovalDeletion: state.finalize,
   releaseRemovalDeletionClaim: state.release,
+  withReleasedDocumentMirrorLock: state.mirrorLock,
   withRemovalDeletionMutation: state.mutation,
 }));
 vi.mock("@/lib/isometric", () => ({
   deleteProductionBatch: state.deleteProductionBatch,
   deleteGhgEntry: state.deleteGhgEntry,
   deleteBiocharApplication: state.deleteBiocharApplication,
+  deleteSource: state.deleteSource,
   findBiocharApplicationBySupplierReference:
     state.findBiocharApplicationBySupplierReference,
   reconcileRemoval: state.reconcileRemoval,
@@ -103,6 +107,8 @@ function claim(overrides: Partial<RemovalDeletionClaim> = {}): RemovalDeletionCl
 beforeEach(() => {
   for (const mock of Object.values(state)) mock.mockReset();
   state.mutation.mockImplementation((_ctx, _claim, run) => run({ guarded: true }));
+  state.mirrorLock.mockImplementation((_ctx, _documentId, run) => run());
+  state.deleteSource.mockResolvedValue(undefined);
   state.shared.mockResolvedValue(false);
   state.getProductionBatch.mockResolvedValue({ id: "ptb_1", supplier_reference_id: "batch-ref", facility_id: "fcl_1" });
   state.findProductionBatch.mockResolvedValue(null);
@@ -208,6 +214,7 @@ describe("deleteRemoval", () => {
       deletedBiocharApplicationIds: ["bse_1", "bse_2"],
       releasedSliceCount: 2,
       releasedDocumentMirrorCount: 0,
+      deletedSourceIds: [],
     });
     expect(state.finalize).toHaveBeenCalledWith(ORG_CTX, claim(), {
       deletedGhgEntryIds: ["gge_1"],
@@ -368,6 +375,139 @@ describe("deleteRemoval", () => {
     );
     expect(state.deleteGhgEntry).toHaveBeenCalledWith({ fake: true }, "gge_recovered");
     expect(result.deletedGhgEntryIds).toEqual(["gge_recovered"]);
+  });
+
+  it("deletes the released Sources after finalize, under each document's mirror lock", async () => {
+    state.claim.mockResolvedValue(claim({ biocharApplications: [] }));
+    const order: string[] = [];
+    state.finalize.mockImplementation(async () => {
+      order.push("finalize");
+      return {
+        releasedSliceCount: 1,
+        releasedDocumentMirrors: [
+          { documentId: "doc-1", externalDocumentId: "src_1" },
+          { documentId: "doc-2", externalDocumentId: "src_2" },
+        ],
+      };
+    });
+    state.deleteSource.mockImplementation(async (_client, id: string) => {
+      order.push(`source:${id}`);
+    });
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(order).toEqual(["finalize", "source:src_1", "source:src_2"]);
+    expect(state.mirrorLock.mock.calls.map(([, documentId]) => documentId)).toEqual(["doc-1", "doc-2"]);
+    expect(result.deletedSourceIds).toEqual(["src_1", "src_2"]);
+    expect(result.releasedDocumentMirrorCount).toBe(2);
+    expect(state.appendSyncEvent).toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({
+        operation: "removal:delete:source",
+        status: "succeeded",
+        requestPayload: { id: "src_2" },
+        responsePayload: { id: "src_2", outcome: "deleted" },
+      }),
+      { removalId: INPUT.removalId },
+    );
+    // The Removal's own success event lands before the best-effort cleanup.
+    const operations = state.appendSyncEvent.mock.calls.map(([, event]) => event.operation);
+    expect(operations.indexOf("removal:delete")).toBeLessThan(
+      operations.indexOf("removal:delete:source"),
+    );
+  });
+
+  it("audits a Source the fence could not reach as failed without a provider attempt", async () => {
+    state.claim.mockResolvedValue(claim({ biocharApplications: [] }));
+    state.finalize.mockResolvedValue({
+      releasedSliceCount: 0,
+      releasedDocumentMirrors: [{ documentId: "doc-1", externalDocumentId: "src_1" }],
+    });
+    state.mirrorLock.mockRejectedValue(new Error("canceling statement due to lock timeout"));
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(result.deletedSourceIds).toEqual([]);
+    expect(state.deleteSource).not.toHaveBeenCalled();
+    expect(state.appendSyncEvent).toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({
+        operation: "removal:delete:source",
+        status: "failed",
+        requestPayload: { id: "src_1" },
+        errorMessage: expect.stringMatching(/lock timeout/),
+      }),
+      { removalId: INPUT.removalId },
+    );
+  });
+
+  it("keeps a released Source that a concurrent mirror mapped again", async () => {
+    state.claim.mockResolvedValue(claim({ biocharApplications: [] }));
+    state.finalize.mockResolvedValue({
+      releasedSliceCount: 0,
+      releasedDocumentMirrors: [{ documentId: "doc-1", externalDocumentId: "src_1" }],
+    });
+    state.mirrorLock.mockResolvedValue("retained");
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(state.deleteSource).not.toHaveBeenCalled();
+    expect(result.deletedSourceIds).toEqual([]);
+    expect(state.appendSyncEvent).not.toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({ operation: "removal:delete:source" }),
+      expect.anything(),
+    );
+  });
+
+  it("finishes the deletion when a released Source cannot be deleted, and audits why", async () => {
+    state.claim.mockResolvedValue(claim({ biocharApplications: [] }));
+    state.finalize.mockResolvedValue({
+      releasedSliceCount: 0,
+      releasedDocumentMirrors: [
+        { documentId: "doc-1", externalDocumentId: "src_refused" },
+        { documentId: "doc-2", externalDocumentId: "src_gone" },
+        { documentId: "doc-3", externalDocumentId: "src_ok" },
+      ],
+    });
+    state.deleteSource.mockImplementation(async (_client, id: string) => {
+      if (id === "src_refused") {
+        throw new IsometricApiError(
+          "refused",
+          422,
+          { errors: [{ detail: "Source is referenced by a locked datapoint" }] },
+          "http",
+        );
+      }
+      if (id === "src_gone") throw new IsometricApiError("gone", 404, null, "http");
+    });
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(result.deletedSourceIds).toEqual(["src_ok"]);
+    expect(state.deleteSource).toHaveBeenCalledTimes(3);
+    expect(state.release).not.toHaveBeenCalled();
+    expect(state.appendSyncEvent).toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({
+        operation: "removal:delete:source",
+        status: "failed",
+        requestPayload: { id: "src_refused" },
+        errorMessage: expect.stringMatching(
+          /Source src_refused.*locked datapoint.*Removal was deleted; the Source stays on the registry/,
+        ),
+      }),
+      { removalId: INPUT.removalId },
+    );
+    expect(state.appendSyncEvent).toHaveBeenCalledWith(
+      ORG_CTX,
+      expect.objectContaining({
+        operation: "removal:delete:source",
+        status: "succeeded",
+        responsePayload: { id: "src_gone", outcome: "absent" },
+      }),
+      { removalId: INPUT.removalId },
+    );
   });
 
   it("skips the registry entirely when the claim carries no external records", async () => {

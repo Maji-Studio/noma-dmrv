@@ -67,12 +67,14 @@ no current call site. noma calls only the `ghg_entries` route family.
 | `GET /sources` | Supplier-reference reconciliation | `src/lib/isometric/sources.ts` → `findSourceBySupplierRef`; consumer in `src/fn/certification/sources.ts` |
 | `POST /sources` | Create a mirrored document Source | `src/lib/isometric/sources.ts` → `createSource`; consumer in `src/fn/certification/sources.ts` |
 | `POST /sources/{id}/signed_upload_url` | Resume an interrupted Source upload or recognize an already-uploaded Source | `src/lib/isometric/sources.ts` → `requestSignedUploadUrl`; consumer in `src/fn/certification/sources.ts` |
+| `DELETE /sources/{id}` | Remove the Sources whose local mapping a Removal deletion released; 204, irreversible, refused while locked Datapoints or a verified statement use the Source (verified 2026-09-10) | `src/lib/isometric/sources.ts` → `deleteSource`; consumer in `src/fn/certification/delete-removal.ts` |
 
 `PATCH /sources/{id}` is not wired. Source visibility is now an
 organization-wide policy applied when a Source is created; noma does not
-rewrite existing remote Sources when the policy changes. `DELETE /sources/{id}`
-is deliberately not wired because immutable submission snapshots retain Source
-IDs.
+rewrite existing remote Sources when the policy changes. Source deletion is
+limited to Removal deletion: a Source that any live submission snapshot still
+cites keeps its local mapping and is never deleted, so immutable snapshots
+keep resolving their Source IDs.
 
 ## Durability measurement operations
 
@@ -134,8 +136,8 @@ The following operation families have no current application call site:
 - measurement locations;
 - standalone project/GHG-statement Components and attribution mutations;
 - Datapoint deletion and reverse-lookup endpoints;
-- Source private URL, update, and deletion;
-- resource DELETE operations other than GHG Entry, Biochar Application, MeasurementSample and ProductionBatch;
+- Source private URL and update;
+- resource DELETE operations other than GHG Entry, Biochar Application, MeasurementSample, ProductionBatch and Source;
 - deprecated Removal/template aliases.
 
 `POST /components` has a typed wrapper in
