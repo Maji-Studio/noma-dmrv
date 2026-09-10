@@ -410,11 +410,32 @@ describe("deleteRemoval", () => {
       }),
       { removalId: INPUT.removalId },
     );
-    expect(state.appendSyncEvent).toHaveBeenLastCalledWith(
+    // The Removal's own success event lands before the best-effort cleanup.
+    const operations = state.appendSyncEvent.mock.calls.map(([, event]) => event.operation);
+    expect(operations.indexOf("removal:delete")).toBeLessThan(
+      operations.indexOf("removal:delete:source"),
+    );
+  });
+
+  it("audits a Source the fence could not reach as failed without a provider attempt", async () => {
+    state.claim.mockResolvedValue(claim({ biocharApplications: [] }));
+    state.finalize.mockResolvedValue({
+      releasedSliceCount: 0,
+      releasedDocumentMirrors: [{ documentId: "doc-1", externalDocumentId: "src_1" }],
+    });
+    state.mirrorLock.mockRejectedValue(new Error("canceling statement due to lock timeout"));
+
+    const result = await deleteRemoval(ORG_CTX, INPUT);
+
+    expect(result.deletedSourceIds).toEqual([]);
+    expect(state.deleteSource).not.toHaveBeenCalled();
+    expect(state.appendSyncEvent).toHaveBeenCalledWith(
       ORG_CTX,
       expect.objectContaining({
-        operation: "removal:delete",
-        responsePayload: expect.objectContaining({ deleted_source_ids: ["src_1", "src_2"] }),
+        operation: "removal:delete:source",
+        status: "failed",
+        requestPayload: { id: "src_1" },
+        errorMessage: expect.stringMatching(/lock timeout/),
       }),
       { removalId: INPUT.removalId },
     );

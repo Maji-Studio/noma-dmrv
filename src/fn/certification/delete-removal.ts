@@ -153,13 +153,9 @@ export async function deleteRemoval(
     throw toDeletionError(error, registry);
   }
   const releasedDocumentMirrorCount = releasedDocumentMirrors.length;
-  const deletedSourceIds = await deleteReleasedSources(
-    orgCtx,
-    removalId,
-    releasedDocumentMirrors,
-    log,
-  );
   const { deletedGhgEntryIds, deletedBiocharApplicationIds } = registry;
+  // The Removal is gone locally at this point; record that before the
+  // best-effort Source cleanup, whose per-Source events follow.
   await appendSyncEventBestEffort(
     orgCtx,
     {
@@ -179,10 +175,15 @@ export async function deleteRemoval(
         measurement_samples: registry.measurementSamples ?? [],
         released_slice_count: releasedSliceCount,
         released_document_mirror_count: releasedDocumentMirrorCount,
-        deleted_source_ids: deletedSourceIds,
       },
     },
     { removalId },
+  );
+  const deletedSourceIds = await deleteReleasedSources(
+    orgCtx,
+    removalId,
+    releasedDocumentMirrors,
+    log,
   );
   log.info(
     {
@@ -207,9 +208,10 @@ export async function deleteRemoval(
 // The local side is already consistent when this runs: the mapping is gone
 // and no live snapshot cites the Source. Each DELETE is fenced by the
 // document's mirror lock so a concurrent mirror either re-maps the Source
-// first (then it is retained) or creates a new one afterwards. Any failure,
-// including a missing client, is recorded and skipped; the deletion result
-// still reports what was removed.
+// first (then it is retained) or creates a new one afterwards. Any failure
+// is skipped and recorded: a provider refusal by `deleteRegistryRecord`, a
+// missing client or a fence error (lock wait, connection) by the failed
+// event written here, so the audit log shows every Source left behind.
 async function deleteReleasedSources(
   orgCtx: OrgContext,
   removalId: string,
@@ -218,7 +220,7 @@ async function deleteReleasedSources(
 ): Promise<string[]> {
   if (released.length === 0) return [];
   const deleted: string[] = [];
-  let client: IsometricClient;
+  let client: IsometricClient | null = null;
   try {
     client = await getIsometricClientForOrg(orgCtx.organizationId);
   } catch (error) {
@@ -230,10 +232,14 @@ async function deleteReleasedSources(
       },
       "released Sources stay on the registry; no client available",
     );
-    return deleted;
   }
   for (const mirror of released) {
     const { documentId, externalDocumentId } = mirror;
+    if (client === null) {
+      await recordSourceCleanupFailure(orgCtx, removalId, externalDocumentId, SOURCE_CLIENT_UNAVAILABLE_MESSAGE);
+      continue;
+    }
+    const registryClient = client;
     try {
       const outcome = await deleteRegistryRecord(
         orgCtx,
@@ -245,7 +251,7 @@ async function deleteReleasedSources(
         },
         (request) =>
           withReleasedDocumentMirrorLock(orgCtx, documentId, () =>
-            request(() => deleteSource(client, externalDocumentId)),
+            request(() => deleteSource(registryClient, externalDocumentId)),
           ),
       );
       if (outcome === "deleted") deleted.push(externalDocumentId);
@@ -265,9 +271,39 @@ async function deleteReleasedSources(
         },
         "released Source stays on the registry",
       );
+      // A provider refusal was already audited and surfaces as a SafeError;
+      // anything else never reached the registry and needs its own record.
+      if (!(error instanceof SafeError)) {
+        await recordSourceCleanupFailure(orgCtx, removalId, externalDocumentId, sanitizeErrorMessage(error));
+      }
     }
   }
   return deleted;
+}
+
+const SOURCE_CLIENT_UNAVAILABLE_MESSAGE =
+  "The registry client was not available after the Removal was deleted; the Source stays on the registry.";
+
+function recordSourceCleanupFailure(
+  orgCtx: OrgContext,
+  removalId: string,
+  externalDocumentId: string,
+  errorMessage: string,
+): Promise<void> {
+  return appendSyncEventBestEffort(
+    orgCtx,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: removalId,
+      operation: "removal:delete:source",
+      status: "failed",
+      requestPayload: { id: externalDocumentId },
+      responsePayload: null,
+      errorMessage,
+    },
+    { removalId },
+  );
 }
 
 function claimNeedsRegistryCleanup(claim: RemovalDeletionClaim): boolean {
@@ -465,9 +501,7 @@ async function deleteRegistryRecord<T extends RegistryDeleteOutcome | "retained"
         captured.attempt = { outcome: "deleted" };
         return "deleted";
       } catch (error) {
-        if (isMissingIsometricResource(error,
-          target.kind === "ProductionBatch" || target.kind === "MeasurementSample" || target.kind === "Source" ? target.kind : null,
-          externalId)) {
+        if (isMissingIsometricResource(error, absenceKindOf(target), externalId)) {
           captured.attempt = { outcome: "absent" };
           return "absent";
         }
@@ -525,6 +559,16 @@ async function deleteRegistryRecord<T extends RegistryDeleteOutcome | "retained"
   return outcome;
 }
 
+// Certify reports a missing ProductionBatch, MeasurementSample or Source as a
+// 400 with a "Could not find" detail; GHG Entries and Applications use 404.
+function absenceKindOf(
+  target: RegistryDeleteTarget,
+): "ProductionBatch" | "MeasurementSample" | "Source" | null {
+  return target.kind === "GHG Entry" || target.kind === "Biochar Application"
+    ? null
+    : target.kind;
+}
+
 function registryDeleteRefusalMessage(
   error: unknown,
   target?: RegistryDeleteTarget,
@@ -533,13 +577,15 @@ function registryDeleteRefusalMessage(
   const label = target
     ? `${kindLabel} ${target.externalId}`
     : "the registry records";
+  if (error instanceof IsometricApiError && error.code === "not_configured") {
+    return error.message;
+  }
   if (target?.kind === "Source") {
     // The Removal is already gone locally; only the audit trail reads this.
     const detail = error instanceof IsometricApiError ? ` ${describeIsometricApiError(error)}` : "";
     return `Isometric did not delete ${label}.${detail} The Removal was deleted; the Source stays on the registry.`;
   }
   if (error instanceof IsometricApiError) {
-    if (error.code === "not_configured") return error.message;
     const detail = describeIsometricApiError(error);
     if (isRegistryStateRefusal(error) && target?.kind !== "ProductionBatch" && target?.kind !== "MeasurementSample") {
       return `Isometric did not delete ${label}. ${detail} Only draft registry records can be deleted. Nothing was removed locally.`;

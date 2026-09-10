@@ -72,6 +72,10 @@ const DRAFT_LEDGER_STATUS = "draft" as const;
 const DELETED_LEDGER_STATUS = "rejected" as const;
 const DELETION_METADATA_KEY = SUBMISSION_METADATA_KEYS.deletion;
 const REMOVAL_SUPPLIER_REF_ROLE = "removal" as const;
+// A mirror of the same document holds its lock across its own registry
+// calls, so the fence waits a bounded time instead of stalling the deletion
+// response; a timeout leaves the Source on the registry, which is audited.
+const RELEASED_MIRROR_LOCK_WAIT_MS = 5_000;
 
 export const REMOVAL_DELETE_SUBMITTED_ERROR =
   "This Removal was submitted to Isometric and cannot be deleted.";
@@ -505,7 +509,8 @@ export async function withRemovalDeletionMutation<T>(
  * lock serializes the two: a mirror that got there first leaves a mapping
  * and the Source is retained; one that queues behind this call finds the
  * Source gone and creates a new one. Runs on a dedicated connection so the
- * registry call never holds a pooled slot.
+ * registry call never holds a pooled slot, with a bounded lock wait so a
+ * slow mirror cannot stall the deletion response.
  */
 export async function withReleasedDocumentMirrorLock<T>(
   ctx: OrgContext,
@@ -514,6 +519,7 @@ export async function withReleasedDocumentMirrorLock<T>(
 ): Promise<T | "retained"> {
   requireOrgScope(ctx);
   return withDedicatedLockConnection(async (tx) => {
+    await tx.execute(sql`SET LOCAL lock_timeout = ${sql.raw(`'${RELEASED_MIRROR_LOCK_WAIT_MS}ms'`)}`);
     await acquireMirrorLock(tx, documentId);
     const mapping = await getDocumentUploadByDocument(
       ctx,

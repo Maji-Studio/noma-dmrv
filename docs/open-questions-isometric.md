@@ -53,7 +53,7 @@ retired questions do not belong in this file.
   the registry refuses a Source that locked Datapoints, validated assets, or a
   verified statement still use. The deletion now sends that DELETE after the
   finalize transaction committed, fenced by each document's mirror lock
-  (`withReleasedDocumentMirrorLock`); a refusal is audited as a failed
+  (`withReleasedDocumentMirrorLock`, bounded lock wait); a refusal is audited as a failed
   `removal:delete:source` event and leaves the Source in place without
   failing the deletion. Whether the orphaned draft Datapoints count as
   locked, and so refuse the Source delete, is unknown until a sandbox run

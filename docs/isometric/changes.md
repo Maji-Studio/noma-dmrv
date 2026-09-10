@@ -16,8 +16,10 @@
   absent. Any other refusal is recorded as a failed `removal:delete:source`
   sync event with the registry detail and does not fail the deletion, since
   the local side is already consistent and the Source stayed on the
-  registry before this change too. The `removal:delete` event and the
-  action result carry `deleted_source_ids` / `deletedSourceIds`.
+  registry before this change too. A fence failure (bounded lock wait,
+  connection) or a missing client is recorded the same way. The
+  `removal:delete` event is written before this cleanup starts; the action
+  result carries `deletedSourceIds`.
 - The single-document and parent-record delete paths still leave the remote
   Source in place. `isometric/removal-deletion-orphans` in
   `docs/open-questions-isometric.md` is narrowed to Datapoints.
