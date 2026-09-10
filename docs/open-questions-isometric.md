@@ -37,35 +37,35 @@ retired questions do not belong in this file.
 - **To resolve** — read the attachment back through GraphQL (issue #737) and
   make the exact-set comparison unconditional again.
 
-### Removal deletion leaves per-submission registry inputs behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
+### Removal deletion leaves Datapoints behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
 
 - **Observed** — deleting a never-finalized Removal
   (`src/fn/certification/delete-removal.ts:deleteRemoval`) removes the draft
-  GHG Entry and its Biochar Applications from the registry, but not the
-  Datapoints, Measurement Samples, or evidence-ledger Sources that the same
-  submission created. Production Batches and Storage Locations are shared
-  across Removals and must stay. GHG Entry and Biochar Application orphans
-  are keyed by version-specific supplier references, so a later Removal
-  never collides with them; Sources are keyed by document
-  (`nm-src-{documentId}`) and a later Removal deliberately reuses them.
-- **Local side is settled (2026-09-08)** — the deletion releases the
-  `certifier_document_uploads` mapping of every Source that only the deleted
-  submissions cited (`releaseDocumentUploadsReferencedOnlyBySubmissions`),
-  records them under the ledger row's `deletion.releasedDocumentMirrors`, and
-  the snapshot-reference guards skip deletion-stamped rows. The owning
-  Application or Delivery can then be deleted; a later submission that
-  mirrors the same document reconciles onto the existing Source through its
-  `nm-src-{documentId}` supplier reference. Only the remote Source cleanup
-  remains open here.
+  GHG Entry, its Biochar Applications, its exclusively owned Production
+  Batches and Measurement Samples, and (since 2026-09-10) the Sources whose
+  local mapping the deletion released. The Datapoints the same submission
+  created stay. Storage Locations are shared across Removals and must stay.
+  GHG Entry and Biochar Application orphans are keyed by version-specific
+  supplier references, so a later Removal never collides with them.
+- **Sources are settled (2026-09-10)** — verified through the `how_to` MCP
+  tool and the public Certify OpenAPI: `DELETE /sources/{id}` exists (204,
+  irreversible), deleting a draft GHG Entry does not cascade to Sources, and
+  the registry refuses a Source that locked Datapoints, validated assets, or a
+  verified statement still use. The deletion now sends that DELETE after the
+  finalize transaction committed, fenced by each document's mirror lock
+  (`withReleasedDocumentMirrorLock`, bounded lock wait); a refusal is audited as a failed
+  `removal:delete:source` event and leaves the Source in place without
+  failing the deletion. Whether the orphaned draft Datapoints count as
+  locked, and so refuse the Source delete, is unknown until a sandbox run
+  (`needs-registry-check`).
 - **Why it matters** — sandbox and production projects accumulate unused
-  inputs after each abandoned submission. Nothing reads them, but a reviewer
-  opening the project in Certify sees records with no GHG Entry.
+  Datapoints after each abandoned submission. Nothing reads them, but a
+  reviewer opening the project in Certify sees records with no GHG Entry.
 - **To resolve** — decide whether cleanup should extend to
-  `DELETE /datapoints/{id}` (refused while a Component still uses it),
-  `DELETE /measurement_samples/{id}`, and `DELETE /sources/{id}`. Needs a
-  sandbox probe of what the GHG Entry delete already cascades
-  (`needs-registry-check`), then a follow-up on the deletion claim in
-  `src/data-access/certifier-removal-deletion.ts:claimRemovalDeletion`.
+  `DELETE /datapoints/{id}` (refused while a Component still uses it). The
+  single-document and parent-record delete paths also release mappings
+  inside their transactions and leave the remote Source in place; covering
+  them needs a durable outbox and is not asked for.
 
 ### Partial registry cleanup leaves a Removal that submits badly before it deletes cleanly (`isometric/removal-deletion-partial-cleanup`, opened 2026-09-08)
 

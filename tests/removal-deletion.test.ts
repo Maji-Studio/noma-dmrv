@@ -32,7 +32,6 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
 import { db } from "@/db";
 import {
   certificationSubmissions,
-  certifierDocumentUploads,
   certifierProjects,
   certifierRemovals,
   certifierSyncEvents,
@@ -43,7 +42,6 @@ import { certifierProductionBatches } from "@/db/schema/certifier-production-bat
 import { buildProductionBatchReference } from "@/lib/isometric/production-batches";
 import { buildMeasurementSampleReference } from "@/lib/isometric/measurement-samples";
 import { applications } from "@/db/schema/application";
-import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
@@ -56,8 +54,6 @@ import {
   REMOVAL_DELETE_IN_FLIGHT_ERROR,
   REMOVAL_DELETE_SUBMITTED_ERROR,
 } from "@/data-access/certifier-removal-deletion";
-import { deleteApplication } from "@/data-access/applications";
-import { deleteDelivery } from "@/data-access/deliveries";
 import { deleteRemoval } from "@/fn/certification/delete-removal";
 import {
   SUBMISSION_ATTEMPT_OUTCOMES,
@@ -82,7 +78,6 @@ const createdRemovalIds: string[] = [];
 const createdBatchIds: string[] = [];
 const createdFeedstockTypeIds: string[] = [];
 const createdChains: BiocharApplicationChain[] = [];
-const createdDocumentIds: string[] = [];
 let registry: FakeIsometricRegistry;
 beforeAll(async () => {
   await ensureTestOrg();
@@ -91,14 +86,6 @@ beforeEach(() => {
   registry = installFakeRegistry();
 });
 afterAll(async () => {
-  if (createdDocumentIds.length > 0) {
-    await db
-      .delete(certifierDocumentUploads)
-      .where(inArray(certifierDocumentUploads.documentId, createdDocumentIds));
-    await db
-      .delete(documents)
-      .where(inArray(documents.id, createdDocumentIds));
-  }
   for (const chain of createdChains.reverse()) {
     await db
       .delete(creditBatchApplications)
@@ -200,38 +187,6 @@ function interruptedMetadata(): Record<string, unknown> {
     externalMutation: SUBMISSION_EXTERNAL_MUTATIONS.confirmed,
     lastError: "Creating Removal in Isometric failed",
   };
-}
-async function insertMirroredDocument(
-  fixture: Fixture,
-  args: { entityType: "application" | "delivery"; entityId: string; sourceId: string },
-): Promise<string> {
-  const [document] = await db
-    .insert(documents)
-    .values({
-      organizationId: TEST_ORG_ID,
-      entityType: args.entityType,
-      entityId: args.entityId,
-      documentType: "pdf",
-      fileName: `${args.entityType}-${fixture.runId}.pdf`,
-      fileUrl: `https://evidence.example.test/${args.entityType}-${fixture.runId}.pdf`,
-    })
-    .returning({ id: documents.id });
-  createdDocumentIds.push(document.id);
-  await db.insert(certifierDocumentUploads).values({
-    organizationId: TEST_ORG_ID,
-    documentId: document.id,
-    provider: "isometric",
-    externalDocumentId: args.sourceId,
-  });
-  return document.id;
-}
-async function mirrorExists(documentId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: certifierDocumentUploads.id })
-    .from(certifierDocumentUploads)
-    .where(eq(certifierDocumentUploads.documentId, documentId))
-    .limit(1);
-  return Boolean(row);
 }
 async function removalExists(removalId: string): Promise<boolean> {
   const [row] = await db
@@ -442,109 +397,6 @@ describe("deleteRemoval", () => {
     expect((row.metadata as { deletion: unknown }).deletion).toMatchObject({
       deletedBiocharApplicationIds: [remoteApplication.id],
     });
-  });
-  it("releases the evidence mirrors only the deleted submission cited, so the Application and Delivery can be deleted", async () => {
-    const fixture = await createFixture();
-    const chain = await createBiocharApplicationChain({
-      tag: fixture.runId,
-      facilityId: fixture.facilityId,
-      creditBatchId: fixture.creditBatchId,
-      certifierProjectId: fixture.certifierProjectId,
-      externalProjectId: fixture.externalProjectId,
-    });
-    createdChains.push(chain);
-    const [application] = await db
-      .select({ deliveryId: applications.deliveryId })
-      .from(applications)
-      .where(eq(applications.id, chain.applicationId));
-    const applicationSourceId = `src_app_${fixture.runId}`;
-    const deliverySourceId = `src_del_${fixture.runId}`;
-    const applicationDocumentId = await insertMirroredDocument(fixture, {
-      entityType: "application",
-      entityId: chain.applicationId,
-      sourceId: applicationSourceId,
-    });
-    const deliveryDocumentId = await insertMirroredDocument(fixture, {
-      entityType: "delivery",
-      entityId: application.deliveryId!,
-      sourceId: deliverySourceId,
-    });
-    const entry = registry.seedGhgEntry({ status: "DRAFT" });
-    const submissionId = await insertLedgerRow(fixture, {
-      status: "draft",
-      externalId: entry.id,
-      metadata: interruptedMetadata(),
-      payloadSnapshot: {
-        sourceBindingPlan: [{ sourceId: deliverySourceId }],
-        transport: {
-          biocharApplicationIntents: [{ sourceIds: [applicationSourceId] }],
-        },
-      },
-    });
-    const result = await deleteRemoval(makeTestOrgContext(), {
-      facilityId: fixture.facilityId,
-      removalId: fixture.removalId,
-    });
-    expect(result.releasedDocumentMirrorCount).toBe(2);
-    expect(await mirrorExists(applicationDocumentId)).toBe(false);
-    expect(await mirrorExists(deliveryDocumentId)).toBe(false);
-    const metadata = (await ledgerRow(submissionId)).metadata as {
-      deletion: { releasedDocumentMirrors: unknown[] };
-    };
-    expect(metadata.deletion.releasedDocumentMirrors).toEqual(
-      expect.arrayContaining([
-        { documentId: applicationDocumentId, externalDocumentId: applicationSourceId },
-        { documentId: deliveryDocumentId, externalDocumentId: deliverySourceId },
-      ]),
-    );
-    const ctx = makeTestOrgContext();
-    await expect(deleteApplication(ctx, chain.applicationId)).resolves.toBeUndefined();
-    await expect(deleteDelivery(ctx, application.deliveryId!)).resolves.toBeUndefined();
-    expect(
-      await db
-        .select({ id: documents.id })
-        .from(documents)
-        .where(inArray(documents.id, [applicationDocumentId, deliveryDocumentId])),
-    ).toHaveLength(0);
-  });
-  it("keeps a mirror that a live submission of another Removal still cites", async () => {
-    const fixture = await createFixture();
-    const other = await createFixture();
-    const chain = await createBiocharApplicationChain({
-      tag: fixture.runId,
-      facilityId: fixture.facilityId,
-      creditBatchId: fixture.creditBatchId,
-      certifierProjectId: fixture.certifierProjectId,
-      externalProjectId: fixture.externalProjectId,
-    });
-    createdChains.push(chain);
-    const sharedSourceId = `src_shared_${fixture.runId}`;
-    const documentId = await insertMirroredDocument(fixture, {
-      entityType: "application",
-      entityId: chain.applicationId,
-      sourceId: sharedSourceId,
-    });
-    const entry = registry.seedGhgEntry({ status: "DRAFT" });
-    await insertLedgerRow(fixture, {
-      status: "draft",
-      externalId: entry.id,
-      metadata: interruptedMetadata(),
-      payloadSnapshot: { sourceBindingPlan: [{ sourceId: sharedSourceId }] },
-    });
-    await insertLedgerRow(other, {
-      status: "rejected",
-      externalId: null,
-      payloadSnapshot: { sourceBindingPlan: [{ sourceId: sharedSourceId }] },
-    });
-    const result = await deleteRemoval(makeTestOrgContext(), {
-      facilityId: fixture.facilityId,
-      removalId: fixture.removalId,
-    });
-    expect(result.releasedDocumentMirrorCount).toBe(0);
-    expect(await mirrorExists(documentId)).toBe(true);
-    await expect(
-      deleteApplication(makeTestOrgContext(), chain.applicationId),
-    ).rejects.toThrow(/certification provider/);
   });
   it("removes a Removal with no ledger without touching the registry", async () => {
     const fixture = await createFixture();

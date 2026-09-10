@@ -5,15 +5,18 @@ import {
   claimRemovalDeletion,
   finalizeRemovalDeletion,
   releaseRemovalDeletionClaim,
+  withReleasedDocumentMirrorLock,
   withRemovalDeletionMutation,
   type RemovalDeletionClaim,
   type RemovalDeletionRegistryOutcome,
 } from "@/data-access/certifier-removal-deletion";
+import type { ReleasedDocumentUpload } from "@/data-access/certifier-document-uploads";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
   deleteBiocharApplication,
   deleteGhgEntry,
+  deleteSource,
   findBiocharApplicationBySupplierReference,
   reconcileRemoval,
 } from "@/lib/isometric";
@@ -31,7 +34,7 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
-import { logger, sanitizeErrorMessage } from "@/lib/log";
+import { logger, sanitizeErrorMessage, type Logger } from "@/lib/log";
 import type { DeleteRemovalInput } from "@/schemas/certification";
 import { appendSyncEventBestEffort } from "./shared";
 
@@ -48,6 +51,12 @@ import { appendSyncEventBestEffort } from "./shared";
  * failure after it was taken, registry or local, so the Removal never stays
  * frozen behind a `deleting` lock.
  *
+ * The Sources whose local mapping the finalize step released are deleted
+ * last, after that transaction committed, each under its document's mirror
+ * lock. A refusal there leaves the Source on the registry, which is the state
+ * this cleanup started from, so it is audited and logged but never fails the
+ * deletion.
+ *
  * No role floor for now: any member may delete (issue #746).
  *
  * This module is deliberately not a `"use server"` file: the core takes a
@@ -61,6 +70,7 @@ export interface RemovalDeletionResult {
   deletedBiocharApplicationIds: string[];
   releasedSliceCount: number;
   releasedDocumentMirrorCount: number;
+  deletedSourceIds: string[];
 }
 
 type RegistryDeleteOutcome = "deleted" | "absent";
@@ -69,7 +79,7 @@ type RegistryDeleteRequest = (send: () => Promise<void>) => Promise<RegistryDele
 interface RegistryDeleteTarget {
   removalId: string;
   operation: string;
-  kind: "GHG Entry" | "Biochar Application" | "MeasurementSample" | "ProductionBatch";
+  kind: "GHG Entry" | "Biochar Application" | "MeasurementSample" | "ProductionBatch" | "Source";
   externalId: string;
 }
 
@@ -105,7 +115,7 @@ export async function deleteRemoval(
   };
 
   let releasedSliceCount: number;
-  let releasedDocumentMirrorCount: number;
+  let releasedDocumentMirrors: ReleasedDocumentUpload[];
   try {
     if (claimNeedsRegistryCleanup(claim)) {
       const client = await getIsometricClientForOrg(orgCtx.organizationId);
@@ -113,7 +123,7 @@ export async function deleteRemoval(
     }
     const finalized = await finalizeRemovalDeletion(orgCtx, claim, registry);
     releasedSliceCount = finalized.releasedSliceCount;
-    releasedDocumentMirrorCount = finalized.releasedDocumentMirrors.length;
+    releasedDocumentMirrors = finalized.releasedDocumentMirrors;
   } catch (error) {
     // The release is TTL-bounded, so a failure here must not hide the
     // original error behind a raw database error.
@@ -142,7 +152,10 @@ export async function deleteRemoval(
     );
     throw toDeletionError(error, registry);
   }
+  const releasedDocumentMirrorCount = releasedDocumentMirrors.length;
   const { deletedGhgEntryIds, deletedBiocharApplicationIds } = registry;
+  // The Removal is gone locally at this point; record that before the
+  // best-effort Source cleanup, whose per-Source events follow.
   await appendSyncEventBestEffort(
     orgCtx,
     {
@@ -166,12 +179,19 @@ export async function deleteRemoval(
     },
     { removalId },
   );
+  const deletedSourceIds = await deleteReleasedSources(
+    orgCtx,
+    removalId,
+    releasedDocumentMirrors,
+    log,
+  );
   log.info(
     {
       deletedGhgEntryCount: deletedGhgEntryIds.length,
       deletedBiocharApplicationCount: deletedBiocharApplicationIds.length,
       releasedSliceCount,
       releasedDocumentMirrorCount,
+      deletedSourceCount: deletedSourceIds.length,
     },
     "removal deleted",
   );
@@ -181,7 +201,109 @@ export async function deleteRemoval(
     deletedBiocharApplicationIds,
     releasedSliceCount,
     releasedDocumentMirrorCount,
+    deletedSourceIds,
   };
+}
+
+// The local side is already consistent when this runs: the mapping is gone
+// and no live snapshot cites the Source. Each DELETE is fenced by the
+// document's mirror lock so a concurrent mirror either re-maps the Source
+// first (then it is retained) or creates a new one afterwards. Any failure
+// is skipped and recorded: a provider refusal by `deleteRegistryRecord`, a
+// missing client or a fence error (lock wait, connection) by the failed
+// event written here, so the audit log shows every Source left behind.
+async function deleteReleasedSources(
+  orgCtx: OrgContext,
+  removalId: string,
+  released: ReleasedDocumentUpload[],
+  log: Logger,
+): Promise<string[]> {
+  if (released.length === 0) return [];
+  const deleted: string[] = [];
+  let client: IsometricClient | null = null;
+  try {
+    client = await getIsometricClientForOrg(orgCtx.organizationId);
+  } catch (error) {
+    log.warn(
+      {
+        releasedDocumentMirrorCount: released.length,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: sanitizeErrorMessage(error),
+      },
+      "released Sources stay on the registry; no client available",
+    );
+  }
+  for (const mirror of released) {
+    const { documentId, externalDocumentId } = mirror;
+    if (client === null) {
+      await recordSourceCleanupFailure(orgCtx, removalId, externalDocumentId, SOURCE_CLIENT_UNAVAILABLE_MESSAGE);
+      continue;
+    }
+    const registryClient = client;
+    try {
+      const outcome = await deleteRegistryRecord(
+        orgCtx,
+        {
+          removalId,
+          operation: "removal:delete:source",
+          kind: "Source",
+          externalId: externalDocumentId,
+        },
+        (request) =>
+          withReleasedDocumentMirrorLock(orgCtx, documentId, () =>
+            request(() => deleteSource(registryClient, externalDocumentId)),
+          ),
+      );
+      if (outcome === "deleted") deleted.push(externalDocumentId);
+      else if (outcome === "retained") {
+        log.info(
+          { documentId, externalDocumentId },
+          "released Source was mirrored again before its delete and stays",
+        );
+      }
+    } catch (error) {
+      log.warn(
+        {
+          documentId,
+          externalDocumentId,
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: sanitizeErrorMessage(error),
+        },
+        "released Source stays on the registry",
+      );
+      // A provider refusal was already audited and surfaces as a SafeError;
+      // anything else never reached the registry and needs its own record.
+      if (!(error instanceof SafeError)) {
+        await recordSourceCleanupFailure(orgCtx, removalId, externalDocumentId, sanitizeErrorMessage(error));
+      }
+    }
+  }
+  return deleted;
+}
+
+const SOURCE_CLIENT_UNAVAILABLE_MESSAGE =
+  "The registry client was not available after the Removal was deleted; the Source stays on the registry.";
+
+function recordSourceCleanupFailure(
+  orgCtx: OrgContext,
+  removalId: string,
+  externalDocumentId: string,
+  errorMessage: string,
+): Promise<void> {
+  return appendSyncEventBestEffort(
+    orgCtx,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: removalId,
+      operation: "removal:delete:source",
+      status: "failed",
+      requestPayload: { id: externalDocumentId },
+      responsePayload: null,
+      errorMessage,
+    },
+    { removalId },
+  );
 }
 
 function claimNeedsRegistryCleanup(claim: RemovalDeletionClaim): boolean {
@@ -379,9 +501,7 @@ async function deleteRegistryRecord<T extends RegistryDeleteOutcome | "retained"
         captured.attempt = { outcome: "deleted" };
         return "deleted";
       } catch (error) {
-        if (isMissingIsometricResource(error,
-          target.kind === "ProductionBatch" || target.kind === "MeasurementSample" ? target.kind : null,
-          externalId)) {
+        if (isMissingIsometricResource(error, absenceKindOf(target), externalId)) {
           captured.attempt = { outcome: "absent" };
           return "absent";
         }
@@ -439,6 +559,16 @@ async function deleteRegistryRecord<T extends RegistryDeleteOutcome | "retained"
   return outcome;
 }
 
+// Certify reports a missing ProductionBatch, MeasurementSample or Source as a
+// 400 with a "Could not find" detail; GHG Entries and Applications use 404.
+function absenceKindOf(
+  target: RegistryDeleteTarget,
+): "ProductionBatch" | "MeasurementSample" | "Source" | null {
+  return target.kind === "GHG Entry" || target.kind === "Biochar Application"
+    ? null
+    : target.kind;
+}
+
 function registryDeleteRefusalMessage(
   error: unknown,
   target?: RegistryDeleteTarget,
@@ -447,8 +577,15 @@ function registryDeleteRefusalMessage(
   const label = target
     ? `${kindLabel} ${target.externalId}`
     : "the registry records";
+  if (error instanceof IsometricApiError && error.code === "not_configured") {
+    return error.message;
+  }
+  if (target?.kind === "Source") {
+    // The Removal is already gone locally; only the audit trail reads this.
+    const detail = error instanceof IsometricApiError ? ` ${describeIsometricApiError(error)}` : "";
+    return `Isometric did not delete ${label}.${detail} The Removal was deleted; the Source stays on the registry.`;
+  }
   if (error instanceof IsometricApiError) {
-    if (error.code === "not_configured") return error.message;
     const detail = describeIsometricApiError(error);
     if (isRegistryStateRefusal(error) && target?.kind !== "ProductionBatch" && target?.kind !== "MeasurementSample") {
       return `Isometric did not delete ${label}. ${detail} Only draft registry records can be deleted. Nothing was removed locally.`;
