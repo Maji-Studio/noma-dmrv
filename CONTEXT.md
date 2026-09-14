@@ -108,10 +108,32 @@ _Avoid_: calling the whole mixture biochar when discussing mass or moisture.
 **Dry biochar mass**:
 The water-free mass established from the source biochar's wet mass and
 biochar-only moisture before mixing, excluding blend ingredients. It is
-conserved through mixing, product-moisture changes, delivery, and application
-unless a recorded physical loss removes biochar.
-_Avoid_: deriving it from the wet mass and moisture of a blended product; dry
-product mass, total dry solids.
+conserved through mixing, moisture changes, delivery, and application unless
+a recorded physical loss removes biochar; a blend's dry solids require its
+biochar share of solids to distinguish biochar from ingredients.
+_Avoid_: equating blended-product dry solids with dry biochar; dry product mass.
+
+**Output-bin layer**:
+One production run's or product batch's remaining dry biochar in a storage bin,
+with its source identity and physical placement date.
+_Avoid_: treating an accounting layer as proof of a physically separate pile.
+
+**Departure moisture**:
+The water fraction measured in material leaving a storage bin, describing
+that draw rather than the condition of the remaining pile.
+
+**Biochar share of solids**:
+The fraction of a product batch's dry solids that is biochar, established from
+its dry biochar and dry blend ingredients when the product is created.
+
+**Stock reconciliation**:
+A comparison of physically counted remaining stock with tracked stock on a
+common mass basis, with any resulting stock adjustment recorded explicitly.
+
+**Stock correction**:
+A linked correction of an identified mistaken stock record that retains the
+original entry and the explanation of its changed quantities or attribution.
+_Avoid_: treating found material of unknown origin as a correction.
 
 ### Sampling, characterization & durability
 
