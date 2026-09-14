@@ -1,9 +1,9 @@
-import { and, count, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
+import { and, count, eq, gte, lte } from "drizzle-orm";
+import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import {
   activeDeliveriesCondition,
   getDeliveryColumnAvailability,
@@ -14,7 +14,6 @@ export interface DeliveryStats {
   totalDeliveries: number;
   totalDeliveredWetMassKg: number;
   totalMassDryKg: number;
-  upcomingCount: number;
   deliveredCount: number;
 }
 
@@ -41,10 +40,10 @@ export async function getDeliveryStats(
   }
   if (filters?.creditBatchId) {
     conditions.push(
-      inCreditBatchLineage(
+      inDeliveryCreditBatchLineage(
         ctx,
         filters.creditBatchId,
-        sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+        deliveries.id,
       ),
     );
   }
@@ -98,7 +97,6 @@ export async function getDeliveryStats(
     totalDeliveries: Number(stats.totalDeliveries),
     totalDeliveredWetMassKg: stats.totalDeliveredWetMassKg || 0,
     totalMassDryKg: stats.totalMassDryKg || 0,
-    upcomingCount: statusCountMap.get("upcoming") ?? 0,
     deliveredCount: statusCountMap.get("delivered") ?? 0,
   };
 }

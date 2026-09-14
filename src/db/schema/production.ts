@@ -1,24 +1,25 @@
+import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import {
+  bigserial,
   check,
+  date,
   foreignKey,
   index,
+  integer,
   pgTable,
+  real,
   text,
   timestamp,
-  uuid,
-  real,
-  date,
-  integer,
   unique,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
-import { relations, sql, type InferSelectModel } from 'drizzle-orm';
-import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
-import { fraction, massKg, percent, ppm } from './numeric-families';
-import { facilities, reactors, storageLocations } from './facilities';
-import { operators } from './parties';
-import { feedstocks } from './feedstock';
 import { organizations } from './auth';
+import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
+import { facilities, reactors, storageLocations } from './facilities';
+import { feedstocks } from './feedstock';
+import { fraction, massKg, percent, ppm } from './numeric-families';
+import { operators } from './parties';
 
 // ============================================
 // Production Runs - Pyrolysis batches
@@ -46,6 +47,7 @@ export const productionRuns = pgTable(
     // NULL = the run has started but not ended yet (an "open" run). A closed
     // run occupies [startTime, endTime); an open run occupies [startTime, ∞).
     endTime: timestamp('end_time'),
+    stockPostingSequence: bigserial('stock_posting_sequence', { mode: 'bigint' }).notNull(),
     reactorId: uuid('reactor_id')
       .notNull()
       .references(() => reactors.id),

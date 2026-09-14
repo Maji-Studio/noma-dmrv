@@ -1,3 +1,37 @@
+import { db, type DbTransaction } from "@/db";
+import { numericAggregate } from "@/db/aggregate";
+import {
+  applications,
+  soilTemperatureMeasurements,
+  type Application,
+} from "@/db/schema/application";
+import { applicationOutputAllocations } from "@/db/schema/application-output-allocations";
+import { certifierProjects } from "@/db/schema/certification";
+import {
+  creditBatchApplications,
+  creditBatches,
+  creditBatchProductionRuns,
+} from "@/db/schema/credits";
+import { facilities, storageLocations } from "@/db/schema/facilities";
+import { deliveries, orders } from "@/db/schema/logistics";
+import { customerLocations, customers } from "@/db/schema/parties";
+import {
+  formulations,
+} from "@/db/schema/products";
+import { isPositiveApplicationFieldSize } from "@/lib/application-field-size";
+import type { OrgContext } from "@/lib/auth/server";
+import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
+import { KG_PER_TONNE, kgToTonnes, tonnesToKg } from "@/lib/calculations/unit-conversions";
+import {
+  applicationEvidenceStateSchema,
+  type ApplicationEvidenceMethod,
+  type ApplicationStatus,
+  type CreateApplicationData,
+  type UpdateApplicationData,
+} from "@/schemas/applications";
+import type { DeliveryStatus } from "@/schemas/deliveries";
+import type { GisBoundary } from "@/schemas/gis-boundary";
 import {
   and,
   count,
@@ -13,51 +47,18 @@ import {
   sql,
   sum,
 } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
-import { db, type DbTransaction } from "@/db";
-import { numericAggregate } from "@/db/aggregate";
-import {
-  applications,
-  soilTemperatureMeasurements,
-  type Application,
-} from "@/db/schema/application";
-import { certifierProjects } from "@/db/schema/certification";
-import { facilities, storageLocations } from "@/db/schema/facilities";
-import {
-  creditBatches,
-  creditBatchApplications,
-  creditBatchProductionRuns,
-} from "@/db/schema/credits";
-import { deliveries, orders } from "@/db/schema/logistics";
-import { customers, customerLocations } from "@/db/schema/parties";
-import {
-  biocharProductSourceAllocations,
-  biocharProducts,
-  formulations,
-} from "@/db/schema/products";
-import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
-import { isPositiveApplicationFieldSize } from "@/lib/application-field-size";
-import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
-import {
-  applicationEvidenceStateSchema,
-  type ApplicationEvidenceMethod,
-  type ApplicationStatus,
-  type CreateApplicationData,
-  type UpdateApplicationData,
-} from "@/schemas/applications";
-import type { GisBoundary } from "@/schemas/gis-boundary";
-import type { DeliveryStatus } from "@/schemas/deliveries";
+import { GRAMS_PER_KG, massGrams, splitGrams } from "./delivery-allocation-math";
+import { getApplicationAllocationShares, saveApplicationOutputAllocations, type ApplicationAllocationShare } from "./delivery-allocation-provenance";
 
-import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
+import { parseGisBoundary } from "@/schemas/gis-boundary";
+import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
-import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
+import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
-import { parseGisBoundary } from "@/schemas/gis-boundary";
+import { requireOrgScope } from "./utils";
 
 // ============================================
 // Application Data Access Layer
@@ -83,6 +84,7 @@ async function assertApplicationSlicesAreMutable(
   applicationId: string,
   mutation: "update" | "delete",
 ): Promise<void> {
+  requireOrgScope(ctx);
   const [ownedSlice] = await tx
     .select({ removalId: creditBatchApplications.removalId })
     .from(creditBatchApplications)
@@ -148,6 +150,7 @@ async function getDeliveryCapacityAndApplied(
   alreadyAppliedTons: number;
   alreadyAppliedDryTons: number;
 }> {
+  requireOrgScope(ctx);
   const deliveryQuery = txOrDb
     .select({
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
@@ -196,6 +199,7 @@ async function assertDeliveryAcceptsApplication(
   applicationDate: Date,
   txOrDb: DbTransaction | typeof db = db,
 ): Promise<void> {
+  requireOrgScope(ctx);
   const deliveryQuery = txOrDb
     .select({
       code: deliveries.code,
@@ -205,8 +209,7 @@ async function assertDeliveryAcceptsApplication(
     .from(deliveries)
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
-  // Lock the row inside a transaction (mirrors getDeliveryCapacityAndApplied)
-  // so a concurrent delivered→upcoming flip can't slip past the guard.
+  // Serialize applications with delivery corrections.
   const [delivery] = await (txOrDb === db
     ? deliveryQuery
     : deliveryQuery.for("update"));
@@ -245,6 +248,7 @@ async function getLinkedCreditBatches(
     status: string;
   }>
 > {
+  requireOrgScope(ctx);
   const rows = await tx
     .select({
       creditBatchId: creditBatches.id,
@@ -252,47 +256,8 @@ async function getLinkedCreditBatches(
       status: creditBatches.status,
     })
     .from(applications)
-    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
-    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
-    .innerJoin(
-      biocharProducts,
-      and(
-        sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      biocharProductSourceAllocations,
-      and(
-        eq(
-          biocharProductSourceAllocations.biocharProductId,
-          biocharProducts.id,
-        ),
-        eq(
-          biocharProductSourceAllocations.organizationId,
-          ctx.organizationId,
-        ),
-      ),
-    )
-    .innerJoin(
-      creditBatchProductionRuns,
-      and(
-        or(
-          eq(
-            creditBatchProductionRuns.productionRunId,
-            biocharProductSourceAllocations.productionRunId,
-          ),
-          and(
-            isNull(biocharProducts.sourceBiocharStorageLocationId),
-            eq(
-              creditBatchProductionRuns.productionRunId,
-              biocharProducts.linkedProductionRunId,
-            ),
-          ),
-        )!,
-        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-      ),
-    )
+    .innerJoin(applicationOutputAllocations, and(eq(applicationOutputAllocations.applicationId, applications.id), eq(applicationOutputAllocations.organizationId, ctx.organizationId)))
+    .innerJoin(creditBatchProductionRuns, and(eq(creditBatchProductionRuns.productionRunId, applicationOutputAllocations.productionRunId), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)))
     .innerJoin(
       creditBatches,
       and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)),
@@ -321,10 +286,17 @@ function resolveApplicationDryMassTons(
   });
   if (allocatedDryKg == null) {
     throw new SafeError(
-      "Tracked dry biochar is not available. Complete the linked product's biochar mass and moisture, then save the delivery again.",
+      "Tracked dry biochar is not available. Save the delivery source allocations before recording an application.",
     );
   }
-  return kgToTonnes(allocatedDryKg);
+  const totalWet = massGrams(input.deliveryWetKg!);
+  const totalDry = massGrams(input.deliveryDryBiocharKg!);
+  const appliedWet = massGrams(tonnesToKg(input.alreadyAppliedTons));
+  const requestedWet = massGrams(tonnesToKg(input.biocharAppliedTons));
+  const appliedDry = massGrams(tonnesToKg(input.alreadyAppliedDryTons));
+  if (appliedWet + requestedWet > totalWet) throw new SafeError("Application exceeds the saved delivery wet mass.");
+  const cumulativeDry = splitGrams(appliedWet + requestedWet, [totalDry, totalWet - totalDry])[0];
+  return kgToTonnes(Math.max(0, cumulativeDry - appliedDry) / GRAMS_PER_KG);
 }
 
 /**
@@ -336,6 +308,7 @@ function resolveApplicationDryMassTons(
  * delivery's override, falling back to the order's customer location.
  */
 export interface ApplicationListItem extends Application {
+  allocationShares: ApplicationAllocationShare[];
   deliveryCode: string;
   customerName: string | null;
   locationName: string | null;
@@ -381,10 +354,10 @@ export async function getApplications(
   }
   if (options?.creditBatchId) {
     conditions.push(
-      inCreditBatchLineage(
+      inDeliveryCreditBatchLineage(
         ctx,
         options.creditBatchId,
-        sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+        deliveries.id,
       ),
     );
   }
@@ -491,8 +464,9 @@ export async function getApplications(
     .limit(pageSize)
     .offset(offset);
 
+  const allocationShares = await getApplicationAllocationShares(ctx, items.map(item => item.id));
   return {
-    items,
+    items: items.map(item => ({ ...item, allocationShares: allocationShares.filter(share => share.applicationId === item.id) })),
     total,
     page,
     pageSize,
@@ -550,21 +524,11 @@ export async function getApplicationDeliveryOptions(
           eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       )
-      .leftJoin(
-        biocharProducts,
-        and(
-          eq(
-            biocharProducts.id,
-            sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-          ),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-        ),
-      )
-      .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+      .leftJoin(formulations, and(eq(formulations.id, sql`orders.formulation_id`), eq(formulations.organizationId, ctx.organizationId)))
       .leftJoin(
         storageLocations,
         and(
-          eq(biocharProducts.storageLocationId, storageLocations.id),
+          eq(deliveries.storageLocationId, storageLocations.id),
           eq(storageLocations.organizationId, ctx.organizationId),
         ),
       )
@@ -603,13 +567,13 @@ export async function getApplicationDeliveryOptions(
 /**
  * Get application by ID
  */
-export async function getApplicationById(ctx: OrgContext, id: string): Promise<Application | null> {
+export async function getApplicationById(ctx: OrgContext, id: string): Promise<(Application & { allocationShares: ApplicationAllocationShare[] }) | null> {
   requireOrgScope(ctx);
   const [application] = await db
     .select()
     .from(applications)
     .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
-  return application ?? null;
+  return application ? { ...application, allocationShares: await getApplicationAllocationShares(ctx, [application.id]) } : null;
 }
 
 /**
@@ -643,8 +607,7 @@ export async function createApplication(
       "application",
     );
 
-    // Before the capacity check — upcoming deliveries carry no delivered
-    // mass, so checkDeliveryCapacity skips and would silently accept them.
+    // Validate physical custody date before allocating the saved truck.
     await assertDeliveryAcceptsApplication(ctx, data.deliveryId, data.applicationDate, tx);
 
     const {
@@ -690,6 +653,8 @@ export async function createApplication(
       })
       .returning();
 
+    await saveApplicationOutputAllocations(ctx, tx, application);
+
     await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
       applicationIds: [application.id],
     });
@@ -718,6 +683,9 @@ export async function updateApplication(
     if (!existingApplication) {
       throw new SafeError("Application not found");
     }
+    await tx.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.id, [...new Set([existingApplication.deliveryId, data.deliveryId ?? existingApplication.deliveryId])].sort())))
+      .orderBy(deliveries.id).for("update");
 
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -836,6 +804,8 @@ export async function updateApplication(
       .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
       .returning();
 
+    if (shouldRecalculateDryMass) await saveApplicationOutputAllocations(ctx, tx, application);
+
     await reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
       applicationIds: [application.id],
     });
@@ -852,13 +822,16 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
 
   await db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ id: applications.id })
+      .select({ id: applications.id, deliveryId: applications.deliveryId })
       .from(applications)
-      .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
+      .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
+      .for("update");
 
     if (!existing) {
       throw new SafeError("Application not found");
     }
+    await tx.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.id, existing.deliveryId), eq(deliveries.organizationId, ctx.organizationId))).for("update");
 
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -887,6 +860,8 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
     await tx
       .delete(soilTemperatureMeasurements)
       .where(and(eq(soilTemperatureMeasurements.applicationId, id), eq(soilTemperatureMeasurements.organizationId, ctx.organizationId)));
+
+    await tx.delete(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.applicationId, id), eq(applicationOutputAllocations.organizationId, ctx.organizationId)));
 
     await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [

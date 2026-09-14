@@ -2,7 +2,7 @@
  * Order fulfillment status — DERIVED, never stored.
  *
  * Orders have no `status` column; the `delivery_status` enum is only
- * `upcoming` / `delivered`. An order's fulfillment is therefore computed from
+ * `delivered`. An order's fulfillment is therefore computed from
  * its deliveries. This module is the single source of truth for that derivation,
  * shared by the orders data-access layer (the SQL CASE used for filtering must
  * mirror `deriveOrderFulfillmentStatus`), the filter schema, and the list UI.

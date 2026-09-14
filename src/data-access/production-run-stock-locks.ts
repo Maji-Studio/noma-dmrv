@@ -36,9 +36,6 @@ export async function lockProductionRunUpdateStock(
 ): Promise<void> {
   const feedstockStockChanged =
     data.feedstockDraws !== undefined || data.facilityId !== undefined;
-  const biocharStockChanged =
-    data.biocharStorageLocationId !== undefined ||
-    data.biocharOutputKg !== undefined;
 
   await lockBinStocks(ctx, tx, [
     ...(feedstockStockChanged
@@ -48,12 +45,8 @@ export async function lockProductionRunUpdateStock(
             snapshot.feedstockStorageLocationIds),
         ]
       : []),
-    ...(biocharStockChanged
-      ? [
-          snapshot.biocharStorageLocationId,
-          data.biocharStorageLocationId ?? snapshot.biocharStorageLocationId,
-        ]
-      : []),
+    snapshot.biocharStorageLocationId,
+    data.biocharStorageLocationId ?? snapshot.biocharStorageLocationId,
   ]);
 }
 
@@ -65,9 +58,6 @@ export function assertProductionRunStockSnapshot(
 ): void {
   const feedstockStockChanged =
     data.feedstockDraws !== undefined || data.facilityId !== undefined;
-  const biocharStockChanged =
-    data.biocharStorageLocationId !== undefined ||
-    data.biocharOutputKg !== undefined;
 
   assertStockLockSnapshot(
     (!feedstockStockChanged ||
@@ -76,9 +66,7 @@ export function assertProductionRunStockSnapshot(
       snapshot.feedstockStorageLocationIds.every(
         (id, index) => id === locked.feedstockStorageLocationIds[index],
       )) &&
-      (!biocharStockChanged ||
-        snapshot.biocharStorageLocationId ===
-          locked.biocharStorageLocationId),
+      snapshot.biocharStorageLocationId === locked.biocharStorageLocationId,
   );
 }
 

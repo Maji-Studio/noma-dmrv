@@ -1,3 +1,5 @@
+import { insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
+import { outputOrderFixtureValues, insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
 /**
  * Carbon Viewer E2E (hermetic) — map-integration Phase 2.
  *
@@ -139,7 +141,7 @@ async function seedGeoLineage(
         })
         .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
 
-      await tx.insert(schema.orders).values({
+      await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: ids.order,
         code: codes.order,
@@ -150,9 +152,9 @@ async function seedGeoLineage(
         biocharProductId: seededData.biocharProduct.id,
         quantityKg: 220,
         packaging: "loose",
-      });
+      }));
 
-      await tx.insert(schema.deliveries).values({
+      await insertOutputDeliveryFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: ids.delivery,
         code: codes.delivery,
@@ -164,9 +166,9 @@ async function seedGeoLineage(
         massDryKg: 215,
         deliveredWetMassKg: 230,
         moistureContentPercent: 6.5,
-      });
+      }, row => row);
 
-      await tx.insert(schema.applications).values({
+      await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: ids.application,
         code: codes.application,
@@ -178,7 +180,7 @@ async function seedGeoLineage(
         status: "applied",
         gpsLatitude: withGeo ? FIELD_POINT.lat : null,
         gpsLongitude: withGeo ? FIELD_POINT.lng : null,
-      });
+      }, row => row);
 
       if (withGeo) {
         await tx.insert(schema.transportLegs).values([

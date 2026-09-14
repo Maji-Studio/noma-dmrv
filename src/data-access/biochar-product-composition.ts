@@ -8,25 +8,25 @@
  * to keep that file under the 1000-line cap.
  */
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import type { DbTransaction } from "@/db";
 import { db } from "@/db";
-import type { OrgContext } from "@/lib/auth/server";
 import {
+  feedstocks,
+  feedstockTypes,
   formulationIngredients,
   storageLocations,
-  feedstockTypes,
 } from "@/db/schema";
-import { SafeError } from "@/lib/errors";
-import { formatCount } from "@/lib/copy-utils";
-import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   deriveSourceBiocharMassKg,
   GRAMS_PER_KILOGRAM,
   toPersistedMassGrams,
 } from "@/lib/biochar-composition";
-import type { DbTransaction } from "@/db";
+import { formatCount } from "@/lib/copy-utils";
+import { SafeError } from "@/lib/errors";
+import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
+import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
 import { assertFeedstockWetDrawWithinStock } from "./feedstock-wet-stock";
-import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
 interface CompositionIngredientRef {
@@ -237,47 +237,9 @@ export function getCompositionIngredientDraws(
   );
 }
 
-const INGREDIENT_MOISTURE_BASIS_ERROR =
-  "This ingredient bin has no complete wet-mass and moisture basis. Complete its feedstock intake before using it in a blend.";
-
-function roundMassKg(value: number): number {
-  return toPersistedMassGrams(value) / GRAMS_PER_KILOGRAM;
-}
-
-function roundPercent(value: number): number {
-  return Math.round(value * PERCENT_PRECISION_FACTOR) /
-    PERCENT_PRECISION_FACTOR;
-}
-
-interface FeedstockMassBasis {
-  remainingWetKg: number;
-  estimatedRemainingDryKg: number | null;
-}
-
-function deriveIngredientMassSnapshot(
-  wetMassKg: number,
-  basis: FeedstockMassBasis | undefined,
-): { massDryKg: number; moistureContentPercent: number } {
-  if (
-    !basis ||
-    basis.remainingWetKg <= 0 ||
-    basis.estimatedRemainingDryKg === null ||
-    basis.estimatedRemainingDryKg <= 0 ||
-    basis.estimatedRemainingDryKg > basis.remainingWetKg
-  ) {
-    throw new SafeError(INGREDIENT_MOISTURE_BASIS_ERROR);
-  }
-
-  const dryRatio = basis.estimatedRemainingDryKg / basis.remainingWetKg;
-  return {
-    massDryKg: roundMassKg(wetMassKg * dryRatio),
-    moistureContentPercent: roundPercent((1 - dryRatio) * 100),
-  };
-}
-
 /**
  * Freeze each ingredient's dry-mass withdrawal from the selected bin's
- * current remaining wet/dry stock. `massKg` stays the operator's wet/as-received mass;
+ * oldest eligible intake or explicit operator moisture. `massKg` stays the operator's wet/as-received mass;
  * the derived fields are server-owned allocation facts persisted in JSONB.
  * Call only while the caller holds every ingredient bin's stock lock.
  */
@@ -286,7 +248,8 @@ export async function resolveCompositionIngredientMassBasis(
   tx: DbTransaction,
   composition: Record<string, unknown> | null | undefined,
   previousComposition?: Record<string, unknown> | null,
-  excludeProductId?: string,
+  _excludeProductId?: string,
+  physicalDate?: string,
 ): Promise<Record<string, unknown>> {
   requireOrgScope(ctx);
   const ingredients = getCompositionIngredientObjects(composition);
@@ -308,19 +271,11 @@ export async function resolveCompositionIngredientMassBasis(
     ),
   ];
 
-  const basisRows = await deriveLaneStock(ctx, tx, {
-    storageLocationIds,
-    excludeProductId,
-  });
-  const basisByStorageLocation = new Map(
-    basisRows.map((row) => [
-      row.storageLocationId,
-      {
-        remainingWetKg: row.feedstockStockWetKg,
-        estimatedRemainingDryKg: row.feedstockEstimatedDryKg,
-      },
-    ]),
-  );
+  const intakeRows = storageLocationIds.length ? await tx.select({ id: feedstocks.id, storageLocationId: feedstocks.storageLocationId, moisture: feedstocks.moistureContentPercent })
+    .from(feedstocks).where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.storageLocationId, storageLocationIds), isNull(feedstocks.archivedAt), physicalDate ? lte(feedstocks.deliveryDate, new Date(`${physicalDate}T23:59:59.999Z`)) : undefined))
+    .orderBy(asc(feedstocks.deliveryDate), asc(feedstocks.createdAt), asc(feedstocks.id)) : [];
+  const oldestByBin = new Map<string, typeof intakeRows[number]>();
+  for (const row of intakeRows) if (row.storageLocationId && !oldestByBin.has(row.storageLocationId)) oldestByBin.set(row.storageLocationId, row);
 
   return {
     ...(composition ?? {}),
@@ -350,22 +305,17 @@ export async function resolveCompositionIngredientMassBasis(
         typeof ingredient.storageLocationId === "string"
           ? ingredient.storageLocationId
           : null;
-      // No bin means no stock draw: the wet mass still counts toward the
-      // blend, but there is no basis to snapshot a dry allocation from.
-      if (!storageLocationId) {
-        return {
-          ...ingredient,
-          massDryKg: null,
-          moistureContentPercent: null,
-        };
+      const intake = storageLocationId ? oldestByBin.get(storageLocationId) : null;
+      const override = ingredient.moistureSource === 'operator_override' || !storageLocationId;
+      const moisture = override ? ingredient.moistureContentPercent : intake?.moisture;
+      if (typeof moisture !== 'number' || !Number.isFinite(moisture) || moisture < 0 || moisture > 100) {
+        throw new SafeError('Every positive ingredient requires moisture. Enter an override when intake moisture is missing.');
       }
-      return {
-        ...ingredient,
-        ...deriveIngredientMassSnapshot(
-          wetMassKg,
-          basisByStorageLocation.get(storageLocationId),
-        ),
-      };
+      return { ...ingredient, moistureContentPercent: moisture,
+        moistureSource: override ? 'operator_override' : 'oldest_intake',
+        moistureSourceSnapshot: override ? { kind: 'operator_override' } : { intakeId: intake!.id },
+        massDryKg: Math.round(wetMassKg * (1 - moisture / 100) * GRAMS_PER_KILOGRAM) / GRAMS_PER_KILOGRAM };
+
     }),
   };
 }

@@ -3,8 +3,8 @@
  * Zod schemas for biochar product forms, server actions, and filtering
  */
 
-import { z } from "zod";
 import { DRY_MASS_EXCEEDS_WET_MESSAGE } from "@/lib/calculations/mass-dry";
+import { z } from "zod";
 import {
   emptyToNull,
   massKgSchema,
@@ -68,6 +68,7 @@ const ingredientBinBaseSchema = z.object({
   massDryKg: massKgSchema("Ingredient dry mass must be 0 or greater")
     .optional()
     .nullable(),
+  moistureSource: z.enum(["oldest_intake", "operator_override"]).optional(),
   moistureContentPercent: storedPercentSchema()
     .min(MOISTURE_MIN)
     .max(MOISTURE_MAX)
@@ -152,7 +153,10 @@ export const biocharProductFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   // Optional: empty = pure-biochar product (no amendment blend)
-  formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
+  formulationId: z.uuid("Choose a valid formulation."),
+  placedAt: z.iso.date(),
+  idempotencyKey: z.string().min(1),
+  basisFingerprint: z.string().min(1),
 
   // No productionDate here: it is derived server-side from the oldest
   // production-run lot allocated from the selected source bin.
@@ -208,7 +212,8 @@ export const updateBiocharProductSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   facilityId: z.string().uuid().optional(),
-  formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  formulationId: z.uuid().optional(),
+  placedAt: z.iso.date().optional(),
   status: z.enum(biocharProductStatusValues).optional(),
   sourceBiocharStorageLocationId: z
     .string()

@@ -1,55 +1,56 @@
+import { getIngredientMoistureBasis } from '../ingredient-moisture-basis';
+import { getOutputBinStockView } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
 
-import {
-  ilike,
-  or,
-  eq,
-  and,
-  inArray,
-  isNull,
-  lt,
-  ne,
-  sql,
-  type SQL,
-} from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import type { EntityOption } from "@/components/forms/entity-select/types";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { db } from "@/db";
-import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
-  storageLocations,
-  feedstocks,
-  feedstockTypes,
-  productionRuns,
-  productionRunFeedstockDraws,
+  binMovements,
   biocharProducts,
   biocharProductSourceAllocations,
-  binMovements,
-  deliveries,
+  feedstocks,
+  feedstockTypes,
   formulations,
-  orders,
+  outputStockAllocations,
+  productionRunFeedstockDraws,
+  productionRuns,
+  storageLocations
 } from "@/db/schema";
-import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
-import {
-  formatStorageLocationType,
-  type StorageLocationType,
-} from "@/schemas/storage-locations";
-import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatWetDryMass } from "@/lib/mass-moisture";
-import { requireOrgScope } from "../utils";
 import {
   CANCELLED_PRODUCTION_RUN_STATUS,
   COMPLETED_PRODUCTION_RUN_STATUS,
 } from "@/lib/production-runs/lifecycle";
 import {
-  deriveLaneStock,
-  type LaneStockDerivation,
-} from "../lane-stock-derivation";
+  formatStorageLocationType,
+  type StorageLocationType,
+} from "@/schemas/storage-locations";
+import {
+  and,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   productDryBiocharKgSql,
   productWetMassKgSql,
   sourceBiocharMassKgSql,
 } from "../biochar-product-source-mass";
+import {
+  deriveLaneStock,
+  type LaneStockDerivation,
+} from "../lane-stock-derivation";
+import { requireOrgScope } from "../utils";
 
 export function formatStorageLocationSubtitle(
   type: string,
@@ -420,45 +421,13 @@ function buildInventoryAggregates(
   .groupBy(biocharProducts.storageLocationId)
   .as("product_inventory_agg");
 
-  const productDeliveredAggregate = executor
-  .select({
-    storageLocationId: biocharProducts.storageLocationId,
-    totalDeliveredWetKg: sumNumeric(deliveries.deliveredWetMassKg).as(
-      "total_delivered_wet_kg",
-    ),
-    totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
-      "total_delivered_dry_kg",
-    ),
-    unresolvedDeliveredDryCount: countRows(
-      and(
-        sql`${deliveries.deliveredWetMassKg} > 0`,
-        isNull(deliveries.massDryKg),
-      ),
-    ).as("unresolved_delivered_dry_count"),
-  })
-  .from(deliveries)
-  .innerJoin(
-    orders,
-    and(
-      eq(deliveries.orderId, orders.id),
-      eq(orders.organizationId, ctx.organizationId),
-    ),
-  )
-  .innerJoin(
-    biocharProducts,
-    and(
-      sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-      eq(biocharProducts.organizationId, ctx.organizationId),
-    ),
-  )
-  .where(
-    and(
-      eq(deliveries.status, "delivered"),
-      eq(deliveries.organizationId, ctx.organizationId),
-    ),
-  )
-  .groupBy(biocharProducts.storageLocationId)
-  .as("product_delivered_agg");
+  const productDeliveredAggregate = executor.select({
+    storageLocationId: outputStockAllocations.sourceStorageLocationId,
+    totalDeliveredWetKg: sumNumeric(outputStockAllocations.wetMassKg).as('total_delivered_wet_kg'),
+    totalDeliveredDryKg: sumNumeric(outputStockAllocations.dryMassKg).as('total_delivered_dry_kg'),
+    unresolvedDeliveredDryCount: sql<number>`0`.mapWith(Number).as('unresolved_delivered_dry_count'),
+  }).from(outputStockAllocations).where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), sql`${outputStockAllocations.biocharProductId} is not null`))
+    .groupBy(outputStockAllocations.sourceStorageLocationId).as('product_delivered_agg');
 
   return {
     feedstockInventoryAggregate,
@@ -821,15 +790,19 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     laneStocks.map((stock) => [stock.storageLocationId, stock]),
   );
 
-  return results.map((result) =>
-    toStorageLocationEntityOption(result, laneStockById.get(result.id)),
-  );
+  return Promise.all(results.map(async result => {
+    const option = toStorageLocationEntityOption(result, laneStockById.get(result.id));
+    if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id))?.moisturePercent ?? null } };
+    const stock = await getOutputBinStockView(ctx, result.id);
+    return { ...option, remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg }, subtitle: `Estimated wet: ${stock.estimatedWetMassKg.toFixed(3)} kg · Dry biochar: ${stock.dryMassKg.toFixed(3)} kg` };
+  }));
 }
 
 export async function getStorageLocationById(
   ctx: OrgContext,
   id: string,
   executor: StorageLocationReadExecutor = db,
+  physicalDate?: string,
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
 
@@ -989,5 +962,8 @@ export async function getStorageLocationById(
   const [stock] = await deriveLaneStock(ctx, executor, {
     storageLocationIds: [result.id],
   });
-  return toStorageLocationEntityOption(result, stock);
+  const option = toStorageLocationEntityOption(result, stock);
+  if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id, physicalDate, executor))?.moisturePercent ?? null } };
+  const output = await getOutputBinStockView(ctx, result.id, executor);
+  return { ...option, remainingMass: { wetKg: output.estimatedWetMassKg, dryKg: output.dryMassKg }, subtitle: `Estimated wet: ${output.estimatedWetMassKg.toFixed(3)} kg · Dry biochar: ${output.dryMassKg.toFixed(3)} kg` };
 }

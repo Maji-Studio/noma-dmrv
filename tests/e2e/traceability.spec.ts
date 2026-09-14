@@ -1,3 +1,5 @@
+import { insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
+import { outputOrderFixtureValues, insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -81,7 +83,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         })
         .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
 
-      await tx.insert(schema.orders).values({
+      await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: ids.order,
         code: codes.order,
@@ -92,9 +94,9 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         biocharProductId: seededData.biocharProduct.id,
         quantityKg: 220,
         packaging: "loose",
-      });
+      }));
 
-      await tx.insert(schema.deliveries).values({
+      await insertOutputDeliveryFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: ids.delivery,
         code: codes.delivery,
@@ -106,9 +108,9 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         massDryKg: 215,
         deliveredWetMassKg: 230,
         moistureContentPercent: 6.5,
-      });
+      }, row => row);
 
-      await tx.insert(schema.applications).values({
+      await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: ids.application,
         code: codes.application,
@@ -118,7 +120,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         biocharAppliedDryTons: 0.2,
         fieldIdentifier,
         status: "applied",
-      });
+      }, row => row);
     });
 
     return {
@@ -325,7 +327,7 @@ async function seedBatchChain(seededData: SeededChainData) {
         },
       ];
       for (const member of memberChains) {
-        await tx.insert(schema.orders).values({
+        await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
           id: member.orderId,
           code: `E2E-BOR-${member.day}-${suffix}`,
@@ -336,8 +338,8 @@ async function seedBatchChain(seededData: SeededChainData) {
           biocharProductId: seededData.biocharProduct.id,
           quantityKg: 150,
           packaging: "loose",
-        });
-        await tx.insert(schema.deliveries).values({
+        }));
+        await insertOutputDeliveryFixture(tx, {
         organizationId: DEC_ORG_ID,
           id: member.deliveryId,
           code: `E2E-BDL-${member.day}-${suffix}`,
@@ -349,8 +351,8 @@ async function seedBatchChain(seededData: SeededChainData) {
           massDryKg: 125,
           deliveredWetMassKg: 134,
           moistureContentPercent: 6.5,
-        });
-        await tx.insert(schema.applications).values({
+        }, row => row);
+        await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
           id: member.applicationId,
           code: member.applicationCode,
@@ -360,7 +362,7 @@ async function seedBatchChain(seededData: SeededChainData) {
           biocharAppliedDryTons: member.appliedDryTons,
           fieldIdentifier: `Field ${member.day}-${suffix}`,
           status: "applied",
-        });
+        }, row => row);
       }
 
       await tx.insert(schema.productionProcesses).values({

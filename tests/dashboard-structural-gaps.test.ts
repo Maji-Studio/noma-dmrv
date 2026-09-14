@@ -1,3 +1,4 @@
+import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * DB-backed regression coverage for the dashboard's structural certification
  * gaps. The fixture exercises canonical supplier-origin GPS, all three parent
@@ -380,12 +381,12 @@ beforeAll(async () => {
 
     const [activeBiocharProduct] = await tx
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `BP-DG-${tag}`,
         facilityId: gapFacility.id,
         linkedProductionRunId: activeRun.id,
-      })
+      }))
       .returning({ id: biocharProducts.id });
 
     const transportRows = await tx
@@ -510,9 +511,7 @@ afterAll(async () => {
   const { ids } = fixture;
   await db.delete(transportLegs).where(inArray(transportLegs.id, ids.transportLegs));
   await db.delete(samples).where(inArray(samples.id, ids.samples));
-  await db
-    .delete(biocharProducts)
-    .where(inArray(biocharProducts.id, ids.biocharProducts));
+  await deleteOutputProductFixtures(db, inArray(biocharProducts.id, ids.biocharProducts));
   await db.delete(creditBatches).where(inArray(creditBatches.id, ids.creditBatches));
   await db
     .delete(productionRuns)
@@ -529,7 +528,7 @@ afterAll(async () => {
   await db
     .delete(feedstockTypes)
     .where(inArray(feedstockTypes.id, ids.feedstockTypes));
-  await db.delete(facilities).where(inArray(facilities.id, ids.facilities));
+  await deleteOutputFacilityFixtures(db, inArray(facilities.id, ids.facilities));
   await db.delete(organizations).where(eq(organizations.id, fixture.foreignOrgId));
 });
 

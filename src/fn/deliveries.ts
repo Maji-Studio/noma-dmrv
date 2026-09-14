@@ -5,8 +5,6 @@
  * Server-side functions for delivery CRUD operations
  */
 
-import { z } from "zod";
-import { type Delivery, deliveries as deliveriesTable } from "@/db/schema";
 import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
@@ -17,23 +15,25 @@ import {
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
   updateDelivery,
-  type PaginatedDeliveries,
   type DeliveryDetail,
+  type PaginatedDeliveries,
 } from "@/data-access/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
 } from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
+import { deliveries as deliveriesTable, type Delivery } from "@/db/schema";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createDeliverySchema,
   deleteDeliverySchema,
+  deliveryFilterSchema,
   resolveDeliveryDistanceSource,
   updateDeliverySchema,
-  deliveryFilterSchema,
 } from "@/schemas/deliveries";
 import type { ActionResult } from "@/types/actions";
+import { z } from "zod";
 import {
   formatZodActionError,
   toLoggedActionError,
@@ -178,7 +178,9 @@ export async function createDeliveryFn(
           orderId: validated.orderId,
           facilityId: validated.facilityId,
           deliveryDate: validated.deliveryDate,
-          biocharProductId: validated.biocharProductId ?? null,
+          storageLocationId: validated.storageLocationId,
+          idempotencyKey: validated.idempotencyKey,
+          basisFingerprint: validated.basisFingerprint,
           driverId: validated.driverId ?? null,
           vehicleId: validated.vehicleId ?? null,
           status: validated.status,
@@ -235,7 +237,7 @@ export async function updateDeliveryFn(
       orderId: validated.orderId,
       facilityId: validated.facilityId,
       deliveryDate: validated.deliveryDate,
-      biocharProductId: validated.biocharProductId,
+      storageLocationId: validated.storageLocationId,
       driverId: validated.driverId,
       vehicleId: validated.vehicleId,
       status: validated.status,

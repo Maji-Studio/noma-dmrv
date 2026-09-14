@@ -1,3 +1,4 @@
+import { outputOrderFixtureValues } from "../helpers/output-contract-fixtures";
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { test, expect } from "./fixtures/auth-fixtures";
@@ -58,7 +59,7 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
           endDate: CROSS_YEAR_END,
         },
       ]);
-      await tx.insert(orders).values({
+      await tx.insert(orders).values(await outputOrderFixtureValues(tx, {
         id: orderId,
         organizationId: DEC_ORG_ID,
         code: orderCode,
@@ -69,7 +70,7 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
         biocharProductId: seededData.biocharProduct.id,
         quantityKg: 100,
         packaging: "loose",
-      });
+      }));
       await tx.insert(samples).values({
         id: sampleId,
         organizationId: DEC_ORG_ID,

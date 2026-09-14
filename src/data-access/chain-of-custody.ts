@@ -2,12 +2,10 @@
  * Chain of custody data access
  * Resolves the upstream lineage for a single application back to its feedstocks.
  */
-import { and, asc, eq, inArray } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
+  applicationOutputAllocations,
   applications,
-  biocharProductSourceAllocations,
   biocharProducts,
   deliveries,
   facilities,
@@ -22,14 +20,16 @@ import {
   storageLocations,
   suppliers,
 } from "@/db/schema";
-import { requireOrgScope } from "./utils";
-import { productionRunDateExpr } from "./production-runs/date-expr";
+import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import type { GisBoundary } from "@/lib/geojson/types";
+import { and, eq, inArray } from "drizzle-orm";
 import type {
   BatchLineageApplicationFact,
   BatchLineageRunFact,
 } from "./credit-batch-accounting";
-import type { GisBoundary } from "@/lib/geojson/types";
+import { productionRunDateExpr } from "./production-runs/date-expr";
+import { requireOrgScope } from "./utils";
 
 const CHAIN_HREFS = {
   application: "/applications",
@@ -154,6 +154,7 @@ export interface ChainOfCustodyData {
   delivery: ChainDeliveryLineage;
   order: ChainOrderLineage | null;
   biocharProduct: ChainBiocharProductLineage | null;
+  products?: Array<{ product: ChainBiocharProductLineage; sources: ChainSourceLineage[]; allocatedWetMassKg: number; allocatedDryMassKg: number }>;
   productionRun: ChainProductionRunLineage | null;
   reactor: ChainReactorLineage | null;
   feedstocks: ChainFeedstockLineage[];
@@ -266,12 +267,10 @@ export async function getChainOfCustodyData(
       deliveryDate: deliveries.deliveryDate,
       deliveryWetMassKg: deliveries.deliveredWetMassKg,
       deliveryMassDryKg: deliveries.massDryKg,
-      deliveryBiocharProductId: deliveries.biocharProductId,
       orderId: orders.id,
       orderCode: orders.code,
       orderDate: orders.orderDate,
       orderQuantityKg: orders.quantityKg,
-      orderBiocharProductId: orders.biocharProductId,
       facilityId: facilities.id,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -288,29 +287,31 @@ export async function getChainOfCustodyData(
   }
 
   const warnings: string[] = [];
-  const biocharProductId =
-    applicationRow.deliveryBiocharProductId ?? applicationRow.orderBiocharProductId;
-
-  const biocharProduct = biocharProductId
-    ? await getBiocharProductLineage(ctx, biocharProductId)
-    : null;
-
-  if (!biocharProductId) {
-    warnings.push(
-      "This application is not linked to a biochar product through its delivery or order."
-    );
+  const allocations = await db.select().from(applicationOutputAllocations)
+    .where(and(eq(applicationOutputAllocations.applicationId, applicationId), eq(applicationOutputAllocations.organizationId, ctx.organizationId)));
+  const products: NonNullable<ChainOfCustodyData["products"]> = [];
+  for (const productId of [...new Set(allocations.map(a => a.biocharProductId))].sort()) {
+    const product = await getBiocharProductLineage(ctx, productId);
+    if (!product) throw new SafeError("Saved application product could not be loaded.");
+    const shares = allocations.filter(a => a.biocharProductId === productId);
+    const sources: ChainSourceLineage[] = [];
+    for (const share of shares) {
+      const [productionRun, reactor, feedstocks] = await Promise.all([
+        getProductionRunLineage(ctx, share.productionRunId),
+        getReactorLineageForRun(ctx, share.productionRunId),
+        getFeedstocksForRun(ctx, share.productionRunId),
+      ]);
+      if (!productionRun) throw new SafeError("Saved application source run could not be loaded.");
+      sources.push({ productionRun, reactor, feedstocks, allocatedWetMassKg: Number(share.wetMassKg), allocatedDryMassKg: Number(share.dryMassKg) });
+    }
+    products.push({ product: { ...product, linkedProductionRunId: sources.length === 1 ? sources[0].productionRun.id : null }, sources,
+      allocatedWetMassKg: shares.reduce((n, a) => n + Number(a.wetMassKg), 0),
+      allocatedDryMassKg: shares.reduce((n, a) => n + Number(a.dryMassKg), 0) });
   }
-
-  const sources = biocharProduct
-    ? await getProductSourceLineages(ctx, biocharProduct)
-    : [];
+  const biocharProduct = products.length === 1 ? products[0].product : null;
+  const sources = products.flatMap(p => p.sources);
   const singleSource = sources.length === 1 ? sources[0] : null;
-
-  if (biocharProduct && sources.length === 0) {
-    warnings.push(
-      "The linked biochar product has no recorded source allocation, so feedstock rollback stops at product level."
-    );
-  }
+  if (!products.length) warnings.push("This application has no saved delivery source allocations.");
 
   for (const source of sources) {
     if (source.feedstocks.length === 0) {
@@ -367,6 +368,7 @@ export async function getChainOfCustodyData(
         }
       : null,
     biocharProduct,
+    products,
     productionRun: singleSource?.productionRun ?? null,
     reactor: singleSource?.reactor ?? null,
     feedstocks: feedstocksForSources,
@@ -375,127 +377,11 @@ export async function getChainOfCustodyData(
   };
 }
 
-async function getProductSourceLineages(
-  ctx: OrgContext,
-  product: ChainBiocharProductLineage,
-): Promise<ChainSourceLineage[]> {
-  const allocationRows = await db
-    .select({
-      allocatedWetMassKg:
-        biocharProductSourceAllocations.allocatedWetMassKg,
-      allocatedDryMassKg:
-        biocharProductSourceAllocations.allocatedDryMassKg,
-      productionRunId: productionRuns.id,
-      productionRunCode: productionRuns.code,
-      productionRunStatus: productionRuns.status,
-      productionRunDate: productionRunDateExpr(),
-      biocharStorageName: storageLocations.name,
-      biocharOutputKg: productionRuns.biocharOutputKg,
-      biocharDryMassKg: productionRuns.biocharDryMassKg,
-      feedstockMassDryKg: productionRuns.feedstockMassDryKg,
-      reactorId: reactors.id,
-      reactorCode: reactors.code,
-      reactorIdentifier: reactors.identifier,
-      reactorType: reactors.reactorType,
-    })
-    .from(biocharProductSourceAllocations)
-    .innerJoin(
-      productionRuns,
-      and(
-        eq(
-          biocharProductSourceAllocations.productionRunId,
-          productionRuns.id,
-        ),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      reactors,
-      and(
-        eq(productionRuns.reactorId, reactors.id),
-        eq(reactors.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      storageLocations,
-      and(
-        eq(
-          productionRuns.biocharStorageLocationId,
-          storageLocations.id,
-        ),
-        eq(storageLocations.organizationId, ctx.organizationId),
-      ),
-    )
-    .where(
-      and(
-        eq(
-          biocharProductSourceAllocations.biocharProductId,
-          product.id,
-        ),
-        eq(
-          biocharProductSourceAllocations.organizationId,
-          ctx.organizationId,
-        ),
-      ),
-    )
-    .orderBy(
-      asc(productionRunDateExpr()),
-      asc(productionRuns.id),
-    );
-
-  if (allocationRows.length === 0) {
-    if (!product.linkedProductionRunId) return [];
-    const [productionRun, reactor, feedstocksForRun] = await Promise.all([
-      getProductionRunLineage(ctx, product.linkedProductionRunId),
-      getReactorLineageForRun(ctx, product.linkedProductionRunId),
-      getFeedstocksForRun(ctx, product.linkedProductionRunId),
-    ]);
-    return productionRun
-      ? [{
-          productionRun,
-          reactor,
-          feedstocks: feedstocksForRun,
-          allocatedWetMassKg: null,
-          allocatedDryMassKg: null,
-        }]
-      : [];
-  }
-
-  const feedstocksByRun = await getFeedstocksForRuns(
-    ctx,
-    allocationRows.map((row) => row.productionRunId),
-  );
-  return allocationRows.map((row) => ({
-    productionRun: {
-      id: row.productionRunId,
-      code: row.productionRunCode,
-      status: row.productionRunStatus,
-      date: row.productionRunDate,
-      biocharStorageName: row.biocharStorageName,
-      biocharOutputKg: row.biocharOutputKg,
-      biocharDryMassKg: row.biocharDryMassKg,
-      feedstockMassDryKg: row.feedstockMassDryKg,
-      href: CHAIN_HREFS.productionRun,
-    },
-    reactor: row.reactorId
-      ? {
-          id: row.reactorId,
-          code: row.reactorCode!,
-          identifier: row.reactorIdentifier!,
-          reactorType: row.reactorType,
-          href: CHAIN_HREFS.reactor,
-        }
-      : null,
-    feedstocks: feedstocksByRun.get(row.productionRunId) ?? [],
-    allocatedWetMassKg: row.allocatedWetMassKg,
-    allocatedDryMassKg: row.allocatedDryMassKg,
-  }));
-}
-
 async function getBiocharProductLineage(
   ctx: OrgContext,
   biocharProductId: string
 ): Promise<ChainBiocharProductLineage | null> {
+  requireOrgScope(ctx);
   const [product] = await db
     .select({
       id: biocharProducts.id,
@@ -526,6 +412,7 @@ async function getProductionRunLineage(
   ctx: OrgContext,
   productionRunId: string
 ): Promise<ChainProductionRunLineage | null> {
+  requireOrgScope(ctx);
   const [productionRun] = await db
     .select({
       id: productionRuns.id,
@@ -562,6 +449,7 @@ async function getReactorLineageForRun(
   ctx: OrgContext,
   productionRunId: string
 ): Promise<ChainReactorLineage | null> {
+  requireOrgScope(ctx);
   const [reactor] = await db
     .select({
       id: reactors.id,
@@ -588,6 +476,7 @@ async function getFeedstocksForRun(
   ctx: OrgContext,
   productionRunId: string
 ): Promise<ChainFeedstockLineage[]> {
+  requireOrgScope(ctx);
   return (
     await getFeedstocksForRuns(ctx, [productionRunId])
   ).get(productionRunId) ?? [];
@@ -597,6 +486,7 @@ async function getFeedstocksForRuns(
   ctx: OrgContext,
   productionRunIds: string[],
 ): Promise<Map<string, ChainFeedstockLineage[]>> {
+  requireOrgScope(ctx);
   if (productionRunIds.length === 0) return new Map();
   const rows = await db
     .select({

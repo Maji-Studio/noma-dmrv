@@ -12,12 +12,6 @@
  * by the shared DAG node-id convention.
  */
 
-import {
-  FileIcon,
-  FlaskIcon,
-  PathIcon,
-  SealCheckIcon,
-} from "@phosphor-icons/react/dist/ssr";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
   TrailNodeEvidence,
@@ -27,8 +21,14 @@ import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
-import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import {
+  FileIcon,
+  FlaskIcon,
+  PathIcon,
+  SealCheckIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   LINEAGE_NODE_STYLES,
   type LineageNodeKind,
@@ -77,7 +77,7 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
     });
   }
 
-  for (const source of sources) {
+  for (const source of new Map(sources.map(source => [source.productionRun.id, source])).values()) {
     const productionRun = source.productionRun;
     steps.push({
       nodeId: `production-run:${productionRun.id}`,
@@ -95,20 +95,19 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
     });
   }
 
-  if (chain.biocharProduct) {
+  for (const product of chain.products?.map(p => p.product) ?? (chain.biocharProduct ? [chain.biocharProduct] : [])) {
+    const allocated = chain.products?.find(branch => branch.product.id === product.id);
+    const productSources = allocated?.sources ?? sources;
     steps.push({
-      nodeId: `biochar-product:${chain.biocharProduct.id}`,
+      nodeId: `biochar-product:${product.id}`,
       kind: "biocharProduct",
       code:
-        chain.biocharProduct.formulationName ?? "Pure biochar",
-      status: chain.biocharProduct.status,
-      date: chain.biocharProduct.productionDate,
+        `${product.code} · ${product.formulationName ?? "Pure biochar"}`,
+      status: product.status,
+      date: product.productionDate,
       massLine: formatWetDryMass({
-        wetKg: chain.biocharProduct.massKg,
-        dryKg: splitWetMass(
-          chain.biocharProduct.massKg,
-          chain.biocharProduct.moistureContentPercent,
-        )?.dryKg,
+        wetKg: productSources.reduce((n, source) => n + (source.allocatedWetMassKg ?? 0), 0),
+        dryKg: productSources.reduce((n, source) => n + (source.allocatedDryMassKg ?? 0), 0),
       }),
       contextLine: null,
     });
@@ -123,10 +122,7 @@ export function buildTrailSteps(chain: ChainOfCustodyData): TrailStepDescriptor[
       date: chain.order.orderDate,
       massLine: formatWetDryMass({
         wetKg: chain.order.quantityKg,
-        dryKg: splitWetMass(
-          chain.order.quantityKg,
-          chain.biocharProduct?.moistureContentPercent,
-        )?.dryKg,
+        dryKg: null,
       }),
       contextLine: null,
     });

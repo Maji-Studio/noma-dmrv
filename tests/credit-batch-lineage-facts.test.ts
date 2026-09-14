@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -49,22 +52,22 @@ describe("credit batch accounting", () => {
     const runs = await db.insert(productionRuns).values([1, 2].map((n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, reactorId: reactor.id, code: `LF-PR${n}-${tag}`, startTime: new Date(`2026-07-0${n}T10:00:00Z`), feedstockMassDryKg: 2_400 * n, biocharDryMassKg: 100 * n }))).returning();
     const stocks = await db.insert(feedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, code: `LF-FS${n}-${tag}`, status: "complete" as const, massDryKg: 200, eligibilityStatus: "eligible" as const }))).returning();
     await db.insert(productionRunFeedstocks).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, productionRunId: run.id, feedstockId: stocks[n].id, wetMassUsedKg: 100 })));
-    const products = await db.insert(biocharProducts).values(runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BP${n}-${tag}`, linkedProductionRunId: run.id, massKg: 100 }))).returning();
-    const [multiRunProduct] = await db.insert(biocharProducts).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BPM-${tag}`, sourceBiocharStorageLocationId: sourceBin.id, linkedProductionRunId: null, massKg: 400 }).returning();
+    const products = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, runs.map((run, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BP${n}-${tag}`, linkedProductionRunId: run.id, massKg: 100 })))).returning();
+    const [multiRunProduct] = await db.insert(biocharProducts).values(await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, code: `LF-BPM-${tag}`, sourceBiocharStorageLocationId: sourceBin.id, linkedProductionRunId: null, massKg: 400 })).returning();
     const allocationRows = await db.insert(biocharProductSourceAllocations).values([
       { organizationId: TEST_ORG_ID, biocharProductId: multiRunProduct.id, productionRunId: runs[0].id, sourceStorageLocationId: sourceBin.id, allocatedWetMassKg: 50, allocatedDryMassKg: 40 },
       { organizationId: TEST_ORG_ID, biocharProductId: multiRunProduct.id, productionRunId: runs[1].id, sourceStorageLocationId: sourceBin.id, allocatedWetMassKg: 150, allocatedDryMassKg: 60 },
     ]).returning();
     const [customer] = await db.insert(customers).values({ organizationId: TEST_ORG_ID, code: `LF-C-${tag}`, name: `Lineage ${tag}` }).returning();
-    const ordersRows = await db.insert(orders).values(products.map((product, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: product.id, code: `LF-O${n}-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 100, packaging: "loose" as const }))).returning();
-    const deliveryRows = await db.insert(deliveries).values([
-      { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 10 },
-      { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, code: `LF-D2-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 20 },
-    ]).returning();
-    const appRows = await db.insert(applications).values(deliveryRows.map((delivery, n) => ({ organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, applicationDate: new Date(`2026-08-1${n}T00:00:00Z`), biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 }))).returning();
-    const [multiRunOrder] = await db.insert(orders).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: multiRunProduct.id, code: `LF-OM-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 400, packaging: "loose" }).returning();
-    const [multiRunDelivery] = await db.insert(deliveries).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: multiRunOrder.id, biocharProductId: multiRunProduct.id, code: `LF-DM-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 400, massDryKg: 200 }).returning();
-    const [multiRunApplication] = await db.insert(applications).values({ organizationId: TEST_ORG_ID, deliveryId: multiRunDelivery.id, code: `LF-AM-${tag}`, applicationDate: new Date("2026-08-12T00:00:00Z"), biocharAppliedTons: 4, biocharAppliedDryTons: 2 }).returning();
+    const ordersRows = await db.insert(orders).values(await outputOrderFixtureValues(db, products.map((product, n) => ({ organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: product.id, code: `LF-O${n}-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 100, packaging: "loose" as const })))).returning();
+    const deliveryRows = await insertOutputDeliveryFixture(db, [
+      { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, biocharProductId: products[0].id, code: `LF-D1-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 1_000, massDryKg: 500 },
+      { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: ordersRows[1].id, code: `LF-D2-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 2_000, massDryKg: 1_500 },
+    ], row => row);
+    const appRows = await insertOutputApplicationFixture(db, deliveryRows.map((delivery, n) => ({ organizationId: TEST_ORG_ID, deliveryId: delivery.id, code: `LF-A${n}-${tag}`, applicationDate: new Date(`2026-08-1${n}T00:00:00Z`), biocharAppliedTons: n + 1, biocharAppliedDryTons: n + 0.5 })), row => row);
+    const [multiRunOrder] = await db.insert(orders).values(await outputOrderFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, customerId: customer.id, biocharProductId: multiRunProduct.id, code: `LF-OM-${tag}`, orderDate: new Date("2026-07-03"), quantityKg: 400, packaging: "loose" })).returning();
+    const [multiRunDelivery] = await insertOutputDeliveryFixture(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, orderId: multiRunOrder.id, biocharProductId: multiRunProduct.id, code: `LF-DM-${tag}`, deliveryDate: new Date("2026-07-04"), deliveredWetMassKg: 4_000, massDryKg: 2_000 }, row => row);
+    const [multiRunApplication] = await insertOutputApplicationFixture(db, { organizationId: TEST_ORG_ID, deliveryId: multiRunDelivery.id, code: `LF-AM-${tag}`, applicationDate: new Date("2026-08-12T00:00:00Z"), biocharAppliedTons: 4, biocharAppliedDryTons: 2 }, row => row);
     const [batch] = await db.insert(creditBatches).values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id, productionProcessId: process.id, code: `LF-CB-${tag}`, startDate: "2026-07-01", endDate: "2026-07-31" }).returning();
     await db.insert(creditBatchProductionRuns).values(runs.map((run) => ({ organizationId: TEST_ORG_ID, creditBatchId: batch.id, productionRunId: run.id })));
     await db.insert(creditBatchApplications).values([
@@ -110,8 +113,8 @@ describe("credit batch accounting", () => {
           .sort((left, right) => left.runId.localeCompare(right.runId)),
       ).toEqual(
         [
-          { runId: runs[0].id, wetTons: 1, dryTons: 0.8 },
-          { runId: runs[1].id, wetTons: 3, dryTons: 1.2 },
+          { runId: runs[0].id, wetTons: 1.6, dryTons: 0.8 },
+          { runId: runs[1].id, wetTons: 2.4, dryTons: 1.2 },
         ].sort((left, right) => left.runId.localeCompare(right.runId)),
       );
       expect(detail?.applicationIds.sort()).toEqual(facts.applicationIds.sort());
@@ -178,17 +181,14 @@ describe("credit batch accounting", () => {
           removalId: firstRemovalId,
         })
       )[batch.id].lineageFacts;
-      const [laterApplication] = await db
-        .insert(applications)
-        .values({
+      const [laterApplication] = await insertOutputApplicationFixture(db, {
           organizationId: TEST_ORG_ID,
           deliveryId: deliveryRows[0].id,
           code: `LF-A-LATER-${tag}`,
           applicationDate: new Date("2026-06-20T00:00:00Z"),
           biocharAppliedTons: 0.25,
           biocharAppliedDryTons: 0.125,
-        })
-        .returning();
+        }, row => row);
       applicationIds.push(laterApplication.id);
       await db.transaction((tx) =>
         reconcileUnassignedCreditBatchApplicationSlices(ctx, tx, {
@@ -268,11 +268,11 @@ describe("credit batch accounting", () => {
       await db.delete(certifierRemovals).where(inArray(certifierRemovals.id, removalIds));
       await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.creditBatchId, batch.id));
       await db.delete(creditBatches).where(eq(creditBatches.id, batch.id));
-      await db.delete(applications).where(inArray(applications.id, applicationIds));
-      await db.delete(deliveries).where(inArray(deliveries.id, [...deliveryRows.map((row) => row.id), multiRunDelivery.id]));
+      await deleteOutputApplicationFixtures(db, inArray(applications.id, applicationIds));
+      await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [...deliveryRows.map((row) => row.id), multiRunDelivery.id]));
       await db.delete(orders).where(inArray(orders.id, [...ordersRows.map((row) => row.id), multiRunOrder.id]));
       await db.delete(biocharProductSourceAllocations).where(inArray(biocharProductSourceAllocations.id, allocationRows.map((row) => row.id)));
-      await db.delete(biocharProducts).where(inArray(biocharProducts.id, [...products.map((row) => row.id), multiRunProduct.id]));
+      await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [...products.map((row) => row.id), multiRunProduct.id]));
       await db.delete(productionRunFeedstocks).where(inArray(productionRunFeedstocks.productionRunId, runs.map((row) => row.id)));
       await db.delete(feedstocks).where(inArray(feedstocks.id, stocks.map((row) => row.id)));
       await db.delete(productionRuns).where(inArray(productionRuns.id, runs.map((row) => row.id)));
@@ -281,7 +281,7 @@ describe("credit batch accounting", () => {
       await db.delete(customers).where(eq(customers.id, customer.id));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, sourceBin.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 });

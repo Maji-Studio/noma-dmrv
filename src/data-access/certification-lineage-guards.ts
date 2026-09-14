@@ -1,12 +1,9 @@
-import { and, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import type { DbTransaction } from "@/db";
 import {
   applications,
-  biocharProductSourceAllocations,
   biocharProducts,
-  certifierRemovals,
   certificationSubmissions,
+  certifierRemovals,
   creditBatchApplications,
   creditBatchProductionRuns,
   creditBatches,
@@ -17,19 +14,22 @@ import {
   productionRuns,
   samples,
 } from "@/db/schema";
-import {
-  acquireCertificationArtifactLocksSorted,
-  certificationArtifactLockKey,
-  type CertificationArtifactLock,
-} from "@/lib/certification/submission-lock";
-import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import { applicationOutputAllocations } from "@/db/schema/application-output-allocations";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   formatCertificationLineageLockMessage,
   type CertificationLineageLockEntityType,
   type CertificationLineageMutation,
 } from "@/lib/certification/lineage-lock-message";
+import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import {
+  acquireCertificationArtifactLocksSorted,
+  certificationArtifactLockKey,
+  type CertificationArtifactLock,
+} from "@/lib/certification/submission-lock";
 import { SafeError } from "@/lib/errors";
-import type { OrgContext } from "@/lib/auth/server";
+import { and, eq, inArray, or, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { requireOrgScope } from "./utils";
 
 export type CertifiedLineageEntityType = Exclude<
@@ -82,6 +82,7 @@ function lineageQuery(
   tx: DbTransaction,
   target: CertifiedLineageTarget,
 ) {
+  requireOrgScope(ctx);
   return tx
     .selectDistinct({
       removalId: certifierRemovals.id,
@@ -129,50 +130,15 @@ function lineageQuery(
         eq(samples.organizationId, ctx.organizationId),
       ),
     )
-    .leftJoin(
-      biocharProductSourceAllocations,
-      and(
-        eq(
-          biocharProductSourceAllocations.productionRunId,
-          productionRuns.id,
-        ),
-        eq(
-          biocharProductSourceAllocations.organizationId,
-          ctx.organizationId,
-        ),
-      ),
-    )
-    .leftJoin(
-      biocharProducts,
-      and(
-        or(
-          eq(
-            biocharProducts.id,
-            biocharProductSourceAllocations.biocharProductId,
-          ),
-          and(
-            isNull(biocharProducts.sourceBiocharStorageLocationId),
-            eq(
-              biocharProducts.linkedProductionRunId,
-              productionRuns.id,
-            ),
-          ),
-        )!,
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(orders, and(eq(orders.biocharProductId, biocharProducts.id), eq(orders.organizationId, ctx.organizationId)))
-    .leftJoin(
-      deliveries,
-      and(
-        or(
-          eq(deliveries.biocharProductId, biocharProducts.id),
-          eq(deliveries.orderId, orders.id),
-        )!,
-        eq(deliveries.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(applications, and(eq(applications.deliveryId, deliveries.id), eq(applications.organizationId, ctx.organizationId)))
+    .leftJoin(applications, and(eq(applications.id, creditBatchApplications.applicationId), eq(applications.organizationId, ctx.organizationId)))
+    .leftJoin(applicationOutputAllocations, and(
+      eq(applicationOutputAllocations.applicationId, applications.id),
+      eq(applicationOutputAllocations.productionRunId, productionRuns.id),
+      eq(applicationOutputAllocations.organizationId, ctx.organizationId),
+    ))
+    .leftJoin(biocharProducts, and(eq(biocharProducts.id, applicationOutputAllocations.biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)))
+    .leftJoin(deliveries, and(eq(deliveries.id, applications.deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
+    .leftJoin(orders, and(eq(orders.id, deliveries.orderId), eq(orders.organizationId, ctx.organizationId)))
     .innerJoin(
       certifierRemovals,
       and(eq(certifierRemovals.id, creditBatchApplications.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)),
@@ -282,6 +248,10 @@ export async function assertCanMutateCertifiedLineage(
   subjectEntityType: CertificationLineageLockEntityType = target.entityType,
   lineageRelationship?: "linked" | "selected",
 ): Promise<void> {
+  requireOrgScope(ctx);
+  // Appending a new physical application does not edit an upstream captured fact.
+  // Relationship updates still check both the original and selected lineages.
+  if (mutation === "create" && subjectEntityType === "application" && target.entityType === "delivery") return;
   const hit = (await getLockedCertifiedLineage(ctx, tx, target)).find(
     (row) => row.removalSubmissionId || row.ghgStatementSubmissionId,
   );

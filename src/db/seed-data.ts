@@ -7,12 +7,20 @@
  *
  * Usage: pnpm tsx src/db/seed-data.ts
  */
+import { config } from 'dotenv';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { config } from 'dotenv';
 import { Pool } from 'pg';
-import * as schema from './schema';
+import { allocateTrackedDryBiocharKg } from '../lib/biochar-mass-accounting';
+import { KG_PER_TONNE } from '../lib/calculations/unit-conversions';
 import { getPgPoolConfig } from '../lib/pg-pool-config';
+import {
+  DEC_ORG_ID,
+  DEC_ORG_NAME,
+  DEC_ORG_SLUG,
+  STARTER_FEEDSTOCK_TYPES,
+} from './org-defaults';
+import * as schema from './schema';
 import {
   buildApplicationBoundaryDocuments,
   buildProductionRunReadings,
@@ -20,16 +28,8 @@ import {
   buildTransportEvidenceDocuments,
 } from './seed-certification-evidence';
 import { seedProductionProcessesAndCreditBatches } from './seed-credit-batches';
-import { seedOperationalDetails } from './seed-operational-details';
 import { storeSyntheticSeedDocuments } from './seed-document-storage';
-import {
-  DEC_ORG_ID,
-  DEC_ORG_NAME,
-  DEC_ORG_SLUG,
-  STARTER_FEEDSTOCK_TYPES,
-} from './org-defaults';
-import { allocateTrackedDryBiocharKg } from '../lib/biochar-mass-accounting';
-import { KG_PER_TONNE } from '../lib/calculations/unit-conversions';
+import { seedOperationalDetails } from './seed-operational-details';
 
 config({ path: '.env.local' });
 // Dev-only CLI: the lazily imported storage layer validates the full env
@@ -1371,6 +1371,7 @@ async function seedDemoData() {
           code: 'BP-26-001',
           facilityId: ids.facilityMoshi,
           productionDate: demoTimestamps.run3End,
+          placedAt: demoTimestamps.run3End.toISOString().slice(0, 10),
           status: 'ready',
           formulationId: ids.formulationStandard,
           biocharRatio: curatedBiocharChainMasses.product1.biocharRatio,
@@ -1387,6 +1388,7 @@ async function seedDemoData() {
           code: 'BP-26-002',
           facilityId: ids.facilityMoshi,
           productionDate: demoTimestamps.run3End,
+          placedAt: demoTimestamps.run3End.toISOString().slice(0, 10),
           status: 'ready',
           formulationId: ids.formulationPremium,
           biocharRatio: curatedBiocharChainMasses.product2.biocharRatio,
@@ -1403,6 +1405,7 @@ async function seedDemoData() {
           code: 'BP-26-003',
           facilityId: ids.facilityMoshi,
           productionDate: demoTimestamps.run3End,
+          placedAt: demoTimestamps.run3End.toISOString().slice(0, 10),
           status: 'ready',
           formulationId: ids.formulationOrganic,
           biocharRatio: curatedBiocharChainMasses.product3.biocharRatio,
@@ -1690,7 +1693,7 @@ async function seedDemoData() {
           orderDate: demoTimestamps.order1Date,
           customerId: ids.customerCoffee,
           customerLocationId: ids.locationCoffeeNorth,
-          biocharProductId: ids.biocharProduct1,
+          formulationId: ids.formulationStandard,
           quantityKg: curatedBiocharChainMasses.product1.orderWetKg,
           packaging: 'bagged',
           value: 1500000,
@@ -1702,7 +1705,7 @@ async function seedDemoData() {
           orderDate: demoTimestamps.order2Date,
           customerId: ids.customerTea,
           customerLocationId: ids.locationTeaEast,
-          biocharProductId: ids.biocharProduct2,
+          formulationId: ids.formulationPremium,
           quantityKg: curatedBiocharChainMasses.product2.orderWetKg,
           packaging: 'bagged',
           value: 1200000,
@@ -1714,7 +1717,7 @@ async function seedDemoData() {
           orderDate: demoTimestamps.order3Date,
           customerId: ids.customerCoffee,
           customerLocationId: ids.locationCoffeeSouth,
-          biocharProductId: ids.biocharProduct3,
+          formulationId: ids.formulationOrganic,
           quantityKg: curatedBiocharChainMasses.product3.orderWetKg,
           packaging: 'bagged',
           value: 1350000,
@@ -2211,7 +2214,6 @@ async function seedDemoData() {
       const extraBinBase = 9000;
       const scaleDemoBiocharMoisturePercent = 2;
       const scaleDemoBiocharDryFraction = 0.98;
-      const scaleDemoProductMoisturePercent = 5;
       const feedstockSupplyRotation = [
         {
           feedstockTypeId: ids.feedstockWoodchips,
@@ -2341,18 +2343,7 @@ async function seedDemoData() {
             biocharDryMassKg: massKg * scaleDemoBiocharDryFraction,
           });
         } else {
-          extraProducts.push({
-            organizationId: DEC_ORG_ID,
-            id: demoId(extraBinBase + 300 + i),
-            code: `BP-26-${900 + i}`,
-            facilityId: ids.facilityMoshi,
-            productionDate: new Date('2026-05-20T12:00:00.000Z'),
-            status: 'testing',
-            composition: {},
-            massKg,
-            moistureContentPercent: scaleDemoProductMoisturePercent,
-            storageLocationId: binId,
-          });
+          // Additional product bins are intentionally empty until a traced product is posted.
         }
       });
 

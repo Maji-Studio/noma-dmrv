@@ -1,12 +1,11 @@
-import dagre from "@dagrejs/dagre";
-import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
-import { formatDate } from "@/lib/format-utils";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
+import { formatDate } from "@/lib/format-utils";
 import { formatWetDryMass, splitWetMass } from "@/lib/mass-moisture";
-import type { ChainNodeData } from "./chain-node";
+import dagre from "@dagrejs/dagre";
+import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import {
   DAGRE_CONFIG,
   LINEAGE_NODE_STYLES,
@@ -14,6 +13,8 @@ import {
   NODE_WIDTH,
   type LineageNodeKind,
 } from "./chain-constants";
+import type { ChainNodeData } from "./chain-node";
+import { expandProductLineages } from "./expand-product-lineages";
 
 /** One label/value row on a lineage card (mono micro-label left, value right). */
 export interface LineageDetailRow {
@@ -74,7 +75,6 @@ const FLOW_EDGE_COLOR = "var(--clr-dark-purple)";
 const EQUIPMENT_EDGE_COLOR = "var(--clr-dark-purple-40)";
 
 /** Residual smaller than this is rounding noise, not a storage remainder. */
-const STORAGE_REMAINDER_EPSILON_KG = 0.5;
 
 /** Below this share, round-to-percent would read as a misleading "0%". */
 const SUB_ONE_PERCENT = 0.01;
@@ -360,7 +360,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
     ) {
       addRow(
         details,
-        "Used in product",
+        "Applied from source",
         formatWetDryMass({
           wetKg: source.allocatedWetMassKg,
           dryKg: source.allocatedDryMassKg,
@@ -381,48 +381,16 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
 
   if (data.biocharProduct) {
     const details: LineageDetailRow[] = [];
-    const productDryKg = splitWetMass(
-      data.biocharProduct.massKg,
-      data.biocharProduct.moistureContentPercent,
-    )?.dryKg;
-    addRow(
-      details,
-      "Mass",
-      formatWetDryMass({
-        wetKg: data.biocharProduct.massKg,
-        dryKg: productDryKg,
-      }),
-    );
-    // The unsold remainder sitting in storage — material that entered the
-    // bin instead of moving on (per this rollback's order).
-    if (
-      data.order &&
-      data.biocharProduct.massKg != null &&
-      data.order.quantityKg != null
-    ) {
-      const remainderKg = data.biocharProduct.massKg - data.order.quantityKg;
-      if (remainderKg > STORAGE_REMAINDER_EPSILON_KG) {
-        const dryFraction =
-          data.biocharProduct.massKg > 0 && productDryKg != null
-            ? productDryKg / data.biocharProduct.massKg
-            : null;
-        addRow(
-          details,
-          "In storage",
-          formatWetDryMass({
-            wetKg: remainderKg,
-            dryKg:
-              dryFraction == null ? null : remainderKg * dryFraction,
-          }),
-        );
-      }
-    }
+    addRow(details, "Applied from batch", formatWetDryMass({
+      wetKg: sources.reduce((n, source) => n + (source.allocatedWetMassKg ?? 0), 0),
+      dryKg: sources.reduce((n, source) => n + (source.allocatedDryMassKg ?? 0), 0),
+    }));
 
     nodes.push({
       id: `biochar-product:${data.biocharProduct.id}`,
       kind: "biocharProduct",
       code:
-        data.biocharProduct.formulationName ?? "Pure biochar",
+        `${data.biocharProduct.code} · ${data.biocharProduct.formulationName ?? "Pure biochar"}`,
       href: data.biocharProduct.href,
       status: data.biocharProduct.status,
       date: formatDateOrNull(data.biocharProduct.productionDate),
@@ -437,10 +405,7 @@ export function buildLineageNodes(data: ChainOfCustodyData): LineageGraphNode[] 
       "Quantity",
       formatWetDryMass({
         wetKg: data.order.quantityKg,
-        dryKg: splitWetMass(
-          data.order.quantityKg,
-          data.biocharProduct?.moistureContentPercent,
-        )?.dryKg,
+        dryKg: null,
       }),
     );
 
@@ -509,6 +474,7 @@ function edge(
   opts?: {
     mass?: EdgeMass | null;
     massLabel?: string | null;
+    wetKg?: number | null;
     variant?: "flow" | "equipment";
   },
 ): Edge {
@@ -526,6 +492,7 @@ function edge(
       color,
       mass: mass?.value ?? null,
       unit: mass?.unit ?? null,
+      wetKg: opts?.wetKg ?? null,
       kgLabel: opts?.massLabel ?? massLabel(mass),
       pctLabel: null,
       routeOffsetX: null,
@@ -578,6 +545,7 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
           `biochar-product:${data.biocharProduct.id}`,
           {
             mass: { value: dryMassKg ?? wetMassKg, unit: "kg" },
+            wetKg: wetMassKg,
             massLabel: formatWetDryMass({
               wetKg: wetMassKg,
               dryKg: dryMassKg,
@@ -588,33 +556,15 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
     }
   }
 
-  if (data.biocharProduct && data.order) {
-    edges.push(
-      edge(`biochar-product:${data.biocharProduct.id}`, `order:${data.order.id}`, {
-        mass: { value: data.order.quantityKg, unit: "kg" },
-      })
-    );
-  }
-
-  const deliveryMass: EdgeMass = { value: data.delivery.massDryKg, unit: "kg" };
-  const deliveryMassLabel = formatWetDryMass({
-    wetKg: data.delivery.deliveredWetMassKg,
-    dryKg: data.delivery.massDryKg,
-  });
   if (data.order) {
-    edges.push(
-      edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`, {
-        mass: deliveryMass,
-        massLabel: deliveryMassLabel,
-      }),
-    );
-  } else if (data.biocharProduct) {
-    edges.push(
-      edge(`biochar-product:${data.biocharProduct.id}`, `delivery:${data.delivery.id}`, {
-        mass: deliveryMass,
-        massLabel: deliveryMassLabel,
-      }),
-    );
+    edges.push(edge(`order:${data.order.id}`, `delivery:${data.delivery.id}`));
+  }
+  if (data.biocharProduct) {
+    edges.push(edge(`biochar-product:${data.biocharProduct.id}`, `delivery:${data.delivery.id}`, {
+      mass: { value: data.application.biocharAppliedDryTons, unit: "tDry" },
+      massLabel: formatWetDryTonnes(data.application.biocharAppliedTons, data.application.biocharAppliedDryTons),
+      wetKg: data.application.biocharAppliedTons == null ? null : tonnesToKg(data.application.biocharAppliedTons),
+    }));
   }
 
   edges.push(
@@ -623,6 +573,7 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
       // visible label carries both bases so operators never have to infer
       // whether the application figure is wet or dry.
       mass: { value: data.application.biocharAppliedDryTons, unit: "tDry" },
+      wetKg: data.application.biocharAppliedTons == null ? null : tonnesToKg(data.application.biocharAppliedTons),
       massLabel: formatWetDryTonnes(
         data.application.biocharAppliedTons,
         data.application.biocharAppliedDryTons,
@@ -715,7 +666,7 @@ export function useChainGraph(
     return { nodes: [], edges: [] };
   }
 
-  return layoutGraph(buildLineageNodes(data), buildLineageEdges(data), options);
+  return buildMergedChainGraph(expandProductLineages(data), options);
 }
 
 /**
@@ -724,7 +675,7 @@ export function useChainGraph(
  * run / lot / feedstock shared by several applications appears once with all
  * its downstream branches attached.
  */
-export function useBatchChainGraph(
+function buildMergedChainGraph(
   lineages: ChainOfCustodyData[] | undefined,
   options: ChainGraphOptions = {}
 ) {
@@ -732,6 +683,7 @@ export function useBatchChainGraph(
     return { nodes: [], edges: [] };
   }
 
+  lineages = lineages.flatMap(expandProductLineages);
   const applicationMasses = new Map<
     string,
     { wetTons: number | null; dryTons: number | null }
@@ -753,6 +705,14 @@ export function useBatchChainGraph(
     }
     applicationMasses.set(lineage.application.id, totals);
   }
+  const productMasses = new Map<string, { wetKg: number; dryKg: number }>();
+  for (const lineage of lineages) {
+    if (!lineage.biocharProduct) continue;
+    const total = productMasses.get(lineage.biocharProduct.id) ?? { wetKg: 0, dryKg: 0 };
+    total.wetKg += tonnesToKg(lineage.application.biocharAppliedTons ?? 0);
+    total.dryKg += tonnesToKg(lineage.application.biocharAppliedDryTons ?? 0);
+    productMasses.set(lineage.biocharProduct.id, total);
+  }
   const normalizedLineages = lineages.map((lineage) => {
     const totals = applicationMasses.get(lineage.application.id);
     return {
@@ -767,12 +727,22 @@ export function useBatchChainGraph(
 
   const nodeById = new Map<string, LineageGraphNode>();
   const edgeById = new Map<string, Edge>();
-  for (const lineage of normalizedLineages) {
-    for (const node of buildLineageNodes(lineage)) {
+  for (const [index, lineage] of lineages.entries()) {
+    for (const node of buildLineageNodes(normalizedLineages[index])) {
+      if (node.kind === "biocharProduct" && lineage.biocharProduct) {
+        const total = productMasses.get(lineage.biocharProduct.id);
+        if (total) node.details = [{ label: "Applied from batch", value: formatWetDryMass(total) }];
+      }
       if (!nodeById.has(node.id)) nodeById.set(node.id, node);
     }
     for (const lineageEdge of buildLineageEdges(lineage)) {
-      if (!edgeById.has(lineageEdge.id)) edgeById.set(lineageEdge.id, lineageEdge);
+      const existing = edgeById.get(lineageEdge.id);
+      if (!existing) edgeById.set(lineageEdge.id, lineageEdge);
+      else if ((lineageEdge.source.startsWith("production-run:") || lineageEdge.source.startsWith("biochar-product:") || lineageEdge.source.startsWith("delivery:")) && existing.data && lineageEdge.data && existing.data.mass != null && lineageEdge.data.mass != null) {
+        const mass = Number(existing.data.mass) + Number(lineageEdge.data.mass);
+        const wetKg = existing.data.wetKg != null && lineageEdge.data.wetKg != null ? Number(existing.data.wetKg) + Number(lineageEdge.data.wetKg) : null;
+        existing.data = { ...existing.data, mass, wetKg, kgLabel: wetKg != null ? formatWetDryMass({ wetKg, dryKg: existing.data.unit === "tDry" ? tonnesToKg(mass) : mass }) : existing.data.unit === "tDry" ? formatDryTons(mass) : formatKg(mass) };
+      }
     }
   }
 
@@ -781,4 +751,8 @@ export function useBatchChainGraph(
     Array.from(edgeById.values()),
     { ...options, drillApplications: true }
   );
+}
+
+export function useBatchChainGraph(lineages: ChainOfCustodyData[] | undefined, options: ChainGraphOptions = {}) {
+  return buildMergedChainGraph(lineages, options);
 }

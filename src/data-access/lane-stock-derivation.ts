@@ -1,3 +1,5 @@
+import { storageLocations } from '@/db/schema';
+import { getOutputBinDryBalance } from './output-stock';
 /**
  * Shared per-location stock derivation for the feedstock and biochar lanes.
  *
@@ -6,6 +8,18 @@
  * source row and movement overlay is read from the same snapshot.
  */
 
+import type { db } from "@/db";
+import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import {
+  binMovements,
+  biocharProducts,
+  biocharProductSourceAllocations,
+  feedstocks,
+  productionRunFeedstockDraws,
+  productionRuns,
+} from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
   and,
   eq,
@@ -16,20 +30,8 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
-import type { db } from "@/db";
-import {
-  biocharProducts,
-  biocharProductSourceAllocations,
-  binMovements,
-  feedstocks,
-  productionRunFeedstockDraws,
-  productionRuns,
-} from "@/db/schema";
-import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "./utils";
-import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
+import { requireOrgScope } from "./utils";
 
 export interface LaneStockDerivation {
   storageLocationId: string;
@@ -386,5 +388,12 @@ export async function deriveLaneStock(
       stock.biocharMovementDeltaKg;
   }
 
+  if (!feedstockOnly) {
+    const bins = await executor.select({ id: storageLocations.id }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), inArray(storageLocations.id, options.storageLocationIds), eq(storageLocations.type, 'biochar_bin'), isNull(storageLocations.archivedAt)));
+    for (const bin of bins) {
+      const stock = byLocation.get(bin.id);
+      if (stock) stock.biocharStockKg = await getOutputBinDryBalance(ctx, bin.id, executor);
+    }
+  }
   return [...byLocation.values()];
 }
