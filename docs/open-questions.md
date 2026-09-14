@@ -498,31 +498,28 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
 
 ## Product bins & formulations
 
-### Conserve dry biochar through orders, deliveries, and applications (`product-mass/dry-biochar-lineage`, opened 2026-08-04) — **deferred · needs-registry-check**
+### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implementation pending
 
-- **Agreed invariant:** dry biochar mass is established before mixing from the
-  source biochar's wet mass and biochar-only moisture. Wet ingredients, added
-  water, and later changes to finished-product moisture do not create or remove
-  dry biochar. Finished-product moisture remains important evidence of the
-  condition and actual mass delivered to the customer, but it cannot distinguish
-  ingredient solids, ingredient water, biochar water, and added water.
-- **Accepted first version:** orders reserve a proportional planning estimate.
-  Deliveries and applications transfer tracked dry biochar in proportion to the
-  recorded wet-product basis, with the final full use carrying the exact dry
-  remainder. `deliveries.massDryKg` is the server-authoritative dry-biochar
-  allocation; finished-product moisture is independent delivery evidence.
-- **Deferred limitation:** partial allocation assumes the recorded mixture is
-  homogeneous. Recorded added water changes the remaining wet basis without
-  changing conserved dry biochar, but unrecorded stock changes, stock takes,
-  segregation, ingredient additions, and losses still need an auditable
-  reconciliation workflow.
-- **Registry check:** use the Isometric MCP `how_to` flow to confirm the required
-  grain and evidence for biochar moisture versus finished blended-product
-  moisture before changing certification field gates. Local protocol summaries
-  are not authoritative for closing this point.
-- **To resolve:** specify the mass-ledger and operator-reconciliation workflow
-  for departures from the accepted homogeneous recorded-basis assumption,
-  then regression-test those reconciliation paths.
+- **Accepted design:** [ADR 0029](./adr/0029-output-bin-stock-is-dry-biochar-drawn-fifo.md)
+  and the [implementation plan](./plans/2026-09-14-fifo-bin-accounting.md)
+  replace `src/data-access/delivery-dry-biochar.ts:deriveDeliveryDryBiocharKg`
+  and `src/data-access/biochar-product-source-allocations.ts:planBiocharProductSourceAllocations` under [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
+  Orders reserve nothing; completed deliveries post measured FIFO dry withdrawals. Applications retain proportional truck shares via `src/lib/biochar-mass-accounting.ts:allocateTrackedDryBiocharKg`.
+- **Reconciliation and corrections:** compare counted and tracked solids using
+  the count's moisture. Show dry losses explicitly. Retain linked corrections
+  and block affected dependent changes; late intake does not replay history.
+- **Registry follow-up:** validate physical oldest-first loading, fixed batch
+  composition, editable ingredient-moisture evidence, and the PDD method against
+  the pinned Biochar v1.1 and Agricultural Soils v1.1. FIFO attribution alone
+  does not establish actual composition if material is remixed.
+- **Deferred:** all whole and partial bin-to-bin transfers remain in
+  [#34](https://github.com/Maji-Studio/noma-dmrv/issues/34). Transfers must preserve
+  provenance and atomically update both bins; destination ordering is to be
+  settled there. Unknown-origin positive additions, arrival/application
+  moisture, and general historical replay are excluded from this implementation.
+- **History follow-up:** per-bin dry effects and correction comparisons are
+  required here. Facility-wide history and CSV remain in
+  [#33](https://github.com/Maji-Studio/noma-dmrv/issues/33).
 
 ### Product-bin formulation claim-release policy (`product-bins/formulation`, opened 2026-06-04) — **deferred**
 
