@@ -5,11 +5,31 @@
 
 import { and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
+import { isPgForeignKeyViolation } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
-import { suppliers, supplierLocations, feedstocks, type Supplier, type SupplierLocation } from "@/db/schema";
+import {
+  suppliers,
+  supplierLocations,
+  feedstocks,
+  feedstockDeliveries,
+  type Supplier,
+  type SupplierLocation,
+} from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { formatSupplierLocationDisplay } from "@/lib/supplier-location-display";
+
+const SUPPLIER_INTAKE_BLOCKER =
+  "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.";
+const SUPPLIER_DELIVERY_BLOCKER =
+  "Supplier was not deleted because feedstock deliveries still use it. Review the linked deliveries or keep this supplier.";
+const SUPPLIER_LOCATION_BLOCKER =
+  "Cannot delete this supplier because it has linked locations. Refresh and try again.";
+const SUPPLIER_DELETE_CONSTRAINTS = [
+  ["feedstocks_supplier_id_suppliers_id_fk", SUPPLIER_INTAKE_BLOCKER],
+  ["feedstock_deliveries_supplier_id_suppliers_id_fk", SUPPLIER_DELIVERY_BLOCKER],
+  ["supplier_locations_supplier_id_suppliers_id_fk", SUPPLIER_LOCATION_BLOCKER],
+] as const;
 
 // ============================================
 // Types
@@ -493,59 +513,63 @@ export async function updateSupplier(
 
 /**
  * Delete a supplier
- * Will fail if supplier has associated feedstocks
+ * Refuses linked intakes or deliveries without removing any locations.
  */
 export async function deleteSupplier(
   ctx: OrgContext,
   supplierId: string
 ): Promise<void> {
-  await ensureSupplierExists(ctx, supplierId);
+  requireOrgScope(ctx);
+  try {
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ id: suppliers.id })
+        .from(suppliers)
+        .where(and(
+          eq(suppliers.id, supplierId),
+          eq(suppliers.organizationId, ctx.organizationId),
+        ));
+      if (!existing) throw new SafeError("Supplier not found");
 
-  // Verify supplier exists
-  const [existing] = await db
-    .select({ id: suppliers.id })
-    .from(suppliers)
-    .where(
-      and(
+      // These are the restrictive references to suppliers. No schema table
+      // references supplier_locations; their own parent FK is handled below.
+      const [intake] = await tx
+        .select({ id: feedstocks.id })
+        .from(feedstocks)
+        .where(and(
+          eq(feedstocks.supplierId, supplierId),
+          eq(feedstocks.organizationId, ctx.organizationId),
+        ))
+        .limit(1);
+      if (intake) throw new SafeError(SUPPLIER_INTAKE_BLOCKER);
+      const [delivery] = await tx
+        .select({ id: feedstockDeliveries.id })
+        .from(feedstockDeliveries)
+        .where(and(
+          eq(feedstockDeliveries.supplierId, supplierId),
+          eq(feedstockDeliveries.organizationId, ctx.organizationId),
+        ))
+        .limit(1);
+      if (delivery) throw new SafeError(SUPPLIER_DELIVERY_BLOCKER);
+
+      // FKs remain the race backstop after prechecks. Any refusal rolls back
+      // every child deletion together with the parent, before error mapping.
+      await tx.delete(supplierLocations).where(and(
+        eq(supplierLocations.supplierId, supplierId),
+        eq(supplierLocations.organizationId, ctx.organizationId),
+      ));
+      const [deleted] = await tx.delete(suppliers).where(and(
         eq(suppliers.id, supplierId),
         eq(suppliers.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (!existing) {
-    throw new SafeError("Supplier not found");
+      )).returning({ id: suppliers.id });
+      if (!deleted) throw new SafeError("Supplier not found");
+    });
+  } catch (error) {
+    for (const [constraint, message] of SUPPLIER_DELETE_CONSTRAINTS) {
+      if (isPgForeignKeyViolation(error, constraint)) throw new SafeError(message);
+    }
+    throw error;
   }
-
-  const [feedstockCount] = await db
-    .select({ count: count() })
-    .from(feedstocks)
-    .where(
-      and(
-        eq(feedstocks.supplierId, supplierId),
-        eq(feedstocks.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (Number(feedstockCount.count) > 0) {
-    throw new SafeError(
-      "Cannot delete supplier with associated feedstock intakes. Remove intakes first."
-    );
-  }
-
-  // Delete supplier locations first (FK constraint)
-  await db.delete(supplierLocations).where(
-    and(
-      eq(supplierLocations.supplierId, supplierId),
-      eq(supplierLocations.organizationId, ctx.organizationId),
-    ),
-  );
-
-  await db.delete(suppliers).where(
-    and(
-      eq(suppliers.id, supplierId),
-      eq(suppliers.organizationId, ctx.organizationId),
-    ),
-  );
 }
 
 // ============================================

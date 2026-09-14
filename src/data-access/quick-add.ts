@@ -22,6 +22,8 @@ import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { isPgUniqueViolation } from "@/db/errors";
 import { getStorageLocationById } from "./entities/storage-locations";
+import { createFeedstockType as createCanonicalFeedstockType } from "./feedstock-types";
+import type { FeedstockCategory } from "@/schemas/feedstock-types";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 
 const VEHICLE_NAME_CONSTRAINT = "vehicles_organization_id_name_unique";
@@ -180,7 +182,7 @@ export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): P
 export interface CreateFeedstockTypeData {
   code: string;
   name: string;
-  category: string;
+  category: FeedstockCategory;
   usage?: "pyrolysis" | "blend";
   description?: string | null;
   registryUrl?: string | null;
@@ -196,39 +198,11 @@ export async function createFeedstockType(
   data: CreateFeedstockTypeData
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
-  const name = data.name.trim();
-  const usage = data.usage ?? "pyrolysis";
-
-  // Check for duplicate name + usage (unique constraint)
-  const [existingName] = await db
-    .select({ id: feedstockTypes.id })
-    .from(feedstockTypes)
-    .where(
-      and(
-        eq(feedstockTypes.name, name),
-        eq(feedstockTypes.usage, usage),
-        eq(feedstockTypes.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (existingName) {
-    throw new SafeError("A feedstock type with this name and usage already exists");
-  }
-
   try {
-    const [feedstockType] = await db
-      .insert(feedstockTypes)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name,
-        category: data.category,
-        usage,
-        description: data.description ?? null,
-        registryUrl: data.registryUrl ?? null,
-        isometricFeedstockTypeId: data.isometricFeedstockTypeId ?? null,
-      })
-      .returning();
+    const feedstockType = await createCanonicalFeedstockType(ctx, {
+      ...data,
+      usage: data.usage ?? "pyrolysis",
+    });
 
     return {
       id: feedstockType.id,
