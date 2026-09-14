@@ -498,13 +498,13 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
 
 ## Product bins & formulations
 
-### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`) — implementation pending · needs-registry-check
+### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implementation pending
 
 - **Accepted design:** [ADR 0029](./adr/0029-output-bin-stock-is-dry-biochar-drawn-fifo.md)
   and the [implementation plan](./plans/2026-09-14-fifo-bin-accounting.md)
-  replace the former homogeneous product-level delivery allocation proposal.
-  [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756) owns implementation. Orders reserve nothing; completed deliveries post
-  measured FIFO dry withdrawals. Applications retain proportional truck shares.
+  replace `src/data-access/delivery-dry-biochar.ts:deriveDeliveryDryBiocharKg`
+  and `src/data-access/biochar-product-source-allocations.ts:planBiocharProductSourceAllocations` under [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
+  Orders reserve nothing; completed deliveries post measured FIFO dry withdrawals. Applications retain proportional truck shares via `src/lib/biochar-mass-accounting.ts:allocateTrackedDryBiocharKg`.
 - **Reconciliation and corrections:** compare counted and tracked solids using
   the count's moisture. Show dry losses explicitly. Retain linked corrections
   and block affected dependent changes; late intake does not replay history.

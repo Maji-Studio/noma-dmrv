@@ -1,6 +1,6 @@
 # FIFO bin accounting with dry biochar as the stock currency
 
-**Date:** 2026-09-14 · **Status:** design accepted after review and stakeholder discussion; not implemented · **Branch:** docs/fifo-bin-accounting-plan
+**Owner:** Kenji Nguyen · **Status:** approved (implementation pending in #756) · **Last reviewed:** 2026-09-14
 
 **Pickup issue:** [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756), containing the self-contained implementation brief and acceptance criteria.
 
@@ -15,9 +15,9 @@ This plan supersedes the earlier draft and its shared interactive example where 
 - Stock is largely derived from source records and the append-only movement ledger. Biochar product source allocations spread draws across production runs proportionally; entered biochar-only moisture determines the dry draw (`biochar-product-source-allocations.ts`, `biochar-product-create.ts`).
 - Delivery source resolution uses one biochar product, directly or through its order. `delivery-dry-biochar.ts` allocates a homogeneous share of that product's conserved dry mass using its recorded wet basis. Delivery moisture does not change that allocation, and a delivery cannot spill into another product.
 - `biochar_storage_inventory` exists in the schema, but the reviewed runtime does not populate/update it as the authoritative delivery stock ledger. Its delivery foreign key is already nullable. Do not implement this plan on the assumption that each current delivery consumes an inventory row.
-- Orders require `biocharProductId`; formulation-only ordering needs relationship, validation, read-model, and UI changes. Current delivery stock predicates depend on `delivered` status.
+- Orders require `biocharProductId`; formulation-only ordering needs relationship, validation, read-model, and UI changes. Some current delivery stock predicates depend on `delivered` status, while `deriveDeliveryDryBiocharKg` sums all non-archived deliveries regardless of status. Removing `upcoming` must align both paths.
 - Product `productionDate` currently derives from source production, not the actual mixing/placement date. Source age must not determine the age of a newly mixed product layer.
-- Ingredient composition does not yet retain the moisture and dry-solids basis required below. Existing stocktake/loss rows do not preserve output-layer allocations.
+- `resolveCompositionIngredientMassBasis` already freezes ingredient moisture and dry mass from the bin's weighted remaining wet/dry basis. Ingredients without a bin currently retain null moisture/dry mass. Extend these snapshots with the editable value and its source, and require a complete basis for every positive ingredient line. Existing stocktake/loss rows do not preserve output-layer allocations.
 - `allocateTrackedDryBiocharKg` already conserves dry mass to grams with an exact final remainder. Preserve proportional allocation for applications taking part of a mixed delivery.
 - Feedstock bins, including bins holding blend ingredients, use wet stock under ADR 0027. Their withdrawal method remains unchanged.
 
@@ -37,7 +37,7 @@ For correction design, the [ERPNext immutable-ledger pattern](https://docs.frapp
 2. **Stock:** remaining dry biochar per layer is authoritative. A layer is one completed production run in a biochar bin or one product batch in a product bin.
 3. **Allocation:** FIFO across layers; proportional source-run shares within a homogeneous product layer. Physical loading also follows oldest-first.
 4. **Measurements:** product creation uses source wet biochar and biochar-only departure moisture. Product-bin delivery uses actual wet load and whole-blend departure moisture. No arrival/application moisture workflow.
-5. **Composition:** product creation prefills ingredient moisture from the oldest intake of each ingredient bin. The operator can override it. Retain the value and source used and freeze dry ingredient solids and source-run allocations; later source edits cannot silently recompute them.
+5. **Composition:** product creation prefills ingredient moisture from each ingredient bin's weighted remaining wet/dry basis, matching its pro-rata stock withdrawal. The operator can override it for the material actually used. Retain the value and source used and freeze dry ingredient solids and source-run allocations; later source edits cannot silently recompute them.
 6. **Formulations:** represent pure biochar with a required 100% biochar formulation with no ingredient lines. Product bins hold one formulation; batch solids ratios can still differ.
 7. **Orders:** select a formulation and requested wet quantity. Show all matching bins and their dry availability using storage-bin mini cards. Orders reserve no stock and do not hard-block on insufficient current stock. An order is not a batch/bin allocation.
 8. **Deliveries:** record completed loads only. Remove `upcoming`; saving a delivery immediately posts its measured FIFO dry withdrawal and log entry. Select the actual source bin at this point. Reject insufficient stock, including shortages caused by a lower moisture reading.
@@ -66,6 +66,10 @@ For correction design, the [ERPNext immutable-ledger pattern](https://docs.frapp
 | Run provenance | This run | Frozen allocated dry run shares |
 
 Water added affects wet product mass, not `B`, `I`, or `f`. Use exact stored quantities when deriving `f`, not rounded displayed percentages. Require positive biochar for a drawable layer, so `0 < f ≤ 1`.
+
+Every positive ingredient line requires a finite retained moisture value and dry-solids basis before product creation can post a drawable layer. For an ingredient without a bin, require entered moisture; it contributes dry solids without withdrawing tracked ingredient stock. Missing moisture/dry mass must block posting, never default to zero solids or `f = 1`. Zero-mass ingredient lines contribute zero solids and require no moisture.
+
+The ingredient-moisture prefill remains an estimate, not a new measurement or approval step. Use the existing weighted remaining basis instead of the earlier oldest-intake suggestion: a wetter oldest intake can understate ingredient solids and overstate a delivery's biochar share. Record whether the retained value came from the bin estimate or an operator override. Its representativeness remains part of the PDD evidence follow-up; the conservative ingredient-decay assumption does not make moisture errors conservative.
 
 Keep physical date, recorded-at time, and a stable posting sequence distinct. Among eligible available layers, order by physical date, then stable creation/posting order for same-day ties. Do not add operator time-of-day input just to break ties. A draw cannot use material physically dated after the draw. New/late receipts are available to subsequent postings, while saved historical allocations remain authoritative. A correction is an explicit new posting linked to its original; it must display any changed historical attribution.
 
@@ -119,7 +123,7 @@ Initial total: 1,500 kg dry biochar and 1,820 kg dry solids. Creation wet mass i
 | Rain | 2,000 kg wet at 30% | 1,400 kg solids; A 900 kg dry + B 250 kg dry; 1,150 kg delivered, 350 kg remains |
 | Dried | 2,000 kg wet at 20% | 1,600 kg solids; A 900 + B 416.667 kg dry; 1,316.667 kg delivered, 183.333 kg remains |
 | Whole-bin shortage | 2,500 kg wet at 15% | Needs 2,125 kg solids, only 1,820 available; blocked; wet capacity at this reading is 2,141.176 kg |
-| Only A remains | 1,500 kg wet at 15% | Needs 1,275 kg solids, only 1,100 available; blocked; wet capacity 1,294.118 kg |
+| Only A exists, before B is mixed | 1,500 kg wet at 15% | Needs 1,275 kg solids, only 1,100 available; blocked; wet capacity 1,294.118 kg |
 | Loss after rain load | 120 kg lost wet at 30% | 84 kg solids, 70 kg dry biochar lost from B; 280 kg dry remains |
 | Reconcile after rain load | Count 600 kg wet at 30% | 420 kg solids equals tracked B remainder; no dry loss |
 | Empty after rain load | Count 0 kg | Exact 350 kg dry loss from B, with B provenance |
@@ -150,6 +154,8 @@ After the rain load, 600 kg is B's wet equivalent **if B is also at 30% moisture
 - Test concurrent delivery/loss/count/correction transactions and repeated submissions: one consistent nonnegative result, no double posting, and no orphaned audit or source rows.
 - Test correction without dependents, rejection after an affected draw/count/application, intake-only non-blocking behavior, notes-only edits, late intake without replay, and explicit correction of an unused delivery.
 - Test all matching formulation bins beyond the first page, empty stock allowed on orders, source-bin/formulation mismatch on deliveries, and required Pure biochar formulation.
+- Test positive ingredients with and without a bin: retain entered moisture and derived solids, reject missing/nonfinite basis, and never treat unknown ingredient solids as zero. Zero-mass lines need no moisture; a bin-less ingredient contributes solids without a tracked stock draw.
+- Test a mixed-moisture ingredient bin: the default follows the weighted remaining wet/dry basis, an override changes and freezes the product's ingredient solids, and later source edits do not recompute the saved basis.
 - Test Organization/facility/source isolation and source/target certification locks on create, update, correction, and relationship changes. Every normal data-access seam keeps `OrgContext` and `requireOrgScope`.
 - End-to-end: product creation → completed delivery spanning A/B → partial application → both credit-batch lineages and shares; verify card/detail/form agree and no remaining route consumes the old single-product allocation.
 

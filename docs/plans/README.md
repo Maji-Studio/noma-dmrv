@@ -23,3 +23,4 @@ Active plans:
 
 - [2026-09-07 Simplification and optimization analysis](./2026-09-07-simplification-analysis.md), proposed, owner Kenji Nguyen.
 - [2026-09-07 Simplification rollout plan](./2026-09-07-simplification-rollout-plan.md), proposed, owner Kenji Nguyen. Review of the analysis plus the Phase A / Phase B split.
+- [2026-09-14 FIFO bin accounting](./2026-09-14-fifo-bin-accounting.md), approved, owner Kenji Nguyen. Implementation pending in [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
