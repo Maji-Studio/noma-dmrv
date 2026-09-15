@@ -159,15 +159,17 @@ export function useCreateFacility(
       // Pre-populate the detail cache with the new facility
       queryClient.setQueryData(facilityKeys.detail(data.id), data);
 
-      // Refresh dependent collections in the background. The server response
-      // is authoritative for the new detail; the save should not wait for list,
-      // country, or onboarding reads before closing its create surface.
-      void queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
+      // Keep the create surface pending until the active lists show the saved
+      // facility. Country and onboarding reads can finish in the background.
+      const listRefresh = queryClient.invalidateQueries({
+        queryKey: facilityKeys.lists(),
+      });
       void queryClient.invalidateQueries({
         queryKey: facilityKeys.countriesPrefix(),
       });
       invalidateOnboardingProgress(queryClient);
 
+      await listRefresh;
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
