@@ -18,7 +18,12 @@ import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { biocharTransportEvidenceDocumentCount } from "./transport-evidence-projections";
 import { getChainOfCustodyData } from "./chain-of-custody";
 
-const url = process.env.PROVENANCE_DB_TEST_URL;
+const url = process.env.DATABASE_URL;
+const CONNECTION_TIMEOUT_MS = 1_000;
+const probe = new Client({ connectionString: url, connectionTimeoutMillis: CONNECTION_TIMEOUT_MS });
+const available = await probe.connect().then(() => true, () => false);
+await probe.end();
+if (!available && process.env.CI) throw new Error("Provenance tests require PostgreSQL in CI");
 const ctx: OrgContext = { organizationId: "provenance-org", userId: "provenance-user", orgRole: "owner", isPlatformAdmin: false };
 const other: OrgContext = { ...ctx, organizationId: "other-org" };
 const ids = Object.fromEntries(["formulation", "facility", "A", "B", "C", "runA", "runB", "delivery", "order", "app", "batchA", "batchB", "removal", "bin"].map(key => [key, randomUUID()]));
@@ -36,10 +41,9 @@ const tables: PgTable[] = [schema.applications, schema.applicationOutputAllocati
   schema.samples, schema.certifierRemovals, schema.certificationSubmissions, schema.documents];
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
-describe.skipIf(!url)("saved provenance PostgreSQL consumer queries", () => {
+describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () => {
   beforeEach(async () => {
-    if (!url || !["localhost", "127.0.0.1"].includes(new URL(url).hostname)) throw new Error("Local PostgreSQL URL required");
-    client = new Client({ connectionString: url });
+    client = new Client({ connectionString: url, connectionTimeoutMillis: CONNECTION_TIMEOUT_MS });
     await client.connect();
     await client.query("begin");
     for (const table of tables) {
