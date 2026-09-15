@@ -1,4 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  dehydrate,
+  HydrationBoundary,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useEffect, type ReactNode } from "react";
@@ -7,10 +12,13 @@ import type {
   CreateSupplierData,
   CreateSupplierWithLocationsData,
 } from "@/schemas/suppliers";
+import type { Supplier, SupplierLocation } from "@/db/schema";
 
 const mocks = vi.hoisted(() => ({
   createSupplierFn: vi.fn(),
   createSupplierWithLocationsFn: vi.fn(),
+  getSupplierByIdFn: vi.fn(),
+  getSupplierLocationsBySupplierFn: vi.fn(),
 }));
 
 vi.mock("@/fn/suppliers", () => ({
@@ -19,8 +27,8 @@ vi.mock("@/fn/suppliers", () => ({
   createSupplierWithLocationsFn: mocks.createSupplierWithLocationsFn,
   deleteSupplierFn: vi.fn(),
   deleteSupplierLocationFn: vi.fn(),
-  getSupplierByIdFn: vi.fn(),
-  getSupplierLocationsBySupplierFn: vi.fn(),
+  getSupplierByIdFn: mocks.getSupplierByIdFn,
+  getSupplierLocationsBySupplierFn: mocks.getSupplierLocationsBySupplierFn,
   getSuppliersFn: vi.fn(),
   updateSupplierFn: vi.fn(),
   updateSupplierLocationFn: vi.fn(),
@@ -33,7 +41,10 @@ vi.mock("./use-onboarding", () => ({
 import {
   useCreateSupplier,
   useCreateSupplierWithLocations,
+  useSupplier,
+  useSupplierLocationsBySupplier,
 } from "./use-suppliers";
+import { supplierKeys } from "./supplier-query-keys";
 
 const createdSupplier = {
   id: "supplier-2",
@@ -66,6 +77,25 @@ function CreateSupplierWithLocationsHarness({
   return null;
 }
 
+function SupplierDetailQueryHarness({
+  supplierId,
+  onCapture,
+}: {
+  supplierId: string;
+  onCapture: (data: {
+    supplier: Supplier | undefined;
+    locations: SupplierLocation[] | undefined;
+  }) => void;
+}) {
+  const supplier = useSupplier(supplierId);
+  const locations = useSupplierLocationsBySupplier(supplierId);
+  useEffect(
+    () => onCapture({ supplier: supplier.data, locations: locations.data }),
+    [supplier.data, locations.data, onCapture],
+  );
+  return null;
+}
+
 function TestProvider({
   children,
   queryClient,
@@ -89,6 +119,8 @@ beforeAll(() => {
 beforeEach(() => {
   mocks.createSupplierFn.mockReset();
   mocks.createSupplierWithLocationsFn.mockReset();
+  mocks.getSupplierByIdFn.mockReset();
+  mocks.getSupplierLocationsBySupplierFn.mockReset();
   mocks.createSupplierFn.mockResolvedValue({
     success: true,
     data: createdSupplier,
@@ -96,6 +128,105 @@ beforeEach(() => {
   mocks.createSupplierWithLocationsFn.mockResolvedValue({
     success: true,
     data: createdSupplier,
+  });
+});
+
+describe("supplier detail hydration", () => {
+  const firstSupplier = {
+    id: "supplier-1",
+    code: "SUP-001",
+    name: "First Supplier",
+  } as Supplier;
+  const secondSupplier = {
+    id: "supplier-2",
+    code: "SUP-002",
+    name: "Second Supplier",
+  } as Supplier;
+  const firstLocations = [
+    { id: "location-1", supplierId: firstSupplier.id, country: "Switzerland" },
+  ] as SupplierLocation[];
+
+  function hydrationState(
+    supplier: Supplier,
+    locations: SupplierLocation[],
+  ) {
+    const serverClient = new QueryClient();
+    const updatedAt = Date.now();
+    serverClient.setQueryData(supplierKeys.detail(supplier.id), supplier, {
+      updatedAt,
+    });
+    serverClient.setQueryData(
+      supplierKeys.supplierLocations(supplier.id),
+      locations,
+      { updatedAt },
+    );
+    return dehydrate(serverClient);
+  }
+
+  it("uses hydrated complete data without duplicate initial actions", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let captured:
+      | { supplier: Supplier | undefined; locations: SupplierLocation[] | undefined }
+      | undefined;
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <TestProvider queryClient={queryClient}>
+          <HydrationBoundary state={hydrationState(firstSupplier, firstLocations)}>
+            <SupplierDetailQueryHarness
+              supplierId={firstSupplier.id}
+              onCapture={(data) => {
+                captured = data;
+              }}
+            />
+          </HydrationBoundary>
+        </TestProvider>,
+      );
+    });
+
+    expect(captured).toEqual({
+      supplier: firstSupplier,
+      locations: firstLocations,
+    });
+    expect(mocks.getSupplierByIdFn).not.toHaveBeenCalled();
+    expect(mocks.getSupplierLocationsBySupplierFn).not.toHaveBeenCalled();
+
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+
+  it("hydrates a client navigation under the destination ID only", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let captured: Supplier | undefined;
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <TestProvider queryClient={queryClient}>
+          <HydrationBoundary state={hydrationState(secondSupplier, [])}>
+            <SupplierDetailQueryHarness
+              supplierId={secondSupplier.id}
+              onCapture={(data) => {
+                captured = data.supplier;
+              }}
+            />
+          </HydrationBoundary>
+        </TestProvider>,
+      );
+    });
+
+    expect(captured).toBe(secondSupplier);
+    expect(queryClient.getQueryData(supplierKeys.detail(firstSupplier.id))).toBeUndefined();
+    expect(queryClient.getQueryData(supplierKeys.detail(secondSupplier.id))).toBe(secondSupplier);
+    expect(mocks.getSupplierByIdFn).not.toHaveBeenCalled();
+
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
   });
 });
 

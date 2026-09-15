@@ -66,9 +66,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
     }
   };
 
-  const isLoading = supplierLoading || locationsLoading;
-
-  if (isLoading) {
+  if (supplierLoading) {
     return <div className="body-large">Loading supplier details...</div>;
   }
 
@@ -87,7 +85,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       locations.find((location) => location.isDefault)?.distanceFromFacilityKm ??
       null,
     legacySupplierDistanceKm: supplier.distanceToFacilityKm,
-    locationsLoaded: true,
+    locationsLoaded: !locationsLoading,
   });
 
   return (
@@ -149,7 +147,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       <div className="flex flex-col gap-24">
         <div className="flex items-center justify-between">
           <h2 className="title-heading-3">
-            Locations ({locations.length})
+            {locationsLoading ? "Locations" : `Locations (${locations.length})`}
           </h2>
           {!isLocationDialogOpen && (
             <Button
@@ -166,7 +164,9 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         </div>
 
         {/* Locations List */}
-        {locations.length === 0 ? (
+        {locationsLoading ? (
+          <div className="body-large">Loading supplier locations...</div>
+        ) : locations.length === 0 ? (
           <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] flex flex-col items-center justify-center gap-24 text-center">
             <div className="flex flex-col gap-16">
               <h3 className="title-heading-4">No locations yet</h3>

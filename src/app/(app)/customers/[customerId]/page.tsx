@@ -3,8 +3,11 @@
  * Displays customer details with nested locations management
  */
 import { CustomerDetail } from "@/components/customers";
-import { getCustomerById } from "@/data-access/entities/customers";
+import { findCustomerWithRelations } from "@/data-access/customer-detail";
+import { customerKeys } from "@/hooks/customer-query-keys";
 import { requireOrgContext } from "@/lib/auth/server";
+import { createServerHydrationState } from "@/lib/react-query/server-hydration";
+import { HydrationBoundary } from "@tanstack/react-query";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
@@ -22,11 +25,22 @@ export default async function CustomerDetailPage({
   }
 
   const ctx = await requireOrgContext();
-  const customer = await getCustomerById(ctx, customerId);
+  const customer = await findCustomerWithRelations(ctx, customerId);
 
   if (!customer) {
     notFound();
   }
 
-  return <CustomerDetail customerId={customerId} />;
+  const hydrationState = createServerHydrationState([
+    {
+      queryKey: customerKeys.detailWithRelations(customerId),
+      data: customer,
+    },
+  ]);
+
+  return (
+    <HydrationBoundary state={hydrationState}>
+      <CustomerDetail customerId={customerId} />
+    </HydrationBoundary>
+  );
 }
