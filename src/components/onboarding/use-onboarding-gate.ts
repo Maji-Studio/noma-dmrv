@@ -97,11 +97,17 @@ export function useOnboardingGate(
   organizationId: string | null,
 ): OnboardingGate {
   const queryClient = useQueryClient();
-  const { data: status, isLoading } = useOnboardingStatus(
+  const { data: status, isPending, isFetching } = useOnboardingStatus(
     facilityId,
     organizationId,
   );
-  const { data: sessionData } = authClient.useSession();
+  const { data: sessionData, isPending: isSessionPending } = authClient.useSession();
+  // Cached counts cannot decide a takeover until the current refresh settles.
+  // An unresolved session waits; a resolved session with no active organization
+  // leaves the ordinary organization/facility selection surface available.
+  const isLoading = organizationId === null
+    ? isSessionPending
+    : isPending || isFetching;
 
   const progress = deriveSetupProgress(status, facilityId);
 
@@ -160,7 +166,7 @@ export function useOnboardingGate(
   // fresh org gets the guide takeover instead and can open the wizard from
   // its facility CTA.
   const autoOpenEligible =
-    !!status && status.isOrgOwnerOrAdmin && status.facilityCount === 0;
+    !isLoading && !!status && status.isOrgOwnerOrAdmin && status.facilityCount === 0;
   const isOpen =
     explicitOpen === null ? autoOpenEligible && !dismissed : explicitOpen;
 
