@@ -79,6 +79,48 @@ function BatchBalanceBar({
   );
 }
 
+/** Read-only balance shared by posting previews and order availability. */
+export function OutputStockBalanceCard({ preview, balance, scale, wetBasis = false, colors, moreInfo }: {
+  preview: Pick<Preview, "binName" | "binCode" | "formulationName" | "lane" | "dryLabel" | "wetLabel" | "estimateMoisturePercent">;
+  balance: { label: string; wet: number | null; dry: number | null; allocations?: OutputStockBalanceView[] };
+  scale: number;
+  wetBasis?: boolean;
+  colors?: Map<string, string>;
+  moreInfo?: ReactNode;
+}) {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const binType = preview.lane === "product" ? "Product bin" : preview.lane === "ingredient" ? "Ingredient bin" : "Biochar bin";
+  const batchColors = colors ?? new Map((balance.allocations ?? []).map((layer, index) => [layer.layerId, BATCH_COLORS[index % BATCH_COLORS.length]]));
+  return (
+    <Card.Root role="article" className="flex-row min-w-0">
+      <div
+        className="relative w-10 shrink-0 bg-[var(--color-background-medium)]"
+        role="meter"
+        aria-label={`${balance.label} stock on common scale`}
+        aria-valuemin={0}
+        aria-valuemax={scale}
+        aria-valuenow={wetBasis ? balance.wet! : balance.dry ?? 0}
+      >
+        <div className="absolute inset-x-0 bottom-0 bg-[var(--acc-prod)]" style={{ height: `${Math.max(0, (wetBasis ? balance.wet! : balance.dry ?? 0) / scale * PERCENT_SCALE)}%` }} />
+      </div>
+      <div className="min-w-0 flex-1 p-12 space-y-8">
+        <div className="space-y-4">
+          <p className="label-micro">{balance.label}</p>
+          <h4 className="body-small font-semibold">{preview.binName}</h4>
+          <p className="body-caption">{preview.binCode ? `${preview.binCode} · ` : ""}{preview.formulationName ?? binType}</p>
+        </div>
+        <div className="space-y-4">
+          {wetBasis && <p className="body-medium">{formatMassKg(balance.wet)} {preview.wetLabel ?? "wet estimate"}</p>}
+          <p className={wetBasis ? "body-caption" : "body-medium"}>{formatMassKg(balance.dry)} {dryLabel}</p>
+          {wetBasis && !preview.wetLabel && <p className="body-caption">At {formatMoisturePercent(preview.estimateMoisturePercent)} moisture</p>}
+        </div>
+        {balance.allocations && <BatchBalanceBar allocations={balance.allocations} scale={scale} wetBasis={wetBasis} colors={batchColors} stage={balance.label} dryLabel={dryLabel} />}
+        {moreInfo}
+      </div>
+    </Card.Root>
+  );
+}
+
 export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlocker }: { preview: Preview; moreInfo?: ReactNode; commonScale?: number; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode }) {
   const wetBasis = preview.beforeEstimatedWetKg !== null && preview.afterEstimatedWetKg !== null;
   const dryLabel = preview.dryLabel ?? "dry biochar";
@@ -93,7 +135,6 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
     { label: "Before loading", wet: preview.beforeEstimatedWetKg, dry: preview.beforeDryKg, allocations: preview.beforeAllocations },
     { label: "After loading", wet: preview.afterEstimatedWetKg, dry: preview.afterDryKg, allocations: preview.afterAllocations },
   ];
-  const binType = preview.lane === "product" ? "Product bin" : preview.lane === "ingredient" ? "Ingredient bin" : "Biochar bin";
 
   return (
     <section className="space-y-16" aria-label="Stock preview" aria-live="polite">
@@ -110,32 +151,7 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         {balances.map((balance) => (
-          <Card.Root key={balance.label} className="flex-row min-w-0">
-            <div
-              className="relative w-10 shrink-0 bg-[var(--color-background-medium)]"
-              role="meter"
-              aria-label={`${balance.label} stock on common scale`}
-              aria-valuemin={0}
-              aria-valuemax={scale}
-              aria-valuenow={wetBasis ? balance.wet! : balance.dry ?? 0}
-            >
-              <div className="absolute inset-x-0 bottom-0 bg-[var(--acc-prod)]" style={{ height: `${Math.max(0, (wetBasis ? balance.wet! : balance.dry ?? 0) / scale * PERCENT_SCALE)}%` }} />
-            </div>
-            <div className="min-w-0 flex-1 p-12 space-y-8">
-              <div className="space-y-4">
-                <p className="label-micro">{balance.label}</p>
-                <h4 className="body-small font-semibold">{preview.binName}</h4>
-                <p className="body-caption">{preview.binCode ? `${preview.binCode} · ` : ""}{preview.formulationName ?? binType}</p>
-              </div>
-              <div className="space-y-4">
-                {wetBasis && <p className="body-medium">{formatMassKg(balance.wet)} {preview.wetLabel ?? "wet estimate"}</p>}
-                <p className={wetBasis ? "body-caption" : "body-medium"}>{formatMassKg(balance.dry)} {dryLabel}</p>
-                {wetBasis && !preview.wetLabel && <p className="body-caption">At {formatMoisturePercent(preview.estimateMoisturePercent)} moisture</p>}
-              </div>
-              {balance.allocations && <BatchBalanceBar allocations={balance.allocations} scale={scale} wetBasis={wetBasis} colors={colors} stage={balance.label} dryLabel={dryLabel} />}
-              {moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)}
-            </div>
-          </Card.Root>
+          <OutputStockBalanceCard key={balance.label} preview={preview} balance={balance} scale={scale} wetBasis={wetBasis} colors={colors} moreInfo={moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)} />
         ))}
       </div>
       {preview.discrepancySolidsKg > 0 && <p role="status" className="body-small">Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</p>}
