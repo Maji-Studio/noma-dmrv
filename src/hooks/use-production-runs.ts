@@ -354,7 +354,8 @@ export function useUpdateProductionRun(
       // Return context with snapshots for rollback
       return { previousRun, previousLists };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async (data, variables, context) => {
+      const previousFacilityId = context?.previousRun?.facilityId;
       // Update cache with actual server data
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
 
@@ -369,7 +370,15 @@ export function useUpdateProductionRun(
       });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
-      invalidateOnboardingProgress(queryClient, data.facilityId);
+      if (variables.facilityId && !previousFacilityId) {
+        // A move without a cached prior row can affect an unknown old facility.
+        invalidateOnboardingProgress(queryClient);
+      } else {
+        invalidateOnboardingProgress(queryClient, data.facilityId);
+        if (previousFacilityId && previousFacilityId !== data.facilityId) {
+          invalidateOnboardingProgress(queryClient, previousFacilityId);
+        }
+      }
 
       await callbacks?.onSuccess?.(data, variables);
     },
