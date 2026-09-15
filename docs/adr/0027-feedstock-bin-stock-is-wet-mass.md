@@ -22,7 +22,8 @@ not constrain a physical withdrawal.
   movement.
 - Storage selectors, summaries, and overdraw messages use authoritative wet
   stock. A dry estimate may be displayed only when clearly marked non-binding.
-- Biochar and finished-product stock semantics are unchanged.
+- Biochar and finished-product stock semantics are unchanged by this decision.
+  Their subsequent FIFO design is recorded in [ADR 0029](./0029-output-bin-stock-is-dry-biochar-drawn-fifo.md), with implementation pending.
 
 ## Consequences
 
