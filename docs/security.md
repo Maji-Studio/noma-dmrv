@@ -119,6 +119,10 @@ Non-obvious semantics only:
   than inheriting the sandbox default. Targeting the sandbox is the opt-in.
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
+- **`DB_POOL_TELEMETRY`** — strict `true`/`false`, default `false`. When enabled,
+  emits connection-establishment, pool-checkout, and query-execution durations
+  plus aggregate pool counts. It deliberately excludes SQL, parameters,
+  connection strings, hostnames, database names, and application identifiers.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 

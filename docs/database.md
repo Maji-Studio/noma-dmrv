@@ -56,8 +56,40 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
   resets the database first so the full migration chain and admin bootstrap run
   before schema verification.
 - `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
-- Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, and `DB_POOL_LOCK_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, `DB_POOL_LOCK_TIMEOUT_MS`, and `DB_POOL_TELEMETRY`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- The module-scope pool is registered with Vercel's [`attachDatabasePool`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#database-connection-pool-management), which keeps a Fluid Compute instance alive until `pg` releases its idle clients. The idle default is 5 seconds. `DB_POOL_MAX` still defaults to 1 until the database connection budget is known; Vercel deployments fail closed above 5 because per-instance pools multiply. Candidate staging experiments are 1, 3, then 5, never an unbounded increase.
 - Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
+
+### Pool sizing and compute placement
+
+Treat pool size and compute region as separate experiments. Before raising
+`DB_POOL_MAX`, obtain `SHOW max_connections`, reserved/admin headroom, current
+peak connections, the provider/pooler mode, and the maximum number of active
+Vercel instances. Budget for both the shared pools and dedicated certification
+lock connections:
+
+```text
+(active function instances × DB_POOL_MAX)
+  + simultaneous dedicated lock operations
+  + migrations, administration, and other consumers
+  < usable database connections
+```
+
+Enable `DB_POOL_TELEMETRY=true` only for a bounded measurement window. Logs are
+privacy-safe: they contain duration, success, pool totals, idle count, and queue
+count, but never SQL, parameters, hostnames, database names, or user data.
+Compare checkout wait and query duration distributions at max 1 and 3 under the
+same workload; test 5 only when the connection budget supports it and 3 still
+queues. Monitor database-side active/idle connection peaks and SQLSTATE `53300`
+at the same time. Disable the telemetry flag after collecting the sample.
+
+Confirm the database's actual region before moving compute. Change the [Vercel
+Function region](https://vercel.com/docs/functions/configuring-functions/region)
+in a separate deployment, then repeat the same workload; do not
+combine a region move with a pool-size change. The application currently needs
+session semantics for `withDedicatedSessionAdvisoryLock`. A direct connection or
+session-pooling proxy is compatible; a transaction-pooling proxy must not be
+assumed compatible with session advisory locks.
 
 ## Soft Delete — Facility and Storage-Bin Archive
 

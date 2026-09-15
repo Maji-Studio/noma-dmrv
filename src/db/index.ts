@@ -3,22 +3,43 @@
  * Provides drizzle ORM instance with PostgreSQL connection
  */
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client, Pool } from "pg";
+import { attachDatabasePool } from "@vercel/functions/db-connections";
 import { env } from "@/config/env";
+import { logger } from "@/lib/log";
 import { getPgPoolConfig } from "@/lib/pg-pool-config";
+import { createObservedClient, createObservedPool } from "./observed-pg";
+import { resolveAppPoolConfig } from "./pool-config";
 import * as schema from "./schema";
 
-const DEFAULT_POOL_LOCK_TIMEOUT_MS = 1_000;
-
-const pool = new Pool({
-  ...getPgPoolConfig(env.DATABASE_URL),
-  max: env.DB_POOL_MAX ?? 1,
-  idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT_MS ?? 10_000,
-  connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000,
-  // Fail a waiting pooled statement before it monopolizes a scarce pool slot.
-  // Dedicated remote-mutation connections must keep their locks until completion.
-  lock_timeout: env.DB_POOL_LOCK_TIMEOUT_MS ?? DEFAULT_POOL_LOCK_TIMEOUT_MS,
+const poolConfig = resolveAppPoolConfig({
+  connection: getPgPoolConfig(env.DATABASE_URL),
+  configuredMax: env.DB_POOL_MAX,
+  configuredIdleTimeoutMs: env.DB_POOL_IDLE_TIMEOUT_MS,
+  configuredConnectionTimeoutMs: env.DB_POOL_CONNECTION_TIMEOUT_MS,
+  configuredLockTimeoutMs: env.DB_POOL_LOCK_TIMEOUT_MS,
+  isVercel: process.env.VERCEL === "1",
 });
+const poolLog = logger.child({
+  computeRegion: process.env.VERCEL_REGION ?? "non-vercel",
+});
+const telemetryOptions = { enabled: env.DB_POOL_TELEMETRY, log: poolLog };
+const pool = createObservedPool(poolConfig, telemetryOptions);
+
+// Fluid Compute shares this module-scope pool across concurrent invocations.
+// Keep the instance alive until pg's idle timer releases unused connections.
+attachDatabasePool(pool);
+
+if (env.DB_POOL_TELEMETRY) {
+  poolLog.info(
+    {
+      maxConnections: poolConfig.max,
+      idleTimeoutMs: poolConfig.idleTimeoutMillis,
+      connectionTimeoutMs: poolConfig.connectionTimeoutMillis,
+      lockTimeoutMs: poolConfig.lock_timeout,
+    },
+    "database pool telemetry enabled",
+  );
+}
 
 export const db = drizzle(pool, { schema });
 
@@ -34,10 +55,13 @@ export async function withDedicatedSessionAdvisoryLock<T>(
   lockKey: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const client = new Client({
-    ...getPgPoolConfig(env.DATABASE_URL),
-    connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000,
-  });
+  const client = createObservedClient(
+    {
+      ...getPgPoolConfig(env.DATABASE_URL),
+      connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+    },
+    telemetryOptions,
+  );
 
   try {
     await client.connect();
@@ -67,10 +91,13 @@ export async function withDedicatedSessionAdvisoryLock<T>(
 export async function withDedicatedLockConnection<T>(
   fn: (tx: DbTransaction) => Promise<T>,
 ): Promise<T> {
-  const client = new Client({
-    ...getPgPoolConfig(env.DATABASE_URL),
-    connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000,
-  });
+  const client = createObservedClient(
+    {
+      ...getPgPoolConfig(env.DATABASE_URL),
+      connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+    },
+    telemetryOptions,
+  );
 
   try {
     await client.connect();
