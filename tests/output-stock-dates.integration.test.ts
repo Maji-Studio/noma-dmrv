@@ -9,6 +9,7 @@ import { previewOutputStock } from '@/data-access/output-stock-operations';
 import { postOutputStock } from '@/data-access/output-stock-post';
 import { archiveStorageLocation } from '@/data-access/storage-locations';
 import { createBiocharProduct } from '@/data-access/biochar-product-create';
+import { previewProductStock, type ProductStockPreviewInput } from '@/data-access/product-stock-preview';
 import { getProductionRunDependentProduct } from '@/data-access/production-runs/product-dependencies';
 import { seedOutputStockParents } from './helpers/output-stock-fixture';
 import { cleanupOutputStockFixture } from './helpers/output-stock-cleanup';
@@ -20,7 +21,13 @@ async function fixture(endTime = new Date('2026-09-15T22:30:00Z')) {
   const f = await seedOutputStockParents(db);
   organizations.push(f.ctx.organizationId);
   await db.update(facilities).set({ timezone: 'Africa/Dar_es_Salaam' }).where(and(eq(facilities.id, f.facility.id), eq(facilities.organizationId, f.ctx.organizationId)));
-  await db.update(productionRuns).set({ endTime, startTime: new Date(endTime.getTime() - ONE_HOUR_MS) }).where(and(eq(productionRuns.facilityId, f.facility.id), eq(productionRuns.organizationId, f.ctx.organizationId)));
+  for (const [index, run] of f.runs.entries()) {
+    const runEndTime = new Date(endTime.getTime() + index * ONE_HOUR_MS);
+    await db.update(productionRuns).set({
+      endTime: runEndTime,
+      startTime: new Date(runEndTime.getTime() - ONE_HOUR_MS),
+    }).where(and(eq(productionRuns.id, run.id), eq(productionRuns.facilityId, f.facility.id), eq(productionRuns.organizationId, f.ctx.organizationId)));
+  }
   return f;
 }
 
@@ -59,11 +66,14 @@ describe('output stock facility dates in PostgreSQL', () => {
     const future = '2099-09-16';
     const f = await fixture(new Date(`${future}T00:00:00Z`));
     await expect(archiveStorageLocation(f.ctx, f.source.id)).rejects.toThrow('Cannot archive');
-    const input = { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: future, kind: 'production_draw' as const, wetMassKg: 100, moisturePercent: 0 };
-    const preview = await previewOutputStock(f.ctx, input);
+    const input: ProductStockPreviewInput = { facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
+      sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
+      ingredientBins: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, feedstockTypeName: f.ingredientType.name,
+        feedstockTypeCategory: f.ingredientType.category, massKg: 0, moistureContentPercent: 0, moistureSource: 'operator_override' }] };
+    const [preview] = await previewProductStock(f.ctx, input);
     await createBiocharProduct(f.ctx, { code: `E2E-FUTURE-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
-      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: 0, moistureContentPercent: 0, moistureSource: 'operator_override' }] },
+      composition: { ingredients: input.ingredientBins },
       idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
     expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(100);
     await expect(archiveStorageLocation(f.ctx, f.bin.id)).rejects.toThrow('Cannot archive');
