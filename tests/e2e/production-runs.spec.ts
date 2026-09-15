@@ -12,6 +12,7 @@ import { test, expect, type SeededChainData } from "./fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import {
   getCreatedActionCode,
+  getListedActionCodes,
   selectEntity,
   waitForSideSheet,
   waitForSideSheetClose,
@@ -133,10 +134,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       await expect(
         page.locator("aside").getByText(seededData.facility.name, { exact: false }),
       ).toBeVisible();
-      // The per-test facility is freshly seeded, so it cannot contain a run.
-      // Avoid asking the table helper for action labels while it is rendering
-      // the empty-state transition.
-      const existingCodes = new Set<string>();
+      const existingCodes = await getListedActionCodes(page);
       await page.getByRole("button", { name: "New Production Run" }).click();
       await waitForSideSheet(page);
       await page.locator('select[name="status"]').selectOption("draft");
@@ -824,6 +822,12 @@ test.describe("Production Run end-time editing", () => {
   }) => {
     const dialog = page.locator('[role="dialog"]');
 
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await expect(
+      page.locator("aside").getByText(seededData.facility.name, { exact: false }),
+    ).toBeVisible();
+    const existingCodes = await getListedActionCodes(page);
+
     // Create the run open, then finish it through the legal Running → Complete
     // transition.
     await openRunForm(page, seededData, {
@@ -846,9 +850,21 @@ test.describe("Production Run end-time editing", () => {
       seededData.biocharStorageLocation.name,
     );
     await page.fill('input[name="biocharOutputKg"]', "10");
+    await page.fill('input[name="biocharMoisturePercent"]', "15");
     await submitCreate(page);
     await waitForSideSheetClose(page);
-    await editFirstRow(page);
+    const createdCode = await getCreatedActionCode(page, existingCodes);
+    const editCreatedRun = async () => {
+      await expect(async () => {
+        await page
+          .getByRole("button", { name: `Actions for ${createdCode}`, exact: true })
+          .click({ timeout: 5000 });
+        await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
+      }).toPass({ timeout: 30000 });
+      await waitForSideSheet(page);
+      await expect(dialog.locator('input[name="startTime"]')).toBeVisible();
+    };
+    await editCreatedRun();
     await page.fill('input[name="endDate"]', "2025-06-05");
     await page.fill('input[name="endTime"]', "12:00");
     await page.selectOption('select[name="status"]', "complete");
@@ -857,14 +873,14 @@ test.describe("Production Run end-time editing", () => {
 
     // No-op guard: edit only a non-time field. Blank-or-untouched end fields
     // must mean "unchanged", never "clear".
-    await editFirstRow(page);
+    await editCreatedRun();
     await page.fill('input[name="feedstockMoisturePercent"]', "18");
     await saveEdit(page);
     await waitForSideSheetClose(page);
 
     // The saved end time survived the non-time edit.
     await page.reload();
-    await editFirstRow(page);
+    await editCreatedRun();
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2025-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("12:00");
     await expect(
@@ -879,7 +895,7 @@ test.describe("Production Run end-time editing", () => {
 
     // The corrected time persisted and the run remains Complete.
     await page.reload();
-    await editFirstRow(page);
+    await editCreatedRun();
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2025-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("13:00");
     await expect(dialog.locator('select[name="status"]')).toHaveValue("complete");
