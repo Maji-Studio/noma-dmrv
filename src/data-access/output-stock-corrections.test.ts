@@ -22,8 +22,8 @@ beforeEach(() => {
 
 describe('correction dependency identities', () => {
   it('keeps the hard later-movement guard and includes the movement identity', async () => {
-    mocks.projection.mockResolvedValue([{ movement: original, allocation }, { movement: { id: 'later', outputKind: 'loss', postingSequence: BigInt(2), physicalDate: '2026-09-12' }, allocation }]);
-    await expect(prepareOutputCorrection(ctx, input, layers, reader)).rejects.toMatchObject({ conflict: { entity: 'binMovement', id: 'later', code: 'Stock loss 2026-09-12' } });
+    mocks.projection.mockResolvedValue([{ movement: original, allocation }, { movement: { id: 'later', reason: 'Later loss', outputKind: 'loss', postingSequence: BigInt(2), physicalDate: '2026-09-12' }, allocation }]);
+    await expect(prepareOutputCorrection(ctx, input, layers, reader)).rejects.toMatchObject({ conflict: { entity: 'binMovement', id: 'later', code: 'Later loss (2026-09-12)' } });
   });
   it('identifies a later balance-dependent count without draw allocations', async () => {
     mocks.where.mockResolvedValueOnce([{ id: 'count', outputKind: 'count', physicalDate: '2026-09-12' }]);

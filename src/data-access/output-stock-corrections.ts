@@ -28,7 +28,7 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
     (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
       affectedLayers.some(l => l.physicalDate <= r.movement.physicalDate!)));
 
-  if (later) throw new ActionConflictError(`Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}.`, { entity: "binMovement", id: later.movement.id, code: `${outputStockEventLabel(later.movement.outputKind!)} ${later.movement.physicalDate}` });
+  if (later) throw new ActionConflictError(`Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${later.movement.physicalDate}).`, { entity: "binMovement", id: later.movement.id, code: `${later.movement.reason || outputStockEventLabel(later.movement.outputKind!)} (${later.movement.physicalDate})` });
   const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
   const count = counts.find(m => (m.outputKind === 'count' || m.inputSnapshot?.kind === 'count') && layers.some(l => affected.has(l.id) && l.physicalDate <= m.physicalDate!));
   if (count) throw new ActionConflictError("Correction blocked by a later count.", { entity: "binMovement", id: count.id, code: `Count ${count.physicalDate}` });

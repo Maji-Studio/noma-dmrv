@@ -7,7 +7,8 @@ import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import type {
   OutputStockAllocationView,
-  OutputStockPreview as Preview,
+  AffectedStockPreview as Preview,
+  OutputStockBalanceView,
 } from "@/types/output-stock";
 import { useState, type ReactNode } from "react";
 
@@ -42,7 +43,7 @@ function BatchBalanceBar({
   stage,
   dryLabel,
 }: {
-  allocations: OutputStockAllocationView[];
+  allocations: OutputStockBalanceView[];
   scale: number;
   wetBasis: boolean;
   colors: Map<string, string>;
@@ -82,8 +83,8 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
   const wetBasis = preview.beforeEstimatedWetKg !== null && preview.afterEstimatedWetKg !== null;
   const dryLabel = preview.dryLabel ?? "dry biochar";
   const scale = commonScale ?? Math.max(
-    wetBasis ? preview.beforeEstimatedWetKg! : preview.beforeDryKg,
-    wetBasis ? preview.afterEstimatedWetKg! : preview.afterDryKg,
+    wetBasis ? preview.beforeEstimatedWetKg! : preview.beforeDryKg ?? 0,
+    wetBasis ? preview.afterEstimatedWetKg! : preview.afterDryKg ?? 0,
     EMPTY_SCALE_KG,
   );
   const layers = [...new Map([...(preview.beforeAllocations ?? []), ...(preview.afterAllocations ?? [])].map(layer => [layer.layerId, layer])).values()];
@@ -99,7 +100,7 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
       <div>
         {preview.removedWetKg !== null && <p className="body-large font-semibold">{formatMassKg(Math.abs(preview.removedWetKg))} wet {preview.removedWetKg < 0 ? "added" : "removed"}</p>}
         <p className={preview.removedWetKg === null ? "body-large font-semibold" : "body-caption text-[var(--color-text-secondary)]"}>
-          {formatMassKg(Math.abs(preview.removedDryKg))} {dryLabel} {preview.removedDryKg < 0 ? "added" : "removed"}
+          {formatMassKg(preview.removedDryKg === null ? null : Math.abs(preview.removedDryKg))} {dryLabel} {preview.removedDryKg !== null && preview.removedDryKg < 0 ? "added" : "removed"}
         </p>
       </div>
       <p className="body-caption">
@@ -116,9 +117,9 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
               aria-label={`${balance.label} stock on common scale`}
               aria-valuemin={0}
               aria-valuemax={scale}
-              aria-valuenow={wetBasis ? balance.wet! : balance.dry}
+              aria-valuenow={wetBasis ? balance.wet! : balance.dry ?? 0}
             >
-              <div className="absolute inset-x-0 bottom-0 bg-[var(--acc-prod)]" style={{ height: `${Math.max(0, (wetBasis ? balance.wet! : balance.dry) / scale * PERCENT_SCALE)}%` }} />
+              <div className="absolute inset-x-0 bottom-0 bg-[var(--acc-prod)]" style={{ height: `${Math.max(0, (wetBasis ? balance.wet! : balance.dry ?? 0) / scale * PERCENT_SCALE)}%` }} />
             </div>
             <div className="min-w-0 flex-1 p-12 space-y-8">
               <div className="space-y-4">
@@ -139,7 +140,7 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
       </div>
       {preview.discrepancySolidsKg > 0 && <p role="status" className="body-small">Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</p>}
       {preview.blockingMessage && <p role="alert" className="body-small text-[var(--st-bad)]">{preview.blockingMessage}</p>}
-      {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?application=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>)}
+      {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? (blocker.entity === "binMovement" ? <span key={blocker.id}>{blocker.code}</span> : <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?ids=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>))}
       <div className="space-y-8">
         <h3 className="body-small font-semibold">{preview.binName}{preview.binCode ? ` (${preview.binCode})` : ""}</h3>
         {preview.lane !== "ingredient" && <OutputStockAllocations allocations={preview.allocations} />}

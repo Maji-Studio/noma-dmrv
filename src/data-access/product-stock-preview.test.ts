@@ -52,9 +52,11 @@ describe('product stock preview', () => {
     expect(bins[1].afterSolidsKg).toBe(150);
     expect(bins[1].estimateMoisturePercent).toBe(25);
   });
-  it('does not fabricate ingredient dry solids when the stock basis is unavailable', async () => {
+  it('keeps wet stock usable without inventing a dry estimate when operator moisture is retained', async () => {
     mocks.stock.mockResolvedValue([{ feedstockStockWetKg: 150, feedstockEstimatedDryKg: null }]);
-    await expect(previewProductStock(ctx, input)).rejects.toThrow('complete moisture basis');
+    const bins = await previewProductStock(ctx, input);
+    expect(bins[1]).toMatchObject({ beforeDryKg: null, afterDryKg: null, removedDryKg: null, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 105, blockingMessage: null });
+    expect(bins[2].afterSolidsKg).toBe(194);
   });
   it('rejects an ingredient bin outside the active facility or organization', async () => {
     mocks.where.mockResolvedValue([]);

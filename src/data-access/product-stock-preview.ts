@@ -3,7 +3,7 @@ import { storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import type { BiocharProductFormData } from '@/schemas/biochar-products';
-import type { OutputStockPreview } from '@/types/output-stock';
+import type { AffectedStockPreview } from '@/types/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
 import { resolveCompositionIngredientMassBasis } from './biochar-product-composition';
 import { deriveLaneStock } from './lane-stock-derivation';
@@ -14,32 +14,33 @@ const PERCENT_SCALE = 100;
 export type ProductStockPreviewInput = Pick<BiocharProductFormData, 'facilityId' | 'formulationId' | 'placedAt' | 'sourceBiocharStorageLocationId' | 'storageLocationId' | 'massKg' | 'moistureContentPercent' | 'waterAddedKg' | 'ingredientBins'>;
 
 /** Read-only projection. Product creation still revalidates every stock draw under locks. */
-export async function previewProductStock(ctx: OrgContext, input: ProductStockPreviewInput): Promise<OutputStockPreview[]> {
+export async function previewProductStock(ctx: OrgContext, input: ProductStockPreviewInput): Promise<AffectedStockPreview[]> {
   requireOrgScope(ctx);
   return db.transaction(async tx => {
     const base = { facilityId: input.facilityId, physicalDate: input.placedAt };
     const source = await prepareOutputStock(ctx, { ...base, storageLocationId: input.sourceBiocharStorageLocationId, kind: 'production_draw', wetMassKg: input.massKg, moisturePercent: input.moistureContentPercent }, tx);
     const composition = await resolveCompositionIngredientMassBasis(ctx, tx, { ingredients: input.ingredientBins ?? [] }, undefined, undefined, input.placedAt);
     const ingredients = composition.ingredients as (NonNullable<ProductStockPreviewInput['ingredientBins']>[number] & { massDryKg: number })[];
-    const bins: OutputStockPreview[] = [source.preview];
+    const bins: AffectedStockPreview[] = [source.preview];
     const draws = new Map<string, number>();
     for (const ingredient of ingredients) if (ingredient.storageLocationId && ingredient.massKg > 0) draws.set(ingredient.storageLocationId, (draws.get(ingredient.storageLocationId) ?? 0) + ingredient.massKg);
     for (const [id, wetDraw] of draws) {
       const [bin] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.id, id), eq(storageLocations.type, 'feedstock_bin'), isNull(storageLocations.archivedAt)));
       if (!bin) throw new SafeError('Ingredient bin not found or archived');
       const [stock] = await deriveLaneStock(ctx, tx, { storageLocationIds: [id], lanes: 'feedstock' });
-      if (!stock || stock.feedstockEstimatedDryKg === null) throw new SafeError('Ingredient stock needs a complete moisture basis before previewing.');
+      if (!stock) throw new SafeError('Ingredient stock not found.');
       const beforeWet = stock.feedstockStockWetKg;
       const beforeDry = stock.feedstockEstimatedDryKg;
       // Ingredient stock is withdrawn pro rata; an override describes the material
       // mixed into the product, not a new measurement of the remaining bin.
-      const dryDraw = beforeWet > 0 ? beforeDry * wetDraw / beforeWet : 0;
-      const allocation = (wet: number, dry: number) => [{ layerId: id, code: bin.code, wetMassKg: wet, dryMassKg: dry, runs: [] }];
+      const dryDraw = beforeDry === null ? null : beforeWet > 0 ? beforeDry * wetDraw / beforeWet : 0;
+      const afterDry = beforeDry === null || dryDraw === null ? null : beforeDry - dryDraw;
+      const allocation = (wet: number, dry: number | null) => [{ layerId: id, code: bin.code, wetMassKg: wet, dryMassKg: dry, runs: [] }];
       bins.push({ ...source.preview, storageLocationId: id, binCode: bin.code, binName: bin.name, formulationName: null, lane: 'ingredient', dryLabel: 'dry solids', wetLabel: 'wet stock',
-        beforeDryKg: beforeDry, afterDryKg: beforeDry - dryDraw, beforeSolidsKg: beforeDry, afterSolidsKg: beforeDry - dryDraw,
+        beforeDryKg: beforeDry, afterDryKg: afterDry, beforeSolidsKg: beforeDry, afterSolidsKg: afterDry,
         beforeEstimatedWetKg: beforeWet, afterEstimatedWetKg: beforeWet - wetDraw, removedDryKg: dryDraw, removedWetKg: wetDraw,
-        estimateMoisturePercent: beforeWet > 0 ? (1 - beforeDry / beforeWet) * PERCENT_SCALE : null,
-        allocations: [], beforeAllocations: allocation(beforeWet, beforeDry), afterAllocations: allocation(beforeWet - wetDraw, beforeDry - dryDraw),
+        estimateMoisturePercent: beforeWet > 0 && beforeDry !== null ? (1 - beforeDry / beforeWet) * PERCENT_SCALE : null,
+        allocations: [], beforeAllocations: allocation(beforeWet, beforeDry), afterAllocations: allocation(beforeWet - wetDraw, afterDry),
         blockingMessage: wetDraw > beforeWet ? 'Ingredient withdrawal exceeds available wet stock.' : null, discrepancySolidsKg: 0 });
     }
     const wetAdded = input.massKg + input.waterAddedKg + ingredients.reduce((sum, ingredient) => sum + ingredient.massKg, 0);

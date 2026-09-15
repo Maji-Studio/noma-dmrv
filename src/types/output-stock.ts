@@ -75,3 +75,19 @@ export interface MatchingOutputBin {
   dryMassKg: number;
   recordedWetMassKg: number | null;
 }
+
+/** Ingredient wet stock remains usable when its dry estimate is unavailable. */
+export type OutputStockBalanceView = Omit<OutputStockAllocationView, 'dryMassKg'> & { dryMassKg: number | null };
+export type IngredientStockPreview = Omit<OutputStockPreview,
+  'beforeDryKg' | 'afterDryKg' | 'removedDryKg' | 'beforeSolidsKg' | 'afterSolidsKg' | 'beforeAllocations' | 'afterAllocations'
+> & {
+  lane: 'ingredient';
+  beforeDryKg: number | null;
+  afterDryKg: number | null;
+  removedDryKg: number | null;
+  beforeSolidsKg: number | null;
+  afterSolidsKg: number | null;
+  beforeAllocations?: OutputStockBalanceView[];
+  afterAllocations?: OutputStockBalanceView[];
+};
+export type AffectedStockPreview = OutputStockPreview | IngredientStockPreview;

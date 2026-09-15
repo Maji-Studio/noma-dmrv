@@ -21,9 +21,16 @@ describe("OutputStockPreview", () => {
       { entity: "removal", id: "removal-id", code: "Removal" },
       { entity: "ghgStatement", id: "statement-id", code: "GHG Statement" },
     ] }} />);
-    expect(html).toContain('/applications?application=app-id');
+    expect(html).toContain('/applications?ids=app-id');
     expect(html).toContain('/certification/removals?removal=removal-id');
     expect(html).toContain('/certification/ghg-statements?statement=statement-id');
+  });
+  it("shows an unavailable ingredient dry estimate without claiming zero dry solids", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, lane: "ingredient", dryLabel: "dry solids", wetLabel: "wet stock", beforeDryKg: null, afterDryKg: null, removedDryKg: null, beforeSolidsKg: null, afterSolidsKg: null, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 120, beforeAllocations: [], afterAllocations: [], allocations: [] }} />);
+    expect(html).toContain("150 kg");
+    expect(html).toContain("120 kg");
+    expect(html).not.toContain("0 kg dry solids");
+    expect(html).not.toContain("NaN");
   });
   it("shows ingredient dry solids and retains the emptied bin on the shared scale", () => {
     const html = renderToStaticMarkup(<OutputStockPreview commonScale={2600} preview={{ ...rain, lane: "ingredient", dryLabel: "dry solids", wetLabel: "wet stock", beforeDryKg: 140, afterDryKg: 0, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 0, removedDryKg: 140, removedWetKg: 150, allocations: [], beforeAllocations: [{ layerId: "ingredient", code: "Compost", wetMassKg: 150, dryMassKg: 140, runs: [] }], afterAllocations: [{ layerId: "ingredient", code: "Compost", wetMassKg: 0, dryMassKg: 0, runs: [] }] }} />);

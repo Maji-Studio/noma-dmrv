@@ -481,13 +481,19 @@ export function BiocharProductForm({
     physicalDate: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
     moisturePercent: Number(watchedMoisture),
   } : null);
-  const productStockPreview = useProductStockPreview(!isEditMode && sourceBiocharStorageLocationId && storageLocationId && selectedFormulationId && watchedPlacedAt && massKgNum !== null && watchedMoisture != null && watchedWaterAddedKg != null ? {
+  const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
+    (ingredient) =>
+      typeof ingredient.massKg === "number" &&
+      Number.isFinite(ingredient.massKg) &&
+      ingredient.massKg >= 0,
+  );
+  const productStockPreview = useProductStockPreview(!isEditMode && ingredientMassesComplete && sourceBiocharStorageLocationId && storageLocationId && selectedFormulationId && watchedPlacedAt && massKgNum !== null && watchedMoisture != null && watchedWaterAddedKg != null ? {
     facilityId: selectedFacilityId, formulationId: selectedFormulationId, placedAt: String(watchedPlacedAt),
     sourceBiocharStorageLocationId, storageLocationId, massKg: massKgNum, moistureContentPercent: Number(watchedMoisture),
     waterAddedKg: Number(watchedWaterAddedKg), ingredientBins: watchedIngredientBins?.map(ingredient => ({ ...ingredient, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : Number.NaN })),
   } : null);
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
-  const productPreviewScale = Math.max(EMPTY_PREVIEW_SCALE_KG, ...(productStockPreview.data ?? []).flatMap(bin => [bin.beforeEstimatedWetKg ?? bin.beforeDryKg, bin.afterEstimatedWetKg ?? bin.afterDryKg]));
+  const productPreviewScale = Math.max(EMPTY_PREVIEW_SCALE_KG, ...(productStockPreview.data ?? []).flatMap(bin => [bin.beforeEstimatedWetKg ?? bin.beforeDryKg ?? 0, bin.afterEstimatedWetKg ?? bin.afterDryKg ?? 0]));
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
   const refreshStockPreview = sourcePreview.refetch;
   useEffect(() => {
@@ -555,12 +561,7 @@ export function BiocharProductForm({
   // The wet product total is a claim about the finished blend, so it stays
   // hidden until water and every ingredient mass are actually entered —
   // otherwise blank required fields read as a smaller final product.
-  const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
-    (ingredient) =>
-      typeof ingredient.massKg === "number" &&
-      Number.isFinite(ingredient.massKg) &&
-      ingredient.massKg >= 0,
-  );
+
   const blendMassKg = deriveBlendMassKg(massKgNum, watchedIngredientBins);
   const destinationWetProductKg =
     blendMassKg !== null &&
