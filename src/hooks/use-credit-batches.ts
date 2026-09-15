@@ -158,14 +158,21 @@ export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+    mutationFn: async (data: CreditBatchFormData) => {
+      const result = await createCreditBatchFn(data);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(creditBatchKeys.detail(data.id), data);
+      const listRefresh = queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, data.facilityId);
+      // The create sheet closes after this resolves; its own list must show the row.
+      return listRefresh;
     },
   });
 }

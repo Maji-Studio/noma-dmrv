@@ -233,6 +233,9 @@ export function useCreateProductionRun(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      // Seed the authoritative record before any dependent background refresh.
+      queryClient.setQueryData(productionRunKeys.detail(data.id), data);
+
       // Invalidate all production run lists
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       // Invalidate stats
@@ -253,10 +256,7 @@ export function useCreateProductionRun(
       });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
-
-      // Pre-populate the detail cache with the new run
-      queryClient.setQueryData(productionRunKeys.detail(data.id), data);
+      invalidateOnboardingProgress(queryClient, data.facilityId);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -354,7 +354,8 @@ export function useUpdateProductionRun(
       // Return context with snapshots for rollback
       return { previousRun, previousLists };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async (data, variables, context) => {
+      const previousFacilityId = context?.previousRun?.facilityId;
       // Update cache with actual server data
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
 
@@ -369,7 +370,15 @@ export function useUpdateProductionRun(
       });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
+      if (variables.facilityId && !previousFacilityId) {
+        // A move without a cached prior row can affect an unknown old facility.
+        invalidateOnboardingProgress(queryClient);
+      } else {
+        invalidateOnboardingProgress(queryClient, data.facilityId);
+        if (previousFacilityId && previousFacilityId !== data.facilityId) {
+          invalidateOnboardingProgress(queryClient, previousFacilityId);
+        }
+      }
 
       await callbacks?.onSuccess?.(data, variables);
     },

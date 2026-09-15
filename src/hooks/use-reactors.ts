@@ -87,6 +87,9 @@ export function useCreateReactor(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      // Pre-populate the detail cache with the authoritative created reactor.
+      queryClient.setQueryData(reactorKeys.detail(data.id), data);
+
       // Invalidate all reactor lists
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
       // Invalidate types in case a new type was added
@@ -102,10 +105,7 @@ export function useCreateReactor(
       queryClient.invalidateQueries({
         queryKey: facilityKeys.lists(),
       });
-      await invalidateOnboardingProgress(queryClient);
-
-      // Pre-populate the detail cache with the new reactor
-      queryClient.setQueryData(reactorKeys.detail(data.id), data);
+      invalidateOnboardingProgress(queryClient, data.facilityId);
 
       await callbacks?.onSuccess?.(data, variables);
     },

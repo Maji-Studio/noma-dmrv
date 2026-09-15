@@ -1,8 +1,13 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from "@tanstack/react-query";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useEffect, type ReactNode } from "react";
 import { entityKeys } from "./entity-query-keys";
+import { onboardingKeys } from "./use-onboarding";
 import type {
   CreateSupplierData,
   CreateSupplierWithLocationsData,
@@ -24,10 +29,6 @@ vi.mock("@/fn/suppliers", () => ({
   getSuppliersFn: vi.fn(),
   updateSupplierFn: vi.fn(),
   updateSupplierLocationFn: vi.fn(),
-}));
-
-vi.mock("./use-onboarding", () => ({
-  invalidateOnboardingProgress: vi.fn(),
 }));
 
 import {
@@ -162,6 +163,175 @@ describe.each([
       ),
     ).toEqual({ ...createdSupplier, subtitle: undefined });
     expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
+
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+});
+
+describe("supplier creation onboarding interaction", () => {
+  it("completes and seeds the entity cache without starting an inactive onboarding refresh", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const onboardingKey = onboardingKeys.status("facility-1", "org-1");
+    let holdRefresh = false;
+    let refreshStarted = false;
+    const neverFinishes = new Promise<never>(() => undefined);
+
+    await queryClient.fetchQuery({
+      queryKey: onboardingKey,
+      queryFn: async () => {
+        if (holdRefresh) {
+          refreshStarted = true;
+          return neverFinishes;
+        }
+        return { supplierCount: 0 };
+      },
+      staleTime: Infinity,
+    });
+    holdRefresh = true;
+
+    let capturedMutation: CreateMutation | undefined;
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <TestProvider queryClient={queryClient}>
+          <CreateSupplierHarness
+            onCapture={(mutation) => {
+              capturedMutation = mutation;
+            }}
+          />
+        </TestProvider>,
+      );
+    });
+
+    let created: unknown;
+    await act(async () => {
+      created = await capturedMutation?.mutateAsync({
+        name: "New Supplier",
+      } as CreateSupplierData);
+    });
+
+    expect(created).toEqual(createdSupplier);
+    expect(refreshStarted).toBe(false);
+    expect(queryClient.getQueryState(onboardingKey)?.isInvalidated).toBe(true);
+    expect(
+      queryClient.getQueryData(
+        entityKeys.detail("supplier", createdSupplier.id),
+      ),
+    ).toEqual({ ...createdSupplier, subtitle: undefined });
+
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+
+  it("completes while an active onboarding refresh is still pending", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const onboardingKey = onboardingKeys.status("facility-1", "org-1");
+    let holdRefresh = false;
+    let releaseRefresh: (() => void) | undefined;
+    const refreshGate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    const queryFn = async () => {
+      if (holdRefresh) await refreshGate;
+      return { supplierCount: holdRefresh ? 1 : 0 };
+    };
+    await queryClient.fetchQuery({
+      queryKey: onboardingKey,
+      queryFn,
+      staleTime: Infinity,
+    });
+    const onboardingObserver = new QueryObserver(queryClient, {
+      queryKey: onboardingKey,
+      queryFn,
+      staleTime: Infinity,
+    });
+    const unsubscribeOnboarding = onboardingObserver.subscribe(
+      () => undefined,
+    );
+    holdRefresh = true;
+
+    let capturedMutation: CreateMutation | undefined;
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <TestProvider queryClient={queryClient}>
+          <CreateSupplierHarness
+            onCapture={(mutation) => {
+              capturedMutation = mutation;
+            }}
+          />
+        </TestProvider>,
+      );
+    });
+
+    let created: unknown;
+    await act(async () => {
+      created = await capturedMutation?.mutateAsync({
+        name: "New Supplier",
+      } as CreateSupplierData);
+    });
+
+    expect(created).toEqual(createdSupplier);
+    expect(onboardingObserver.getCurrentResult().isFetching).toBe(true);
+    expect(capturedMutation?.isPending).toBe(false);
+
+    releaseRefresh?.();
+    await vi.waitFor(() => {
+      expect(onboardingObserver.getCurrentResult().isFetching).toBe(false);
+      expect(queryClient.getQueryData(onboardingKey)).toEqual({
+        supplierCount: 1,
+      });
+    });
+
+    unsubscribeOnboarding();
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+
+  it("does not invalidate onboarding or seed a supplier when persistence fails", async () => {
+    mocks.createSupplierFn.mockResolvedValueOnce({
+      success: false,
+      error: "Supplier was not created",
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const onboardingKey = onboardingKeys.status("facility-1", "org-1");
+    queryClient.setQueryData(onboardingKey, { supplierCount: 0 });
+
+    let capturedMutation: CreateMutation | undefined;
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <TestProvider queryClient={queryClient}>
+          <CreateSupplierHarness
+            onCapture={(mutation) => {
+              capturedMutation = mutation;
+            }}
+          />
+        </TestProvider>,
+      );
+    });
+
+    await act(async () => {
+      await expect(
+        capturedMutation?.mutateAsync({
+          name: "New Supplier",
+        } as CreateSupplierData),
+      ).rejects.toThrow("Supplier was not created");
+    });
+
+    expect(queryClient.getQueryState(onboardingKey)?.isInvalidated).toBe(false);
+    expect(
+      queryClient.getQueryData(
+        entityKeys.detail("supplier", createdSupplier.id),
+      ),
+    ).toBeUndefined();
 
     await act(async () => renderer?.unmount());
     queryClient.clear();
