@@ -27,6 +27,8 @@ import type { FeedstockCategory } from "@/schemas/feedstock-types";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 
 const VEHICLE_NAME_CONSTRAINT = "vehicles_organization_id_name_unique";
+const ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT =
+  "feedstock_types_organization_id_isometric_id_unique";
 const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
   "feedstock_types_organization_id_name_usage_unique";
 
@@ -211,6 +213,9 @@ export async function createFeedstockType(
       subtitle: `${feedstockType.category} · ${feedstockType.usage}`,
     };
   } catch (error) {
+    if (isPgUniqueViolation(error, ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT)) {
+      throw new SafeError("This Isometric feedstock type already exists. Select the existing feedstock type.");
+    }
     if (isPgUniqueViolation(error, FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT)) {
       throw new SafeError("A feedstock type with this name and usage already exists");
     }

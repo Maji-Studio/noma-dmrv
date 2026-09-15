@@ -38,6 +38,16 @@ describe("feedstock type quick-add canonical policy", () => {
     expect(saved).toMatchObject({ organizationId: ctx.organizationId, isometricFeedstockTypeId: data.isometricFeedstockTypeId });
   });
 
+  it("maps a duplicate registry selection to an actionable safe error", async () => {
+    const data = input();
+    const duplicate = input();
+    const ctx = makeTestOrgContext();
+    await createFeedstockType(ctx, data);
+    await expect(createFeedstockType(ctx, { ...duplicate, isometricFeedstockTypeId: data.isometricFeedstockTypeId }))
+      .rejects.toMatchObject({ name: "SafeError", message: "This Isometric feedstock type already exists. Select the existing feedstock type." });
+    expect(await db.select().from(feedstockTypes).where(eq(feedstockTypes.code, duplicate.code))).toEqual([]);
+  });
+
   it("keeps duplicate name/usage handling scoped to the active organization", async () => {
     const data = input();
     const duplicate = input();
