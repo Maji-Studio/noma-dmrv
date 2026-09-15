@@ -3,7 +3,7 @@
  * CRUD operations for orders with auth guards, pagination, and filtering
  */
 
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { countRows, numericAggregate } from "@/db/aggregate";
 import {
   customerLocations,
@@ -301,11 +301,13 @@ export async function getOrdersForSelect(
 async function validateCustomerLocationBelongsToCustomer(
   ctx: OrgContext,
   customerId: string,
-  customerLocationId: string | null | undefined
+  customerLocationId: string | null | undefined,
+  executor: Pick<DbTransaction, "select"> = db,
 ): Promise<void> {
+  requireOrgScope(ctx);
   if (!customerLocationId) return;
 
-  const [location] = await db
+  const [location] = await executor
     .select({ customerId: customerLocations.customerId })
     .from(customerLocations)
     .where(and(
@@ -349,7 +351,7 @@ export async function updateOrder(ctx: OrgContext, orderId: string, data: Partia
     await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'order', entityId: orderId }, 'update');
     const [delivery] = await tx.select({ code: deliveries.code }).from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.orderId, orderId)));
     if (delivery && ['formulationId', 'facilityId', 'customerId', 'customerLocationId'].some(key => key in data && data[key as keyof typeof data] !== existing[key as keyof Order])) throw new SafeError(`Order relationship is used by delivery ${delivery.code}.`);
-    await validateCustomerLocationBelongsToCustomer(ctx, data.customerId ?? existing.customerId, data.customerLocationId === undefined ? existing.customerLocationId : data.customerLocationId);
+    await validateCustomerLocationBelongsToCustomer(ctx, data.customerId ?? existing.customerId, data.customerLocationId === undefined ? existing.customerLocationId : data.customerLocationId, tx);
     if (data.facilityId) {
       const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
       if (!facility) throw new SafeError('Facility not found or archived');
