@@ -101,17 +101,16 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       reject(signal.reason);
       return;
     }
-    const timer = setTimeout(resolve, ms);
-    if (signal) {
-      signal.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timer);
-          reject(signal.reason);
-        },
-        { once: true }
-      );
-    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -163,18 +162,41 @@ async function isometricRequest<T = unknown>(
       timeoutController.abort(options.signal?.reason);
     options.signal?.addEventListener("abort", onExternalAbort, { once: true });
 
-    let response: Response;
+    let response: Response | undefined;
+    let bodyText: string;
     try {
-      response = await fetch(url, {
-        method,
-        headers,
-        body: requestBody,
-        signal: timeoutController.signal,
-      });
+      try {
+        response = await fetch(url, {
+          method,
+          headers,
+          body: requestBody,
+          signal: timeoutController.signal,
+        });
+        // The deadline covers headers and body, including HTTP error bodies.
+        bodyText = response.status === 204 ? "" : await response.text().catch((error: unknown) => {
+          // Preserve a known HTTP refusal when only its optional error body
+          // fails; deadline and caller cancellation must still propagate.
+          if (response?.ok || timeoutController.signal.aborted || options.signal?.aborted) {
+            throw error;
+          }
+          return "";
+        });
+      } finally {
+        clearTimeout(timer);
+        options.signal?.removeEventListener("abort", onExternalAbort);
+      }
     } catch (err) {
-      clearTimeout(timer);
-      options.signal?.removeEventListener("abort", onExternalAbort);
       if (options.signal?.aborted) throw options.signal.reason ?? err;
+      if (response?.ok && !timeoutController.signal.aborted) {
+        // Headers confirmed acceptance: do not replay because its body failed.
+        // Keep network classification so write reconciliation remains cautious.
+        throw new IsometricApiError(
+          `Isometric ${method} ${path}: response body could not be read`,
+          response.status,
+          undefined,
+          "network"
+        );
+      }
       const canRetry =
         isIdempotentMethod(method) || options.allowUnsafeRetries === true;
       if (!canRetry || attempt === MAX_ATTEMPTS) {
@@ -193,8 +215,6 @@ async function isometricRequest<T = unknown>(
       await sleep(jitterDelayMs(attempt), options.signal);
       continue;
     }
-    clearTimeout(timer);
-    options.signal?.removeEventListener("abort", onExternalAbort);
 
     if (response.ok) {
       log.debug(
@@ -202,7 +222,7 @@ async function isometricRequest<T = unknown>(
         "isometric request ok"
       );
       if (response.status === 204) return undefined as T;
-      const text = await response.text();
+      const text = bodyText;
       if (!text) return undefined as T;
       try {
         return JSON.parse(text) as T;
@@ -216,7 +236,6 @@ async function isometricRequest<T = unknown>(
       }
     }
 
-    const bodyText = await response.text().catch(() => "");
     let bodyJson: unknown = bodyText;
     if (bodyText) {
       try {
