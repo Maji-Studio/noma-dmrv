@@ -487,6 +487,7 @@ test.describe("Full Chain UI Smoke Test", () => {
         seededData.biocharStorageLocation.name
       );
       await page.fill('input[name="biocharOutputKg"]', "10");
+      await page.fill('input[name="biocharMoisturePercent"]', "10");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
       await waitForSideSheetClose(page);
