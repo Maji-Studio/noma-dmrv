@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { ActionConflictError } from "@/lib/errors";
 import { biocharProducts, biocharProductSourceAllocations, feedstocks, feedstockTypes, productIngredientSnapshots, storageLocations } from "@/db/schema";
 import { createBiocharProduct, updateBiocharProduct } from "@/data-access/biochar-products";
 import { updateFormulation } from "@/data-access/formulations";
@@ -89,7 +90,9 @@ describe("posted product bin and formulation contract", () => {
   });
   it("requires moisture for a positive ingredient without a usable intake", async () => {
     const f = await fixture(); const bin = await ingredientBin(f, 0);
-    await expect(submitInvalidBlend(f, { composition: composition(f, 1, bin.id) })).rejects.toThrow("Every positive ingredient requires moisture");
+    await expect(blend(f, { composition: composition(f, 1, bin.id) })).rejects.toThrow("Every positive ingredient requires moisture");
+    await expect(submitInvalidBlend(f, { composition: composition(f, 1, bin.id) })).rejects.toBeInstanceOf(ActionConflictError);
+    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
   });
   it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
@@ -107,7 +110,10 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture(); const bin = await ingredientBin(f);
     await blend(f, { composition: composition(f, 50, bin.id) }); await intake(f, bin.id, 100, 0, "2026-09-02");
     const product = await blend(f, { composition: composition(f, 30, bin.id) });
-    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "28.000", moisturePercentUsed: 6.666667 });
+    // The canonical remaining-bin estimate is pro-rata over all eligible intakes:
+    // 200 kg wet / 180 kg dry keeps a 90% solids ratio after wet withdrawals.
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory).toMatchObject({ currentWetMassKg: 120, estimatedDryMassKg: 108 });
+    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "27.000", moisturePercentUsed: 10 });
     const override = await blend(f, { composition: composition(f, 30, bin.id, { moistureContentPercent: 10, moistureSource: "operator_override" }) });
     expect(await snapshot(override.id)).toMatchObject({ drySolidsKg: "27.000", moisturePercentUsed: 10, moistureSource: "operator_override" });
   });
