@@ -12,13 +12,18 @@ in [forms.md](./forms.md); naming and React rules in
 ```text
 components (UI)
   -> hooks (React Query)
-  -> fn (server actions)
+  -> read Route Handlers (queries) / fn (server-action writes)
+  -> fn/read-models (transport-neutral read orchestration)
   -> data-access (org scope + queries)
   -> db (Drizzle schema + connection)
 ```
 
 - UI never talks directly to `db`; no layer skipping.
 - `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
+- `fn/read-models/` is the server-only exception to the `"use server"` file
+  directive: its validated orchestration cores accept an `OrgContext` supplied
+  by either a Server Action compatibility wrapper or an authenticated read
+  Route Handler. They never resolve authentication themselves.
 - `data-access/` owns query composition **and** org-scope enforcement.
 
 ## Tenancy — the actual authorization model
@@ -140,13 +145,14 @@ because of a Turbopack/Vercel runtime bug.
   explicitly allowed through.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Five API route families: `/api/auth/[...all]`,
+- Six API route families: `/api/auth/[...all]`,
   `/api/storage-local/[...key]`, `/api/documents/[id]`,
   `/api/ghg-statement-reports/[reportId]`, and
-  `/api/certification/submissions`. Documents are normally resolved
-  through `getOrgContext()`. The report route is the one deliberate public
-  bearer-capability seam: middleware lets it through, then the route verifies a
-  per-report token against the stored digest and redirects to a freshly signed
+  `/api/certification/submissions`, plus private `/api/reads/*`. Documents are
+  normally resolved through `getOrgContext()`. The report route is the one
+  deliberate public bearer-capability seam: middleware lets it through, then
+  the route verifies a per-report token against the stored digest and redirects
+  to a freshly signed
   private-object URL. Its cross-org lookup is marked
   `// org-scope-ok: verifier capability-token lookup intentionally crosses organizations.`
   Do not generalize that waiver to other reads; see [auth.md](./auth.md) and
@@ -167,6 +173,28 @@ because of a Turbopack/Vercel runtime bug.
 - Invalidate related keys after every mutation.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
+
+### Authenticated read transport
+
+Client React Query reads use ordinary `fetch` against small resource-specific
+handlers under `/api/reads/*` when that read has been migrated. This avoids the
+browser's one-at-a-time Server Function dispatch queue while preserving the
+existing query keys, freshness policy, and mutation invalidation. Server
+Actions remain the write transport. Do not replace a read with client-side
+`Promise.all` around Server Actions; those calls still share the Server
+Function queue.
+
+Each private read handler resolves `requireOrgContext()` once, then delegates
+to a validated core in `src/fn/read-models/`, which calls the same org-scoped
+data-access functions as its Server Action compatibility wrapper. Facility
+inputs are checked with `requireOrgFacility` before the domain read. Responses
+use an `ActionResult`-shaped JSON envelope and `Cache-Control: private,
+no-store`; the React Query function passes its abort signal to `fetch`.
+
+JSON is a deliberate transport contract: database `Date` values cross as ISO
+strings. The typed client adapter in `src/lib/read-api/client.ts` rehydrates the
+declared date fields before returning existing domain types to hooks. Calendar
+date fields such as a credit batch's `startDate` and `endDate` remain strings.
 
 ## next.config.ts — three load-bearing settings
 

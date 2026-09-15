@@ -4,7 +4,6 @@ import { env } from "@/config/env";
 import {
   deleteCertifierProject,
   getCertifierProjectByFacility,
-  listFacilitiesLinkedToExternal,
   listAllFacilitiesLinkedByProvider,
   updateFacilityEmissionConfig,
   upsertCertifierProject,
@@ -32,6 +31,12 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
+import {
+  readFacilityCertifierSummary,
+  type FacilityCertifierSummary,
+} from "@/fn/read-models/facility-certifier-summary";
+
+export type { FacilityCertifierSummary } from "@/fn/read-models/facility-certifier-summary";
 
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
@@ -55,40 +60,12 @@ export interface FacilityCertifierMapping {
 // or the management payload (available projects, link hints, template options).
 // The count lets create surfaces fail early when Isometric's project-wide GHG
 // Statements cannot be assigned safely to one noma facility.
-export interface FacilityCertifierSummary {
-  mapping: CertifierProjectRow | null;
-  linkedFacilityCount: number;
-  isProduction: boolean;
-  viewerCanManage: boolean;
-}
-
 export async function loadFacilityCertifierSummary(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierSummary>> {
-  return withAction(async (orgCtx) => {
-    await requireOrgFacility(orgCtx, facilityId);
-    const mapping = await getCertifierProjectByFacility(
-      orgCtx,
-      facilityId,
-      ISOMETRIC_PROVIDER,
-    );
-    const linkedFacilities = mapping
-      ? await listFacilitiesLinkedToExternal(
-          orgCtx,
-          ISOMETRIC_PROVIDER,
-          mapping.externalProjectId,
-        )
-      : [];
-    return {
-      mapping,
-      linkedFacilityCount: linkedFacilities.length,
-      isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
-      viewerCanManage:
-        orgCtx.isPlatformAdmin ||
-        orgCtx.orgRole === "owner" ||
-        orgCtx.orgRole === "admin",
-    };
-  });
+  return withAction((orgCtx) =>
+    readFacilityCertifierSummary(orgCtx, facilityId),
+  );
 }
 
 export async function loadFacilityCertifierMapping(

@@ -9,7 +9,6 @@ import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
-  getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   getCreditBatchProductionRunOptions,
@@ -21,6 +20,7 @@ import {
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
 } from "@/data-access/credit-batches";
+import { readCreditBatches } from "@/fn/read-models/credit-batches";
 import {
   createCreditBatchSchema,
   updateCreditBatchSchema,
@@ -49,12 +49,7 @@ export async function getCreditBatchesFn(
   try {
     const ctx = await requireOrgContext();
 
-    const validatedFacilityId = z.string().uuid().parse(facilityId);
-    await requireOrgFacility(ctx, validatedFacilityId);
-    const creditBatches = await getCreditBatchesData(
-      ctx,
-      validatedFacilityId,
-    );
+    const creditBatches = await readCreditBatches(ctx, facilityId);
     return { success: true, data: creditBatches };
   } catch (error) {
     logCreditBatchError("Failed to get credit batches", error);

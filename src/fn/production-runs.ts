@@ -17,9 +17,7 @@ import { requireOrgFacility } from "@/data-access/utils";
 import {
   createProductionRun,
   deleteProductionRun,
-  getProductionRuns as getProductionRunsData,
   getProductionRunById as getProductionRunByIdData,
-  getProductionRunStats as getProductionRunStatsData,
   getFacilityEnergyTotals as getFacilityEnergyTotalsData,
   getProductionRunReadings as getProductionRunReadingsData,
   updateProductionRun,
@@ -31,6 +29,10 @@ import {
   type FacilityEnergyTotals,
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
+import {
+  readProductionRuns,
+  readProductionRunStats,
+} from "@/fn/read-models/production-runs";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   formatZodActionError,
@@ -68,13 +70,7 @@ export async function getProductionRunsFn(
   try {
     const ctx = await requireOrgContext();
 
-    const validatedFilters = filters
-      ? productionRunFilterSchema.parse(filters)
-      : undefined;
-    if (validatedFilters?.facilityId) {
-      await requireOrgFacility(ctx, validatedFilters.facilityId);
-    }
-    const runs = await getProductionRunsData(ctx, validatedFilters);
+    const runs = await readProductionRuns(ctx, filters);
 
     return { success: true, data: runs };
   } catch (error) {
@@ -127,10 +123,7 @@ export async function getProductionRunStatsFn(
   try {
     const ctx = await requireOrgContext();
 
-    if (facilityId) {
-      await requireOrgFacility(ctx, facilityId);
-    }
-    const stats = await getProductionRunStatsData(ctx, facilityId);
+    const stats = await readProductionRunStats(ctx, facilityId);
     return { success: true, data: stats };
   } catch (error) {
     return {
