@@ -13,12 +13,13 @@ vi.mock("@/components/organizations/invitation-bootstrap-form", () => ({ Invitat
 import proxy from "@/proxy";
 import AcceptInvitationPage from "./page";
 
+const APP_ORIGIN = "http://localhost:3100";
 const INVITATION_ID = "audit-invitation";
 const INVITATION_PATH = `/accept-invitation/${INVITATION_ID}`;
 const EMAIL = "invitee@e2e.local";
 const state = { invitationId: INVITATION_ID, organizationId: "org-audit", email: EMAIL, accountExists: false };
 async function visitInvitation() {
-  const response = await proxy(new NextRequest(`http://localhost:3100${INVITATION_PATH}`));
+  const response = await proxy(new NextRequest(`${APP_ORIGIN}${INVITATION_PATH}`));
   expect(response.status).toBe(200);
   expect(response.headers.get("location")).toBeNull();
   return AcceptInvitationPage({ params: Promise.resolve({ id: INVITATION_ID }) });
@@ -67,13 +68,13 @@ describe("invitation proxy and landing page", () => {
     expect(renderToStaticMarkup(await visitInvitation())).toContain("Accept invitation</button>");
   });
   it.each(["/dashboard", "/settings/organization", "/accept-invitation-other/token"])("keeps %s protected", async (path) => {
-    const response = await proxy(new NextRequest(`http://localhost:3100${path}`));
+    const response = await proxy(new NextRequest(`${APP_ORIGIN}${path}`));
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe(`http://localhost:3100/login?from=${encodeURIComponent(path)}`);
+    expect(response.headers.get("location")).toBe(`${APP_ORIGIN}/login?from=${encodeURIComponent(path)}`);
   });
   it("keeps unverified users out of the workspace", async () => {
     mocks.getSession.mockResolvedValue({ user: { id: "user", emailVerified: false } });
-    const response = await proxy(new NextRequest("http://localhost:3100/dashboard"));
-    expect(response.headers.get("location")).toBe("http://localhost:3100/verify-email");
+    const response = await proxy(new NextRequest(`${APP_ORIGIN}/dashboard`));
+    expect(response.headers.get("location")).toBe(`${APP_ORIGIN}/verify-email`);
   });
 });
