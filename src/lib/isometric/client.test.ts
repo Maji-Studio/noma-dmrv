@@ -81,6 +81,20 @@ describe("registry response body deadline", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it.each(["GET", "POST"] as const)("does not replay accepted %s when its body fails", async (method) => {
+    fetchMock.mockImplementation(async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new Error("response stream failed")); },
+    }), { status: 200 }));
+    const outcome = (method === "GET"
+      ? client.get("/test")
+      : client.post("/test", {}, { allowUnsafeRetries: true }))
+      .catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    expect(await outcome).toMatchObject({ code: "network", status: 200 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("does not replay a timed-out PATCH", async () => {
     stalledResponse(200);
     const outcome = client.patch("/test", {}).catch((error: unknown) => error);

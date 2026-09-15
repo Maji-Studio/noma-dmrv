@@ -162,7 +162,7 @@ async function isometricRequest<T = unknown>(
       timeoutController.abort(options.signal?.reason);
     options.signal?.addEventListener("abort", onExternalAbort, { once: true });
 
-    let response: Response;
+    let response: Response | undefined;
     let bodyText: string;
     try {
       try {
@@ -176,7 +176,7 @@ async function isometricRequest<T = unknown>(
         bodyText = response.status === 204 ? "" : await response.text().catch((error: unknown) => {
           // Preserve a known HTTP refusal when only its optional error body
           // fails; deadline and caller cancellation must still propagate.
-          if (response.ok || timeoutController.signal.aborted || options.signal?.aborted) {
+          if (response?.ok || timeoutController.signal.aborted || options.signal?.aborted) {
             throw error;
           }
           return "";
@@ -187,6 +187,16 @@ async function isometricRequest<T = unknown>(
       }
     } catch (err) {
       if (options.signal?.aborted) throw options.signal.reason ?? err;
+      if (response?.ok && !timeoutController.signal.aborted) {
+        // Headers confirmed acceptance: do not replay because its body failed.
+        // Keep network classification so write reconciliation remains cautious.
+        throw new IsometricApiError(
+          `Isometric ${method} ${path}: response body could not be read`,
+          response.status,
+          undefined,
+          "network"
+        );
+      }
       const canRetry =
         isIdempotentMethod(method) || options.allowUnsafeRetries === true;
       if (!canRetry || attempt === MAX_ATTEMPTS) {
