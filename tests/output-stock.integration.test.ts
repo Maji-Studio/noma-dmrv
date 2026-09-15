@@ -1,3 +1,4 @@
+import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
@@ -23,11 +24,10 @@ async function fixture() {
   for (const [index, wet, moisture, ingredientWet, ingredientMoisture, date] of [
     [0, 1000, 10, 500, 60, '2026-09-10'], [1, 750, 20, 250, 52, '2026-09-12'],
   ] as const) {
-    const preview = await previewOutputStock(f.ctx, { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: date, kind: 'production_draw', wetMassKg: wet, moisturePercent: moisture });
-    const productInput = { code: `E2E-FIFO-${index}-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: date,
+    const productInput = await withProductStockFingerprint(f.ctx, { code: `E2E-FIFO-${index}-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: date,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: wet + ingredientWet, moistureContentPercent: moisture, waterAddedKg: 0,
-      idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint,
-      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: ingredientWet, moistureContentPercent: ingredientMoisture, moistureSource: 'operator_override' }] } };
+      idempotencyKey: randomUUID(),
+      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: ingredientWet, moistureContentPercent: ingredientMoisture, moistureSource: 'operator_override' }] } });
     const product = await createBiocharProduct(f.ctx, productInput);
     expect((await createBiocharProduct(f.ctx, productInput)).id).toBe(product.id);
   }
@@ -126,10 +126,10 @@ describe('output FIFO transactions', () => {
     const source = { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: '2026-09-08', kind: 'production_draw' as const, wetMassKg: 100, moisturePercent: 0 };
     const preview = await previewOutputStock(f.ctx, source);
     expect(preview.allocations[0].layerId).toBe(late.id);
-    const product = await createBiocharProduct(f.ctx, { code: `E2E-FIFO-LATE-P-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: source.physicalDate,
+    const product = await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, { code: `E2E-FIFO-LATE-P-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: source.physicalDate,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
-      idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint,
-      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: 0, moistureContentPercent: 0, moistureSource: 'operator_override' }] } });
+      idempotencyKey: randomUUID(),
+      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: 0, moistureContentPercent: 0, moistureSource: 'operator_override' }] } }));
     const originals = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     expect(originals.map(a => Number(a.dryMassKg)).sort((a,b) => b-a)).toEqual([900, 250]);
     const corrected = await post(f, { ...f.input, physicalDate: '2026-09-15', correctsMovementId: originals[0].movementId });
@@ -158,9 +158,8 @@ describe('output FIFO transactions', () => {
     const products: Awaited<ReturnType<typeof createBiocharProduct>>[] = [];
     for (const [index, massKg] of [0.001, 0.002].entries()) {
       const input = { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: '2026-09-14', kind: 'production_draw' as const, wetMassKg: massKg, moisturePercent: 0 };
-      const preview = await previewOutputStock(f.ctx, input);
-      products.push(await createBiocharProduct(f.ctx, { code: `E2E-FIFO-TINY-P${index}-${f.tag}`, facilityId: f.facility.id, formulationId: f.pure.id, placedAt: input.physicalDate,
-        sourceBiocharStorageLocationId: f.source.id, storageLocationId: bin.id, massKg, moistureContentPercent: 0, waterAddedKg: 0, composition: {}, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint }));
+      products.push(await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, { code: `E2E-FIFO-TINY-P${index}-${f.tag}`, facilityId: f.facility.id, formulationId: f.pure.id, placedAt: input.physicalDate,
+        sourceBiocharStorageLocationId: f.source.id, storageLocationId: bin.id, massKg, moistureContentPercent: 0, waterAddedKg: 0, composition: {}, idempotencyKey: randomUUID() })));
     }
     const order = await createOrder(f.ctx, { code: `E2E-FIFO-TINY-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 1, packaging: 'loose' });
     let lastDelivery;

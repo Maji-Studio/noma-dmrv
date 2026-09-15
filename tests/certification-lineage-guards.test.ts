@@ -1,5 +1,5 @@
 import { ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
-import { previewOutputStock } from "@/data-access/output-stock-operations";
+import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -748,6 +748,7 @@ describe("certification lineage guards", () => {
       const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
       // Certification freezes the submitted records, not the physical stock
       // that remains in the run's biochar bin.
+      const formulationId = (await db.select().from(biocharProducts).where(eq(biocharProducts.id, fixture.productId)))[0].formulationId;
       const [bin] = await db
         .insert(storageLocations)
         .values({
@@ -763,23 +764,22 @@ describe("certification lineage guards", () => {
       await db.update(productionRuns).set({ biocharStorageLocationId: sourceBin.id, biocharDryMassKg: 380, biocharOutputKg: 400 }).where(eq(productionRuns.id, fixture.productionRunId));
       await db.insert(biocharProductSourceAllocations).values({ organizationId: TEST_ORG_ID, biocharProductId: fixture.productId, productionRunId: fixture.productionRunId, sourceStorageLocationId: sourceBin.id, allocatedDryMassKg: 285, allocatedWetMassKg: 300 });
       await ensureOutputFixtureActor(makeTestOrgContext(TEST_USER_ID));
-      const preview = await previewOutputStock(makeTestOrgContext(TEST_USER_ID), { kind: "production_draw", facilityId: fixture.facilityId, storageLocationId: sourceBin.id, physicalDate: "2026-07-01", wetMassKg: 10, moisturePercent: 5 });
+
       try {
         const product = await createBiocharProduct(
           makeTestOrgContext(TEST_USER_ID),
-          {
+          await withProductStockFingerprint(makeTestOrgContext(TEST_USER_ID), {
             code: `BP-LOCKED-${tag}`,
             placedAt: "2026-07-01",
-            formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, fixture.productId)))[0].formulationId,
+            formulationId,
             facilityId: fixture.facilityId,
             sourceBiocharStorageLocationId: sourceBin.id,
             idempotencyKey: crypto.randomUUID(),
-            basisFingerprint: preview.basisFingerprint,
             storageLocationId: bin.id,
             massKg: 10,
             moistureContentPercent: 5,
             waterAddedKg: 0,
-          },
+          }),
         );
         expect(product.code).toBe(`BP-LOCKED-${tag}`);
       } finally {

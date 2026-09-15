@@ -1,3 +1,4 @@
+import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
@@ -38,18 +39,14 @@ async function parents() {
 
 async function postedTruck() {
   const f = await parents();
-  const sourcePreview = await previewOutputStock(f.ctx, {
-    storageLocationId: f.source.id, facilityId: f.facility.id,
-    physicalDate: '2026-09-10', kind: 'production_draw', wetMassKg: 1000, moisturePercent: 10,
-  });
-  const product = await createBiocharProduct(f.ctx, {
+  const product = await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, {
     code: `E2E-RACE-P-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id,
     placedAt: '2026-09-10', sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id,
     massKg: 1500, moistureContentPercent: 10, waterAddedKg: 0,
-    idempotencyKey: randomUUID(), basisFingerprint: sourcePreview.basisFingerprint,
+    idempotencyKey: randomUUID(),
     composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id,
       massKg: 500, moistureContentPercent: 60, moistureSource: 'operator_override' }] },
-  });
+  }));
   const order = await createOrder(f.ctx, {
     code: `E2E-RACE-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
     formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 2000, packaging: 'loose',

@@ -1,4 +1,5 @@
 import "../../setup";
+import { withProductStockFingerprint } from "../../helpers/product-stock-preview-fixture";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "../../../src/db/org-defaults";
@@ -28,20 +29,16 @@ export async function seedOutputStockBrowserFixture(userId: string, shipped = fa
     [0, 1000, 10, 500, 60, "2026-09-10"],
     [1, 750, 20, 250, 52, "2026-09-12"],
   ] as const) {
-    const preview = await previewOutputStock(f.ctx, {
-      storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: placedAt,
-      kind: "production_draw", wetMassKg: wet, moisturePercent: moisture,
-    });
-    products.push(await createBiocharProduct(f.ctx, {
+    products.push(await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, {
       code: `E2E-FIFO-${index}-${f.tag}`, facilityId: f.facility.id,
       formulationId: f.recipe.id, placedAt, sourceBiocharStorageLocationId: f.source.id,
       storageLocationId: f.bin.id, massKg: wet + ingredientWet,
       moistureContentPercent: moisture, waterAddedKg: 0,
-      idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint,
+      idempotencyKey: randomUUID(),
       composition: { ingredients: [{ formulationIngredientId: f.ingredient.id,
         feedstockTypeId: f.ingredientType.id, massKg: ingredientWet,
         moistureContentPercent: ingredientMoisture, moistureSource: "operator_override" }] },
-    }));
+    })));
   }
   const emptyBins = await db.insert(storageLocations).values(
     Array.from({ length: FIFO_MATCHING_BIN_COUNT }, (_, index) => ({

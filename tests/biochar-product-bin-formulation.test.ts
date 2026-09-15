@@ -35,6 +35,11 @@ function composition(f: Fixture, massKg = 0, binId: string | null = null, extra:
 async function blend(f: Fixture, input: { massKg?: number; composition?: Record<string, unknown>; storageLocationId?: string } = {}) {
   return postProduct(f, { massKg: 100, formulationId: f.recipe.id, composition: composition(f), ...input });
 }
+/** Obtain a valid public preview before deliberately submitting invalid writer facts. */
+async function submitInvalidBlend(f: Fixture, changes: Parameters<typeof blend>[1]) {
+  const input = await productInput(f, { formulationId: f.recipe.id, composition: composition(f) });
+  return createBiocharProduct(f.ctx, { ...input, ...changes });
+}
 async function snapshot(productId: string) { return (await db.select().from(productIngredientSnapshots).where(eq(productIngredientSnapshots.biocharProductId, productId)))[0]; }
 
 describe("posted product bin and formulation contract", () => {
@@ -46,15 +51,16 @@ describe("posted product bin and formulation contract", () => {
   });
   it("rejects a different formulation in an assigned bin before posting", async () => {
     const f = await fixture();
-    await expect(postProduct(f)).rejects.toThrow("product bin for this formulation");
+    const input = await productInput(f, { formulationId: f.recipe.id, composition: composition(f) });
+    await expect(createBiocharProduct(f.ctx, { ...input, formulationId: f.pure.id })).rejects.toThrow("product bin for this formulation");
     expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
   });
   it("rejects a composition that omits a formulation ingredient", async () => {
-    const f = await fixture(); await expect(postProduct(f, { formulationId: f.recipe.id })).rejects.toThrow("must include every ingredient");
+    const f = await fixture(); await expect(submitInvalidBlend(f, { composition: {} })).rejects.toThrow("must include every ingredient");
   });
   it("rejects duplicate ingredient rows before drawing either source", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const row = composition(f, 20, bin.id).ingredients[0];
-    await expect(blend(f, { composition: { ingredients: [row, { ...row }] } })).rejects.toThrow("Each formulation ingredient can appear only once");
+    await expect(submitInvalidBlend(f, { composition: { ingredients: [row, { ...row }] } })).rejects.toThrow("Each formulation ingredient can appear only once");
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(100);
     expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
   });
@@ -67,12 +73,12 @@ describe("posted product bin and formulation contract", () => {
   it("rejects pyrolysis-only feedstock bins as blend ingredient sources", async () => {
     const f = await fixture(); const [type] = await db.insert(feedstockTypes).values({ organizationId: f.ctx.organizationId, code: `E2E-PYRO-${f.tag}`, name: `E2E Pyro ${f.tag}`, category: "forestry", usage: "pyrolysis" }).returning();
     const bin = await ingredientBin(f, 0, 0, type.id);
-    await expect(blend(f, { composition: composition(f, 20, bin.id) })).rejects.toThrow("blend-usage");
+    await expect(submitInvalidBlend(f, { composition: composition(f, 20, bin.id) })).rejects.toThrow("blend-usage");
   });
   it("rejects a blend bin whose held material differs from the recipe line", async () => {
     const f = await fixture(); const [type] = await db.insert(feedstockTypes).values({ organizationId: f.ctx.organizationId, code: `E2E-OTHER-${f.tag}`, name: `E2E Other ${f.tag}`, category: "mineral", usage: "blend" }).returning();
     const bin = await ingredientBin(f, 0, 0, type.id);
-    await expect(blend(f, { composition: composition(f, 20, bin.id) })).rejects.toThrow("match the formulation material");
+    await expect(submitInvalidBlend(f, { composition: composition(f, 20, bin.id) })).rejects.toThrow("match the formulation material");
   });
   it("omits moisture snapshots for zero-mass ingredients and keeps their solids at zero", async () => {
     const f = await fixture(); const bin = await ingredientBin(f, 0);
@@ -83,7 +89,7 @@ describe("posted product bin and formulation contract", () => {
   });
   it("requires moisture for a positive ingredient without a usable intake", async () => {
     const f = await fixture(); const bin = await ingredientBin(f, 0);
-    await expect(blend(f, { composition: composition(f, 1, bin.id) })).rejects.toThrow("Every positive ingredient requires moisture");
+    await expect(submitInvalidBlend(f, { composition: composition(f, 1, bin.id) })).rejects.toThrow("Every positive ingredient requires moisture");
   });
   it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
@@ -132,7 +138,7 @@ describe("posted product bin and formulation contract", () => {
   });
   it("rejects an all-ingredient product with zero source biochar", async () => {
     const f = await fixture();
-    await expect(blend(f, { composition: composition(f, 100, null, { moistureContentPercent: 0 }) })).rejects.toThrow("positive source biochar");
+    await expect(submitInvalidBlend(f, { composition: composition(f, 100, null, { moistureContentPercent: 0 }) })).rejects.toThrow("positive source biochar");
   });
   it("allows manual ingredient moisture without a bin while keeping posted mass immutable", async () => {
     const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10, moistureSource: "operator_override" }) });

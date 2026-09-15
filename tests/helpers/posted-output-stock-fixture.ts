@@ -1,3 +1,4 @@
+import { withProductStockFingerprint } from "./product-stock-preview-fixture";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -28,14 +29,7 @@ export async function productInput(f: PostedStockParents, changes: Partial<Creat
   const data = { code: `E2E-STOCK-P-${randomUUID().toUpperCase()}`, facilityId: f.facility.id, formulationId: f.pure.id,
     placedAt: "2026-09-12", sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id,
     massKg: 100, moistureContentPercent: 0, waterAddedKg: 0, ...changes };
-  const ingredients = data.composition?.ingredients;
-  const ingredientWet = Array.isArray(ingredients) ? ingredients.reduce((sum: number, ingredient: unknown) => {
-    if (!ingredient || typeof ingredient !== "object" || !("massKg" in ingredient)) throw new Error("Invalid fixture ingredient");
-    return sum + Number(ingredient.massKg);
-  }, 0) : 0;
-  const preview = await previewOutputStock(f.ctx, { facilityId: data.facilityId, storageLocationId: data.sourceBiocharStorageLocationId ?? f.source.id,
-    physicalDate: data.placedAt, kind: "production_draw", wetMassKg: Math.max(0.001, (data.massKg ?? 0) - ingredientWet), moisturePercent: data.moistureContentPercent });
-  return { ...data, idempotencyKey: changes.idempotencyKey ?? randomUUID(), basisFingerprint: changes.basisFingerprint ?? preview.basisFingerprint };
+  return withProductStockFingerprint(f.ctx, { ...data, idempotencyKey: changes.idempotencyKey ?? randomUUID() });
 }
 export async function postProduct(f: PostedStockParents, changes: Partial<CreateBiocharProductInput> = {}) {
   return createBiocharProduct(f.ctx, await productInput(f, changes));
