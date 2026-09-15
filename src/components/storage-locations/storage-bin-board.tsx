@@ -13,6 +13,13 @@
  */
 "use client";
 
+import { Button, EmptyState, ListPagination } from "@/components/ui";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
+import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatMass } from "@/lib/format-utils";
+import type { StorageLocationType } from "@/schemas/storage-locations";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -24,12 +31,6 @@ import {
   WarehouseIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState, ListPagination } from "@/components/ui";
-import { Skeleton } from "@/components/ui/loading-skeleton";
-import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
-import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import type { StorageLocationType } from "@/schemas/storage-locations";
-import { formatMass } from "@/lib/format-utils";
 import {
   BIN_SORT_OPTIONS,
   BIN_TYPE_FILTER_ORDER,
@@ -38,7 +39,6 @@ import {
   type StorageBinTypeFilter,
 } from "./bin-display";
 import { StorageBinTile, type BinRowAction } from "./storage-bin-tile";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
@@ -92,6 +92,7 @@ export interface StorageBinBoardProps {
   onArchive: (binId: string) => void;
   onRestore: (binId: string) => void;
   onDelete: (binId: string) => void;
+  onRecordLoss?: (bin: StorageLocationWithFacility) => void;
   onReconcile: (bin: StorageLocationWithFacility) => void;
 }
 
@@ -143,7 +144,7 @@ function binRowActions(
   bin: StorageLocationWithFacility,
   handlers: Pick<
     StorageBinBoardProps,
-    "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile"
+    "onEdit" | "onArchive" | "onRestore" | "onDelete" | "onReconcile" | "onRecordLoss"
   >,
 ): BinRowAction[] {
   if (bin.archivedAt != null) {
@@ -156,6 +157,7 @@ function binRowActions(
     ];
   }
   return [
+    ...(bin.type !== "feedstock_bin" && handlers.onRecordLoss ? [{ label: "Record loss", onSelect: () => handlers.onRecordLoss?.(bin) }] : []),
     {
       label: "Reconcile stock",
       icon: <ArrowsClockwiseIcon size={16} />,

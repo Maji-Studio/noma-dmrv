@@ -1,3 +1,4 @@
+import { outputStockKeys } from "./use-output-stock";
 /**
  * Bin Movements React Query Hooks (issue #194)
  *
@@ -6,17 +7,17 @@
  * (and the negative-stock badge) refresh immediately.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getBinMovementsFn,
   recordLossFn,
   recordStockTakeFn,
 } from "@/fn/bin-movements";
+import { storageLocationKeys } from "@/hooks/use-storage-locations";
 import type {
   RecordLossData,
   RecordStockTakeData,
 } from "@/schemas/bin-movements";
-import { storageLocationKeys } from "@/hooks/use-storage-locations";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
 
 /** Client-side carrier for a structured loss action field error. */
@@ -75,6 +76,7 @@ function useInvalidateAfterMovement() {
     queryClient.invalidateQueries({
       queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
     });
+    void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
     invalidateStockEntityQueries(queryClient, "binMovement");
   };
 }

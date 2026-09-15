@@ -5,55 +5,46 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import {
-  TruckIcon,
-  CalendarIcon,
-  ScalesIcon,
-  PlusIcon,
-  XIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import type { Delivery } from "@/db/schema";
-import { DataTable } from "@/components/ui/data-table";
-import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/ui/stat-card";
-import { MassPair } from "@/components/ui/mass-pair";
-import { ServerError } from "@/components/forms";
-import { useToast } from "@/components/ui/toast";
-import { DeliveryForm } from "./delivery-form";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
-import { TransportEvidencePanel } from "@/components/transport-legs";
-import {
-  useCreateDelivery,
-  useDeleteDelivery,
-  useDeliveries,
-  useUpdateDelivery,
-  useDeliveryStats,
-  useDeliveryWithRelations,
-} from "@/hooks/use-deliveries";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDebounce } from "@/hooks/use-debounce";
-import {
-  useListPagination,
-  useReconcileListPage,
-} from "@/hooks/use-list-pagination";
-import { useCreditBatches } from "@/hooks/use-credit-batches";
-import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
+import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import type {
-  DeliveryFormData,
-  CreateDeliveryData,
-} from "@/schemas/deliveries";
+import { TransportEvidencePanel } from "@/components/transport-legs";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { DataTable } from "@/components/ui/data-table";
+import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { MassPair } from "@/components/ui/mass-pair";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useToast } from "@/components/ui/toast";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type {
   DeliveryDetail,
   DeliveryWithRelations,
 } from "@/data-access/deliveries";
+import type { Delivery } from "@/db/schema";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
+import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useCreateDelivery,
+  useDeliveries,
+  useDeliveryStats,
+  useDeliveryWithRelations,
+  useUpdateDelivery,
+} from "@/hooks/use-deliveries";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 import {
   formatDate,
   formatDateRange,
@@ -67,17 +58,24 @@ import {
   qualifyMassLabel,
   WET_MASS_FIELD_LABEL,
 } from "@/lib/mass-moisture";
-import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
+import type {
+  CreateDeliveryData,
+  DeliveryFormData,
+} from "@/schemas/deliveries";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
-import { parseAsString, useQueryState } from "nuqs";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import {
-  ENTITY_DEEP_LINK_FOCUS_PARAM,
-  ENTITY_DEEP_LINK_MODE_PARAM,
-  parseEntityFocusTarget,
-} from "@/lib/entity-deep-link";
-import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+  CalendarIcon,
+  PlusIcon,
+  ScalesIcon,
+  TruckIcon,
+  XIcon,
+} from "@phosphor-icons/react/dist/ssr";
+import type { ColumnDef } from "@tanstack/react-table";
+import { parseAsString, useQueryState } from "nuqs";
+import { useEffect, useState } from "react";
+import { DeliveryForm } from "./delivery-form";
+import { DeliveryStockDetails } from "./delivery-stock-details";
 
 // ============================================
 // Helper Functions
@@ -88,6 +86,7 @@ function deliveryDetailToRelations(
 ): DeliveryWithRelations {
   return {
     ...delivery,
+    status: "delivered",
     orderCode: delivery.order?.code ?? null,
     facilityName: delivery.facility?.name ?? null,
     customerName: delivery.customerName,
@@ -103,7 +102,6 @@ function deliveryDetailToRelations(
 
 function createColumns(
   onEdit: (delivery: DeliveryWithRelations) => void,
-  onDelete: (deliveryId: string) => void,
 ): ColumnDef<DeliveryWithRelations>[] {
   return [
     {
@@ -201,7 +199,6 @@ function createColumns(
             label={`Actions for ${row.original.code}`}
             actions={[
               { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
             ]}
           />
         </div>
@@ -239,12 +236,9 @@ export function DeliveryList() {
     mode: SideSheetMode;
   } | null>(null);
 
-  // Delete state
-  const [deletingDeliveryId, setDeletingDeliveryId] = useState<string | null>(null);
 
   // Error state
   const [formError, setFormError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Global facility context
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -286,7 +280,6 @@ export function DeliveryList() {
   // Mutations
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
-  const deleteDelivery = useDeleteDelivery();
   const toast = useToast();
   const createWithEvidence = useCreateWithEvidence({
     entityType: "delivery",
@@ -302,6 +295,7 @@ export function DeliveryList() {
       const created = await createDelivery.mutateAsync(createData);
       const createdDelivery: DeliveryWithRelations = {
         ...created,
+        status: "delivered",
         orderCode: null,
         facilityName: null,
         customerName: null,
@@ -412,23 +406,7 @@ export function DeliveryList() {
     }
   };
 
-  const handleDelete = (deliveryId: string) => {
-    setDeletingDeliveryId(deliveryId);
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deletingDeliveryId) return;
-    setDeleteError(null);
-    try {
-      await deleteDelivery.mutateAsync(deletingDeliveryId);
-      setDeletingDeliveryId(null);
-      toast.success("Delivery deleted.");
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Delivery was not deleted. Try again.");
-    }
-  };
-
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openEdit);
 
   const deliveries = deliveriesData?.items ?? [];
   const totalPages = deliveriesData?.totalPages ?? 0;
@@ -648,12 +626,7 @@ export function DeliveryList() {
                     },
                   ],
                   content: (
-                    <ProductCompositionPreview
-                      wetMassKg={sideSheetEntity.deliveredWetMassKg}
-                      moisturePercent={sideSheetEntity.moistureContentPercent}
-                      dryBiocharKg={sideSheetEntity.massDryKg}
-                      note="Dry biochar is allocated from the linked product's tracked composition."
-                    />
+                    <DeliveryStockDetails deliveryId={sideSheetEntity.id} storageLocationId={sideSheetEntity.storageLocationId} facilityId={sideSheetEntity.facilityId} wetMassKg={sideSheetEntity.deliveredWetMassKg} dryMassKg={sideSheetEntity.massDryKg} />
                   ),
                 },
                 {
@@ -701,21 +674,6 @@ export function DeliveryList() {
         />
       </EntitySideSheet>
 
-      {/* Delete Error */}
-      {deleteError && <ServerError message={deleteError} />}
-
-      {/* Delete Confirmation Dialog */}
-      <DeleteConfirmDialog
-        isOpen={!!deletingDeliveryId}
-        title="Delete Delivery"
-        message="Are you sure you want to delete this delivery? This action cannot be undone."
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => {
-          setDeletingDeliveryId(null);
-          setDeleteError(null);
-        }}
-        isPending={deleteDelivery.isPending}
-      />
     </div>
   );
 }

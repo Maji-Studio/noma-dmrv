@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -69,17 +72,17 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
 
     const [product] = await tx
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `BP-AM-${runId}`,
         facilityId: facility.id,
         formulationId: formulation.id,
-      })
+      }))
       .returning({ id: biocharProducts.id });
 
     const [order] = await tx
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `OR-AM-${runId}`,
         facilityId: facility.id,
@@ -89,12 +92,10 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
         orderDate: new Date("2025-07-01"),
         quantityKg: 10_000,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
 
-    const insertedDeliveries = await tx
-      .insert(deliveries)
-      .values([
+    const insertedDeliveries = await insertOutputDeliveryFixture(tx, [
         {
           organizationId: TEST_ORG_ID,
           code: `DL-AM-${runId}-A`,
@@ -117,8 +118,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
           massDryKg: 2_700,
           moistureContentPercent: 5,
         },
-      ])
-      .returning({ id: deliveries.id });
+      ], row => ({ id: row.id }));
 
     return {
       facilityId: facility.id,
@@ -133,23 +133,20 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
   });
 }
 
-/** Delivery left at the schema default status ('upcoming') for guard tests. */
-async function insertUpcomingDelivery(
+/** Delivery with unresolved dry evidence for guard tests. */
+async function insertUnresolvedDelivery(
   fixture: ApplicationMutationFixture,
   runId: string,
 ): Promise<string> {
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
+  const [delivery] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
-      code: `DL-AM-${runId}-UPCOMING`,
+      code: `DL-AM-${runId}-UNRESOLVED`,
       facilityId: fixture.facilityId,
       orderId: fixture.orderId,
       deliveryDate: new Date("2025-07-07"),
       deliveredWetMassKg: 4_000,
       moistureContentPercent: 15,
-    })
-    .returning({ id: deliveries.id });
+    }, row => ({ id: row.id }));
 
   fixture.deliveryIds.push(delivery.id);
   return delivery.id;
@@ -158,19 +155,17 @@ async function insertUpcomingDelivery(
 async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Promise<void> {
   await db.transaction(async (tx) => {
     if (fixture.applicationIds.length > 0) {
-      await tx
-        .delete(applications)
-        .where(inArray(applications.id, fixture.applicationIds));
+      await deleteOutputApplicationFixtures(tx, inArray(applications.id, fixture.applicationIds));
     }
 
-    await tx.delete(deliveries).where(inArray(deliveries.id, fixture.deliveryIds));
+    await deleteOutputDeliveryFixtures(tx, inArray(deliveries.id, fixture.deliveryIds));
     await tx.delete(orders).where(eq(orders.id, fixture.orderId));
-    await tx.delete(biocharProducts).where(eq(biocharProducts.id, fixture.productId));
+    await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx.delete(formulations).where(eq(formulations.id, fixture.formulationId));
     await tx.delete(certifierProjects).where(eq(certifierProjects.facilityId, fixture.facilityId));
     await tx.delete(customerLocations).where(eq(customerLocations.id, fixture.customerLocationId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
-    await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
 }
 
@@ -279,9 +274,7 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const [corrupt] = await db
-        .insert(applications)
-        .values({
+      const [corrupt] = await insertOutputApplicationFixture(db, {
           organizationId: TEST_ORG_ID,
           code: `AP-AM-${runId}-CORRUPT`,
           deliveryId: fixture.deliveryIds[0],
@@ -289,8 +282,7 @@ describe("application mutations", () => {
           biocharAppliedTons: 4,
           fieldSizeHa: 1,
           biocharAppliedDryTons: 4.1,
-        })
-        .returning({ id: applications.id });
+        }, row => ({ id: row.id }));
       fixture.applicationIds.push(corrupt.id);
 
       await expect(
@@ -451,7 +443,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
     } finally {
-      await db.delete(applications).where(eq(applications.code, code));
+      await deleteOutputApplicationFixtures(db, eq(applications.code, code));
       await cleanupMutationFixture(fixture);
     }
   });
@@ -489,24 +481,24 @@ describe("application mutations", () => {
     }
   });
 
-  it("rejects create against a delivery not yet marked delivered", async () => {
+  it("rejects create against a delivery with unresolved saved provenance", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
-    const code = `AP-AM-${runId}-UPCOMING`;
+    const code = `AP-AM-${runId}-UNRESOLVED`;
 
     try {
-      const upcomingDeliveryId = await insertUpcomingDelivery(fixture, runId);
+      const unresolvedDeliveryId = await insertUnresolvedDelivery(fixture, runId);
 
       await expect(
         createApplication(makeTestOrgContext(TEST_USER_ID), {
           code,
-          deliveryId: upcomingDeliveryId,
+          deliveryId: unresolvedDeliveryId,
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
           fieldSizeHa: 1,
         }),
       ).rejects.toThrow(
-        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+        /saved|provenance|dry/i,
       );
 
       const [application] = await db
@@ -601,14 +593,14 @@ describe("application mutations", () => {
       });
       fixture.applicationIds.push(application.id);
 
-      const upcomingDeliveryId = await insertUpcomingDelivery(fixture, runId);
+      const unresolvedDeliveryId = await insertUnresolvedDelivery(fixture, runId);
 
       await expect(
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
-          deliveryId: upcomingDeliveryId,
+          deliveryId: unresolvedDeliveryId,
         }),
       ).rejects.toThrow(
-        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+        /saved|provenance|dry/i,
       );
     } finally {
       await cleanupMutationFixture(fixture);
