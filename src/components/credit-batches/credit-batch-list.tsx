@@ -263,16 +263,9 @@ export function CreditBatchList({
   const handleCreate = async (data: CreditBatchFormData) => {
     setCreateError(null);
     try {
-      const result = await createCreditBatch.mutateAsync(data);
-      if (result.success) {
-        closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
-        toast.success("Credit batch created.");
-      } else {
-        setCreateError(
-          result.error ||
-            "Credit batch was not created. Check the form.",
-        );
-      }
+      await createCreditBatch.mutateAsync(data);
+      closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
+      toast.success("Credit batch created.");
     } catch (err) {
       const message =
         err instanceof Error

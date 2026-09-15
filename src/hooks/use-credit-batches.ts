@@ -158,20 +158,19 @@ export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
-    onSuccess: (result) => {
-      if (!result.success) return;
-
-      queryClient.setQueryData(
-        creditBatchKeys.detail(result.data.id),
-        result.data,
-      );
+    mutationFn: async (data: CreditBatchFormData) => {
+      const result = await createCreditBatchFn(data);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(creditBatchKeys.detail(data.id), data);
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
       invalidateCertificationReadiness(queryClient);
-      invalidateOnboardingProgress(queryClient, result.data.facilityId);
+      invalidateOnboardingProgress(queryClient, data.facilityId);
     },
   });
 }
