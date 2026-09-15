@@ -59,6 +59,13 @@ describe("useCreateCreditBatch", () => {
     client.setQueryData(key, { creditBatchCount: 0 });
     const listKey = creditBatchKeys.list({ facilityId: row.facilityId });
     client.setQueryData(listKey, []);
+    let releaseList!: () => void;
+    const listHeld = new Promise<void>((resolve) => { releaseList = resolve; });
+    const listObserver = new QueryObserver(client, {
+      queryKey: listKey, staleTime: Infinity,
+      queryFn: async () => { await listHeld; return [row]; },
+    });
+    const unsubscribeList = listObserver.subscribe(() => undefined);
     let release!: () => void;
     const held = new Promise<void>((resolve) => { release = resolve; });
     const observer = new QueryObserver(client, {
@@ -67,16 +74,25 @@ describe("useCreateCreditBatch", () => {
       queryFn: async () => { await held; return { creditBatchCount: 1 }; },
     });
     const unsubscribe = observer.subscribe(() => undefined);
+    let save!: ReturnType<typeof mutation.mutateAsync>;
     await act(async () => {
-      await expect(mutation.mutateAsync(input)).resolves.toEqual(row);
+      save = mutation.mutateAsync(input);
+      await vi.waitFor(() => expect(listObserver.getCurrentResult().isFetching).toBe(true));
+    });
+    expect(client.getMutationCache().getAll()[0].state.status).toBe("pending");
+    expect(client.getQueryData(listKey)).toEqual([]);
+    await act(async () => {
+      releaseList();
+      await expect(save).resolves.toEqual(row);
     });
     expect(client.getQueryData(creditBatchKeys.detail(row.id))).toEqual(row);
-    expect(client.getQueryState(listKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryData(listKey)).toEqual([row]);
     expect(mocks.readiness).toHaveBeenCalledWith(client);
     expect(observer.getCurrentResult().isFetching).toBe(true);
     expect(client.getMutationCache().getAll()[0].state.status).toBe("success");
     release();
     await vi.waitFor(() => expect(observer.getCurrentResult().isFetching).toBe(false));
     unsubscribe();
+    unsubscribeList();
   });
 });

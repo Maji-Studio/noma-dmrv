@@ -165,12 +165,14 @@ export function useCreateCreditBatch() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(creditBatchKeys.detail(data.id), data);
-      queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      const listRefresh = queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
       invalidateCertificationReadiness(queryClient);
       invalidateOnboardingProgress(queryClient, data.facilityId);
+      // The create sheet closes after this resolves; its own list must show the row.
+      return listRefresh;
     },
   });
 }
