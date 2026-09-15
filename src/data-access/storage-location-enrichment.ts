@@ -460,7 +460,8 @@ export async function enrichStorageLocationRows(
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
         `),
-        deriveLaneStock(ctx, tx, { storageLocationIds, lanes: "feedstock" }),
+        // Enrichment also needs the source-allocation aggregate from the biochar lane.
+        deriveLaneStock(ctx, tx, { storageLocationIds }),
       ]), {
         isolationLevel: "repeatable read",
         accessMode: "read only",
