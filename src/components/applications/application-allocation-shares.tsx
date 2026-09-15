@@ -2,6 +2,7 @@ import type { ApplicationAllocationShare } from "@/data-access/delivery-allocati
 
 const PERCENT_SCALE = 100;
 const MASS_DECIMALS = 3;
+const SHARE_DECIMALS = 3;
 
 export function ApplicationAllocationShares({ shares }: { shares: ApplicationAllocationShare[] }) {
   const total = shares.reduce((sum, share) => sum + share.dryMassKg, 0);
@@ -13,7 +14,7 @@ export function ApplicationAllocationShares({ shares }: { shares: ApplicationAll
       const runs = shares.filter(share => share.biocharProductId === productId);
       const dry = runs.reduce((sum, share) => sum + share.dryMassKg, 0);
       return <div key={productId} className="body-small">
-        <p>{runs[0].productCode}: {mass(dry)} · {total > 0 ? (dry / total * PERCENT_SCALE).toFixed(2) : "0"}%</p>
+        <p>{runs[0].productCode}: {mass(dry)} · {total > 0 ? (dry / total * PERCENT_SCALE).toFixed(SHARE_DECIMALS) : "0"}%</p>
         <ul className="body-caption text-[var(--color-text-secondary)]">
           {runs.map(run => <li key={run.productionRunId}>{run.productionRunCode}: {mass(run.dryMassKg)}</li>)}
         </ul>
