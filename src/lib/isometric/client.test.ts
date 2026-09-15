@@ -70,6 +70,17 @@ describe("registry response body deadline", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("preserves a non-retryable HTTP status when its error body fails", async () => {
+    fetchMock.mockImplementation(async () => new Response(new ReadableStream({
+      start(controller) { controller.error(new Error("response stream failed")); },
+    }), { status: 400 }));
+    const outcome = client.get("/test").catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    expect(await outcome).toMatchObject({ code: "http", status: 400, body: "" });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("does not replay a timed-out PATCH", async () => {
     stalledResponse(200);
     const outcome = client.patch("/test", {}).catch((error: unknown) => error);

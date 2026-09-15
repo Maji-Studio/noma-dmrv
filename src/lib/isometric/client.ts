@@ -173,7 +173,14 @@ async function isometricRequest<T = unknown>(
           signal: timeoutController.signal,
         });
         // The deadline covers headers and body, including HTTP error bodies.
-        bodyText = response.status === 204 ? "" : await response.text();
+        bodyText = response.status === 204 ? "" : await response.text().catch((error: unknown) => {
+          // Preserve a known HTTP refusal when only its optional error body
+          // fails; deadline and caller cancellation must still propagate.
+          if (response.ok || timeoutController.signal.aborted || options.signal?.aborted) {
+            throw error;
+          }
+          return "";
+        });
       } finally {
         clearTimeout(timer);
         options.signal?.removeEventListener("abort", onExternalAbort);
