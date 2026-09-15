@@ -20,7 +20,7 @@ import {
   deriveSourceBiocharMassKg,
   GRAMS_PER_KILOGRAM,
   toPersistedMassGrams,
-} from "@/lib/biochar-composition";
+} from "@/lib/biochar-composition/composition";
 import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
@@ -314,7 +314,7 @@ export async function resolveCompositionIngredientMassBasis(
       return { ...ingredient, moistureContentPercent: moisture,
         moistureSource: override ? 'operator_override' : 'weighted_remaining',
         moistureSourceSnapshot: override ? { kind: 'operator_override' } : { kind: "weighted_remaining", wetMassKg: basis!.wetMassKg, dryMassKg: basis!.dryMassKg },
-        massDryKg: Math.round(wetMassKg * (1 - moisture / 100) * GRAMS_PER_KILOGRAM) / GRAMS_PER_KILOGRAM };
+        massDryKg: Math.round(wetMassKg * (override ? 1 - moisture / 100 : basis!.dryMassKg / basis!.wetMassKg) * GRAMS_PER_KILOGRAM) / GRAMS_PER_KILOGRAM };
 
     }),
   };
