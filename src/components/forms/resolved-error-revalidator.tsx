@@ -109,7 +109,10 @@ export function ResolvedErrorRevalidator<
   TContext,
   TTransformedValues
 >) {
-  const values = useWatch({ control });
+  // RHF compares computed outputs by value (including dates and arrays).
+  // Validation can publish a fresh values object without changing a field;
+  // watching its identity would trigger another validation indefinitely.
+  const values = useWatch({ control, compute: (formValues) => formValues });
   const { errors } = useFormState({ control });
   const previousValues = useRef(values);
 
