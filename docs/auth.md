@@ -19,7 +19,9 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 
 - `PUBLIC_ROUTES` — reachable signed out. Includes `/schema`,
   `/api/storage-local`, and `/api/ghg-statement-reports` alongside the auth
-  pages. Matching is prefix-based
+  pages, including `/accept-invitation`. The invitation page and bootstrap action
+  enforce token validity, expiry, existing-account routing, and signed-in email
+  ownership. Matching is prefix-based
   (`pathname === route || pathname.startsWith(route + "/")`), so every
   descendant is public too.
 - `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.

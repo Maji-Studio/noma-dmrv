@@ -41,6 +41,7 @@ export function FeedstockTypeQuickAddDialog({
         usage: data.usage,
         description: data.description?.trim() || null,
         registryUrl: data.registryUrl?.trim() || null,
+        isometricFeedstockTypeId: data.isometricFeedstockTypeId?.trim() || null,
       }),
     onSuccess,
     onClose,
