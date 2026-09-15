@@ -144,7 +144,7 @@ describe("Output-bin reconciliation", () => {
   it.each(["biochar_bin", "product_bin"] as const)("offers count and loss for %s", (type) => {
     const markup = renderToStaticMarkup(<BinReconcileSheet open onOpenChange={() => undefined} storageLocation={{ ...storageLocation, type }} />);
     expect(markup).toContain("Counted wet mass (kg)");
-    expect(markup).toContain("Moisture content (%)");
+    expect(markup).toContain("Moisture (%)");
     expect(markup).toContain("Record loss");
     expect(markup).toContain("Reconcile stock");
     expect(markup).toContain("A zero count does not need moisture.");

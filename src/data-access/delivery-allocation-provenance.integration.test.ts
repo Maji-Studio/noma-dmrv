@@ -134,7 +134,7 @@ describe.skipIf(!available)("saved provenance PostgreSQL consumer queries", () =
     await expect(assertCanMutateCertifiedLineage(ctx, tx, { entityType: "delivery", entityId: ids.delivery }, "update")).rejects.toThrow();
     await expect(assertCanMutateCertifiedLineage(ctx, tx, { entityType: "biocharProduct", entityId: ids.B }, "update")).rejects.toThrow();
     await expect(assertCanMutateCertifiedLineage(ctx, tx, { entityType: "biocharProduct", entityId: ids.C }, "update")).resolves.toBeUndefined();
-    await expect(assertCanMutateCertifiedLineage(ctx, tx, { entityType: "delivery", entityId: ids.delivery }, "create", "application")).resolves.toBeUndefined();
+    await expect(assertCanMutateCertifiedLineage(ctx, tx, { entityType: "delivery", entityId: ids.delivery }, "create", "application")).rejects.toThrow(/locked/);
     const [app] = await executor.select().from(schema.applications).where(eq(schema.applications.id, ids.app));
     await expect(saveApplicationOutputAllocations(ctx, tx, app)).rejects.toThrow("Removal");
     expect(await getCertifiedLineage(ctx, tx, { entityType: "biocharProduct", entityId: ids.C })).toHaveLength(0);
