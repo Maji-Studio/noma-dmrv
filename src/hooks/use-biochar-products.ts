@@ -31,7 +31,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 // Query Keys
 // ============================================
 
-const biocharProductKeys = {
+export const biocharProductKeys = {
   all: ["biocharProducts"] as const,
   lists: () => [...biocharProductKeys.all, "list"] as const,
   list: (filters?: Partial<BiocharProductFilterData>) =>

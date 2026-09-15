@@ -1,13 +1,14 @@
 import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { SafeError } from '@/lib/errors';
+import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, compare, decimal, divide, grams, kilograms, multiply, planOutputStock, rational, readRational, subtract, type OutputStockLayer, type Rational } from '@/lib/output-stock';
 import { outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
+import { getCertifiedLineage } from './certification-lineage-guards';
 import { prepareOutputCorrection } from './output-stock-corrections';
 import { requireOrgScope } from './utils';
 
@@ -87,7 +88,28 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
 }
 export async function previewOutputStock(ctx: OrgContext, input: OutputStockPreviewInput): Promise<OutputStockPreview> {
   requireOrgScope(ctx);
-  return (await prepareOutputStock(ctx, input)).preview;
+  try {
+    return await db.transaction(async tx => {
+      const prepared = await prepareOutputStock(ctx, input, tx);
+      if (prepared.correction && prepared.plan) {
+        const targets = prepared.layers.filter(layer => prepared.plan!.allocations.some(a => a.layerId === layer.id) || prepared.correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === layer.id))
+          .map(layer => ({ entityType: prepared.lane === 'product' ? 'biocharProduct' as const : 'productionRun' as const, entityId: layer.id }));
+        const lineage = (await Promise.all(targets.map(target => getCertifiedLineage(ctx, tx, target)))).flat();
+        if (prepared.correction.deliveryId) lineage.push(...await getCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: prepared.correction.deliveryId }));
+        const blockers = lineage.filter(row => row.removalSubmissionId || row.ghgStatementSubmissionId).map(row => ({
+          entity: row.ghgStatementSubmissionId ? 'ghgStatement' : 'removal',
+          id: row.ghgStatementSubmissionId ? row.ghgStatementId! : row.removalId,
+          code: row.ghgStatementSubmissionId ? 'GHG Statement' : 'Removal',
+        }));
+        if (blockers.length) return { ...prepared.preview, blockingMessage: 'Correction blocked by certification. Open the linked artifact to review its dependencies.', blockers: [...new Map(blockers.map(b => [b.id, b])).values()] };
+      }
+      return prepared.preview;
+    });
+  } catch (error) {
+    if (!(error instanceof ActionConflictError)) throw error;
+    const preview = (await prepareOutputStock(ctx, { ...input, correctsMovementId: undefined })).preview;
+    return { ...preview, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: [error.conflict] };
+  }
 }
 export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId: string; formulationId: string }): Promise<MatchingOutputBin[]> {
   requireOrgScope(ctx);

@@ -23,7 +23,9 @@ export interface OutputStockPreview {
   binName: string;
   binCode?: string;
   formulationName?: string | null;
-  lane: 'biochar' | 'product';
+  lane: 'biochar' | 'product' | 'ingredient';
+  dryLabel?: 'dry solids';
+  wetLabel?: 'wet stock';
   beforeDryKg: number;
   afterDryKg: number;
   beforeSolidsKg: number;
@@ -39,6 +41,7 @@ export interface OutputStockPreview {
   afterAllocations?: OutputStockAllocationView[];
   /** Validation failure, such as insufficient solids, leaves the full form visible. */
   blockingMessage: string | null;
+  blockers?: { entity: string; id: string; code: string }[];
 }
 
 export interface OutputStockPostInput extends OutputStockPreviewInput {

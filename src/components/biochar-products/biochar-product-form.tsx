@@ -13,6 +13,7 @@ import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
+import { BinMovementHistoryModal } from "@/components/storage-locations/bin-movement-history-modal";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
@@ -20,6 +21,7 @@ import { ProductCompositionPreview } from "@/components/ui/product-composition-p
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { useEntityById } from "@/hooks/use-entities";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
 import { useOutputStockPreview } from "@/hooks/use-output-stock";
 import {
   deriveBlendMassKg,
@@ -52,6 +54,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 
+const EMPTY_PREVIEW_SCALE_KG = 1;
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
@@ -478,6 +481,13 @@ export function BiocharProductForm({
     physicalDate: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
     moisturePercent: Number(watchedMoisture),
   } : null);
+  const productStockPreview = useProductStockPreview(!isEditMode && sourceBiocharStorageLocationId && storageLocationId && selectedFormulationId && watchedPlacedAt && massKgNum !== null && watchedMoisture != null && watchedWaterAddedKg != null ? {
+    facilityId: selectedFacilityId, formulationId: selectedFormulationId, placedAt: String(watchedPlacedAt),
+    sourceBiocharStorageLocationId, storageLocationId, massKg: massKgNum, moistureContentPercent: Number(watchedMoisture),
+    waterAddedKg: Number(watchedWaterAddedKg), ingredientBins: watchedIngredientBins?.map(ingredient => ({ ...ingredient, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : Number.NaN })),
+  } : null);
+  const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
+  const productPreviewScale = Math.max(EMPTY_PREVIEW_SCALE_KG, ...(productStockPreview.data ?? []).flatMap(bin => [bin.beforeEstimatedWetKg ?? bin.beforeDryKg, bin.afterEstimatedWetKg ?? bin.afterDryKg]));
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
   const refreshStockPreview = sourcePreview.refetch;
   useEffect(() => {
@@ -504,15 +514,16 @@ export function BiocharProductForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit(async (data) => {
-    if (!isEditMode && (!sourcePreview.data || sourcePreview.isFetching || sourcePreview.data.blockingMessage)) return;
+    if (!isEditMode && (!sourcePreview.data || sourcePreview.isFetching || sourcePreview.data.blockingMessage || affectedBinsUnavailable)) return;
     try {
       await onSubmit({
         ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
-        basisFingerprint: sourcePreview.data?.basisFingerprint ?? data.basisFingerprint,
+        basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint ?? sourcePreview.data?.basisFingerprint ?? data.basisFingerprint,
         idempotencyKey,
       });
     } catch (error) {
       void sourcePreview.refetch();
+      void productStockPreview.refetch();
       throw error;
     }
   });
@@ -623,7 +634,9 @@ export function BiocharProductForm({
         </div>
       )}
 
-      {sourcePreview.data && <OutputStockPreview preview={sourcePreview.data} moreInfo={<OutputStockHistory storageLocationId={sourceBiocharStorageLocationId} facilityId={selectedFacilityId} />} />}
+      {productStockPreview.data?.map(bin => <OutputStockPreview key={bin.storageLocationId} preview={bin} commonScale={productPreviewScale} moreInfo={bin.lane === "ingredient" ? <BinMovementHistoryModal storageLocationId={bin.storageLocationId} /> : <OutputStockHistory storageLocationId={bin.storageLocationId} facilityId={selectedFacilityId} />} />)}
+      {productStockPreview.error && <p role="alert">{productStockPreview.error.message}</p>}
+      {productStockPreview.isFetching && <p role="status">Refreshing affected bins...</p>}
       {sourcePreview.isFetching && <p role="status">Refreshing source stock preview...</p>}
       <FormSpine control={control}>
       <FormSection title="Placement" fields={["placedAt"]}>
@@ -852,7 +865,7 @@ export function BiocharProductForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={routedServerError.footerError}
-        submitDisabled={hasZeroSourceBiochar || !isEditMode && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.data.blockingMessage)}
+        submitDisabled={hasZeroSourceBiochar || !isEditMode && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.data.blockingMessage || affectedBinsUnavailable)}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

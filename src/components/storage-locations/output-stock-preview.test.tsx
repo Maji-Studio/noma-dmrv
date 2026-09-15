@@ -15,6 +15,30 @@ const rain: Preview = {
 };
 
 describe("OutputStockPreview", () => {
+  it("links application and certification blockers to their records", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, blockingMessage: "Correction blocked", blockers: [
+      { entity: "application", id: "app-id", code: "APP-001" },
+      { entity: "removal", id: "removal-id", code: "Removal" },
+      { entity: "ghgStatement", id: "statement-id", code: "GHG Statement" },
+    ] }} />);
+    expect(html).toContain('/applications?application=app-id');
+    expect(html).toContain('/certification/removals?removal=removal-id');
+    expect(html).toContain('/certification/ghg-statements?statement=statement-id');
+  });
+  it("shows ingredient dry solids and retains the emptied bin on the shared scale", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview commonScale={2600} preview={{ ...rain, lane: "ingredient", dryLabel: "dry solids", wetLabel: "wet stock", beforeDryKg: 140, afterDryKg: 0, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 0, removedDryKg: 140, removedWetKg: 150, allocations: [], beforeAllocations: [{ layerId: "ingredient", code: "Compost", wetMassKg: 150, dryMassKg: 140, runs: [] }], afterAllocations: [{ layerId: "ingredient", code: "Compost", wetMassKg: 0, dryMassKg: 0, runs: [] }] }} />);
+    expect(html).toContain('140 kg dry solids');
+    expect(html).toContain('0 kg wet stock');
+    expect(html).not.toContain('dry biochar');
+    expect(html.match(/aria-valuemax="2600"/g)).toHaveLength(2);
+  });
+  it("gives the newly received product a visible batch segment", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, removedDryKg: -90, removedWetKg: -100, beforeAllocations: [], afterAllocations: [{ layerId: "new", code: "New product", wetMassKg: 100, dryMassKg: 90, runs: [] }] }} />);
+    expect(html).toContain('100 kg wet added');
+    expect(html).toContain('90 kg dry biochar added');
+    expect(html).toContain('data-stock-batch="new"');
+    expect(html).toContain('background-color:var(--acc-prod)');
+  });
   it("renders the rain example with wet first, conserved dry values and a common scale", () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={rain} />);
     expect(html.indexOf("2,000 kg wet removed")).toBeLessThan(html.indexOf("1,150 kg dry biochar removed"));

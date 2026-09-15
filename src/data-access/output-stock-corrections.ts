@@ -1,7 +1,8 @@
 import type { DbTransaction } from '@/db';
 import { applications, binMovements } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { SafeError } from '@/lib/errors';
+import { outputStockEventLabel } from '@/lib/output-stock/labels';
+import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, grams, kilograms, readRational, type OutputStockLayer } from '@/lib/output-stock';
 import type { OutputStockPreviewInput } from '@/types/output-stock';
 import { and, eq, gt } from 'drizzle-orm';
@@ -27,14 +28,14 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
     (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
       affectedLayers.some(l => l.physicalDate <= r.movement.physicalDate!)));
 
-  if (later) throw new SafeError(`Correction blocked by later ${later.movement.outputKind}: ${later.movement.reason} (${later.movement.physicalDate}).`);
+  if (later) throw new ActionConflictError(`Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}.`, { entity: "binMovement", id: later.movement.id, code: `${outputStockEventLabel(later.movement.outputKind!)} ${later.movement.physicalDate}` });
   const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
   const count = counts.find(m => (m.outputKind === 'count' || m.inputSnapshot?.kind === 'count') && layers.some(l => affected.has(l.id) && l.physicalDate <= m.physicalDate!));
-  if (count) throw new SafeError(`Correction blocked by later count: ${count.reason} (${count.physicalDate}).`);
+  if (count) throw new ActionConflictError("Correction blocked by a later count.", { entity: "binMovement", id: count.id, code: `Count ${count.physicalDate}` });
   const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? null;
   if (deliveryId) {
-    const [application] = await reader.select({ code: applications.code }).from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId)));
-    if (application) throw new SafeError(`Correction blocked by application ${application.code}.`);
+    const [application] = await reader.select({ id: applications.id, code: applications.code }).from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId)));
+    if (application) throw new ActionConflictError(`Correction blocked by application ${application.code}.`, { entity: "application", id: application.id, code: application.code });
   }
   const restored = layers.map(layer => {
     const effects = allocations.filter(a => (a.biocharProductId ?? a.productionRunId) === layer.id);

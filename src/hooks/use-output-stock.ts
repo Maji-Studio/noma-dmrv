@@ -5,6 +5,11 @@ import type { OutputStockPostInput, OutputStockPreviewInput } from "@/types/outp
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { biocharProductKeys } from "./use-biochar-products";
+import { orderKeys } from "./use-orders";
+import { chainOfCustodyKeys } from "./use-chain-of-custody";
+import { deliveryKeys } from "./use-deliveries";
+import { storageLocationKeys } from "./use-storage-locations";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
@@ -63,7 +68,7 @@ export function usePostOutputStock() {
       return result.data;
     },
     onSuccess: () => {
-      for (const key of [outputStockKeys.all, ["storageLocations"], ["biocharProducts"], ["deliveries"], ["orders"], dashboardOverviewKeys.all, certificationKeys.all, creditBatchKeys.all, ["chain-of-custody"]]) {
+      for (const key of [outputStockKeys.all, storageLocationKeys.all, biocharProductKeys.all, deliveryKeys.all, orderKeys.all, dashboardOverviewKeys.all, certificationKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
         void client.invalidateQueries({ queryKey: key });
       }
       invalidateStockEntityQueries(client, "delivery");

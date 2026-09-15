@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
@@ -7,7 +9,7 @@ import type {
   OutputStockAllocationView,
   OutputStockPreview as Preview,
 } from "@/types/output-stock";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 const PERCENT_SCALE = 100;
 const EMPTY_SCALE_KG = 1;
@@ -38,12 +40,14 @@ function BatchBalanceBar({
   wetBasis,
   colors,
   stage,
+  dryLabel,
 }: {
   allocations: OutputStockAllocationView[];
   scale: number;
   wetBasis: boolean;
   colors: Map<string, string>;
   stage: string;
+  dryLabel: string;
 }) {
   return (
     <div className="space-y-8" aria-label={`${stage} batch balances`}>
@@ -66,7 +70,7 @@ function BatchBalanceBar({
         {allocations.map((allocation) => (
           <li key={allocation.layerId} className="flex items-start gap-6 body-caption">
             <span className="size-8 mt-4 shrink-0" aria-hidden="true" style={{ backgroundColor: colors.get(allocation.layerId) }} />
-            <span>{allocation.code}: {formatMassKg(allocation.dryMassKg)} dry biochar</span>
+            <span>{allocation.code}: {formatMassKg(allocation.dryMassKg)} {dryLabel}</span>
           </li>
         ))}
       </ul>
@@ -74,33 +78,34 @@ function BatchBalanceBar({
   );
 }
 
-export function OutputStockPreview({ preview, moreInfo }: { preview: Preview; moreInfo?: ReactNode }) {
+export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlocker }: { preview: Preview; moreInfo?: ReactNode; commonScale?: number; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode }) {
   const wetBasis = preview.beforeEstimatedWetKg !== null && preview.afterEstimatedWetKg !== null;
-  const scale = Math.max(
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const scale = commonScale ?? Math.max(
     wetBasis ? preview.beforeEstimatedWetKg! : preview.beforeDryKg,
     wetBasis ? preview.afterEstimatedWetKg! : preview.afterDryKg,
     EMPTY_SCALE_KG,
   );
-  const layers = preview.beforeAllocations ?? preview.afterAllocations ?? [];
+  const layers = [...new Map([...(preview.beforeAllocations ?? []), ...(preview.afterAllocations ?? [])].map(layer => [layer.layerId, layer])).values()];
   const colors = new Map(layers.map((layer, index) => [layer.layerId, BATCH_COLORS[index % BATCH_COLORS.length]]));
   const balances = [
     { label: "Before loading", wet: preview.beforeEstimatedWetKg, dry: preview.beforeDryKg, allocations: preview.beforeAllocations },
     { label: "After loading", wet: preview.afterEstimatedWetKg, dry: preview.afterDryKg, allocations: preview.afterAllocations },
   ];
-  const binType = preview.lane === "product" ? "Product bin" : "Biochar bin";
+  const binType = preview.lane === "product" ? "Product bin" : preview.lane === "ingredient" ? "Ingredient bin" : "Biochar bin";
 
   return (
     <section className="space-y-16" aria-label="Stock preview" aria-live="polite">
       <div>
-        {preview.removedWetKg !== null && <p className="body-large font-semibold">{formatMassKg(preview.removedWetKg)} wet removed</p>}
+        {preview.removedWetKg !== null && <p className="body-large font-semibold">{formatMassKg(Math.abs(preview.removedWetKg))} wet {preview.removedWetKg < 0 ? "added" : "removed"}</p>}
         <p className={preview.removedWetKg === null ? "body-large font-semibold" : "body-caption text-[var(--color-text-secondary)]"}>
-          {formatMassKg(preview.removedDryKg)} dry biochar removed
+          {formatMassKg(Math.abs(preview.removedDryKg))} {dryLabel} {preview.removedDryKg < 0 ? "added" : "removed"}
         </p>
       </div>
       <p className="body-caption">
-        {wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture. ` : "No moisture measurement was entered. "}
-        Both bars use the same {formatMassKg(scale)} {wetBasis ? "wet estimate" : "dry biochar"} scale.
-        {wetBasis ? " These estimates do not replace recorded pile measurements." : " Wet estimates need a moisture measurement."}
+        {preview.wetLabel ? "Recorded wet stock. " : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture. ` : "No moisture measurement was entered. "}
+        Both bars use the same {formatMassKg(scale)} {preview.wetLabel ?? (wetBasis ? "wet estimate" : dryLabel)} scale.
+        {preview.wetLabel ? " Dry solids use the recorded intake basis." : wetBasis ? " These estimates do not replace recorded pile measurements." : " Wet estimates need a moisture measurement."}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         {balances.map((balance) => (
@@ -122,22 +127,38 @@ export function OutputStockPreview({ preview, moreInfo }: { preview: Preview; mo
                 <p className="body-caption">{preview.binCode ? `${preview.binCode} · ` : ""}{preview.formulationName ?? binType}</p>
               </div>
               <div className="space-y-4">
-                {wetBasis && <p className="body-medium">{formatMassKg(balance.wet)} wet estimate</p>}
-                <p className={wetBasis ? "body-caption" : "body-medium"}>{formatMassKg(balance.dry)} dry biochar</p>
-                {wetBasis && <p className="body-caption">At {formatMoisturePercent(preview.estimateMoisturePercent)} moisture</p>}
+                {wetBasis && <p className="body-medium">{formatMassKg(balance.wet)} {preview.wetLabel ?? "wet estimate"}</p>}
+                <p className={wetBasis ? "body-caption" : "body-medium"}>{formatMassKg(balance.dry)} {dryLabel}</p>
+                {wetBasis && !preview.wetLabel && <p className="body-caption">At {formatMoisturePercent(preview.estimateMoisturePercent)} moisture</p>}
               </div>
-              {balance.allocations && <BatchBalanceBar allocations={balance.allocations} scale={scale} wetBasis={wetBasis} colors={colors} stage={balance.label} />}
-              {moreInfo}
+              {balance.allocations && <BatchBalanceBar allocations={balance.allocations} scale={scale} wetBasis={wetBasis} colors={colors} stage={balance.label} dryLabel={dryLabel} />}
+              {moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)}
             </div>
           </Card.Root>
         ))}
       </div>
       {preview.discrepancySolidsKg > 0 && <p role="status" className="body-small">Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</p>}
       {preview.blockingMessage && <p role="alert" className="body-small text-[var(--st-bad)]">{preview.blockingMessage}</p>}
+      {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?application=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>)}
       <div className="space-y-8">
         <h3 className="body-small font-semibold">{preview.binName}{preview.binCode ? ` (${preview.binCode})` : ""}</h3>
-        <OutputStockAllocations allocations={preview.allocations} />
+        {preview.lane !== "ingredient" && <OutputStockAllocations allocations={preview.allocations} />}
       </div>
     </section>
   );
+}
+
+function IngredientStockInfo({ preview }: { preview: Preview }) {
+  const [open, setOpen] = useState(false);
+  return <>
+    <Button onClick={() => setOpen(true)}>More info</Button>
+    <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabel="Ingredient stock basis">
+      <div className="space-y-16">
+        <h3 className="title-heading-3">{preview.binName}</h3>
+        <p className="body-small">Wet stock is the recorded intake less tracked withdrawals. Ingredient withdrawals take a proportional share of this stock.</p>
+        <p className="body-small">Dry solids use the recorded intake basis. The moisture used for the new product describes its ingredient addition and does not update the remaining bin.</p>
+        <p className="body-small">Before: {formatMassKg(preview.beforeEstimatedWetKg)} wet stock, {formatMassKg(preview.beforeDryKg)} dry solids. After: {formatMassKg(preview.afterEstimatedWetKg)} wet stock, {formatMassKg(preview.afterDryKg)} dry solids.</p>
+      </div>
+    </Modal>
+  </>;
 }
