@@ -1,6 +1,7 @@
 import type { DbTransaction } from "@/db";
 import {
   binMovements,
+  facilities,
   biocharProductSourceAllocations,
   biocharProducts,
   outputStockAllocations,
@@ -10,6 +11,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from '@/lib/errors';
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { facilityTimestampDateExpr } from "../output-stock-dates";
 import { requireOrgScope } from "../utils";
 
 /**
@@ -26,8 +28,9 @@ export async function getProductionRunDependentProduct(
   requireOrgScope(ctx);
   const [count] = await tx.select({ reason: binMovements.reason, date: binMovements.physicalDate }).from(binMovements)
     .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId), eq(productionRuns.biocharStorageLocationId, binMovements.storageLocationId)))
+    .innerJoin(facilities, and(eq(facilities.id, productionRuns.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), sql`(${binMovements.outputKind} = 'count' or ${binMovements.inputSnapshot}->>'kind' = 'count')`,
-      sql`(${productionRuns.endTime} is null or ${productionRuns.endTime}::date <= ${binMovements.physicalDate})`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
+      sql`(${productionRuns.endTime} is null or ${facilityTimestampDateExpr(productionRuns.endTime, facilities.timezone)}::date <= ${binMovements.physicalDate})`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
   if (count) throw new SafeError(`Production stock is covered by count: ${count.reason} (${count.date}).`);
   const [effect] = await tx.select({ kind: binMovements.outputKind, reason: binMovements.reason, date: binMovements.physicalDate })
     .from(outputStockRunAllocations)

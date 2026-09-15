@@ -5,6 +5,8 @@ import { SafeError } from '@/lib/errors';
 import type { OutputStockHistoryEntry } from '@/types/output-stock';
 import { and, asc, eq } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
+import { formatFacilityDate } from '@/lib/date-utils';
+import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
 /** Intake facts retain their recorded wet mass; movement facts remain immutable. */
@@ -12,6 +14,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   requireOrgScope(ctx);
   const [bin] = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
+  const timezone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, db);
   const movements = await db.select({ movement: binMovements, actorName: users.name }).from(binMovements)
     .leftJoin(users, eq(users.id, binMovements.createdBy))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId))).orderBy(asc(binMovements.postingSequence));
@@ -43,7 +46,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
       dry: provenance.reduce((sum, s) => sum + Number(s.allocatedDryMassKg), 0),
       runs: provenance.map(s => ({ productionRunId: s.productionRunId, code: runCode.get(s.productionRunId) ?? s.productionRunId, dryMassKg: Number(s.allocatedDryMassKg) })) };
   }) : runs.filter(r => r.biocharStorageLocationId === storageLocationId && r.status === 'complete' && r.endTime).map(r => ({
-    id: r.id, code: r.code, physicalDate: r.endTime!.toISOString().slice(0, 10), createdAt: r.createdAt,
+    id: r.id, code: r.code, physicalDate: formatFacilityDate(r.endTime!, timezone), createdAt: r.createdAt,
     wet: Number(r.biocharOutputKg ?? 0), moisture: r.biocharMoisturePercent, dry: Number(r.biocharDryMassKg ?? 0),
     runs: [{ productionRunId: r.id, code: r.code, dryMassKg: Number(r.biocharDryMassKg ?? 0) }],
   }));

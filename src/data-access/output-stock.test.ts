@@ -3,7 +3,8 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
-import { getBiocharOutputStockLayers, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
+import { facilities } from '@/db/schema';
+import { getBiocharOutputStockLayers, getOutputBinDryBalance, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
 import { assertProductionRunBiocharStockNotOverdrawn, deriveProductionRunUpdateBiocharStockState } from './production-run-stock-locks';
 
 const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
@@ -13,9 +14,9 @@ const run = { id: 'run', dryKg: '100.000', physicalDate: '2026-09-01', postingSe
 function reader(results: unknown[][]) {
   const predicates: string[] = [];
   const executor = { select: vi.fn(() => {
-    const result = results.shift() ?? [];
-    const query = { from: () => query, innerJoin: () => query, leftJoin: () => query, orderBy: () => query,
-      where: (predicate: SQL) => { predicates.push(new PgDialect().sqlToQuery(predicate).sql); return query; },
+    let result: unknown[] = [];
+    const query = { from: (table: unknown) => { result = table === facilities ? [{ timezone: 'Africa/Dar_es_Salaam' }] : results.shift() ?? []; return query; }, innerJoin: () => query, leftJoin: () => query, orderBy: () => query,
+      where: (predicate: SQL) => { if (!new PgDialect().sqlToQuery(predicate).sql.includes('"facilities"')) predicates.push(new PgDialect().sqlToQuery(predicate).sql); return query; },
       then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(result).then(resolve) };
     return query;
   }) } as unknown as DbTransaction;
@@ -79,5 +80,28 @@ describe('product ingredient snapshot completeness', () => {
   it('rejects missing positive snapshots even when a zero-line snapshot fills the count', async () => {
     await expect(getProductOutputStockLayers(ctx, input, productReader([zeroLine, positiveLine], []))).rejects.toThrow('Ingredient dry solids are unresolved');
     await expect(getProductOutputStockLayers(ctx, input, productReader([zeroLine, positiveLine], [{ ...snapshot, formulationIngredientId: 'zero' }]))).rejects.toThrow('Ingredient dry solids are unresolved');
+  });
+});
+
+
+describe('future stock conservation', () => {
+  it.each(['biochar_bin', 'product_bin'])('keeps future %s stock in the guard balance but out of today previews', async type => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
+    try {
+      const rows = () => type === 'biochar_bin'
+        ? [[{ ...bin, type }], [bin], [{ ...run, physicalDate: '2026-09-16' }], [], []]
+        : [[{ ...bin, type }], [bin], [{ id: 'product', placedAt: '2026-09-16', postingSequence: BigInt(1), composition: {} }], [{ productId: 'product', runId: run.id, dryKg: '100.000' }], [], []];
+      expect(await getOutputBinDryBalance(ctx, bin.id, reader(rows()).executor)).toBe(100);
+      expect(await getOutputBinStockView(ctx, bin.id, reader([...rows(), []]).executor)).toEqual({ dryMassKg: 0, recordedWetMassKg: 0, estimatedWetMassKg: 0 });
+    } finally { vi.useRealTimers(); }
+  });
+  it('shows the new facility day before UTC midnight', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
+    try {
+      const read = reader([[bin], [bin], [{ ...run, physicalDate: '2026-09-16' }], [], [], [{ id: run.id, wet: 125 }]]);
+      expect(await getOutputBinStockView(ctx, bin.id, read.executor)).toEqual({ dryMassKg: 100, recordedWetMassKg: 125, estimatedWetMassKg: 125 });
+    } finally { vi.useRealTimers(); }
   });
 });

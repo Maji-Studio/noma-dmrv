@@ -10,6 +10,8 @@ import { createHash } from 'node:crypto';
 import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
 import { prepareOutputCorrection } from './output-stock-corrections';
+import { formatFacilityDate } from '@/lib/date-utils';
+import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
@@ -116,8 +118,9 @@ export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId
   const [formulation] = await db.select({ id: formulations.id }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, input.formulationId)));
   if (!formulation) throw new SafeError('Formulation not found');
   const bins = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, 'product_bin'), eq(storageLocations.formulationId, input.formulationId), isNull(storageLocations.archivedAt))).orderBy(asc(storageLocations.code));
+  const physicalDate = formatFacilityDate(new Date(), await getOutputStockFacilityTimezone(ctx, input.facilityId, db));
   return Promise.all(bins.map(async bin => {
-    const state = await getProductOutputStockLayers(ctx, { ...input, storageLocationId: bin.id, physicalDate: new Date().toISOString().slice(0, 10) });
+    const state = await getProductOutputStockLayers(ctx, { ...input, storageLocationId: bin.id, physicalDate });
     return { id: bin.id, code: bin.code, name: bin.name, dryMassKg: Number(state.remainingDryKg), recordedWetMassKg: null };
   }));
 }

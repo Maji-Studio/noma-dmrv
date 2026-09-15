@@ -1,10 +1,12 @@
 import { db, type DbTransaction } from '@/db';
-import { binMovements, biocharProducts, biocharProductSourceAllocations, outputStockAllocations, outputStockRunAllocations, productIngredientSnapshots, productionRuns, storageLocations } from '@/db/schema';
+import { binMovements, biocharProducts, biocharProductSourceAllocations, outputStockAllocations, outputStockRunAllocations, facilities, productIngredientSnapshots, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { add, grams, GRAMS_PER_KG, kilograms, planOutputStock, rational, readRational, subtract, type OutputStockLayer } from '@/lib/output-stock';
 import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { facilityTimestampDateExpr, getOutputStockFacilityTimezone } from './output-stock-dates';
+import { formatFacilityDate } from '@/lib/date-utils';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
@@ -86,9 +88,9 @@ export async function getBiocharOutputStockLayers(ctx: OrgContext, input: { stor
     eq(storageLocations.id, input.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId),
     eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, 'biochar_bin'), options.includeArchived ? undefined : isNull(storageLocations.archivedAt)));
   if (!bin) throw new SafeError('Biochar bin not found or archived');
-  const runs = await reader.select({ id: productionRuns.id, physicalDate: sql<string | null>`${productionRuns.endTime}::date::text`,
+  const runs = await reader.select({ id: productionRuns.id, physicalDate: facilityTimestampDateExpr(productionRuns.endTime, facilities.timezone),
     dryKg: sql<string | null>`${productionRuns.biocharDryMassKg}::text`, postingSequence: productionRuns.stockPostingSequence })
-    .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, input.facilityId),
+    .from(productionRuns).innerJoin(facilities, and(eq(facilities.id, productionRuns.facilityId), eq(facilities.organizationId, ctx.organizationId))).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, input.facilityId),
       eq(productionRuns.biocharStorageLocationId, input.storageLocationId), eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS), options.includeArchived ? undefined : isNull(productionRuns.archivedAt)));
   const sources = await reader.select({ productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId,
     dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` }).from(biocharProductSourceAllocations)
@@ -125,9 +127,10 @@ export async function getOutputBinDryBalance(ctx: OrgContext, storageLocationId:
   requireOrgScope(ctx);
   const [bin] = await reader.select({ facilityId: storageLocations.facilityId, type: storageLocations.type }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
-  const input = { storageLocationId, facilityId: bin.facilityId, physicalDate: new Date().toISOString().slice(0, 10) };
+  const input = { storageLocationId, facilityId: bin.facilityId, physicalDate: formatFacilityDate(new Date(), await getOutputStockFacilityTimezone(ctx, bin.facilityId, reader)) };
   const state = bin.type === 'product_bin' ? await getProductOutputStockLayers(ctx, input, reader, options) : await getBiocharOutputStockLayers(ctx, input, reader, options);
-  return Number(state.remainingDryKg);
+  // Archive and mutation guards conserve all stock, including future receipts.
+  return Number(kilograms(state.layers.reduce((sum, layer) => sum + grams(layer.remainingDryBiocharKg), BigInt(0))));
 }
 
 /** Wet estimates retain each layer's creation basis; shipment moisture never edits it. */
@@ -135,7 +138,7 @@ export async function getOutputBinStockView(ctx: OrgContext, storageLocationId: 
   requireOrgScope(ctx);
   const [bin] = await reader.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
-  const input = { storageLocationId, facilityId: bin.facilityId, physicalDate: new Date().toISOString().slice(0, 10) };
+  const input = { storageLocationId, facilityId: bin.facilityId, physicalDate: formatFacilityDate(new Date(), await getOutputStockFacilityTimezone(ctx, bin.facilityId, reader)) };
   let state;
   try {
     state = bin.type === 'product_bin' ? await getProductOutputStockLayers(ctx, input, reader, { includeArchived: bin.archivedAt != null }) : await getBiocharOutputStockLayers(ctx, input, reader, { includeArchived: bin.archivedAt != null });

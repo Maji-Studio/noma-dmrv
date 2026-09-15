@@ -13,7 +13,7 @@ vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, get
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
-import { previewOutputStock } from './output-stock-operations';
+import { getMatchingOutputBins, previewOutputStock } from './output-stock-operations';
 
 it('returns certification artifact identities while checking both affected sources and the corrected delivery', async () => {
   const binId = '00000000-0000-4000-8000-000000000001';
@@ -28,4 +28,17 @@ it('returns certification artifact identities while checking both affected sourc
   expect(result.blockers).toEqual([{ entity: 'removal', id: 'removal', code: 'Removal' }, { entity: 'ghgStatement', id: 'statement', code: 'GHG Statement' }]);
   expect(mocks.lineage.mock.calls.map(call => call[2])).toEqual([{ entityType: 'productionRun', entityId: 'run' }, { entityType: 'delivery', entityId: 'delivery' }]);
   expect(result.removedDryKg).toBe(9);
+});
+
+
+it('matches product-bin stock using facility-local today across UTC midnight', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
+  try {
+    mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }], [{ timezone: 'Africa/Dar_es_Salaam' }]];
+    mocks.state.mockResolvedValue({ remainingDryKg: '100.000' });
+    const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+    expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toMatchObject([{ id: 'bin', dryMassKg: 100 }]);
+    expect(mocks.state).toHaveBeenLastCalledWith(ctx, { facilityId: 'facility', formulationId: 'recipe', storageLocationId: 'bin', physicalDate: '2026-09-16' });
+  } finally { vi.useRealTimers(); }
 });
