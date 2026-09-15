@@ -82,7 +82,7 @@ describe("data-access/quick-add: auth enforcement", () => {
       createFeedstockType(makeTestOrgContext(""), {
         code: "FT-001",
         name: "Test Type",
-        category: "biomass",
+        category: "forestry",
       })
     ).rejects.toThrow("Unauthorized");
   });
