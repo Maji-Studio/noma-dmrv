@@ -429,12 +429,12 @@ export function useSaveFacilityCertifierMapping() {
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: async (_data, variables) => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, variables.facilityId);
     },
   });
 }

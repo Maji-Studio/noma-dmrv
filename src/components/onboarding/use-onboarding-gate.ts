@@ -92,10 +92,23 @@ function writeBooleanFlag(
   }
 }
 
-export function useOnboardingGate(facilityId: string | null): OnboardingGate {
+export function useOnboardingGate(
+  facilityId: string | null,
+  organizationId: string | null,
+): OnboardingGate {
   const queryClient = useQueryClient();
-  const { data: status, isLoading } = useOnboardingStatus(facilityId);
-  const { data: sessionData } = authClient.useSession();
+  const { data: status, isPending, isFetching, isFetchedAfterMount } = useOnboardingStatus(
+    facilityId,
+    organizationId,
+  );
+  const { data: sessionData, isPending: isSessionPending } = authClient.useSession();
+  // Revisited cached counts cannot decide a takeover until the first refresh
+  // settles. Later refreshes keep the already-validated dashboard visible.
+  // An unresolved session waits; a resolved session with no active organization
+  // leaves the ordinary organization/facility selection surface available.
+  const isLoading = organizationId === null
+    ? isSessionPending
+    : isPending || (isFetching && !isFetchedAfterMount);
 
   const progress = deriveSetupProgress(status, facilityId);
 
@@ -110,15 +123,15 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
     | { id: string; activeOrganizationId?: string | null }
     | undefined;
   const userId = sessionData?.user?.id ?? null;
-  const organizationId = authSession?.activeOrganizationId ?? null;
+  const sessionOrganizationId = authSession?.activeOrganizationId ?? null;
   const dismissKey = authSession
-    ? onboardingWizardDismissedKey(authSession.id, organizationId)
+    ? onboardingWizardDismissedKey(authSession.id, sessionOrganizationId)
     : null;
   // The collapse preference is persistent (localStorage) but must not leak
   // across accounts or organizations sharing a browser, so it scopes by user
   // (not session — it survives re-login by design) and org.
   const collapsedKey = userId
-    ? onboardingGuideCollapsedKey(userId, organizationId)
+    ? onboardingGuideCollapsedKey(userId, sessionOrganizationId)
     : null;
 
   // Persisted preferences read lazily, re-read whenever their scoped key
@@ -154,7 +167,7 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
   // fresh org gets the guide takeover instead and can open the wizard from
   // its facility CTA.
   const autoOpenEligible =
-    !!status && status.isOrgOwnerOrAdmin && status.facilityCount === 0;
+    !isLoading && !isFetching && !!status && status.isOrgOwnerOrAdmin && status.facilityCount === 0;
   const isOpen =
     explicitOpen === null ? autoOpenEligible && !dismissed : explicitOpen;
 
@@ -173,7 +186,7 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
       setExplicitOpen(false);
       // Re-read once more at the wizard boundary so steps completed by nested
       // registry surfaces also appear behind the modal immediately.
-      void invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient);
     },
   };
 
