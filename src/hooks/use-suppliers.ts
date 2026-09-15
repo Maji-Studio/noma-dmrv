@@ -127,15 +127,15 @@ export function useCreateSupplier(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      seedCreatedSupplierCaches(queryClient, data);
+
       // Invalidate all supplier lists
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       // Invalidate locations in case a new location was added
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
-      await invalidateOnboardingProgress(queryClient);
-
-      seedCreatedSupplierCaches(queryClient, data);
+      invalidateOnboardingProgress(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -162,12 +162,13 @@ export function useCreateSupplierWithLocations(
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      seedCreatedSupplierCaches(queryClient, data);
+
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
-      await invalidateOnboardingProgress(queryClient);
-      seedCreatedSupplierCaches(queryClient, data);
+      invalidateOnboardingProgress(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },

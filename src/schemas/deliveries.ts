@@ -4,25 +4,25 @@
  * Delivery dry biochar is derived server-side from the linked product.
  */
 
+import {
+  DELIVERED_WET_MASS_RANGE_MESSAGE,
+  DELIVERED_WET_MASS_REQUIRED_MESSAGE,
+  hasStorableDeliveredWetMass,
+} from "@/lib/delivery-wet-mass";
 import { z } from "zod";
-import { deliveryDryMassSchema } from "./isometric";
 import {
   optionalDistanceSource,
   resolveDistanceSource,
   type DistanceSourceValue,
 } from "./distance-source";
-import { optionalTripType } from "./trip-type";
-import {
-  DELIVERED_WET_MASS_REQUIRED_MESSAGE,
-  DELIVERED_WET_MASS_RANGE_MESSAGE,
-  hasStorableDeliveredWetMass,
-} from "@/lib/delivery-wet-mass";
 import {
   emptyToNull,
   positiveMassKgSchema,
   requiredNumber,
   storedPercentSchema,
 } from "./helpers";
+import { deliveryDryMassSchema } from "./isometric";
+import { optionalTripType } from "./trip-type";
 
 // ============================================
 // Constants and Enums
@@ -31,7 +31,7 @@ import {
 /**
  * Valid delivery statuses
  */
-export const deliveryStatuses = ["upcoming", "delivered"] as const;
+export const deliveryStatuses = ["delivered"] as const;
 
 export type DeliveryStatus = (typeof deliveryStatuses)[number];
 
@@ -65,7 +65,7 @@ const requiredProductMoisturePercent = requiredNumber(
 ).pipe(
   storedPercentSchema()
     .min(0, "Moisture content must be 0% or more")
-    .max(100, "Moisture content must be 100% or less"),
+    .lt(100, "Moisture must be below 100%"),
 );
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
 
@@ -111,10 +111,12 @@ const deliveryFormBaseSchema = z.object({
   deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
 
   // Optional fields
-  biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  storageLocationId: z.uuid(),
+  idempotencyKey: z.string().min(1),
+  basisFingerprint: z.string().min(1),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  status: z.enum(deliveryStatuses).default("upcoming"),
+  status: z.enum(deliveryStatuses).default("delivered"),
   deliveredWetMassKg: optionalWetMassKg,
   moistureContentPercent: requiredProductMoisturePercent,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
@@ -151,10 +153,12 @@ export const createDeliverySchema = z.object({
   orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   deliveryDate: z.coerce.date(),
-  biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  storageLocationId: z.uuid(),
+  idempotencyKey: z.string().min(1),
+  basisFingerprint: z.string().min(1),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  status: z.enum(deliveryStatuses).default("upcoming"),
+  status: z.enum(deliveryStatuses).default("delivered"),
   deliveredWetMassKg: optionalWetMassKg,
   moistureContentPercent: requiredProductMoisturePercent,
   distanceKmOverride: optionalNumber,
@@ -181,7 +185,7 @@ export const updateDeliverySchema = z.object({
   orderId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
   deliveryDate: z.coerce.date().optional(),
-  biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  storageLocationId: z.uuid().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).optional(),

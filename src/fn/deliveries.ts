@@ -5,8 +5,6 @@
  * Server-side functions for delivery CRUD operations
  */
 
-import { z } from "zod";
-import { type Delivery, deliveries as deliveriesTable } from "@/db/schema";
 import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
@@ -17,23 +15,26 @@ import {
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
   updateDelivery,
-  type PaginatedDeliveries,
   type DeliveryDetail,
+  type PaginatedDeliveries,
 } from "@/data-access/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
 } from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
+import { deliveries as deliveriesTable, type Delivery } from "@/db/schema";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createDeliverySchema,
   deleteDeliverySchema,
+  deliveryFilterSchema,
   resolveDeliveryDistanceSource,
   updateDeliverySchema,
-  deliveryFilterSchema,
 } from "@/schemas/deliveries";
+import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
+import { z } from "zod";
 import {
   formatZodActionError,
   toLoggedActionError,
@@ -162,9 +163,7 @@ export async function getDeliveryStatsFn(
 export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
 ): Promise<ActionResult<Delivery>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const delivery = await withAutoCode(
       ctx,
       "DL",
@@ -178,7 +177,9 @@ export async function createDeliveryFn(
           orderId: validated.orderId,
           facilityId: validated.facilityId,
           deliveryDate: validated.deliveryDate,
-          biocharProductId: validated.biocharProductId ?? null,
+          storageLocationId: validated.storageLocationId,
+          idempotencyKey: validated.idempotencyKey,
+          basisFingerprint: validated.basisFingerprint,
           driverId: validated.driverId ?? null,
           vehicleId: validated.vehicleId ?? null,
           status: validated.status,
@@ -196,23 +197,11 @@ export async function createDeliveryFn(
       CODE_CONFLICT_MESSAGES.delivery,
     );
 
-    return { success: true, data: delivery };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to create delivery",
-        "delivery:create",
-      ),
-    };
-  }
+    return delivery;
+  }, {
+    fallbackMessage: "Failed to create delivery",
+    log: { message: "delivery action failed", context: { op: "delivery:create" } },
+  });
 }
 
 // ============================================
@@ -235,7 +224,7 @@ export async function updateDeliveryFn(
       orderId: validated.orderId,
       facilityId: validated.facilityId,
       deliveryDate: validated.deliveryDate,
-      biocharProductId: validated.biocharProductId,
+      storageLocationId: validated.storageLocationId,
       driverId: validated.driverId,
       vehicleId: validated.vehicleId,
       status: validated.status,

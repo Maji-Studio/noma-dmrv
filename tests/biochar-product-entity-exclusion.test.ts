@@ -1,3 +1,4 @@
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the biochar-product entity option's
  * `excludeOrderId` (DR-002 / OR-26-001).
@@ -72,18 +73,18 @@ beforeAll(async () => {
 
     const [product] = await tx
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `BP-EXCL-${runId}`,
         facilityId: facility.id,
         massKg: PRODUCT_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PERCENT,
-      })
+      }))
       .returning({ id: biocharProducts.id });
 
     const [fulfilledOrder] = await tx
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `OR-EXCL-A-${runId}`,
         facilityId: facility.id,
@@ -92,12 +93,12 @@ beforeAll(async () => {
         orderDate: new Date("2026-06-01"),
         quantityKg: DELIVERED_WET_KG,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
 
     const [otherOrder] = await tx
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `OR-EXCL-B-${runId}`,
         facilityId: facility.id,
@@ -106,12 +107,10 @@ beforeAll(async () => {
         orderDate: new Date("2026-06-02"),
         quantityKg: 500,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
 
-    const [delivery] = await tx
-      .insert(deliveries)
-      .values({
+    const [delivery] = await insertOutputDeliveryFixture(tx, {
         organizationId: TEST_ORG_ID,
         code: `DL-EXCL-${runId}`,
         facilityId: facility.id,
@@ -120,8 +119,7 @@ beforeAll(async () => {
         deliveredWetMassKg: DELIVERED_WET_KG,
         massDryKg: DELIVERED_DRY_KG,
         status: "delivered",
-      })
-      .returning({ id: deliveries.id });
+      }, row => ({ id: row.id }));
 
     return {
       facilityId: facility.id,
@@ -136,15 +134,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!fixture) return;
-  await db.delete(deliveries).where(inArray(deliveries.id, [fixture.deliveryId]));
+  await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [fixture.deliveryId]));
   await db
     .delete(orders)
     .where(inArray(orders.id, [fixture.fulfilledOrderId, fixture.otherOrderId]));
-  await db
-    .delete(biocharProducts)
-    .where(inArray(biocharProducts.id, [fixture.productId]));
+  await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [fixture.productId]));
   await db.delete(customers).where(inArray(customers.id, [fixture.customerId]));
-  await db.delete(facilities).where(inArray(facilities.id, [fixture.facilityId]));
+  await deleteOutputFacilityFixtures(db, inArray(facilities.id, [fixture.facilityId]));
 });
 
 describe("biochar product entity option excludeOrderId", () => {
@@ -157,13 +153,13 @@ describe("biochar product entity option excludeOrderId", () => {
     );
   });
 
-  it("adds the excluded order's fulfilment back into remaining stock", async () => {
+  it("does not add posted shipments back when an order is excluded", async () => {
     const currentFixture = requireFixture();
     const ctx = makeTestOrgContext();
     const option = await getBiocharProductEntityById(ctx, currentFixture.productId, {
       excludeOrderId: currentFixture.fulfilledOrderId,
     });
-    expect(option?.remainingMass?.wetKg).toBe(PRODUCT_MASS_KG);
+    expect(option?.remainingMass?.wetKg).toBe(0);
   });
 
   it("excluding an unrelated order changes nothing", async () => {
@@ -177,7 +173,7 @@ describe("biochar product entity option excludeOrderId", () => {
     );
   });
 
-  it("applies the same exclusion on the list/search path", async () => {
+  it("keeps posted shipments consumed on the list/search path", async () => {
     const { facilityId, fulfilledOrderId, productId } = requireFixture();
     const ctx = makeTestOrgContext();
     const options = await getBiocharProducts(ctx, {
@@ -186,6 +182,6 @@ describe("biochar product entity option excludeOrderId", () => {
       limit: ENTITY_QUERY_LIMIT,
     });
     const option = options.find((o) => o.id === productId);
-    expect(option?.remainingMass?.wetKg).toBe(PRODUCT_MASS_KG);
+    expect(option?.remainingMass?.wetKg).toBe(0);
   });
 });

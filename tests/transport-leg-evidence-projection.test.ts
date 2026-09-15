@@ -1,3 +1,4 @@
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Real-DB regression coverage for the transport-leg evidence projections.
@@ -6,7 +7,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  * a raw sql template; drizzle renders `${table.column}` UNQUALIFIED there,
  * which once produced ambiguous SQL (42702) that no unit test executed. These
  * tests run the real query per category and pin the biochar min-across-
- * contributing-deliveries semantics (a file on an upcoming delivery must not
+ * contributing-deliveries semantics (a file on an archived delivery must not
  * count; every delivered, non-archived delivery must carry a file).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -29,7 +30,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
   let orderId: string;
   let deliveredWithDocId: string;
   let deliveredWithoutDocId: string;
-  let upcomingId: string;
+  let archivedId: string;
   let legId: string;
   const documentIds: string[] = [];
 
@@ -48,11 +49,11 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
 
     const [product] = await db
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `BP-TEP-${tag}`,
         facilityId,
-      })
+      }))
       .returning({ id: biocharProducts.id });
     productId = product.id;
 
@@ -68,7 +69,7 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
 
     const [order] = await db
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `OR-TEP-${tag}`,
         facilityId,
@@ -77,33 +78,33 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
         biocharProductId: productId,
         quantityKg: 500,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
     orderId = order.id;
 
     async function makeDelivery(
       suffix: string,
-      status: "delivered" | "upcoming",
+      status: "delivered" | "archived",
     ): Promise<string> {
-      const [row] = await db
-        .insert(deliveries)
-        .values({
+      const [row] = await insertOutputDeliveryFixture(db, {
           organizationId: TEST_ORG_ID,
           code: `DL-TEP-${suffix}-${tag}`,
           facilityId,
           deliveryDate: new Date("2026-01-10T00:00:00Z"),
-          status,
+          status: "delivered",
+          deliveredWetMassKg: 100,
+          massDryKg: 90,
+          archivedAt: status === "archived" ? new Date("2026-01-12") : null,
           orderId,
           biocharProductId: productId,
           distanceSource: "document",
-        })
-        .returning({ id: deliveries.id });
+        }, row => ({ id: row.id }));
       return row.id;
     }
 
     deliveredWithDocId = await makeDelivery("A", "delivered");
     deliveredWithoutDocId = await makeDelivery("B", "delivered");
-    upcomingId = await makeDelivery("C", "upcoming");
+    archivedId = await makeDelivery("C", "archived");
 
     const [leg] = await db
       .insert(transportLegs)
@@ -136,20 +137,20 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
     if (legId) {
       await cleanup(() => db.delete(transportLegs).where(eq(transportLegs.id, legId)));
     }
-    await cleanup(() => db.delete(deliveries).where(eq(deliveries.orderId, orderId)));
+    await cleanup(() => deleteOutputDeliveryFixtures(db, eq(deliveries.orderId, orderId)));
     if (orderId) {
       await cleanup(() => db.delete(orders).where(eq(orders.id, orderId)));
     }
     if (productId) {
       await cleanup(() =>
-        db.delete(biocharProducts).where(eq(biocharProducts.id, productId)),
+        deleteOutputProductFixtures(db, eq(biocharProducts.id, productId)),
       );
     }
     if (customerId) {
       await cleanup(() => db.delete(customers).where(eq(customers.id, customerId)));
     }
     if (facilityId) {
-      await cleanup(() => db.delete(facilities).where(eq(facilities.id, facilityId)));
+      await cleanup(() => deleteOutputFacilityFixtures(db, eq(facilities.id, facilityId)));
     }
   });
 
@@ -195,8 +196,8 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
     expect(await loadCount()).toBe(0);
   });
 
-  it("ignores files on non-contributing (upcoming) deliveries", async () => {
-    await addEvidence(upcomingId);
+  it("ignores files on non-contributing (archived) deliveries", async () => {
+    await addEvidence(archivedId);
     expect(await loadCount()).toBe(0);
   });
 

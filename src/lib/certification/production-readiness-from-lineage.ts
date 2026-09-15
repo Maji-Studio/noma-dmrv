@@ -21,11 +21,11 @@ export function productionReadinessGapFromLineages(
     return null;
   }
 
-  const missingProduct = lineages.find((lineage) => !lineage.biocharProduct);
+  const missingProduct = lineages.find((lineage) => !lineage.biocharProduct && !lineage.products?.length);
   if (missingProduct) {
     return {
       kind: "missingBiocharProduct",
-      detail: `Application ${missingProduct.application.code} is not linked to a biochar product through its delivery or order`,
+      detail: `Application ${missingProduct.application.code} is not linked to a biochar product through saved delivery allocations`,
       fixTarget: "deliveries",
     };
   }
