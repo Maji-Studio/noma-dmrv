@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 import { test, expect } from "./fixtures";
+import { createDbConnection } from "./fixtures/db";
 import { invitations } from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 
 const VALIDITY_MS = 60_000;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/app_template_test" });
-const db = drizzle(pool);
+if (!process.env.DATABASE_URL) {
+  throw new Error("Set DATABASE_URL before running invitation onboarding tests.");
+}
+const { db, pool } = createDbConnection();
 const ids: string[] = [];
 
 async function invite(email: string, inviterId: string, expired = false) {
