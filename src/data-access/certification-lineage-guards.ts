@@ -249,9 +249,6 @@ export async function assertCanMutateCertifiedLineage(
   lineageRelationship?: "linked" | "selected",
 ): Promise<void> {
   requireOrgScope(ctx);
-  // Appending a new physical application does not edit an upstream captured fact.
-  // Relationship updates still check both the original and selected lineages.
-  if (mutation === "create" && subjectEntityType === "application" && target.entityType === "delivery") return;
   const hit = (await getLockedCertifiedLineage(ctx, tx, target)).find(
     (row) => row.removalSubmissionId || row.ghgStatementSubmissionId,
   );

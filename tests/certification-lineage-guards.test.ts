@@ -814,22 +814,16 @@ describe("certification lineage guards", () => {
     });
   });
 
-  it("allows a new application of unclaimed saved shipment shares while the submitted application stays locked", async () => {
+  it("rejects a new application on a submitted delivery lineage", async () => {
     await withFixture(async (fixture) => {
-      const application = await createApplication(makeTestOrgContext(TEST_USER_ID), {
-        code: `AP-REMAINING-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+      await expect(createApplication(makeTestOrgContext(TEST_USER_ID), {
+        code: `AP-LOCKED-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         deliveryId: fixture.deliveryId,
         applicationDate: new Date("2026-06-17T00:00:00Z"),
         biocharAppliedTons: 0.01,
         fieldSizeHa: 1,
-      });
-      try {
-        expect(application.biocharAppliedDryTons).toBe(0.0095);
-        await expect(updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { fieldSizeHa: 2 })).rejects.toThrow(LOCKED_COPY);
-      } finally {
-        await db.delete(creditBatchApplications).where(eq(creditBatchApplications.applicationId, application.id));
-        await deleteOutputApplicationFixtures(db, eq(applications.id, application.id));
-      }
+      })).rejects.toThrow(LOCKED_COPY);
+      await expect(updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { fieldSizeHa: 2 })).rejects.toThrow(LOCKED_COPY);
     });
   });
 
