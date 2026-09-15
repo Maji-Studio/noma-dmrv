@@ -3,26 +3,25 @@
  * CRUD operations for orders with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { countRows, numericAggregate } from "@/db/aggregate";
 import {
-  orders,
-  facilities,
-  customers,
   customerLocations,
-  biocharProducts,
-  storageLocations,
+  customers,
   deliveries,
-  type Order,
+  facilities,
+  formulations,
+  orders,
+  type Order
 } from "@/db/schema";
-import type { OrderFilterData } from "@/schemas/orders";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   deriveOrderFulfillmentStatus,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
+import type { OrderFilterData } from "@/schemas/orders";
+import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
 
 // ============================================
 // Types
@@ -32,8 +31,8 @@ export interface OrderWithRelations extends Order {
   facilityName: string | null;
   customerName: string | null;
   customerLocationName: string | null;
-  biocharProductCode: string | null;
-  productBinName: string | null;
+  formulationName: string | null;
+
   /** Total deliveries linked to this order (non-archived). */
   deliveryCount: number;
   /** Deliveries in the `delivered` status — drives the `x/y delivered` progress. */
@@ -54,23 +53,15 @@ export interface PaginatedOrders {
 // Auth Guards
 // ============================================
 
-import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertOrderQuantityCoversAllocations } from "./delivery-order-balance";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
-  assertOrderProductRepointWithinStock,
-  lockOrderProductRepointBins,
-} from "./order-stock-locks";
-import {
-  lockBiocharTransportRouteTopology,
-  syncBiocharProductTransportLegs,
+  lockBiocharTransportRouteTopology
 } from "./transport-legs";
-import { assertOrderQuantityCoversAllocations } from "./delivery-order-balance";
-import { isStockOverdraw } from "@/lib/stock-overdraw";
-import { ZERO_SOURCE_BIOCHAR_WARNING } from "@/lib/biochar-composition";
-import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 // ============================================
 // Read Operations
@@ -193,7 +184,7 @@ export async function getOrders(
       facilityId: orders.facilityId,
       customerId: orders.customerId,
       customerLocationId: orders.customerLocationId,
-      biocharProductId: orders.biocharProductId,
+      formulationId: orders.formulationId,
       orderDate: orders.orderDate,
       quantityKg: orders.quantityKg,
       packaging: orders.packaging,
@@ -205,8 +196,8 @@ export async function getOrders(
       facilityName: facilities.name,
       customerName: customers.name,
       customerLocationName: customerLocations.name,
-      biocharProductCode: biocharProducts.code,
-      productBinName: storageLocations.name,
+      formulationName: formulations.name,
+
       deliveryCount: numericAggregate(
         sql<number>`coalesce(${deliveryAgg.total}, 0)`,
       ),
@@ -218,8 +209,7 @@ export async function getOrders(
     .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
     .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
-    .leftJoin(biocharProducts, and(eq(orders.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
-    .leftJoin(storageLocations, and(eq(biocharProducts.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
+    .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
     .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
@@ -259,7 +249,8 @@ export async function getOrdersForSelect(
     code: string;
     orderDate: Date;
     customerName: string | null;
-    biocharProductCode: string | null;
+    formulationName: string | null;
+    formulationId: string;
     quantityKg: number;
     /** Destination (order's customer location) GPS. */
     destinationGpsLatitude: number | null;
@@ -287,7 +278,8 @@ export async function getOrdersForSelect(
       code: orders.code,
       orderDate: orders.orderDate,
       customerName: customers.name,
-      biocharProductCode: biocharProducts.code,
+      formulationName: formulations.name,
+      formulationId: orders.formulationId,
       quantityKg: orders.quantityKg,
       destinationGpsLatitude: customerLocations.gpsLatitude,
       destinationGpsLongitude: customerLocations.gpsLongitude,
@@ -296,7 +288,7 @@ export async function getOrdersForSelect(
     })
     .from(orders)
     .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
-    .leftJoin(biocharProducts, and(eq(orders.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+    .leftJoin(formulations, and(eq(orders.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
     .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(desc(orders.orderDate));
@@ -309,11 +301,13 @@ export async function getOrdersForSelect(
 async function validateCustomerLocationBelongsToCustomer(
   ctx: OrgContext,
   customerId: string,
-  customerLocationId: string | null | undefined
+  customerLocationId: string | null | undefined,
+  executor: Pick<DbTransaction, "select"> = db,
 ): Promise<void> {
+  requireOrgScope(ctx);
   if (!customerLocationId) return;
 
-  const [location] = await db
+  const [location] = await executor
     .select({ customerId: customerLocations.customerId })
     .from(customerLocations)
     .where(and(
@@ -330,312 +324,44 @@ async function validateCustomerLocationBelongsToCustomer(
   }
 }
 
-/** Enforce the product/facility/source-mass invariant shared by order writes. */
-async function assertOrderProductCanBeUsed(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  biocharProductId: string,
-  facilityId: string,
-): Promise<void> {
-  const [product] = await tx
-    .select({
-      facilityId: biocharProducts.facilityId,
-      sourceBiocharMassKg: sourceBiocharMassKgSql(
-        biocharProducts.massKg,
-        biocharProducts.composition,
-      ),
-    })
-    .from(biocharProducts)
-    .where(
-      and(
-        eq(biocharProducts.id, biocharProductId),
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ),
-    )
-    .for("update");
-
-  if (!product) {
-    throw new SafeError("Biochar product not found");
-  }
-
-  if (product.facilityId !== facilityId) {
-    throw new SafeError("Biochar product belongs to a different facility");
-  }
-
-  if (product.sourceBiocharMassKg <= 0) {
-    throw new SafeError(ZERO_SOURCE_BIOCHAR_WARNING);
-  }
-}
-
-/** Create a new order. */
-export async function createOrder(
-  ctx: OrgContext,
-  data: {
-    code: string;
-    facilityId: string;
-    customerId: string;
-    customerLocationId?: string | null;
-    biocharProductId: string;
-    orderDate: Date;
-    quantityKg: number;
-    packaging: "loose" | "bagged";
-    value?: number | null;
-    currency?: string;
-  }
-): Promise<Order> {
+/** Orders request a formulation and wet mass; they never reserve physical stock. */
+export async function createOrder(ctx: OrgContext, data: {
+  code: string; facilityId: string; customerId: string; customerLocationId?: string | null;
+  formulationId: string; orderDate: Date; quantityKg: number; packaging: 'loose' | 'bagged'; value?: number | null; currency?: string;
+}): Promise<Order> {
   requireOrgScope(ctx);
-
   await assertSameOrg(ctx, customers, data.customerId);
-  await validateCustomerLocationBelongsToCustomer(
-    ctx,
-    data.customerId,
-    data.customerLocationId
-  );
-
-  return db.transaction(async (tx) => {
-    await assertOrderProductCanBeUsed(
-      ctx,
-      tx,
-      data.biocharProductId,
-      data.facilityId,
-    );
-
-    const [order] = await tx
-      .insert(orders)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        facilityId: data.facilityId,
-        customerId: data.customerId,
-        customerLocationId: data.customerLocationId,
-        biocharProductId: data.biocharProductId,
-        orderDate: data.orderDate,
-        quantityKg: data.quantityKg,
-        packaging: data.packaging,
-        value: data.value ?? null,
-        currency: data.currency ?? "TZS",
-      })
-      .returning();
-
+  await validateCustomerLocationBelongsToCustomer(ctx, data.customerId, data.customerLocationId);
+  return db.transaction(async tx => {
+    const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
+    const [formulation] = await tx.select({ id: formulations.id }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, data.formulationId))).for('share');
+    if (!facility || !formulation) throw new SafeError('Choose an active facility and formulation.');
+    const [order] = await tx.insert(orders).values({ ...data, organizationId: ctx.organizationId }).returning();
     return order;
   });
 }
-
-// ============================================
-// Update Operations
-// ============================================
-
-/**
- * Update an existing order
- */
-export async function updateOrder(
-  ctx: OrgContext,
-  orderId: string,
-  data: {
-    code?: string;
-    facilityId?: string;
-    customerId?: string;
-    customerLocationId?: string | null;
-    biocharProductId?: string;
-    orderDate?: Date;
-    quantityKg?: number;
-    packaging?: "loose" | "bagged";
-    value?: number | null;
-    currency?: string;
-  }
-): Promise<Order> {
+export async function updateOrder(ctx: OrgContext, orderId: string, data: Partial<Omit<Order, 'id' | 'organizationId' | 'createdAt' | 'archivedAt'>>): Promise<Order> {
   requireOrgScope(ctx);
-
-  // Verify order exists
-  const [existing] = await db
-    .select()
-    .from(orders)
-    .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Order not found");
-  }
-
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(and(eq(orders.code, data.code), eq(orders.organizationId, ctx.organizationId)));
-
-    if (duplicate) {
-      throw new SafeError("An order with this code already exists");
+  if (data.customerId) await assertSameOrg(ctx, customers, data.customerId);
+  if (data.formulationId) await assertSameOrg(ctx, formulations, data.formulationId);
+  return db.transaction(async tx => {
+    await lockBiocharTransportRouteTopology(ctx, tx);
+    const [existing] = await tx.select().from(orders).where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).for('update');
+    if (!existing) throw new SafeError('Order not found');
+    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'order', entityId: orderId }, 'update');
+    const [delivery] = await tx.select({ code: deliveries.code }).from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.orderId, orderId)));
+    if (delivery && ['formulationId', 'facilityId', 'customerId', 'customerLocationId'].some(key => key in data && data[key as keyof typeof data] !== existing[key as keyof Order])) throw new SafeError(`Order relationship is used by delivery ${delivery.code}.`);
+    await validateCustomerLocationBelongsToCustomer(ctx, data.customerId ?? existing.customerId, data.customerLocationId === undefined ? existing.customerLocationId : data.customerLocationId, tx);
+    if (data.facilityId) {
+      const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+      if (!facility) throw new SafeError('Facility not found or archived');
     }
-  }
-
-  const effectiveCustomerId = data.customerId ?? existing.customerId;
-  const effectiveCustomerLocationId =
-    data.customerLocationId !== undefined
-      ? data.customerLocationId
-      : existing.customerLocationId;
-
-  if (data.customerId !== undefined || data.customerLocationId !== undefined) {
-    await assertSameOrg(ctx, customers, effectiveCustomerId);
-    await validateCustomerLocationBelongsToCustomer(
-      ctx,
-      effectiveCustomerId,
-      effectiveCustomerLocationId
-    );
-  }
-
-  const updated = await db.transaction(async (tx) => {
-    const routeAnchorCanChange =
-      data.biocharProductId !== undefined ||
-      data.customerLocationId !== undefined;
-    if (routeAnchorCanChange) {
-      await lockBiocharTransportRouteTopology(ctx, tx);
-    }
-
-    // Match delivery mutation lock precedence: route topology first, then
-    // certification artifacts, stock bins, parent/product rows, and finally
-    // transport aggregates.
-    // This prevents an order↔delivery ABBA cycle on artifact and order locks.
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "order", entityId: orderId },
-      "update",
-    );
-
-    const repointPreparation = data.biocharProductId !== undefined
-      ? await lockOrderProductRepointBins(
-          ctx,
-          tx,
-          orderId,
-          data.biocharProductId,
-        )
-      : null;
-
-    const [locked] = await tx
-      .select()
-      .from(orders)
-      .where(and(
-        eq(orders.id, orderId),
-        eq(orders.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Order not found");
-    }
-
-    if (
-      data.quantityKg !== undefined &&
-      isStockOverdraw(locked.quantityKg, data.quantityKg)
-    ) {
-      await assertOrderQuantityCoversAllocations(ctx, tx, {
-        orderId,
-        orderQuantityKg: data.quantityKg,
-      });
-    }
-
-    if (
-      data.biocharProductId !== undefined &&
-      repointPreparation
-    ) {
-      await assertOrderProductRepointWithinStock(
-        ctx,
-        tx,
-        orderId,
-        locked.biocharProductId,
-        data.biocharProductId,
-        repointPreparation,
-      );
-    }
-
-    await assertOrderProductCanBeUsed(
-      ctx,
-      tx,
-      data.biocharProductId ?? locked.biocharProductId,
-      data.facilityId ?? locked.facilityId,
-    );
-
-    const productChanged =
-      data.biocharProductId !== undefined &&
-      data.biocharProductId !== locked.biocharProductId;
-    const customerLocationChanged =
-      data.customerLocationId !== undefined &&
-      data.customerLocationId !== locked.customerLocationId;
-    const affectedProductIds: Array<string | null> = [];
-    let inheritingDeliveries: Array<{
-      biocharProductId: string | null;
-      customerLocationId: string | null;
-    }> = [];
-
-    if (productChanged || customerLocationChanged) {
-      inheritingDeliveries = await tx
-        .select({
-          biocharProductId: deliveries.biocharProductId,
-          customerLocationId: deliveries.customerLocationId,
-        })
-        .from(deliveries)
-        .where(and(
-          eq(deliveries.orderId, orderId),
-          eq(deliveries.organizationId, ctx.organizationId),
-        ))
-        .orderBy(deliveries.id)
-        .for("update");
-
-      if (productChanged) {
-        const inheritedProductDelivery = inheritingDeliveries.find(
-          (delivery) => delivery.biocharProductId === null,
-        );
-        if (inheritedProductDelivery) {
-          throw new SafeError(
-            "This order already has deliveries. Create a new order instead of changing its biochar product.",
-          );
-        }
-      }
-
-      for (const delivery of inheritingDeliveries) {
-        if (
-          customerLocationChanged &&
-          delivery.customerLocationId === null
-        ) {
-          affectedProductIds.push(
-            delivery.biocharProductId ?? locked.biocharProductId,
-            delivery.biocharProductId ??
-              data.biocharProductId ??
-              locked.biocharProductId,
-          );
-        }
-      }
-    }
-
-    const [row] = await tx
-      .update(orders)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)))
-      .returning();
-
-    await syncBiocharProductTransportLegs(
-      ctx,
-      tx,
-      affectedProductIds,
-    );
-    return row;
+    if (data.quantityKg !== undefined) await assertOrderQuantityCoversAllocations(ctx, tx, { orderId, orderQuantityKg: data.quantityKg });
+    const [saved] = await tx.update(orders).set({ ...data, updatedAt: new Date() }).where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).returning();
+    return saved;
   });
-  await processPendingStorageObjectDeletions(ctx);
-
-  return updated;
 }
 
-// ============================================
-// Delete Operations
-// ============================================
-
-/**
- * Delete an order
- * Will fail if order has associated deliveries
- */
 export async function deleteOrder(
   ctx: OrgContext,
   orderId: string

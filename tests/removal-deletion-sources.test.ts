@@ -1,3 +1,5 @@
+import { deleteDocumentWithCertificationSafety } from "@/data-access/documents";
+import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
 import {
   ensureTestOrg,
@@ -113,9 +115,7 @@ afterAll(async () => {
     await db
       .delete(certifierProjects)
       .where(inArray(certifierProjects.facilityId, tracked.createdFacilityIds));
-    await db
-      .delete(facilities)
-      .where(inArray(facilities.id, tracked.createdFacilityIds));
+    await deleteOutputFacilityFixtures(db, inArray(facilities.id, tracked.createdFacilityIds));
   }
   if (tracked.createdFeedstockTypeIds.length > 0) {
     await db
@@ -209,7 +209,7 @@ async function ledgerRow(id: string) {
   return row;
 }
 describe("deleteRemoval evidence cleanup", () => {
-  it("releases the evidence mirrors only the deleted submission cited, so the Application and Delivery can be deleted", async () => {
+  it("releases the evidence mirrors only the deleted submission cited, while retaining the posted Delivery history", async () => {
     const fixture = await createFixture();
     const chain = await createChain(fixture);
     const [application] = await db
@@ -272,7 +272,8 @@ describe("deleteRemoval evidence cleanup", () => {
     );
     const ctx = makeTestOrgContext();
     await expect(deleteApplication(ctx, chain.applicationId)).resolves.toBeUndefined();
-    await expect(deleteDelivery(ctx, application.deliveryId!)).resolves.toBeUndefined();
+    await expect(deleteDelivery(ctx, application.deliveryId!)).rejects.toThrow(/Posted deliveries retain their history/);
+    await expect(deleteDocumentWithCertificationSafety(ctx, deliveryDocumentId)).resolves.toMatchObject({ id: deliveryDocumentId });
     expect(
       await db
         .select({ id: documents.id })

@@ -1,3 +1,6 @@
+import { postedStockFixture, cleanupPostedStock } from "./helpers/posted-output-stock-fixture";
+import { postOutputStock } from "@/data-access/output-stock-post";
+import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import {
@@ -190,8 +193,6 @@ describe("storage location archive", () => {
 
   it.each([
     { type: "feedstock_bin" as const, lane: "feedstock" as const },
-    { type: "biochar_bin" as const, lane: "biochar" as const },
-    { type: "product_bin" as const, lane: "product" as const },
   ])("blocks archiving a $lane bin with non-zero stock", async ({ type, lane }) => {
     const fixture = await createStorageArchiveFixture({
       type,
@@ -207,6 +208,18 @@ describe("storage location archive", () => {
     } finally {
       await cleanupStorageArchiveFixture(fixture);
     }
+  });
+
+  it.each(["biochar", "product"] as const)("blocks archiving %s stock derived from posted dry provenance", async lane => {
+    const fixture = await postedStockFixture({ stockKg: 10 });
+    const binId = lane === "biochar" ? fixture.source.id : fixture.bin.id;
+    try {
+      await expect(archiveStorageLocation(fixture.ctx, binId)).rejects.toThrow(/on hand/);
+      const input = { facilityId: fixture.facility.id, storageLocationId: binId, physicalDate: "2026-09-14", kind: "count" as const, wetMassKg: 0 };
+      const preview = await previewOutputStock(fixture.ctx, input);
+      await postOutputStock(fixture.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E archive empty bin" });
+      await expect(archiveStorageLocation(fixture.ctx, binId)).resolves.toMatchObject({ archivedAt: expect.any(Date) });
+    } finally { await cleanupPostedStock(fixture); }
   });
 
   it("preserves the sign of a sub-kilogram archive deficit", async () => {

@@ -24,10 +24,7 @@ export const biocharProductStatus = pgEnum('biochar_product_status', [
   'sold',
 ]);
 
-export const deliveryStatus = pgEnum('delivery_status', [
-  'upcoming',
-  'delivered',
-]);
+export const deliveryStatus = pgEnum('delivery_status', ['delivered']);
 
 export const applicationStatus = pgEnum('application_status', [
   'delivered',

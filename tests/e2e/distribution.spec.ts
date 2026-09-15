@@ -20,16 +20,6 @@ import { selectEntity, selectEntityByText } from "./fixtures/page-helpers";
 const ORDERS_URL = "/orders";
 const DELIVERIES_URL = "/deliveries";
 
-/**
- * Select a product bin in the order form.
- * The bin field is a searchable EntitySelect (custom dropdown showing live
- * stock and the traceability batch), not a native <select>, so it is driven via
- * its trigger button and per-option testids rather than selectOption().
- */
-async function selectProductBin(page: Page, productId: string) {
-  await selectEntity(page, "Product bin", productId);
-}
-
 async function createOrderViaUi(
   page: Page,
   seededData: SeededChainData,
@@ -71,7 +61,7 @@ async function createOrderViaUi(
 
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', quantityKg);
-  await selectProductBin(page, seededData.biocharProduct.id);
+  await selectEntity(page, "Formulation", seededData.formulation.id);
   await page.click('button[type="submit"]:has-text("Create Order")');
   await page.waitForSelector('[role="dialog"]', {
     state: "hidden",
@@ -92,8 +82,8 @@ async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
   await page.waitForSelector('[role="dialog"]', { timeout: 8000 });
 
   await page.fill('input[name="deliveryDate"]', "2026-03-02");
-  await page.selectOption('select[name="status"]', "upcoming");
   await selectEntityByText(page, "Order", seededData.customer.name);
+  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "95");
   await page.fill('input[name="moistureContentPercent"]', "10");
   await page.click('button[type="submit"]:has-text("Create Delivery")');
@@ -302,8 +292,7 @@ test.describe("Delivery Mass Validation - Isometric Protocol", () => {
 
 test.describe("Distribution Schema Constants", () => {
   test("delivery status values are valid", () => {
-    expect(deliveryStatuses).toContain("upcoming");
-    expect(deliveryStatuses).toContain("delivered");
+    expect(deliveryStatuses).toEqual(["delivered"]);
   });
 
   test("packaging types are valid", () => {

@@ -46,6 +46,8 @@ function splitMassByWeights(
  * link. Once allocations exist they are authoritative, even if the
  * compatibility link is still populated.
  */
+/** Product-weight preview helper only. Posted delivery applications use frozen
+ * applicationOutputAllocations; never call this to reconstruct their provenance. */
 export function splitApplicationAcrossSourceAllocations<
   T extends AllocatableApplication,
 >(

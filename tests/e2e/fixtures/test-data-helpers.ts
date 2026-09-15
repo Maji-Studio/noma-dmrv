@@ -1,3 +1,4 @@
+import { deleteOutputFacilityFixtures, outputProductFixtureValues, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 /**
  * Test Data Helpers
@@ -135,7 +136,7 @@ export async function deleteTestFacility(facilityId: string): Promise<void> {
     await db
       .delete(schema.certifierProjects)
       .where(eq(schema.certifierProjects.facilityId, facilityId));
-    await db.delete(schema.facilities).where(eq(schema.facilities.id, facilityId));
+    await deleteOutputFacilityFixtures(db, eq(schema.facilities.id, facilityId));
   } finally {
     await pool.end();
   }
@@ -312,7 +313,7 @@ export async function createTestBiocharProduct(
       moistureContentPercent: overrides.moistureContentPercent ?? 10,
     };
 
-    await db.insert(schema.biocharProducts).values({
+    await db.insert(schema.biocharProducts).values(await outputProductFixtureValues(db, {
       organizationId: DEC_ORG_ID,
       id: product.id,
       code: product.code,
@@ -322,7 +323,7 @@ export async function createTestBiocharProduct(
       status: product.status,
       massKg: product.massKg,
       moistureContentPercent: product.moistureContentPercent,
-    });
+    }));
 
     return product;
   } finally {
@@ -337,7 +338,7 @@ export async function deleteTestBiocharProduct(productId: string): Promise<void>
   const { db, pool } = createDbConnection();
 
   try {
-    await db.delete(schema.biocharProducts).where(eq(schema.biocharProducts.id, productId));
+    await deleteOutputProductFixtures(db, eq(schema.biocharProducts.id, productId));
   } finally {
     await pool.end();
   }

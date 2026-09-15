@@ -1,3 +1,6 @@
+import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
+import { previewOutputStock } from "@/data-access/output-stock-operations";
+import { deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues } from "./helpers/output-contract-fixtures";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -48,7 +51,7 @@ describe("derived transport-leg transaction boundaries", () => {
     deliveryIds: [] as string[],
   };
 
-  beforeAll(() => ensureTestOrg());
+  beforeAll(async () => { await ensureTestOrg(); await ensureOutputFixtureActor(ctx); });
 
   afterEach(async () => {
     const trackedFeedstocks = created.feedstockCodes.length > 0
@@ -68,7 +71,7 @@ describe("derived transport-leg transaction boundaries", () => {
       await db.delete(transportLegs).where(inArray(transportLegs.entityId, entityIds));
     }
     if (created.deliveryIds.length > 0) {
-      await db.delete(deliveries).where(inArray(deliveries.id, created.deliveryIds));
+      await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, created.deliveryIds));
     }
     if (trackedFeedstocks.length > 0) {
       await db
@@ -87,9 +90,7 @@ describe("derived transport-leg transaction boundaries", () => {
       await db.delete(customers).where(inArray(customers.id, created.customerIds));
     }
     if (created.biocharProductIds.length > 0) {
-      await db
-        .delete(biocharProducts)
-        .where(inArray(biocharProducts.id, created.biocharProductIds));
+      await deleteOutputProductFixtures(db, inArray(biocharProducts.id, created.biocharProductIds));
     }
     if (created.storageLocationIds.length > 0) {
       await db
@@ -110,7 +111,7 @@ describe("derived transport-leg transaction boundaries", () => {
       await db.delete(suppliers).where(inArray(suppliers.id, created.supplierIds));
     }
     if (created.facilityIds.length > 0) {
-      await db.delete(facilities).where(inArray(facilities.id, created.facilityIds));
+      await deleteOutputFacilityFixtures(db, inArray(facilities.id, created.facilityIds));
     }
 
     for (const ids of Object.values(created)) ids.length = 0;
@@ -363,7 +364,7 @@ describe("derived transport-leg transaction boundaries", () => {
     });
   });
 
-  it("recomputes prior, new, and location-affected product legs without touching manual legs", async () => {
+  it("preserves posted source relationships and recomputes location-affected legs without touching manual legs", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
@@ -408,26 +409,28 @@ describe("derived transport-leg transaction boundaries", () => {
 
     const [firstProduct, secondProduct] = await db
       .insert(biocharProducts)
-      .values([
+      .values(await outputProductFixtureValues(db, [
         {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
           code: `BP-DIST-A-${tag}`,
           massKg: 1_000,
+          moistureContentPercent: 0,
         },
         {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
           code: `BP-DIST-B-${tag}`,
           massKg: 1_000,
+          moistureContentPercent: 0,
         },
-      ])
+      ]))
       .returning({ id: biocharProducts.id });
     created.biocharProductIds.push(firstProduct.id, secondProduct.id);
 
     const [firstOrder, secondOrder] = await db
       .insert(orders)
-      .values([
+      .values(await outputOrderFixtureValues(db, [
         {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
@@ -450,29 +453,19 @@ describe("derived transport-leg transaction boundaries", () => {
           quantityKg: 100,
           packaging: "bagged" as const,
         },
-      ])
+      ]))
       .returning({ id: orders.id });
     created.orderIds.push(firstOrder.id, secondOrder.id);
 
-    const delivery = await createDelivery(ctx, {
-      code: `DL-DIST-${tag}`,
-      orderId: firstOrder.id,
-      facilityId: facility.id,
-      deliveryDate: new Date("2026-07-19T00:00:00Z"),
-      biocharProductId: firstProduct.id,
-      status: "upcoming",
-      deliveredWetMassKg: 100,
-    });
-    created.deliveryIds.push(delivery.id);
-
-    const upcomingDerived = await db
-      .select({ id: transportLegs.id })
-      .from(transportLegs)
-      .where(and(
-        eq(transportLegs.entityId, firstProduct.id),
-        eq(transportLegs.isDerived, true),
-      ));
-    expect(upcomingDerived).toEqual([]);
+    const sources = await Promise.all([firstProduct, secondProduct].map(product => preparePureOutputProductFixture(db, product.id)));
+    async function postDelivery(index: number, orderId: string) {
+      const preview = await previewOutputStock(ctx, { kind: "delivery", facilityId: facility.id, storageLocationId: sources[index].storageLocationId, physicalDate: "2026-07-19", wetMassKg: 100, moisturePercent: 0 });
+      const delivery = await createDelivery(ctx, { code: `DL-DIST-${index}-${tag}`, orderId, facilityId: facility.id, storageLocationId: sources[index].storageLocationId, deliveryDate: new Date("2026-07-19"), deliveredWetMassKg: 100, moistureContentPercent: 0, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID() });
+      created.deliveryIds.push(delivery.id);
+      return delivery;
+    }
+    const delivery = await postDelivery(0, firstOrder.id);
+    await postDelivery(1, secondOrder.id);
 
     await db.insert(transportLegs).values({
       organizationId: TEST_ORG_ID,
@@ -486,11 +479,7 @@ describe("derived transport-leg transaction boundaries", () => {
       isDerived: false,
     });
 
-    await updateDelivery(ctx, delivery.id, {
-      orderId: secondOrder.id,
-      biocharProductId: secondProduct.id,
-      status: "delivered",
-    });
+    await expect(updateDelivery(ctx, delivery.id, { orderId: secondOrder.id })).rejects.toThrow(/Correct entry/);
 
     const legsAfterReassignment = await db
       .select({
@@ -503,31 +492,10 @@ describe("derived transport-leg transaction boundaries", () => {
 
     expect(legsAfterReassignment).toEqual(expect.arrayContaining([
       { entityId: firstProduct.id, isDerived: false, distanceKm: 99 },
+      { entityId: firstProduct.id, isDerived: true, distanceKm: 20 },
       { entityId: secondProduct.id, isDerived: true, distanceKm: 60 },
     ]));
-    expect(legsAfterReassignment).toHaveLength(2);
-
-    const upcomingDelivery = await createDelivery(ctx, {
-      code: `DL-STALE-${tag}`,
-      orderId: firstOrder.id,
-      facilityId: facility.id,
-      deliveryDate: new Date("2026-07-19T00:00:00Z"),
-      biocharProductId: firstProduct.id,
-      status: "upcoming",
-      deliveredWetMassKg: 100,
-    });
-    created.deliveryIds.push(upcomingDelivery.id);
-    await db.insert(transportLegs).values({
-      organizationId: TEST_ORG_ID,
-      entityType: "biochar",
-      entityId: firstProduct.id,
-      distanceKm: 20,
-      distanceSource: "manual",
-      transportMethodType: "road",
-      calculationMethodType: "distance_based",
-      loadMassKg: 100,
-      isDerived: true,
-    });
+    expect(legsAfterReassignment).toHaveLength(3);
 
     await updateCustomerLocation(ctx, secondLocation.id, {
       distanceFromFacilityKm: 80,
@@ -547,16 +515,16 @@ describe("derived transport-leg transaction boundaries", () => {
       distanceFromFacilityKm: 40,
       distanceSource: "map_estimate",
     });
-    const staleDerived = await db
-      .select({ id: transportLegs.id })
+    const firstDerived = await db
+      .select({ distanceKm: transportLegs.distanceKm })
       .from(transportLegs)
       .where(and(
         eq(transportLegs.entityId, firstProduct.id),
         eq(transportLegs.isDerived, true),
       ));
-    expect(staleDerived).toEqual([]);
+    expect(firstDerived).toEqual([{ distanceKm: 40 }]);
 
-    await deleteDelivery(ctx, delivery.id);
+    await expect(deleteDelivery(ctx, delivery.id)).rejects.toThrow(/Correct entry/);
     const remainingLegs = await db
       .select({
         entityId: transportLegs.entityId,
@@ -565,8 +533,11 @@ describe("derived transport-leg transaction boundaries", () => {
       .from(transportLegs)
       .where(inArray(transportLegs.entityId, [firstProduct.id, secondProduct.id]));
 
-    expect(remainingLegs).toEqual([
+    expect(remainingLegs).toEqual(expect.arrayContaining([
       { entityId: firstProduct.id, isDerived: false },
-    ]);
+      { entityId: firstProduct.id, isDerived: true },
+      { entityId: secondProduct.id, isDerived: true },
+    ]));
+    expect(remainingLegs).toHaveLength(3);
   });
 });

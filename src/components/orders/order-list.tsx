@@ -4,39 +4,38 @@
  */
 "use client";
 
-import { useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
-import type { Order } from "@/db/schema";
-import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
-import { useCustomers } from "@/hooks/use-customers";
-import { useDebounce } from "@/hooks/use-debounce";
-import {
-  useListPagination,
-  useReconcileListPage,
-} from "@/hooks/use-list-pagination";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { SelectFacilityEmptyState } from "@/components/navigation";
-import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
+import { SelectFacilityEmptyState } from "@/components/navigation";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { pluralize } from "@/lib/copy-utils";
-import { OrderForm } from "./order-form";
-import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type { OrderWithRelations } from "@/data-access/orders";
+import type { Order } from "@/db/schema";
+import { useCustomers } from "@/hooks/use-customers";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
+import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
+import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
   orderFulfillmentStatuses,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import type { OrderFilterData, OrderFormData } from "@/schemas/orders";
+import { PackageIcon, PlusIcon, TruckIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useState } from "react";
+import { OrderForm } from "./order-form";
 
 // ============================================
 // Column Definitions
@@ -77,7 +76,7 @@ function createColumns(
     },
     {
       accessorKey: "quantityKg",
-      header: "Quantity (kg)",
+      header: "Requested wet mass (kg)",
       cell: ({ row }) => row.original.quantityKg.toLocaleString(),
     },
     {
@@ -409,9 +408,9 @@ export function OrderList() {
                 {
                   title: "Product details",
                   fields: [
-                    { label: "Product bin", value: sideSheetEntity.productBinName },
+                    { label: "Formulation", value: sideSheetEntity.formulationName },
                     { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
-                    { label: "Quantity (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
+                    { label: "Requested wet mass (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
                     { label: "Value", value: sideSheetEntity.value },
                     { label: "Currency", value: sideSheetEntity.currency },
                   ],

@@ -1,32 +1,33 @@
+import { outputStockKeys } from "./use-output-stock";
 /**
  * Deliveries React Query Hooks
  * Client-side state management for delivery operations
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Delivery } from "@/db/schema";
 import type {
-  DeliveryFilterData,
+  DeliveryWithRelations,
+  PaginatedDeliveries,
+} from "@/data-access/deliveries";
+import type { Delivery } from "@/db/schema";
+import {
+  createDeliveryFn,
+  deleteDeliveryFn,
+  getDeliveriesFn,
+  getDeliveryStatsFn,
+  getDeliveryWithRelationsFn,
+  updateDeliveryFn,
+} from "@/fn/deliveries";
+import type {
   CreateDeliveryData,
+  DeliveryFilterData,
   UpdateDeliveryData,
 } from "@/schemas/deliveries";
-import type {
-  PaginatedDeliveries,
-  DeliveryWithRelations,
-} from "@/data-access/deliveries";
-import {
-  getDeliveriesFn,
-  getDeliveryWithRelationsFn,
-  getDeliveryStatsFn,
-  createDeliveryFn,
-  updateDeliveryFn,
-  deleteDeliveryFn,
-} from "@/fn/deliveries";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { MutationCallbacks } from "./types";
-import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { certificationKeys } from "./use-certification";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import type { MutationCallbacks } from "./types";
+import { certificationKeys } from "./use-certification";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
 // Query Keys
@@ -158,6 +159,7 @@ export function useCreateDelivery(
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
@@ -165,6 +167,7 @@ export function useCreateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -261,11 +264,13 @@ export function useUpdateDelivery(
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
 
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {
@@ -355,11 +360,13 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
 
       await callbacks?.onSuccess?.(undefined, deliveryId);
     },
     onError: async (error, deliveryId, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {

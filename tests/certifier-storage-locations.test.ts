@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -98,16 +101,16 @@ async function createFixture(): Promise<Fixture> {
       .returning({ id: formulations.id });
     const [product] = await tx
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         formulationId: formulation.id,
         code: `BP-SLC-${runId}`,
-      })
+      }))
       .returning({ id: biocharProducts.id });
     const [order] = await tx
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         customerId: customer.id,
@@ -117,11 +120,9 @@ async function createFixture(): Promise<Fixture> {
         orderDate: new Date("2026-08-01T00:00:00Z"),
         quantityKg: 1_000,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
-    const [delivery] = await tx
-      .insert(deliveries)
-      .values({
+    const [delivery] = await insertOutputDeliveryFixture(tx, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         orderId: order.id,
@@ -130,19 +131,15 @@ async function createFixture(): Promise<Fixture> {
         status: "delivered",
         deliveredWetMassKg: 1_000,
         massDryKg: 900,
-      })
-      .returning({ id: deliveries.id });
-    const [application] = await tx
-      .insert(applications)
-      .values({
+      }, row => ({ id: row.id }));
+    const [application] = await insertOutputApplicationFixture(tx, {
         organizationId: TEST_ORG_ID,
         deliveryId: delivery.id,
         code: `AP-SLC-${runId}`,
         applicationDate: new Date("2026-08-03T00:00:00Z"),
         biocharAppliedTons: 1,
         biocharAppliedDryTons: 0.9,
-      })
-      .returning({ id: applications.id });
+      }, row => ({ id: row.id }));
     return {
       applicationId: application.id,
       customerLocationId: customerLocation.id,
@@ -170,10 +167,10 @@ async function cleanupFixture(fixture: Fixture): Promise<void> {
           ),
         ),
       );
-    await tx.delete(applications).where(eq(applications.id, fixture.applicationId));
-    await tx.delete(deliveries).where(eq(deliveries.id, fixture.deliveryId));
+    await deleteOutputApplicationFixtures(tx, eq(applications.id, fixture.applicationId));
+    await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
     await tx.delete(orders).where(eq(orders.id, fixture.orderId));
-    await tx.delete(biocharProducts).where(eq(biocharProducts.id, fixture.productId));
+    await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx.delete(formulations).where(eq(formulations.id, fixture.formulationId));
     await tx
       .delete(certifierProjects)
@@ -182,7 +179,7 @@ async function cleanupFixture(fixture: Fixture): Promise<void> {
       .delete(customerLocations)
       .where(eq(customerLocations.id, fixture.customerLocationId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
-    await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
 }
 
@@ -435,7 +432,7 @@ describe("certifier Storage Location data access", () => {
           .where(eq(certifierProjects.id, secondProjectId));
       }
       if (secondFacilityId) {
-        await db.delete(facilities).where(eq(facilities.id, secondFacilityId));
+        await deleteOutputFacilityFixtures(db, eq(facilities.id, secondFacilityId));
       }
     }
   });
@@ -545,7 +542,7 @@ describe("certifier Storage Location data access", () => {
         await db
           .delete(certifierProjects)
           .where(eq(certifierProjects.facilityId, sharedFacilityId));
-        await db.delete(facilities).where(eq(facilities.id, sharedFacilityId));
+        await deleteOutputFacilityFixtures(db, eq(facilities.id, sharedFacilityId));
       }
     }
   });

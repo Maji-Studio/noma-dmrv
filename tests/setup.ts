@@ -8,6 +8,7 @@ import { config } from "dotenv";
 config({ path: ".env.test" });
 
 const testEnvDefaults: Record<string, string> = {
+  NODE_ENV: "test",
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/app_template_test",
   // The app default is a single connection, but the DB-backed concurrency
   // tests (tests/certification-submissions.test.ts) hold a transaction open

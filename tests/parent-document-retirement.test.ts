@@ -1,3 +1,4 @@
+import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
@@ -158,7 +159,7 @@ describe("parent document retirement", () => {
         .where(eq(storageObjectDeletions.organizationId, otherOrgId));
       await db.delete(documents).where(eq(documents.organizationId, otherOrgId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
       await db.delete(organizations).where(eq(organizations.id, otherOrgId));
     }
   });
@@ -199,7 +200,7 @@ describe("parent document retirement", () => {
         .where(eq(certifierDocumentUploads.documentId, documentId));
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
     }
   });
 
@@ -231,16 +232,16 @@ describe("parent document retirement", () => {
       .returning({ id: customerLocations.id });
     const [product] = await db
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         code: `BP-DEL-${tag}`,
         massKg: 1_000,
-      })
+      }))
       .returning({ id: biocharProducts.id });
     const [order] = await db
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         customerId: customer.id,
@@ -250,21 +251,18 @@ describe("parent document retirement", () => {
         orderDate: new Date("2026-07-19T00:00:00Z"),
         quantityKg: 100,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
-    const [delivery] = await db
-      .insert(deliveries)
-      .values({
+    const [delivery] = await insertOutputDeliveryFixture(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         orderId: order.id,
         biocharProductId: product.id,
         code: `DL-DEL-${tag}`,
         deliveryDate: new Date("2026-07-19T00:00:00Z"),
-        status: "upcoming",
+        status: "delivered",
         deliveredWetMassKg: 100,
-      })
-      .returning({ id: deliveries.id });
+      }, row => ({ id: row.id }));
     const [leg] = await db
       .insert(transportLegs)
       .values({
@@ -301,7 +299,7 @@ describe("parent document retirement", () => {
 
       await expect(
         deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id),
-      ).rejects.toThrow(/certification provider/);
+      ).rejects.toThrow(/posted deliveries|bin history/i);
 
       expect(provider.deleteCalls).toEqual([]);
       expect(provider.objects.has(deliveryKey)).toBe(true);
@@ -325,13 +323,13 @@ describe("parent document retirement", () => {
       await db
         .delete(documents)
         .where(inArray(documents.id, [deliveryDocumentId, legDocumentId]));
-      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
+      await deleteOutputDeliveryFixtures(db, eq(deliveries.id, delivery.id));
       await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
       await db.delete(orders).where(eq(orders.id, order.id));
       await db.delete(customerLocations).where(eq(customerLocations.id, location.id));
       await db.delete(customers).where(eq(customers.id, customer.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputProductFixtures(db, eq(biocharProducts.id, product.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 
@@ -407,7 +405,7 @@ describe("parent document retirement", () => {
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
     }
   });
 
@@ -458,7 +456,7 @@ describe("parent document retirement", () => {
     } finally {
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
     }
   });
 
@@ -549,9 +547,7 @@ describe("parent document retirement", () => {
       await db
         .delete(reactors)
         .where(eq(reactors.organizationId, organizationId));
-      await db
-        .delete(facilities)
-        .where(eq(facilities.organizationId, organizationId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.organizationId, organizationId));
       await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
@@ -784,7 +780,7 @@ describe("parent document retirement", () => {
       await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 
@@ -890,7 +886,7 @@ describe("parent document retirement", () => {
       await db.delete(reactors).where(eq(reactors.id, reactor.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 });

@@ -1,3 +1,4 @@
+import { deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -37,9 +38,7 @@ describe("updateFormulation ingredient identity", () => {
 
   afterAll(async () => {
     if (createdProductIds.length > 0) {
-      await db
-        .delete(biocharProducts)
-        .where(inArray(biocharProducts.id, createdProductIds));
+      await deleteOutputProductFixtures(db, inArray(biocharProducts.id, createdProductIds));
     }
     if (createdFormulationIds.length > 0) {
       await db.delete(formulations).where(inArray(formulations.id, createdFormulationIds));
@@ -50,7 +49,7 @@ describe("updateFormulation ingredient identity", () => {
         .where(inArray(feedstockTypes.id, createdFeedstockTypeIds));
     }
     if (createdFacilityIds.length > 0) {
-      await db.delete(facilities).where(inArray(facilities.id, createdFacilityIds));
+      await deleteOutputFacilityFixtures(db, inArray(facilities.id, createdFacilityIds));
     }
   });
 
@@ -117,14 +116,14 @@ describe("updateFormulation ingredient identity", () => {
     };
     const [product] = await db
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         code: `BP-FORM-${tag}`,
         facilityId: facility.id,
         formulationId: formulation.id,
         massKg: 100,
         composition: savedComposition,
-      })
+      }))
       .returning({ id: biocharProducts.id });
     createdProductIds.push(product.id);
 

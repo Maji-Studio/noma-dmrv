@@ -10,7 +10,6 @@
  * application evidence-gap check stays fail-closed (issue #461): an application
  * with unresolved evidence keeps surfacing until the gap is filled.
  */
-import { and, eq, isNull, lt, or, type SQL } from "drizzle-orm";
 import {
   applications,
   biocharProducts,
@@ -19,6 +18,7 @@ import {
   feedstocks,
   productionRuns,
 } from "@/db/schema";
+import { and, eq, isNull, lt, or, type SQL } from "drizzle-orm";
 import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
 
 /** Complete production runs missing either mass reading. */
@@ -62,19 +62,6 @@ export function feedstocksMissingDataWhere(
     eq(feedstocks.facilityId, facilityId),
     isNull(feedstocks.archivedAt),
     eq(feedstocks.status, "missing_data"),
-  );
-}
-
-/** Deliveries scheduled but not yet fulfilled. */
-export function upcomingDeliveriesWhere(
-  organizationId: string,
-  facilityId: string,
-): SQL | undefined {
-  return and(
-    eq(deliveries.organizationId, organizationId),
-    eq(deliveries.facilityId, facilityId),
-    isNull(deliveries.archivedAt),
-    eq(deliveries.status, "upcoming"),
   );
 }
 

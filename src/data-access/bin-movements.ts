@@ -7,26 +7,26 @@
  * per-lane sums feed the storage-location derivation overlay.
  */
 
-import { and, desc, eq } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
+import { isPgCheckViolation } from "@/db/errors";
 import {
   binMovements,
   storageLocations,
   users,
   type BinMovement,
 } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { SafeError } from "@/lib/errors";
 import type { BinMovementLane, BinMovementType } from "@/schemas/bin-movements";
 import { laneForStorageType } from "@/schemas/bin-movements";
-import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "./utils";
-import { SafeError } from "@/lib/errors";
-import { isPgCheckViolation } from "@/db/errors";
+import { and, desc, eq } from "drizzle-orm";
 import {
   deriveBinLaneAvailableKg,
   isOverdraw,
   lockBinStock,
   overdrawError,
 } from "./bin-stock-guards";
+import { requireOrgScope } from "./utils";
 
 const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
 const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
@@ -173,6 +173,7 @@ export async function createBinMovement(
   input: CreateBinMovementInput,
 ): Promise<BinMovement> {
   requireOrgScope(ctx);
+  if (input.lane !== 'feedstock') throw new SafeError('Use the output stock preview and posting action for output bins.');
   if (input.movementType !== "loss") {
     throw new SafeError(
       "Use Reconcile stock to record a stock-take adjustment",
@@ -209,6 +210,7 @@ export async function recordStockTakeMovement(
   input: RecordStockTakeMovementInput,
 ): Promise<BinMovement> {
   requireOrgScope(ctx);
+  if (input.lane !== 'feedstock') throw new SafeError('Use the output stock preview and posting action for output bins.');
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, input.storageLocationId);
     await assertBinLaneTarget(ctx, tx, input);

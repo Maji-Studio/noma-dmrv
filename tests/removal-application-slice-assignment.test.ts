@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -100,13 +103,13 @@ describe("Removal Application-slice assignment", () => {
       .returning();
     const [product] = await db
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         code: `RAS-BP-${tag}`,
         sourceBiocharStorageLocationId: sourceBin.id,
         massKg: 300,
-      })
+      }))
       .returning();
     await db.insert(biocharProductSourceAllocations).values(
       runs.map((run) => ({
@@ -128,7 +131,7 @@ describe("Removal Application-slice assignment", () => {
       .returning();
     const [order] = await db
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         customerId: customer.id,
@@ -137,11 +140,9 @@ describe("Removal Application-slice assignment", () => {
         orderDate: new Date("2026-04-03T00:00:00Z"),
         quantityKg: 300,
         packaging: "loose",
-      })
+      }))
       .returning();
-    const [delivery] = await db
-      .insert(deliveries)
-      .values({
+    const [delivery] = await insertOutputDeliveryFixture(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         orderId: order.id,
@@ -150,19 +151,15 @@ describe("Removal Application-slice assignment", () => {
         deliveryDate: new Date("2026-04-04T00:00:00Z"),
         deliveredWetMassKg: 300,
         massDryKg: 300,
-      })
-      .returning();
-    const [application] = await db
-      .insert(applications)
-      .values({
+      }, row => row);
+    const [application] = await insertOutputApplicationFixture(db, {
         organizationId: TEST_ORG_ID,
         deliveryId: delivery.id,
         code: `RAS-A-${tag}`,
         applicationDate: new Date("2026-04-05T00:00:00Z"),
         biocharAppliedTons: 0.3,
         biocharAppliedDryTons: 0.15,
-      })
-      .returning();
+      }, row => row);
     const batches = await db
       .insert(creditBatches)
       .values(
@@ -466,20 +463,20 @@ describe("Removal Application-slice assignment", () => {
           ...(laterBatchId ? [laterBatchId] : []),
         ]),
       );
-      await db.delete(applications).where(eq(applications.id, application.id));
-      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
+      await deleteOutputApplicationFixtures(db, eq(applications.id, application.id));
+      await deleteOutputDeliveryFixtures(db, eq(deliveries.id, delivery.id));
       await db.delete(orders).where(eq(orders.id, order.id));
       await db.delete(customers).where(eq(customers.id, customer.id));
       await db
         .delete(biocharProductSourceAllocations)
         .where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
+      await deleteOutputProductFixtures(db, eq(biocharProducts.id, product.id));
       await db.delete(productionRuns).where(inArray(productionRuns.id, runs.map((r) => r.id)));
       await db.delete(productionProcesses).where(eq(productionProcesses.id, process.id));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
       await db.delete(reactors).where(eq(reactors.id, reactor.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, sourceBin.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 });

@@ -1,3 +1,4 @@
+import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import {
@@ -45,24 +46,24 @@ describe("order product-bin options", () => {
         .returning({ id: storageLocations.id });
       const [product] = await tx
         .insert(biocharProducts)
-        .values({
+        .values(await outputProductFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
           code: `BP-OPB-${tag}`,
           facilityId: facility.id,
           storageLocationId: productBin.id,
           massKg: 250,
           moistureContentPercent: 15,
-        })
+        }))
         .returning({ id: biocharProducts.id });
       const [binlessProduct] = await tx
         .insert(biocharProducts)
-        .values({
+        .values(await outputProductFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
           code: `BP-NOBIN-${tag}`,
           facilityId: facility.id,
           massKg: 250,
           moistureContentPercent: 15,
-        })
+        }))
         .returning({ id: biocharProducts.id });
 
       return {
@@ -80,14 +81,12 @@ describe("order product-bin options", () => {
   });
 
   afterAll(async () => {
-    await db
-      .delete(biocharProducts)
-      .where(eq(biocharProducts.id, binlessProductId));
-    await db.delete(biocharProducts).where(eq(biocharProducts.id, productId));
+    await deleteOutputProductFixtures(db, eq(biocharProducts.id, binlessProductId));
+    await deleteOutputProductFixtures(db, eq(biocharProducts.id, productId));
     await db
       .delete(storageLocations)
       .where(eq(storageLocations.id, productBinId));
-    await db.delete(facilities).where(eq(facilities.id, facilityId));
+    await deleteOutputFacilityFixtures(db, eq(facilities.id, facilityId));
   });
 
   it("shows the bin identity while retaining the product batch as the selected id", async () => {
@@ -99,7 +98,7 @@ describe("order product-bin options", () => {
     expect(options).toContainEqual({
       id: productId,
       code: `BIN-OPB-${tag}`,
-      name: `Order Product Bin ${tag} • Pure biochar`,
+      name: `Order Product Bin ${tag} • E2E Pure fixture`,
       mass: {
         moisturePercent: 15,
       },
@@ -121,7 +120,7 @@ describe("order product-bin options", () => {
     expect(options).toContainEqual({
       id: binlessProductId,
       code: `BP-NOBIN-${tag}`,
-      name: "Pure biochar",
+      name: "E2E Pure fixture",
       mass: {
         moisturePercent: 15,
       },
@@ -142,7 +141,7 @@ describe("order product-bin options", () => {
     await expect(getBiocharProductEntityById(ctx, productId)).resolves.toEqual({
       id: productId,
       code: `BIN-OPB-${tag}`,
-      name: `Order Product Bin ${tag} • Pure biochar`,
+      name: `Order Product Bin ${tag} • E2E Pure fixture`,
       mass: {
         moisturePercent: 15,
       },

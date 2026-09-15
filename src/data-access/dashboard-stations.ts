@@ -9,7 +9,6 @@
  * `dashboard-overview.ts`. Queries are narrow, indexed, facility-scoped;
  * anything that isn't a cheap count/group-by happens in JS.
  */
-import { and, count, countDistinct, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
@@ -24,12 +23,13 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import type { StatusStateClass } from "@/lib/status-state";
-import { requireOrgScope } from "./utils";
+import { and, count, countDistinct, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   applicationEvidenceGapWhere,
   productsUnlinkedWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
+import { requireOrgScope } from "./utils";
 
 /** Total rows the activity feed keeps after the merge sort. */
 const ACTIVITY_TOTAL = 8;
@@ -543,7 +543,6 @@ export async function getDashboardStations(
   const runningRuns = countByStatus(counts.productionRuns, ["running"]);
   const productTotal = totalCount(counts.biocharProducts);
   const deliveryTotal = totalCount(counts.deliveries);
-  const deliveriesUpcoming = countByStatus(counts.deliveries, ["upcoming"]);
   const applicationTotal = totalCount(counts.applications);
 
   const stations: DashboardStation[] = [
@@ -601,11 +600,8 @@ export async function getDashboardStations(
       name: "Delivery",
       total: deliveryTotal,
       totalLabel: plural(deliveryTotal, "delivery", "deliveries"),
-      attention: deliveriesUpcoming,
-      reasons:
-        deliveriesUpcoming > 0
-          ? [{ state: "warning", text: `${plural(deliveriesUpcoming, "upcoming delivery", "upcoming deliveries")}` }]
-          : [],
+      attention: 0,
+      reasons: [],
       href: facilityHref("/deliveries", facilityId),
     },
     {

@@ -384,3 +384,8 @@ helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
 CI secrets come from 1Password via `1password/load-secrets-action` plus the
 `OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
 plain Actions secret. See [security.md](./security.md) → Secrets Management.
+
+## Output stock
+
+See [Output stock and completed deliveries](output-stock.md) for physical FIFO,
+conserved dry stock, immutable corrections, and saved downstream provenance.

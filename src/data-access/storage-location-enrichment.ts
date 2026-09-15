@@ -1,3 +1,4 @@
+import { getOutputBinStockView } from './output-stock';
 /**
  * Storage Location Enrichment
  *
@@ -12,33 +13,32 @@
  * "needs reconciliation" signal rather than hiding it.
  */
 
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { db } from "@/db";
 import {
   countRows,
   numericAggregate,
   sumNumeric,
 } from "@/db/aggregate";
-import type { OrgContext } from "@/lib/auth/server";
 import {
-  feedstocks,
-  feedstockTypes,
-  productionRuns,
-  biocharProducts,
-  formulations,
-  deliveries,
-  orders,
   applications,
   binMovements,
-  type StorageLocation,
+  biocharProducts,
+  deliveries,
+  feedstocks,
+  feedstockTypes,
+  formulations,
+  productionRuns,
+  type StorageLocation
 } from "@/db/schema";
-import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { deriveLaneStock } from "./lane-stock-derivation";
+import type { OrgContext } from "@/lib/auth/server";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import {
   productDryBiocharKgSql,
   productWetMassKgSql,
   sourceBiocharMassKgSql,
 } from "./biochar-product-source-mass";
+import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -69,14 +69,18 @@ export interface StorageLocationWithFacility extends StorageLocation {
   };
   biocharInventory: {
     productionRunCount: number;
-    currentMassKg: number;
+    currentMassKg: number | null;
+    dryMassKg?: number | null;
+    recordedWetMassKg?: number | null;
     allocatedToProductsKg: number;
     downstreamFormulations: string[];
   };
   productInventory: {
     batchCount: number;
-    currentMassKg: number;
-    biocharEquivalentKg: number;
+    currentMassKg: number | null;
+    dryMassKg?: number | null;
+    recordedWetMassKg?: number | null;
+    biocharEquivalentKg: number | null;
     formulationNames: string[];
     appliedApplicationCount: number;
     appliedDryMassKg: number;
@@ -146,7 +150,6 @@ export async function enrichStorageLocationRows(
     sourceDownstreamProductRows,
     legacyDownstreamProductRows,
     productInventoryRows,
-    productDeliveredRows,
     productApplicationRows,
     lastActivityRows,
     laneStockRows,
@@ -301,83 +304,12 @@ export async function enrichStorageLocationRows(
             ),
           )
           .groupBy(biocharProducts.storageLocationId),
-        tx
-          .select({
-            storageLocationId: biocharProducts.storageLocationId,
-            deliveredMassKg: sumNumeric(deliveries.deliveredWetMassKg),
-          })
-          .from(deliveries)
-          .innerJoin(
-            orders,
-            and(
-              eq(deliveries.orderId, orders.id),
-              eq(orders.organizationId, ctx.organizationId),
-            ),
-          )
-          .innerJoin(
-            biocharProducts,
-            and(
-              sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-              eq(biocharProducts.organizationId, ctx.organizationId),
-            ),
-          )
-          .where(
-            and(
-              eq(deliveries.status, "delivered"),
-              eq(deliveries.organizationId, ctx.organizationId),
-              inArray(biocharProducts.storageLocationId, storageLocationIds),
-            ),
-          )
-          .groupBy(biocharProducts.storageLocationId),
-        tx
-          .select({
-            storageLocationId: sql<string>`
-              COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})
-            `,
-            appliedApplicationCount: count(),
-            appliedDryMassKg: numericAggregate(sql<number>`
-              COALESCE(
-                SUM(
-                  COALESCE(${applications.biocharAppliedDryTons}, 0) * 1000
-                ),
-                0
-              )
-            `),
-            lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})`,
-          })
-          .from(applications)
-          .innerJoin(
-            deliveries,
-            and(
-              eq(applications.deliveryId, deliveries.id),
-              eq(deliveries.organizationId, ctx.organizationId),
-            ),
-          )
-          .leftJoin(
-            orders,
-            and(
-              eq(deliveries.orderId, orders.id),
-              eq(orders.organizationId, ctx.organizationId),
-            ),
-          )
-          .leftJoin(
-            biocharProducts,
-            and(
-              sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-              eq(biocharProducts.organizationId, ctx.organizationId),
-            ),
-          )
-          .where(
-            and(
-              eq(applications.status, "applied"),
-              eq(applications.organizationId, ctx.organizationId),
-              sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IS NOT NULL`,
-              sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IN (${storageLocationIdsSql})`
-            )
-          )
-          .groupBy(
-            sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})`
-          ),
+        tx.select({ storageLocationId: deliveries.storageLocationId, appliedApplicationCount: count(),
+          appliedDryMassKg: numericAggregate(sql<number>`COALESCE(SUM(COALESCE(${applications.biocharAppliedDryTons}, 0) * 1000), 0)`),
+          lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})` })
+          .from(applications).innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+          .where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.status, "applied"), inArray(deliveries.storageLocationId, storageLocationIds)))
+          .groupBy(deliveries.storageLocationId),
         tx.execute<{
           storage_location_id: string;
           activity_type: "in" | "out";
@@ -528,13 +460,13 @@ export async function enrichStorageLocationRows(
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
         `),
+        // Enrichment also needs the source-allocation aggregate from the biochar lane.
         deriveLaneStock(ctx, tx, { storageLocationIds }),
       ]), {
         isolationLevel: "repeatable read",
         accessMode: "read only",
       })
     : [
-        [],
         [],
         [],
         [],
@@ -596,9 +528,6 @@ export async function enrichStorageLocationRows(
   const productInventoryMap = new Map(
     productInventoryRows.map((row) => [row.storageLocationId ?? "", row])
   );
-  const productDeliveredMap = new Map(
-    productDeliveredRows.map((row) => [row.storageLocationId ?? "", row])
-  );
   const productApplicationMap = new Map(
     productApplicationRows
       .filter((row) => row.storageLocationId != null)
@@ -608,6 +537,7 @@ export async function enrichStorageLocationRows(
     laneStockRows.map((row) => [row.storageLocationId, row]),
   );
 
+  const outputViews = new Map(await Promise.all(rows.filter(row => row.type !== 'feedstock_bin').map(async row => [row.id, await getOutputBinStockView(ctx, row.id)] as const)));
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
@@ -633,10 +563,8 @@ export async function enrichStorageLocationRows(
     const allocatedKg = laneStock?.biocharAllocatedKg ?? 0;
 
     const productInventoryRow = productInventoryMap.get(row.id);
-    const productDeliveredRow = productDeliveredMap.get(row.id);
     const productApplicationRow = productApplicationMap.get(row.id);
-    const productBaseMassKg = productInventoryRow?.currentMassKg ?? 0;
-    const productDeliveredMassKg = productDeliveredRow?.deliveredMassKg ?? 0;
+    const outputView = outputViews.get(row.id);
 
     return {
       ...row,
@@ -655,7 +583,8 @@ export async function enrichStorageLocationRows(
       biocharInventory: {
         productionRunCount: Number(biocharOutputRow?.productionRunCount ?? 0),
         // Unclamped, movement-inclusive (see currentWetMassKg above).
-        currentMassKg: laneStock?.biocharStockKg ?? 0,
+        currentMassKg: outputView?.estimatedWetMassKg ?? null,
+        dryMassKg: outputView?.dryMassKg ?? null,
         allocatedToProductsKg: allocatedKg,
         downstreamFormulations: [
           ...(downstreamFormulationsByLocation.get(row.id) ?? []),
@@ -663,11 +592,10 @@ export async function enrichStorageLocationRows(
       },
       productInventory: {
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
-        currentMassKg:
-          productBaseMassKg -
-          productDeliveredMassKg +
-          (laneStock?.productMovementDeltaKg ?? 0),
-        biocharEquivalentKg: productInventoryRow?.biocharEquivalentKg ?? 0,
+        currentMassKg: outputView?.estimatedWetMassKg ?? null,
+        dryMassKg: outputView?.dryMassKg ?? null,
+        recordedWetMassKg: outputView?.recordedWetMassKg ?? null,
+        biocharEquivalentKg: outputView?.dryMassKg ?? null,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
         ),

@@ -1,9 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import {
   FormField,
   FormInput,
@@ -11,27 +7,34 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
+import { Button } from "@/components/ui";
+import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { useToast } from "@/components/ui/toast";
-import { formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
+import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import {
   RecordLossFieldError,
   useRecordLoss,
 } from "@/hooks/use-bin-movements";
+import { formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
+import {
+  binStockOverdrawInlineMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 import {
   laneForStorageType,
   recordLossFormSchema,
   type RecordLossFormData,
 } from "@/schemas/bin-movements";
 import { toNumberOrNull } from "@/schemas/helpers";
-import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { binCurrentMassKg } from "./bin-display";
-import {
-  binStockOverdrawInlineMessage,
-  isStockOverdraw,
-} from "@/lib/stock-overdraw";
+import { OutputStockForm } from "./output-stock-form";
 
 interface BinReconcileSheetProps {
+  initialKind?: "loss" | "count";
   open: boolean;
   onOpenChange: (open: boolean) => void;
   storageLocation: StorageLocationWithFacility | null;
@@ -118,7 +121,7 @@ function LossForm({
   const lossInput = useWatch({ control, name: "lossMassKg" });
   const lossMassKg = previewNumber(lossInput);
   const liveStockError =
-    lossMassKg !== null &&
+    lossMassKg !== null && availableKg !== null &&
     isStockOverdraw(lossMassKg, availableKg)
       ? binStockOverdrawInlineMessage(lane, availableKg)
       : undefined;
@@ -212,11 +215,13 @@ function LossForm({
 }
 
 export function BinReconcileSheet({
+  initialKind = "count",
   open,
   onOpenChange,
   storageLocation,
   onRecorded,
 }: BinReconcileSheetProps) {
+  const [outputKind, setOutputKind] = useState<"loss" | "count">(initialKind);
   const close = () => onOpenChange(false);
   const handleRecorded = () => {
     onRecorded?.();
@@ -244,6 +249,7 @@ export function BinReconcileSheet({
         <SlideOverPanel.Body noPaddingBottom fillHeight>
           {storageLocation && (
             <div className="flex flex-1 flex-col gap-20">
+              {storageLocation.type === "feedstock_bin" ? <>
               <CurrentStockContext storageLocation={storageLocation} />
               {/* Keyed so switching bins resets the form's state. */}
               <LossForm
@@ -252,6 +258,13 @@ export function BinReconcileSheet({
                 onCancel={close}
                 onRecorded={handleRecorded}
               />
+              </> : <>
+                <div className="flex gap-12">
+                  <Button variant="default" onClick={() => setOutputKind("loss")}>Record loss</Button>
+                  <Button variant="default" onClick={() => setOutputKind("count")}>Reconcile stock</Button>
+                </div>
+                <OutputStockForm key={`${storageLocation.id}-${outputKind}`} storageLocationId={storageLocation.id} facilityId={storageLocation.facilityId} kind={outputKind} onCancel={close} onRecorded={handleRecorded} />
+              </> }
             </div>
           )}
         </SlideOverPanel.Body>

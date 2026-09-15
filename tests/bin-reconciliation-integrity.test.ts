@@ -1,15 +1,11 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   binMovements,
-  biocharProducts,
-  customers,
-  deliveries,
   facilities,
   feedstocks,
   feedstockTypes,
-  orders,
   productionRunFeedstockDraws,
   productionRunFeedstocks,
   productionRuns,
@@ -23,7 +19,7 @@ import {
   createBiocharProduct,
   deleteBiocharProduct,
 } from "@/data-access/biochar-products";
-import { createDelivery, updateDelivery } from "@/data-access/deliveries";
+import { createDelivery } from "@/data-access/deliveries";
 import { updateOrder } from "@/data-access/orders";
 import { createProductionRun } from "@/data-access/production-runs";
 import {
@@ -33,7 +29,6 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-bin-reconciliation";
-const BIN_STOCK_LOCK_SCOPE = "bin-stock";
 const INITIAL_FEEDSTOCK_DRY_MASS_KG = 100;
 const RECOUNTED_FEEDSTOCK_WET_MASS_KG = 10;
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
@@ -73,153 +68,32 @@ beforeAll(async () => {
     .onConflictDoNothing({ target: users.id });
 });
 
+import { postedStockFixture, cleanupPostedStock, productInput, postProduct, postDelivery, deliveryInput, postMeasurement } from "./helpers/posted-output-stock-fixture";
+import { getOutputBinDryBalance } from "@/data-access/output-stock";
+import { previewOutputStock } from "@/data-access/output-stock-operations";
+import { postOutputStock } from "@/data-access/output-stock-post";
+import { recordStockTakeMovement } from "@/data-access/bin-movements";
+import { outputStockAllocations } from "@/db/schema";
+const postedFixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
+async function postedFixture(stockKg = 100) { const f = await postedStockFixture({ stockKg, quantityKg: 100 }); postedFixtures.push(f); return f; }
+afterEach(async () => { for (const f of postedFixtures.splice(0)) await cleanupPostedStock(f); });
+
 describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS }, () => {
-  it("serializes a zero-mass product delete with an ingredient-bin stock-take", async () => {
-    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const [facility] = await db
-      .insert(facilities)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FAC-TAKE-DELETE-${tag}`,
-        name: `Stock Take Delete Facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [feedstockType] = await db
-      .insert(feedstockTypes)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FT-TAKE-DELETE-${tag}`,
-        name: `Stock Take Delete Feedstock ${tag}`,
-        category: "forestry",
-        usage: "blend",
-      })
-      .returning({ id: feedstockTypes.id });
-    const [bin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        feedstockTypeId: feedstockType.id,
-        code: `BIN-TAKE-DELETE-${tag}`,
-        name: `Stock Take Delete Bin ${tag}`,
-        type: "feedstock_bin",
-      })
-      .returning({ id: storageLocations.id });
-    const [feedstock] = await db
-      .insert(feedstocks)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        feedstockTypeId: feedstockType.id,
-        storageLocationId: bin.id,
-        code: `FS-TAKE-DELETE-${tag}`,
-        status: "complete",
-        massDryKg: 100,
-        massWetKg: 100,
-        moistureContentPercent: 0,
-      })
-      .returning({ id: feedstocks.id });
-    const [product] = await db
-      .insert(biocharProducts)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `BP-TAKE-DELETE-${tag}`,
-        massKg: 0,
-        composition: {
-          ingredients: [{
-            formulationIngredientId: crypto.randomUUID(),
-            feedstockTypeId: feedstockType.id,
-            storageLocationId: bin.id,
-            massKg: 30,
-            massDryKg: 30,
-            moistureContentPercent: 0,
-          }],
-        },
-      })
-      .returning({ id: biocharProducts.id });
-
-    let releaseBarrier = () => {};
-    let barrierTransaction: Promise<void> | undefined;
-    let concurrentResults:
-      | Promise<[
-          PromiseSettledResult<void>,
-          PromiseSettledResult<Awaited<ReturnType<typeof recordStockTakeFn>>>,
-        ]>
-      | undefined;
-
-    try {
-      let signalBarrierReady = () => {};
-      const barrierReady = new Promise<void>((resolve) => {
-        signalBarrierReady = resolve;
-      });
-      const releaseBarrierPromise = new Promise<void>((resolve) => {
-        releaseBarrier = resolve;
-      });
-      let barrierBackendPid = 0;
-      barrierTransaction = db.transaction(async (tx) => {
-        await lockBinStock(ctx, tx, bin.id);
-        const backend = await tx.execute<{ pid: number }>(
-          sql`select pg_backend_pid() as pid`,
-        );
-        barrierBackendPid = backend.rows[0]?.pid ?? 0;
-        signalBarrierReady();
-        await releaseBarrierPromise;
-      });
-      await barrierReady;
-
-      const deletePromise = deleteBiocharProduct(ctx, product.id);
-
-      await expect.poll(async () => {
-        const waits = await db.execute<{ waiter_count: number }>(sql`
-          select count(distinct waiting.pid)::int as waiter_count
-          from pg_locks waiting
-          join pg_locks held
-            on held.locktype = waiting.locktype
-           and held.database is not distinct from waiting.database
-           and held.classid is not distinct from waiting.classid
-           and held.objid is not distinct from waiting.objid
-           and held.objsubid is not distinct from waiting.objsubid
-          where waiting.locktype = 'advisory'
-            and not waiting.granted
-            and held.granted
-            and held.pid = ${barrierBackendPid}
-        `);
-        return waits.rows[0]?.waiter_count ?? 0;
-      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(1);
-
-      concurrentResults = Promise.allSettled([
-        deletePromise,
-        recordStockTakeFn({
-          storageLocationId: bin.id,
-          lane: "feedstock",
-          countedMassKg: 70,
-          countedWetMassKg: 70,
-          moistureRatioUsed: 0,
-          reason: "Concurrent stock-take against product delete",
-        }),
-      ]);
-
-      releaseBarrier();
-      await barrierTransaction;
-      const [deleteResult, stockTakeResult] = await concurrentResults;
-      expect(deleteResult.status).toBe("fulfilled");
-      expect(stockTakeResult.status).toBe("fulfilled");
-      if (stockTakeResult.status === "fulfilled") {
-        expect(stockTakeResult.value.success).toBe(true);
-      }
-    } finally {
-      releaseBarrier();
-      await barrierTransaction?.catch(() => undefined);
-      await concurrentResults?.catch(() => undefined);
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
-      await db.delete(binMovements).where(eq(binMovements.storageLocationId, bin.id));
-      await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
-      await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
-    }
+  it("keeps posted ingredient withdrawals when product deletion races a stock-take", async () => {
+    const f = await postedFixture(0);
+    const [bin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+      code: `E2E-ING-${f.tag}`, name: `E2E Ingredient ${f.tag}`, type: "feedstock_bin", feedstockTypeId: f.ingredientType.id }).returning();
+    await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FS-${f.tag}`,
+      status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") });
+    await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
+    const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30 }] } });
+    const [deletion, stockTake] = await Promise.allSettled([
+      deleteBiocharProduct(f.ctx, product.id),
+      recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" }),
+    ]);
+    expect(deletion.status).toBe("rejected"); expect(stockTake.status).toBe("fulfilled");
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
+    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(70);
   });
 
   it("serializes a stock-take against a concurrent production-run feedstock draw", async () => {
@@ -432,534 +306,62 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     }
   });
 
-  it("serializes concurrent deliveries before checking product stock", async () => {
-    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const [facility] = await db
-      .insert(facilities)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FAC-DEL-RACE-${tag}`,
-        name: `Delivery Race Facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [bin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `BIN-DEL-RACE-${tag}`,
-        name: `Delivery Race Bin ${tag}`,
-        type: "product_bin",
-      })
-      .returning({ id: storageLocations.id });
-    const [product] = await db
-      .insert(biocharProducts)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        storageLocationId: bin.id,
-        code: `BP-DEL-RACE-${tag}`,
-        massKg: 100,
-      })
-      .returning({ id: biocharProducts.id });
-    const [customer] = await db
-      .insert(customers)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `CU-DEL-RACE-${tag}`,
-        name: `Delivery Race Customer ${tag}`,
-      })
-      .returning({ id: customers.id });
-    const [order] = await db
-      .insert(orders)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        biocharProductId: product.id,
-        customerId: customer.id,
-        code: `OR-DEL-RACE-${tag}`,
-        orderDate: new Date("2026-07-01T00:00:00Z"),
-        quantityKg: 120,
-        packaging: "bagged",
-      })
-      .returning({ id: orders.id });
-
-    try {
-      const reducedCount = await recordStockTakeFn({
-        storageLocationId: bin.id,
-        lane: "product",
-        countedMassKg: 50,
-        reason: "Reduce product stock before delivery guard",
-      });
-      expect(reducedCount.success).toBe(true);
-
-      await expect(
-        createDelivery(ctx, {
-          code: `DL-DEL-RACE-${tag}-MOVEMENT`,
-          orderId: order.id,
-          facilityId: facility.id,
-          deliveryDate: new Date("2026-07-02T00:00:00Z"),
-          biocharProductId: product.id,
-          status: "delivered",
-          deliveredWetMassKg: 60,
-        }),
-      ).rejects.toThrow(/^Not enough biochar in this bin$/);
-
-      await db
-        .insert(biocharProducts)
-        .values({
-          organizationId: TEST_ORG_ID,
-          facilityId: facility.id,
-          storageLocationId: bin.id,
-          code: `BP-DEL-RACE-SUPPLEMENTAL-${tag}`,
-          massKg: 50,
-        });
-
-      const results = await Promise.allSettled(
-        [1, 2].map((attempt) =>
-          createDelivery(ctx, {
-            code: `DL-DEL-RACE-${tag}-${attempt}`,
-            orderId: order.id,
-            facilityId: facility.id,
-            deliveryDate: new Date("2026-07-02T00:00:00Z"),
-            biocharProductId: product.id,
-            status: "delivered",
-            deliveredWetMassKg: 60,
-          }),
-        ),
-      );
-
-      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-      expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
-
-      const rows = await db
-        .select({ deliveredWetMassKg: deliveries.deliveredWetMassKg })
-        .from(deliveries)
-        .where(eq(deliveries.orderId, order.id));
-      expect(
-        rows.reduce(
-          (total, row) => total + Number(row.deliveredWetMassKg ?? 0),
-          0,
-        ),
-      ).toBe(60);
-    } finally {
-      await db.delete(deliveries).where(eq(deliveries.orderId, order.id));
-      await db
-        .delete(binMovements)
-        .where(eq(binMovements.storageLocationId, bin.id));
-      await db
-        .delete(biocharProducts)
-        .where(eq(biocharProducts.code, `BP-DEL-RACE-SUPPLEMENTAL-${tag}`));
-      await db.delete(orders).where(eq(orders.id, order.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
-      await db.delete(customers).where(eq(customers.id, customer.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
-    }
+  it("serializes concurrent trucks against stock remaining after an explicit loss", async () => {
+    const f = await postedFixture(); await postMeasurement(f, { kind: "loss", wetMassKg: 50 });
+    const inputs = await Promise.all([deliveryInput(f, 40), deliveryInput(f, 40)]);
+    const results = await Promise.allSettled(inputs.map(input => createDelivery(f.ctx, input)));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(10);
   });
 
-  it("takes the source advisory lock before the destination row lock for a bin-linked product create", async () => {
-    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const productCode = `BP-ZERO-LOCK-${tag}`;
-    const [facility] = await db
-      .insert(facilities)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FAC-ZERO-LOCK-${tag}`,
-        name: `Zero Lock Facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [reactor] = await db
-      .insert(reactors)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `R-ZERO-LOCK-${tag}`,
-        identifier: `Zero Lock Reactor ${tag}`,
-        reactorType: "auger",
-      })
-      .returning({ id: reactors.id });
-    const [sourceBin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `BIN-ZERO-SOURCE-${tag}`,
-        name: `Zero Source Bin ${tag}`,
-        type: "biochar_bin",
-      })
-      .returning({ id: storageLocations.id });
-    const [destinationBin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `BIN-ZERO-DEST-${tag}`,
-        name: `Zero Destination Bin ${tag}`,
-        type: "product_bin",
-      })
-      .returning({ id: storageLocations.id });
-    const [run] = await db
-      .insert(productionRuns)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        reactorId: reactor.id,
-        code: `PR-ZERO-LOCK-${tag}`,
-        status: "complete",
-        startTime: new Date("2026-07-04T08:00:00Z"),
-        endTime: new Date("2026-07-04T10:00:00Z"),
-        biocharOutputKg: 10,
-        biocharStorageLocationId: sourceBin.id,
-      })
-      .returning({ id: productionRuns.id });
-
-    let releaseSourceLock = () => {};
-    let sourceLockTransaction: Promise<void> | undefined;
-    let createPromise: ReturnType<typeof createBiocharProduct> | undefined;
-
+  it("waits for the source-bin advisory lock before locking source production rows", async () => {
+    const f = await postedFixture(0); const input = await productInput(f);
+    let release = () => {};
+    let ready = () => {};
+    let barrierPid = 0;
+    const readyPromise = new Promise<void>(resolve => { ready = resolve; });
+    const releasePromise = new Promise<void>(resolve => { release = resolve; });
+    const barrier = db.transaction(async tx => {
+      await lockBinStock(f.ctx, tx, f.source.id);
+      barrierPid = (await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`)).rows[0].pid;
+      ready(); await releasePromise;
+    });
+    let creation: Promise<PromiseSettledResult<Awaited<ReturnType<typeof createBiocharProduct>>>[]> | undefined;
     try {
-      let signalSourceLockReady = () => {};
-      const sourceLockReady = new Promise<void>((resolve) => {
-        signalSourceLockReady = resolve;
-      });
-      const releaseSourceLockPromise = new Promise<void>((resolve) => {
-        releaseSourceLock = resolve;
-      });
-      let sourceLockBackendPid = 0;
-      sourceLockTransaction = db.transaction(async (tx) => {
-        const lockKey = `${BIN_STOCK_LOCK_SCOPE}:${TEST_ORG_ID}:${sourceBin.id}`;
-        await tx.execute(sql`
-          select pg_advisory_xact_lock(
-            hashtextextended(${lockKey}, 0)
-          )
-        `);
-        const backend = await tx.execute<{ pid: number }>(
-          sql`select pg_backend_pid() as pid`,
-        );
-        sourceLockBackendPid = backend.rows[0]?.pid ?? 0;
-        signalSourceLockReady();
-        await releaseSourceLockPromise;
-      });
-      await sourceLockReady;
-
-      createPromise = createBiocharProduct(ctx, {
-        code: productCode,
-        facilityId: facility.id,
-        linkedProductionRunId: run.id,
-        storageLocationId: destinationBin.id,
-        massKg: 1,
-        moistureContentPercent: 0,
-        waterAddedKg: 0,
-      });
-      // Same handler-attach window as the delivery update below: a rejection
-      // landing before the expectation attaches would fail the run as an
-      // unhandled rejection instead of the real assertion.
-      createPromise.catch(() => {});
-
-      await expect.poll(async () => {
-        const result = await db.execute<{ waiting: boolean }>(sql`
-          select exists (
-            select 1
-            from pg_locks waiting
-            join pg_locks held
-              on held.locktype = waiting.locktype
-             and held.database is not distinct from waiting.database
-             and held.classid is not distinct from waiting.classid
-             and held.objid is not distinct from waiting.objid
-             and held.objsubid is not distinct from waiting.objsubid
-            where waiting.locktype = 'advisory'
-              and not waiting.granted
-              and held.granted
-              and held.pid = ${sourceLockBackendPid}
-          ) as waiting
-        `);
-        return result.rows[0]?.waiting ?? false;
-      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
-
-      await expect(db.transaction(async (tx) => {
-        await tx.execute(sql`
-          select ${storageLocations.id}
-          from ${storageLocations}
-          where ${storageLocations.id} = ${destinationBin.id}
-          for update nowait
-        `);
+      await readyPromise;
+      creation = Promise.allSettled([createBiocharProduct(f.ctx, input)]);
+      await expect.poll(async () => (await db.execute<{ blocked: boolean }>(sql`
+        select exists(select 1 from pg_stat_activity where ${barrierPid} = any(pg_blocking_pids(pid))) as blocked
+      `)).rows[0].blocked, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
+      await expect(db.transaction(async tx => {
+        await tx.execute(sql`select id from production_runs where id = ${f.runs[0].id} for update nowait`);
       })).resolves.toBeUndefined();
-
-      // The create must not lock the run before it obtains the source-bin
-      // advisory lock. updateProductionRun uses bins -> run; this NOWAIT probe
-      // makes the shared global order deterministic and catches run -> bin ABBA.
-      await expect(db.transaction(async (tx) => {
-        await tx.execute(sql`
-          select ${productionRuns.id}
-          from ${productionRuns}
-          where ${productionRuns.id} = ${run.id}
-          for update nowait
-        `);
-      })).resolves.toBeUndefined();
-
-      releaseSourceLock();
-      await sourceLockTransaction;
-      await expect(createPromise).resolves.toMatchObject({ massKg: 1 });
     } finally {
-      releaseSourceLock();
-      await sourceLockTransaction?.catch(() => undefined);
-      await createPromise?.catch(() => undefined);
-      await db.delete(biocharProducts).where(eq(biocharProducts.code, productCode));
-      await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, destinationBin.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, sourceBin.id));
-      await db.delete(reactors).where(eq(reactors.id, reactor.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      release(); await barrier;
+      const result = await creation;
+      expect(result?.[0].status).toBe("fulfilled");
     }
   });
 
-  it("rejects reassigning an order when inherited delivered mass overdraws the new product", async () => {
-    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const [facility] = await db
-      .insert(facilities)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FAC-ORDER-DRAW-${tag}`,
-        name: `Order Draw Facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [oldBin, newBin] = await db
-      .insert(storageLocations)
-      .values([
-        {
-          organizationId: TEST_ORG_ID,
-          facilityId: facility.id,
-          code: `BIN-ORDER-OLD-${tag}`,
-          name: `Order Old Bin ${tag}`,
-          type: "product_bin" as const,
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          facilityId: facility.id,
-          code: `BIN-ORDER-NEW-${tag}`,
-          name: `Order New Bin ${tag}`,
-          type: "product_bin" as const,
-        },
-      ])
-      .returning({ id: storageLocations.id });
-    const [oldProduct, newProduct] = await db
-      .insert(biocharProducts)
-      .values([
-        {
-          organizationId: TEST_ORG_ID,
-          facilityId: facility.id,
-          storageLocationId: oldBin.id,
-          code: `BP-ORDER-OLD-${tag}`,
-          massKg: 100,
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          facilityId: facility.id,
-          storageLocationId: newBin.id,
-          code: `BP-ORDER-NEW-${tag}`,
-          massKg: 50,
-        },
-      ])
-      .returning({ id: biocharProducts.id });
-    const [customer] = await db
-      .insert(customers)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `CU-ORDER-DRAW-${tag}`,
-        name: `Order Draw Customer ${tag}`,
-      })
-      .returning({ id: customers.id });
-    const [order] = await db
-      .insert(orders)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        biocharProductId: oldProduct.id,
-        customerId: customer.id,
-        code: `OR-ORDER-DRAW-${tag}`,
-        orderDate: new Date("2026-07-05T00:00:00Z"),
-        quantityKg: 60,
-        packaging: "bagged",
-      })
-      .returning({ id: orders.id });
-    const [delivery] = await db
-      .insert(deliveries)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        orderId: order.id,
-        biocharProductId: null,
-        code: `DL-ORDER-DRAW-${tag}`,
-        deliveryDate: new Date("2026-07-06T00:00:00Z"),
-        status: "delivered",
-        deliveredWetMassKg: 60,
-      })
-      .returning({ id: deliveries.id });
-
-    try {
-      await expect(
-        updateOrder(ctx, order.id, { biocharProductId: newProduct.id }),
-      ).rejects.toThrow(/^Not enough biochar in this product$/);
-
-      const [unchanged] = await db
-        .select({ biocharProductId: orders.biocharProductId })
-        .from(orders)
-        .where(eq(orders.id, order.id));
-      expect(unchanged.biocharProductId).toBe(oldProduct.id);
-    } finally {
-      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
-      await db.delete(orders).where(eq(orders.id, order.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, oldProduct.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, newProduct.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, oldBin.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, newBin.id));
-      await db.delete(customers).where(eq(customers.id, customer.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
-    }
+  it("rejects changing a used order formulation without moving delivery provenance", async () => {
+    const f = await postedFixture(); const delivery = await postDelivery(f, 60);
+    const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
+    await expect(updateOrder(f.ctx, f.order.id, { formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
   });
 
-  it("locks the inherited order before validating a delivery stock transition", async () => {
-    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const [facility] = await db
-      .insert(facilities)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FAC-DEL-ORDER-LOCK-${tag}`,
-        name: `Delivery Order Lock Facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [oldProduct, newProduct] = await db
-      .insert(biocharProducts)
-      .values([
-        {
-          organizationId: TEST_ORG_ID,
-          facilityId: facility.id,
-          code: `BP-DEL-ORDER-OLD-${tag}`,
-          massKg: 100,
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          facilityId: facility.id,
-          code: `BP-DEL-ORDER-NEW-${tag}`,
-          massKg: 50,
-        },
-      ])
-      .returning({ id: biocharProducts.id });
-    const [customer] = await db
-      .insert(customers)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `CU-DEL-ORDER-LOCK-${tag}`,
-        name: `Delivery Order Lock Customer ${tag}`,
-      })
-      .returning({ id: customers.id });
-    const [order] = await db
-      .insert(orders)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        biocharProductId: oldProduct.id,
-        customerId: customer.id,
-        code: `OR-DEL-ORDER-LOCK-${tag}`,
-        orderDate: new Date("2026-07-07T00:00:00Z"),
-        quantityKg: 60,
-        packaging: "bagged",
-      })
-      .returning({ id: orders.id });
-    const [delivery] = await db
-      .insert(deliveries)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        orderId: order.id,
-        biocharProductId: null,
-        code: `DL-DEL-ORDER-LOCK-${tag}`,
-        deliveryDate: new Date("2026-07-08T00:00:00Z"),
-        status: "upcoming",
-        deliveredWetMassKg: 60,
-      })
-      .returning({ id: deliveries.id });
-
-    let releaseOrderUpdate = () => {};
-    let orderUpdateTransaction: Promise<void> | undefined;
-    let deliveryUpdatePromise: ReturnType<typeof updateDelivery> | undefined;
-
-    try {
-      let signalOrderUpdateReady = () => {};
-      const orderUpdateReady = new Promise<void>((resolve) => {
-        signalOrderUpdateReady = resolve;
-      });
-      const releaseOrderUpdatePromise = new Promise<void>((resolve) => {
-        releaseOrderUpdate = resolve;
-      });
-      let orderUpdateBackendPid = 0;
-      orderUpdateTransaction = db.transaction(async (tx) => {
-        await tx
-          .update(orders)
-          .set({ biocharProductId: newProduct.id })
-          .where(eq(orders.id, order.id));
-        const backend = await tx.execute<{ pid: number }>(
-          sql`select pg_backend_pid() as pid`,
-        );
-        orderUpdateBackendPid = backend.rows[0]?.pid ?? 0;
-        signalOrderUpdateReady();
-        await releaseOrderUpdatePromise;
-      });
-      await orderUpdateReady;
-
-      deliveryUpdatePromise = updateDelivery(ctx, delivery.id, {
-        status: "delivered",
-      });
-      // The update can reject in the window between the barrier committing and
-      // the `.rejects` expectation below attaching — pre-attach a no-op
-      // handler so the runner never sees an unhandled rejection (flaked in
-      // CI). `expect(...).rejects` still observes the rejection.
-      deliveryUpdatePromise.catch(() => {});
-
-      await expect.poll(async () => {
-        const result = await db.execute<{ waiting: boolean }>(sql`
-          select exists (
-            select 1
-            from pg_stat_activity
-            where ${orderUpdateBackendPid} = any(pg_blocking_pids(pid))
-          ) as waiting
-        `);
-        return result.rows[0]?.waiting ?? false;
-      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
-
-      releaseOrderUpdate();
-      await orderUpdateTransaction;
-      // The delivery is refused, not silently mis-attributed — that is the
-      // invariant. It surfaces as the snapshot-retry error rather than a
-      // specific over-draw figure because the global lock order forbids holding
-      // a row lock while discovering which bin to lock: the bins are chosen from
-      // an unlocked read, locked, then re-checked, and the concurrent re-point
-      // invalidates that snapshot. Re-deriving instead would mean drawing
-      // against a bin this transaction never locked.
-      await expect(deliveryUpdatePromise).rejects.toThrow(
-        "Stock changed while this operation was being prepared",
-      );
-
-      const [unchanged] = await db
-        .select({ status: deliveries.status })
-        .from(deliveries)
-        .where(eq(deliveries.id, delivery.id));
-      expect(unchanged.status).toBe("upcoming");
-    } finally {
-      releaseOrderUpdate();
-      await orderUpdateTransaction?.catch(() => undefined);
-      await deliveryUpdatePromise?.catch(() => undefined);
-      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
-      await db.delete(orders).where(eq(orders.id, order.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, oldProduct.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, newProduct.id));
-      await db.delete(customers).where(eq(customers.id, customer.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
-    }
+  it("serializes explicit delivery correction with a commercial order shrink", async () => {
+    const f = await postedFixture(); const delivery = await postDelivery(f, 60);
+    const [allocation] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
+    const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, physicalDate: "2026-09-14", kind: "delivery" as const, wetMassKg: 80, moisturePercent: 0, correctsMovementId: allocation.movementId };
+    const preview = await previewOutputStock(f.ctx, input);
+    const results = await Promise.allSettled([
+      postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
+      updateOrder(f.ctx, f.order.id, { quantityKg: 70 }),
+    ]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBeGreaterThanOrEqual(0);
   });
 });

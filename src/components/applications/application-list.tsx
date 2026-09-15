@@ -5,56 +5,48 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
-import { parseAsString, useQueryState } from "nuqs";
-import { useQueryClient } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
-import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
-import { DataTable } from "@/components/ui/data-table";
-import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { StatCard } from "@/components/ui/stat-card";
-import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { ApplicationAllocationShares } from "./application-allocation-shares";
+
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
-import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { MISSING_VALUE } from "@/lib/copy-utils";
-import { sumNullableBy } from "@/lib/nullable-sum";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { DataTable } from "@/components/ui/data-table";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useToast } from "@/components/ui/toast";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import type { ApplicationListItem } from "@/data-access/applications";
+import {
+  applicationKeys,
+  useApplicationCertificationLock,
+  useApplicationDeliveryOptions,
+  useApplications,
+  useCreateApplication,
+  useDeleteApplication,
+  useUpdateApplication,
+} from "@/hooks/use-applications";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
-import { ApplicationForm } from "./application-form";
-import { ApplicationEvidencePanel } from "./application-evidence-panel";
-import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
-import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
-import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
-import {
-  formatApplicationKgFromTons,
-  formatFieldSizeHa,
-  type ApplicationDeliveryOption,
-} from "./mass-utils";
-import type { ApplicationListItem } from "@/data-access/applications";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import {
-  useApplicationCertificationLock,
-  useApplications,
-  useApplicationDeliveryOptions,
-  useCreateApplication,
-  useUpdateApplication,
-  useDeleteApplication,
-  applicationKeys,
-} from "@/hooks/use-applications";
-import { useCreditBatches } from "@/hooks/use-credit-batches";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { sumNullableBy } from "@/lib/nullable-sum";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
-  applicationStatuses,
   applicationEvidenceMethods,
+  applicationStatuses,
   formatApplicationEvidenceMethod,
   formatApplicationMethod,
   formatApplicationStatus,
@@ -64,10 +56,20 @@ import {
   type ApplicationStatus,
   type SoilTemperatureSource,
 } from "@/schemas/applications";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
-import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { LeafIcon, MapPinIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import { useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { parseAsString, useQueryState } from "nuqs";
+import { useEffect, useState } from "react";
+import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import { ApplicationForm } from "./application-form";
+import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
+import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
+import {
+  formatApplicationKgFromTons,
+  formatFieldSizeHa,
+  type ApplicationDeliveryOption,
+} from "./mass-utils";
 
 // ============================================
 // Column Definitions
@@ -312,6 +314,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       const createdApplication: ApplicationListItem = {
         ...result.data,
         deliveryCode: "",
+        allocationShares: [],
         customerName: null,
         locationName: null,
         durabilityOption,
@@ -719,6 +722,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                   : null,
               },
             ],
+          },
+          {
+            title: "Batch shares",
+            fields: [],
+            content: <ApplicationAllocationShares shares={sideSheetEntity.allocationShares} />,
           },
           {
             title: "Field details",

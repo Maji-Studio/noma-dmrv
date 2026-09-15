@@ -5,13 +5,10 @@
  * Server-side functions for order CRUD operations
  */
 
-import { z } from "zod";
-import { type Order, orders } from "@/db/schema";
 import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
 } from "@/data-access/code-generator";
-import { requireOrgFacility } from "@/data-access/utils";
 import {
   createOrder,
   deleteOrder,
@@ -20,14 +17,17 @@ import {
   updateOrder,
   type PaginatedOrders,
 } from "@/data-access/orders";
+import { requireOrgFacility } from "@/data-access/utils";
+import { orders, type Order } from "@/db/schema";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 import {
   createOrderSchema,
   deleteOrderSchema,
-  updateOrderSchema,
   orderFilterSchema,
+  updateOrderSchema,
 } from "@/schemas/orders";
 import type { ActionResult } from "@/types/actions";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { z } from "zod";
 import { withAction } from "./with-action";
 
 // ============================================
@@ -65,7 +65,8 @@ export async function getOrdersForSelectFn(
       code: string;
       orderDate: Date;
       customerName: string | null;
-      biocharProductCode: string | null;
+      formulationName: string | null;
+      formulationId: string;
       quantityKg: number;
       destinationGpsLatitude: number | null;
       destinationGpsLongitude: number | null;
@@ -110,7 +111,7 @@ export async function createOrderFn(
           facilityId: validated.facilityId,
           customerId: validated.customerId,
           customerLocationId: validated.customerLocationId,
-          biocharProductId: validated.biocharProductId,
+          formulationId: validated.formulationId,
           orderDate: validated.orderDate,
           quantityKg: validated.quantityKg,
           packaging: validated.packaging,
@@ -140,7 +141,7 @@ export async function updateOrderFn(
       facilityId: validated.facilityId,
       customerId: validated.customerId,
       customerLocationId: validated.customerLocationId,
-      biocharProductId: validated.biocharProductId,
+      formulationId: validated.formulationId,
       orderDate: validated.orderDate,
       quantityKg: validated.quantityKg,
       packaging: validated.packaging,

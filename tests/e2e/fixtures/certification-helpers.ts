@@ -1,3 +1,6 @@
+import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../../helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
+import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 /**
  * Shared fixtures for the Certification workspace E2E specs
  * (`certification-workspace.spec.ts`, `certification-review-flow.spec.ts`).
@@ -74,7 +77,8 @@ async function getFormulationBiocharRatio(
     );
   }
 
-  return formulation.biocharRatio ?? 1;
+  if (formulation.biocharRatio !== 1) throw new Error("Certification fixture requires a Pure biochar formulation; mixed fixtures must retain ingredient solids");
+  return formulation.biocharRatio;
 }
 
 /**
@@ -156,7 +160,7 @@ export async function seedGroupedRemovalWithChain(
         storageLocationId: refs.feedstockStorageLocationId,
         wetMassKg: FIXTURE_FEEDSTOCK_WET_MASS_KG,
       });
-      await tx.insert(schema.biocharProducts).values({
+      await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: id.biocharProduct,
         code: `E2E-BP-RVW-${testRunId}`,
@@ -165,13 +169,12 @@ export async function seedGroupedRemovalWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        storageLocationId: refs.productStorageLocationId,
         productionDate: productionStartTime,
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PCT,
         waterAddedKg: 0,
-      });
+      }));
       await tx.insert(schema.biocharProductSourceAllocations).values({
         organizationId: DEC_ORG_ID,
         biocharProductId: id.biocharProduct,
@@ -180,7 +183,8 @@ export async function seedGroupedRemovalWithChain(
         allocatedWetMassKg,
         allocatedDryMassKg,
       });
-      await tx.insert(schema.orders).values({
+      const productSource = await preparePureOutputProductFixture(tx, id.biocharProduct);
+      await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: id.order,
         code: `E2E-ORD-${testRunId}`,
@@ -189,10 +193,10 @@ export async function seedGroupedRemovalWithChain(
         customerId: refs.customerId,
         customerLocationId: refs.customerLocationId,
         biocharProductId: id.biocharProduct,
-        quantityKg: 100,
+        quantityKg: DELIVERED_WET_MASS_KG,
         packaging: "bagged",
-      });
-      await tx.insert(schema.deliveries).values({
+      }));
+      await insertOutputDeliveryFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: id.delivery,
         code: `E2E-DEL-${testRunId}`,
@@ -200,14 +204,14 @@ export async function seedGroupedRemovalWithChain(
         deliveryDate: new Date(),
         orderId: id.order,
         biocharProductId: id.biocharProduct,
-        storageLocationId: refs.productStorageLocationId,
+        storageLocationId: productSource.storageLocationId,
         deliveredWetMassKg: DELIVERED_WET_MASS_KG,
         massDryKg: DELIVERED_DRY_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PCT,
         status: "delivered",
         vehicleId: refs.vehicleId,
-      });
-      await tx.insert(schema.applications).values({
+      }, row => row);
+      await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: id.application,
         code: `E2E-APP-${testRunId}`,
@@ -222,7 +226,7 @@ export async function seedGroupedRemovalWithChain(
         gpsLongitude: 37.0,
         soilTemperatureSource: "baseline",
         soilTemperatureC: 25,
-      });
+      }, row => row);
       // ADR 0016: the credit batch is single-feedstock (NOT NULL). Mirror the
       // run's own feedstock so the batch stays consistent with its membership.
       const [feedstockRow] = await tx
@@ -269,8 +273,8 @@ export async function seedGroupedRemovalWithChain(
         organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         applicationId: id.application,
-        allocatedWetMassKg: DELIVERED_WET_MASS_KG,
-        allocatedDryMassKg: DELIVERED_DRY_MASS_KG,
+        allocatedWetMassKg: 100,
+        allocatedDryMassKg: APPLIED_DRY_TONS * 1000,
         removalId: id.removal,
       });
     });
@@ -306,12 +310,8 @@ export async function seedGroupedRemovalWithChain(
           await tx
             .delete(schema.certifierRemovals)
             .where(eq(schema.certifierRemovals.id, id.removal));
-          await tx
-            .delete(schema.applications)
-            .where(eq(schema.applications.id, id.application));
-          await tx
-            .delete(schema.deliveries)
-            .where(eq(schema.deliveries.id, id.delivery));
+          await deleteOutputApplicationFixtures(tx, eq(schema.applications.id, id.application));
+          await deleteOutputDeliveryFixtures(tx, eq(schema.deliveries.id, id.delivery));
           await tx.delete(schema.orders).where(eq(schema.orders.id, id.order));
           await tx
             .delete(schema.biocharProductSourceAllocations)
@@ -321,9 +321,7 @@ export async function seedGroupedRemovalWithChain(
                 id.biocharProduct,
               ),
             );
-          await tx
-            .delete(schema.biocharProducts)
-            .where(eq(schema.biocharProducts.id, id.biocharProduct));
+          await deleteOutputProductFixtures(tx, eq(schema.biocharProducts.id, id.biocharProduct));
           await tx
             .delete(schema.productionRunFeedstocks)
             .where(
@@ -667,7 +665,7 @@ export async function seedUngroupedReadyBatchWithChain(
         storageLocationId: refs.feedstockStorageLocationId,
         wetMassKg: FIXTURE_FEEDSTOCK_WET_MASS_KG,
       });
-      await tx.insert(schema.biocharProducts).values({
+      await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: id.biocharProduct,
         code: `E2E-BP-RDY-${testRunId}`,
@@ -676,13 +674,12 @@ export async function seedUngroupedReadyBatchWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        storageLocationId: refs.productStorageLocationId,
         productionDate: productionStartTime,
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
-        moistureContentPercent: PRODUCT_MOISTURE_PCT,
+        moistureContentPercent: READY_BIOCHAR_MOISTURE_PCT,
         waterAddedKg: 0,
-      });
+      }));
       await tx.insert(schema.biocharProductSourceAllocations).values({
         organizationId: DEC_ORG_ID,
         biocharProductId: id.biocharProduct,
@@ -691,7 +688,8 @@ export async function seedUngroupedReadyBatchWithChain(
         allocatedWetMassKg,
         allocatedDryMassKg,
       });
-      await tx.insert(schema.orders).values({
+      const productSource = await preparePureOutputProductFixture(tx, id.biocharProduct);
+      await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: id.order,
         code: `E2E-ORD-RDY-${testRunId}`,
@@ -700,10 +698,10 @@ export async function seedUngroupedReadyBatchWithChain(
         customerId: refs.customerId,
         customerLocationId: refs.customerLocationId,
         biocharProductId: id.biocharProduct,
-        quantityKg: 100,
+        quantityKg: DELIVERED_WET_MASS_KG,
         packaging: "bagged",
-      });
-      await tx.insert(schema.deliveries).values({
+      }));
+      await insertOutputDeliveryFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: id.delivery,
         code: `E2E-DEL-RDY-${testRunId}`,
@@ -711,14 +709,14 @@ export async function seedUngroupedReadyBatchWithChain(
         deliveryDate: new Date(),
         orderId: id.order,
         biocharProductId: id.biocharProduct,
-        storageLocationId: refs.productStorageLocationId,
+        storageLocationId: productSource.storageLocationId,
         deliveredWetMassKg: DELIVERED_WET_MASS_KG,
         massDryKg: DELIVERED_DRY_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PCT,
         status: "delivered",
         vehicleId: refs.vehicleId,
-      });
-      await tx.insert(schema.applications).values({
+      }, row => row);
+      await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
         id: id.application,
         code: applicationCode,
@@ -733,7 +731,7 @@ export async function seedUngroupedReadyBatchWithChain(
         gpsLongitude: 37.0,
         soilTemperatureSource: "baseline",
         soilTemperatureC: 25,
-      });
+      }, row => row);
       const applicationEvidenceDocuments: (typeof schema.documents.$inferInsert)[] =
         READY_APPLICATION_EVIDENCE_ROLES.map((role, index) => ({
           organizationId: DEC_ORG_ID,
@@ -787,8 +785,8 @@ export async function seedUngroupedReadyBatchWithChain(
         organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         applicationId: id.application,
-        allocatedWetMassKg,
-        allocatedDryMassKg,
+        allocatedWetMassKg: 100,
+        allocatedDryMassKg: APPLIED_DRY_TONS * 1000,
       });
       // A sampled credit batch needs at least three complete H/Corg + O/Corg
       // replicates pooled on the batch itself. The run link is provenance only.
@@ -902,12 +900,8 @@ export async function seedUngroupedReadyBatchWithChain(
                 eq(schema.documents.entityId, id.application),
               ),
             );
-          await tx
-            .delete(schema.applications)
-            .where(eq(schema.applications.id, id.application));
-          await tx
-            .delete(schema.deliveries)
-            .where(eq(schema.deliveries.id, id.delivery));
+          await deleteOutputApplicationFixtures(tx, eq(schema.applications.id, id.application));
+          await deleteOutputDeliveryFixtures(tx, eq(schema.deliveries.id, id.delivery));
           await tx.delete(schema.orders).where(eq(schema.orders.id, id.order));
           await tx
             .delete(schema.biocharProductSourceAllocations)
@@ -917,9 +911,7 @@ export async function seedUngroupedReadyBatchWithChain(
                 id.biocharProduct,
               ),
             );
-          await tx
-            .delete(schema.biocharProducts)
-            .where(eq(schema.biocharProducts.id, id.biocharProduct));
+          await deleteOutputProductFixtures(tx, eq(schema.biocharProducts.id, id.biocharProduct));
           await tx
             .delete(schema.productionRunFeedstocks)
             .where(

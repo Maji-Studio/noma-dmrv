@@ -1,36 +1,37 @@
+import { outputStockKeys } from "./use-output-stock";
 /**
  * Biochar Products React Query Hooks
  * Client-side state management for biochar product operations
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  BiocharProductWithRelations,
+  PaginatedBiocharProducts,
+} from "@/data-access/biochar-products";
 import type { BiocharProduct } from "@/db/schema";
+import {
+  createBiocharProductFn,
+  deleteBiocharProductFn,
+  getBiocharProductByIdFn,
+  getBiocharProductsFn,
+  updateBiocharProductFn,
+} from "@/fn/biochar-products";
 import type {
   BiocharProductFilterData,
   CreateBiocharProductData,
   UpdateBiocharProductData,
 } from "@/schemas/biochar-products";
-import type {
-  PaginatedBiocharProducts,
-  BiocharProductWithRelations,
-} from "@/data-access/biochar-products";
-import {
-  getBiocharProductsFn,
-  getBiocharProductByIdFn,
-  createBiocharProductFn,
-  updateBiocharProductFn,
-  deleteBiocharProductFn,
-} from "@/fn/biochar-products";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 
 // ============================================
 // Query Keys
 // ============================================
 
-const biocharProductKeys = {
+export const biocharProductKeys = {
   all: ["biocharProducts"] as const,
   lists: () => [...biocharProductKeys.all, "list"] as const,
   list: (filters?: Partial<BiocharProductFilterData>) =>
@@ -114,11 +115,13 @@ export function useCreateBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -214,11 +217,13 @@ export function useUpdateBiocharProduct(
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousProduct, previousLists } = context as {
@@ -315,11 +320,13 @@ export function useDeleteBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(undefined, productId);
     },
     onError: async (error, productId, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousProduct, previousLists } = context as {

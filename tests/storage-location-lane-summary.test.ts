@@ -1,3 +1,5 @@
+import { preparePureOutputProductFixture } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the storage-location lane summary (DR-002 /
  * PB-26-001).
@@ -80,7 +82,7 @@ beforeAll(async () => {
 
     const [product] = await tx
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `BP-LANE-${runId}`,
         facilityId: facility.id,
@@ -88,12 +90,14 @@ beforeAll(async () => {
         massKg: BLEND_MASS_KG,
         waterAddedKg: WATER_ADDED_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PERCENT,
-      })
+      }))
       .returning({ id: biocharProducts.id });
+
+    await preparePureOutputProductFixture(tx, product.id);
 
     const [order] = await tx
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `OR-LANE-${runId}`,
         facilityId: facility.id,
@@ -102,21 +106,19 @@ beforeAll(async () => {
         orderDate: new Date("2026-06-01"),
         quantityKg: DELIVERED_WET_KG,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
 
-    const [delivery] = await tx
-      .insert(deliveries)
-      .values({
+    const [delivery] = await insertOutputDeliveryFixture(tx, {
         organizationId: TEST_ORG_ID,
         code: `DL-LANE-${runId}`,
         facilityId: facility.id,
         orderId: order.id,
         deliveryDate: new Date("2026-06-10"),
         deliveredWetMassKg: DELIVERED_WET_KG,
+        massDryKg: BLEND_MASS_KG * (1 - PRODUCT_MOISTURE_PERCENT / 100),
         status: "delivered",
-      })
-      .returning({ id: deliveries.id });
+      }, row => ({ id: row.id }));
 
     return {
       facilityId: facility.id,
@@ -131,16 +133,14 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!fixture) return;
-  await db.delete(deliveries).where(inArray(deliveries.id, [fixture.deliveryId]));
+  await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, [fixture.deliveryId]));
   await db.delete(orders).where(inArray(orders.id, [fixture.orderId]));
-  await db
-    .delete(biocharProducts)
-    .where(inArray(biocharProducts.id, [fixture.productId]));
+  await deleteOutputProductFixtures(db, inArray(biocharProducts.id, [fixture.productId]));
   await db
     .delete(storageLocations)
     .where(inArray(storageLocations.id, [fixture.binId]));
   await db.delete(customers).where(inArray(customers.id, [fixture.customerId]));
-  await db.delete(facilities).where(inArray(facilities.id, [fixture.facilityId]));
+  await deleteOutputFacilityFixtures(db, inArray(facilities.id, [fixture.facilityId]));
 });
 
 describe("storage location lane summary", () => {

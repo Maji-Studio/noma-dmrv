@@ -51,7 +51,6 @@ export const ENTITY_STATUS_STATES = {
 
   // Waiting / attention
   pending: "warning",
-  upcoming: "warning",
   testing: "warning",
   scheduled: "warning",
   conditional: "warning",

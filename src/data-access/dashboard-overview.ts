@@ -11,8 +11,6 @@
  * aggregation happens in JS — facilities operate at hundreds of records, not
  * millions, and this keeps the module free of fragile SQL bucketing.
  */
-import { and, asc, count, desc, eq, gte, isNull, ne } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   applications,
@@ -22,9 +20,12 @@ import {
   feedstocks,
   productionRuns,
 } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
-import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { and, asc, count, desc, eq, gte, isNull, ne } from "drizzle-orm";
 import { getCo2eStoredPreviews } from "./credit-batches";
 import {
   applicationEvidenceGapWhere,
@@ -32,7 +33,6 @@ import {
   overdueBatchesWhere,
   productsUnlinkedWhere,
   runsMissingMassWhere,
-  upcomingDeliveriesWhere,
 } from "./dashboard-attention";
 import {
   getDashboardStations,
@@ -43,9 +43,8 @@ import {
   loadDashboardStructuralGapCounts,
   type DashboardStructuralGap,
 } from "./dashboard-structural-gaps";
-import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
-import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { requireOrgScope } from "./utils";
 
 // Re-exported so components import every dashboard type from one module.
 export type {
@@ -56,7 +55,7 @@ export type {
   DashboardStation,
   DashboardStationKey,
   DashboardStationReason,
-  DashboardStationState,
+  DashboardStationState
 } from "./dashboard-stations";
 
 export type DashboardRange = "week" | "month" | "all";
@@ -538,7 +537,6 @@ async function getAttentionItems(
     unlinkedLots,
     feedstocksMissingData,
     applicationsMissingEvidence,
-    upcomingDeliveries,
     batchesAwaitingVerification,
     [overdueBatchesRow],
   ] = await Promise.all([
@@ -589,24 +587,6 @@ async function getAttentionItems(
       )
       .where(applicationEvidenceGapWhere(orgId, facilityId))
       .orderBy(desc(applications.applicationDate))
-      .limit(ATTENTION_PER_CHECK),
-    db
-      .select({
-        id: deliveries.id,
-        code: deliveries.code,
-        date: deliveries.deliveryDate,
-      })
-      .from(deliveries)
-      // Redundant explicit org predicate beside the shared helper: the
-      // check:org-scoping lexical guard can't see organizationId inside the
-      // helper call, and the helper already scopes by org (harmless overlap).
-      .where(
-        and(
-          upcomingDeliveriesWhere(orgId, facilityId),
-          eq(deliveries.organizationId, orgId),
-        ),
-      )
-      .orderBy(asc(deliveries.deliveryDate))
       .limit(ATTENTION_PER_CHECK),
     db
       .select({
@@ -674,13 +654,6 @@ async function getAttentionItems(
       date: row.date,
       title: "Period ended · awaiting verification",
       href: creditBatchDeepLinkHref(row.id, facilityId),
-    })),
-    ...upcomingDeliveries.map((row) => ({
-      id: `delivery-upcoming-${row.id}`,
-      entityCode: row.code,
-      date: row.date,
-      title: "Upcoming delivery",
-      href: `/deliveries${facilityQuery}`,
     })),
   ];
 

@@ -53,6 +53,7 @@ async function createProductionRunForCreditBatch(
     seededData.biocharStorageLocation.name,
   );
   await page.fill('input[name="biocharOutputKg"]', "10");
+  await page.fill('input[name="biocharMoisturePercent"]', "10");
 
   await page
     .locator('[role="dialog"]')
@@ -114,9 +115,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     await selectEntity(
       page,
-      "Product bin",
-      seededData.biocharProduct.id,
-      seededData.biocharProduct.code
+      "Formulation", seededData.formulation.id, seededData.formulation.name
     );
     await page.selectOption('select[name="packaging"]', "loose");
     await page.fill('input[name="quantityKg"]', "10000");
@@ -133,9 +132,9 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     await page.fill('input[name="deliveryDate"]', today);
     // Applications require a delivered delivery (issue #284)
-    await page.selectOption('select[name="status"]', "delivered");
     // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
     await selectFirstEntity(page, "Order");
+    await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
     await page.fill('input[name="moistureContentPercent"]', "10");
 
@@ -220,7 +219,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
   });
 
-  test("blocks application against an undelivered delivery", async ({
+  test("requires a completed delivery before an application can be recorded", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -244,9 +243,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     );
     await selectEntity(
       page,
-      "Product bin",
-      seededData.biocharProduct.id,
-      seededData.biocharProduct.code
+      "Formulation", seededData.formulation.id, seededData.formulation.name
     );
     await page.selectOption('select[name="packaging"]', "loose");
     await page.fill('input[name="quantityKg"]', "10000");
@@ -254,33 +251,16 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
     await waitForSideSheetClose(page);
 
-    // Step 2: Create a delivery left in "upcoming" status
-    await page.goto(`/deliveries?facility=${seededData.facility.id}`);
-    await page.waitForLoadState("networkidle");
-    await page.click('button:has-text("New Delivery")');
-    await waitForSideSheet(page);
-
-    await page.fill('input[name="deliveryDate"]', today);
-    await page.selectOption('select[name="status"]', "upcoming");
-    await selectFirstEntity(page, "Order");
-    await page.fill('input[name="deliveredWetMassKg"]', "10000");
-    await page.fill('input[name="moistureContentPercent"]', "10");
-
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
-    await waitForSideSheetClose(page);
-
-    // Step 3: The application form lists the undelivered delivery but
-    // disables it (issue #284 custody-ordering guard)
+    // An order reserves no stock and is not an application source. Without a
+    // posted delivery, custody cannot advance to application.
     await page.goto(`/applications?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
     await page.click('button:has-text("New Application")');
     await waitForSideSheet(page);
-
-    const undeliveredOption = page.locator(
-      'select[name="deliveryId"] option:has-text("not yet delivered")'
-    );
-    await expect(undeliveredOption.first()).toBeAttached({ timeout: 8000 });
-    await expect(undeliveredOption.first()).toBeDisabled();
+    await expect(page.locator('select[name="deliveryId"] option:not([value=""])')).toHaveCount(0);
+    await page.locator('[role="dialog"]').getByRole("button", { name: "Create Application", exact: true }).click();
+    await expect(page.locator("#deliveryId-error")).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
   });
 
   test("create credit batch via UI form", async ({

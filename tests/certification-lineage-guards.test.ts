@@ -1,3 +1,8 @@
+import { ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
+import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -167,7 +172,7 @@ async function createLineageFixture(
 
     const [product] = await tx
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `BP-CLG-${tag}`,
         facilityId: facility.id,
@@ -175,7 +180,7 @@ async function createLineageFixture(
         massKg: 300,
         moistureContentPercent: 5,
         waterAddedKg: 0,
-      })
+      }))
       .returning({ id: biocharProducts.id });
 
     const [customer] = await tx
@@ -185,7 +190,7 @@ async function createLineageFixture(
 
     const [order] = await tx
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `OR-CLG-${tag}`,
         facilityId: facility.id,
@@ -194,12 +199,10 @@ async function createLineageFixture(
         orderDate: new Date("2026-06-14T00:00:00Z"),
         quantityKg: 300,
         packaging: "loose",
-      })
+      }))
       .returning({ id: orders.id });
 
-    const [delivery] = await tx
-      .insert(deliveries)
-      .values({
+    const [delivery] = await insertOutputDeliveryFixture(tx, {
         organizationId: TEST_ORG_ID,
         code: `DL-CLG-${tag}`,
         facilityId: facility.id,
@@ -209,23 +212,19 @@ async function createLineageFixture(
         deliveryDate: new Date("2026-06-15T00:00:00Z"),
         deliveredWetMassKg: 300,
         massDryKg: 285,
-      })
-      .returning({ id: deliveries.id });
+      }, row => ({ id: row.id }));
 
-    const [application] = await tx
-      .insert(applications)
-      .values({
+    const [application] = await insertOutputApplicationFixture(tx, {
         organizationId: TEST_ORG_ID,
         code: `AP-CLG-${tag}`,
         deliveryId: delivery.id,
         applicationDate: new Date("2026-06-16T00:00:00Z"),
-        biocharAppliedTons: 0.3,
-        biocharAppliedDryTons: 0.285,
+        biocharAppliedTons: 0.2,
+        biocharAppliedDryTons: 0.19,
         fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
-      })
-      .returning({ id: applications.id });
+      }, row => ({ id: row.id }));
 
     let ghgStatementId: string | null = null;
     if (blockingVia === "ghgStatement") {
@@ -269,8 +268,8 @@ async function createLineageFixture(
       organizationId: TEST_ORG_ID,
       creditBatchId: batch.id,
       applicationId: application.id,
-      allocatedWetMassKg: 300,
-      allocatedDryMassKg: 285,
+      allocatedWetMassKg: 200,
+      allocatedDryMassKg: 190,
       removalId: removal.id,
     });
 
@@ -327,14 +326,10 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
       .delete(creditBatchApplications)
       .where(eq(creditBatchApplications.creditBatchId, fixture.batchId));
     await tx.delete(creditBatches).where(eq(creditBatches.id, fixture.batchId));
-    await tx
-      .delete(applications)
-      .where(eq(applications.id, fixture.applicationId));
-    await tx.delete(deliveries).where(eq(deliveries.id, fixture.deliveryId));
+    await deleteOutputApplicationFixtures(tx, eq(applications.id, fixture.applicationId));
+    await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
     await tx.delete(orders).where(eq(orders.id, fixture.orderId));
-    await tx
-      .delete(biocharProducts)
-      .where(eq(biocharProducts.id, fixture.productId));
+    await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx.delete(samples).where(eq(samples.id, fixture.sampleId));
     await tx
       .delete(productionRunFeedstocks)
@@ -370,7 +365,7 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
       .where(eq(productionRuns.id, fixture.productionRunId));
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
-    await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
 }
 
@@ -498,14 +493,14 @@ describe("certification lineage guards", () => {
         .returning({ id: storageLocations.id });
       const [unrelatedProduct] = await db
         .insert(biocharProducts)
-        .values({
+        .values(await outputProductFixtureValues(db, {
           organizationId: TEST_ORG_ID,
           code: `BP-CLG-INCOMPLETE-${tag}`,
           facilityId: fixture.facilityId,
           massKg: 1,
           moistureContentPercent: 0,
           waterAddedKg: 0,
-        })
+        }))
         .returning({ id: biocharProducts.id });
 
       try {
@@ -526,7 +521,7 @@ describe("certification lineage guards", () => {
           .where(eq(biocharProducts.id, fixture.productId));
         await db
           .update(orders)
-          .set({ biocharProductId: unrelatedProduct.id })
+          .set({ formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, unrelatedProduct.id)))[0].formulationId })
           .where(eq(orders.id, fixture.orderId));
         await db
           .update(deliveries)
@@ -547,7 +542,7 @@ describe("certification lineage guards", () => {
           .where(eq(deliveries.id, fixture.deliveryId));
         await db
           .update(orders)
-          .set({ biocharProductId: fixture.productId })
+          .set({ formulationId: (await db.select().from(biocharProducts).where(eq(biocharProducts.id, fixture.productId)))[0].formulationId })
           .where(eq(orders.id, fixture.orderId));
         await db
           .delete(biocharProductSourceAllocations)
@@ -564,9 +559,7 @@ describe("certification lineage guards", () => {
             sourceBiocharStorageLocationId: null,
           })
           .where(eq(biocharProducts.id, fixture.productId));
-        await db
-          .delete(biocharProducts)
-          .where(eq(biocharProducts.id, unrelatedProduct.id));
+        await deleteOutputProductFixtures(db, eq(biocharProducts.id, unrelatedProduct.id));
         await db
           .delete(storageLocations)
           .where(eq(storageLocations.id, sourceBin.id));
@@ -755,6 +748,7 @@ describe("certification lineage guards", () => {
       const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
       // Certification freezes the submitted records, not the physical stock
       // that remains in the run's biochar bin.
+      const formulationId = (await db.select().from(biocharProducts).where(eq(biocharProducts.id, fixture.productId)))[0].formulationId;
       const [bin] = await db
         .insert(storageLocations)
         .values({
@@ -766,24 +760,33 @@ describe("certification lineage guards", () => {
         })
         .returning({ id: storageLocations.id });
 
+      const [sourceBin] = await db.insert(storageLocations).values({ organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, type: "biochar_bin", code: `E2E-SOURCE-${tag}`, name: `E2E Certified remaining stock ${tag}` }).returning();
+      await db.update(productionRuns).set({ biocharStorageLocationId: sourceBin.id, biocharDryMassKg: 380, biocharOutputKg: 400 }).where(eq(productionRuns.id, fixture.productionRunId));
+      await db.insert(biocharProductSourceAllocations).values({ organizationId: TEST_ORG_ID, biocharProductId: fixture.productId, productionRunId: fixture.productionRunId, sourceStorageLocationId: sourceBin.id, allocatedDryMassKg: 285, allocatedWetMassKg: 300 });
+      await ensureOutputFixtureActor(makeTestOrgContext(TEST_USER_ID));
+
       try {
         const product = await createBiocharProduct(
           makeTestOrgContext(TEST_USER_ID),
-          {
+          await withProductStockFingerprint(makeTestOrgContext(TEST_USER_ID), {
             code: `BP-LOCKED-${tag}`,
+            placedAt: "2026-07-01",
+            formulationId,
             facilityId: fixture.facilityId,
-            linkedProductionRunId: fixture.productionRunId,
+            sourceBiocharStorageLocationId: sourceBin.id,
+            idempotencyKey: crypto.randomUUID(),
             storageLocationId: bin.id,
             massKg: 10,
             moistureContentPercent: 5,
             waterAddedKg: 0,
-          },
+          }),
         );
         expect(product.code).toBe(`BP-LOCKED-${tag}`);
       } finally {
-        await db
-          .delete(biocharProducts)
-          .where(eq(biocharProducts.code, `BP-LOCKED-${tag}`));
+        await deleteOutputProductFixtures(db, eq(biocharProducts.code, `BP-LOCKED-${tag}`));
+        await db.delete(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, fixture.productId));
+        await db.update(productionRuns).set({ biocharStorageLocationId: null }).where(eq(productionRuns.id, fixture.productionRunId));
+        await db.delete(storageLocations).where(eq(storageLocations.id, sourceBin.id));
         await db
           .delete(storageLocations)
           .where(eq(storageLocations.id, bin.id));
@@ -811,19 +814,16 @@ describe("certification lineage guards", () => {
     });
   });
 
-  it("rejects new applications on a submitted delivery lineage", async () => {
+  it("rejects a new application on a submitted delivery lineage", async () => {
     await withFixture(async (fixture) => {
-      await expect(
-        createApplication(makeTestOrgContext(TEST_USER_ID), {
-          code: `AP-LOCKED-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-          deliveryId: fixture.deliveryId,
-          applicationDate: new Date("2026-06-17T00:00:00Z"),
-          biocharAppliedTons: 0.01,
-          fieldSizeHa: 1,
-        }),
-      ).rejects.toThrow(
-        "Cannot create this application because the selected delivery is locked by a certification submission. Select a delivery that is not locked.",
-      );
+      await expect(createApplication(makeTestOrgContext(TEST_USER_ID), {
+        code: `AP-LOCKED-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+        deliveryId: fixture.deliveryId,
+        applicationDate: new Date("2026-06-17T00:00:00Z"),
+        biocharAppliedTons: 0.01,
+        fieldSizeHa: 1,
+      })).rejects.toThrow(LOCKED_COPY);
+      await expect(updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { fieldSizeHa: 2 })).rejects.toThrow(LOCKED_COPY);
     });
   });
 

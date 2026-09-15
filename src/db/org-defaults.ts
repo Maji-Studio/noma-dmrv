@@ -1,5 +1,5 @@
 import { db, type DbTransaction } from ".";
-import { feedstockTypes } from "./schema";
+import { feedstockTypes, formulations } from "./schema";
 
 export const DEC_ORG_ID = "org_dark_earth_carbon";
 export const DEC_ORG_NAME = "Dark Earth Carbon";
@@ -79,6 +79,7 @@ export async function seedOrgDefaults(
   txOrDb: OrgDefaultsExecutor,
   organizationId: string,
 ): Promise<void> {
+  await txOrDb.insert(formulations).values({ organizationId, code: 'PURE-BIOCHAR', name: 'Pure biochar', biocharRatio: 1 }).onConflictDoNothing();
   await txOrDb
     .insert(feedstockTypes)
     .values(

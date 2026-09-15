@@ -1,10 +1,9 @@
+import { deliveryProductAllocations } from "./delivery-allocation-provenance";
 // `transport_legs.entity_id` is polymorphic and not FK-constrained, so every
 // read of a single leg and every write resolves the parent chain back to a
 // facility via `resolveEntityFacility`. Swap for `requireFacilityAccess` once
 // a facility-membership model lands.
 
-import { and, asc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts,
@@ -23,8 +22,7 @@ import {
   type NewTransportLeg,
   type TransportLeg,
 } from "@/db/schema";
-import { SafeError } from "@/lib/errors";
-import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   aggregateDistributionLegs,
   deriveTransportLeg,
@@ -32,11 +30,13 @@ import {
   positiveOrNull,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
+import { SafeError } from "@/lib/errors";
+import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
+import { and, asc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
 import {
   assertCanMutateCertifiedLineage,
   type CertifiedLineageEntityType,
 } from "./certification-lineage-guards";
-import { requireOrgScope } from "./utils";
 import {
   retireDocumentsForEntities,
   type DocumentEntityRef,
@@ -46,6 +46,7 @@ import {
   biocharTransportEvidenceDocumentCount,
   transportEvidenceDocumentCount,
 } from "./transport-evidence-projections";
+import { requireOrgScope } from "./utils";
 
 export type TransportEntityType = TransportEntityTypeValue;
 
@@ -126,9 +127,11 @@ export type TransportLegWithEvidence = TransportLeg & {
 // evidence on the leg row itself, and biochar evidence on the deliveries the
 // auto-derived leg aggregates.
 function legEvidenceDocumentCount(
-  organizationId: string,
+  ctx: OrgContext,
   entityType: TransportEntityType,
 ) {
+  requireOrgScope(ctx);
+  const organizationId = ctx.organizationId;
   return entityType === "feedstock"
       ? transportEvidenceDocumentCount(
           organizationId,
@@ -142,7 +145,7 @@ function legEvidenceDocumentCount(
             "transportLegId",
           )
       : biocharTransportEvidenceDocumentCount(
-          organizationId,
+          ctx,
           transportLegs.entityId,
         );
 }
@@ -159,7 +162,7 @@ export async function getTransportLegsForEntity(
     .select({
       ...getTableColumns(transportLegs),
       transportEvidenceDocumentCount: legEvidenceDocumentCount(
-        ctx.organizationId,
+        ctx,
         entityType,
       ),
     })
@@ -213,7 +216,7 @@ export async function getTransportLegsWithEvidenceForEntities(
     .select({
       ...getTableColumns(transportLegs),
       transportEvidenceDocumentCount: legEvidenceDocumentCount(
-        ctx.organizationId,
+        ctx,
         entityType,
       ),
     })
@@ -678,9 +681,10 @@ async function syncLockedBiocharProductTransportLeg(
   // The destination location lives on the order in the common flow; the
   // delivery may also carry its own override. Resolve via
   // COALESCE(delivery.customerLocationId, order.customerLocationId).
+  const allocated = deliveryProductAllocations(ctx, tx);
   const rows = await tx
     .select({
-      loadMassKg: deliveries.deliveredWetMassKg,
+      loadMassKg: allocated.wetMassKg,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
       deliveryDistanceSource: deliveries.distanceSource,
       deliveryTripType: deliveries.tripType,
@@ -691,6 +695,7 @@ async function syncLockedBiocharProductTransportLeg(
       locationGpsLongitude: customerLocations.gpsLongitude,
     })
     .from(deliveries)
+    .innerJoin(allocated, eq(allocated.deliveryId, deliveries.id))
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(
       customerLocations,
@@ -701,11 +706,12 @@ async function syncLockedBiocharProductTransportLeg(
     )
     .where(and(
       eq(
-        sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+        allocated.biocharProductId,
         biocharProductId,
       ),
       eq(deliveries.organizationId, ctx.organizationId),
       eq(deliveries.status, "delivered"),
+      isNull(deliveries.archivedAt),
     ));
 
   // Per delivery: its own distance override (+ source) beats the destination
@@ -815,11 +821,13 @@ export async function syncBiocharLegsForCustomerLocation(
 
   // Match deliveries whose resolved destination is this location — either the
   // delivery's own override or, in the common flow, its order's location.
+  const allocated = deliveryProductAllocations(ctx, tx);
   const rows = await tx
     .selectDistinct({
-      biocharProductId: sql<string | null>`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+      biocharProductId: allocated.biocharProductId,
     })
     .from(deliveries)
+    .innerJoin(allocated, eq(allocated.deliveryId, deliveries.id))
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .where(
       and(

@@ -58,7 +58,6 @@ describe("semantic entity status states", () => {
       accepted: "success",
       eligible: "success",
       pending: "warning",
-      upcoming: "warning",
       testing: "warning",
       scheduled: "warning",
       conditional: "warning",

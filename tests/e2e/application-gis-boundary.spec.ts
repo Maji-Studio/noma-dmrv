@@ -77,9 +77,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
     .selectOption(seededData.customerLocation.id);
   await selectEntity(
     page,
-    "Product bin",
-    seededData.biocharProduct.id,
-    seededData.biocharProduct.code,
+    "Formulation", seededData.formulation.id, seededData.formulation.name,
   );
   await page.locator("#packaging").selectOption("loose");
   await page.locator("#quantityKg").fill("100");
@@ -94,8 +92,8 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.getByRole("button", { name: "New Delivery" }).click();
   await waitForSideSheet(page);
   await page.locator("#deliveryDate").fill(today);
-  await page.locator("#status").selectOption("delivered");
   await selectFirstEntity(page, "Order");
+  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.locator("#deliveredWetMassKg").fill("100");
   await page.locator("#moistureContentPercent").fill("10");
   await page

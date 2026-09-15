@@ -5,33 +5,34 @@
  * Server-side functions for biochar product CRUD operations
  */
 
-import { z } from "zod";
-import type { BiocharProduct } from "@/db/schema";
 import {
   createBiocharProduct,
   deleteBiocharProduct,
-  getBiocharProducts as getBiocharProductsData,
   getBiocharProductById as getBiocharProductByIdData,
+  getBiocharProducts as getBiocharProductsData,
   updateBiocharProduct,
-  type PaginatedBiocharProducts,
   type BiocharProductWithRelations,
+  type PaginatedBiocharProducts,
 } from "@/data-access/biochar-products";
+import type { BiocharProduct } from "@/db/schema";
+import { z } from "zod";
 
-import { requireOrgContext } from "@/lib/auth/server";
-import {
-  createBiocharProductSchema,
-  deleteBiocharProductSchema,
-  updateBiocharProductSchema,
-  biocharProductFilterSchema,
-} from "@/schemas/biochar-products";
-import type { ActionResult } from "@/types/actions";
 import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
 } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
 import { biocharProducts } from "@/db/schema";
+import { requireOrgContext } from "@/lib/auth/server";
 import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
+import {
+  biocharProductFilterSchema,
+  createBiocharProductSchema,
+  deleteBiocharProductSchema,
+  updateBiocharProductSchema,
+} from "@/schemas/biochar-products";
+import { withAction } from "./with-action";
+import type { ActionResult } from "@/types/actions";
 import {
   formatZodActionError,
   toLoggedActionError,
@@ -121,9 +122,7 @@ export async function getBiocharProductByIdFn(
 export async function createBiocharProductFn(
   data: z.infer<typeof createBiocharProductSchema>
 ): Promise<ActionResult<BiocharProduct>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createBiocharProductSchema.parse(data);
 
     const composition = toCompositionJsonb(validated.ingredientBins, { mode: "create" });
@@ -138,7 +137,10 @@ export async function createBiocharProductFn(
         createBiocharProduct(ctx, {
           code,
           facilityId: validated.facilityId,
-          formulationId: validated.formulationId ?? null,
+          formulationId: validated.formulationId,
+          placedAt: validated.placedAt,
+          idempotencyKey: validated.idempotencyKey,
+          basisFingerprint: validated.basisFingerprint,
           status: validated.status,
           sourceBiocharStorageLocationId:
             validated.sourceBiocharStorageLocationId,
@@ -152,23 +154,11 @@ export async function createBiocharProductFn(
       CODE_CONFLICT_MESSAGES.biocharProduct,
     );
 
-    return { success: true, data: product };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to create biochar product",
-        "biochar-product:create",
-      ),
-    };
-  }
+    return product;
+  }, {
+    fallbackMessage: "Failed to create biochar product",
+    log: { message: "biochar product action failed", context: { op: "biochar-product:create" } },
+  });
 }
 
 // ============================================
@@ -192,6 +182,7 @@ export async function updateBiocharProductFn(
       code: validated.code,
       facilityId: validated.facilityId,
       formulationId: validated.formulationId,
+      placedAt: validated.placedAt,
       status: validated.status,
       storageLocationId: validated.storageLocationId === "" ? null : validated.storageLocationId,
       massKg: validated.massKg,

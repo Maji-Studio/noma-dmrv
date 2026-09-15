@@ -410,3 +410,22 @@ describe("branching edge routes", () => {
     expect(edges.map(offsetOf)).toEqual([28, -28, 0]);
   });
 });
+
+it("keeps both products sharing a run and one physical application in the graph", () => {
+  const base = lineage();
+  const source = {
+    productionRun: base.productionRun!, reactor: base.reactor, feedstocks: base.feedstocks,
+    allocatedWetMassKg: 785.714, allocatedDryMassKg: 450,
+  };
+  base.biocharProduct = null;
+  base.application = { ...base.application, biocharAppliedTons: 1, biocharAppliedDryTons: 0.575 };
+  base.products = [
+    { product: { ...lineage().biocharProduct!, id: "A", code: "A" }, sources: [source], allocatedWetMassKg: 785.714, allocatedDryMassKg: 450 },
+    { product: { ...lineage().biocharProduct!, id: "B", code: "B" }, sources: [{ ...source, allocatedWetMassKg: 214.286, allocatedDryMassKg: 125 }], allocatedWetMassKg: 214.286, allocatedDryMassKg: 125 },
+  ];
+  const graph = useChainGraph(base);
+  expect(graph.nodes.filter(n => n.id.startsWith("biochar-product:"))).toHaveLength(2);
+  expect(graph.nodes.filter(n => n.id.startsWith("application:"))).toHaveLength(1);
+  expect(graph.edges.filter(e => e.source.startsWith("biochar-product:")).map(e => e.data?.mass)).toEqual([0.45, 0.125]);
+  expect(graph.edges.find(e => e.source === `delivery:${base.delivery.id}`)?.data?.kgLabel).toBe("Wet: 1,000 kg · Dry: 575 kg");
+});

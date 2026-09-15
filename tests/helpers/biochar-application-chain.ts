@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "./output-contract-fixtures";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -78,16 +81,16 @@ export async function createBiocharApplicationChain(
     .returning({ id: formulations.id });
   const [product] = await db
     .insert(biocharProducts)
-    .values({
+    .values(await outputProductFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       facilityId,
       formulationId: formulation.id,
       code: `BP-${tag}`,
-    })
+    }))
     .returning({ id: biocharProducts.id });
   const [order] = await db
     .insert(orders)
-    .values({
+    .values(await outputOrderFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       facilityId,
       customerId: customer.id,
@@ -97,11 +100,9 @@ export async function createBiocharApplicationChain(
       orderDate: new Date("2026-04-01T00:00:00Z"),
       quantityKg: APPLIED_WET_MASS_KG,
       packaging: "loose",
-    })
+    }))
     .returning({ id: orders.id });
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
+  const [delivery] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId,
       orderId: order.id,
@@ -110,11 +111,8 @@ export async function createBiocharApplicationChain(
       status: "delivered",
       deliveredWetMassKg: APPLIED_WET_MASS_KG,
       massDryKg: APPLIED_DRY_MASS_KG,
-    })
-    .returning({ id: deliveries.id });
-  const [application] = await db
-    .insert(applications)
-    .values({
+    }, row => ({ id: row.id }));
+  const [application] = await insertOutputApplicationFixture(db, {
       organizationId: TEST_ORG_ID,
       deliveryId: delivery.id,
       code: `AP-${tag}`,
@@ -122,8 +120,7 @@ export async function createBiocharApplicationChain(
       biocharAppliedTons: APPLIED_WET_MASS_KG / 1000,
       biocharAppliedDryTons: APPLIED_DRY_MASS_KG / 1000,
       fieldSizeHa: FIELD_SIZE_HA,
-    })
-    .returning({ id: applications.id });
+    }, row => ({ id: row.id }));
   const externalProductionBatchId = `ptb_${tag}`;
   const [production] = await db
     .insert(certifierProductionBatches)
@@ -165,10 +162,10 @@ export async function createBiocharApplicationChain(
     cleanup: async () => {
       await db.delete(certifierStorageLocations).where(eq(certifierStorageLocations.id, storage.id));
       await db.delete(certifierProductionBatches).where(eq(certifierProductionBatches.id, production.id));
-      await db.delete(applications).where(eq(applications.id, application.id));
-      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
+      await deleteOutputApplicationFixtures(db, eq(applications.id, application.id));
+      await deleteOutputDeliveryFixtures(db, eq(deliveries.id, delivery.id));
       await db.delete(orders).where(eq(orders.id, order.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
+      await deleteOutputProductFixtures(db, eq(biocharProducts.id, product.id));
       await db.delete(formulations).where(eq(formulations.id, formulation.id));
       await db.delete(customerLocations).where(eq(customerLocations.id, location.id));
       await db.delete(customers).where(eq(customers.id, customer.id));

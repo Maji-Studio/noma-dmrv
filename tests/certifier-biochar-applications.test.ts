@@ -1,3 +1,6 @@
+import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -153,17 +156,17 @@ beforeAll(async () => {
   ids.formulation = formulation.id;
   const [product] = await db
     .insert(biocharProducts)
-    .values({
+    .values(await outputProductFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       formulationId: formulation.id,
       code: `BP-BCA-${tag}`,
-    })
+    }))
     .returning({ id: biocharProducts.id });
   ids.product = product.id;
   const [order] = await db
     .insert(orders)
-    .values({
+    .values(await outputOrderFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       customerId: customer.id,
@@ -173,12 +176,10 @@ beforeAll(async () => {
       orderDate: new Date("2026-04-01T00:00:00Z"),
       quantityKg: 12_000,
       packaging: "loose",
-    })
+    }))
     .returning({ id: orders.id });
   ids.order = order.id;
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
+  const [delivery] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       orderId: order.id,
@@ -187,12 +188,9 @@ beforeAll(async () => {
       status: "delivered",
       deliveredWetMassKg: 12_000,
       massDryKg: 10_800,
-    })
-    .returning({ id: deliveries.id });
+    }, row => ({ id: row.id }));
   ids.delivery = delivery.id;
-  const [application] = await db
-    .insert(applications)
-    .values({
+  const [application] = await insertOutputApplicationFixture(db, {
       organizationId: TEST_ORG_ID,
       deliveryId: delivery.id,
       code: `AP-BCA-${tag}`,
@@ -200,8 +198,7 @@ beforeAll(async () => {
       biocharAppliedTons: 12,
       biocharAppliedDryTons: 10.8,
       fieldSizeHa: 4,
-    })
-    .returning({ id: applications.id });
+    }, row => ({ id: row.id }));
   ids.application = application.id;
   const [production] = await db
     .insert(certifierProductionBatches)
@@ -279,10 +276,10 @@ afterAll(async () => {
   await cleanup(certificationSubmissions, ids.submission);
   await cleanup(certificationSubmissions, ids.secondSubmission);
   await cleanup(certificationSubmissions, ids.foreignSubmission);
-  await cleanup(applications, ids.application);
-  await cleanup(deliveries, ids.delivery);
+  await deleteOutputApplicationFixtures(db, eq(applications.id, ids.application));
+  await deleteOutputDeliveryFixtures(db, eq(deliveries.id, ids.delivery));
   await cleanup(orders, ids.order);
-  await cleanup(biocharProducts, ids.product);
+  await deleteOutputProductFixtures(db, eq(biocharProducts.id, ids.product));
   await cleanup(formulations, ids.formulation);
   await cleanup(customerLocations, ids.location);
   await cleanup(customers, ids.customer);
@@ -290,7 +287,7 @@ afterAll(async () => {
   await cleanup(creditBatches, ids.batch);
   await cleanup(productionProcesses, ids.process);
   await cleanup(feedstockTypes, ids.feedstock);
-  await cleanup(facilities, ids.facility);
+  await deleteOutputFacilityFixtures(db, eq(facilities.id, ids.facility));
   await db.delete(organizations).where(eq(organizations.id, FOREIGN_ORG_ID));
 });
 

@@ -9,6 +9,13 @@ const SOURCE_BIN_ID = "22222222-2222-4222-8222-222222222222";
 const PRODUCT_BIN_ID = "33333333-3333-4333-8333-333333333333";
 const PRODUCT_ID = "44444444-4444-4444-8444-444444444444";
 const FORMULATION_INGREDIENT_ID = "55555555-5555-4555-8555-555555555555";
+const FORMULATION_ID = "77777777-7777-4777-8777-777777777777";
+const POSTING_FIELDS = {
+  formulationId: FORMULATION_ID,
+  placedAt: "2026-09-01",
+  idempotencyKey: "product-request",
+  basisFingerprint: "product-preview",
+};
 const FEEDSTOCK_TYPE_ID = "66666666-6666-4666-8666-666666666666";
 
 function ingredientBin(massKg: number, massDryKg: number) {
@@ -25,6 +32,7 @@ function ingredientBin(massKg: number, massDryKg: number) {
 describe("biochar product ingredient mass schemas", () => {
   it("attaches a form-schema dry-mass overage to the dry-mass field", () => {
     const result = biocharProductFormSchema.safeParse({
+      ...POSTING_FIELDS,
       facilityId: FACILITY_ID,
       sourceBiocharStorageLocationId: SOURCE_BIN_ID,
       storageLocationId: PRODUCT_BIN_ID,
@@ -66,6 +74,7 @@ describe("biochar product ingredient mass schemas", () => {
 
   it.each([
     ["form", biocharProductFormSchema, {
+      ...POSTING_FIELDS,
       facilityId: FACILITY_ID,
       sourceBiocharStorageLocationId: SOURCE_BIN_ID,
       storageLocationId: PRODUCT_BIN_ID,
@@ -84,6 +93,7 @@ describe("biochar product ingredient mass schemas", () => {
 
   it.each([
     ["form", biocharProductFormSchema, {
+      ...POSTING_FIELDS,
       facilityId: FACILITY_ID,
       sourceBiocharStorageLocationId: SOURCE_BIN_ID,
       storageLocationId: PRODUCT_BIN_ID,

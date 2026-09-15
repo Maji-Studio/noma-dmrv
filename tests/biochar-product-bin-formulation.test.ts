@@ -1,999 +1,163 @@
-import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
-/**
- * Server-side enforcement of the "one formulation per product bin" rule.
- *
- * Covers the three branches added to `createBiocharProduct`:
- *   - an unassigned bin is CLAIMED for the product's formulation on first use,
- *   - a bin reserved for a different formulation is REJECTED,
- *   - a pure-biochar product (null formulation) is allowed in an unassigned bin
- *     and leaves it unclaimed (still pure).
- *
- * Real-DB integration test (mirrors tests/applications-delete.test.ts): inserts
- * a minimal fixture, exercises the data-access function, asserts, cleans up.
- */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  createBiocharProduct,
-  updateBiocharProduct,
-} from "@/data-access/biochar-products";
+import { ActionConflictError } from "@/lib/errors";
+import { biocharProducts, biocharProductSourceAllocations, feedstocks, feedstockTypes, productIngredientSnapshots, storageLocations } from "@/db/schema";
+import { createBiocharProduct, updateBiocharProduct } from "@/data-access/biochar-products";
 import { updateFormulation } from "@/data-access/formulations";
-import { getEntityById } from "@/data-access/entities";
-import { getStockAvailability } from "@/data-access/stock-availability";
-import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
-import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
-import { productionRuns } from "@/db/schema/production";
-import {
-  biocharProducts,
-  biocharProductSourceAllocations,
-  formulationIngredients,
-  formulations,
-} from "@/db/schema/products";
+import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
+import { getOutputBinDryBalance } from "@/data-access/output-stock";
+import { cleanupPostedStock, postedStockFixture, postProduct, productInput } from "./helpers/posted-output-stock-fixture";
 
-const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
+const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
+async function fixture() {
+  const f = await postedStockFixture({ stockKg: 0 }); fixtures.push(f);
+  await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
+  return f;
+}
+afterEach(async () => { for (const f of fixtures.splice(0)) await cleanupPostedStock(f); });
+type Fixture = Awaited<ReturnType<typeof fixture>>;
+async function ingredientBin(f: Fixture, wetKg = 100, moisture = 20, typeId = f.ingredientType.id) {
+  const [bin] = await db.insert(storageLocations).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+    code: `E2E-INGBIN-${randomUUID()}`, name: `E2E Ingredient bin ${randomUUID()}`, type: "feedstock_bin", feedstockTypeId: typeId }).returning();
+  if (wetKg > 0) await intake(f, bin.id, wetKg, moisture);
+  return bin;
+}
+async function intake(f: Fixture, binId: string, wetKg: number, moisture: number, date = "2026-09-01") {
+  const [row] = await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id,
+    code: `E2E-INTAKE-${randomUUID()}`, status: "complete", feedstockTypeId: f.ingredientType.id, storageLocationId: binId,
+    massWetKg: wetKg, massDryKg: wetKg * (1 - moisture / 100), moistureContentPercent: moisture, deliveryDate: new Date(date) }).returning();
+  return row;
+}
+function composition(f: Fixture, massKg = 0, binId: string | null = null, extra: Record<string, unknown> = {}) {
+  return { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg, storageLocationId: binId, ...extra }] };
+}
+async function blend(f: Fixture, input: { massKg?: number; composition?: Record<string, unknown>; storageLocationId?: string } = {}) {
+  return postProduct(f, { massKg: 100, formulationId: f.recipe.id, composition: composition(f), ...input });
+}
+/** Obtain a valid public preview before deliberately submitting invalid writer facts. */
+async function submitInvalidBlend(f: Fixture, changes: Parameters<typeof blend>[1]) {
+  const input = await productInput(f, { formulationId: f.recipe.id, composition: composition(f) });
+  return createBiocharProduct(f.ctx, { ...input, ...changes });
+}
+async function snapshot(productId: string) { return (await db.select().from(productIngredientSnapshots).where(eq(productIngredientSnapshots.biocharProductId, productId)))[0]; }
 
-describe("createBiocharProduct — product bin ↔ formulation", () => {
-  const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-  let facilityId: string;
-  let reactorId: string;
-  let runId: string;
-  let formulationAId: string;
-  let formulationBId: string;
-  let formulationIngredientAId: string;
-  let pyrolysisTypeId: string;
-  let blendTypeAId: string;
-  let blendTypeBId: string;
-  const createdBinIds: string[] = [];
-  const createdFeedstockIds: string[] = [];
-  const createdProductIds: string[] = [];
-  const createdSourceRunIds: string[] = [];
-
-  beforeAll(() => ensureTestOrg());
-
-beforeAll(async () => {
-    const [facility] = await db
-      .insert(facilities)
-      .values({ organizationId: TEST_ORG_ID, code: `FAC-PBF-${tag}`, name: `PBF Facility ${tag}` })
-      .returning({ id: facilities.id });
-    facilityId = facility.id;
-
-    const [reactor] = await db
-      .insert(reactors)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `R-PBF-${tag}`,
-        identifier: `PBF Reactor ${tag}`,
-        facilityId,
-        reactorType: "auger",
-      })
-      .returning({ id: reactors.id });
-    reactorId = reactor.id;
-
-    const [run] = await db
-      .insert(productionRuns)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `PR-PBF-${tag}`,
-        facilityId,
-        reactorId,
-        status: "complete",
-        startTime: new Date("2026-01-01T08:00:00Z"),
-        endTime: new Date("2026-01-01T12:00:00Z"),
-      })
-      .returning({ id: productionRuns.id });
-    runId = run.id;
-
-    const [formulationA] = await db
-      .insert(formulations)
-      .values({ organizationId: TEST_ORG_ID, code: `FM-PBF-A-${tag}`, name: `PBF Blend A ${tag}`, biocharRatio: 0.6 })
-      .returning({ id: formulations.id });
-    formulationAId = formulationA.id;
-
-    const [formulationB] = await db
-      .insert(formulations)
-      .values({ organizationId: TEST_ORG_ID, code: `FM-PBF-B-${tag}`, name: `PBF Blend B ${tag}`, biocharRatio: 0.4 })
-      .returning({ id: formulations.id });
-    formulationBId = formulationB.id;
-
-    const [pyrolysisType] = await db
-      .insert(feedstockTypes)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FT-PBF-P-${tag}`,
-        name: `PBF Pyrolysis Type ${tag}`,
-        category: "forestry",
-        usage: "pyrolysis",
-      })
-      .returning({ id: feedstockTypes.id });
-    pyrolysisTypeId = pyrolysisType.id;
-
-    const [blendTypeA] = await db
-      .insert(feedstockTypes)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FT-PBF-BA-${tag}`,
-        name: `PBF Blend Type A ${tag}`,
-        category: "compost",
-        usage: "blend",
-      })
-      .returning({ id: feedstockTypes.id });
-    blendTypeAId = blendTypeA.id;
-
-    const [blendTypeB] = await db
-      .insert(feedstockTypes)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FT-PBF-BB-${tag}`,
-        name: `PBF Blend Type B ${tag}`,
-        category: "mineral",
-        usage: "blend",
-      })
-      .returning({ id: feedstockTypes.id });
-    blendTypeBId = blendTypeB.id;
-
-    const [formulationIngredientA] = await db
-      .insert(formulationIngredients)
-      .values({
-        organizationId: TEST_ORG_ID,
-        formulationId: formulationAId,
-        feedstockTypeId: blendTypeAId,
-        ratio: 0.2,
-      })
-      .returning({ id: formulationIngredients.id });
-    formulationIngredientAId = formulationIngredientA.id;
+describe("posted product bin and formulation contract", () => {
+  it("claims an unassigned output bin for the selected formulation", async () => {
+    const f = await fixture(); await db.update(storageLocations).set({ formulationId: null }).where(eq(storageLocations.id, f.bin.id));
+    const product = await blend(f);
+    expect((await db.select().from(storageLocations).where(eq(storageLocations.id, f.bin.id)))[0].formulationId).toBe(f.recipe.id);
+    expect(product.biocharRatio).toBe(0.8);
   });
-
-  afterAll(async () => {
-    async function cleanup(step: () => Promise<unknown>) {
-      try {
-        await step();
-      } catch {
-        // Best-effort teardown; keep the original test failure visible.
-      }
-    }
-
-    if (createdProductIds.length > 0) {
-      await cleanup(() =>
-        db.delete(biocharProducts).where(inArray(biocharProducts.id, createdProductIds)),
-      );
-    }
-
-    if (createdFeedstockIds.length > 0) {
-      await cleanup(() =>
-        db.delete(feedstocks).where(inArray(feedstocks.id, createdFeedstockIds)),
-      );
-    }
-
-    if (createdBinIds.length > 0) {
-      await cleanup(() =>
-        db.delete(storageLocations).where(inArray(storageLocations.id, createdBinIds)),
-      );
-    }
-
-    if (runId) {
-      await cleanup(() => db.delete(productionRuns).where(eq(productionRuns.id, runId)));
-    }
-    if (createdSourceRunIds.length > 0) {
-      await cleanup(() =>
-        db
-          .delete(productionRuns)
-          .where(inArray(productionRuns.id, createdSourceRunIds)),
-      );
-    }
-    if (reactorId) {
-      await cleanup(() => db.delete(reactors).where(eq(reactors.id, reactorId)));
-    }
-    const formulationIds = [formulationAId, formulationBId].filter(
-      (id): id is string => id != null,
-    );
-    if (formulationIngredientAId) {
-      await cleanup(() =>
-        db
-          .delete(formulationIngredients)
-          .where(eq(formulationIngredients.id, formulationIngredientAId)),
-      );
-    }
-    if (formulationIds.length > 0) {
-      await cleanup(() =>
-        db.delete(formulations).where(inArray(formulations.id, formulationIds)),
-      );
-    }
-    const feedstockTypeIds = [pyrolysisTypeId, blendTypeAId, blendTypeBId].filter(
-      (id): id is string => id != null,
-    );
-    if (feedstockTypeIds.length > 0) {
-      await cleanup(() => db.delete(feedstockTypes).where(inArray(feedstockTypes.id, feedstockTypeIds)));
-    }
-    if (facilityId) {
-      await cleanup(() => db.delete(facilities).where(eq(facilities.id, facilityId)));
-    }
+  it("rejects a different formulation in an assigned bin before posting", async () => {
+    const f = await fixture();
+    const input = await productInput(f, { formulationId: f.recipe.id, composition: composition(f) });
+    await expect(createBiocharProduct(f.ctx, { ...input, formulationId: f.pure.id })).rejects.toThrow("product bin for this formulation");
+    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
   });
-
-  async function makeProductBin(formulationId: string | null): Promise<string> {
-    // Names must be unique per call, not per suite: storage locations are
-    // unique on (facility_id, name) and each test creates its own bin.
-    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const [bin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `BIN-PBF-${suffix}`,
-        name: `PBF Bin ${tag} ${suffix}`,
-        type: "product_bin",
-        facilityId,
-        formulationId,
-      })
-      .returning({ id: storageLocations.id });
-    createdBinIds.push(bin.id);
-    return bin.id;
-  }
-
-  async function makeFeedstockBin(feedstockTypeId: string): Promise<string> {
-    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const [bin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `BIN-PBF-FS-${suffix}`,
-        name: `PBF Feedstock Bin ${tag} ${suffix}`,
-        type: "feedstock_bin",
-        facilityId,
-        feedstockTypeId,
-      })
-      .returning({ id: storageLocations.id });
-    createdBinIds.push(bin.id);
-    return bin.id;
-  }
-
-  async function makeBiocharBin(): Promise<string> {
-    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const [bin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `BIN-PBF-BC-${suffix}`,
-        name: `PBF Biochar Bin ${tag} ${suffix}`,
-        type: "biochar_bin",
-        facilityId,
-      })
-      .returning({ id: storageLocations.id });
-    createdBinIds.push(bin.id);
-    return bin.id;
-  }
-
-  async function makeStockedFeedstockBin(
-    massDryKg: number,
-    massWetKg = massDryKg,
-  ): Promise<string> {
-    const binId = await makeFeedstockBin(blendTypeAId);
-    await addCompletedFeedstock(binId, massDryKg, massWetKg);
-    return binId;
-  }
-
-  async function addCompletedFeedstock(
-    binId: string,
-    massDryKg: number,
-    massWetKg = massDryKg,
-  ): Promise<void> {
-    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const [feedstock] = await db
-      .insert(feedstocks)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FS-PBF-${suffix}`,
-        facilityId,
-        status: "complete",
-        feedstockTypeId: blendTypeAId,
-        massDryKg,
-        massWetKg,
-        moistureContentPercent:
-          massWetKg > 0 ? ((massWetKg - massDryKg) / massWetKg) * 100 : 0,
-        storageLocationId: binId,
-      })
-      .returning({ id: feedstocks.id });
-    createdFeedstockIds.push(feedstock.id);
-  }
-
-  function baseProductInput() {
-    return {
-      code: `BP-PBF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-      facilityId,
-      linkedProductionRunId: runId,
-      massKg: 500,
-      moistureContentPercent: 2,
-      waterAddedKg: 0,
-    };
-  }
-
-  /** Composition covering formulation A's single ingredient line. */
-  function formulationAComposition() {
-    return {
-      ingredients: [
-        {
-          formulationIngredientId: formulationIngredientAId,
-          feedstockTypeId: blendTypeAId,
-          feedstockTypeName: "PBF Blend Type A",
-          feedstockTypeCategory: "compost",
-          ratio: 0.2,
-          massKg: 0,
-          storageLocationId: null as string | null,
-        },
-      ],
-    };
-  }
-
-  it("claims an unassigned bin for the product's formulation on first use", async () => {
-    const binId = await makeProductBin(null);
-
-    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-      ...baseProductInput(),
-      formulationId: formulationAId,
-      storageLocationId: binId,
-      composition: formulationAComposition(),
-    });
-    createdProductIds.push(product.id);
-
-    const [bin] = await db
-      .select({ formulationId: storageLocations.formulationId })
-      .from(storageLocations)
-      .where(eq(storageLocations.id, binId));
-
-    expect(bin.formulationId).toBe(formulationAId);
-    // The recipe's biochar ratio is frozen onto the product at creation.
-    expect(product.biocharRatio).toBe(0.6);
+  it("rejects a composition that omits a formulation ingredient", async () => {
+    const f = await fixture(); await expect(submitInvalidBlend(f, { composition: {} })).rejects.toThrow("must include every ingredient");
   });
-
-  it("rejects a product whose formulation differs from the bin's reservation", async () => {
-    const binId = await makeProductBin(formulationBId); // reserved for B
-
-    await expect(
-      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-        ...baseProductInput(),
-        formulationId: formulationAId, // mismatched
-        storageLocationId: binId,
-        composition: formulationAComposition(),
-      })
-    ).rejects.toThrow("reserved for a different formulation");
+  it("rejects duplicate ingredient rows before drawing either source", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f); const row = composition(f, 20, bin.id).ingredients[0];
+    await expect(submitInvalidBlend(f, { composition: { ingredients: [row, { ...row }] } })).rejects.toThrow("Each formulation ingredient can appear only once");
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(100);
+    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
   });
-
-  it("rejects a formulated product whose composition omits a recipe line", async () => {
-    const binId = await makeProductBin(null);
-
-    await expect(
-      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-        ...baseProductInput(),
-        formulationId: formulationAId,
-        storageLocationId: binId,
-        // no composition — formulation A has one ingredient line
-      })
-    ).rejects.toThrow("must include every ingredient");
+  it("claims an unassigned bin for the explicit Pure biochar formulation", async () => {
+    const f = await fixture(); await db.update(storageLocations).set({ formulationId: null }).where(eq(storageLocations.id, f.bin.id));
+    const product = await postProduct(f);
+    expect(product.formulationId).toBe(f.pure.id); expect(product.biocharRatio).toBe(1);
+    expect((await db.select().from(storageLocations).where(eq(storageLocations.id, f.bin.id)))[0].formulationId).toBe(f.pure.id);
   });
-
-  it("rejects duplicate formulation ingredient rows before drawing stock", async () => {
-    const productBinId = await makeProductBin(formulationAId);
-    const ingredientBinId = await makeStockedFeedstockBin(100);
-    const composition = formulationAComposition();
-    composition.ingredients[0].massKg = 20;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-
-    await expect(
-      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-        ...baseProductInput(),
-        formulationId: formulationAId,
-        storageLocationId: productBinId,
-        composition: {
-          ingredients: [
-            composition.ingredients[0],
-            { ...composition.ingredients[0] },
-          ],
-        },
-      }),
-    ).rejects.toThrow("Each formulation ingredient can appear only once");
-
-    const ingredientBin = await getEntityById(
-      makeTestOrgContext(TEST_USER_ID),
-      "storageLocation",
-      ingredientBinId,
-    );
-    expect(ingredientBin?.subtitle).toContain("100 kg stored");
+  it("rejects pyrolysis-only feedstock bins as blend ingredient sources", async () => {
+    const f = await fixture(); const [type] = await db.insert(feedstockTypes).values({ organizationId: f.ctx.organizationId, code: `E2E-PYRO-${f.tag}`, name: `E2E Pyro ${f.tag}`, category: "forestry", usage: "pyrolysis" }).returning();
+    const bin = await ingredientBin(f, 0, 0, type.id);
+    await expect(submitInvalidBlend(f, { composition: composition(f, 20, bin.id) })).rejects.toThrow("blend-usage");
   });
-
-  it("allows a pure-biochar product in an unassigned bin and leaves it unclaimed", async () => {
-    const binId = await makeProductBin(null);
-
-    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-      ...baseProductInput(),
-      formulationId: null, // pure biochar
-      storageLocationId: binId,
-    });
-    createdProductIds.push(product.id);
-
-    const [bin] = await db
-      .select({ formulationId: storageLocations.formulationId })
-      .from(storageLocations)
-      .where(eq(storageLocations.id, binId));
-
-    expect(bin.formulationId).toBeNull();
-    // Pure-biochar products carry no ratio snapshot (effective 1 via COALESCE).
-    expect(product.biocharRatio).toBeNull();
+  it("rejects a blend bin whose held material differs from the recipe line", async () => {
+    const f = await fixture(); const [type] = await db.insert(feedstockTypes).values({ organizationId: f.ctx.organizationId, code: `E2E-OTHER-${f.tag}`, name: `E2E Other ${f.tag}`, category: "mineral", usage: "blend" }).returning();
+    const bin = await ingredientBin(f, 0, 0, type.id);
+    await expect(submitInvalidBlend(f, { composition: composition(f, 20, bin.id) })).rejects.toThrow("match the formulation material");
   });
-
-  it("rejects pyrolysis-usage feedstock bins as formulation ingredient bins", async () => {
-    const productBinId = await makeProductBin(formulationAId);
-    const pyrolysisBinId = await makeFeedstockBin(pyrolysisTypeId);
-
-    await expect(
-      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-        ...baseProductInput(),
-        formulationId: formulationAId,
-        storageLocationId: productBinId,
-        composition: {
-          ingredients: [
-            {
-              formulationIngredientId: formulationIngredientAId,
-              feedstockTypeId: blendTypeAId,
-              feedstockTypeName: "Compost",
-              feedstockTypeCategory: "compost",
-              ratio: 0.2,
-              massKg: 100,
-              storageLocationId: pyrolysisBinId,
-            },
-          ],
-        },
-      })
-    ).rejects.toThrow("Feedstock bin must hold blend-usage feedstock");
+  it("omits moisture snapshots for zero-mass ingredients and keeps their solids at zero", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f, 0);
+    const product = await blend(f, { composition: composition(f, 0, bin.id) });
+    expect(await snapshot(product.id)).toBeUndefined();
+    expect(product.composition).toMatchObject({ ingredients: [{ massKg: 0, massDryKg: 0, moistureContentPercent: null }] });
+    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(100);
   });
-
-  it("rejects blend ingredient bins whose held type differs from the formulation line", async () => {
-    const productBinId = await makeProductBin(formulationAId);
-    const wrongBlendBinId = await makeFeedstockBin(blendTypeBId);
-
-    await expect(
-      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-        ...baseProductInput(),
-        formulationId: formulationAId,
-        storageLocationId: productBinId,
-        composition: {
-          ingredients: [
-            {
-              formulationIngredientId: formulationIngredientAId,
-              feedstockTypeId: blendTypeAId,
-              feedstockTypeName: "Compost",
-              feedstockTypeCategory: "compost",
-              ratio: 0.2,
-              massKg: 100,
-              storageLocationId: wrongBlendBinId,
-            },
-          ],
-        },
-      })
-    ).rejects.toThrow("Feedstock bin must match the formulation material");
+  it("requires moisture for a positive ingredient without a usable intake", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f, 0);
+    await expect(blend(f, { composition: composition(f, 1, bin.id) })).rejects.toThrow("Every positive ingredient requires moisture");
+    await expect(submitInvalidBlend(f, { composition: composition(f, 1, bin.id) })).rejects.toBeInstanceOf(ActionConflictError);
+    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
   });
-
-  it("requires a wet-mass and moisture basis for an ingredient draw", async () => {
-    const productBinId = await makeProductBin(formulationAId);
-    const ingredientBinId = await makeFeedstockBin(blendTypeAId);
-    const composition = formulationAComposition();
-    composition.ingredients[0].massKg = 1;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-
-    await expect(
-      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-        ...baseProductInput(),
-        formulationId: formulationAId,
-        storageLocationId: productBinId,
-        composition,
-      }),
-    ).rejects.toThrow("no complete wet-mass and moisture basis");
+  it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
+    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureSource: "weighted_remaining" });
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
   });
-
-  it("deducts ingredient wet mass while preserving its frozen dry basis", async () => {
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const productBinId = await makeProductBin(formulationAId);
-    const ingredientBinId = await makeStockedFeedstockBin(80, 100);
-    const composition = formulationAComposition();
-    composition.ingredients[0].massKg = 50;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-
-    const product = await createBiocharProduct(ctx, {
-      ...baseProductInput(),
-      formulationId: formulationAId,
-      storageLocationId: productBinId,
-      composition,
-    });
-    createdProductIds.push(product.id);
-
-    const [ingredient] = (
-      product.composition as {
-        ingredients: Array<{
-          massKg: number;
-          massDryKg: number;
-          moistureContentPercent: number;
-        }>;
-      }
-    ).ingredients;
-    expect(ingredient).toMatchObject({
-      massKg: 50,
-      massDryKg: 40,
-      moistureContentPercent: 20,
-    });
-
-    const ingredientBin = await getEntityById(
-      ctx,
-      "storageLocation",
-      ingredientBinId,
-    );
-    expect(ingredientBin?.subtitle).toContain("50 kg stored");
+  it("keeps posted ingredient moisture unchanged after a later dry intake", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
+    const before = await snapshot(product.id); await intake(f, bin.id, 100, 0, "2026-09-02");
+    await updateBiocharProduct(f.ctx, product.id, { code: `E2E-RENAMED-${f.tag}` });
+    expect(await snapshot(product.id)).toEqual(before);
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(150);
   });
-
-  it("preserves a frozen ingredient basis when later intakes change bin moisture", async () => {
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const productBinId = await makeProductBin(formulationAId);
-    const ingredientBinId = await makeStockedFeedstockBin(80, 100);
-    const composition = formulationAComposition();
-    composition.ingredients[0].massKg = 50;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-
-    const product = await createBiocharProduct(ctx, {
-      ...baseProductInput(),
-      formulationId: formulationAId,
-      storageLocationId: productBinId,
-      composition,
-    });
-    createdProductIds.push(product.id);
-    await addCompletedFeedstock(ingredientBinId, 100, 100);
-
-    const updated = await updateBiocharProduct(ctx, product.id, {
-      composition: product.composition as Record<string, unknown>,
-    });
-    const [ingredient] = (
-      updated.composition as {
-        ingredients: Array<{
-          massDryKg: number;
-          moistureContentPercent: number;
-        }>;
-      }
-    ).ingredients;
-    expect(ingredient).toMatchObject({
-      massDryKg: 40,
-      moistureContentPercent: 20,
-    });
-
-    const ingredientBin = await getEntityById(
-      ctx,
-      "storageLocation",
-      ingredientBinId,
-    );
-    expect(ingredientBin?.subtitle).toContain("150 kg stored");
+  it("prefills from weighted remaining stock, with an explicit operator override for a new blend", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f);
+    await blend(f, { composition: composition(f, 50, bin.id) }); await intake(f, bin.id, 100, 0, "2026-09-02");
+    const product = await blend(f, { composition: composition(f, 30, bin.id) });
+    // The canonical remaining-bin estimate is pro-rata over all eligible intakes:
+    // 200 kg wet / 180 kg dry keeps a 90% solids ratio after wet withdrawals.
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory).toMatchObject({ currentWetMassKg: 120, estimatedDryMassKg: 108 });
+    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "27.000", moisturePercentUsed: 10 });
+    const override = await blend(f, { composition: composition(f, 30, bin.id, { moistureContentPercent: 10, moistureSource: "operator_override" }) });
+    expect(await snapshot(override.id)).toMatchObject({ drySolidsKg: "27.000", moisturePercentUsed: 10, moistureSource: "operator_override" });
   });
-
-  it("derives a new ingredient basis from mixed-history remaining stock", async () => {
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const ingredientBinId = await makeStockedFeedstockBin(80, 100);
-    const firstProductBinId = await makeProductBin(formulationAId);
-    const firstComposition = formulationAComposition();
-    firstComposition.ingredients[0].massKg = 50;
-    firstComposition.ingredients[0].storageLocationId = ingredientBinId;
-
-    const firstProduct = await createBiocharProduct(ctx, {
-      ...baseProductInput(),
-      formulationId: formulationAId,
-      storageLocationId: firstProductBinId,
-      composition: firstComposition,
-    });
-    createdProductIds.push(firstProduct.id);
-
-    await addCompletedFeedstock(ingredientBinId, 100, 100);
-
-    const secondProductBinId = await makeProductBin(formulationAId);
-    const secondComposition = formulationAComposition();
-    secondComposition.ingredients[0].massKg = 30;
-    secondComposition.ingredients[0].storageLocationId = ingredientBinId;
-    const secondProduct = await createBiocharProduct(ctx, {
-      ...baseProductInput(),
-      formulationId: formulationAId,
-      storageLocationId: secondProductBinId,
-      composition: secondComposition,
-    });
-    createdProductIds.push(secondProduct.id);
-
-    const [ingredient] = (
-      secondProduct.composition as {
-        ingredients: Array<{
-          massDryKg: number;
-          moistureContentPercent: number;
-        }>;
-      }
-    ).ingredients;
-    expect(ingredient).toMatchObject({
-      massDryKg: 27,
-      moistureContentPercent: 10,
-    });
+  it("rejects changing a posted ingredient draw even when later stock is available", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 60, bin.id) });
+    await expect(updateBiocharProduct(f.ctx, product.id, { composition: composition(f, 101, bin.id) })).rejects.toThrow("immutable");
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(40);
   });
-
-  it("rejects an update that increases an ingredient draw beyond stock", async () => {
-    const productBinId = await makeProductBin(formulationAId);
-    const ingredientBinId = await makeStockedFeedstockBin(100);
-    const composition = formulationAComposition();
-    composition.ingredients[0].massKg = 60;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-    const product = await createBiocharProduct(
-      makeTestOrgContext(TEST_USER_ID),
-      {
-        ...baseProductInput(),
-        formulationId: formulationAId,
-        storageLocationId: productBinId,
-        composition,
-      },
-    );
-    createdProductIds.push(product.id);
-
-    const increased = formulationAComposition();
-    increased.ingredients[0].massKg = 101;
-    increased.ingredients[0].storageLocationId = ingredientBinId;
-    await expect(
-      updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), product.id, {
-        composition: increased,
-      }),
-    ).rejects.toThrow("Not enough wet feedstock in this bin");
+  it("serializes concurrent ingredient draws and leaves no orphan product on rejection", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f, 100, 0);
+    const inputs = await Promise.all([productInput(f, { formulationId: f.recipe.id, massKg: 100, composition: composition(f, 60, bin.id) }), productInput(f, { formulationId: f.recipe.id, massKg: 100, composition: composition(f, 60, bin.id) })]);
+    const results = await Promise.allSettled(inputs.map(input => createBiocharProduct(f.ctx, input)));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(40);
+    expect(await db.select().from(biocharProducts).where(eq(biocharProducts.organizationId, f.ctx.organizationId))).toHaveLength(1);
   });
-
-  it("serializes concurrent ingredient draws from the same bin", async () => {
-    const ingredientBinId = await makeStockedFeedstockBin(100);
-    const productBinIds = await Promise.all([
-      makeProductBin(formulationAId),
-      makeProductBin(formulationAId),
-    ]);
-    const create = (storageLocationId: string) => {
-      const composition = formulationAComposition();
-      composition.ingredients[0].massKg = 60;
-      composition.ingredients[0].storageLocationId = ingredientBinId;
-      return createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-        ...baseProductInput(),
-        storageLocationId,
-        formulationId: formulationAId,
-        composition,
-      });
-    };
-
-    const results = await Promise.allSettled(productBinIds.map(create));
-    const fulfilled = results.filter(
-      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof create>>> =>
-        result.status === "fulfilled",
-    );
-    const rejected = results.filter(
-      (result): result is PromiseRejectedResult => result.status === "rejected",
-    );
-    createdProductIds.push(...fulfilled.map((result) => result.value.id));
-
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-    expect(rejected[0].reason).toBeInstanceOf(Error);
-    expect(rejected[0].reason.message).toBe(
-      "Not enough wet feedstock in this bin",
-    );
-
-    const ingredientBin = await getEntityById(
-      makeTestOrgContext(TEST_USER_ID),
-      "storageLocation",
-      ingredientBinId,
-    );
-    expect(ingredientBin?.subtitle).toContain("40 kg stored");
+  it("withdraws saved source dry mass, freezes source shares and rejects dry overdraw", async () => {
+    const f = await fixture();
+    const product = await blend(f, { massKg: 1600, composition: composition(f, 100, null, { moistureContentPercent: 0, moistureSource: "operator_override" }) });
+    const shares = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
+    expect(shares.reduce((sum, row) => sum + row.allocatedDryMassKg, 0)).toBe(1500);
+    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(0);
+    await updateFormulation(f.ctx, f.recipe.id, { biocharRatio: 0.7 });
+    await expect(updateBiocharProduct(f.ctx, product.id, { composition: composition(f, 105, null, { moistureContentPercent: 0 }) })).rejects.toThrow("immutable");
+    expect(await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id))).toEqual(shares);
+    await expect(blend(f, { massKg: 1 })).rejects.toThrow(/Insufficient/);
   });
-
-  it("withdraws recorded source mass, keeps allocations immutable, and blocks overdraw", async () => {
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const sourceBinId = await makeBiocharBin();
-    const ingredientBinId = await makeStockedFeedstockBin(40);
-    const [firstProductBinId, secondProductBinId] = await Promise.all([
-      makeProductBin(formulationAId),
-      makeProductBin(formulationAId),
-    ]);
-    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const [sourceRun] = await db
-      .insert(productionRuns)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `PR-PBF-SOURCE-${suffix}`,
-        facilityId,
-        reactorId,
-        status: "complete",
-        startTime: new Date("2026-02-01T08:00:00Z"),
-        endTime: new Date("2026-02-01T12:00:00Z"),
-        biocharStorageLocationId: sourceBinId,
-        biocharOutputKg: 80,
-        biocharDryMassKg: 72,
-        biocharMoisturePercent: 10,
-      })
-      .returning({ id: productionRuns.id });
-    createdSourceRunIds.push(sourceRun.id);
-
-    const composition = formulationAComposition();
-    composition.ingredients[0].massKg = 20;
-    composition.ingredients[0].storageLocationId = ingredientBinId;
-
-    // 2% claims 78.4 kg dry from an 80 kg wet draw, above the lot's 72 kg.
-    await expect(
-      createBiocharProduct(ctx, {
-        ...baseProductInput(),
-        linkedProductionRunId: null,
-        sourceBiocharStorageLocationId: sourceBinId,
-        formulationId: formulationAId,
-        storageLocationId: firstProductBinId,
-        massKg: 100,
-        moistureContentPercent: 2,
-        composition,
-      }),
-    ).rejects.toThrow("Increase the moisture or reduce the blend mass");
-
-    const product = await createBiocharProduct(ctx, {
-      ...baseProductInput(),
-      linkedProductionRunId: null,
-      sourceBiocharStorageLocationId: sourceBinId,
-      formulationId: formulationAId,
-      storageLocationId: firstProductBinId,
-      massKg: 100,
-      // Matches the source lot's 10% so the measured dry draw equals the
-      // lot's full 72 kg dry stock.
-      moistureContentPercent: 10,
-      composition,
-    });
-    createdProductIds.push(product.id);
-
-    const allocations = await db
-      .select({
-        allocatedWetMassKg:
-          biocharProductSourceAllocations.allocatedWetMassKg,
-        allocatedDryMassKg:
-          biocharProductSourceAllocations.allocatedDryMassKg,
-      })
-      .from(biocharProductSourceAllocations)
-      .where(
-        eq(biocharProductSourceAllocations.biocharProductId, product.id),
-      );
-    expect(product.massKg).toBe(100);
-    expect(product.biocharRatio).toBe(0.6);
-    expect(allocations).toEqual([
-      { allocatedWetMassKg: 80, allocatedDryMassKg: 72 },
-    ]);
-    await expect(
-      getStockAvailability(ctx, {
-        kind: "biocharProduct",
-        sourceBiocharStorageLocationId: sourceBinId,
-      }),
-    ).resolves.toEqual({ availableKg: 0 });
-
-    const metadataRefreshedComposition = {
-      ingredients: [
-        {
-          massKg: 20,
-          massDryKg: 20,
-          moistureContentPercent: 0,
-          storageLocationId: ingredientBinId,
-          ratio: 0.9,
-          feedstockTypeCategory: "refreshed-category",
-          feedstockTypeName: "Refreshed display name",
-          feedstockTypeId: blendTypeAId,
-          formulationIngredientId: formulationIngredientAId,
-        },
-      ],
-    };
-    await expect(
-      updateBiocharProduct(ctx, product.id, {
-        composition: metadataRefreshedComposition,
-      }),
-    ).resolves.toMatchObject({ id: product.id });
-    await expect(
-      db
-        .select({
-          allocatedWetMassKg:
-            biocharProductSourceAllocations.allocatedWetMassKg,
-        })
-        .from(biocharProductSourceAllocations)
-        .where(
-          eq(biocharProductSourceAllocations.biocharProductId, product.id),
-        ),
-    ).resolves.toEqual([{ allocatedWetMassKg: 80 }]);
-
-    await updateFormulation(ctx, formulationAId, { biocharRatio: 0.7 });
-    try {
-      await expect(
-        db
-          .select({
-            allocatedWetMassKg:
-              biocharProductSourceAllocations.allocatedWetMassKg,
-            allocatedDryMassKg:
-              biocharProductSourceAllocations.allocatedDryMassKg,
-          })
-          .from(biocharProductSourceAllocations)
-          .where(
-            eq(biocharProductSourceAllocations.biocharProductId, product.id),
-          ),
-      ).resolves.toEqual([
-        { allocatedWetMassKg: 80, allocatedDryMassKg: 72 },
-      ]);
-      await expect(
-        getStockAvailability(ctx, {
-          kind: "biocharProduct",
-          sourceBiocharStorageLocationId: sourceBinId,
-        }),
-      ).resolves.toEqual({ availableKg: 0 });
-    } finally {
-      await updateFormulation(ctx, formulationAId, { biocharRatio: 0.6 });
-    }
-
-    const changedComposition = formulationAComposition();
-    changedComposition.ingredients[0].massKg = 25;
-    changedComposition.ingredients[0].storageLocationId = ingredientBinId;
-    await expect(
-      updateBiocharProduct(ctx, product.id, {
-        composition: changedComposition,
-      }),
-    ).rejects.toThrow("source allocation is fixed");
-    await expect(
-      db
-        .select({
-          allocatedWetMassKg:
-            biocharProductSourceAllocations.allocatedWetMassKg,
-        })
-        .from(biocharProductSourceAllocations)
-        .where(
-          eq(biocharProductSourceAllocations.biocharProductId, product.id),
-        ),
-    ).resolves.toEqual([{ allocatedWetMassKg: 80 }]);
-
-    const overdrawComposition = formulationAComposition();
-    overdrawComposition.ingredients[0].massKg = 5;
-    overdrawComposition.ingredients[0].storageLocationId = ingredientBinId;
-    await expect(
-      createBiocharProduct(ctx, {
-        ...baseProductInput(),
-        linkedProductionRunId: null,
-        sourceBiocharStorageLocationId: sourceBinId,
-        formulationId: formulationAId,
-        storageLocationId: secondProductBinId,
-        massKg: 10,
-        composition: overdrawComposition,
-      }),
-    ).rejects.toThrow("Not enough biochar in this bin");
+  it("rejects an all-ingredient product with zero source biochar", async () => {
+    const f = await fixture();
+    await expect(submitInvalidBlend(f, { composition: composition(f, 100, null, { moistureContentPercent: 0 }) })).rejects.toThrow("positive source biochar");
   });
-
-  it("rejects a binless all-ingredient product with zero source biochar", async () => {
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const sourceBinId = await makeBiocharBin();
-    const productBinId = await makeProductBin(formulationAId);
-    const composition = formulationAComposition();
-    composition.ingredients[0].massKg = 100;
-    await expect(
-      createBiocharProduct(ctx, {
-        ...baseProductInput(),
-        linkedProductionRunId: null,
-        sourceBiocharStorageLocationId: sourceBinId,
-        formulationId: formulationAId,
-        storageLocationId: productBinId,
-        massKg: 100,
-        composition,
-      }),
-    ).rejects.toThrow("Source biochar mass must be greater than 0 kg");
+  it("allows manual ingredient moisture without a bin while keeping posted mass immutable", async () => {
+    const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10, moistureSource: "operator_override" }) });
+    expect(await snapshot(product.id)).toMatchObject({ sourceStorageLocationId: null, drySolidsKg: "18.000" });
+    await expect(updateBiocharProduct(f.ctx, product.id, { massKg: 110 })).rejects.toThrow("immutable");
   });
-  it("updates legacy blend mass without requiring a missing ingredient bin", async () => {
-    const ctx = makeTestOrgContext(TEST_USER_ID);
-    const sourceBinId = await makeBiocharBin();
-    const productBinId = await makeProductBin(formulationAId);
-    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const [sourceRun] = await db
-      .insert(productionRuns)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `PR-PBF-LEGACY-${suffix}`,
-        facilityId,
-        reactorId,
-        status: "complete",
-        startTime: new Date("2026-02-02T08:00:00Z"),
-        endTime: new Date("2026-02-02T12:00:00Z"),
-        biocharStorageLocationId: sourceBinId,
-        biocharOutputKg: 100,
-        biocharDryMassKg: 90,
-        biocharMoisturePercent: 10,
-      })
-      .returning({ id: productionRuns.id });
-    createdSourceRunIds.push(sourceRun.id);
-
-    const [legacyProduct] = await db
-      .insert(biocharProducts)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `BP-PBF-LEGACY-${suffix}`,
-        facilityId,
-        linkedProductionRunId: sourceRun.id,
-        formulationId: formulationAId,
-        storageLocationId: productBinId,
-        massKg: 50,
-        moistureContentPercent: 2,
-        waterAddedKg: 0,
-        composition: {
-          ingredients: [
-            {
-              formulationIngredientId: formulationIngredientAId,
-              feedstockTypeId: blendTypeAId,
-              massKg: 20,
-              storageLocationId: null,
-            },
-          ],
-        },
-      })
-      .returning({ id: biocharProducts.id });
-    createdProductIds.push(legacyProduct.id);
-
-    await expect(
-      updateBiocharProduct(ctx, legacyProduct.id, { massKg: 60 }),
-    ).resolves.toMatchObject({ massKg: 60 });
+  it("retains its ratio snapshot when the live formulation and metadata change", async () => {
+    const f = await fixture(); const product = await blend(f); await updateFormulation(f.ctx, f.recipe.id, { biocharRatio: 0.7 });
+    const updated = await updateBiocharProduct(f.ctx, product.id, { code: `E2E-RATIO-${f.tag}` }); expect(updated.biocharRatio).toBe(0.8);
   });
-
-  it("keeps the snapshot ratio when the formulation's live ratio changes", async () => {
-    const binId = await makeProductBin(null);
-    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-      ...baseProductInput(),
-      formulationId: formulationAId,
-      storageLocationId: binId,
-      composition: formulationAComposition(),
-    });
-    createdProductIds.push(product.id);
-    expect(product.biocharRatio).toBe(0.6);
-
-    // Recipe edit AFTER the product exists — the frozen snapshot must not move.
-    await db
-      .update(formulations)
-      .set({ biocharRatio: 0.9 })
-      .where(eq(formulations.id, formulationAId));
-    try {
-      const [row] = await db
-        .select({ biocharRatio: biocharProducts.biocharRatio })
-        .from(biocharProducts)
-        .where(eq(biocharProducts.id, product.id));
-      expect(row.biocharRatio).toBe(0.6);
-
-      // An unrelated field update must not re-derive the snapshot either.
-      await updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), product.id, {
-        moistureContentPercent: 5,
-      });
-      const [afterUpdate] = await db
-        .select({ biocharRatio: biocharProducts.biocharRatio })
-        .from(biocharProducts)
-        .where(eq(biocharProducts.id, product.id));
-      expect(afterUpdate.biocharRatio).toBe(0.6);
-    } finally {
-      await db
-        .update(formulations)
-        .set({ biocharRatio: 0.6 })
-        .where(eq(formulations.id, formulationAId));
-    }
-  });
-
-  it("re-snapshots the ratio when the product is reassigned to another formulation", async () => {
-    const binId = await makeProductBin(null);
-    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
-      ...baseProductInput(),
-      formulationId: formulationAId,
-      storageLocationId: binId,
-      composition: formulationAComposition(),
-    });
-    createdProductIds.push(product.id);
-    expect(product.biocharRatio).toBe(0.6);
-
-    // Reassign to formulation B (ratio 0.4, no recipe lines) in a fresh bin.
-    const binBId = await makeProductBin(null);
-    await updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), product.id, {
-      formulationId: formulationBId,
-      storageLocationId: binBId,
-      composition: { ingredients: [] },
-    });
-
-    const [row] = await db
-      .select({ biocharRatio: biocharProducts.biocharRatio })
-      .from(biocharProducts)
-      .where(eq(biocharProducts.id, product.id));
-    expect(row.biocharRatio).toBe(0.4);
+  it("prevents a posted product from being reassigned to another formulation", async () => {
+    const f = await fixture(); const product = await blend(f);
+    await expect(updateBiocharProduct(f.ctx, product.id, { formulationId: f.pure.id })).rejects.toThrow("immutable");
+    expect((await db.select().from(biocharProducts).where(eq(biocharProducts.id, product.id)))[0].biocharRatio).toBe(0.8);
   });
 });

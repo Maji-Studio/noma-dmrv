@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the evidence-gap SQL — the fail-CLOSED certify
  * readiness signal.
@@ -159,18 +162,18 @@ async function seedDeliveryChain(
 
   const [product] = await dbc
     .insert(biocharProducts)
-    .values({
+    .values(await outputProductFixtureValues(dbc, {
       organizationId: TEST_ORG_ID,
       code: `BP-GAP-${runId}`,
       facilityId: facility.id,
       formulationId: formulation.id,
       linkedProductionRunId: productionRun.id,
-    })
+    }))
     .returning({ id: biocharProducts.id });
 
   const [order] = await dbc
     .insert(orders)
-    .values({
+    .values(await outputOrderFixtureValues(dbc, {
       organizationId: TEST_ORG_ID,
       code: `OR-GAP-${runId}`,
       facilityId: facility.id,
@@ -179,20 +182,17 @@ async function seedDeliveryChain(
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
-    })
+    }))
     .returning({ id: orders.id });
 
-  const [delivery] = await dbc
-    .insert(deliveries)
-    .values({
+  const [delivery] = await insertOutputDeliveryFixture(dbc, {
       organizationId: TEST_ORG_ID,
       code: `DL-GAP-${runId}`,
       facilityId: facility.id,
       orderId: order.id,
       deliveryDate: new Date("2025-06-10"),
       deliveredWetMassKg: 10_000,
-    })
-    .returning({ id: deliveries.id });
+    }, row => ({ id: row.id }));
 
   return {
     facilityId: facility.id,
@@ -217,9 +217,7 @@ async function seedApplicationsAndDocuments(
   const documentIds: string[] = [];
 
   for (const [index, spec] of APP_SPECS.entries()) {
-    const [application] = await dbc
-      .insert(applications)
-      .values({
+    const [application] = await insertOutputApplicationFixture(dbc, {
         organizationId: TEST_ORG_ID,
         code: `AP-GAP-${runId}-${index}`,
         deliveryId: chain.deliveryId,
@@ -230,8 +228,7 @@ async function seedApplicationsAndDocuments(
         gpsLatitude: spec.gpsLatitude,
         gpsLongitude: spec.gpsLongitude,
         gisBoundary: spec.gisBoundary,
-      })
-      .returning({ id: applications.id, code: applications.code });
+      }, row => ({ id: row.id, code: row.code }));
 
     seededApplications.push({ id: application.id, code: application.code, spec });
 
@@ -264,11 +261,11 @@ async function cleanupFixture(target: Fixture): Promise<void> {
     }
     const applicationIds = target.applications.map((app) => app.id);
     if (applicationIds.length > 0) {
-      await tx.delete(applications).where(inArray(applications.id, applicationIds));
+      await deleteOutputApplicationFixtures(tx, inArray(applications.id, applicationIds));
     }
-    await tx.delete(deliveries).where(eq(deliveries.id, target.deliveryId));
+    await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, target.deliveryId));
     await tx.delete(orders).where(eq(orders.id, target.orderId));
-    await tx.delete(biocharProducts).where(eq(biocharProducts.id, target.productId));
+    await deleteOutputProductFixtures(tx, eq(biocharProducts.id, target.productId));
     await tx.delete(productionRuns).where(eq(productionRuns.id, target.productionRunId));
     await tx.delete(reactors).where(eq(reactors.id, target.reactorId));
     await tx.delete(formulations).where(eq(formulations.id, target.formulationId));
@@ -276,7 +273,7 @@ async function cleanupFixture(target: Fixture): Promise<void> {
     await tx
       .delete(productionProcesses)
       .where(eq(productionProcesses.id, target.productionProcessId));
-    await tx.delete(facilities).where(eq(facilities.id, target.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, target.facilityId));
     await tx.delete(feedstockTypes).where(eq(feedstockTypes.id, target.feedstockTypeId));
   });
 }

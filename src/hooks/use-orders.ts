@@ -26,7 +26,7 @@ import { invalidateStockEntityQueries } from "./entity-query-keys";
 // Query Keys
 // ============================================
 
-const orderKeys = {
+export const orderKeys = {
   all: ["orders"] as const,
   lists: () => [...orderKeys.all, "list"] as const,
   list: (filters?: Partial<OrderFilterData>) =>
