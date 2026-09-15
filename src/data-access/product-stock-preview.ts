@@ -1,36 +1,41 @@
-import { db } from '@/db';
+import { db, type DbTransaction } from '@/db';
 import { storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { SafeError } from '@/lib/errors';
+import { ActionConflictError, SafeError } from '@/lib/errors';
 import type { BiocharProductFormData } from '@/schemas/biochar-products';
 import type { AffectedStockPreview } from '@/types/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
 import { resolveCompositionIngredientMassBasis } from './biochar-product-composition';
-import { deriveLaneStock } from './lane-stock-derivation';
-import { prepareOutputStock } from './output-stock-operations';
+import { getIngredientStockBasis } from './ingredient-moisture-basis';
+import { prepareOutputStock, stockFingerprint } from './output-stock-operations';
 import { requireOrgScope } from './utils';
 
 const PERCENT_SCALE = 100;
-export type ProductStockPreviewInput = Pick<BiocharProductFormData, 'facilityId' | 'formulationId' | 'placedAt' | 'sourceBiocharStorageLocationId' | 'storageLocationId' | 'massKg' | 'moistureContentPercent' | 'waterAddedKg' | 'ingredientBins'>;
+export type ProductStockPreviewInput = Pick<BiocharProductFormData, 'facilityId' | 'formulationId' | 'placedAt' | 'sourceBiocharStorageLocationId' | 'storageLocationId' | 'massKg' | 'moistureContentPercent' | 'waterAddedKg'> & { ingredientBins?: Record<string, unknown>[] };
 
 /** Read-only projection. Product creation still revalidates every stock draw under locks. */
 export async function previewProductStock(ctx: OrgContext, input: ProductStockPreviewInput): Promise<AffectedStockPreview[]> {
   requireOrgScope(ctx);
-  return db.transaction(async tx => {
+  return db.transaction(async tx => (await prepareProductStock(ctx, input, tx)).bins);
+}
+
+/** The same request projection is recomputed under all bin locks before writes. */
+export async function prepareProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction) {
+    requireOrgScope(ctx);
     const base = { facilityId: input.facilityId, physicalDate: input.placedAt };
     const source = await prepareOutputStock(ctx, { ...base, storageLocationId: input.sourceBiocharStorageLocationId, kind: 'production_draw', wetMassKg: input.massKg, moisturePercent: input.moistureContentPercent }, tx);
     const composition = await resolveCompositionIngredientMassBasis(ctx, tx, { ingredients: input.ingredientBins ?? [] }, undefined, undefined, input.placedAt);
-    const ingredients = composition.ingredients as (NonNullable<ProductStockPreviewInput['ingredientBins']>[number] & { massDryKg: number })[];
+    const ingredients = composition.ingredients as { formulationIngredientId: string; feedstockTypeId: string; storageLocationId?: string | null; massKg: number; massDryKg: number; moistureContentPercent: number | null; moistureSource: string; moistureSourceSnapshot?: unknown }[];
     const bins: AffectedStockPreview[] = [source.preview];
     const draws = new Map<string, number>();
     for (const ingredient of ingredients) if (ingredient.storageLocationId && ingredient.massKg > 0) draws.set(ingredient.storageLocationId, (draws.get(ingredient.storageLocationId) ?? 0) + ingredient.massKg);
     for (const [id, wetDraw] of draws) {
       const [bin] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.id, id), eq(storageLocations.type, 'feedstock_bin'), isNull(storageLocations.archivedAt)));
       if (!bin) throw new SafeError('Ingredient bin not found or archived');
-      const [stock] = await deriveLaneStock(ctx, tx, { storageLocationIds: [id], lanes: 'feedstock' });
+      const stock = await getIngredientStockBasis(ctx, id, input.placedAt, tx);
       if (!stock) throw new SafeError('Ingredient stock not found.');
-      const beforeWet = stock.feedstockStockWetKg;
-      const beforeDry = stock.feedstockEstimatedDryKg;
+      const beforeWet = stock.wetMassKg;
+      const beforeDry = stock.dryMassKg;
       // Ingredient stock is withdrawn pro rata; an override describes the material
       // mixed into the product, not a new measurement of the remaining bin.
       const dryDraw = beforeDry === null ? null : beforeWet > 0 ? beforeDry * wetDraw / beforeWet : 0;
@@ -61,6 +66,44 @@ export async function previewProductStock(ctx: OrgContext, input: ProductStockPr
       afterEstimatedWetKg: beforeWet === null ? null : beforeWet + wetAdded,
       afterAllocations: [...(beforeAllocations ?? []), added], allocations: [added], removedDryKg: -source.preview.removedDryKg,
       removedWetKg: -wetAdded, discrepancySolidsKg: 0, blockingMessage: source.preview.blockingMessage });
-    return bins;
-  });
+    const basisFingerprint = stockFingerprint({
+      request: {
+        facilityId: input.facilityId, formulationId: input.formulationId, physicalDate: input.placedAt,
+        sourceStorageLocationId: input.sourceBiocharStorageLocationId, destinationStorageLocationId: input.storageLocationId,
+        wetMassKg: input.massKg, moisturePercent: input.moistureContentPercent, waterAddedKg: input.waterAddedKg,
+        ingredients: ingredients.map(ingredient => ({
+          formulationIngredientId: ingredient.formulationIngredientId, feedstockTypeId: ingredient.feedstockTypeId,
+          storageLocationId: ingredient.storageLocationId ?? null, massKg: ingredient.massKg,
+          massDryKg: ingredient.massDryKg, moisturePercent: ingredient.moistureContentPercent,
+          moistureSource: ingredient.moistureSource, basis: ingredient.moistureSourceSnapshot ?? null,
+        })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      },
+      source: source.preview.basisFingerprint,
+      destination: destination.preview.basisFingerprint,
+      ingredientBins: bins.filter(bin => bin.lane === 'ingredient').map(bin => ({
+        storageLocationId: bin.storageLocationId, wetMassKg: bin.beforeEstimatedWetKg, dryMassKg: bin.beforeDryKg,
+      })).sort((a, b) => a.storageLocationId.localeCompare(b.storageLocationId)),
+    });
+    return { bins: bins.map(bin => ({ ...bin, basisFingerprint })), composition, source, basisFingerprint };
+}
+
+export function assertProductStockBasis(expected: string, prepared: Awaited<ReturnType<typeof prepareProductStock>>) {
+  if (expected !== prepared.basisFingerprint) throw new ActionConflictError(
+    'Stock changed since this preview. Refresh the preview and try again.',
+    { entity: 'storageLocation', id: prepared.source.preview.storageLocationId, code: prepared.source.preview.binCode ?? '' },
+  );
+}
+
+/** A previously previewable request becoming unavailable is also a refresh conflict. */
+export async function revalidateProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction, expectedFingerprint: string) {
+  requireOrgScope(ctx);
+  try {
+    const prepared = await prepareProductStock(ctx, input, tx);
+    assertProductStockBasis(expectedFingerprint, prepared);
+    return prepared;
+  } catch (error) {
+    if (!(error instanceof SafeError) || error instanceof ActionConflictError) throw error;
+    throw new ActionConflictError('Stock changed since this preview. Refresh the preview and try again.',
+      { entity: 'storageLocation', id: input.storageLocationId, code: '' });
+  }
 }

@@ -4,10 +4,10 @@ import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { grams, kilograms } from '@/lib/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
-import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, getCompositionIngredientDraws, resolveCompositionIngredientMassBasis, validateCompositionIngredientBins } from './biochar-product-composition';
+import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, getCompositionIngredientDraws, validateCompositionIngredientBins } from './biochar-product-composition';
 import { insertBiocharProductSourceAllocations } from './biochar-product-source-allocations';
 import { lockBinStocks } from './lock-bin-stocks';
-import { prepareOutputStock } from './output-stock-operations';
+import { revalidateProductStock } from './product-stock-preview';
 import { findOutputRequest, lockOutputRequest, persistOutputStock } from './output-stock-post';
 import { requireOrgScope } from './utils';
 
@@ -58,9 +58,14 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
     const [bin] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, data.storageLocationId!), eq(storageLocations.facilityId, data.facilityId), eq(storageLocations.type, 'product_bin'), isNull(storageLocations.archivedAt))).for('update');
     if (!bin || (bin.formulationId && bin.formulationId !== data.formulationId)) throw new SafeError('Choose a product bin for this formulation.');
     await validateCompositionIngredientBins(ctx, tx, data.composition, data.formulationId, data.facilityId);
-    const composition = await resolveCompositionIngredientMassBasis(ctx, tx, data.composition, undefined, undefined, data.placedAt);
+    const productBasis = await revalidateProductStock(ctx, {
+      facilityId: data.facilityId, formulationId: data.formulationId, placedAt: data.placedAt,
+      sourceBiocharStorageLocationId: input.storageLocationId, storageLocationId: data.storageLocationId!,
+      massKg: wet, moistureContentPercent: data.moistureContentPercent!, waterAddedKg: data.waterAddedKg!,
+      ingredientBins: (data.composition?.ingredients ?? []) as Record<string, unknown>[],
+    }, tx, data.basisFingerprint);
+    const { composition, source: prepared } = productBasis;
     await assertCompositionIngredientDrawsWithinStock(ctx, tx, composition);
-    const prepared = await prepareOutputStock(ctx, input, tx);
     if (!prepared.plan || prepared.preview.blockingMessage) throw new SafeError(prepared.preview.blockingMessage ?? 'Source stock is unavailable.');
     const firstLayer = prepared.layers.find(l => l.id === prepared.plan!.allocations[0].layerId)!;
     const [product] = await tx.insert(biocharProducts).values({ organizationId: ctx.organizationId, code: data.code, facilityId: data.facilityId,
@@ -70,7 +75,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
       storageLocationId: data.storageLocationId, massKg: data.massKg, moistureContentPercent: data.moistureContentPercent, densityKgM3: data.densityKgM3,
       waterAddedKg: data.waterAddedKg, composition }).returning();
     // Post before source snapshots, so the locked read cannot subtract the new product twice.
-    const posted = await persistOutputStock(ctx, tx, input, { targetBiocharProductId: product.id, payload });
+    const posted = await persistOutputStock(ctx, tx, { ...input, basisFingerprint: prepared.preview.basisFingerprint }, { targetBiocharProductId: product.id, payload });
     const effects = await tx.select().from(outputStockAllocations).where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.movementId, posted.movement.id)));
     await insertBiocharProductSourceAllocations(ctx, tx, { biocharProductId: product.id, sourceStorageLocationId: input.storageLocationId,
       allocations: prepared.preview.allocations.map(a => ({ productionRunId: a.layerId, producedAt: new Date(`${prepared.layers.find(l => l.id === a.layerId)!.physicalDate}T00:00:00.000Z`), allocatedWetMassKg: Number(effects.find(e => e.productionRunId === a.layerId)!.wetMassKg), allocatedDryMassKg: a.dryMassKg })) });
