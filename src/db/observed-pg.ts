@@ -40,7 +40,7 @@ export function instrumentClient(
   client.connect = ((callback?: (error?: Error) => void) => {
     const startedAt = clock();
     const finish = (success: boolean) => {
-      if (!enabled && success) return;
+      if (!enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
@@ -72,7 +72,7 @@ export function instrumentClient(
     const finish = (success: boolean) => {
       if (finished) return;
       finished = true;
-      if (!enabled && success) return;
+      if (!enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
@@ -141,7 +141,7 @@ export function instrumentPoolAcquisition(
     const startedAt = clock();
     const waitingBefore = pool.waitingCount;
     const finish = (success: boolean) => {
-      if (!enabled && success) return;
+      if (!enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
@@ -188,6 +188,7 @@ export function createObservedPool(
   const pool = new Pool({ ...config, Client: InstrumentedClient });
   instrumentPoolAcquisition(pool, options);
   pool.on("error", () => {
+    if (!options.enabled) return;
     (options.log ?? logger)
       .child({ mod: "db-pool" })
       .warn("idle database connection failed");

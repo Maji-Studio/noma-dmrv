@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "@/lib/log";
 import {
+  createObservedPool,
   instrumentClient,
   instrumentPoolAcquisition,
   type QueryableClient,
@@ -63,7 +64,7 @@ describe("database client observability", () => {
     expect(JSON.stringify(info.mock.calls)).not.toContain("sensitive-id");
   });
 
-  it("reports failures even when detailed telemetry is disabled", async () => {
+  it("suppresses failure telemetry when telemetry is disabled", async () => {
     const { log, warn } = createTestLogger();
     const failure = new Error("connection refused");
     const fakeClient = {
@@ -73,6 +74,26 @@ describe("database client observability", () => {
 
     instrumentClient(fakeClient, {
       enabled: false,
+      clock: createClock(0, 5, 10, 18),
+      log,
+    });
+
+    await expect(fakeClient.connect()).rejects.toBe(failure);
+    await expect(fakeClient.query("select 1")).rejects.toBe(failure);
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("reports failures when telemetry is enabled", async () => {
+    const { log, warn } = createTestLogger();
+    const failure = new Error("connection refused");
+    const fakeClient = {
+      connect: () => Promise.reject(failure),
+      query: () => Promise.reject(failure),
+    } as unknown as QueryableClient;
+
+    instrumentClient(fakeClient, {
+      enabled: true,
       clock: createClock(0, 5, 10, 18),
       log,
     });
@@ -123,4 +144,42 @@ describe("database pool acquisition observability", () => {
       "database connection acquired",
     );
   });
+
+  it.each([false, true])(
+    "logs failed checkouts only when telemetry enabled is %s",
+    async (enabled) => {
+      const { log, warn } = createTestLogger();
+      const failure = new Error("checkout failed");
+      const fakePool = {
+        connect: () => Promise.reject(failure),
+        waitingCount: 1,
+        totalCount: 1,
+        idleCount: 0,
+      } as unknown as Pool;
+
+      instrumentPoolAcquisition(fakePool, {
+        enabled,
+        clock: createClock(4, 16.5),
+        log,
+      });
+
+      await expect(fakePool.connect()).rejects.toBe(failure);
+      expect(warn).toHaveBeenCalledTimes(enabled ? 1 : 0);
+    },
+  );
+});
+
+describe("database pool idle-client observability", () => {
+  it.each([false, true])(
+    "logs idle-client failures only when telemetry enabled is %s",
+    async (enabled) => {
+      const { log, warn } = createTestLogger();
+      const pool = createObservedPool({}, { enabled, log });
+
+      pool.emit("error", new Error("idle connection failed"));
+
+      expect(warn).toHaveBeenCalledTimes(enabled ? 1 : 0);
+      await pool.end();
+    },
+  );
 });
