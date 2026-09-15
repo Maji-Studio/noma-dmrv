@@ -5,55 +5,40 @@
  */
 "use client";
 
-import { useId, useState } from "react";
-import { nullableNumericValue } from "@/lib/form-utils";
-import { toDateInputValue } from "@/lib/date-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { toDateInputValue } from "@/lib/date-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
+import { useEffect, useId, useState } from "react";
 
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MoistureField, WetMassField, makeCertFieldStatus, ResolvedErrorRevalidator, StockReconciliationLink } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
-import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
+import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
+import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { Delivery } from "@/db/schema";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOrdersForSelect } from "@/hooks/use-orders";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
+import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
 import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
 import { TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
-import type { Delivery } from "@/db/schema";
-import { useOrdersForSelect } from "@/hooks/use-orders";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
-import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
-import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { CalendarIcon, MapPinIcon, ScalesIcon } from "@phosphor-icons/react/dist/ssr";
+import { useForm, useWatch } from "react-hook-form";
 import { DeliveryEvidenceSection } from "./delivery-trailing-sections";
-import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
-import type { EntityFocusTarget } from "@/lib/entity-deep-link";
-import { useStockAvailability } from "@/hooks/use-stock-availability";
-import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
-import {
-  binStockOverdrawMessage,
-  deliveryStockOverdrawInlineMessage,
-  isStockOverdraw,
-  productStockOverdrawMessage,
-} from "@/lib/stock-overdraw";
-import {
-  deliveryOrderBalanceMessage,
-  isDeliveryOrderBalanceMessage,
-} from "@/lib/delivery-order-balance";
-import { useEntityById } from "@/hooks/use-entities";
-import { DeliveryMassPreview } from "./delivery-mass-preview";
 
 // ============================================
 // Constants for select options
 // ============================================
 
-const statusOptions: readonly { value: string; label: string }[] = deliveryStatuses.map((status) => ({
-  value: status,
-  label: formatStatus(status),
-}));
 const SET_VALUE_OPTS = {
   shouldDirty: true,
   shouldTouch: true,
@@ -66,18 +51,6 @@ const isDeliveryCertifyField = (field: string) =>
 // ============================================
 // Formatting helpers
 // ============================================
-
-function formatStatus(status: DeliveryStatus): string {
-  const labels: Record<DeliveryStatus, string> = {
-    upcoming: "Upcoming",
-    delivered: "Delivered",
-  };
-  return labels[status];
-}
-
-function isDeliveryStatus(value: string | null | undefined): value is DeliveryStatus {
-  return !!value && deliveryStatuses.includes(value as DeliveryStatus);
-}
 
 // ============================================
 // Component
@@ -104,6 +77,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const isEditMode = !!delivery;
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const formFacilityId = delivery?.facilityId ?? contextFacilityId;
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
   // cache read rather than a round trip on open.
@@ -112,19 +86,21 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   // The order picker fetches its own options (FormEntitySelect); this query
   // only backs the stored-distance prefill for the selected order below.
-  const { data: ordersData } = useOrdersForSelect(contextFacilityId ?? undefined, {
-    enabled: !!contextFacilityId,
+  const { data: ordersData } = useOrdersForSelect(formFacilityId ?? undefined, {
+    enabled: !!formFacilityId,
   });
   const orders = ordersData ?? [];
-  const defaultStatus: DeliveryStatus = isDeliveryStatus(delivery?.status) ? delivery.status : "upcoming";
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const defaultValues = {
+    idempotencyKey,
+    basisFingerprint: "pending-preview",
     orderId: delivery?.orderId ?? "",
     deliveryDate: toDateInputValue(delivery?.deliveryDate),
-    status: defaultStatus,
+    status: "delivered" as const,
     deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
     moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
-    biocharProductId: delivery?.biocharProductId ?? undefined,
+    storageLocationId: delivery?.storageLocationId ?? "",
     driverId: delivery?.driverId ?? undefined,
     vehicleId: delivery?.vehicleId ?? undefined,
     distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
@@ -153,7 +129,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const watchWetMass = useWatch({ control, name: "deliveredWetMassKg" });
   const watchMoisture = useWatch({ control, name: "moistureContentPercent" });
   const watchOrderId = useWatch({ control, name: "orderId" });
-  const watchStatus = useWatch({ control, name: "status" });
+  const watchBinId = useWatch({ control, name: "storageLocationId" });
+  const watchDate = useWatch({ control, name: "deliveryDate" });
   const distanceKmOverride = useWatch({
     control,
     name: "distanceKmOverride",
@@ -164,10 +141,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   // transport leg falls back to when this delivery has no override
   // (data-access/transport-legs.ts, map-integration plan decision 3).
   const selectedOrder = orders.find((o) => o.id === watchOrderId);
-  const { data: selectedOrderOption } = useEntityById(
-    "order",
-    watchOrderId || undefined,
-  );
   const storedDistanceKm = selectedOrder?.destinationDistanceKm ?? null;
   const storedDistanceSource = selectedOrder?.destinationDistanceSource ?? null;
 
@@ -262,68 +235,32 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     setValue("distanceNote", "");
   });
 
-  const editingSameOrder = delivery?.orderId === watchOrderId;
-  const allocationWetBasisKg = selectedOrderOption?.remainingMass?.wetKg == null
-    ? null
-    : selectedOrderOption.remainingMass.wetKg +
-      (editingSameOrder ? delivery?.deliveredWetMassKg ?? 0 : 0);
-  const selectedRemainingDryKg = selectedOrderOption?.remainingMass?.dryKg;
-  const allocationDryBasisKg = selectedRemainingDryKg == null
-    ? null
-    : selectedRemainingDryKg + (editingSameOrder ? delivery?.massDryKg ?? 0 : 0);
-  const { data: deliveryAvailability } = useStockAvailability(
-    watchOrderId
-      ? {
-          kind: "delivery",
-          orderId: watchOrderId,
-          deliveryId: delivery?.id,
-          biocharProductId: delivery?.biocharProductId ?? undefined,
-        }
-      : null,
-  );
-  const deliveryStockError =
-    watchStatus === "delivered" &&
-    typeof watchWetMass === "number" &&
-    deliveryAvailability &&
-    deliveryAvailability.availableKg !== null &&
-    isStockOverdraw(
-      watchWetMass,
-      deliveryAvailability.availableKg,
-    )
-      ? deliveryStockOverdrawInlineMessage(deliveryAvailability.availableKg)
-      : undefined;
-  const deliveryOrderBalanceError =
-    typeof watchWetMass === "number" &&
-    deliveryAvailability?.orderAvailableKg != null &&
-    isStockOverdraw(watchWetMass, deliveryAvailability.orderAvailableKg)
-      ? deliveryOrderBalanceMessage(deliveryAvailability.orderAvailableKg)
-      : undefined;
-  const deliveryMassFingerprint = [
-    watchOrderId,
-    watchStatus,
-    watchWetMass,
-  ].join(":");
-  const routedServerError = useInlineStockServerError(
-    errorMessage,
-    deliveryMassFingerprint,
-    (message) =>
-      message === productStockOverdrawMessage() ||
-      message === binStockOverdrawMessage("product") ||
-      isDeliveryOrderBalanceMessage(message),
-  );
-  const deliveredWetMassError =
-    errors.deliveredWetMassKg?.message ??
-    deliveryOrderBalanceError ??
-    deliveryStockError ??
-    routedServerError.inlineError;
+  const matchingBins = useMatchingOutputBins(formFacilityId ?? "", selectedOrder?.formulationId ?? "");
+  const wetMass = Number(watchWetMass);
+  const moisture = watchMoisture === "" || watchMoisture == null ? NaN : Number(watchMoisture);
+  const stockPreview = useOutputStockPreview(!isEditMode && watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass) && Number.isFinite(moisture) && moisture >= 0 && moisture < 100 ? {
+    storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery",
+    physicalDate: String(watchDate), wetMassKg: wetMass, moisturePercent: moisture,
+  } : null);
+  useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
+  const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
+
+  const refreshStockPreview = stockPreview.refetch;
+  useEffect(() => {
+    if (errorMessage && !isEditMode) void refreshStockPreview();
+  }, [errorMessage, isEditMode, refreshStockPreview]);
 
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
-  const handleFormSubmit = handleSubmit((data) => {
-    // A distance note only explains an override — never persist one without.
-    const normalized =
-      data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
-    return onSubmit(normalized as DeliveryFormData);
+  const handleFormSubmit = handleSubmit(async (data) => {
+    if (!isEditMode && (!stockPreview.data || stockPreview.isFetching || stockPreview.data.blockingMessage)) return;
+    const normalized = data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
+    try {
+      await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint: stockPreview.data?.basisFingerprint } as DeliveryFormData);
+    } catch (error) {
+      void stockPreview.refetch();
+      throw error;
+    }
   });
 
   // All three branches describe the same quantity — the one-way facility ›
@@ -346,28 +283,19 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       <FormSection
         title="Delivery information"
         icon={<CalendarIcon size={14} weight="bold" />}
-        fields={["deliveryDate", "status", "orderId"]}
+        fields={["deliveryDate", "orderId", "storageLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="deliveryDate" label="Delivery date" error={errors.deliveryDate?.message} required>
             <FormInput
               id="deliveryDate"
               type="date"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isEditMode}
               error={!!errors.deliveryDate}
               {...register("deliveryDate")}
             />
           </FormField>
 
-          <FormField id="status" label="Status" error={errors.status?.message}>
-            <FormSelect
-              id="status"
-              disabled={isSubmitting}
-              error={!!errors.status}
-              options={statusOptions}
-              {...register("status")}
-            />
-          </FormField>
         </div>
 
         {/* Disabled until facility context resolves — an unscoped fetch would
@@ -381,17 +309,22 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           placeholder="Select order..."
           required
           showRemainingDryMass={false}
-          disabled={isSubmitting || !contextFacilityId}
-          filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+          disabled={isSubmitting || isEditMode || !formFacilityId}
+          filterBy={formFacilityId ? { facilityId: formFacilityId } : undefined}
           emptyHint={{
             message:
               "A delivery fulfils an order. Record the customer order first.",
-            href: contextFacilityId
-              ? `/orders?facility=${encodeURIComponent(contextFacilityId)}`
+            href: formFacilityId
+              ? `/orders?facility=${encodeURIComponent(formFacilityId)}`
               : "/orders",
             linkLabel: "Open orders",
           }}
         />
+        <FormField id="storageLocationId" label="Actual source bin" required error={errors.storageLocationId?.message}>
+          <FormSelect id="storageLocationId" placeholder="Select matching source bin..." disabled={isSubmitting || isEditMode} options={(matchingBins.data ?? []).map(bin => ({ value: bin.id, label: bin.name }))} {...register("storageLocationId")} />
+        </FormField>
+        {matchingBins.error && <p role="alert">{matchingBins.error.message}</p>}
+        {isEditMode && delivery?.storageLocationId && <div className="space-y-8"><p className="body-small">To change stock measurements, open More info and correct the original delivery entry. Saved stock history is preserved.</p><OutputStockHistory storageLocationId={delivery.storageLocationId} facilityId={formFacilityId ?? ""} /></div>}
       </FormSection>
 
       {/* Mass & Moisture Section */}
@@ -405,9 +338,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             id="deliveredWetMassKg"
             materialLabel="Biochar product"
             error={deliveredWetMassError}
-            hint="As-received weight of the delivery, water included."
+            hint="Measured wet mass at departure, water included."
             required
-            disabled={isSubmitting}
+            disabled={isSubmitting || isEditMode}
             placeholder="e.g. 1000"
             certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
             certifyStatus={certStatus("deliveredWetMassKg")}
@@ -420,30 +353,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             materialLabel="Biochar product"
             error={errors.moistureContentPercent?.message}
             required
-            disabled={isSubmitting}
+            disabled={isSubmitting || isEditMode}
             placeholder="e.g. 20"
             registration={register("moistureContentPercent")}
           />
-          <DeliveryMassPreview
-            deliveredWetMassKg={watchWetMass}
-            allocationWetBasisKg={allocationWetBasisKg}
-            allocationDryBasisKg={allocationDryBasisKg}
-            moisturePercent={watchMoisture}
-            persisted={
-              delivery && editingSameOrder
-                ? {
-                    deliveredWetMassKg: delivery.deliveredWetMassKg,
-                    massDryKg: delivery.massDryKg,
-                  }
-                : null
-            }
-          />
-          {(deliveryStockError || routedServerError.inlineError) && (
-            <div className="md:col-span-2">
-              <StockReconciliationLink facilityId={contextFacilityId} />
-            </div>
-          )}
         </div>
+        {stockPreview.isFetching && <p role="status">Refreshing stock preview...</p>}
+        {stockPreview.error && <p role="alert">{stockPreview.error.message}</p>}
+        {stockPreview.data && <OutputStockPreview preview={stockPreview.data} moreInfo={<OutputStockHistory storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
       </FormSection>
 
       {/* Transport Section */}
@@ -555,7 +472,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={routedServerError.footerError}
+        errorMessage={errorMessage}
+        submitDisabled={!isEditMode && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.data.blockingMessage)}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

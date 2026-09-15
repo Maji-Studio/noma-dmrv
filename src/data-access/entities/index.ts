@@ -8,50 +8,50 @@
  * dispatcher so the auth gate is never bypassed.
  */
 
-import { requireOrgScope } from "../utils";
-import type { OrgContext } from "@/lib/auth/server";
-import { productionRunStatus } from "@/db/schema/common";
 import type {
   EntityOption,
   EntityType,
 } from "@/components/forms/entity-select/types";
+import { productionRunStatus } from "@/db/schema/common";
+import type { OrgContext } from "@/lib/auth/server";
+import { PURE_PRODUCT_BIN_FILTER } from "@/schemas/biochar-products";
 import {
   storageLocationTypes,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
-import { PURE_PRODUCT_BIN_FILTER } from "@/schemas/biochar-products";
+import { requireOrgScope } from "../utils";
 
-import { getFacilities, getFacilityById } from "./facilities";
-import { getReactors, getReactorById } from "./reactors";
-import { getSuppliers, getSupplierById } from "./suppliers";
-import { getCustomers, getCustomerById } from "./customers";
-import { getDrivers, getDriverById } from "./drivers";
-import { getOperators, getOperatorById } from "./operators";
-import { getStorageLocations, getStorageLocationById } from "./storage-locations";
-import { getVehicles, getVehicleById } from "./vehicles";
-import { getFeedstockTypes, getFeedstockTypeById } from "./feedstock-types";
-import { getFeedstocks, getFeedstockById } from "./feedstocks";
 import {
-  getProductionRunsEntity,
-  getProductionRunEntityById,
-} from "./production-runs";
-import {
-  getApplicationsEntity,
   getApplicationEntityById,
+  getApplicationsEntity,
 } from "./applications";
 import {
-  getFormulationsEntity,
-  getFormulationEntityById,
-} from "./formulations";
-import {
-  getBiocharProducts,
   getBiocharProductEntityById,
+  getBiocharProducts,
 } from "./biochar-products";
-import { getOrdersEntity, getOrderEntityById } from "./orders";
 import {
-  getCreditBatchesEntity,
   getCreditBatchEntityById,
+  getCreditBatchesEntity,
 } from "./credit-batches";
+import { getCustomerById, getCustomers } from "./customers";
+import { getDriverById, getDrivers } from "./drivers";
+import { getFacilities, getFacilityById } from "./facilities";
+import { getFeedstockTypeById, getFeedstockTypes } from "./feedstock-types";
+import { getFeedstockById, getFeedstocks } from "./feedstocks";
+import {
+  getFormulationEntityById,
+  getFormulationsEntity,
+} from "./formulations";
+import { getOperatorById, getOperators } from "./operators";
+import { getOrderEntityById, getOrdersEntity } from "./orders";
+import {
+  getProductionRunEntityById,
+  getProductionRunsEntity,
+} from "./production-runs";
+import { getReactorById, getReactors } from "./reactors";
+import { getStorageLocationById, getStorageLocations } from "./storage-locations";
+import { getSupplierById, getSuppliers } from "./suppliers";
+import { getVehicleById, getVehicles } from "./vehicles";
 
 /** Default page size for searchable entity-select queries. */
 const DEFAULT_ENTITY_LIMIT = 50;
@@ -178,7 +178,7 @@ export async function getEntityById(
   id: string,
   // Same idea as getEntities' filterBy; only adapters that derive
   // per-caller figures (biocharProduct's remaining stock) consume it.
-  filterBy?: { excludeOrderId?: string },
+  filterBy?: { excludeOrderId?: string; physicalDate?: string },
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
   switch (entityType) {
@@ -195,7 +195,7 @@ export async function getEntityById(
     case "operator":
       return getOperatorById(ctx, id);
     case "storageLocation":
-      return getStorageLocationById(ctx, id);
+      return getStorageLocationById(ctx, id, undefined, filterBy?.physicalDate);
     case "vehicle":
       return getVehicleById(ctx, id);
     case "feedstockType":

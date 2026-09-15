@@ -4,21 +4,40 @@
  */
 "use client";
 
-import { useEffect, useId, useRef, type ComponentProps } from "react";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
+import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
-import { useForm, Controller, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
-import { MASS_MOISTURE_LABELS, splitWetMass, splitWetMassAfterAddedWater, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
-import { formatMassKg } from "@/lib/format-utils";
+import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, SectionLabel, StockReconciliationLink } from "@/components/forms";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
+import { BinMovementHistoryModal } from "@/components/storage-locations/bin-movement-history-modal";
+import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
+import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
+import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { useEntityById } from "@/hooks/use-entities";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
+import { useOutputStockPreview } from "@/hooks/use-output-stock";
+import {
+  deriveBlendMassKg,
+  deriveSourceBiocharMassKg,
+  fromCompositionJsonb,
+  SOURCE_BIOCHAR_MASS_ERROR,
+  useBiocharComposition,
+  ZERO_SOURCE_BIOCHAR_ERROR,
+} from "@/lib/biochar-composition";
+import { formatLocalDate } from "@/lib/date-utils";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { formatMassKg } from "@/lib/format-utils";
+import { MASS_MOISTURE_LABELS, qualifyMassLabel, splitWetMass, splitWetMassAfterAddedWater, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
+import {
+  binStockOverdrawMessage,
+} from "@/lib/stock-overdraw";
 import {
   biocharProductFormSchema,
   PURE_PRODUCT_BIN_FILTER,
@@ -28,30 +47,14 @@ import {
   MASS_KG_INPUT_STEP,
 } from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
-import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
-import {
-  deriveBlendMassKg,
-  deriveSourceBiocharMassKg,
-  fromCompositionJsonb,
-  SOURCE_BIOCHAR_MASS_ERROR,
-  ZERO_SOURCE_BIOCHAR_ERROR,
-  useBiocharComposition,
-} from "@/lib/biochar-composition";
-import { IngredientBinRows } from "./ingredient-bin-rows";
-import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
-import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { FactoryIcon, FlowArrowIcon, PackageIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { useStockAvailability } from "@/hooks/use-stock-availability";
-import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
-import {
-  binStockOverdrawInlineMessage,
-  binStockOverdrawMessage,
-  isStockOverdraw,
-} from "@/lib/stock-overdraw";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
-import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 
+const EMPTY_PREVIEW_SCALE_KG = 1;
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
@@ -358,6 +361,7 @@ export function BiocharProductForm({
   focusTarget,
 }: BiocharProductFormProps) {
   const formId = useId();
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
   const isEditMode = !!product;
   const hasFrozenSourceAllocation = Boolean(
     product?.sourceBiocharStorageLocationId,
@@ -377,8 +381,11 @@ export function BiocharProductForm({
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues: {
+      idempotencyKey,
+      basisFingerprint: "pending-preview",
       facilityId: product?.facility?.id ?? contextFacilityId ?? "",
       formulationId: initialFormulationId ?? "",
+      placedAt: product?.placedAt ?? formatLocalDate(new Date()),
       sourceBiocharStorageLocationId:
         product?.sourceBiocharStorageLocation?.id ??
         product?.sourceBiocharStorageLocationId ??
@@ -413,6 +420,7 @@ export function BiocharProductForm({
   });
   const storageLocationId = useWatch({ control, name: "storageLocationId" });
   const selectedFormulationId = useWatch({ control, name: "formulationId" });
+  const watchedPlacedAt = useWatch({ control, name: "placedAt" });
   const watchedMassKg = useWatch({ control, name: "massKg" });
   const watchedIngredientBins = useWatch({ control, name: "ingredientBins" });
   const watchedMoisture = useWatch({ control, name: "moistureContentPercent" });
@@ -467,25 +475,31 @@ export function BiocharProductForm({
   // never reduce what leaves the biochar bin.
   const massKgNum = typeof watchedMassKg === "number" ? watchedMassKg : null;
   const requestedBiocharKg = massKgNum;
-  const { data: biocharAvailability } = useStockAvailability(
-    sourceBiocharStorageLocationId
-      ? {
-          kind: "biocharProduct",
-          sourceBiocharStorageLocationId,
-          biocharProductId: product?.id,
-        }
-      : null,
+  const sourcePreview = useOutputStockPreview(!isEditMode && sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0 && watchedMoisture != null ? {
+    storageLocationId: sourceBiocharStorageLocationId,
+    facilityId: selectedFacilityId,
+    physicalDate: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
+    moisturePercent: Number(watchedMoisture),
+  } : null);
+  const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
+    (ingredient) =>
+      typeof ingredient.massKg === "number" &&
+      Number.isFinite(ingredient.massKg) &&
+      ingredient.massKg >= 0,
   );
-  const biocharStockError =
-    requestedBiocharKg !== null &&
-    biocharAvailability &&
-    biocharAvailability.availableKg !== null &&
-    isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
-      ? binStockOverdrawInlineMessage(
-          "biochar",
-          biocharAvailability.availableKg,
-        )
-      : undefined;
+  const productStockPreview = useProductStockPreview(!isEditMode && ingredientMassesComplete && sourceBiocharStorageLocationId && storageLocationId && selectedFormulationId && watchedPlacedAt && massKgNum !== null && watchedMoisture != null && watchedWaterAddedKg != null ? {
+    facilityId: selectedFacilityId, formulationId: selectedFormulationId, placedAt: String(watchedPlacedAt),
+    sourceBiocharStorageLocationId, storageLocationId, massKg: massKgNum, moistureContentPercent: Number(watchedMoisture),
+    waterAddedKg: Number(watchedWaterAddedKg), ingredientBins: watchedIngredientBins?.map(ingredient => ({ ...ingredient, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : Number.NaN })),
+  } : null);
+  const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
+  const productPreviewScale = Math.max(EMPTY_PREVIEW_SCALE_KG, ...(productStockPreview.data ?? []).flatMap(bin => [bin.beforeEstimatedWetKg ?? bin.beforeDryKg ?? 0, bin.afterEstimatedWetKg ?? bin.afterDryKg ?? 0]));
+  const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
+  const refreshStockPreview = sourcePreview.refetch;
+  useEffect(() => {
+    if (errorMessage && !isEditMode) void refreshStockPreview();
+  }, [errorMessage, isEditMode, refreshStockPreview]);
+
   const massFieldFingerprint = [
     sourceBiocharStorageLocationId,
     selectedFormulationId,
@@ -505,14 +519,19 @@ export function BiocharProductForm({
     biocharStockError ??
     routedServerError.inlineError;
 
-  const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(
-      prepareBiocharProductSubmission(
-        data as BiocharProductFormData,
-        hasFrozenSourceAllocation,
-        isEditMode ? product?.massKg ?? undefined : undefined,
-      ),
-    );
+  const handleFormSubmit = handleSubmit(async (data) => {
+    if (!isEditMode && (!sourcePreview.data || sourcePreview.isFetching || sourcePreview.data.blockingMessage || affectedBinsUnavailable)) return;
+    try {
+      await onSubmit({
+        ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
+        basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint ?? sourcePreview.data?.basisFingerprint ?? data.basisFingerprint,
+        idempotencyKey,
+      });
+    } catch (error) {
+      void sourcePreview.refetch();
+      void productStockPreview.refetch();
+      throw error;
+    }
   });
 
   // Derive preview values
@@ -542,12 +561,7 @@ export function BiocharProductForm({
   // The wet product total is a claim about the finished blend, so it stays
   // hidden until water and every ingredient mass are actually entered —
   // otherwise blank required fields read as a smaller final product.
-  const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
-    (ingredient) =>
-      typeof ingredient.massKg === "number" &&
-      Number.isFinite(ingredient.massKg) &&
-      ingredient.massKg >= 0,
-  );
+
   const blendMassKg = deriveBlendMassKg(massKgNum, watchedIngredientBins);
   const destinationWetProductKg =
     blendMassKg !== null &&
@@ -591,7 +605,7 @@ export function BiocharProductForm({
       />
       {/* Transfer preview — a derived recap of the transfer, not a data-entry
           step, so it sits above the numbered spine and only when it has data. */}
-      {(selectedSourceBiocharBin || selectedStorageLocation || massKgNum != null) && (
+      {isEditMode && (selectedSourceBiocharBin || selectedStorageLocation || massKgNum != null) && (
         <div className="space-y-12">
           <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
             Transfer preview
@@ -621,7 +635,16 @@ export function BiocharProductForm({
         </div>
       )}
 
+      {productStockPreview.data?.map(bin => <OutputStockPreview key={bin.storageLocationId} preview={bin} commonScale={productPreviewScale} moreInfo={bin.lane === "ingredient" ? <BinMovementHistoryModal storageLocationId={bin.storageLocationId} /> : <OutputStockHistory storageLocationId={bin.storageLocationId} facilityId={selectedFacilityId} />} />)}
+      {productStockPreview.error && <p role="alert">{productStockPreview.error.message}</p>}
+      {productStockPreview.isFetching && <p role="status">Refreshing affected bins...</p>}
+      {sourcePreview.isFetching && <p role="status">Refreshing source stock preview...</p>}
       <FormSpine control={control}>
+      <FormSection title="Placement" fields={["placedAt"]}>
+        <FormField id="placedAt" label="Mixing and placement date" required error={errors.placedAt?.message} helperText="The date this product was physically mixed and placed in its bin.">
+          <FormInput id="placedAt" type="date" disabled={isSubmitting || isEditMode} {...register("placedAt")} />
+        </FormField>
+      </FormSection>
       {/* Source biochar bin */}
       <FormSection
         title="Source"
@@ -752,12 +775,12 @@ export function BiocharProductForm({
         fields={["formulationId", "storageLocationId"]}
       >
 
-        {/* Formulation drives ingredient-bin rows and the destination bin filter.
-            The explicit none choice produces a pure-biochar product. */}
+        {/* Formulation drives ingredient-bin rows and the destination bin filter. */}
         <FormField
           id="formulationId"
           label="Formulation"
           error={errors.formulationId?.message}
+          required
         >
           <Controller
             name="formulationId"
@@ -769,10 +792,6 @@ export function BiocharProductForm({
                 onChange={field.onChange}
                 disabled={isSubmitting || isEditMode}
                 error={!!fieldState.error}
-                noneOption={{
-                  label: `None (${PURE_BIOCHAR_LABEL})`,
-                  subtitle: "No amendment blend",
-                }}
               />
             )}
           />
@@ -846,8 +865,8 @@ export function BiocharProductForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        submitDisabled={hasZeroSourceBiochar}
         errorMessage={routedServerError.footerError}
+        submitDisabled={hasZeroSourceBiochar || !isEditMode && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.data.blockingMessage || affectedBinsUnavailable)}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

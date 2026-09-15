@@ -1,3 +1,4 @@
+import { deleteOutputFacilityFixtures, outputProductFixtureValues, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -93,7 +94,7 @@ async function cleanupFixture(fixture: FeedstockStockFixture): Promise<void> {
     await tx.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
     await tx.delete(storageLocations).where(eq(storageLocations.id, fixture.storageLocationId));
     await tx.delete(feedstockTypes).where(eq(feedstockTypes.id, fixture.feedstockTypeId));
-    await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
 }
 
@@ -145,7 +146,7 @@ describe("storage-location feedstock stock", () => {
     const fixture = await createFixture(runId);
     const [product] = await db
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: fixture.facilityId,
         code: `BP-FS-STOCK-${runId}`,
@@ -160,7 +161,7 @@ describe("storage-location feedstock stock", () => {
             moistureContentPercent: 20,
           }],
         },
-      })
+      }))
       .returning({ id: biocharProducts.id });
 
     try {
@@ -172,7 +173,7 @@ describe("storage-location feedstock stock", () => {
       expect(result.items).toHaveLength(1);
       expect(result.items[0]?.inventorySummary.feedstockWetKg).toBe(70);
     } finally {
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
+      await deleteOutputProductFixtures(db, eq(biocharProducts.id, product.id));
       await cleanupFixture(fixture);
     }
   });

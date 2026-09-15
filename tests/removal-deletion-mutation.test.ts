@@ -1,3 +1,4 @@
+import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db, withDedicatedLockConnection, type DbTransaction } from "@/db";
@@ -39,7 +40,7 @@ afterAll(async () => {
   if (tracked.createdFacilityIds.length) {
     await db.delete(productionProcesses).where(inArray(productionProcesses.facilityId, tracked.createdFacilityIds));
     await db.delete(certifierProjects).where(inArray(certifierProjects.facilityId, tracked.createdFacilityIds));
-    await db.delete(facilities).where(inArray(facilities.id, tracked.createdFacilityIds));
+    await deleteOutputFacilityFixtures(db, inArray(facilities.id, tracked.createdFacilityIds));
   }
   if (tracked.createdFeedstockTypeIds.length) await db.delete(feedstockTypes).where(inArray(feedstockTypes.id, tracked.createdFeedstockTypeIds));
 });

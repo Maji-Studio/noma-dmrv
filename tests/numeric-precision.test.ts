@@ -1,3 +1,5 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Issue #280 — credit-bearing values are exact numeric(p,s), not float4.
@@ -12,7 +14,7 @@ import { eq, TransactionRollbackError } from "drizzle-orm";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
 import { facilities, storageLocations } from "@/db/schema/facilities";
-import { deliveries, orders } from "@/db/schema/logistics";
+import { orders } from "@/db/schema/logistics";
 import { customers } from "@/db/schema/parties";
 import { samples } from "@/db/schema/production";
 import { biocharProducts } from "@/db/schema/products";
@@ -66,7 +68,7 @@ describe("numeric precision round-trips (issue #280)", () => {
 
       const [product] = await tx
         .insert(biocharProducts)
-        .values({ organizationId: TEST_ORG_ID, code: `BP-NUM-${runId}`, facilityId: facility.id })
+        .values(await outputProductFixtureValues(tx, { organizationId: TEST_ORG_ID, code: `BP-NUM-${runId}`, facilityId: facility.id }))
         .returning({ id: biocharProducts.id });
 
       const [inserted] = await tx
@@ -138,12 +140,12 @@ describe("numeric precision round-trips (issue #280)", () => {
 
       const [product] = await tx
         .insert(biocharProducts)
-        .values({ organizationId: TEST_ORG_ID, code: `BP-NUM-AP-${runId}`, facilityId: facility.id })
+        .values(await outputProductFixtureValues(tx, { organizationId: TEST_ORG_ID, code: `BP-NUM-AP-${runId}`, facilityId: facility.id }))
         .returning({ id: biocharProducts.id });
 
       const [order] = await tx
         .insert(orders)
-        .values({
+        .values(await outputOrderFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
           code: `OR-NUM-${runId}`,
           facilityId: facility.id,
@@ -152,31 +154,25 @@ describe("numeric precision round-trips (issue #280)", () => {
           biocharProductId: product.id,
           quantityKg: 1000,
           packaging: "loose",
-        })
+        }))
         .returning({ id: orders.id });
 
-      const [delivery] = await tx
-        .insert(deliveries)
-        .values({
+      const [delivery] = await insertOutputDeliveryFixture(tx, {
           organizationId: TEST_ORG_ID,
           code: `DL-NUM-${runId}`,
           facilityId: facility.id,
           deliveryDate: new Date(),
           orderId: order.id,
-        })
-        .returning({ id: deliveries.id });
+        }, row => ({ id: row.id }));
 
-      const [inserted] = await tx
-        .insert(applications)
-        .values({
+      const [inserted] = await insertOutputApplicationFixture(tx, {
           organizationId: TEST_ORG_ID,
           code: `AP-NUM-${runId}`,
           deliveryId: delivery.id,
           biocharAppliedTons: 1,
           biocharAppliedDryTons: 0.9,
           co2eStoredTonnes: TONNES_9_SIG_DIGITS,
-        })
-        .returning({ id: applications.id });
+        }, row => ({ id: row.id }));
 
       const [row] = await tx
         .select({ co2eStoredTonnes: applications.co2eStoredTonnes })

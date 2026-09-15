@@ -24,6 +24,7 @@ export interface IngredientBin {
   /** Server-derived dry mass frozen from the source bin's intake basis. */
   massDryKg?: number | null;
   /** Server-derived wet-basis moisture snapshot used for massDryKg. */
+  moistureSource?: "weighted_remaining" | "operator_override";
   moistureContentPercent?: number | null;
   storageLocationId?: string | null;
 }

@@ -1,3 +1,5 @@
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import { deliveryProductAllocations } from "./delivery-allocation-provenance";
 /**
  * Chain of custody — geo payload (map-integration Phase 2).
  *
@@ -8,8 +10,6 @@
  * `ChainOfCustodyData` payload carries no coordinates by design — this is the
  * explicit geo contract the Carbon Viewer map consumes (plan decision 6).
  */
-import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   applications,
@@ -20,14 +20,15 @@ import {
   orders,
   transportLegs,
 } from "@/db/schema";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
-import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
+import type { OrgContext } from "@/lib/auth/server";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
-import { requireOrgScope } from "./utils";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import {
   getChainOfCustodyData,
   type ChainOfCustodyData,
 } from "./chain-of-custody";
+import { requireOrgScope } from "./utils";
 
 export type ChainGeoNodeKind =
   | "facility"
@@ -148,16 +149,11 @@ export async function projectChainOfCustodyGeoData(
     getFeedstockGps(ctx, feedstockIds),
     getFeedstockLegs(ctx, feedstockIds),
   ]);
-  const outboundLegs = chain.biocharProduct
-    ? await getApplicationBiocharLeg({
-        ctx,
-        applicationId: chain.application.id,
-        deliveryId: chain.delivery.id,
-        biocharProductId: chain.biocharProduct.id,
-        facilityName: chain.facility.name,
-        facilityGps,
-      })
-    : [];
+  const products = chain.products?.map(p => p.product) ?? (chain.biocharProduct ? [chain.biocharProduct] : []);
+  const outboundLegs = (await Promise.all(products.map(product => getApplicationBiocharLeg(ctx, {
+    applicationId: chain.application.id, deliveryId: chain.delivery.id,
+    biocharProductId: product.id, appliedWetMassKg: chain.products?.find(p => p.product.id === product.id)?.allocatedWetMassKg ?? (chain.application.biocharAppliedTons ?? 0) * KG_PER_TONNE, facilityName: chain.facility.name, facilityGps,
+  })))).flat();
 
   const legs = enrichLegs(chain, [...feedstockLegs, ...outboundLegs]);
 
@@ -314,9 +310,9 @@ function buildGeoNodes(
       resolve("productionRun", productionRun.id, productionRun.code, null)
     );
   }
-  if (chain.biocharProduct) {
+  for (const product of chain.products?.map(p => p.product) ?? (chain.biocharProduct ? [chain.biocharProduct] : [])) {
     nodes.push(
-      resolve("biocharProduct", chain.biocharProduct.id, chain.biocharProduct.code, null)
+      resolve("biocharProduct", product.id, product.code, null)
     );
   }
   if (chain.order) {
@@ -434,25 +430,26 @@ async function getFeedstockLegs(
   }));
 }
 
-async function getApplicationBiocharLeg({
-  ctx,
+async function getApplicationBiocharLeg(ctx: OrgContext, {
   applicationId,
   deliveryId,
   biocharProductId,
+  appliedWetMassKg,
   facilityName,
   facilityGps,
 }: {
-  ctx: OrgContext;
   applicationId: string;
   deliveryId: string;
   biocharProductId: string;
+  appliedWetMassKg: number;
   facilityName: string;
   facilityGps: GpsPair;
 }): Promise<ChainGeoLeg[]> {
+  requireOrgScope(ctx);
+  const allocated = deliveryProductAllocations(ctx);
   const [row] = await db
     .select({
-      loadMassKg: deliveries.deliveredWetMassKg,
-      appliedWetMassTons: applications.biocharAppliedTons,
+      loadMassKg: allocated.wetMassKg,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
       deliveryDistanceSource: deliveries.distanceSource,
       locationDistanceKm: customerLocations.distanceFromFacilityKm,
@@ -462,6 +459,7 @@ async function getApplicationBiocharLeg({
       locationGpsLongitude: customerLocations.gpsLongitude,
     })
     .from(deliveries)
+    .innerJoin(allocated, and(eq(allocated.deliveryId, deliveries.id), eq(allocated.biocharProductId, biocharProductId)))
     .innerJoin(
       applications,
       and(
@@ -483,7 +481,6 @@ async function getApplicationBiocharLeg({
   const override = positiveOrNull(row.deliveryDistanceKmOverride);
   const distanceKm = override ?? positiveOrNull(row.locationDistanceKm);
   const loadMassKg = positiveOrNull(row.loadMassKg);
-  const appliedWetMassKg = row.appliedWetMassTons * KG_PER_TONNE;
   if (distanceKm == null || loadMassKg == null) return [];
 
   return [
