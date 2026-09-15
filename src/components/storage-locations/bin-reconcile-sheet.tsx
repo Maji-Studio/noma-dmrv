@@ -121,7 +121,7 @@ function LossForm({
   const lossInput = useWatch({ control, name: "lossMassKg" });
   const lossMassKg = previewNumber(lossInput);
   const liveStockError =
-    lossMassKg !== null &&
+    lossMassKg !== null && availableKg !== null &&
     isStockOverdraw(lossMassKg, availableKg)
       ? binStockOverdrawInlineMessage(lane, availableKg)
       : undefined;

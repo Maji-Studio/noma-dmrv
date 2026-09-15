@@ -14,21 +14,21 @@ export function IngredientMoistureField({ control, index, frozen, disabled }: { 
   const previousBin = useRef(binId);
   const placedAt = useWatch({ control, name: "placedAt" });
   const bin = useEntityById("storageLocation", frozen ? undefined : binId || undefined, placedAt ? { physicalDate: String(placedAt) } : undefined);
-  // This field requires oldest-intake metadata, never a blended pile estimate.
-  const oldestMoisture = bin.data?.mass?.moisturePercent;
+  // The server shares this remaining-stock estimate with product posting.
+  const estimatedMoisture = bin.data?.mass?.moisturePercent;
   useEffect(() => {
     if (frozen) return;
     if (previousBin.current !== binId) {
       previousBin.current = binId;
-      onChange(oldestMoisture ?? null);
-      changeSource("oldest_intake");
+      onChange(estimatedMoisture ?? null);
+      changeSource("weighted_remaining");
       return;
     }
-    if (sourceValue === "operator_override" || oldestMoisture == null) return;
-    onChange(oldestMoisture);
-    changeSource("oldest_intake");
-  }, [binId, frozen, oldestMoisture, onChange, changeSource, sourceValue]);
-  return <FormField id={name} label="Ingredient moisture (%)" required={Number(massKg) > 0} error={fieldState.error?.message} helperText={sourceValue === "operator_override" ? "Operator measurement" : "Prefilled from the oldest intake when available."}>
+    if (sourceValue === "operator_override") return;
+    onChange(estimatedMoisture ?? null);
+    changeSource("weighted_remaining");
+  }, [binId, frozen, estimatedMoisture, onChange, changeSource, sourceValue]);
+  return <FormField id={name} label="Ingredient moisture (%)" required={Number(massKg) > 0} error={fieldState.error?.message} helperText={sourceValue === "operator_override" ? "Operator measurement" : "Prefilled from the weighted remaining stock when available."}>
     <FormInput id={name} name={name} ref={ref} onBlur={onBlur} type="number" min="0" max="99.999" step="any" value={value ?? ""} disabled={disabled || frozen} onChange={event => {
       onChange(event.target.value === "" ? null : Number(event.target.value));
       changeSource("operator_override");

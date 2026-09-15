@@ -1,4 +1,5 @@
 import type { DbTransaction } from "@/db";
+import { getOutputBinDryBalance } from "./output-stock";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   deriveBiocharAvailableKg,
@@ -20,6 +21,9 @@ interface ProductionRunStockUpdate {
   feedstockDraws?: ReadonlyArray<{ storageLocationId: string }>;
   biocharStorageLocationId?: string | null;
   biocharOutputKg?: number | null;
+  biocharMoisturePercent?: number | null;
+  endTime?: Date | null;
+  status?: string;
 }
 
 interface BiocharBinStockState {
@@ -75,6 +79,7 @@ export async function deriveProductionRunBiocharStockState(
   ctx: OrgContext,
   tx: DbTransaction,
   storageLocationIds: ReadonlyArray<string | null>,
+  excludeUnresolvedRunId?: string,
 ): Promise<BiocharBinStockState[]> {
   const uniqueIds = [...new Set(
     storageLocationIds.filter((id): id is string => id != null),
@@ -83,11 +88,7 @@ export async function deriveProductionRunBiocharStockState(
   for (const storageLocationId of uniqueIds) {
     stockState.push({
       storageLocationId,
-      availableKg: await deriveBiocharAvailableKg(
-        ctx,
-        tx,
-        storageLocationId,
-      ),
+      availableKg: await getOutputBinDryBalance(ctx, storageLocationId, tx, { excludeUnresolvedRunId }),
     });
   }
   return stockState;
@@ -98,15 +99,19 @@ export async function deriveProductionRunUpdateBiocharStockState(
   ctx: OrgContext,
   tx: DbTransaction,
   locked: {
+    id: string;
+    biocharDryMassKg: number | null;
+    endTime: Date | null;
     biocharStorageLocationId: string | null;
     biocharOutputKg: number | null;
   },
   data: Pick<
     ProductionRunStockUpdate,
-    "biocharStorageLocationId" | "biocharOutputKg"
+    "biocharStorageLocationId" | "biocharOutputKg" | "biocharMoisturePercent" | "endTime" | "status"
   >,
 ): Promise<BiocharBinStockState[]> {
   const biocharStockChanged =
+    data.biocharMoisturePercent !== undefined || data.endTime !== undefined || data.status !== undefined ||
     (data.biocharOutputKg !== undefined &&
       data.biocharOutputKg !== locked.biocharOutputKg) ||
     (data.biocharStorageLocationId !== undefined &&
@@ -120,7 +125,7 @@ export async function deriveProductionRunUpdateBiocharStockState(
   return deriveProductionRunBiocharStockState(ctx, tx, [
     locked.biocharStorageLocationId,
     effectiveBiocharStorageId,
-  ]);
+  ], locked.biocharDryMassKg == null || !Number.isFinite(locked.biocharDryMassKg) || locked.biocharDryMassKg <= 0 || locked.endTime == null ? locked.id : undefined);
 }
 
 /** Re-derive changed run lanes and reject any incremental overdraw. */

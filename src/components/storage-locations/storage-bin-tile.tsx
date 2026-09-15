@@ -25,6 +25,7 @@
 import { RowActionsMenu } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockPreview } from "@/hooks/use-output-stock";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
@@ -59,8 +60,8 @@ export function StorageBinTile({
   onView,
   onReconcile,
 }: StorageBinTileProps) {
-  const output = useOutputStockPreview(bin.type === "feedstock_bin" ? null : { storageLocationId: bin.id, facilityId: bin.facilityId, physicalDate: formatLocalDate(new Date()), kind: "count", wetMassKg: 0 });
-  const massKg = bin.type === "feedstock_bin" ? binCurrentMassKg(bin) : output.data?.beforeDryKg ?? null;
+  const output = useOutputStockPreview(bin.type === "feedstock_bin" || bin.archivedAt != null ? null : { storageLocationId: bin.id, facilityId: bin.facilityId, physicalDate: formatLocalDate(new Date()), kind: "count", wetMassKg: 0 });
+  const massKg = bin.type === "feedstock_bin" ? binCurrentMassKg(bin) : bin.archivedAt != null ? (bin.type === "biochar_bin" ? bin.biocharInventory.dryMassKg : bin.productInventory.dryMassKg) ?? null : output.data?.beforeDryKg ?? null;
   const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
   const needsReconciliation = binNeedsReconciliation(bin);
   const isEmpty = massKg === 0;
@@ -155,7 +156,7 @@ export function StorageBinTile({
                   : "text-[var(--color-text-primary)]"
             }`}
           >
-            {isEmpty ? "Empty" : formatMassKg(massKg)}{bin.type !== "feedstock_bin" && " dry biochar"}
+            {massKg == null ? MISSING_VALUE.notAvailable : isEmpty ? "Empty" : formatMassKg(massKg)}{massKg != null && bin.type !== "feedstock_bin" && " dry biochar"}
           </span>
           {needsReconciliation && (
             <ReconcileLink bin={bin} onReconcile={onReconcile} />

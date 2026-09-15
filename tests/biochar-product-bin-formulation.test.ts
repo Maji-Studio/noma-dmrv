@@ -74,13 +74,20 @@ describe("posted product bin and formulation contract", () => {
     const bin = await ingredientBin(f, 0, 0, type.id);
     await expect(blend(f, { composition: composition(f, 20, bin.id) })).rejects.toThrow("match the formulation material");
   });
+  it("omits moisture snapshots for zero-mass ingredients and keeps their solids at zero", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f, 0);
+    const product = await blend(f, { composition: composition(f, 0, bin.id) });
+    expect(await snapshot(product.id)).toBeUndefined();
+    expect(product.composition).toMatchObject({ ingredients: [{ massKg: 0, massDryKg: 0, moistureContentPercent: null }] });
+    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(100);
+  });
   it("requires moisture for a positive ingredient without a usable intake", async () => {
     const f = await fixture(); const bin = await ingredientBin(f, 0);
     await expect(blend(f, { composition: composition(f, 1, bin.id) })).rejects.toThrow("Every positive ingredient requires moisture");
   });
-  it("deducts ingredient wet mass and freezes oldest-intake dry solids", async () => {
+  it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
-    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureSource: "oldest_intake" });
+    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureSource: "weighted_remaining" });
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
   });
   it("keeps posted ingredient moisture unchanged after a later dry intake", async () => {
@@ -90,11 +97,11 @@ describe("posted product bin and formulation contract", () => {
     expect(await snapshot(product.id)).toEqual(before);
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(150);
   });
-  it("prefills from oldest physical intake, with an explicit operator override for a new blend", async () => {
+  it("prefills from weighted remaining stock, with an explicit operator override for a new blend", async () => {
     const f = await fixture(); const bin = await ingredientBin(f);
     await blend(f, { composition: composition(f, 50, bin.id) }); await intake(f, bin.id, 100, 0, "2026-09-02");
     const product = await blend(f, { composition: composition(f, 30, bin.id) });
-    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "24.000", moisturePercentUsed: 20 });
+    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "28.000", moisturePercentUsed: 6.666667 });
     const override = await blend(f, { composition: composition(f, 30, bin.id, { moistureContentPercent: 10, moistureSource: "operator_override" }) });
     expect(await snapshot(override.id)).toMatchObject({ drySolidsKg: "27.000", moisturePercentUsed: 10, moistureSource: "operator_override" });
   });

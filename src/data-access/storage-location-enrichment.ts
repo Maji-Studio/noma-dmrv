@@ -69,18 +69,18 @@ export interface StorageLocationWithFacility extends StorageLocation {
   };
   biocharInventory: {
     productionRunCount: number;
-    currentMassKg: number;
-    dryMassKg?: number;
-    recordedWetMassKg?: number;
+    currentMassKg: number | null;
+    dryMassKg?: number | null;
+    recordedWetMassKg?: number | null;
     allocatedToProductsKg: number;
     downstreamFormulations: string[];
   };
   productInventory: {
     batchCount: number;
-    currentMassKg: number;
-    dryMassKg?: number;
-    recordedWetMassKg?: number;
-    biocharEquivalentKg: number;
+    currentMassKg: number | null;
+    dryMassKg?: number | null;
+    recordedWetMassKg?: number | null;
+    biocharEquivalentKg: number | null;
     formulationNames: string[];
     appliedApplicationCount: number;
     appliedDryMassKg: number;
@@ -460,7 +460,7 @@ export async function enrichStorageLocationRows(
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
         `),
-        deriveLaneStock(ctx, tx, { storageLocationIds }),
+        deriveLaneStock(ctx, tx, { storageLocationIds, lanes: "feedstock" }),
       ]), {
         isolationLevel: "repeatable read",
         accessMode: "read only",
@@ -536,7 +536,7 @@ export async function enrichStorageLocationRows(
     laneStockRows.map((row) => [row.storageLocationId, row]),
   );
 
-  const outputViews = new Map(await Promise.all(rows.filter(row => row.type !== 'feedstock_bin' && !row.archivedAt).map(async row => [row.id, await getOutputBinStockView(ctx, row.id)] as const)));
+  const outputViews = new Map(await Promise.all(rows.filter(row => row.type !== 'feedstock_bin').map(async row => [row.id, await getOutputBinStockView(ctx, row.id)] as const)));
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
@@ -582,8 +582,8 @@ export async function enrichStorageLocationRows(
       biocharInventory: {
         productionRunCount: Number(biocharOutputRow?.productionRunCount ?? 0),
         // Unclamped, movement-inclusive (see currentWetMassKg above).
-        currentMassKg: outputView?.estimatedWetMassKg ?? 0,
-        dryMassKg: outputView?.dryMassKg ?? 0,
+        currentMassKg: outputView?.estimatedWetMassKg ?? null,
+        dryMassKg: outputView?.dryMassKg ?? null,
         allocatedToProductsKg: allocatedKg,
         downstreamFormulations: [
           ...(downstreamFormulationsByLocation.get(row.id) ?? []),
@@ -591,10 +591,10 @@ export async function enrichStorageLocationRows(
       },
       productInventory: {
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
-        currentMassKg: outputView?.estimatedWetMassKg ?? 0,
-        dryMassKg: outputView?.dryMassKg ?? 0,
-        recordedWetMassKg: outputView?.recordedWetMassKg ?? 0,
-        biocharEquivalentKg: outputView?.dryMassKg ?? 0,
+        currentMassKg: outputView?.estimatedWetMassKg ?? null,
+        dryMassKg: outputView?.dryMassKg ?? null,
+        recordedWetMassKg: outputView?.recordedWetMassKg ?? null,
+        biocharEquivalentKg: outputView?.dryMassKg ?? null,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
         ),

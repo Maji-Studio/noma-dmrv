@@ -11,7 +11,6 @@
 import type { DbTransaction } from "@/db";
 import { db } from "@/db";
 import {
-  feedstocks,
   feedstockTypes,
   formulationIngredients,
   storageLocations,
@@ -25,8 +24,9 @@ import {
 import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
-import { and, asc, eq, inArray, isNull, lte } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { assertFeedstockWetDrawWithinStock } from "./feedstock-wet-stock";
+import { getIngredientMoistureBasis } from "./ingredient-moisture-basis";
 import { requireOrgScope } from "./utils";
 
 interface CompositionIngredientRef {
@@ -40,7 +40,7 @@ interface CompositionIngredientRef {
   moistureContentPercent: number | null;
 }
 
-function getCompositionIngredientRefs(
+export function getCompositionIngredientRefs(
   composition: Record<string, unknown> | null | undefined,
 ): CompositionIngredientRef[] {
   const ingredients = composition?.ingredients;
@@ -239,7 +239,7 @@ export function getCompositionIngredientDraws(
 
 /**
  * Freeze each ingredient's dry-mass withdrawal from the selected bin's
- * oldest eligible intake or explicit operator moisture. `massKg` stays the operator's wet/as-received mass;
+ * weighted remaining basis or explicit operator moisture. `massKg` stays the operator's wet/as-received mass;
  * the derived fields are server-owned allocation facts persisted in JSONB.
  * Call only while the caller holds every ingredient bin's stock lock.
  */
@@ -248,7 +248,7 @@ export async function resolveCompositionIngredientMassBasis(
   tx: DbTransaction,
   composition: Record<string, unknown> | null | undefined,
   previousComposition?: Record<string, unknown> | null,
-  _excludeProductId?: string,
+  excludeProductId?: string,
   physicalDate?: string,
 ): Promise<Record<string, unknown>> {
   requireOrgScope(ctx);
@@ -271,11 +271,9 @@ export async function resolveCompositionIngredientMassBasis(
     ),
   ];
 
-  const intakeRows = storageLocationIds.length ? await tx.select({ id: feedstocks.id, storageLocationId: feedstocks.storageLocationId, moisture: feedstocks.moistureContentPercent })
-    .from(feedstocks).where(and(eq(feedstocks.organizationId, ctx.organizationId), inArray(feedstocks.storageLocationId, storageLocationIds), isNull(feedstocks.archivedAt), physicalDate ? lte(feedstocks.deliveryDate, new Date(`${physicalDate}T23:59:59.999Z`)) : undefined))
-    .orderBy(asc(feedstocks.deliveryDate), asc(feedstocks.createdAt), asc(feedstocks.id)) : [];
-  const oldestByBin = new Map<string, typeof intakeRows[number]>();
-  for (const row of intakeRows) if (row.storageLocationId && !oldestByBin.has(row.storageLocationId)) oldestByBin.set(row.storageLocationId, row);
+  const basisByBin = new Map(await Promise.all(storageLocationIds.map(async id =>
+    [id, await getIngredientMoistureBasis(ctx, id, physicalDate, tx, excludeProductId)] as const,
+  )));
 
   return {
     ...(composition ?? {}),
@@ -299,21 +297,23 @@ export async function resolveCompositionIngredientMassBasis(
         previousIngredientsByKey.get(massSnapshotKey(ingredient)),
       );
       if (previousSnapshot) {
-        return { ...ingredient, ...previousSnapshot };
+        return { ...ingredient, ...previousSnapshot,
+          moistureSource: previousIngredientsByKey.get(massSnapshotKey(ingredient))?.moistureSource,
+          moistureSourceSnapshot: previousIngredientsByKey.get(massSnapshotKey(ingredient))?.moistureSourceSnapshot };
       }
       const storageLocationId =
         typeof ingredient.storageLocationId === "string"
           ? ingredient.storageLocationId
           : null;
-      const intake = storageLocationId ? oldestByBin.get(storageLocationId) : null;
+      const basis = storageLocationId ? basisByBin.get(storageLocationId) : null;
       const override = ingredient.moistureSource === 'operator_override' || !storageLocationId;
-      const moisture = override ? ingredient.moistureContentPercent : intake?.moisture;
+      const moisture = override ? ingredient.moistureContentPercent : basis?.moisturePercent;
       if (typeof moisture !== 'number' || !Number.isFinite(moisture) || moisture < 0 || moisture > 100) {
-        throw new SafeError('Every positive ingredient requires moisture. Enter an override when intake moisture is missing.');
+        throw new SafeError('Every positive ingredient requires moisture. Enter an override when the bin estimate is unavailable.');
       }
       return { ...ingredient, moistureContentPercent: moisture,
-        moistureSource: override ? 'operator_override' : 'oldest_intake',
-        moistureSourceSnapshot: override ? { kind: 'operator_override' } : { intakeId: intake!.id },
+        moistureSource: override ? 'operator_override' : 'weighted_remaining',
+        moistureSourceSnapshot: override ? { kind: 'operator_override' } : { kind: "weighted_remaining", wetMassKg: basis!.wetMassKg, dryMassKg: basis!.dryMassKg },
         massDryKg: Math.round(wetMassKg * (1 - moisture / 100) * GRAMS_PER_KILOGRAM) / GRAMS_PER_KILOGRAM };
 
     }),

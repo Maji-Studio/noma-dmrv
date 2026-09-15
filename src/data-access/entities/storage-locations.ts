@@ -1,3 +1,5 @@
+import { formatMassKg } from "@/lib/format-utils";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getIngredientMoistureBasis } from '../ingredient-moisture-basis';
 import { getOutputBinStockView } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
@@ -785,6 +787,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
 
   const laneStocks = await deriveLaneStock(ctx, db, {
     storageLocationIds: results.map((result) => result.id),
+    lanes: "feedstock",
   });
   const laneStockById = new Map(
     laneStocks.map((stock) => [stock.storageLocationId, stock]),
@@ -794,7 +797,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     const option = toStorageLocationEntityOption(result, laneStockById.get(result.id));
     if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id))?.moisturePercent ?? null } };
     const stock = await getOutputBinStockView(ctx, result.id);
-    return { ...option, remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg }, subtitle: `Estimated wet: ${stock.estimatedWetMassKg.toFixed(3)} kg · Dry biochar: ${stock.dryMassKg.toFixed(3)} kg` };
+    return { ...option, remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg }, subtitle: `Estimated wet: ${stock.estimatedWetMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(stock.estimatedWetMassKg)} · Dry biochar: ${stock.dryMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(stock.dryMassKg)}` };
   }));
 }
 
@@ -961,9 +964,10 @@ export async function getStorageLocationById(
 
   const [stock] = await deriveLaneStock(ctx, executor, {
     storageLocationIds: [result.id],
+    lanes: "feedstock",
   });
   const option = toStorageLocationEntityOption(result, stock);
   if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id, physicalDate, executor))?.moisturePercent ?? null } };
   const output = await getOutputBinStockView(ctx, result.id, executor);
-  return { ...option, remainingMass: { wetKg: output.estimatedWetMassKg, dryKg: output.dryMassKg }, subtitle: `Estimated wet: ${output.estimatedWetMassKg.toFixed(3)} kg · Dry biochar: ${output.dryMassKg.toFixed(3)} kg` };
+  return { ...option, remainingMass: { wetKg: output.estimatedWetMassKg, dryKg: output.dryMassKg }, subtitle: `Estimated wet: ${output.estimatedWetMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(output.estimatedWetMassKg)} · Dry biochar: ${output.dryMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(output.dryMassKg)}` };
 }

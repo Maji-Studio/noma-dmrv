@@ -17,7 +17,7 @@ export const productIngredientSnapshots = pgTable('product_ingredient_snapshots'
   sourceStorageLocationId: uuid('source_storage_location_id'),
   wetMassKg: exactMassKg('wet_mass_kg').notNull(),
   moisturePercentUsed: percent('moisture_percent_used').notNull(),
-  moistureSource: text('moisture_source', { enum: ['oldest_intake', 'operator_override'] }).notNull(),
+  moistureSource: text('moisture_source', { enum: ['weighted_remaining', 'operator_override'] }).notNull(),
   /** Original intake identity/evidence, or override reason. */
   moistureSourceSnapshot: jsonb('moisture_source_snapshot').$type<Record<string, unknown>>().notNull(),
   drySolidsKg: exactMassKg('dry_solids_kg').notNull(),

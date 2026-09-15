@@ -1,5 +1,5 @@
 import { storageLocations } from '@/db/schema';
-import { getOutputBinDryBalance } from './output-stock';
+import { getOutputBinStockView } from './output-stock';
 /**
  * Shared per-location stock derivation for the feedstock and biochar lanes.
  *
@@ -45,7 +45,7 @@ export interface LaneStockDerivation {
   biocharProducedKg: number;
   biocharAllocatedKg: number;
   biocharMovementDeltaKg: number;
-  biocharStockKg: number;
+  biocharStockKg: number | null;
   productMovementDeltaKg: number;
 }
 
@@ -392,7 +392,7 @@ export async function deriveLaneStock(
     const bins = await executor.select({ id: storageLocations.id }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), inArray(storageLocations.id, options.storageLocationIds), eq(storageLocations.type, 'biochar_bin'), isNull(storageLocations.archivedAt)));
     for (const bin of bins) {
       const stock = byLocation.get(bin.id);
-      if (stock) stock.biocharStockKg = await getOutputBinDryBalance(ctx, bin.id, executor);
+      if (stock) stock.biocharStockKg = (await getOutputBinStockView(ctx, bin.id, executor)).dryMassKg;
     }
   }
   return [...byLocation.values()];

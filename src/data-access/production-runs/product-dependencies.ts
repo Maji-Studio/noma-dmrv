@@ -27,7 +27,7 @@ export async function getProductionRunDependentProduct(
   const [count] = await tx.select({ reason: binMovements.reason, date: binMovements.physicalDate }).from(binMovements)
     .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId), eq(productionRuns.biocharStorageLocationId, binMovements.storageLocationId)))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), sql`(${binMovements.outputKind} = 'count' or ${binMovements.inputSnapshot}->>'kind' = 'count')`,
-      sql`${productionRuns.endTime}::date <= ${binMovements.physicalDate}`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
+      sql`(${productionRuns.endTime} is null or ${productionRuns.endTime}::date <= ${binMovements.physicalDate})`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
   if (count) throw new SafeError(`Production stock is covered by count: ${count.reason} (${count.date}).`);
   const [effect] = await tx.select({ kind: binMovements.outputKind, reason: binMovements.reason, date: binMovements.physicalDate })
     .from(outputStockRunAllocations)

@@ -75,12 +75,13 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
     await insertBiocharProductSourceAllocations(ctx, tx, { biocharProductId: product.id, sourceStorageLocationId: input.storageLocationId,
       allocations: prepared.preview.allocations.map(a => ({ productionRunId: a.layerId, producedAt: new Date(`${prepared.layers.find(l => l.id === a.layerId)!.physicalDate}T00:00:00.000Z`), allocatedWetMassKg: Number(effects.find(e => e.productionRunId === a.layerId)!.wetMassKg), allocatedDryMassKg: a.dryMassKg })) });
     for (const ingredient of (composition.ingredients ?? []) as Record<string, unknown>[]) {
-      const moisture = Number(ingredient.moistureContentPercent ?? 0);
+      if (ingredient.massKg === 0) continue;
+      const moisture = Number(ingredient.moistureContentPercent);
       await tx.insert(productIngredientSnapshots).values({ organizationId: ctx.organizationId, biocharProductId: product.id,
         formulationIngredientId: String(ingredient.formulationIngredientId), sourceStorageLocationId: typeof ingredient.storageLocationId === 'string' ? ingredient.storageLocationId : null,
         wetMassKg: kilograms(grams(Number(ingredient.massKg))), moisturePercentUsed: moisture,
-        moistureSource: ingredient.moistureSource === 'oldest_intake' ? 'oldest_intake' : 'operator_override',
-        moistureSourceSnapshot: (ingredient.moistureSourceSnapshot ?? { kind: 'zero_mass' }) as Record<string, unknown>, drySolidsKg: kilograms(grams(Number(ingredient.massDryKg))) });
+        moistureSource: ingredient.moistureSource === 'weighted_remaining' ? 'weighted_remaining' : 'operator_override',
+        moistureSourceSnapshot: ingredient.moistureSourceSnapshot as Record<string, unknown>, drySolidsKg: kilograms(grams(Number(ingredient.massDryKg))) });
     }
     if (!bin.formulationId) await tx.update(storageLocations).set({ formulationId: data.formulationId, updatedAt: new Date() }).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, bin.id)));
     return product;
