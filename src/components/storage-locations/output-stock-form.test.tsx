@@ -16,11 +16,12 @@ vi.mock("@/components/forms/mass-moisture-fields", () => ({
   WetMassField: ({ registration }: { registration: UseFormRegisterReturn }) => <input {...registration} />,
   MoistureField: ({ registration }: { registration: UseFormRegisterReturn }) => <input {...registration} />,
 }));
-vi.mock("./output-stock-preview", () => ({ OutputStockPreview: () => <div>Preview</div>, OutputStockAllocations: () => <div>Allocations</div> }));
+vi.mock("./output-stock-preview", () => ({ OutputStockPreview: ({ moreInfo }: { moreInfo: ReactNode }) => <div>Preview{moreInfo}{moreInfo}</div>, OutputStockAllocations: () => <div>Allocations</div> }));
 vi.mock("@/components/forms", () => {
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
   return { FormSpine: Wrapper, FormSection: Wrapper, FormField: Wrapper, FormInput: "input", FormTextarea: "textarea", ResolvedErrorRevalidator: () => null, FormActions: ({ errorMessage }: { errorMessage?: string }) => <div>{errorMessage}</div> };
 });
+vi.mock("./output-stock-history", () => ({ OutputStockHistory: ({ storageLocationId }: { storageLocationId: string }) => <button data-history-bin={storageLocationId}>More info</button> }));
 import { OutputStockForm } from "./output-stock-form";
 
 const original: OutputStockHistoryEntry = {
@@ -59,6 +60,7 @@ describe("OutputStockForm", () => {
     const recorded = vi.fn();
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={recorded} />); });
+    expect(renderer.root.findAllByProps({ "data-history-bin": "00000000-0000-4000-8000-000000000002" })).toHaveLength(2);
     expect(mocks.input?.moisturePercent).toBeNull();
     expect(mocks.input?.wetMassKg).toBe(0);
     await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Verified empty bin" }, type: "change" }); });
