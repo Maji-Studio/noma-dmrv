@@ -1,5 +1,6 @@
-import { insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
-import { outputOrderFixtureValues, insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
+import { setProductSourceFixture } from "./helpers/product-source-fixture";
+import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
+import { outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -61,27 +62,23 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         reactorId: seededData.reactor.id,
         feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
         biocharStorageLocationId: seededData.biocharStorageLocation.id,
-        feedstockMassDryKg: 100,
-        biocharDryMassKg: 42,
-        biocharOutputKg: 43,
+        feedstockMassDryKg: 1000,
+        biocharDryMassKg: 250,
+        biocharOutputKg: 250,
+        biocharMoisturePercent: 0,
       });
 
+      await tx.update(schema.feedstocks).set({ massWetKg: 1000, massDryKg: 1000, moistureContentPercent: 0 })
+        .where(eq(schema.feedstocks.id, seededData.feedstock.id));
       await tx.insert(schema.productionRunFeedstocks).values({
         organizationId: DEC_ORG_ID,
         id: ids.productionRunFeedstock,
         productionRunId: ids.productionRun,
         feedstockId: seededData.feedstock.id,
-        wetMassUsedKg: 100,
+        wetMassUsedKg: 1000,
       });
 
-      await tx
-        .update(schema.biocharProducts)
-        .set({
-          linkedProductionRunId: ids.productionRun,
-          storageLocationId: seededData.biocharStorageLocation.id,
-          massKg: 250,
-        })
-        .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
+      await setProductSourceFixture(tx, seededData.biocharProduct.id, ids.productionRun, 250, 250, "2026-02-10");
 
       await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
@@ -92,7 +89,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         customerId: seededData.customer.id,
         customerLocationId: seededData.customerLocation.id,
         biocharProductId: seededData.biocharProduct.id,
-        quantityKg: 220,
+        quantityKg: 250,
         packaging: "loose",
       }));
 
@@ -106,8 +103,8 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         deliveryDate: new Date("2026-02-14T09:00:00.000Z"),
         status: "delivered",
         massDryKg: 215,
-        deliveredWetMassKg: 230,
-        moistureContentPercent: 6.5,
+        deliveredWetMassKg: 215,
+        moistureContentPercent: 0,
       }, row => row);
 
       await insertOutputApplicationFixture(tx, {
@@ -116,7 +113,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         code: codes.application,
         deliveryId: ids.delivery,
         applicationDate: new Date("2026-02-16T10:30:00.000Z"),
-        biocharAppliedTons: 0.21,
+        biocharAppliedTons: 0.2,
         biocharAppliedDryTons: 0.2,
         fieldIdentifier,
         status: "applied",
@@ -214,8 +211,8 @@ async function seedBatchOptions(seededData: SeededChainData) {
  * Seeds a credit batch whose two member applications share one production run
  * and one biochar lot — the shared-run dedupe case — with masses chosen so
  * the Sankey emits all three planned exits:
- *   feedstock 1000 → (ineligible 100) → runs out 300 → lots 300
- *   → applied 250 (0.1 t + 0.15 t) → in storage 50; conversion loss 600.
+ *   feedstock 1000 → (ineligible 100) → runs out 300 → allocated lots 250
+ *   → applied 250 (0.1 t + 0.15 t); outside these applications 50; conversion loss 600.
  * The ineligible exit derives from a second feedstock flagged
  * `eligibilityStatus: 'ineligible'` with a 100 kg run allocation (issue #285)
  * — there is no batch-level ineligible-mass column anymore.
@@ -263,9 +260,12 @@ async function seedBatchChain(seededData: SeededChainData) {
         biocharStorageLocationId: seededData.biocharStorageLocation.id,
         feedstockMassDryKg: 1000,
         biocharDryMassKg: 300,
-        biocharOutputKg: 320,
+        biocharOutputKg: 300,
+        biocharMoisturePercent: 0,
       });
 
+      await tx.update(schema.feedstocks).set({ massWetKg: 900, massDryKg: 900, moistureContentPercent: 0 })
+        .where(eq(schema.feedstocks.id, seededData.feedstock.id));
       // 900 kg eligible + 100 kg ineligible allocations; the run's recorded
       // 1000 kg input stays authoritative for the Sankey's feedstock column.
       await tx.insert(schema.feedstocks).values({
@@ -275,6 +275,9 @@ async function seedBatchChain(seededData: SeededChainData) {
         facilityId: seededData.facility.id,
         feedstockTypeId: seededData.feedstockType.id,
         massDryKg: 100,
+        massWetKg: 100,
+        moistureContentPercent: 0,
+        status: "complete",
         eligibilityStatus: "ineligible",
         storageLocationId: seededData.feedstockStorageLocation.id,
       });
@@ -295,18 +298,7 @@ async function seedBatchChain(seededData: SeededChainData) {
         },
       ]);
 
-      await tx
-        .update(schema.biocharProducts)
-        .set({
-          linkedProductionRunId: ids.productionRun,
-          storageLocationId: seededData.biocharStorageLocation.id,
-          // This Sankey fixture models a 300 kg dry lot. Override the shared
-          // fixture's 10% moisture so the wet-to-dry conversion stays aligned
-          // with the production run and the documented 50 kg remainder.
-          massKg: 300,
-          moistureContentPercent: 0,
-        })
-        .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
+      await setProductSourceFixture(tx, seededData.biocharProduct.id, ids.productionRun, 300, 300, "2026-03-02");
 
       const memberChains = [
         {
@@ -348,9 +340,9 @@ async function seedBatchChain(seededData: SeededChainData) {
           biocharProductId: seededData.biocharProduct.id,
           deliveryDate: new Date(`2026-03-${member.day}T11:00:00.000Z`),
           status: "delivered",
-          massDryKg: 125,
-          deliveredWetMassKg: 134,
-          moistureContentPercent: 6.5,
+          massDryKg: member.appliedDryTons * 1000,
+          deliveredWetMassKg: member.appliedDryTons * 1000,
+          moistureContentPercent: 0,
         }, row => row);
         await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
@@ -358,7 +350,7 @@ async function seedBatchChain(seededData: SeededChainData) {
           code: member.applicationCode,
           deliveryId: member.deliveryId,
           applicationDate: new Date(`2026-03-${member.day}T15:00:00.000Z`),
-          biocharAppliedTons: member.appliedDryTons + 0.01,
+          biocharAppliedTons: member.appliedDryTons,
           biocharAppliedDryTons: member.appliedDryTons,
           fieldIdentifier: `Field ${member.day}-${suffix}`,
           status: "applied",
@@ -802,7 +794,8 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     await expect(sankey).toBeVisible({ timeout: 15000 });
 
     // Seeded balance: 1000 in − 100 ineligible − 300 out = 600 conversion
-    // loss; 300 lot − 250 applied = 50 in storage.
+    // loss. Saved application shares are 100 + 150 kg, so this application-scoped
+    // Sankey shows 250 kg through lots and 50 kg outside these applications.
     const ineligible = sankey.getByTestId("sankey-exit-ineligible_feedstock");
     await expect(ineligible).toBeVisible();
     await expect(ineligible).toContainText("Ineligible feedstock");
@@ -813,10 +806,10 @@ test.describe("Traceability Views (credit-batch anchor)", () => {
     await expect(conversion).toContainText("Conversion loss");
     await expect(conversion).toContainText("600 kg");
 
-    const inStorage = sankey.getByTestId("sankey-exit-in_storage");
-    await expect(inStorage).toBeVisible();
-    await expect(inStorage).toContainText("In storage / undelivered");
-    await expect(inStorage).toContainText("50 kg");
+    const outsideApplications = sankey.getByTestId("sankey-exit-unallocated_output");
+    await expect(outsideApplications).toBeVisible();
+    await expect(outsideApplications).toContainText("Outside these applications");
+    await expect(outsideApplications).toContainText("50 kg");
 
     await expect(sankey.getByText("Feedstock", { exact: true })).toBeVisible();
     await expect(sankey.getByText("Applied", { exact: true })).toBeVisible();

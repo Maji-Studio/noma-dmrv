@@ -1,3 +1,4 @@
+import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../helpers/output-contract-fixtures";
 /**
  * Full Chain UI Smoke Test
  *
@@ -285,15 +286,11 @@ test.describe("Full Chain UI Smoke Test", () => {
           }
 
           if (applicationIds.length) {
-            await tx
-              .delete(schema.applications)
-              .where(inArray(schema.applications.id, applicationIds));
+            await deleteOutputApplicationFixtures(tx, inArray(schema.applications.id, applicationIds));
           }
 
           if (allDeliveryIds.length) {
-            await tx
-              .delete(schema.deliveries)
-              .where(inArray(schema.deliveries.id, allDeliveryIds));
+            await deleteOutputDeliveryFixtures(tx, inArray(schema.deliveries.id, allDeliveryIds));
           }
 
           if (relatedOrderIds.length) {
@@ -321,9 +318,7 @@ test.describe("Full Chain UI Smoke Test", () => {
           }
 
           if (biocharProductIds.length) {
-            await tx
-              .delete(schema.biocharProducts)
-              .where(inArray(schema.biocharProducts.id, biocharProductIds));
+            await deleteOutputProductFixtures(tx, inArray(schema.biocharProducts.id, biocharProductIds));
           }
 
           if (productionRunIds.length) {
@@ -549,11 +544,10 @@ test.describe("Full Chain UI Smoke Test", () => {
         seededData.customerLocation.id
       );
 
-      // Product bin is a FormEntitySelect (custom dropdown), not a native <select>
+      // Orders select a formulation without reserving a bin.
       await selectEntityById(
         page,
-        "Product bin",
-        seededData.biocharProduct.id
+        "Formulation", seededData.formulation.id, seededData.formulation.name
       );
       await page.selectOption('select[name="packaging"]', "loose");
       await page.fill('input[name="quantityKg"]', "100");
@@ -581,10 +575,10 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.fill('input[name="deliveryDate"]', today);
       // Applications require a delivered delivery (issue #284)
-      await page.selectOption('select[name="status"]', "delivered");
 
       // Select the first available order (FormEntitySelect, not a native <select>)
       await selectFirstEntity(page, "Order");
+      await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
       await page.fill('input[name="moistureContentPercent"]', "10");

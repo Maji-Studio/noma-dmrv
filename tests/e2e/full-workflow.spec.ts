@@ -1,6 +1,6 @@
-import { insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
+import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "../helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../helpers/output-contract-fixtures";
+import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../helpers/output-contract-fixtures";
 /**
  * Full E2E Integration Test
  *
@@ -220,9 +220,11 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       facilityId: ids.facility,
       reactorId: ids.reactor,
       status: "complete",
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      startTime: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      endTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
       biocharOutputKg: 150,
+      biocharDryMassKg: 150,
+      biocharMoisturePercent: 0,
       biocharStorageLocationId: ids.biocharStorageLocation,
       feedstockStorageLocationId: ids.storageLocation,
     });
@@ -264,11 +266,13 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       facilityId: ids.facility,
       formulationId: ids.formulation,
       linkedProductionRunId: ids.productionRun,
-      storageLocationId: ids.biocharStorageLocation,
       productionDate: new Date(),
       status: "ready",
       massKg: 150,
+      moistureContentPercent: 0,
     }));
+
+    const productSource = await preparePureOutputProductFixture(tx, ids.biocharProduct);
 
     // 15. Create Customer
     await tx.insert(schema.customers).values({
@@ -299,7 +303,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       customerId: ids.customer,
       customerLocationId: ids.customerLocation,
       biocharProductId: ids.biocharProduct,
-      quantityKg: 100,
+      quantityKg: 105,
       packaging: "bagged",
     }));
 
@@ -312,9 +316,9 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       deliveryDate: new Date(),
       orderId: ids.order,
       biocharProductId: ids.biocharProduct,
-      storageLocationId: ids.biocharStorageLocation,
+      storageLocationId: productSource.storageLocationId,
       deliveredWetMassKg: 105,
-      massDryKg: 100,
+      massDryKg: 99.75,
       moistureContentPercent: 5,
       status: "delivered",
       vehicleId: ids.vehicle,

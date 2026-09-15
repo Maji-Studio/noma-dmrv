@@ -6,7 +6,7 @@ import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
   formulations, orders, outputStockAllocations, outputStockRunAllocations,
   applicationOutputAllocations, applications, facilities, productionRuns,
-  reactors, storageLocations, users, type Delivery,
+  reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
 
 type Executor = typeof db | DbTransaction;
@@ -83,12 +83,14 @@ async function ensureProductBin(executor: Executor, product: typeof biocharProdu
   return bin.id;
 }
 
-async function persistFixtureProvenance(executor: Executor, delivery: Delivery, productId: string | undefined) {
+async function persistFixtureProvenance(executor: Executor, delivery: Delivery, productId: string | undefined, requireEstablishedSource = false) {
+  if (requireEstablishedSource && (!productId || delivery.massDryKg == null || delivery.deliveredWetMassKg == null)) throw new Error("E2E delivery requires a measured product source");
   // Null dry mass deliberately represents unresolved evidence in some tests.
   if (!productId || delivery.massDryKg == null || delivery.deliveredWetMassKg == null) return;
   const [product] = await executor.select().from(biocharProducts).where(eq(biocharProducts.id, productId));
   if (!product) throw new Error("Fixture source product is missing");
   const sources = await executor.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
+  if (requireEstablishedSource && !sources.length) throw new Error("E2E delivery cannot invent product source provenance");
   let runShares = sources.map(source => ({ id: source.productionRunId, dry: source.allocatedDryMassKg }));
   if (!runShares.length && product.linkedProductionRunId) runShares = [{ id: product.linkedProductionRunId, dry: delivery.massDryKg }];
   if (!runShares.length) {
@@ -99,8 +101,36 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
     runShares = [{ id: run.id, dry: delivery.massDryKg }];
   }
   const dry = delivery.massDryKg;
-  const [movement] = await executor.insert(binMovements).values({ organizationId: delivery.organizationId, storageLocationId: delivery.storageLocationId, lane: "product", movementType: "adjustment", massDeltaKg: -delivery.deliveredWetMassKg, reason: "Saved consumer-test fixture", outputKind: "delivery", physicalDate: delivery.deliveryDate.toISOString().slice(0, 10), idempotencyKey: randomUUID(), basisFingerprint: "fixture-snapshot", inputSnapshot: { kind: "delivery", deliveryId: delivery.id, wetMassKg: delivery.deliveredWetMassKg, moisturePercent: delivery.moistureContentPercent }, outputDryDeltaKg: String(-dry), balanceBeforeDryKg: String(dry), balanceAfterDryKg: "0" }).returning();
-  const [allocation] = await executor.insert(outputStockAllocations).values({ organizationId: delivery.organizationId, movementId: movement.id, sourceStorageLocationId: delivery.storageLocationId, biocharProductId: product.id, deliveryId: delivery.id, dryMassKg: String(dry), wetMassKg: String(delivery.deliveredWetMassKg), basisSnapshot: { fixture: true, solidsKg: { numerator: String(Math.round(dry * GRAMS_PER_KG)), denominator: String(GRAMS_PER_KG) } } }).returning();
+  // Existing source facts describe the whole layer, not just this delivery.
+  // Keep journal balances faithful when several consumer fixtures draw it.
+  const previousDraws = await executor.select({ dry: outputStockAllocations.dryMassKg })
+    .from(outputStockAllocations).where(eq(outputStockAllocations.biocharProductId, product.id));
+  const establishedDry = sources.reduce((sum, source) => sum + source.allocatedDryMassKg, 0);
+  const beforeDry = requireEstablishedSource && sources.length
+    ? establishedDry - previousDraws.reduce((sum, draw) => sum + Number(draw.dry), 0)
+    : dry;
+
+  if (requireEstablishedSource && (dry <= 0 || Math.round(dry * GRAMS_PER_KG) > Math.round(beforeDry * GRAMS_PER_KG) || product.placedAt > delivery.deliveryDate.toISOString().slice(0, 10))) throw new Error("E2E delivery exceeds eligible established product stock");
+  const ingredients = await executor.select().from(productIngredientSnapshots)
+    .where(eq(productIngredientSnapshots.biocharProductId, product.id));
+  const establishedGrams = BigInt(Math.round(establishedDry * GRAMS_PER_KG));
+  const ingredientGrams = ingredients.reduce((sum, ingredient) => sum + BigInt(Math.round(Number(ingredient.drySolidsKg) * GRAMS_PER_KG)), BigInt(0));
+  const dryGrams = BigInt(Math.round(dry * GRAMS_PER_KG));
+  if (requireEstablishedSource) {
+    const [recipe] = await executor.select().from(formulations).where(eq(formulations.id, product.formulationId));
+    if (!ingredients.length && recipe?.biocharRatio !== 1) throw new Error("E2E pure product requires a Pure biochar formulation");
+    const composition = product.composition as { ingredients?: unknown[] };
+    if ((composition.ingredients?.length ?? 0) !== ingredients.length) throw new Error("E2E mixed product requires retained ingredient solids");
+    const measuredSolids = delivery.deliveredWetMassKg * (1 - (delivery.moistureContentPercent ?? NaN) / PERCENT_SCALE);
+    const expectedDryGrams = Math.round(measuredSolids * Number(establishedGrams) / Number(establishedGrams + ingredientGrams) * GRAMS_PER_KG);
+    if (!Number.isFinite(expectedDryGrams) || expectedDryGrams !== Number(dryGrams)) throw new Error("E2E delivery dry allocation must match its measured load and fixed composition");
+  }
+
+  const solidsKg = establishedGrams > BigInt(0)
+    ? { numerator: String(dryGrams * (establishedGrams + ingredientGrams)), denominator: String(establishedGrams * BigInt(GRAMS_PER_KG)) }
+    : { numerator: String(dryGrams), denominator: String(GRAMS_PER_KG) };
+  const [movement] = await executor.insert(binMovements).values({ organizationId: delivery.organizationId, storageLocationId: delivery.storageLocationId, lane: "product", movementType: "adjustment", massDeltaKg: -delivery.deliveredWetMassKg, reason: "Saved consumer-test fixture", outputKind: "delivery", physicalDate: delivery.deliveryDate.toISOString().slice(0, 10), idempotencyKey: randomUUID(), basisFingerprint: "fixture-snapshot", inputSnapshot: { kind: "delivery", deliveryId: delivery.id, wetMassKg: delivery.deliveredWetMassKg, moisturePercent: delivery.moistureContentPercent }, outputDryDeltaKg: String(-dry), balanceBeforeDryKg: String(beforeDry), balanceAfterDryKg: String(beforeDry - dry) }).returning();
+  const [allocation] = await executor.insert(outputStockAllocations).values({ organizationId: delivery.organizationId, movementId: movement.id, sourceStorageLocationId: delivery.storageLocationId, biocharProductId: product.id, deliveryId: delivery.id, dryMassKg: String(dry), wetMassKg: String(delivery.deliveredWetMassKg), basisSnapshot: { fixture: true, solidsKg } }).returning();
   const sourceTotal = runShares.reduce((sum, source) => sum + source.dry, 0);
   let allocatedGrams = 0;
   for (const [index, source] of runShares.entries()) {
@@ -110,7 +140,7 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
   }
 }
 
-export async function insertOutputDeliveryFixture<T>(executor: Executor, input: DeliveryFixture | DeliveryFixture[], select: (row: Delivery) => T): Promise<T[]> {
+export async function insertOutputDeliveryFixture<T>(executor: Executor, input: DeliveryFixture | DeliveryFixture[], select: (row: Delivery) => T, requireEstablishedSource = false): Promise<T[]> {
   const result: T[] = [];
   for (const values of Array.isArray(input) ? input : [input]) {
     const [order] = await executor.select().from(orders).where(eq(orders.id, values.orderId));
@@ -124,10 +154,15 @@ export async function insertOutputDeliveryFixture<T>(executor: Executor, input: 
       storageLocationId = bin.id;
     }
     const [saved] = await executor.insert(deliveries).values({ ...values, storageLocationId, status: "delivered" }).returning();
-    await persistFixtureProvenance(executor, saved, productId);
+    await persistFixtureProvenance(executor, saved, productId, requireEstablishedSource);
     result.push(select(saved));
   }
   return result;
+}
+
+/** E2E consumers must establish their product sources before posting deliveries. */
+export function insertEstablishedOutputDeliveryFixture<T>(executor: Executor, input: DeliveryFixture | DeliveryFixture[], select: (row: Delivery) => T) {
+  return insertOutputDeliveryFixture(executor, input, select, true);
 }
 
 /** Remove new journal children before existing fixture cleanup deletes parents. */
@@ -169,6 +204,7 @@ export async function deleteOutputProductFixtures(executor: Executor, predicate:
       await executor.delete(binMovements).where(inArray(binMovements.id, draws.map(draw => draw.movementId)));
     }
   }
+  if (productIds.length) await executor.delete(productIngredientSnapshots).where(inArray(productIngredientSnapshots.biocharProductId, productIds));
   const sourcedIds = products.map(product => product.id);
   if (sourcedIds.length) await executor.delete(biocharProductSourceAllocations).where(inArray(biocharProductSourceAllocations.biocharProductId, sourcedIds));
   const result = await executor.delete(biocharProducts).where(predicate);
@@ -201,12 +237,28 @@ export async function deleteOutputApplicationFixtures(executor: Executor, predic
 }
 
 /** Freeze explicitly declared historical application shares, including deliberately invalid guard fixtures. */
-export async function insertOutputApplicationFixture<T>(executor: Executor, input: typeof applications.$inferInsert | (typeof applications.$inferInsert)[], select: (row: typeof applications.$inferSelect) => T): Promise<T[]> {
+export async function insertOutputApplicationFixture<T>(executor: Executor, input: typeof applications.$inferInsert | (typeof applications.$inferInsert)[], select: (row: typeof applications.$inferSelect) => T, requireSavedDelivery = false): Promise<T[]> {
   const result: T[] = [];
   for (const values of Array.isArray(input) ? input : [input]) {
+    if (requireSavedDelivery) {
+      const [delivery] = await executor.select().from(deliveries).where(eq(deliveries.id, values.deliveryId));
+      const previous = await executor.select().from(applications).where(eq(applications.deliveryId, values.deliveryId));
+      if (delivery?.massDryKg != null && delivery.deliveredWetMassKg && values.biocharAppliedDryTons != null &&
+        Math.round(values.biocharAppliedDryTons * GRAMS_PER_TONNE) !== Math.round(values.biocharAppliedTons * GRAMS_PER_TONNE * delivery.massDryKg / delivery.deliveredWetMassKg)) {
+        throw new Error("E2E application must use proportional shares of its saved delivery");
+      }
+      const usedWet = previous.reduce((sum, row) => sum + Math.round(row.biocharAppliedTons * GRAMS_PER_TONNE), 0);
+      const usedDry = previous.reduce((sum, row) => sum + Math.round((row.biocharAppliedDryTons ?? 0) * GRAMS_PER_TONNE), 0);
+      if (!delivery || delivery.massDryKg == null || delivery.deliveredWetMassKg == null || values.biocharAppliedDryTons == null ||
+        usedWet + Math.round(values.biocharAppliedTons * GRAMS_PER_TONNE) > Math.round(delivery.deliveredWetMassKg * GRAMS_PER_KG) ||
+        usedDry + Math.round(values.biocharAppliedDryTons * GRAMS_PER_TONNE) > Math.round(delivery.massDryKg * GRAMS_PER_KG)) {
+        throw new Error("E2E application exceeds its saved delivery allocation");
+      }
+    }
     const [application] = await executor.insert(applications).values(values).returning();
     const sources = await executor.select({ productId: outputStockAllocations.biocharProductId, runId: outputStockRunAllocations.productionRunId, dry: outputStockRunAllocations.dryMassKg }).from(outputStockAllocations).innerJoin(outputStockRunAllocations, eq(outputStockRunAllocations.allocationId, outputStockAllocations.id)).where(eq(outputStockAllocations.deliveryId, application.deliveryId));
     const total = sources.reduce((sum, source) => sum + Number(source.dry), 0);
+    if (requireSavedDelivery && !total) throw new Error("E2E application requires saved delivery source shares");
     let dryGrams = 0;
     let wetGrams = 0;
     for (const [index, source] of sources.entries()) {
@@ -221,6 +273,11 @@ export async function insertOutputApplicationFixture<T>(executor: Executor, inpu
     result.push(select(application));
   }
   return result;
+}
+
+/** Preserve the completed-delivery custody boundary in UI consumer fixtures. */
+export function insertEstablishedOutputApplicationFixture<T>(executor: Executor, input: typeof applications.$inferInsert | (typeof applications.$inferInsert)[], select: (row: typeof applications.$inferSelect) => T) {
+  return insertOutputApplicationFixture(executor, input, select, true);
 }
 
 /** Establish a pure product layer for tests that exercise the real delivery writer. */
@@ -241,7 +298,7 @@ export async function preparePureOutputProductFixture(executor: Executor, produc
   if (!run) {
     const [reactor] = await executor.insert(reactors).values({ organizationId: product.organizationId, facilityId: product.facilityId, code: `E2E-REACTOR-${randomUUID()}`, identifier: `E2E Reactor ${randomUUID()}`, reactorType: "auger" }).returning();
     ownedReactors.add(reactor.id);
-    [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, biocharStorageLocationId: sourceStorageLocationId, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(`${product.placedAt}T00:00:00Z`), endTime: new Date(`${product.placedAt}T01:00:00Z`), biocharDryMassKg: dryKg }).returning();
+    [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, biocharStorageLocationId: sourceStorageLocationId, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(`${product.placedAt}T00:00:00Z`), endTime: new Date(`${product.placedAt}T01:00:00Z`), biocharDryMassKg: dryKg, biocharOutputKg: product.massKg, biocharMoisturePercent: product.moistureContentPercent }).returning();
     ownedRuns.add(run.id);
   }
   await executor.insert(biocharProductSourceAllocations).values({ organizationId: product.organizationId, biocharProductId: product.id, productionRunId: run.id, sourceStorageLocationId, allocatedDryMassKg: dryKg, allocatedWetMassKg: product.massKg });

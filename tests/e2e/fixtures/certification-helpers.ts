@@ -1,6 +1,6 @@
-import { insertOutputApplicationFixture } from "../../helpers/output-contract-fixtures";
+import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../../helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
-import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
+import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 /**
  * Shared fixtures for the Certification workspace E2E specs
  * (`certification-workspace.spec.ts`, `certification-review-flow.spec.ts`).
@@ -77,7 +77,8 @@ async function getFormulationBiocharRatio(
     );
   }
 
-  return formulation.biocharRatio ?? 1;
+  if (formulation.biocharRatio !== 1) throw new Error("Certification fixture requires a Pure biochar formulation; mixed fixtures must retain ingredient solids");
+  return formulation.biocharRatio;
 }
 
 /**
@@ -168,7 +169,6 @@ export async function seedGroupedRemovalWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        storageLocationId: refs.productStorageLocationId,
         productionDate: productionStartTime,
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
@@ -183,6 +183,7 @@ export async function seedGroupedRemovalWithChain(
         allocatedWetMassKg,
         allocatedDryMassKg,
       });
+      const productSource = await preparePureOutputProductFixture(tx, id.biocharProduct);
       await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: id.order,
@@ -192,7 +193,7 @@ export async function seedGroupedRemovalWithChain(
         customerId: refs.customerId,
         customerLocationId: refs.customerLocationId,
         biocharProductId: id.biocharProduct,
-        quantityKg: 100,
+        quantityKg: DELIVERED_WET_MASS_KG,
         packaging: "bagged",
       }));
       await insertOutputDeliveryFixture(tx, {
@@ -203,7 +204,7 @@ export async function seedGroupedRemovalWithChain(
         deliveryDate: new Date(),
         orderId: id.order,
         biocharProductId: id.biocharProduct,
-        storageLocationId: refs.productStorageLocationId,
+        storageLocationId: productSource.storageLocationId,
         deliveredWetMassKg: DELIVERED_WET_MASS_KG,
         massDryKg: DELIVERED_DRY_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PCT,
@@ -272,8 +273,8 @@ export async function seedGroupedRemovalWithChain(
         organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         applicationId: id.application,
-        allocatedWetMassKg: DELIVERED_WET_MASS_KG,
-        allocatedDryMassKg: DELIVERED_DRY_MASS_KG,
+        allocatedWetMassKg: 100,
+        allocatedDryMassKg: APPLIED_DRY_TONS * 1000,
         removalId: id.removal,
       });
     });
@@ -673,11 +674,10 @@ export async function seedUngroupedReadyBatchWithChain(
         biocharRatio: productBiocharRatio,
         sourceBiocharStorageLocationId: refs.biocharStorageLocationId,
         linkedProductionRunId: id.productionRun,
-        storageLocationId: refs.productStorageLocationId,
         productionDate: productionStartTime,
         status: "ready",
         massKg: PRODUCT_WET_MASS_KG,
-        moistureContentPercent: PRODUCT_MOISTURE_PCT,
+        moistureContentPercent: READY_BIOCHAR_MOISTURE_PCT,
         waterAddedKg: 0,
       }));
       await tx.insert(schema.biocharProductSourceAllocations).values({
@@ -688,6 +688,7 @@ export async function seedUngroupedReadyBatchWithChain(
         allocatedWetMassKg,
         allocatedDryMassKg,
       });
+      const productSource = await preparePureOutputProductFixture(tx, id.biocharProduct);
       await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: id.order,
@@ -697,7 +698,7 @@ export async function seedUngroupedReadyBatchWithChain(
         customerId: refs.customerId,
         customerLocationId: refs.customerLocationId,
         biocharProductId: id.biocharProduct,
-        quantityKg: 100,
+        quantityKg: DELIVERED_WET_MASS_KG,
         packaging: "bagged",
       }));
       await insertOutputDeliveryFixture(tx, {
@@ -708,7 +709,7 @@ export async function seedUngroupedReadyBatchWithChain(
         deliveryDate: new Date(),
         orderId: id.order,
         biocharProductId: id.biocharProduct,
-        storageLocationId: refs.productStorageLocationId,
+        storageLocationId: productSource.storageLocationId,
         deliveredWetMassKg: DELIVERED_WET_MASS_KG,
         massDryKg: DELIVERED_DRY_MASS_KG,
         moistureContentPercent: PRODUCT_MOISTURE_PCT,
@@ -784,8 +785,8 @@ export async function seedUngroupedReadyBatchWithChain(
         organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         applicationId: id.application,
-        allocatedWetMassKg,
-        allocatedDryMassKg,
+        allocatedWetMassKg: 100,
+        allocatedDryMassKg: APPLIED_DRY_TONS * 1000,
       });
       // A sampled credit batch needs at least three complete H/Corg + O/Corg
       // replicates pooled on the batch itself. The run link is provenance only.

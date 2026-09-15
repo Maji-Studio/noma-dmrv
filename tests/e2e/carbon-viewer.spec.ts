@@ -1,5 +1,6 @@
-import { insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
-import { outputOrderFixtureValues, insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
+import { setProductSourceFixture } from "./helpers/product-source-fixture";
+import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
+import { outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture } from "../helpers/output-contract-fixtures";
 /**
  * Carbon Viewer E2E (hermetic) — map-integration Phase 2.
  *
@@ -119,27 +120,23 @@ async function seedGeoLineage(
         reactorId: seededData.reactor.id,
         feedstockStorageLocationId: seededData.feedstockStorageLocation.id,
         biocharStorageLocationId: seededData.biocharStorageLocation.id,
-        feedstockMassDryKg: 100,
-        biocharDryMassKg: 42,
-        biocharOutputKg: 43,
+        feedstockMassDryKg: 1000,
+        biocharDryMassKg: 250,
+        biocharOutputKg: 250,
+        biocharMoisturePercent: 0,
       });
 
+      await tx.update(schema.feedstocks).set({ massWetKg: 1000, massDryKg: 1000, moistureContentPercent: 0 })
+        .where(eq(schema.feedstocks.id, seededData.feedstock.id));
       await tx.insert(schema.productionRunFeedstocks).values({
         organizationId: DEC_ORG_ID,
         id: ids.productionRunFeedstock,
         productionRunId: ids.productionRun,
         feedstockId: seededData.feedstock.id,
-        wetMassUsedKg: 100,
+        wetMassUsedKg: 1000,
       });
 
-      await tx
-        .update(schema.biocharProducts)
-        .set({
-          linkedProductionRunId: ids.productionRun,
-          storageLocationId: seededData.biocharStorageLocation.id,
-          massKg: 250,
-        })
-        .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
+      await setProductSourceFixture(tx, seededData.biocharProduct.id, ids.productionRun, 250, 250, "2026-02-10");
 
       await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
@@ -150,7 +147,7 @@ async function seedGeoLineage(
         customerId: seededData.customer.id,
         customerLocationId: seededData.customerLocation.id,
         biocharProductId: seededData.biocharProduct.id,
-        quantityKg: 220,
+        quantityKg: 250,
         packaging: "loose",
       }));
 
@@ -164,8 +161,8 @@ async function seedGeoLineage(
         deliveryDate: new Date("2026-02-14T09:00:00.000Z"),
         status: "delivered",
         massDryKg: 215,
-        deliveredWetMassKg: 230,
-        moistureContentPercent: 6.5,
+        deliveredWetMassKg: 215,
+        moistureContentPercent: 0,
       }, row => row);
 
       await insertOutputApplicationFixture(tx, {
@@ -174,7 +171,7 @@ async function seedGeoLineage(
         code: codes.application,
         deliveryId: ids.delivery,
         applicationDate: new Date("2026-02-16T10:30:00.000Z"),
-        biocharAppliedTons: 0.21,
+        biocharAppliedTons: 0.2,
         biocharAppliedDryTons: 0.2,
         fieldIdentifier: `Field ${suffix}`,
         status: "applied",

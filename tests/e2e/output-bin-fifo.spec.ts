@@ -145,13 +145,13 @@ test.describe("Output-bin conserved FIFO", () => {
     const shares = page.locator('[aria-label="Applied batch and source-run shares"]');
     await expect(shares).toContainText(`${f.products[0].code}: 450 kg dry`);
     await expect(shares).toContainText(`${f.products[1].code}: 125 kg dry`);
-    await expect(shares).toContainText("78.26%");
-    await expect(shares).toContainText("21.74%");
+    await expect(shares).toContainText("78.261%");
+    await expect(shares).toContainText("21.739%");
     await evidence(page, info, "application-batch-run-shares");
 
     await openBin(page, f);
     await page.getByRole("button", { name: "More info", exact: true }).first().click();
-    const deliveryEntry = page.getByRole("dialog", { name: "Stock history" }).locator("article").filter({ has: page.getByRole("heading", { name: "delivery, original entry", exact: true }) });
+    const deliveryEntry = page.getByRole("dialog", { name: "Stock history" }).locator("article").filter({ has: page.getByRole("heading", { name: "Delivery, original entry", exact: true }) });
     await deliveryEntry.getByRole("button", { name: "Correct entry" }).click();
     await fillStock(page, "1900", "30", "E2E attempted used delivery correction");
     await expect(page.getByRole("dialog", { name: "Stock history" }).getByRole("alert")).toContainText(/application/i);
@@ -186,7 +186,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await history.getByRole("button", { name: "Save correction", exact: true }).click();
     await expect(history.getByText("E2E corrected spill", { exact: true }).first()).toBeVisible();
     await expect(history.getByText("E2E FIFO spill", { exact: true })).toBeVisible();
-    const reversal = history.locator("article").filter({ has: page.getByRole("heading", { name: /^reversal, corrects/ }) });
+    const reversal = history.locator("article").filter({ has: page.getByRole("heading", { name: /^Reversal, corrects/ }) });
     await expect(reversal).toContainText("120 kg measured wet at 30% moisture");
     await expect(reversal).toContainText("-70 kg dry biochar effect");
     expect((await readOutputStockBrowserFixture(f)).balance.beforeDryKg).toBe(343);
