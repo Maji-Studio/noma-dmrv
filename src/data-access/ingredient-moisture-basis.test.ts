@@ -60,13 +60,13 @@ describe('remaining ingredient moisture', () => {
     expect(queries[0].sql).toContain('"feedstocks"."delivery_date" <=');
     expect(queries[1].sql).toContain('"biochar_products"."placed_at" <=');
     expect(queries[1].params).toContain('excluded-product');
-    expect(queries[2].sql).toContain('"production_runs"."start_time" <=');
+    expect(queries[2].sql).toContain('("production_runs"."start_time" at time zone \'UTC\' at time zone "facilities"."timezone")::date::text <=');
     expect(queries[2].params).toContain('cancelled');
-    expect(queries[3].sql).toContain('coalesce("bin_movements"."physical_date", "bin_movements"."created_at"::date) <=');
+    expect(queries[3].sql).toContain('coalesce("bin_movements"."physical_date", ("bin_movements"."created_at" at time zone \'UTC\' at time zone "facilities"."timezone")::date::text::date) <=');
     for (const query of queries) expect(query.params).toContain('org');
     expect(queries[0].params).toContain('2026-09-14T23:59:59.999Z');
     expect(queries[1].params).toContain('2026-09-14');
-    expect(queries[2].params).toContain('2026-09-14T23:59:59.999Z');
+    expect(queries[2].params).toContain('2026-09-14');
     expect(queries[3].params).toContain('2026-09-14');
   });
   it('keeps the same basis when fractional intake rows are returned in a different order', async () => {

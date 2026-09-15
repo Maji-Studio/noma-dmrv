@@ -1,10 +1,11 @@
 import { db, type DbTransaction } from '@/db';
-import { binMovements, biocharProducts, feedstocks, productionRunFeedstockDraws, productionRuns } from '@/db/schema';
+import { binMovements, biocharProducts, facilities, feedstocks, productionRunFeedstockDraws, productionRuns, storageLocations } from '@/db/schema';
 import { GRAMS_PER_KILOGRAM, toPersistedMassGrams } from '@/lib/biochar-composition/composition';
 import type { OrgContext } from '@/lib/auth/server';
 import { and, eq, isNull, lte, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
+import { facilityTimestampDateExpr } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
 const PERCENT = 100;
@@ -23,11 +24,14 @@ export async function getIngredientStockBasis(ctx: OrgContext, storageLocationId
       sql`${biocharProducts.composition}->'ingredients' @> ${JSON.stringify([{ storageLocationId }])}::jsonb`));
   const draws = await reader.select({ wet: productionRunFeedstockDraws.wetMassKg })
     .from(productionRunFeedstockDraws).innerJoin(productionRuns, and(eq(productionRuns.id, productionRunFeedstockDraws.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(facilities.id, productionRuns.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(eq(productionRunFeedstockDraws.organizationId, ctx.organizationId), eq(productionRunFeedstockDraws.storageLocationId, storageLocationId), ne(productionRuns.status, 'cancelled'),
-      physicalDate ? lte(productionRuns.startTime, new Date(`${physicalDate}T23:59:59.999Z`)) : undefined));
+      physicalDate ? lte(facilityTimestampDateExpr(productionRuns.startTime, facilities.timezone), physicalDate) : undefined));
   const movements = await reader.select({ wet: binMovements.massDeltaKg }).from(binMovements)
+    .innerJoin(storageLocations, and(eq(storageLocations.id, binMovements.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(facilities.id, storageLocations.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId), eq(binMovements.lane, 'feedstock'),
-      physicalDate ? sql`coalesce(${binMovements.physicalDate}, ${binMovements.createdAt}::date) <= ${physicalDate}::date` : undefined));
+      physicalDate ? sql`coalesce(${binMovements.physicalDate}, ${facilityTimestampDateExpr(binMovements.createdAt, facilities.timezone)}::date) <= ${physicalDate}::date` : undefined));
   // Stored masses have gram precision. Integer sums make the basis independent
   // of query row order without rounding the remaining solids ratio.
   let intakeWetGrams = 0;

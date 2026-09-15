@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { facilities, productionRuns, storageLocations } from '@/db/schema';
+import { binMovements, facilities, feedstocks, productionRunFeedstockDraws, productionRuns, storageLocations } from '@/db/schema';
 import { getBiocharOutputStockLayers, getOutputBinDryBalance } from '@/data-access/output-stock';
+import { getIngredientStockBasis } from '@/data-access/ingredient-moisture-basis';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
 import { previewOutputStock } from '@/data-access/output-stock-operations';
 import { postOutputStock } from '@/data-access/output-stock-post';
@@ -48,6 +49,47 @@ describe('output stock facility dates in PostgreSQL', () => {
     expect(nextDay.blockingMessage).toBeFalsy();
     expect(nextDay.removedDryKg).toBe(100);
     expect((await getOutputStockHistory(f.ctx, f.source.id)).filter(e => e.kind === 'intake').map(e => e.physicalDate)).toEqual(['2026-09-16', '2026-09-16']);
+  });
+
+  it('uses facility dates for ingredient draws and movement fallbacks while explicit movement dates win', async () => {
+    const f = await fixture();
+    await db.transaction(async tx => {
+      const organizationId = f.ctx.organizationId;
+      const [bin] = await tx.insert(storageLocations).values({
+        organizationId, facilityId: f.facility.id, code: `E2E-INGREDIENT-${f.tag}`,
+        name: `E2E Ingredient ${f.tag}`, type: 'feedstock_bin',
+      }).returning();
+      await tx.insert(feedstocks).values({
+        organizationId, facilityId: f.facility.id, code: `E2E-INTAKE-${f.tag}`,
+        feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, status: 'complete',
+        deliveryDate: new Date('2026-09-15T00:00:00Z'), massWetKg: 100, massDryKg: 50,
+      });
+      // Keep the fixture's distinct run starts; its second run starts at this boundary.
+      expect(f.runs[1].id).not.toBe(f.runs[0].id);
+      await tx.insert(productionRunFeedstockDraws).values({
+        organizationId, productionRunId: f.runs[1].id, storageLocationId: bin.id, wetMassKg: 20,
+      });
+      const [movement] = await tx.insert(binMovements).values({
+        organizationId, storageLocationId: bin.id, lane: 'feedstock', movementType: 'loss',
+        massDeltaKg: -10, reason: 'E2E ingredient date boundary', createdAt: new Date('2026-09-15T22:30:00Z'),
+      }).returning();
+      for (const zone of ['UTC', 'America/Los_Angeles']) {
+        await tx.execute(sql`select set_config('TimeZone', ${zone}, true)`);
+        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-15', tx)).toEqual({ wetMassKg: 100, dryMassKg: 50 });
+        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-16', tx)).toEqual({ wetMassKg: 70, dryMassKg: 35 });
+        await tx.update(binMovements).set({ physicalDate: '2026-09-15' })
+          .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
+        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-15', tx)).toEqual({ wetMassKg: 90, dryMassKg: 45 });
+        await tx.update(binMovements).set({ physicalDate: '2026-09-17' })
+          .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
+        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-16', tx)).toEqual({ wetMassKg: 80, dryMassKg: 40 });
+        await tx.update(binMovements).set({ physicalDate: null })
+          .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
+      }
+      // These ingredient-only children are outside the shared output fixture cleanup.
+      await tx.delete(productionRunFeedstockDraws).where(eq(productionRunFeedstockDraws.organizationId, organizationId));
+      await tx.delete(feedstocks).where(eq(feedstocks.organizationId, organizationId));
+    });
   });
 
   it('only treats counts on or after the facility receipt date as dependencies', async () => {
