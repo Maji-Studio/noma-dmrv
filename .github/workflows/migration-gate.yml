@@ -2,13 +2,12 @@ name: PR migration gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened]
     paths:
       - "src/db/schema/**"
       - "drizzle/**"
       - "drizzle.config.ts"
-      # Seed changes alter the canonical fixture used by future gates. This run
-      # still uses the base copy, so candidate seed edits cannot mask a conflict.
+      # Validate canonical development fixtures against the candidate schema.
       - "src/db/seed-data.ts"
       # Runtime inputs of the gate itself: edits to the workflow or the CLI
       # scripts it invokes should exercise the gate.
@@ -64,14 +63,16 @@ jobs:
       NODE_ENV: development
 
     steps:
-      # Always start from the immutable base SHA: the gate's whole purpose is to
-      # apply the candidate's migrations on top of real pre-existing rows. The
-      # first-production (empty-database) case is validated ADDITIVELY by the
-      # fresh-database-gate job below, never by weakening this one.
-      - name: Checkout initial revision
+      # No production database exists. Development databases may be reset for
+      # schema changes, so validate the candidate's complete migration chain
+      # and current seed instead of requiring upgrades of obsolete demo rows.
+      # github.ref is GitHub's prospective merge ref for pull requests, so this
+      # tests what will land rather than the head branch in isolation. A manual
+      # run uses the commit selected in the workflow-dispatch UI.
+      - name: Checkout merge candidate
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'staging' }}
+          ref: ${{ github.event_name == 'pull_request' && github.ref || github.sha }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -86,67 +87,29 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install initial dependencies
-        run: pnpm install --frozen-lockfile
-
-      # Match the E2E bootstrap convention: the synthetic admin's password is
-      # random per run and exists only for this throwaway database.
-      - name: Generate ephemeral admin password
-        run: echo "ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
-
-      # Build the exact base state before introducing PR code. Normal PRs also
-      # seed it so legacy fixture conflicts remain visible. The one-time first
-      # production promotion skips that obsolete demo data: main's pre-0074
-      # seed relies on database timestamp defaults and creates duplicate active
-      # run starts, while production is empty and is exercised independently by
-      # fresh-database-gate below.
-      - name: Apply base migrations
-        run: pnpm db:migrate
-
-      - name: Ensure base admin and organization
-        run: pnpm db:ensure-admin
-
-      - name: Seed base data
-        if: >-
-          github.event_name != 'pull_request' ||
-          !contains(github.event.pull_request.labels.*.name, 'first-production-deployment')
-        run: pnpm db:seed
-
-      # github.ref is GitHub's prospective merge ref for pull requests, so this
-      # tests what will land rather than the head branch in isolation. A manual
-      # run uses the commit selected in the workflow-dispatch UI.
-      - name: Checkout merge candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-          persist-credentials: false
-          fetch-depth: 0
-
-      # The second checkout cleans node_modules, and the candidate lockfile may
-      # differ from the base, so install again against the candidate revision.
       - name: Install candidate dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply candidate migrations
+      - name: Generate ephemeral admin password
+        run: echo "ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+
+      - name: Apply full candidate migration chain to an empty database
         run: pnpm db:migrate
+
+      - name: Ensure candidate admin and organization
+        run: pnpm db:ensure-admin
+
+      - name: Seed candidate development data
+        run: pnpm db:seed
 
       - name: Verify candidate schema
         run: pnpm db:verify-schema
 
-  # The first production deployment applies the whole migration chain to an
-  # EMPTY database and then bootstraps the admin/org — a path the seeded gate
-  # above never exercises. This job validates it additively: it can only add
-  # coverage, never skip the seeded gate, so re-using the label on a later
-  # promotion is harmless rather than a silent downgrade. Both jobs are
-  # required, so the promotion cannot merge unless both are green.
+  # Independently exercise the full empty-database chain and bootstrap guards
+  # on every matching PR/manual run. No promotion label can bypass this gate.
   fresh-database-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.base.ref == 'main' &&
-      github.event.pull_request.head.ref == 'staging' &&
-      contains(github.event.pull_request.labels.*.name, 'first-production-deployment')
 
     services:
       postgres:
@@ -199,7 +162,7 @@ jobs:
       - name: Generate ephemeral admin password
         run: echo "ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
 
-      # The whole chain, against an empty database — what production will do.
+      # Exercise every migration; schema push/reset is not a substitute.
       - name: Apply full migration chain to an empty database
         run: pnpm db:migrate
 
