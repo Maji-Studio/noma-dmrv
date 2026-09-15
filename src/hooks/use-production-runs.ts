@@ -233,6 +233,9 @@ export function useCreateProductionRun(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      // Seed the authoritative record before any dependent background refresh.
+      queryClient.setQueryData(productionRunKeys.detail(data.id), data);
+
       // Invalidate all production run lists
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       // Invalidate stats
@@ -253,10 +256,7 @@ export function useCreateProductionRun(
       });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
-
-      // Pre-populate the detail cache with the new run
-      queryClient.setQueryData(productionRunKeys.detail(data.id), data);
+      invalidateOnboardingProgress(queryClient, data.facilityId);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -369,7 +369,7 @@ export function useUpdateProductionRun(
       });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, data.facilityId);
 
       await callbacks?.onSuccess?.(data, variables);
     },

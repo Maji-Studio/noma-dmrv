@@ -159,13 +159,19 @@ export function useCreateCreditBatch() {
 
   return useMutation({
     mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
-    onSuccess: async () => {
+    onSuccess: (result) => {
+      if (!result.success) return;
+
+      queryClient.setQueryData(
+        creditBatchKeys.detail(result.data.id),
+        result.data,
+      );
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, result.data.facilityId);
     },
   });
 }
