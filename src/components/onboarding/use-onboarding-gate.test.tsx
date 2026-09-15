@@ -116,6 +116,7 @@ describe("useOnboardingGate freshness", () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
     if (opening === "explicit") await act(async () => gate.wizard.open());
     expect(gate.wizard.isOpen).toBe(true);
+    const visibleMode = gate.mode;
     let release!: (value: unknown) => void;
     mocks.fetch.mockReturnValueOnce(new Promise((resolve) => { release = resolve; }));
     let refresh!: Promise<void>;
@@ -124,6 +125,8 @@ describe("useOnboardingGate freshness", () => {
     });
     expect(client.isFetching()).toBe(1);
     expect(gate.wizard.isOpen).toBe(true);
+    expect(gate.mode).toBe(visibleMode);
+    expect(gate.isLoading).toBe(false);
     await act(async () => {
       release({ success: true, data: populatedStatus });
       await refresh;
