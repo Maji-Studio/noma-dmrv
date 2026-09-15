@@ -31,6 +31,7 @@ import {
   deleteBiocharProductSchema,
   updateBiocharProductSchema,
 } from "@/schemas/biochar-products";
+import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 import {
   formatZodActionError,
@@ -121,9 +122,7 @@ export async function getBiocharProductByIdFn(
 export async function createBiocharProductFn(
   data: z.infer<typeof createBiocharProductSchema>
 ): Promise<ActionResult<BiocharProduct>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = createBiocharProductSchema.parse(data);
 
     const composition = toCompositionJsonb(validated.ingredientBins, { mode: "create" });
@@ -155,23 +154,11 @@ export async function createBiocharProductFn(
       CODE_CONFLICT_MESSAGES.biocharProduct,
     );
 
-    return { success: true, data: product };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to create biochar product",
-        "biochar-product:create",
-      ),
-    };
-  }
+    return product;
+  }, {
+    fallbackMessage: "Failed to create biochar product",
+    log: { message: "biochar product action failed", context: { op: "biochar-product:create" } },
+  });
 }
 
 // ============================================

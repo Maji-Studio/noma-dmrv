@@ -32,6 +32,7 @@ import {
   resolveDeliveryDistanceSource,
   updateDeliverySchema,
 } from "@/schemas/deliveries";
+import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
 import { z } from "zod";
 import {
@@ -162,9 +163,7 @@ export async function getDeliveryStatsFn(
 export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
 ): Promise<ActionResult<Delivery>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const delivery = await withAutoCode(
       ctx,
       "DL",
@@ -198,23 +197,11 @@ export async function createDeliveryFn(
       CODE_CONFLICT_MESSAGES.delivery,
     );
 
-    return { success: true, data: delivery };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to create delivery",
-        "delivery:create",
-      ),
-    };
-  }
+    return delivery;
+  }, {
+    fallbackMessage: "Failed to create delivery",
+    log: { message: "delivery action failed", context: { op: "delivery:create" } },
+  });
 }
 
 // ============================================
