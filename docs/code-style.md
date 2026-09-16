@@ -40,8 +40,9 @@ Three distinct seams; do not collapse them.
 
 Reference: `src/fn/facilities.ts` → `src/data-access/facilities.ts`.
 
-**Org-scoping invariant:** `pnpm check:org-scoping` statically scans `src/data-access/` and
-`src/fn/` and fails any `db`/`tx` select/insert/update/delete chain touching a domain table
+**Org-scoping invariant:** `pnpm check:org-scoping` statically scans `src/data-access/`,
+`src/fn/`, and `src/lib/read-models/` and fails any `db`/`tx`
+select/insert/update/delete chain touching a domain table
 without `organizationId`. Exempt tables: users, sessions, accounts, verifications,
 organizations, members, invitations, geoRouteCache. The **only** waiver is a
 `// org-scope-ok: <reason>` comment — the reason text is required; a bare marker does not

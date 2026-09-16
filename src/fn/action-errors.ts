@@ -1,10 +1,23 @@
-import { SafeError, toActionError } from "@/lib/errors";
+import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
-import type { ZodError } from "zod";
+import type { ActionResult } from "@/types/actions";
+import { ZodError } from "zod";
 
 interface LogActionErrorOptions {
   context?: Record<string, unknown>;
   message: string;
+}
+
+/** The failure half of `ActionResult`, shared by every server entry point. */
+export type ActionFailure = Extract<ActionResult<never>, { success: false }>;
+
+interface ActionFailureOptions {
+  /** Fallback message when the error is not safe to show verbatim. */
+  fallbackMessage: string;
+  /** Structured log line for unexpected errors (Zod and conflicts are not). */
+  log: LogActionErrorOptions;
+  /** Optional task-specific context for ZodError messages. */
+  zodErrorPrefix?: string;
 }
 
 const DEFAULT_ZOD_ACTION_ERROR = "Check the highlighted fields.";
@@ -53,4 +66,33 @@ export function toLoggedActionError(
 ): string {
   logActionError(error, logOptions);
   return toActionError(error, fallbackMessage);
+}
+
+/**
+ * Convert a thrown error into the shared `ActionResult` failure shape: Zod
+ * issues become one readable sentence, an `ActionConflictError` keeps its
+ * structured `conflict`, and anything else is logged and replaced by the
+ * fallback. Both server entry points use it (`withAction` for Server Actions,
+ * `readResponse` for the `/api/reads/*` handlers) so the two transports cannot
+ * drift apart.
+ */
+export function toActionFailure(
+  error: unknown,
+  { fallbackMessage, log, zodErrorPrefix }: ActionFailureOptions,
+): ActionFailure {
+  if (error instanceof ZodError) {
+    return {
+      success: false,
+      error: formatZodActionError(error, zodErrorPrefix),
+    };
+  }
+  if (error instanceof ActionConflictError) {
+    return {
+      success: false,
+      error: error.message,
+      conflict: error.conflict,
+    };
+  }
+  logActionError(error, log);
+  return { success: false, error: toActionError(error, fallbackMessage) };
 }

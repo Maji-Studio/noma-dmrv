@@ -9,7 +9,7 @@
  *     `certifier_projects` row with a throwaway project id so the facility is
  *     "linked" — the operational routes (Removals / GHG Statements) are gated
  *     behind a registry link (ADR 0007), and the gate reads the
- *     DB-only `loadFacilityCertifierSummary`, so no real project is required.
+ *     DB-only `readFacilityCertifierSummary`, so no real project is required.
  *     Then visits each of the three routes via its nav link and asserts the
  *     per-route heading plus that the active `?facility=` scope is preserved on
  *     every hop. Links are addressed by accessible name (sidebar section per

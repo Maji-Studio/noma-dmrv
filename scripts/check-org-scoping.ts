@@ -9,7 +9,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 
 const ROOT = process.cwd();
-const SCANNED_DIRS = [join(ROOT, "src/data-access"), join(ROOT, "src/fn")];
+const SCANNED_DIRS = [
+  join(ROOT, "src/data-access"),
+  join(ROOT, "src/fn"),
+  join(ROOT, "src/lib/read-models"),
+];
 const SCHEMA_DIR = join(ROOT, "src/db/schema");
 const WAIVER = /\/\/\s*org-scope-ok:\s*\S/;
 

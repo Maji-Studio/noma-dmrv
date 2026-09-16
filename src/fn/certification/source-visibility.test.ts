@@ -34,7 +34,10 @@ vi.mock("@/data-access/certifier-organization-settings", () => ({
   upsertRegistrySourceVisibility: vi.fn(),
 }));
 
-vi.mock("@/fn/action-errors", () => ({
+// Only the log helper is stubbed; `withAction` formats its failures with the
+// real `toActionFailure` from the same module.
+vi.mock("@/fn/action-errors", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/fn/action-errors")>()),
   logActionError: vi.fn(),
 }));
 

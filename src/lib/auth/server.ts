@@ -147,22 +147,34 @@ const ORG_ROLE_RANK: Record<OrgRole, number> = {
 };
 
 /**
- * Resolve the active-organization context for the current session, or null if
- * the user is signed out or has no active organization selected. Platform
- * Admins pass without a membership row (override).
+ * Why an active-organization context could not be resolved. `unauthenticated`
+ * means no session at all; `no-organization` means a signed-in caller with no
+ * active organization selected, or one whose active organization they do not
+ * belong to. An HTTP transport needs that difference to answer 401 rather than
+ * 403; Server Actions do not and use `requireOrgContext`.
  */
-export async function getOrgContext(): Promise<OrgContext | null> {
+export type OrgContextDenial = "unauthenticated" | "no-organization";
+
+export type OrgContextResolution =
+  | { ok: true; ctx: OrgContext }
+  | { ok: false; denial: OrgContextDenial };
+
+/**
+ * Resolve the active-organization context for the current session, or say why
+ * it was denied. Platform Admins pass without a membership row (override).
+ */
+export async function resolveOrgContext(): Promise<OrgContextResolution> {
   const session = await getBetterAuthSession();
   const userId = session?.user?.id;
   if (!userId) {
-    return null;
+    return { ok: false, denial: "unauthenticated" };
   }
 
   const activeOrganizationId =
     (session.session as { activeOrganizationId?: string | null })
       .activeOrganizationId ?? null;
   if (!activeOrganizationId) {
-    return null;
+    return { ok: false, denial: "no-organization" };
   }
 
   const [userRow] = await db
@@ -186,15 +198,27 @@ export async function getOrgContext(): Promise<OrgContext | null> {
   // Active org is set but the user is neither a member nor a Platform Admin:
   // treat as no context (the org switcher / chooser should re-resolve it).
   if (!membership && !isPlatformAdmin) {
-    return null;
+    return { ok: false, denial: "no-organization" };
   }
 
   return {
-    userId,
-    organizationId: activeOrganizationId,
-    orgRole: (membership?.role as OrgRole | undefined) ?? null,
-    isPlatformAdmin,
+    ok: true,
+    ctx: {
+      userId,
+      organizationId: activeOrganizationId,
+      orgRole: (membership?.role as OrgRole | undefined) ?? null,
+      isPlatformAdmin,
+    },
   };
+}
+
+/**
+ * The active-organization context for the current session, or null if the user
+ * is signed out or has no usable active organization.
+ */
+export async function getOrgContext(): Promise<OrgContext | null> {
+  const resolution = await resolveOrgContext();
+  return resolution.ok ? resolution.ctx : null;
 }
 
 /**

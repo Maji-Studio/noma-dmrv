@@ -12,11 +12,9 @@ import {
   createFacility,
   getFacilityArchiveImpact,
   restoreFacility,
-  getFacilities as getFacilitiesData,
   getFacilityById as getFacilityByIdData,
   getFacilityCountries as getFacilityCountriesData,
   updateFacility,
-  type PaginatedFacilities,
   type FacilityArchiveImpact,
 } from "@/data-access/facilities";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -25,7 +23,6 @@ import {
   createFacilitySchema,
   restoreFacilitySchema,
   updateFacilitySchema,
-  facilityFilterSchema,
 } from "@/schemas/facilities";
 import type { ActionResult } from "@/types/actions";
 import {
@@ -52,39 +49,6 @@ function facilityActionError(
 // ============================================
 // List/Query Operations
 // ============================================
-
-/**
- * Get paginated list of facilities with filtering
- */
-export async function getFacilitiesFn(
-  filters?: Partial<z.infer<typeof facilityFilterSchema>>
-): Promise<ActionResult<PaginatedFacilities>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validatedFilters = filters
-      ? facilityFilterSchema.parse(filters)
-      : undefined;
-    const facilities = await getFacilitiesData(ctx, validatedFilters);
-
-    return { success: true, data: facilities };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facilities",
-        "facility:list",
-      ),
-    };
-  }
-}
 
 /**
  * Get a single facility by ID
