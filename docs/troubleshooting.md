@@ -45,16 +45,38 @@ Check no firewall blocks `localhost:3100`; try `WATCHPACK_POLLING=true pnpm dev:
 
 ### Pool Configuration (read before diagnosing any connection symptom)
 
-`src/db/index.ts` builds the pool from `getPgPoolConfig(env.DATABASE_URL)` plus:
+`src/db/index.ts` assembles the pool from two helpers: `getPgPoolConfig`
+(`src/lib/pg-pool-config.ts`) supplies the connection string and SSL,
+`resolveAppPoolConfig` (`src/db/pool-config.ts`) supplies sizes and timeouts.
+The defaults live in `src/db/pool-config.ts`, not inline in `src/db/index.ts`:
 
-- `max: env.DB_POOL_MAX ?? 1` — the default is **1**, not a library default of 10. Advice about "reducing the pool" is backwards here; local pool starvation is usually fixed by *raising* `DB_POOL_MAX`.
-- `idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT_MS ?? 10_000`
-- `connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000` — so exhaustion surfaces as a **10-second hang**, not an immediate error.
-- `lock_timeout: env.DB_POOL_LOCK_TIMEOUT_MS ?? DEFAULT_POOL_LOCK_TIMEOUT_MS` — defaults to **1 second** while a pooled statement waits for a conflicting database lock. A timeout raises `55P03` and releases the waiting transaction's pool slot after rollback; retry after the conflicting operation completes. Keep this timeout below the connection-acquisition timeout.
+- `max` — `DEFAULT_DB_POOL_MAX` is **1**, not a library default of 10. Advice about "reducing the pool" is backwards here; local pool starvation is usually fixed by *raising* `DB_POOL_MAX`.
+- `idleTimeoutMillis` — `DEFAULT_DB_POOL_IDLE_TIMEOUT_MS`, **5 seconds**.
+- `connectionTimeoutMillis` — `DEFAULT_DB_POOL_CONNECTION_TIMEOUT_MS`, **10 seconds**, so exhaustion surfaces as a 10-second hang, not an immediate error.
+- `lock_timeout` — `DEFAULT_DB_POOL_LOCK_TIMEOUT_MS`, **1 second** while a pooled statement waits for a conflicting database lock. A timeout raises `55P03` and releases the waiting transaction's pool slot after rollback; retry after the conflicting operation completes. Keep this timeout below the connection-acquisition timeout.
 
-All four are env-driven (`src/config/env.ts`). Tune their environment overrides rather than editing the defaults in `src/db/index.ts`.
+All five `DB_POOL_*` variables — those four plus `DB_POOL_TELEMETRY` — are
+env-driven (`src/config/env.ts`). Tune the environment rather than editing the
+constants. `MAX_VERCEL_DB_POOL_MAX` (5) makes a Vercel deployment fail closed on
+a larger `DB_POOL_MAX`, because each Fluid Compute instance holds its own pool.
+The module-scope pool is attached to the Fluid Compute lifecycle so idle clients
+close before suspension.
 
-`withDedicatedLockConnection()` (same file) deliberately opens its own `pg.Client` **outside** the shared pool: lock-backed certification work holds the advisory lock while doing heavyweight nested work through the shared pool, so it must not consume a pooled connection. It is a second, invisible connection source when counting `pg_stat_activity` — and "cleaning up" the duplicate connection logic will deadlock certification.
+`DB_POOL_TELEMETRY=true` turns on the instrumentation in
+`src/db/observed-pg.ts`: structured `db-pool` records separating connection
+establishment, connection acquisition, and query execution, with queue and pool
+counts but no SQL or values. Enable it for a bounded measurement window and
+disable it after the sample; an HTTP response time is not an SQL timing.
+**With the flag off, connection failures, checkout failures, and idle-client
+errors are still logged at warn; query timings and query failures are not.**
+Expected `55P03` lock timeouts and unique-violation retries are ordinary control
+flow in this codebase, so a failed pooled query is never a `db-pool` warning —
+diagnose it from the error the caller surfaces. An unreachable database, an
+acquisition that times out, or a dropped idle connection always leaves a record.
+The idle-client `error` listener also stays registered either way, so a dropped
+idle connection can never become an unhandled event.
+
+`withDedicatedLockConnection()` (`src/db/index.ts`) deliberately opens its own `pg.Client` **outside** the shared pool: lock-backed certification work holds the advisory lock while doing heavyweight nested work through the shared pool, so it must not consume a pooled connection. It is a second, invisible connection source when counting `pg_stat_activity` — and "cleaning up" the duplicate connection logic will deadlock certification.
 The dedicated connection does not inherit the pooled lock timeout. Do not add a transaction or statement timeout that could release an active registry DELETE's locks while the remote operation still runs.
 
 ### Connection Pool Exhaustion / "too many clients already"
@@ -68,8 +90,9 @@ The dedicated connection does not inherit the pooled lock timeout. Do not add a 
    SHOW max_connections;
    SELECT count(*) FROM pg_stat_activity;
    ```
-2. Tune `DB_POOL_MAX` in the environment (up or down) rather than editing `src/db/index.ts`.
-3. For production, front the database with PgBouncer and point `DATABASE_URL` at its port (6432).
+2. Account for `active Vercel instances × DB_POOL_MAX`, plus simultaneous dedicated lock operations and non-app consumers.
+3. Raise `DB_POOL_MAX` one measured step at a time, never past the budget above, and on Vercel never past `MAX_VERCEL_DB_POOL_MAX`. The current measurement procedure is in [database.md](./database.md#rollout--pool-size-measurement).
+4. If adding a pooler, use direct/session semantics or prove compatibility with `withDedicatedSessionAdvisoryLock`; transaction pooling is not automatically safe for session locks.
 
 ### Connection Refused / Connection Timeout
 

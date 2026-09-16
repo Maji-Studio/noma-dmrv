@@ -10,13 +10,17 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn(),
 }));
 
-vi.mock("@/lib/log", () => ({
-  logger: {
+vi.mock("@/lib/log", () => {
+  const logger = {
     error: vi.fn(),
-  },
-  sanitizeErrorMessage: (error: unknown) =>
-    error instanceof Error ? error.message : String(error),
-}));
+    child: () => logger,
+  };
+  return {
+    logger,
+    sanitizeErrorMessage: (error: unknown) =>
+      error instanceof Error ? error.message : String(error),
+  };
+});
 
 import { withAction } from "@/fn/with-action";
 import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
