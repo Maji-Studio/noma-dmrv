@@ -533,7 +533,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await waitForSideSheet(page);
 
       await page.fill('input[name="orderDate"]', today);
-      await page.selectOption('select[name="customerId"]', seededData.customer.id);
+      await selectEntityById(page, "Customer", seededData.customer.id, seededData.customer.name);
 
       // Wait for cascading customer location select
       await page.waitForSelector(

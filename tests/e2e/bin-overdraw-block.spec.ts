@@ -341,9 +341,11 @@ async function createOrder(page: Page, seededData: SeededChainData, quantityKg =
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', DELIVERY_DATE);
-  await page.selectOption(
-    'select[name="customerId"]',
+  await selectEntity(
+    page,
+    "Customer",
     seededData.customer.id,
+    seededData.customer.name,
   );
   await page.waitForSelector(
     'select[name="customerLocationId"]:not([disabled])',
