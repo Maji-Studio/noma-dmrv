@@ -17,6 +17,7 @@ import {
   deleteCreditBatch as deleteCreditBatchData,
   creditBatchCodeExists,
   type CreditBatchWithRelations,
+  type CreatedCreditBatch,
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
 } from "@/data-access/credit-batches";
@@ -130,7 +131,7 @@ export async function getCreditBatchProductionRunOptionsFn(
  */
 export async function createCreditBatchFn(
   data: z.infer<typeof createCreditBatchSchema>
-): Promise<ActionResult<CreditBatchWithRelations>> {
+): Promise<ActionResult<CreatedCreditBatch>> {
   try {
     const ctx = await requireOrgContext();
 

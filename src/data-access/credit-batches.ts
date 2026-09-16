@@ -126,6 +126,23 @@ type CreditBatchWithOptionalPreview = Omit<
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
 };
 
+/**
+ * A credit batch as it comes back from its own create. The insert committed,
+ * but the accounting roll-up opens its own transaction after that commit and
+ * can fail on its own, so its fields are nullable here: `null` means the
+ * roll-up did not load, never that nothing is applied. A row answering `0 t`
+ * would describe a batch nobody read (issue #769). Readers render the shared
+ * missing-value token for a null, never a zero.
+ */
+export type CreatedCreditBatch = Omit<
+  CreditBatchWithRelations,
+  "appliedWeightTons" | "applicationIds" | "applicationCount"
+> & {
+  appliedWeightTons: number | null;
+  applicationIds: string[] | null;
+  applicationCount: number | null;
+};
+
 export interface CreditBatchProductionRunOption {
   id: string;
   code: string;
@@ -370,7 +387,7 @@ export async function createCreditBatch(
     code: string;
     sampling?: CreditBatchSampling;
   }
-): Promise<CreditBatchWithRelations> {
+): Promise<CreatedCreditBatch> {
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
   let resolvedProductionRunIds = productionRunIds ?? [];
@@ -515,20 +532,23 @@ export async function createCreditBatch(
   // `previewAvailable: false` (as list reads already do) instead of failing a
   // create that succeeded. The caller turns that into a warning (issue #769).
   const accounting = await loadCreditBatchAccountingSafely(ctx, creditBatch.id);
+  // The member runs are known from the write itself, so they stay populated
+  // either way. The application slices and the applied tonnage are only known
+  // from the roll-up: without it they are unknown, not zero.
   const memberProductionRunIds =
     accounting?.lineageFacts.productionRunIds ?? resolvedProductionRunIds;
-  const applicationIds = accounting?.lineageFacts.applicationIds ?? [];
+  const applicationIds = accounting?.lineageFacts.applicationIds ?? null;
 
   return {
     ...creditBatch,
     facility: facility ? { name: facility.name } : null,
     durabilityOption,
     feedstockTypeName: feedstockType?.name ?? null,
-    applicationCount: applicationIds.length,
+    applicationCount: applicationIds?.length ?? null,
     applicationIds,
     productionRunCount: memberProductionRunIds.length,
     productionRunIds: memberProductionRunIds,
-    appliedWeightTons: accounting?.appliedWeightTons ?? 0,
+    appliedWeightTons: accounting?.appliedWeightTons ?? null,
     co2eStoredPreview: accounting?.co2ePreview ?? null,
     previewAvailable: accounting !== undefined,
   };

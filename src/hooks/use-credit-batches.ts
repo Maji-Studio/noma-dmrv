@@ -167,7 +167,13 @@ export function useCreateCreditBatch() {
       return { creditBatch: result.data, warning: result.warning };
     },
     onSuccess: ({ creditBatch }) => {
-      queryClient.setQueryData(creditBatchKeys.detail(creditBatch.id), creditBatch);
+      // The created row is not an authoritative detail: when its post-commit
+      // roll-up did not load, its applied tonnage and application slices are
+      // unknown, and seeding it would serve those unknowns for the whole
+      // staleTime window. Refetch the detail instead (issue #769).
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.detail(creditBatch.id),
+      });
       const listRefresh = queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
