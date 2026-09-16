@@ -31,6 +31,45 @@ export class RecordLossFieldError extends Error {
   }
 }
 
+/** The blocking record a conflicting loss request points back at. */
+export interface RecordLossConflict {
+  entity: string;
+  id: string;
+  code: string;
+}
+
+/**
+ * Client-side carrier for a loss request-key conflict (issue #773).
+ *
+ * The action answers a reused key with `{ conflict }` per the `ActionResult`
+ * contract; the form needs that payload to rotate its key so an edited
+ * resubmit is a fresh request instead of the same conflict again.
+ */
+export class RecordLossConflictError extends Error {
+  readonly conflict: RecordLossConflict;
+
+  constructor(message: string, conflict: RecordLossConflict) {
+    super(message);
+    this.name = "RecordLossConflictError";
+    this.conflict = conflict;
+  }
+}
+
+/** Turn a failed loss action into a thrown error, keeping its structure. */
+export function throwRecordLossError(result: {
+  error: string;
+  field?: "lossMassKg";
+  conflict?: RecordLossConflict;
+}): never {
+  if (result.field) {
+    throw new RecordLossFieldError(result.error, result.field);
+  }
+  if (result.conflict) {
+    throw new RecordLossConflictError(result.error, result.conflict);
+  }
+  throw new Error(result.error);
+}
+
 /** Client-side carrier for a structured stock-take action field error. */
 export class RecordStockTakeFieldError extends Error {
   readonly field: "counted";
@@ -104,10 +143,7 @@ export function useRecordLoss() {
     mutationFn: async (data: RecordLossData) => {
       const result = await recordLossFn(data);
       if (!result.success) {
-        if (result.field) {
-          throw new RecordLossFieldError(result.error, result.field);
-        }
-        throw new Error(result.error);
+        throwRecordLossError(result);
       }
       return result.data;
     },

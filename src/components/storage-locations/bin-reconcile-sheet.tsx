@@ -12,6 +12,7 @@ import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { useToast } from "@/components/ui/toast";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import {
+  RecordLossConflictError,
   RecordLossFieldError,
   useRecordLoss,
 } from "@/hooks/use-bin-movements";
@@ -32,6 +33,10 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { binCurrentMassKg } from "./bin-display";
 import { OutputStockForm } from "./output-stock-form";
+
+/** Shown when a resubmit reuses a request key that already saved a loss. */
+const LOSS_CONFLICT_MESSAGE =
+  "A loss from this form is already recorded. Check the reconciliation history before you submit again.";
 
 interface BinReconcileSheetProps {
   initialKind?: "loss" | "count";
@@ -105,6 +110,11 @@ function LossForm({
     lossMassKg: number;
   } | null>(null);
   const recordLoss = useRecordLoss();
+  // One key per open form instance, so a double submit replays the saved
+  // movement instead of posting a second deduction.
+  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+    crypto.randomUUID(),
+  );
   const lane = laneForStorageType(storageLocation.type);
   const availableKg = binCurrentMassKg(storageLocation);
 
@@ -143,9 +153,11 @@ function LossForm({
       await recordLoss.mutateAsync({
         storageLocationId: storageLocation.id,
         lane,
+        idempotencyKey,
         reason: values.reason,
         lossMassKg: values.lossMassKg,
       });
+      setIdempotencyKey(crypto.randomUUID());
       toast.success("Loss recorded");
       onRecorded?.();
     } catch (error) {
@@ -154,6 +166,13 @@ function LossForm({
           message: error.message,
           lossMassKg: values.lossMassKg,
         });
+        return;
+      }
+      if (error instanceof RecordLossConflictError) {
+        // The key is spent on the saved movement, so an edited resubmit would
+        // conflict again. Rotate it and let the operator decide.
+        setIdempotencyKey(crypto.randomUUID());
+        setServerError(LOSS_CONFLICT_MESSAGE);
         return;
       }
       setServerError(
