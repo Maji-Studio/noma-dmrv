@@ -444,13 +444,43 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     toast,
   ]);
 
-  const deepLinkedSideSheet =
-    focusedFeedstockId && focusedFeedstock.data
-      ? ({
-          entity: focusedFeedstock.data,
-          mode: deepLinkMode === "edit" ? "edit" : "view",
-        } as const)
-      : null;
+  // A deep-linked edit sheet (?feedstock=...&mode=edit) has to save against the
+  // version it opened on, exactly like the click-opened path, so the first
+  // loaded entity is frozen into state here (#768). Reading the live query
+  // instead would let an evidence upload that invalidates it hand a stale draft
+  // a fresh version. This is a render-phase state adjustment, not an effect:
+  // the snapshot is derived from the id the sheet is pinned to.
+  const [deepLinkEditEntity, setDeepLinkEditEntity] = useState<{
+    id: string;
+    entity: FeedstockWithRelations;
+  } | null>(null);
+  const wantsDeepLinkEdit =
+    !sideSheet && deepLinkMode === "edit" && !!focusedFeedstockId;
+  if (!wantsDeepLinkEdit) {
+    // Dropped as soon as the sheet closes or switches away, so reopening the
+    // same record deep-links onto a freshly read version.
+    if (deepLinkEditEntity) setDeepLinkEditEntity(null);
+  } else if (
+    focusedFeedstockId &&
+    focusedFeedstock.data &&
+    deepLinkEditEntity?.id !== focusedFeedstockId
+  ) {
+    setDeepLinkEditEntity({
+      id: focusedFeedstockId,
+      entity: focusedFeedstock.data,
+    });
+  }
+  const frozenDeepLinkEntity =
+    deepLinkEditEntity?.id === focusedFeedstockId ? deepLinkEditEntity.entity : null;
+  const deepLinkedSideSheet = !focusedFeedstockId
+    ? null
+    : wantsDeepLinkEdit
+      ? frozenDeepLinkEntity
+        ? ({ entity: frozenDeepLinkEntity, mode: "edit" } as const)
+        : null
+      : focusedFeedstock.data
+        ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
+        : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
   const activeFocusTarget = sideSheet
     ? null
