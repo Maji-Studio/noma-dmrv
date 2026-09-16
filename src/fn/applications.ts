@@ -25,11 +25,29 @@ import {
   deleteApplicationSchema,
 } from "@/schemas/applications";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
+
+/**
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function applicationActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "application action failed", context: { op } },
+  });
+}
 
 function applicationActionError(
   error: unknown,
@@ -177,20 +195,7 @@ export async function updateApplicationFn(
     const application = await updateApplicationData(ctx, applicationId, updateData);
     return { success: true, data: application };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: applicationActionError(
-        error,
-        "Failed to update application",
-        "application:update",
-      ),
-    };
+    return applicationActionFailure(error, "Failed to update application", "application:update");
   }
 }
 

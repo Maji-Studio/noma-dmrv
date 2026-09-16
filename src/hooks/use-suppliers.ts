@@ -39,7 +39,9 @@ import {
   deleteSupplierLocationFn,
 } from "@/fn/suppliers";
 
+import { throwActionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
 
@@ -195,9 +197,9 @@ export function useUpdateSupplier(
   return useMutation({
     mutationFn: async (data: UpdateSupplierData) => {
       const result = await updateSupplierFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -245,11 +247,10 @@ export function useUpdateSupplier(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.supplierId
-                ? ({
-                    ...item,
-                    ...variables,
-                    updatedAt: new Date(),
-                  } as SupplierWithRelations)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as SupplierWithRelations)
                 : item
             ),
           };
@@ -264,6 +265,11 @@ export function useUpdateSupplier(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<SupplierWithRelations>(
+        queryClient,
+        supplierKeys.lists(),
+        data,
+      );
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
@@ -462,7 +468,9 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
   return useMutation({
     mutationFn: async (data: UpdateSupplierLocationData) => {
       const result = await updateSupplierLocationFn(data);
-      if (!result.success) throw new Error(result.error);
+      // Keeps an expected-version refusal typed so the open edit dialog can
+      // show it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {

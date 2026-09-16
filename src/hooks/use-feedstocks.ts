@@ -22,6 +22,7 @@ import {
   updateFeedstockFn,
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
+import { throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -138,7 +139,9 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
   return useMutation({
     mutationFn: async (data: UpdateFeedstockData) => {
       const result = await updateFeedstockFn(data);
-      if (!result.success) throw new Error(result.error);
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {

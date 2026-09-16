@@ -10,6 +10,7 @@ import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import {
   clearablePositiveNumber,
   emptyToNull,
+  expectedUpdatedAtSchema,
   massKgSchema,
   optionalPositiveNumber,
   positiveMassKgSchema,
@@ -159,6 +160,7 @@ export const createFeedstockSchema = feedstockFormSchema.safeExtend({
 
 export const updateFeedstockSchema = z.object({
   feedstockId: z.string().uuid("Choose a valid feedstock."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   facilityId: z.string().uuid().optional(),
   deliveryDate: z.union([
     z.date(),

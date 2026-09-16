@@ -43,6 +43,11 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { sumNullableBy } from "@/lib/nullable-sum";
+import {
+  isStaleVersionFailure,
+  STALE_VERSION_MESSAGE,
+  toSaveErrorMessage,
+} from "@/lib/stale-version";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
   applicationEvidenceMethods,
@@ -359,6 +364,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     try {
       const result = await updateApplication.mutateAsync({
         applicationId,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
         ...data,
       });
       if (result.success) {
@@ -367,6 +375,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             deferredAttachments.flush("application", applicationId),
           );
           if (!flushResult.ok) {
+            // The update itself committed, so the still-open sheet has to adopt
+            // the version it wrote. Leaving the opened-on snapshot in place
+            // would get the operator's next Save refused as stale against
+            // their own write (#768).
+            const saved = result.data;
+            setSideSheet((prev) =>
+              prev?.entity && prev.entity.id === applicationId
+                ? { ...prev, entity: { ...prev.entity, ...saved } }
+                : prev,
+            );
             setUpdateError(
               `Application updated, but ${flushResult.failed.length} ${
                 flushResult.failed.length === 1
@@ -384,10 +402,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setSideSheet(null);
         toast.success("Application updated.");
       } else {
-        setUpdateError(result.error || "Application was not saved. Try again.");
+        // The side sheet stays open on every failure, so the operator's draft
+        // survives an expected-version refusal untouched. This hook answers
+        // with the result instead of throwing, so the refusal is read off it.
+        setUpdateError(
+          isStaleVersionFailure(result)
+            ? STALE_VERSION_MESSAGE
+            : result.error || "Application was not saved. Try again.",
+        );
       }
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Application was not saved. Try again.");
+      setUpdateError(toSaveErrorMessage(error, "Application was not saved. Try again."));
     }
   };
 

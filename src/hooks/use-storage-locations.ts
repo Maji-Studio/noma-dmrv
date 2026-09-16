@@ -29,8 +29,10 @@ import {
   deleteStorageLocationFn,
 } from "@/fn/storage-locations";
 import { facilityKeys } from "@/hooks/use-facilities";
+import { throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
 // ============================================
 // Query Keys
@@ -149,9 +151,9 @@ export function useUpdateStorageLocation(
   return useMutation({
     mutationFn: async (data: UpdateStorageLocationData) => {
       const result = await updateStorageLocationFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -201,11 +203,10 @@ export function useUpdateStorageLocation(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.storageLocationId
-                ? ({
-                    ...item,
-                    ...variables,
-                    updatedAt: new Date(),
-                  } as StorageLocationWithFacility)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as StorageLocationWithFacility)
                 : item
             ),
           };
@@ -220,6 +221,12 @@ export function useUpdateStorageLocation(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+
+      patchListCachesWithSavedRow<StorageLocationWithFacility>(
+        queryClient,
+        storageLocationKeys.lists(),
+        data,
+      );
 
       // Invalidate to ensure consistency
       await Promise.all([
