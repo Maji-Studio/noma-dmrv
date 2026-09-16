@@ -5,7 +5,7 @@
 "use client";
 
 import { formatLocalDate } from "@/lib/date-utils";
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
@@ -320,7 +320,7 @@ export function OrderForm({
               disabled={isSubmitting}
               error={!!errors.value}
               {...register("value", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>

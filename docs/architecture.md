@@ -25,7 +25,11 @@ components (UI)
   are not exported from a `"use server"` file; the caller authenticates first.
   Today that caller is the `/api/reads/*` adapter; a `fn/` action that needs the
   same read wraps the core in `withAction` rather than duplicating it.
-- `data-access/` owns query composition **and** org-scope enforcement.
+- `data-access/` owns query composition **and** org-scope enforcement. A
+  partial update reads `undefined` as omitted, `null` as an explicit clear,
+  and `0` as zero; values the server owns (derived masses) and cross-field
+  rules are resolved against the locked stored row, never trusted from the
+  patch. See [forms.md](./forms.md#the-partial-update-contract-omitted--null--zero).
 
 ## Tenancy — the actual authorization model
 

@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
 import { formatDate } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -659,7 +659,7 @@ export function ApplicationForm({
               disabled={isSubmitting}
               error={!!errors.soilTemperatureC}
               {...register("soilTemperatureC", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>
