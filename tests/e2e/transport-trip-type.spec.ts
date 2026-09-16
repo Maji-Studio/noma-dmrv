@@ -34,7 +34,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', "2026-03-02");
-  await page.selectOption('select[name="customerId"]', seededData.customer.id);
+  await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
   await page.waitForSelector(
     'select[name="customerLocationId"]:not([disabled])',
     { timeout: 8000 }

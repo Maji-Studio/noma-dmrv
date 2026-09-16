@@ -9,16 +9,9 @@ import type { OrgContext } from "@/lib/auth/server";
 import {
   storageLocations,
   facilities,
-  feedstocks,
   feedstockTypes,
-  productionRuns,
-  productionRunFeedstockDraws,
   biocharProducts,
-  biocharProductSourceAllocations,
-  biocharStorageInventory,
-  binMovements,
   formulations,
-  deliveries,
   type StorageLocation,
 } from "@/db/schema";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -41,6 +34,10 @@ import {
 } from "./bin-stock-guards";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import { assertBinIdentityChangeAllowed } from "./storage-location-identity-guards";
+import {
+  countStorageLocationReferences,
+  storageLocationBlockers,
+} from "./storage-location-references";
 import { getStorageLocationLaneSummary } from "./storage-location-lane-summary";
 import type {
   StorageLocationWithFacility,
@@ -526,16 +523,21 @@ export async function updateStorageLocation(
       : null;
 
     // These two columns select the bin's material lane, so a stocked bin keeps
-    // the setup its recorded stock and history were written against.
-    if (
-      effectiveType !== existing.type ||
-      normalizedFeedstockTypeId !== existing.feedstockTypeId
-    ) {
-      await assertBinIdentityChangeAllowed(ctx, tx, {
+    // the setup its recorded stock and history were written against. The guard
+    // compares the two identities itself and returns when neither moved.
+    await assertBinIdentityChangeAllowed(
+      ctx,
+      tx,
+      {
         id: storageLocationId,
         type: existing.type as StorageLocationType,
-      });
-    }
+        feedstockTypeId: existing.feedstockTypeId,
+      },
+      {
+        type: effectiveType as StorageLocationType,
+        feedstockTypeId: normalizedFeedstockTypeId,
+      },
+    );
 
     const normalizedFormulationId =
       effectiveType === "product_bin"
@@ -773,66 +775,9 @@ export async function deleteStorageLocation(
     throw new SafeError("Storage bin not found");
   }
 
-  const [
-    [{ value: feedstockCount }],
-    [{ value: feedstockRunCount }],
-    [{ value: biocharRunCount }],
-    [{ value: productCount }],
-    [{ value: sourcedProductCount }],
-    [{ value: sourceAllocationCount }],
-    [{ value: deliveryCount }],
-    [{ value: inventoryCount }],
-    [{ value: movementCount }],
-  ] = await Promise.all([
-    db
-      .select({ value: count() })
-      .from(feedstocks)
-      .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(productionRunFeedstockDraws)
-      .where(and(eq(productionRunFeedstockDraws.storageLocationId, storageLocationId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(productionRuns)
-      .where(and(eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.storageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.sourceBiocharStorageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(biocharProductSourceAllocations)
-      .where(and(eq(biocharProductSourceAllocations.sourceStorageLocationId, storageLocationId), eq(biocharProductSourceAllocations.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(deliveries)
-      .where(and(eq(deliveries.storageLocationId, storageLocationId), eq(deliveries.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(biocharStorageInventory)
-      .where(and(eq(biocharStorageInventory.storageLocationId, storageLocationId), eq(biocharStorageInventory.organizationId, ctx.organizationId))),
-    db
-      .select({ value: count() })
-      .from(binMovements)
-      .where(and(eq(binMovements.storageLocationId, storageLocationId), eq(binMovements.organizationId, ctx.organizationId))),
-  ]);
-
-  const blockers = [
-    Number(feedstockCount) > 0 ? "feedstock batches" : null,
-    Number(feedstockRunCount) > 0 ? "production runs using it as a feedstock bin" : null,
-    Number(biocharRunCount) > 0 ? "production runs using it as a biochar bin" : null,
-    Number(productCount) > 0 ? "biochar products stored in it" : null,
-    Number(sourcedProductCount) > 0 ? "biochar products sourced from it" : null,
-    Number(sourceAllocationCount) > 0 ? "product source allocations drawing from it" : null,
-    Number(deliveryCount) > 0 ? "deliveries drawing from it" : null,
-    Number(inventoryCount) > 0 ? "storage inventory records" : null,
-    Number(movementCount) > 0 ? "reconciliation or movement history" : null,
-  ].filter(Boolean);
+  const blockers = storageLocationBlockers(
+    await countStorageLocationReferences(ctx, db, storageLocationId),
+  );
 
   if (blockers.length > 0) {
     throw new SafeError(

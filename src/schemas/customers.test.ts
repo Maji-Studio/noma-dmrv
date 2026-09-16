@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   createCustomerLocationSchema,
+  createCustomerWithLocationsSchema,
   customerLocationFormSchema,
+  MAX_PENDING_CUSTOMER_LOCATIONS,
   updateCustomerLocationSchema,
 } from "./customers";
 
@@ -71,6 +73,66 @@ describe("customer location site description", () => {
     if (result.success) return;
     expect(result.error.issues[0]?.message).toBe(
       "Site description must be 500 characters or fewer",
+    );
+  });
+});
+
+describe("createCustomerWithLocationsSchema", () => {
+  const customerInput = { name: "Kilimanjaro Coffee" };
+
+  it("defaults an omitted locations array to empty", () => {
+    const result = createCustomerWithLocationsSchema.safeParse({
+      customer: customerInput,
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.locations).toEqual([]);
+  });
+
+  it("accepts locations without a customer id, which the writer fills in", () => {
+    const result = createCustomerWithLocationsSchema.safeParse({
+      customer: customerInput,
+      locations: [locationInput, { ...locationInput, isDefault: true }],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.locations).toHaveLength(2);
+    expect(result.data.locations[1]?.isDefault).toBe(true);
+  });
+
+  it("rejects the payload when the customer is invalid", () => {
+    expect(
+      createCustomerWithLocationsSchema.safeParse({
+        customer: { name: "" },
+        locations: [],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects the payload when any location is invalid", () => {
+    const result = createCustomerWithLocationsSchema.safeParse({
+      customer: customerInput,
+      locations: [locationInput, { ...locationInput, gpsLatitude: 999 }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects more locations than one create form should carry", () => {
+    const result = createCustomerWithLocationsSchema.safeParse({
+      customer: customerInput,
+      locations: Array.from(
+        { length: MAX_PENDING_CUSTOMER_LOCATIONS + 1 },
+        () => locationInput,
+      ),
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.issues[0]?.message).toContain(
+      `at most ${MAX_PENDING_CUSTOMER_LOCATIONS} locations`,
     );
   });
 });

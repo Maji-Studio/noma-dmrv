@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { ServerError } from "@/components/forms";
+import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
@@ -16,7 +16,6 @@ import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type { OrderWithRelations } from "@/data-access/orders";
 import type { Order } from "@/db/schema";
-import { useCustomers } from "@/hooks/use-customers";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -173,10 +172,6 @@ export function OrderList() {
     filters,
     { enabled: !!facilityId },
   );
-
-  // Customer options for the filter dropdown
-  const { data: customersData } = useCustomers({ pageSize: 100 });
-  const customerOptions = customersData?.items ?? [];
 
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
@@ -356,17 +351,21 @@ export function OrderList() {
                 <option key={s} value={s}>{ORDER_FULFILLMENT_DISPLAY[s].label}</option>
               ))}
             </DataTable.FilterSelect>
-            <DataTable.FilterSelect
-              value={customerFilter}
-              onChange={(e) => { setCustomerFilter(e.target.value); setCurrentPage(1); }}
-              className="sm:max-w-[200px]"
-              aria-label="Filter by customer"
-            >
-              <option value="">All customers</option>
-              {customerOptions.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </DataTable.FilterSelect>
+            {/*
+              Searchable rather than a native select: an organization can hold
+              more customers than any fixed page would list, and a truncated
+              filter silently hides orders (#774). The "All customers" row is
+              the unfiltered state, so it reads as a choice, not a blank.
+            */}
+            <EntitySelect
+              entityType="customer"
+              value={customerFilter || undefined}
+              onChange={(value) => { setCustomerFilter(value ?? ""); setCurrentPage(1); }}
+              placeholder="Filter by customer"
+              noneOption={{ label: "All customers" }}
+              alwaysShowSearch
+              className="w-full sm:w-[200px]"
+            />
             {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><XIcon size={16} weight="bold" />Clear</Button>}
             <DataTable.ColumnVisibility />
           </DataTable.Controls>

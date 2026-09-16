@@ -540,7 +540,7 @@ threshold for the same PR; revisit next time the area is touched.
 ### Phase 3.5 Sources panel test-pass follow-ups (opened 2026-05-27)
 
 Surfaced while exercising the Sources panel against the sandbox (Cases A–H).
-A–E and the precondition guards (G/H) passed; the three below were band-aided or
+A–E and the precondition guards (G/H) passed; the two below were band-aided or
 are clean deferrals.
 
 - **`storage/sources-storage-loopback` — replace the HTTP loopback in
@@ -554,28 +554,6 @@ are clean deferrals.
   Browser→storage signed URLs stay for genuine browser use. Removes one HTTP hop
   per mirror, shrinks the loopback-host allowlist surface, and kills the dev-only
   `STORAGE_SIGNING_SECRET` dependency on this path.
-
-- **`storage/sources-sync-events-tx` — move `certifier_sync_events` writes out
-  of the mirror business transaction. ⚠️ NOT MITIGATED — live at the default
-  pool size.** `appendSyncEventBestEffort` (`src/fn/certification/shared.ts`)
-  runs on the root `db` while being called from inside the transaction opened in
-  `mirrorDocumentToSource` (`src/fn/certification/sources.ts`). With a
-  single-connection pool the audit write deadlocks waiting for a connection held
-  by the open business transaction — **the same pool-starvation failure the
-  `assertSameOrg` `executor` parameter exists to prevent** (see the invariants
-  section).
-  A previous version of this entry claimed the risk was band-aided with
-  `DB_POOL_MAX=10`. **That is false.** `resolveAppPoolConfig`
-  (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX`, which is 1, and
-  `.env.local` records `DB_POOL_MAX skipped — no
-  "DB_POOL_MAX" field in the 1Password item`, so the effective pool size is
-  **1** and the starvation path is fully live. Treat this as unmitigated until
-  fixed.
-  **Resolve via:** accumulate event payloads in a closure and flush after the
-  transaction settles (success or rollback). Touch points:
-  `src/fn/certification/sources.ts` (`withSourceSyncEventOnFailure`, the
-  `appendSyncEventBestEffort` calls inside the mirror transaction),
-  `src/data-access/certification.ts` (`appendSyncEvent`).
 
 - **`ux/sources-panel-row-layout` — Mirror clips on narrow viewports.** The
   Mirror action in `src/components/certification/sources-panel.tsx` can clip

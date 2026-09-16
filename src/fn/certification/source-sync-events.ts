@@ -1,3 +1,4 @@
+import type { AppendSyncEventInput } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { sanitizeErrorMessage } from "@/lib/log";
 import {
@@ -5,12 +6,21 @@ import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
 } from "./shared";
+import type { SyncEventStage } from "./sync-event-stage";
 
 interface SourceSyncEventArgs {
   documentId: string;
   removalId: string;
   operation: string;
   requestPayload?: unknown;
+  /**
+   * Supplied when the call runs inside an open transaction. The diagnostics
+   * are then staged and written after the transaction rolls back, because
+   * `appendSyncEvent` inserts through the root pooled `db` and would otherwise
+   * wait for a connection the transaction itself is holding. See
+   * `./sync-event-stage`.
+   */
+  stage?: SyncEventStage;
 }
 
 /**
@@ -32,14 +42,14 @@ export async function withSourceSyncEventOnFailure<T>(
       status: "failed" as const,
       errorMessage,
     };
-    await Promise.all([
-      appendSyncEventBestEffort(orgCtx, {
+    const events: AppendSyncEventInput[] = [
+      {
         ...common,
         entityType: "document",
         entityId: args.documentId,
         requestPayload: args.requestPayload,
-      }),
-      appendSyncEventBestEffort(orgCtx, {
+      },
+      {
         ...common,
         entityType: REMOVAL_ENTITY_TYPE,
         entityId: args.removalId,
@@ -47,8 +57,15 @@ export async function withSourceSyncEventOnFailure<T>(
           ...((args.requestPayload as Record<string, unknown> | undefined) ?? {}),
           documentId: args.documentId,
         },
-      }),
-    ]);
+      },
+    ];
+    if (args.stage) {
+      for (const event of events) args.stage.onRollback(event);
+    } else {
+      await Promise.all(
+        events.map((event) => appendSyncEventBestEffort(orgCtx, event)),
+      );
+    }
     throw error;
   }
 }
