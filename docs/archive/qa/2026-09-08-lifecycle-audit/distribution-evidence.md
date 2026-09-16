@@ -3,7 +3,7 @@
 Independent Astra low CLI report. Consult [the parent audit](README.md) for verified rankings, later database simulations, and combined test results. The investigator’s environment limitations below describe its own run; the parent subsequently installed dependencies and tested a disposable database.
 
 **Baseline:** `ef857545b11fa298f0f08e128868ed14e37fbf5f`  
-**Checkout:** `/Users/kenji/.codex/worktrees/d483/noma-dmrv`  
+**Checkout:** local detached worktree (path not recorded)  
 **Audit date:** 2026-09-08
 
 This audit found reproducible problems in application GIS editing, optional-field clearing, customer creation, supplier deletion, and upload retry handling. The distribution layer also contains substantial defensive behavior: transactional stock checks, organization filtering, certification lineage locks, and durable storage deletion queues.
