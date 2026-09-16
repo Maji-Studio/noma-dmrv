@@ -546,6 +546,21 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   matching product leaves (`deleteBiocharProduct` + the move-out path of
   `updateBiocharProduct`).
 
+### May an emptied bin with stock history be repurposed? (`product-bins/identity-change-with-history`, opened 2026-09-16) — **decision pending**
+
+- `src/data-access/storage-location-identity-guards.ts:assertBinIdentityChangeAllowed`
+  refuses a `type` or `feedstockTypeId` change when the bin holds stock in its
+  current lane, and also when the bin is empty but carries stock history
+  (intake batches, run draws, products, allocations, deliveries, inventory,
+  bin movements). Refusing the empty-with-history case is deliberately the
+  conservative half of the decision: it is reversible, while silently
+  re-pointing the lane strands recorded mass.
+- **Resolve via:** the product decision on
+  [#767](https://github.com/Maji-Studio/noma-dmrv/issues/767) /
+  [#313](https://github.com/Maji-Studio/noma-dmrv/issues/313) — either keep the
+  refusal and point operators at archive plus a new bin, or allow the change on
+  an emptied bin and define what happens to the history that still names it.
+
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 
 Surfaced by a manual walkthrough of every entity + certification; most findings

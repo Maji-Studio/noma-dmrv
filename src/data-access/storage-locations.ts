@@ -4,7 +4,7 @@
  */
 
 import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   storageLocations,
@@ -40,6 +40,7 @@ import {
   lockBinStock,
 } from "./bin-stock-guards";
 import { laneForStorageType } from "@/schemas/bin-movements";
+import { assertBinIdentityChangeAllowed } from "./storage-location-identity-guards";
 import { getStorageLocationLaneSummary } from "./storage-location-lane-summary";
 import type {
   StorageLocationWithFacility,
@@ -400,8 +401,39 @@ export async function createStorageLocation(
 // Update Operations
 // ============================================
 
+/** Re-read one editable bin, rejecting a missing or archived row. */
+async function readEditableStorageLocation(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  storageLocationId: string,
+): Promise<StorageLocation> {
+  const [existing] = await tx
+    .select()
+    .from(storageLocations)
+    .where(
+      and(
+        eq(storageLocations.id, storageLocationId),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    );
+
+  if (!existing) {
+    throw new SafeError("Storage bin not found");
+  }
+  if (existing.archivedAt) {
+    throw new SafeError("Restore this storage bin before editing it");
+  }
+  return existing;
+}
+
 /**
- * Update an existing storage bin
+ * Update an existing storage bin.
+ *
+ * Runs under the bin's stock lock so a `type` or `feedstockTypeId` change can
+ * never race a withdrawal: both columns decide which lane every stock
+ * derivation reads, so changing them on a bin that still holds material would
+ * strand that mass (issue #767). Everything else on a stocked bin, including
+ * its name, code and capacity, stays editable.
  */
 export async function updateStorageLocation(
   ctx: OrgContext,
@@ -421,157 +453,166 @@ export async function updateStorageLocation(
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
-  // Verify storage bin exists
-  const [existing] = await db
-    .select()
-    .from(storageLocations)
-    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Storage bin not found");
-  }
-  if (existing.archivedAt) {
-    throw new SafeError(
-      "Restore this storage bin before editing it",
+  return db.transaction(async (tx) => {
+    // Read before locking: `lockBinStock` reports an archived bin in stock
+    // vocabulary, and an edit needs the restore instruction instead.
+    await readEditableStorageLocation(ctx, tx, storageLocationId);
+    await lockBinStock(ctx, tx, storageLocationId);
+    const existing = await readEditableStorageLocation(
+      ctx,
+      tx,
+      storageLocationId,
     );
-  }
 
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: storageLocations.id })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
+    // If code is being changed, check for duplicates
+    if (data.code && data.code !== existing.code) {
+      const [duplicate] = await tx
+        .select({ id: storageLocations.id })
+        .from(storageLocations)
+        .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
 
-    if (duplicate) {
-      throw new SafeError("A storage bin with this code already exists");
+      if (duplicate) {
+        throw new SafeError("A storage bin with this code already exists");
+      }
     }
-  }
 
-  // If facilityId is being changed, verify new facility exists and is active
-  if (data.facilityId && data.facilityId !== existing.facilityId) {
-    const [facility] = await db
-      .select({ id: facilities.id })
-      .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
+    // If facilityId is being changed, verify new facility exists and is active
+    if (data.facilityId && data.facilityId !== existing.facilityId) {
+      const [facility] = await tx
+        .select({ id: facilities.id })
+        .from(facilities)
+        .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
-    if (!facility) {
-      throw new SafeError("Facility not found or archived");
+      if (!facility) {
+        throw new SafeError("Facility not found or archived");
+      }
     }
-  }
 
-  if (data.feedstockTypeId) {
-    const [feedstockType] = await db
-      .select({ id: feedstockTypes.id })
-      .from(feedstockTypes)
-      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
+    if (data.feedstockTypeId) {
+      const [feedstockType] = await tx
+        .select({ id: feedstockTypes.id })
+        .from(feedstockTypes)
+        .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
-    if (!feedstockType) {
-      throw new SafeError("Feedstock type not found");
+      if (!feedstockType) {
+        throw new SafeError("Feedstock type not found");
+      }
     }
-  }
 
-  const effectiveType = data.type ?? existing.type;
+    const effectiveType = data.type ?? existing.type;
 
-  // The Zod update schema can only see the payload — when `type` is omitted it
-  // cannot tell this is a feedstock bin, so an update could clear
-  // feedstockTypeId on one. Enforce the invariant against the effective row.
-  const effectiveFeedstockTypeId =
-    data.feedstockTypeId !== undefined
-      ? data.feedstockTypeId
-      : existing.feedstockTypeId;
-  if (
-    isFeedstockBinType(effectiveType as StorageLocationType) &&
-    !effectiveFeedstockTypeId
-  ) {
-    throw new SafeError(
-      "Feedstock bins must be restricted to one feedstock type"
-    );
-  }
-
-  // A feedstock type only makes sense on a feedstock bin — clear it
-  // when the (effective) type is anything else, same as formulationId below.
-  const normalizedFeedstockTypeId = isFeedstockBinType(
-    effectiveType as StorageLocationType
-  )
-    ? effectiveFeedstockTypeId ?? null
-    : null;
-
-  const normalizedFormulationId =
-    effectiveType === "product_bin"
-      ? (data.formulationId !== undefined
-          ? data.formulationId
-          : existing.formulationId) ?? null
-      : null;
-
-  if (normalizedFormulationId) {
-    const [formulation] = await db
-      .select({ id: formulations.id })
-      .from(formulations)
-      .where(and(eq(formulations.id, normalizedFormulationId), eq(formulations.organizationId, ctx.organizationId)));
-
-    if (!formulation) {
-      throw new SafeError("Formulation not found");
-    }
-  }
-
-  // Don't let a product bin's formulation be re-pointed while it still holds
-  // product of a different formulation — that would dirty the bin. `IS DISTINCT
-  // FROM` handles NULL correctly (a pure-biochar product vs a named formulation
-  // counts as a mismatch, and vice versa).
-  if (effectiveType === "product_bin") {
-    const [conflicting] = await db
-      .select({ id: biocharProducts.id })
-      .from(biocharProducts)
-      .where(
-        and(
-          eq(biocharProducts.storageLocationId, storageLocationId),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-          sql`${biocharProducts.formulationId} IS DISTINCT FROM ${normalizedFormulationId}`
-        )
-      )
-      .limit(1);
-
-    if (conflicting) {
+    // The Zod update schema can only see the payload. When `type` is omitted it
+    // cannot tell this is a feedstock bin, so an update could clear
+    // feedstockTypeId on one. Enforce the invariant against the effective row.
+    const effectiveFeedstockTypeId =
+      data.feedstockTypeId !== undefined
+        ? data.feedstockTypeId
+        : existing.feedstockTypeId;
+    if (
+      isFeedstockBinType(effectiveType as StorageLocationType) &&
+      !effectiveFeedstockTypeId
+    ) {
       throw new SafeError(
-        "This storage bin holds a product with a different formulation. Move or remove the product before changing the bin's formulation."
+        "Feedstock bins must be restricted to one feedstock type"
       );
     }
-  }
 
-  const dataWithoutNormalized = { ...data };
-  delete dataWithoutNormalized.formulationId;
-  delete dataWithoutNormalized.feedstockTypeId;
-  // A rename OR a facility move can collide with the per-facility name index.
-  const [updated] = await guardStorageLocationName(
-    ctx,
-    data.name ?? existing.name,
-    () =>
-      db
-        .update(storageLocations)
-        .set({
-          ...dataWithoutNormalized,
-          feedstockTypeId: normalizedFeedstockTypeId,
-          formulationId: normalizedFormulationId,
-          updatedAt: new Date(),
-        })
+    // A feedstock type only makes sense on a feedstock bin, so clear it
+    // when the (effective) type is anything else, same as formulationId below.
+    const normalizedFeedstockTypeId = isFeedstockBinType(
+      effectiveType as StorageLocationType
+    )
+      ? effectiveFeedstockTypeId ?? null
+      : null;
+
+    // These two columns select the bin's material lane, so a stocked bin keeps
+    // the setup its recorded stock and history were written against.
+    if (
+      effectiveType !== existing.type ||
+      normalizedFeedstockTypeId !== existing.feedstockTypeId
+    ) {
+      await assertBinIdentityChangeAllowed(ctx, tx, {
+        id: storageLocationId,
+        type: existing.type as StorageLocationType,
+      });
+    }
+
+    const normalizedFormulationId =
+      effectiveType === "product_bin"
+        ? (data.formulationId !== undefined
+            ? data.formulationId
+            : existing.formulationId) ?? null
+        : null;
+
+    if (normalizedFormulationId) {
+      const [formulation] = await tx
+        .select({ id: formulations.id })
+        .from(formulations)
+        .where(and(eq(formulations.id, normalizedFormulationId), eq(formulations.organizationId, ctx.organizationId)));
+
+      if (!formulation) {
+        throw new SafeError("Formulation not found");
+      }
+    }
+
+    // Don't let a product bin's formulation be re-pointed while it still holds
+    // product of a different formulation, which would dirty the bin. `IS
+    // DISTINCT FROM` handles NULL correctly (a pure-biochar product vs a named
+    // formulation counts as a mismatch, and vice versa).
+    if (effectiveType === "product_bin") {
+      const [conflicting] = await tx
+        .select({ id: biocharProducts.id })
+        .from(biocharProducts)
         .where(
           and(
-            eq(storageLocations.id, storageLocationId),
-            eq(storageLocations.organizationId, ctx.organizationId),
-            isNull(storageLocations.archivedAt),
-          ),
+            eq(biocharProducts.storageLocationId, storageLocationId),
+            eq(biocharProducts.organizationId, ctx.organizationId),
+            sql`${biocharProducts.formulationId} IS DISTINCT FROM ${normalizedFormulationId}`
+          )
         )
-        .returning()
-  );
+        .limit(1);
 
-  if (!updated) {
-    throw new SafeError(
-      "Restore this storage bin before editing it",
+      if (conflicting) {
+        throw new SafeError(
+          "This storage bin holds a product with a different formulation. Move or remove the product before changing the bin's formulation."
+        );
+      }
+    }
+
+    const dataWithoutNormalized = { ...data };
+    delete dataWithoutNormalized.formulationId;
+    delete dataWithoutNormalized.feedstockTypeId;
+    // A rename OR a facility move can collide with the per-facility name index.
+    const [updated] = await guardStorageLocationName(
+      ctx,
+      data.name ?? existing.name,
+      () =>
+        tx
+          .update(storageLocations)
+          .set({
+            ...dataWithoutNormalized,
+            feedstockTypeId: normalizedFeedstockTypeId,
+            formulationId: normalizedFormulationId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(storageLocations.id, storageLocationId),
+              eq(storageLocations.organizationId, ctx.organizationId),
+              isNull(storageLocations.archivedAt),
+            ),
+          )
+          .returning()
     );
-  }
 
-  return updated;
+    if (!updated) {
+      throw new SafeError(
+        "Restore this storage bin before editing it",
+      );
+    }
+
+    return updated;
+  });
 }
 
 // ============================================

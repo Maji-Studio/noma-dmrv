@@ -39,6 +39,7 @@ import { processPendingStorageObjectDeletions } from "./storage-object-deletions
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
+import { assertFeedstockBinLanesNotNegative } from "./feedstock-bin-stock-integrity";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
@@ -655,6 +656,18 @@ export async function updateFeedstock(
       })
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
+    // Re-derive the affected lanes now that the new row is visible, while the
+    // bin locks above are still held. Validating the bin reference only proves
+    // the bin is usable, never that the edited mass still covers withdrawals.
+    if (stockDerivationChanged) {
+      await assertFeedstockBinLanesNotNegative(
+        ctx,
+        tx,
+        [locked.storageLocationId, effectiveStorageLocationId],
+        "save",
+      );
+    }
+
     await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
       distanceKm: transportDistanceKm,
       distanceSource: transportDistanceSource,
@@ -745,6 +758,15 @@ export async function deleteFeedstock(
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
     if (result.rowCount === 0) {
       throw new SafeError("Feedstock not found");
+    }
+    // Removing a complete intake shrinks the lane the same way an edit does.
+    if (locked.status === "complete") {
+      await assertFeedstockBinLanesNotNegative(
+        ctx,
+        tx,
+        [locked.storageLocationId],
+        "delete",
+      );
     }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "feedstock", entityId: feedstockId },
