@@ -98,6 +98,14 @@ reset-and-seed job sets that flag, loads the registry trio and the storage
 settings from the staging 1Password item, and passes the two optional IDs from
 GitHub repository variables. The PR migration gate seeds without credentials.
 
+The seed runs real server actions, so its import graph reaches
+`src/config/env.ts`, which validates at module load and requires
+`NEXT_PUBLIC_APP_URL` alongside `DATABASE_URL`, `BETTER_AUTH_SECRET`, and
+`NODE_ENV`. The staging job loads the app URL from the same 1Password item and
+runs `pnpm db:seed:preflight` (`src/lib/cli/seed-preflight.ts`) before
+`pnpm db:reset`, so an incomplete environment fails with staging data intact
+instead of after the wipe.
+
 ### Pool sizing and compute placement
 
 `DB_POOL_MAX` is a per-environment deployment decision, never a default to

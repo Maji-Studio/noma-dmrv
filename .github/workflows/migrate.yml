@@ -247,6 +247,9 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          # src/config/env.ts requires this at module load, so the seed's
+          # server actions cannot start without it.
+          NEXT_PUBLIC_APP_URL: op://Environment Variables/noma-dmrv env staging/NEXT_PUBLIC_APP_URL
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
@@ -292,6 +295,9 @@ jobs:
           # Session-free server actions still initialize Better Auth, which
           # needs a signing secret. The runner never issues a session.
           export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+          # Validate the seed's environment before the wipe: a step that is
+          # missing a required variable must fail with staging data intact.
+          pnpm db:seed:preflight
           pnpm db:reset
           pnpm db:seed
           pnpm db:verify-schema
