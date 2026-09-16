@@ -67,7 +67,7 @@ Paths below are repository-relative. `C/U/D` means create/update/delete.
 
 `updateFeedstock` locks the row, checks certification, and locks affected bins, but does not validate the resulting stock:
 
-- [Feedstock update](/Users/kenji/.codex/worktrees/d483/noma-dmrv/src/data-access/feedstocks.ts:625)
+- Feedstock update at `src/data-access/feedstocks.ts:625`.
 - Write at `src/data-access/feedstocks.ts:649`.
 - Stock is intake minus run/ingredient consumption plus movement deltas: `src/data-access/lane-stock-derivation.ts`.
 - Withdrawal protection exists separately at `src/data-access/feedstock-wet-stock.ts:40`.
@@ -133,7 +133,7 @@ Call `src/fn/quick-add.ts:createFeedstockTypeFn` as an authenticated Member usin
 
 The full form records the selection at `src/components/feedstock-types/feedstock-type-form.tsx:215`. Quick-add forwards name, category, usage, description, and URL, but omits `isometricFeedstockTypeId`:
 
-[Quick-add payload](/Users/kenji/.codex/worktrees/d483/noma-dmrv/src/components/forms/entity-select/feedstock-type-quick-add-dialog.tsx:37)
+Quick-add payload at `src/components/forms/entity-select/feedstock-type-quick-add-dialog.tsx:37`.
 
 The quick-add writer stores the absent value as null at `src/data-access/quick-add.ts:229`.
 
