@@ -56,8 +56,53 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
   resets the database first so the full migration chain and admin bootstrap run
   before schema verification.
 - `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
-- Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, and `DB_POOL_LOCK_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- Connection via `DATABASE_URL`. `src/db/index.ts` builds the app pool from `getPgPoolConfig` (`src/lib/pg-pool-config.ts`, connection string and SSL) and `resolveAppPoolConfig` (`src/db/pool-config.ts`, which owns every `DEFAULT_DB_POOL_*` constant and `MAX_VERCEL_DB_POOL_MAX`). Five environment variables feed it: `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, `DB_POOL_LOCK_TIMEOUT_MS`, and `DB_POOL_TELEMETRY`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- The module-scope pool is registered with Vercel's [`attachDatabasePool`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#database-connection-pool-management), which keeps a Fluid Compute instance alive until `pg` releases its idle clients. The idle default is 5 seconds. `DB_POOL_MAX` defaults to 1 until the database connection budget is known, and a Vercel deployment fails closed above `MAX_VERCEL_DB_POOL_MAX` because per-instance pools multiply.
 - Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
+
+### Pool sizing and compute placement
+
+`DB_POOL_MAX` is a per-environment deployment decision, never a default to
+raise on intuition. Before raising it, obtain `SHOW max_connections`,
+reserved/admin headroom, current peak connections, the provider/pooler mode,
+and the maximum number of active Vercel instances. Budget for both the shared
+pools and the dedicated certification lock connections:
+
+```text
+(active function instances × DB_POOL_MAX)
+  + simultaneous dedicated lock operations
+  + migrations, administration, and other consumers
+  < usable database connections
+```
+
+Pool size and compute region are separate changes; never move both in one
+deployment. Confirm the database's actual region before changing the [Vercel
+Function region](https://vercel.com/docs/functions/configuring-functions/region).
+
+The application needs session semantics for
+`withDedicatedSessionAdvisoryLock`. A direct connection or a session-pooling
+proxy is compatible; a transaction-pooling proxy must not be assumed compatible
+with session advisory locks.
+
+`DB_POOL_TELEMETRY=true` is a measurement tool, not a monitoring setting: enable
+it for a bounded window and turn it off afterwards. Its records are
+privacy-safe — duration, success, pool totals, idle count, and queue count, and
+never SQL, parameters, hostnames, database names, or user data. With the flag
+off, connection failures, checkout failures, and idle-client errors are still
+logged at warn; query timings and query failures are not.
+
+### Rollout — pool-size measurement
+
+Dated rollout content, not an evergreen rule. Delete this section once the
+connection budget is measured and `DB_POOL_MAX` is settled per environment.
+
+The 2026-09 plan raises `DB_POOL_MAX` on staging one step at a time: 1, then 3,
+then 5. Never an unbounded increase, and never together with a region move. At each
+step, compare checkout wait and query duration distributions under the same
+workload, and watch database-side active/idle connection peaks and SQLSTATE
+`53300`. Move from 3 to 5 only when the measured connection budget supports it
+and acquisition still queues at 3. Decide from the checkout-queue metric, not
+from page latency.
 
 ## Soft Delete — Facility and Storage-Bin Archive
 

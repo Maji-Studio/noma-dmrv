@@ -21,3 +21,27 @@ describe("database pool lock timeout environment", () => {
     });
   });
 });
+
+describe("database pool telemetry environment", () => {
+  it.each([
+    [undefined, false],
+    ["", false],
+    ["true", true],
+    ["false", false],
+  ])("maps %s to %s", async (value, expected) => {
+    vi.stubEnv("DB_POOL_TELEMETRY", value);
+    vi.resetModules();
+    const { env } = await import("./env");
+    expect(env.DB_POOL_TELEMETRY).toBe(expected);
+  });
+
+  it("rejects ambiguous boolean values", async () => {
+    vi.stubEnv("DB_POOL_TELEMETRY", "1");
+    vi.resetModules();
+    await expect(import("./env")).rejects.toMatchObject({
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["DB_POOL_TELEMETRY"] }),
+      ]),
+    });
+  });
+});

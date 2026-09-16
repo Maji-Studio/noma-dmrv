@@ -58,6 +58,7 @@
     "@turf/bbox": "7.3.5",
     "@turf/rewind": "7.3.5",
     "@turf/truncate": "7.3.5",
+    "@vercel/functions": "^3.9.7",
     "@xyflow/react": "^12.10.1",
     "better-auth": "^1.6.23",
     "class-variance-authority": "^0.7.1",
