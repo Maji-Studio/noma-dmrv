@@ -7,14 +7,14 @@
  * are optional hints (see docs/database.md). No registry submissions.
  */
 import { config } from "dotenv";
-import { SeedError } from "./seed/actions";
+import { SeedError } from "@/lib/cli/seed/actions";
 
 config({ path: ".env.local" });
 (process.env as Record<string, string | undefined>).NODE_ENV ??= "development";
 
 async function main() {
   // Import all application/env-dependent modules only after dotenv has run.
-  const { seedMafinga } = await import("./seed/run");
+  const { seedMafinga } = await import("@/lib/cli/seed/run");
   await seedMafinga();
 }
 

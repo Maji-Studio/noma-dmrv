@@ -7,7 +7,7 @@ import {
 import { loadIsometricFeedstockTypes } from "@/fn/certification/feedstock-types";
 import { createFeedstockTypeFn, importIsometricFeedstockTypeFn } from "@/fn/feedstock-types";
 import { selectForestryEntry } from "./forestry-catalogue";
-import { DEC_ORG_ID } from "../org-defaults";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { FORESTRY, MANURE } from "./constants";
 import { SeedError, unwrap, type SeedCounts } from "./actions";
 

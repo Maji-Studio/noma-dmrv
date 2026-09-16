@@ -2,7 +2,7 @@ import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import { deliveries, facilities } from "@/db/schema";
 import { CliBootstrapError, resolveCliAdminIdentity, runWithCliOrgContext } from "@/lib/cli/org-context";
-import { DEC_ORG_ID } from "../org-defaults";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { FACILITY, MAFINGA_CODE } from "./constants";
 import { SeedError, SeedCounts } from "./actions";
 import { registryEnvironment } from "./registry";

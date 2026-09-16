@@ -56,7 +56,7 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
   resets the database first so the full migration chain and admin bootstrap run
   before schema verification.
 - `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
-- Connection via `DATABASE_URL`. `src/db/index.ts` builds the app pool from `getPgPoolConfig` (`src/lib/pg-pool-config.ts`, connection string and SSL) and `resolveAppPoolConfig` (`src/db/pool-config.ts`, which owns every `DEFAULT_DB_POOL_*` constant and `MAX_VERCEL_DB_POOL_MAX`). Five environment variables feed it: `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, `DB_POOL_LOCK_TIMEOUT_MS`, and `DB_POOL_TELEMETRY`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- Connection via `DATABASE_URL`. `src/db/index.ts` builds the app pool from `getPgPoolConfig` (`src/lib/pg-pool-config.ts`, connection string and SSL) and `resolveAppPoolConfig` (`src/db/pool-config.ts`, which owns every `DEFAULT_DB_POOL_*` constant and `MAX_VERCEL_DB_POOL_MAX`). Five environment variables feed it: `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, `DB_POOL_LOCK_TIMEOUT_MS`, and `DB_POOL_TELEMETRY`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool. The Mafinga seed (`src/lib/cli/seed/`) is the one exception: it calls the real server actions, so it uses the app pool they use.
 - The module-scope pool is registered with Vercel's [`attachDatabasePool`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#database-connection-pool-management), which keeps a Fluid Compute instance alive until `pg` releases its idle clients. The idle default is 5 seconds. `DB_POOL_MAX` defaults to 1 until the database connection budget is known, and a Vercel deployment fails closed above `MAX_VERCEL_DB_POOL_MAX` because per-instance pools multiply.
 - Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
 
@@ -66,7 +66,8 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 actions and Zod schemas as the forms, so every seeded row is one the UI would
 have accepted. Run `pnpm db:ensure-admin` first if the bootstrap admin or
 organization is missing. The entry is `src/db/seed-data.ts`; the steps live in
-`src/db/seed/`. A repeat run matches the Mafinga facility by its code or its
+`src/lib/cli/seed/`, because they call server actions and `src/db/` must not
+import `src/fn/`. A repeat run matches the Mafinga facility by its code or its
 seeded name, then checks the completion marker (the delivery the seed creates
 last). A complete dataset exits without adding rows. A failed step aborts with
 its action error and leaves earlier steps in place, and a rerun refuses that
