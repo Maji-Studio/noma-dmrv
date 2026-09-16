@@ -15,6 +15,12 @@ vi.mock("./facility-reference-guards", () => ({
   lockActiveFacilityReference: vi.fn(),
 }));
 vi.mock("./lock-bin-stocks", () => ({ lockBinStocks: vi.fn() }));
+// The post-write lane check (issue #767) runs its own aggregate reads through
+// the same transaction. Those reads are not what this spec is about, and
+// leaving them live would consume the scripted reads below.
+vi.mock("./feedstock-bin-stock-integrity", () => ({
+  assertFeedstockBinLanesNotNegative: vi.fn(),
+}));
 vi.mock("./storage-object-deletions", () => ({
   processPendingStorageObjectDeletions: vi.fn(),
 }));
