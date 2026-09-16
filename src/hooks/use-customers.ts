@@ -30,6 +30,7 @@ import {
 } from "@/fn/customers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { throwActionError } from "@/lib/stale-version";
 import { customerKeys } from "./customer-query-keys";
 
@@ -207,11 +208,10 @@ export function useUpdateCustomer(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.customerId
-                ? ({
-                    ...item,
-                    ...variables,
-                    updatedAt: new Date(),
-                  } as CustomerWithRelations)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as CustomerWithRelations)
                 : item
             ),
           };
@@ -231,6 +231,11 @@ export function useUpdateCustomer(
       queryClient.invalidateQueries({
         queryKey: customerKeys.detailWithRelations(data.id),
       });
+      patchListCachesWithSavedRow<CustomerWithRelations>(
+        queryClient,
+        customerKeys.lists(),
+        data,
+      );
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
 

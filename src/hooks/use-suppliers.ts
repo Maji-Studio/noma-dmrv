@@ -41,6 +41,7 @@ import {
 
 import { throwActionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
 
@@ -165,6 +166,11 @@ export function useCreateSupplierWithLocations(
     onSuccess: async (data, variables) => {
       seedCreatedSupplierCaches(queryClient, data);
 
+      patchListCachesWithSavedRow<SupplierWithRelations>(
+        queryClient,
+        supplierKeys.lists(),
+        data,
+      );
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
@@ -246,11 +252,10 @@ export function useUpdateSupplier(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.supplierId
-                ? ({
-                    ...item,
-                    ...variables,
-                    updatedAt: new Date(),
-                  } as SupplierWithRelations)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as SupplierWithRelations)
                 : item
             ),
           };

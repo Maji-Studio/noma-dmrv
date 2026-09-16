@@ -22,6 +22,7 @@ import { missingRecordMessage } from "@/lib/errors";
 import { throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 
 // ============================================
@@ -249,7 +250,10 @@ export function useUpdateFacility(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.facilityId
-                ? ({ ...item, ...variables, updatedAt: new Date() } as FacilityWithRelations)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as FacilityWithRelations)
                 : item
             ),
           };
@@ -269,6 +273,11 @@ export function useUpdateFacility(
       queryClient.invalidateQueries({
         queryKey: facilityKeys.detailWithRelations(data.id),
       });
+      patchListCachesWithSavedRow<FacilityWithRelations>(
+        queryClient,
+        facilityKeys.lists(),
+        data,
+      );
       queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
       queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
 
