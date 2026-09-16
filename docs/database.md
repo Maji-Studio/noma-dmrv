@@ -114,8 +114,10 @@ pools and the dedicated certification lock connections:
 ```
 
 Pool size and compute region are separate changes; never move both in one
-deployment. Confirm the database's actual region before changing the [Vercel
-Function region](https://vercel.com/docs/functions/configuring-functions/region).
+deployment. The [Vercel Function
+region](https://vercel.com/docs/functions/configuring-functions/region) is pinned
+in `vercel.json` (`regions`) and must match the database's actual region; change
+both together when the database moves.
 
 The application needs session semantics for
 `withDedicatedSessionAdvisoryLock`. A direct connection or a session-pooling
