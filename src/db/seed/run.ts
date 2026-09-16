@@ -1,7 +1,7 @@
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db";
-import { deliveries, facilities, organizations, users } from "@/db/schema";
-import { runWithOrgContext } from "@/lib/auth/server";
+import { deliveries, facilities } from "@/db/schema";
+import { CliBootstrapError, resolveCliAdminIdentity, runWithCliOrgContext } from "@/lib/cli/org-context";
 import { DEC_ORG_ID } from "../org-defaults";
 import { FACILITY, MAFINGA_CODE } from "./constants";
 import { SeedError, SeedCounts } from "./actions";
@@ -39,7 +39,8 @@ async function hasSeededDelivery(facilityId: string): Promise<boolean> {
 }
 
 export async function seedMafinga() {
-  // The only direct reads: bootstrap identities and facility idempotency.
+  // The only direct reads here: facility idempotency. The bootstrap identities
+  // are resolved and verified by the CLI org-context seam.
   const existing = await findSeededFacility();
   if (existing) {
     if (await hasSeededDelivery(existing.id)) {
@@ -48,13 +49,18 @@ export async function seedMafinga() {
     }
     throw new SeedError("bootstrap: a partial Mafinga seed exists in this database. Run pnpm db:reset before reseeding; reseeding on top of it would duplicate rows.");
   }
-  const [admin] = await db.select({ id: users.id }).from(users).where(eq(users.role, "admin")).limit(1);
-  const [organization] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, DEC_ORG_ID)).limit(1);
-  if (!admin || !organization) throw new SeedError("bootstrap: run the existing admin/organization bootstrap before db:seed");
+  let identity;
+  try {
+    identity = await resolveCliAdminIdentity(DEC_ORG_ID);
+  } catch (error) {
+    // The seam authors these messages, so they are safe to surface.
+    if (error instanceof CliBootstrapError) throw new SeedError(`bootstrap: ${error.message}`);
+    throw error;
+  }
   // Fail configuration checks before creating the facility idempotency marker.
   registryEnvironment();
   const counts = new SeedCounts();
-  await runWithOrgContext({ userId: admin.id, organizationId: DEC_ORG_ID, orgRole: "owner", isPlatformAdmin: true }, async () => {
+  await runWithCliOrgContext(identity, async () => {
     try {
       const infra = await seedInfrastructure(counts);
       await seedProduction(infra, counts);

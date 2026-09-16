@@ -2,12 +2,12 @@
  * Server-side authentication utilities
  * For use in Server Components and Server Actions
  */
-import { AsyncLocalStorage } from "node:async_hooks";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { members, users } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import { cliOrgContextStore } from "./cli-org-context-store";
 import {
   getBetterAuthSession,
   mapBetterAuthUser,
@@ -141,22 +141,6 @@ export type OrgContext = {
   isPlatformAdmin: boolean;
 };
 
-const cliOrgContext = new AsyncLocalStorage<OrgContext>();
-
-/** CLI-only bootstrap seam. Never call this from request code. */
-export function runWithOrgContext<T>(
-  ctx: OrgContext,
-  fn: () => Promise<T>
-): Promise<T> {
-  if (
-    process.env.NODE_ENV === "production" &&
-    process.env.ALLOW_DEV_BOOTSTRAP !== "1"
-  ) {
-    throw new Error("CLI org context requires ALLOW_DEV_BOOTSTRAP=1 in production.");
-  }
-  return cliOrgContext.run(ctx, fn);
-}
-
 const ORG_ROLE_RANK: Record<OrgRole, number> = {
   member: 1,
   admin: 2,
@@ -181,7 +165,8 @@ export type OrgContextResolution =
  * it was denied. Platform Admins pass without a membership row (override).
  */
 export async function resolveOrgContext(): Promise<OrgContextResolution> {
-  const cliContext = cliOrgContext.getStore();
+  // Read-only: the seam that writes this store lives in src/lib/cli.
+  const cliContext = cliOrgContextStore.getStore();
   if (cliContext) {
     return { ok: true, ctx: cliContext };
   }

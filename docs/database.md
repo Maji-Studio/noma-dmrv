@@ -93,9 +93,10 @@ Registry setup is driven by environment variables:
 The seed only reads from the registry (projects, catalogue, templates). It never
 creates registry business records.
 
-The CLI uses `runWithOrgContext` (`src/lib/auth/server.ts`) to call real actions
-without a request session. The seam is forbidden in request code and rejects
-production use unless `ALLOW_DEV_BOOTSTRAP=1`. The manually confirmed staging
+The CLI uses `runWithCliOrgContext` (`src/lib/cli/org-context.ts`) to call real
+actions without a request session. The seam verifies the Platform Admin and the
+organization, is forbidden in request code, and rejects production use unless
+`ALLOW_DEV_BOOTSTRAP=1` ([auth.md](./auth.md)). The manually confirmed staging
 reset-and-seed job sets that flag, loads the registry trio and the storage
 settings from the staging 1Password item, and passes the two optional IDs from
 GitHub repository variables. The PR migration gate seeds without credentials.

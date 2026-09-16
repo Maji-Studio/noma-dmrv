@@ -21,8 +21,10 @@ vi.mock("@/db", async () => {
     }),
   } };
 });
-vi.mock("@/lib/auth/server", () => ({
-  runWithOrgContext: vi.fn(async (_ctx: unknown, fn: () => Promise<void>) => fn()),
+vi.mock("@/lib/cli/org-context", () => ({
+  CliBootstrapError: class CliBootstrapError extends Error {},
+  resolveCliAdminIdentity: vi.fn(async () => ({ userId: "admin-1", organizationId: "org-1" })),
+  runWithCliOrgContext: vi.fn(async (_identity: unknown, fn: () => Promise<void>) => fn()),
 }));
 vi.mock("./registry", () => ({ registryEnvironment: vi.fn() }));
 vi.mock("./infrastructure", () => ({ seedInfrastructure: vi.fn(async () => ({ registryStatus: "stubbed" })) }));
@@ -78,9 +80,7 @@ describe("Mafinga seed idempotency", () => {
     expect(seedInfrastructure).not.toHaveBeenCalled();
   });
 
-  it("runs the seed when the bootstrap identities exist and no facility does", async () => {
-    state.rows.set("users", [{ id: "admin-1" }]);
-    state.rows.set("organizations", [{ id: "org-1" }]);
+  it("runs the seed when no facility exists yet", async () => {
     await seedMafinga();
     expect(seedInfrastructure).toHaveBeenCalledTimes(1);
   });
