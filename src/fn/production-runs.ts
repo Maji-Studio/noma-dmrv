@@ -17,17 +17,13 @@ import { requireOrgFacility } from "@/data-access/utils";
 import {
   createProductionRun,
   deleteProductionRun,
-  getProductionRuns as getProductionRunsData,
   getProductionRunById as getProductionRunByIdData,
-  getProductionRunStats as getProductionRunStatsData,
   getFacilityEnergyTotals as getFacilityEnergyTotalsData,
   getProductionRunReadings as getProductionRunReadingsData,
   updateProductionRun,
   ProductionRunOverlapError,
   ProductionRunDependencyError,
-  type PaginatedProductionRuns,
   type ProductionRunWithRelations,
-  type ProductionRunStats,
   type FacilityEnergyTotals,
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
@@ -40,7 +36,6 @@ import {
   createProductionRunSchema,
   deleteProductionRunSchema,
   updateProductionRunSchema,
-  productionRunFilterSchema,
 } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
 
@@ -60,42 +55,6 @@ function productionRunActionError(
 // ============================================
 
 /**
- * Get paginated list of production runs with filtering
- */
-export async function getProductionRunsFn(
-  filters?: Partial<z.infer<typeof productionRunFilterSchema>>
-): Promise<ActionResult<PaginatedProductionRuns>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validatedFilters = filters
-      ? productionRunFilterSchema.parse(filters)
-      : undefined;
-    if (validatedFilters?.facilityId) {
-      await requireOrgFacility(ctx, validatedFilters.facilityId);
-    }
-    const runs = await getProductionRunsData(ctx, validatedFilters);
-
-    return { success: true, data: runs };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load production runs",
-        "production-run:list",
-      ),
-    };
-  }
-}
-
-/**
  * Get a single production run by ID
  */
 export async function getProductionRunByIdFn(
@@ -113,32 +72,6 @@ export async function getProductionRunByIdFn(
         error,
         "Failed to load production run",
         "production-run:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get production run statistics
- */
-export async function getProductionRunStatsFn(
-  facilityId?: string
-): Promise<ActionResult<ProductionRunStats>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    if (facilityId) {
-      await requireOrgFacility(ctx, facilityId);
-    }
-    const stats = await getProductionRunStatsData(ctx, facilityId);
-    return { success: true, data: stats };
-  } catch (error) {
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load production run stats",
-        "production-run:stats",
       ),
     };
   }

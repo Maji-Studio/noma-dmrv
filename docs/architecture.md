@@ -12,13 +12,19 @@ in [forms.md](./forms.md); naming and React rules in
 ```text
 components (UI)
   -> hooks (React Query)
-  -> fn (server actions)
+  -> /api/reads Route Handlers (migrated reads) / fn (everything else)
+  -> lib/read-models (transport-neutral read orchestration)
   -> data-access (org scope + queries)
   -> db (Drizzle schema + connection)
 ```
 
 - UI never talks directly to `db`; no layer skipping.
 - `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
+- `src/lib/read-models/` holds server-only read cores that take an already
+  resolved `OrgContext` and return domain data. They are not Server Actions and
+  are not exported from a `"use server"` file; the caller authenticates first.
+  Today that caller is the `/api/reads/*` adapter; a `fn/` action that needs the
+  same read wraps the core in `withAction` rather than duplicating it.
 - `data-access/` owns query composition **and** org-scope enforcement.
 
 ## Tenancy — the actual authorization model
@@ -112,11 +118,21 @@ See [forms.md](./forms.md).
 ### Structured logging — `@/lib/log` (server-only)
 
 `logger.info({ userId, removalId }, "msg")`; `logger.child(bindings)` merges
-bindings into every record. Import only from `fn/`, `data-access/`, and the
-isometric client boundary — never a client component. NDJSON out, level via
-`LOG_LEVEL`. Redacts `email`/`token`/`secret`/`authorization` keys at any depth —
-a backstop, not a license to log PII. The in-house implementation replaces pino
-because of a Turbopack/Vercel runtime bug.
+bindings into every record. Import only from `fn/`, `data-access/`, the
+isometric client boundary, and `src/db/index.ts` — never a client component.
+NDJSON out, level via `LOG_LEVEL`. Redacts
+`email`/`token`/`secret`/`authorization` keys at any depth — a backstop, not a
+license to log PII. The in-house implementation replaces pino because of a
+Turbopack/Vercel runtime bug.
+
+**Waiver — `src/db/index.ts`.** The connection pool is the bottom layer and is
+constructed at module scope, so there is no layer above it to inject a logger
+from; pool telemetry has to be wired up where the pool is built. That module
+calls `logger.child` during module evaluation, so a test that mocks
+`@/lib/log` and transitively imports `@/db` must give the mock a `child` that
+returns a logger. The rest of `src/db/` receives its logger as an argument
+(`createObservedPool`, `createObservedClient`) and never imports `@/lib/log` at
+runtime.
 
 ## Routing & Auth
 
@@ -140,13 +156,14 @@ because of a Turbopack/Vercel runtime bug.
   explicitly allowed through.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Five API route families: `/api/auth/[...all]`,
+- Six API route families: `/api/auth/[...all]`,
   `/api/storage-local/[...key]`, `/api/documents/[id]`,
   `/api/ghg-statement-reports/[reportId]`, and
-  `/api/certification/submissions`. Documents are normally resolved
-  through `getOrgContext()`. The report route is the one deliberate public
-  bearer-capability seam: middleware lets it through, then the route verifies a
-  per-report token against the stored digest and redirects to a freshly signed
+  `/api/certification/submissions`, plus private `/api/reads/*`. Documents are
+  normally resolved through `getOrgContext()`. The report route is the one
+  deliberate public bearer-capability seam: middleware lets it through, then
+  the route verifies a per-report token against the stored digest and redirects
+  to a freshly signed
   private-object URL. Its cross-org lookup is marked
   `// org-scope-ok: verifier capability-token lookup intentionally crosses organizations.`
   Do not generalize that waiver to other reads; see [auth.md](./auth.md) and
@@ -165,8 +182,59 @@ because of a Turbopack/Vercel runtime bug.
   (including `0`, 5s–5m, and `Infinity`). Read the neighbouring hook and match
   its intent instead of repeating the global values mechanically.
 - Invalidate related keys after every mutation.
+- A Server Component that has already authorized and loaded a record seeds the
+  client cache with `createServerHydrationState`
+  (`src/lib/react-query/server-hydration.ts`) and renders the page inside
+  React Query's `HydrationBoundary`, so the first client render reuses that
+  read instead of refetching it. It builds a fresh `QueryClient` per call, so
+  records can never cross requests or organizations, and stamps every seeded
+  key with one request-local `updatedAt` so they age together. Seed the keys
+  the page's own hooks use, imported from the plain `src/hooks/*-query-keys.ts`
+  module rather than the `"use client"` hook file. The supplier and customer
+  detail routes are the reference.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
+
+### Authenticated read transport
+
+Client React Query reads use ordinary `fetch` against small resource-specific
+handlers under `/api/reads/*` when that read has been migrated. This avoids the
+browser's one-at-a-time Server Function dispatch queue while preserving the
+existing query keys, freshness policy, and mutation invalidation. Server
+Actions remain the write transport. Do not replace a read with client-side
+`Promise.all` around Server Actions; those calls still share the Server
+Function queue.
+
+The seam has two parts. A read core in `src/lib/read-models/` validates its
+input, checks facility inputs with `requireOrgFacility`, and calls the
+org-scoped data-access functions for a caller-supplied `OrgContext`. The HTTP
+adapter `src/app/api/reads/read-response.ts` resolves the context once per
+request with `resolveOrgContext()` and formats failures with the same
+`toActionFailure` helper `withAction` uses, so an HTTP read and a Server Action
+answer with the same `ActionResult` envelope, `conflict` included. Route
+handlers stay thin: they name the read, its log context, and its fallback
+message. A migrated read has no Server Action wrapper left; adding one back
+means wrapping the same core in `withAction`, never a second copy of the query.
+
+Status mapping belongs to the adapter alone: a denied org context answers 401
+when there is no session and 403 when the caller has no usable organization
+(see [auth.md](./auth.md)), rejected input and org-scoped lookups answer 400, a
+conflict answers 409, and an unexpected failure answers 500. Request bodies are
+capped; resolving the context happens inside the same try/catch, so a database
+failure there is logged and answered rather than escaping the handler.
+Responses carry `Cache-Control: private, no-store`; the React Query function
+passes its abort signal to `fetch`.
+
+JSON is a deliberate transport contract: database `Date` values cross as ISO
+strings. The typed client adapter in `src/lib/read-api/client.ts` rehydrates the
+declared date fields before returning existing domain types to hooks; a null or
+absent timestamp stays null rather than becoming the epoch, and each decoder
+declares its timestamp columns through `dateFields<T>()`, which fails the build
+if the domain type gains one. Calendar date fields such as a credit batch's
+`startDate` and `endDate` remain strings. The adapter parses a response body
+only when it is JSON, so a gateway error page becomes a formatted transport
+failure instead of a raw parser message; a proxy's own error text never reaches
+the operator, and a 401 sends them to sign in the way any navigation would.
 
 ## next.config.ts — three load-bearing settings
 
@@ -191,7 +259,8 @@ local, and deployed builds remain on the stable default.
 ## Database Boundaries
 
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
-permission checks; pooling defaults are centralized in `src/db/index.ts`. See
+permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
+(`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
 [database.md](./database.md) and [schema-overview.md](./schema-overview.md).
 
 ## Computed Method-B Eligibility (Isometric)

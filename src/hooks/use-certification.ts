@@ -24,7 +24,6 @@ import {
   loadCreditBatchHealthSummaries,
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
-  loadFacilityCertifierSummary,
   loadGhgStatementBreakdown,
   loadGhgStatementReports,
   loadGhgStatementsForFacility,
@@ -50,6 +49,7 @@ import {
   saveRegistrySourceVisibility,
   type CreditBatchHealthSummary,
 } from "@/fn/certification";
+import { getFacilityCertifierSummaryRead } from "@/lib/read-api/client";
 import type { RemovalSubmissionResult } from "@/fn/certification/submit-removal";
 import type { SubmitGhgStatementResult } from "@/fn/certification/submit-ghg-statement";
 import {
@@ -380,8 +380,10 @@ export function useFacilityCertifierSummary(
 ) {
   return useQuery({
     queryKey: certificationKeys.facilitySummary(facilityId),
-    queryFn: async () => {
-      const result = await loadFacilityCertifierSummary(facilityId);
+    queryFn: async ({ signal }) => {
+      const result = await getFacilityCertifierSummaryRead(facilityId, {
+        signal,
+      });
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

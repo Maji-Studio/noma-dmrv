@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SupplierFallbackDistanceSummary } from "./supplier-detail";
+import { SupplierSummaryField } from "./supplier-detail";
 import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
 
 const supplier = {
@@ -42,7 +42,7 @@ describe("supplier distance surface parity", () => {
     });
 
     const html = renderToStaticMarkup(
-      <SupplierFallbackDistanceSummary field={detailSurfaceField} />,
+      <SupplierSummaryField field={detailSurfaceField} />,
     );
     expect(html).toContain("2.5 km");
     expect(html).toContain("Required for certification. Provided.");

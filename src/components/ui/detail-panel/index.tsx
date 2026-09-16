@@ -35,6 +35,7 @@ import {
   MISSING_VALUE,
   type MissingValueSituation,
 } from "@/lib/copy-utils";
+import { Skeleton } from "@/components/ui/loading-skeleton";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
@@ -68,6 +69,24 @@ const DEFAULT_EMPTY_SITUATION: MissingValueSituation = "notRecorded";
 const EMPTY_DETAIL_VALUE_CLASS = "font-normal text-[var(--color-text-tertiary)]";
 const PRESENT_DETAIL_VALUE_CLASS =
   "font-medium text-[var(--color-text-primary)]";
+
+/**
+ * The one pending treatment. It matches the value line's height so the row
+ * keeps its size while the value loads.
+ */
+const PENDING_DETAIL_VALUE_CLASS = "inline-block h-16 w-96 align-middle";
+
+/**
+ * The loading stand-in for a detail value.
+ *
+ * A value still being fetched is not an absent value: a missing-value token
+ * would claim the operator left the field blank before the app has looked.
+ * Fields whose value arrives from a separate query render this instead.
+ */
+function DetailValueSkeleton({ className }: { className?: string }) {
+  return <Skeleton className={cn(PENDING_DETAIL_VALUE_CLASS, className)} />;
+}
+DetailValueSkeleton.displayName = "DetailValueSkeleton";
 
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
@@ -162,6 +181,12 @@ interface DetailFieldProps {
    * the chip outright; omit it to derive presence from `value`.
    */
   valuePresent?: boolean;
+  /**
+   * The value is still loading. Loading is not absence: the field shows the
+   * skeleton instead of a missing-value token, and its CERT chip stays neutral
+   * until the query settles.
+   */
+  pending?: boolean;
 }
 
 /**
@@ -174,14 +199,20 @@ interface DetailFieldProps {
  * screen inventing its own placeholder ("Unassigned", "No crop type") must pass
  * `emptySituation` or `valuePresent={false}` instead of relying on it.
  */
-function resolveDetailValue({
+function resolveDetailFieldValue({
   value,
   emptySituation = DEFAULT_EMPTY_SITUATION,
   valuePresent,
-}: Pick<DetailFieldProps, "value" | "emptySituation" | "valuePresent">): {
+  pending,
+}: Pick<
+  DetailFieldProps,
+  "value" | "emptySituation" | "valuePresent" | "pending"
+>): {
   displayValue: React.ReactNode;
   isEmpty: boolean;
   present: boolean;
+  /** The value slot's ink and weight, so surfaces with their own markup match. */
+  valueClassName: string;
 } {
   const isBlank = value === null || value === undefined || value === "";
   const rendersSharedToken = isMissingValueCopy(value);
@@ -189,10 +220,26 @@ function resolveDetailValue({
     valuePresent ??
     (!isBlank && !rendersSharedToken && isCertFieldValuePresent(value));
 
+  // Loading is not absence: a pending field shows the skeleton and claims
+  // nothing about the value, so it is neither empty nor provided.
+  if (pending) {
+    return {
+      displayValue: <DetailValueSkeleton />,
+      isEmpty: false,
+      present,
+      valueClassName: PRESENT_DETAIL_VALUE_CLASS,
+    };
+  }
+
+  const isEmpty = isBlank || rendersSharedToken || valuePresent === false;
+
   return {
     displayValue: isBlank ? MISSING_VALUE[emptySituation] : value,
-    isEmpty: isBlank || rendersSharedToken || valuePresent === false,
+    isEmpty,
     present,
+    valueClassName: isEmpty
+      ? EMPTY_DETAIL_VALUE_CLASS
+      : PRESENT_DETAIL_VALUE_CLASS,
   };
 }
 
@@ -204,14 +251,14 @@ function DetailField({
   certifyStatus,
   emptySituation,
   valuePresent,
+  pending,
 }: DetailFieldProps) {
-  const { displayValue, isEmpty, present } = resolveDetailValue({
-    value,
-    emptySituation,
-    valuePresent,
-  });
+  const { displayValue, isEmpty, present, valueClassName } =
+    resolveDetailFieldValue({ value, emptySituation, valuePresent, pending });
+  // A pending field makes no claim yet, so its CERT chip stays neutral until
+  // the query settles.
   const resolvedCertifyStatus =
-    certifyStatus ?? resolveCertFieldStatus(true, present);
+    certifyStatus ?? resolveCertFieldStatus(pending ? undefined : true, present);
 
   return (
     <div className={cn("flex flex-1 flex-col gap-4 min-w-0", className)}>
@@ -220,11 +267,10 @@ function DetailField({
         {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
       </span>
       <span
-        className={cn(
-          "body-medium break-words",
-          isEmpty ? EMPTY_DETAIL_VALUE_CLASS : PRESENT_DETAIL_VALUE_CLASS,
-        )}
+        className={cn("body-medium break-words", valueClassName)}
+        aria-busy={pending || undefined}
         data-empty={isEmpty || undefined}
+        data-pending={pending || undefined}
       >
         {displayValue}
       </span>
@@ -246,6 +292,8 @@ export interface DetailPanelField {
   emptySituation?: MissingValueSituation;
   /** Explicit presence signal for the CERT chip when `value` is not readable. */
   valuePresent?: boolean;
+  /** The value is still loading, so the field shows a skeleton, not a token. */
+  pending?: boolean;
 }
 
 export interface DetailPanelSection {
@@ -287,6 +335,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
                   certifyStatus={field.certifyStatus}
                   emptySituation={field.emptySituation}
                   valuePresent={field.valuePresent}
+                  pending={field.pending}
                 />
               ))}
             </DetailRow>
@@ -374,4 +423,12 @@ function chunkFields(fields: DetailPanelField[]): DetailPanelField[][] {
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { DetailSection, DetailRow, DetailField, DetailSpine, EntityDetailPanel };
+export {
+  resolveDetailFieldValue,
+  DetailSection,
+  DetailRow,
+  DetailField,
+  DetailValueSkeleton,
+  DetailSpine,
+  EntityDetailPanel,
+};

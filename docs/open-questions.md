@@ -51,8 +51,9 @@ code today; breaking one compiles cleanly and fails silently.
   through the global pool from inside an open transaction holds one connection
   while waiting for another, and starves the pool under parallel load. This is
   the same failure the `storage/sources-sync-events-tx` entry below describes —
-  and that one is **not** mitigated: `src/db/index.ts` runs `max: env.DB_POOL_MAX
-  ?? 1`, and `DB_POOL_MAX` is unset in every environment. Applies to every
+  and that one is **not** mitigated: `resolveAppPoolConfig`
+  (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX`, which is 1, and
+  `DB_POOL_MAX` is unset in every environment. Applies to every
   tx-scoped read, not just this helper.
 - **`transport_legs.tripType` defaults to `'return'` and is credit-bearing.**
   `roundTripDistanceFactor` (defined in `src/schemas/trip-type.ts`; imported by

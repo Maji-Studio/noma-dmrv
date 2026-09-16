@@ -5,7 +5,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
-  getCreditBatchesFn,
   getCreditBatchByIdFn,
   getCo2eStoredPreviewsFn,
   getCreditBatchProductionRunOptionsFn,
@@ -13,6 +12,7 @@ import {
   updateCreditBatchFn,
   deleteCreditBatchFn,
 } from "@/fn/credit-batches";
+import { getCreditBatchesRead } from "@/lib/read-api/client";
 import type {
   CreditBatchFormData,
   UpdateCreditBatchData,
@@ -45,9 +45,9 @@ function chunkIds(ids: string[], size: number): string[][] {
 export function useCreditBatches(facilityId?: string) {
   return useQuery({
     queryKey: creditBatchKeys.list({ facilityId }),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!facilityId) return [];
-      const result = await getCreditBatchesFn(facilityId);
+      const result = await getCreditBatchesRead(facilityId, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }

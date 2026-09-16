@@ -7,7 +7,7 @@
  * link is created. These tests cover both the sidebar nav-hiding
  * (`app-sidebar.tsx`) and the route guard (`certification-registry-guard.tsx`).
  *
- * The summary the gate reads (`loadFacilityCertifierSummary`) is DB-only — no
+ * The summary the gate reads (`readFacilityCertifierSummary`) is DB-only — no
  * Isometric API — so the link row is seeded directly via Drizzle with a
  * throwaway project id. No sandbox creds required; no `test.skip`.
  */

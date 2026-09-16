@@ -565,8 +565,9 @@ are clean deferrals.
   `assertSameOrg` `executor` parameter exists to prevent** (see the invariants
   section).
   A previous version of this entry claimed the risk was band-aided with
-  `DB_POOL_MAX=10`. **That is false.** `src/db/index.ts` runs
-  `max: env.DB_POOL_MAX ?? 1` and `.env.local` records `DB_POOL_MAX skipped — no
+  `DB_POOL_MAX=10`. **That is false.** `resolveAppPoolConfig`
+  (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX`, which is 1, and
+  `.env.local` records `DB_POOL_MAX skipped — no
   "DB_POOL_MAX" field in the 1Password item`, so the effective pool size is
   **1** and the starvation path is fully live. Treat this as unmitigated until
   fixed.
