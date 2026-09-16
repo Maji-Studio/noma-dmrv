@@ -5,6 +5,10 @@
  * losses per bin and material lane. There is deliberately NO update/delete —
  * corrections are compensating movements. Reads are auth-guarded; the signed
  * per-lane sums feed the storage-location derivation overlay.
+ *
+ * Because nothing can be edited away, a loss carries the request key its form
+ * instance generated and posts at most once (issue #773); see
+ * `./bin-movement-requests`.
  */
 
 import { db, type DbTransaction } from "@/db";
@@ -21,6 +25,11 @@ import type { BinMovementLane, BinMovementType } from "@/schemas/bin-movements";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import { and, desc, eq } from "drizzle-orm";
 import {
+  findMovementRequest,
+  lockMovementRequest,
+  requestFingerprint,
+} from "./bin-movement-requests";
+import {
   deriveBinLaneAvailableKg,
   isOverdraw,
   lockBinStock,
@@ -36,6 +45,8 @@ const FEEDSTOCK_SNAPSHOT_MESSAGE =
   "Feedstock stock-takes require wet stock and moisture metadata";
 const NON_FEEDSTOCK_SNAPSHOT_MESSAGE =
   "Wet stock and moisture are only valid for feedstock bins";
+const LOSS_REPLAY_CONFLICT_MESSAGE =
+  "Loss was not saved because this request was already saved with different values. Start a new loss entry.";
 
 // ============================================
 // Types
@@ -46,7 +57,8 @@ export interface BinMovementWithActor extends BinMovement {
   actorName: string | null;
 }
 
-export interface CreateBinMovementInput {
+/** Row-shaped input for the private insert. Only losses carry a request key. */
+interface InsertBinMovementInput {
   storageLocationId: string;
   lane: BinMovementLane;
   movementType: BinMovementType;
@@ -56,7 +68,18 @@ export interface CreateBinMovementInput {
   derivedMassKgAtTime?: number | null;
   countedWetMassKg?: number | null;
   moistureRatioUsed?: number | null;
+  idempotencyKey?: string | null;
+  inputSnapshot?: Record<string, unknown> | null;
 }
+
+/**
+ * A loss is an operator command that a double submit can repeat, so it always
+ * carries the request key its open form generated.
+ */
+export type CreateBinMovementInput = Omit<
+  InsertBinMovementInput,
+  "idempotencyKey" | "inputSnapshot"
+> & { idempotencyKey: string };
 
 export interface RecordStockTakeMovementInput {
   storageLocationId: string;
@@ -117,7 +140,7 @@ export async function getBinMovements(
 async function assertBinLaneTarget(
   ctx: OrgContext,
   tx: DbTransaction,
-  input: Pick<CreateBinMovementInput, "storageLocationId" | "lane">,
+  input: Pick<InsertBinMovementInput, "storageLocationId" | "lane">,
 ): Promise<void> {
   const [location] = await tx
     .select({ id: storageLocations.id, type: storageLocations.type })
@@ -136,7 +159,7 @@ async function assertBinLaneTarget(
 async function createBinMovementInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,
-  input: CreateBinMovementInput,
+  input: InsertBinMovementInput,
 ): Promise<BinMovement> {
   await assertBinLaneTarget(ctx, tx, input);
 
@@ -156,6 +179,8 @@ async function createBinMovementInTransaction(
         derivedMassKgAtTime: input.derivedMassKgAtTime ?? null,
         countedWetMassKg: input.countedWetMassKg ?? null,
         moistureRatioUsed: input.moistureRatioUsed ?? null,
+        idempotencyKey: input.idempotencyKey ?? null,
+        inputSnapshot: input.inputSnapshot ?? null,
       })
       .returning();
   } catch (error) {
@@ -168,6 +193,15 @@ async function createBinMovementInTransaction(
   return movement;
 }
 
+/**
+ * Record a documented loss exactly once (issue #773).
+ *
+ * The ledger is append-only, so a resubmitted form would otherwise post a
+ * second deduction. The request key the form instance generated serializes the
+ * retry, replays the saved movement when the values match, and refuses a key
+ * reused with different values. Reversing a mistaken loss is a separate
+ * command that does not exist yet.
+ */
 export async function createBinMovement(
   ctx: OrgContext,
   input: CreateBinMovementInput,
@@ -179,7 +213,25 @@ export async function createBinMovement(
       "Use Reconcile stock to record a stock-take adjustment",
     );
   }
+  const payload = {
+    storageLocationId: input.storageLocationId,
+    lane: input.lane,
+    movementType: input.movementType,
+    massDeltaKg: input.massDeltaKg,
+    reason: input.reason,
+  };
   return db.transaction(async (tx) => {
+    // Request key first: a concurrent twin waits here and replays the saved
+    // movement instead of queueing behind the bin lock for a second insert.
+    await lockMovementRequest(ctx, tx, input.idempotencyKey);
+    const existing = await findMovementRequest(ctx, tx, {
+      idempotencyKey: input.idempotencyKey,
+      payload,
+      storageLocationId: input.storageLocationId,
+      conflictMessage: LOSS_REPLAY_CONFLICT_MESSAGE,
+    });
+    if (existing) return existing;
+
     await lockBinStock(ctx, tx, input.storageLocationId);
     if (input.movementType === "loss" && input.massDeltaKg < 0) {
       // Validate the target first so a bad bin/lane fails with its own error
@@ -196,7 +248,14 @@ export async function createBinMovement(
         throw overdrawError(input.lane);
       }
     }
-    return createBinMovementInTransaction(ctx, tx, input);
+    return createBinMovementInTransaction(ctx, tx, {
+      ...input,
+      inputSnapshot: {
+        ...payload,
+        actorId: ctx.userId,
+        payloadHash: requestFingerprint(payload),
+      },
+    });
   });
 }
 

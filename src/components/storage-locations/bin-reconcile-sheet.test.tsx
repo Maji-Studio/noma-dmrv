@@ -33,6 +33,7 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 
 vi.mock("@/hooks/use-bin-movements", () => ({
+  RecordLossConflictError: class RecordLossConflictError extends Error {},
   RecordLossFieldError: class RecordLossFieldError extends Error {},
   useRecordLoss: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));

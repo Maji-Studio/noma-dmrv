@@ -101,6 +101,7 @@ describe("bin loss stock guard", () => {
       const rejected = await recordLossFn({
         storageLocationId: fixture.storageLocationId,
         lane: "feedstock",
+        idempotencyKey: crypto.randomUUID(),
         reason: "Overdraw regression check",
         lossMassKg: OVERDRAW_LOSS_KG,
       });
@@ -122,6 +123,7 @@ describe("bin loss stock guard", () => {
       const accepted = await recordLossFn({
         storageLocationId: fixture.storageLocationId,
         lane: "feedstock",
+        idempotencyKey: crypto.randomUUID(),
         reason: "Exact available stock",
         lossMassKg: AVAILABLE_STOCK_KG,
       });

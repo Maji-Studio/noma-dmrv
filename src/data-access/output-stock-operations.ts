@@ -6,7 +6,7 @@ import { add, compare, decimal, divide, grams, kilograms, multiply, planOutputSt
 import { outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
+import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
 import { prepareOutputCorrection } from './output-stock-corrections';
@@ -16,9 +16,8 @@ import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
 export const rationalNumber = (value: Rational) => Number(value.numerator) / Number(value.denominator);
-export function stockFingerprint(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v)).digest('hex');
-}
+/** Output-lane alias of the shared request digest. */
+export { requestFingerprint as stockFingerprint };
 
 /** One read/plan seam shared by previews and locked writes. */
 export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPreviewInput, reader: Reader = db) {
@@ -42,7 +41,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const planningLayers = preserveLossSources ? layers.filter(l => correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === l.id)) : layers;
   const events = await reader.select({ id: binMovements.id, sequence: binMovements.postingSequence })
     .from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, bin.id))).orderBy(asc(binMovements.postingSequence));
-  const basisFingerprint = stockFingerprint({ layers, events, formulationId: bin.formulationId, physicalDate: input.physicalDate, correctsMovementId: input.correctsMovementId });
+  const basisFingerprint = requestFingerprint({ layers, events, formulationId: bin.formulationId, physicalDate: input.physicalDate, correctsMovementId: input.correctsMovementId });
   const codes = lane === 'product'
     ? await reader.select({ id: biocharProducts.id, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
     : await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, bin.id)));

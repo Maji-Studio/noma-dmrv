@@ -5,7 +5,8 @@ import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, decimal, grams, GRAMS_PER_KG, kilograms, multiply, rational, readRational, round, storeRational } from '@/lib/output-stock';
 import { outputStockPostSchema } from '@/schemas/output-stock';
 import type { OutputStockPostInput } from '@/types/output-stock';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { findMovementRequest, lockMovementRequest } from './bin-movement-requests';
 import { assertCanMutateCertifiedLineage } from './certification-lineage-guards';
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
 import { lockBinStock } from './lock-bin-stocks';
@@ -13,17 +14,15 @@ import { prepareOutputStock, stockFingerprint } from './output-stock-operations'
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
 
-const IDEMPOTENCY_LOCK_SEED = 0;
+const OUTPUT_REQUEST_CONFLICT_MESSAGE = 'This request key was already used with different values.';
+
 /** Serializes a request even if a reused key names a different bin. */
 export async function lockOutputRequest(ctx: OrgContext, tx: DbTransaction, key: string) {
-  requireOrgScope(ctx);
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`output-request:${ctx.organizationId}:${key}`}, ${IDEMPOTENCY_LOCK_SEED}))`);
+  return lockMovementRequest(ctx, tx, key);
 }
+/** Output-lane view of the shared replay guard. */
 export async function findOutputRequest(ctx: OrgContext, tx: DbTransaction, input: OutputStockPostInput, payload: unknown = input) {
-  requireOrgScope(ctx);
-  const [existing] = await tx.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.idempotencyKey, input.idempotencyKey)));
-  if (existing && existing.inputSnapshot?.payloadHash !== stockFingerprint(payload)) throw new ActionConflictError('This request key was already used with different values.', { entity: 'storageLocation', id: input.storageLocationId, code: '' });
-  return existing;
+  return findMovementRequest(ctx, tx, { idempotencyKey: input.idempotencyKey, payload, storageLocationId: input.storageLocationId, conflictMessage: OUTPUT_REQUEST_CONFLICT_MESSAGE });
 }
 
 /** Caller owns the bin/request locks and cross-entity transaction. */

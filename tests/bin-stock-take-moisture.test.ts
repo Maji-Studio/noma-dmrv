@@ -155,6 +155,7 @@ describe("feedstock stock-take moisture integrity", () => {
           storageLocationId: bin.id,
           lane: "feedstock",
           movementType: "adjustment",
+          idempotencyKey: crypto.randomUUID(),
           massDeltaKg: 1,
           reason: "Generic movement caller cannot bypass stock-take checks",
         }),

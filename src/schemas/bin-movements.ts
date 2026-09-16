@@ -4,7 +4,8 @@
  * Two operator-facing flows write to the append-only reconciliation ledger:
  * a stock-take (counted stock → computed adjustment) and a documented loss.
  * Client form schemas validate the raw operator input; server action schemas
- * validate the assembled payload.
+ * validate the assembled payload, including the request key that makes a
+ * resubmitted loss replay instead of deducting twice.
  */
 
 import { z } from "zod";
@@ -48,6 +49,18 @@ export const BIN_MOVEMENT_LANE_LABELS: Record<BinMovementLane, string> = {
 };
 
 const REASON_MAX = 1000;
+const REQUEST_KEY_MAX = 200;
+
+/**
+ * Client-generated key for one open form instance. It makes a repeated submit
+ * replay the saved movement instead of posting a second deduction.
+ */
+const requestKeySchema = z
+  .string()
+  .trim()
+  .min(1, "Loss was not saved. Close this form and start a new loss entry.")
+  .max(REQUEST_KEY_MAX, "Loss was not saved. Close this form and start a new loss entry.");
+
 const reasonSchema = z
   .string()
   .trim()
@@ -154,6 +167,7 @@ export type RecordStockTakeData = z.infer<typeof recordStockTakeSchema>;
 export const recordLossSchema = z.object({
   storageLocationId: z.uuid("Choose a valid storage bin."),
   lane: z.enum(binMovementLanes),
+  idempotencyKey: requestKeySchema,
   reason: reasonSchema,
   lossMassKg: requiredPositiveMassKgSchema(
     "Loss amount is required",
