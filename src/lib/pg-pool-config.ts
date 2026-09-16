@@ -49,7 +49,7 @@ export function getPgPoolConfig(databaseUrl: string): PoolConfig {
  * verification on, unlike PG_ALLOW_UNVERIFIED_SSL. Secret stores often keep
  * the PEM on one line with literal "\n" escapes, so those are restored.
  */
-function readCaCert(): string | undefined {
+export function readCaCert(): string | undefined {
   const raw = process.env.DATABASE_CA_CERT?.trim();
   if (!raw) return undefined;
   return raw.replace(/\\n/g, '\n');
