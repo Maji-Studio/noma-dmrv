@@ -8,6 +8,7 @@ import type {
   ProductionRunStats,
   ProductionRunWithRelations,
 } from "@/data-access/production-runs";
+import type { CertifierProjectRow } from "@/data-access/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { Facility } from "@/db/schema";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
@@ -18,10 +19,19 @@ import type { ActionResult } from "@/types/actions";
 const readResultSchema = z.union([
   z.discriminatedUnion("success", [
     z.object({ success: z.literal(true), data: z.unknown() }),
-    z.object({ success: z.literal(false), error: z.string() }),
+    z.object({
+      success: z.literal(false),
+      error: z.string(),
+      // Kept so an HTTP read answers with the same envelope a Server Action
+      // does and a form can still deep-link to the blocking record.
+      conflict: z
+        .object({ entity: z.string(), id: z.string(), code: z.string() })
+        .optional(),
+    }),
   ]),
   // The authenticated API proxy rejects signed-out/unverified requests before
-  // a Route Handler runs and returns this smaller envelope.
+  // a Route Handler runs and returns this smaller envelope. Its text is not
+  // operator copy, so only its status is used.
   z.object({ error: z.string() }),
 ]);
 
@@ -30,6 +40,9 @@ interface ReadRequestOptions {
 }
 
 const JSON_MEDIA_TYPE = "application/json";
+const SIGN_IN_PATH = "/login";
+const UNAUTHENTICATED_STATUS = 401;
+const FORBIDDEN_STATUS = 403;
 
 // A gateway timeout or platform error page arrives as HTML, and a truncated
 // response is not parseable at all. Neither is the operator's fault, so the
@@ -38,6 +51,8 @@ const TRANSPORT_ERROR =
   "The server could not be reached. Refresh the page and try again.";
 const INVALID_ENVELOPE_ERROR =
   "The server returned an unreadable response. Refresh the page and try again.";
+const SESSION_EXPIRED_ERROR = "Your session has ended. Sign in to continue.";
+const UNVERIFIED_EMAIL_ERROR = "Verify your email to continue.";
 
 type JsonContract<T> = T extends Date
   ? string
@@ -62,6 +77,14 @@ async function requestRead<T>(
     signal: options?.signal,
   });
 
+  // A read is an API call, so an expired session comes back as 401 instead of
+  // the sign-in redirect a page navigation would have received. Send the
+  // operator to sign in the way the rest of the app does.
+  if (response.status === UNAUTHENTICATED_STATUS) {
+    redirectToSignIn();
+    return { success: false, error: SESSION_EXPIRED_ERROR };
+  }
+
   const body = await readJsonBody(response);
   if (!body.ok) return { success: false, error: body.error };
 
@@ -69,9 +92,27 @@ async function requestRead<T>(
   if (!parsed.success) {
     return { success: false, error: INVALID_ENVELOPE_ERROR };
   }
-  return "success" in parsed.data
-    ? (parsed.data as ActionResult<JsonContract<T>>)
-    : { success: false, error: parsed.data.error };
+  if ("success" in parsed.data) {
+    return parsed.data as ActionResult<JsonContract<T>>;
+  }
+  // The proxy or a gateway answered instead of the read handler. Its body text
+  // never reaches the operator; the status decides what they are told.
+  return { success: false, error: proxyFailureMessage(response.status) };
+}
+
+function proxyFailureMessage(status: number): string {
+  return status === FORBIDDEN_STATUS ? UNVERIFIED_EMAIL_ERROR : TRANSPORT_ERROR;
+}
+
+/**
+ * Leave for the sign-in page, keeping where the operator was so the existing
+ * `?from=` handling can return them there.
+ */
+function redirectToSignIn(): void {
+  const location = globalThis.window?.location;
+  if (!location || location.pathname.startsWith(SIGN_IN_PATH)) return;
+  const from = encodeURIComponent(`${location.pathname}${location.search}`);
+  location.replace(`${SIGN_IN_PATH}?from=${from}`);
 }
 
 /**
@@ -112,36 +153,74 @@ function decodeDate(value: string | null | undefined): Date | null {
   return value === null || value === undefined ? null : new Date(value);
 }
 
-function decodeFacility<T extends JsonContract<Facility>>(wire: T): Facility {
-  return {
-    ...wire,
-    archivedAt: decodeDate(wire.archivedAt),
-    createdAt: decodeDate(wire.createdAt),
-    updatedAt: decodeDate(wire.updatedAt),
-  } as Facility;
+/** Every own key of `Value` whose domain type is a `Date`, nullable or not. */
+type DateKeys<Value> = {
+  [Key in keyof Value]-?: Date extends Extract<Value[Key], Date> ? Key : never;
+}[keyof Value];
+
+/**
+ * Declare the timestamp columns of `Value`. The compiler demands all of them,
+ * so a `Date` column added to a domain type fails the build here instead of
+ * reaching the UI as a string. It checks the type's own keys; a timestamp
+ * nested inside a relation still needs its own declared decoder.
+ */
+function dateFields<Value>() {
+  return <Fields extends Record<DateKeys<Value> & string, true>>(
+    fields: Fields,
+  ) => Object.keys(fields) as (DateKeys<Value> & string)[];
+}
+
+const FACILITY_DATE_FIELDS = dateFields<Facility>()({
+  archivedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+const PRODUCTION_RUN_DATE_FIELDS = dateFields<ProductionRunWithRelations>()({
+  startTime: true,
+  endTime: true,
+  createdAt: true,
+  updatedAt: true,
+});
+const CREDIT_BATCH_DATE_FIELDS = dateFields<CreditBatchWithRelations>()({
+  archivedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+const CERTIFIER_PROJECT_DATE_FIELDS = dateFields<CertifierProjectRow>()({
+  createdAt: true,
+  updatedAt: true,
+});
+
+function decodeDates<Value extends object>(
+  wire: JsonContract<Value>,
+  fields: readonly (keyof Value & string)[],
+): Value {
+  const decoded = { ...(wire as Record<string, unknown>) };
+  for (const field of fields) {
+    decoded[field] = decodeDate(
+      decoded[field] as string | null | undefined,
+    );
+  }
+  return decoded as Value;
+}
+
+function decodeFacility(wire: JsonContract<Facility>): Facility {
+  return decodeDates<Facility>(wire, FACILITY_DATE_FIELDS);
 }
 
 function decodeProductionRun(
   wire: JsonContract<ProductionRunWithRelations>,
 ): ProductionRunWithRelations {
-  return {
-    ...wire,
-    startTime: decodeDate(wire.startTime),
-    endTime: decodeDate(wire.endTime),
-    createdAt: decodeDate(wire.createdAt),
-    updatedAt: decodeDate(wire.updatedAt),
-  };
+  return decodeDates<ProductionRunWithRelations>(
+    wire,
+    PRODUCTION_RUN_DATE_FIELDS,
+  );
 }
 
 function decodeCreditBatch(
   wire: JsonContract<CreditBatchWithRelations>,
 ): CreditBatchWithRelations {
-  return {
-    ...wire,
-    archivedAt: decodeDate(wire.archivedAt),
-    createdAt: decodeDate(wire.createdAt),
-    updatedAt: decodeDate(wire.updatedAt),
-  } as CreditBatchWithRelations;
+  return decodeDates<CreditBatchWithRelations>(wire, CREDIT_BATCH_DATE_FIELDS);
 }
 
 function decodeCertifierSummary(
@@ -150,13 +229,12 @@ function decodeCertifierSummary(
   return {
     ...wire,
     mapping: wire.mapping
-      ? {
-          ...wire.mapping,
-          createdAt: decodeDate(wire.mapping.createdAt),
-          updatedAt: decodeDate(wire.mapping.updatedAt),
-        }
+      ? decodeDates<CertifierProjectRow>(
+          wire.mapping,
+          CERTIFIER_PROJECT_DATE_FIELDS,
+        )
       : null,
-  } as FacilityCertifierSummary;
+  };
 }
 
 export async function getFacilitiesRead(

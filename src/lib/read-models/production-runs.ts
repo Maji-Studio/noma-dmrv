@@ -15,8 +15,14 @@ import { optionalFacilityIdSchema } from "./facility-id";
 // Action caller still passes a Date. Both are accepted; anything else (a null
 // boundary in particular) is rejected rather than coerced to the epoch.
 const INVALID_DATE_FILTER = "Enter a valid date.";
+// The string form is validated as a timestamp before it is converted, so a
+// loose value like "2026" or "Friday" is refused instead of silently becoming
+// some other instant. `{ offset: true }` also accepts a numeric UTC offset.
 const transportDateSchema = z
-  .union([z.date(), z.string()], INVALID_DATE_FILTER)
+  .union(
+    [z.date(), z.iso.datetime({ offset: true, error: INVALID_DATE_FILTER })],
+    INVALID_DATE_FILTER,
+  )
   .pipe(z.coerce.date(INVALID_DATE_FILTER))
   .optional();
 

@@ -31,13 +31,6 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
-import {
-  readFacilityCertifierSummary,
-  type FacilityCertifierSummary,
-} from "@/lib/read-models/facility-certifier-summary";
-
-export type { FacilityCertifierSummary } from "@/lib/read-models/facility-certifier-summary";
-
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
   availableProjects: IsometricProject[];
@@ -51,21 +44,6 @@ export interface FacilityCertifierMapping {
   // "Isometric isn't configured" (availableProjects forced empty by
   // safeListIfConfigured) from a configured account with no projects.
   isConfigured: boolean;
-}
-
-// Read-only registry-link summary for non-managing viewers. DB-only — it
-// deliberately does NOT hit the Isometric API (`listProjects` /
-// `listGhgEntryTemplates`). A non-admin reading the current mapping receives
-// only the number of local facilities sharing its project, not their identities
-// or the management payload (available projects, link hints, template options).
-// The count lets create surfaces fail early when Isometric's project-wide GHG
-// Statements cannot be assigned safely to one noma facility.
-export async function loadFacilityCertifierSummary(
-  facilityId: string,
-): Promise<ActionResult<FacilityCertifierSummary>> {
-  return withAction((orgCtx) =>
-    readFacilityCertifierSummary(orgCtx, facilityId),
-  );
 }
 
 export async function loadFacilityCertifierMapping(

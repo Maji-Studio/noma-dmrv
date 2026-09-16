@@ -13,7 +13,7 @@ vi.mock("@/data-access/utils", () => ({
 }));
 
 import { SafeError } from "@/lib/errors";
-import { readProductionRuns } from "@/lib/read-models/production-runs";
+import { readProductionRuns } from "./production-runs";
 
 const ACTIVE_CONTEXT = {
   userId: "user-1",
@@ -23,7 +23,7 @@ const ACTIVE_CONTEXT = {
 };
 const FOREIGN_FACILITY_ID = "11111111-1111-4111-8111-111111111111";
 
-describe("read-model facility isolation", () => {
+describe("Production Run read model", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -54,6 +54,14 @@ describe("read-model facility isolation", () => {
     await expect(
       readProductionRuns(ACTIVE_CONTEXT, { startDate: null }),
     ).rejects.toThrow();
+
+    expect(mocks.getProductionRuns).not.toHaveBeenCalled();
+  });
+
+  it("rejects a date filter that is not an ISO timestamp", async () => {
+    await expect(
+      readProductionRuns(ACTIVE_CONTEXT, { startDate: "2026-09-15" }),
+    ).rejects.toThrow("Enter a valid date.");
 
     expect(mocks.getProductionRuns).not.toHaveBeenCalled();
   });

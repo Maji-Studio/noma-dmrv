@@ -20,14 +20,12 @@ import {
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
 } from "@/data-access/credit-batches";
-import { readCreditBatches } from "@/lib/read-models/credit-batches";
 import {
   createCreditBatchSchema,
   updateCreditBatchSchema,
   deleteCreditBatchSchema,
 } from "@/schemas/credit-batches";
 import { formatZodActionError } from "./action-errors";
-import { withAction } from "./with-action";
 
 const MAX_BATCH_PREVIEWS = 50;
 
@@ -39,18 +37,6 @@ function logCreditBatchError(message: string, error: unknown): void {
     },
     message,
   );
-}
-
-/**
- * Get credit batches for a facility
- */
-export async function getCreditBatchesFn(
-  facilityId: string,
-): Promise<ActionResult<CreditBatchWithRelations[]>> {
-  return withAction((ctx) => readCreditBatches(ctx, facilityId), {
-    fallbackMessage: "Failed to get credit batches",
-    log: { message: "Failed to get credit batches" },
-  });
 }
 
 /**

@@ -23,27 +23,19 @@ import {
   updateProductionRun,
   ProductionRunOverlapError,
   ProductionRunDependencyError,
-  type PaginatedProductionRuns,
   type ProductionRunWithRelations,
-  type ProductionRunStats,
   type FacilityEnergyTotals,
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
-import {
-  readProductionRuns,
-  readProductionRunStats,
-} from "@/lib/read-models/production-runs";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   formatZodActionError,
   toLoggedActionError,
 } from "./action-errors";
-import { withAction } from "./with-action";
 import {
   createProductionRunSchema,
   deleteProductionRunSchema,
   updateProductionRunSchema,
-  productionRunFilterSchema,
 } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
 
@@ -61,22 +53,6 @@ function productionRunActionError(
 // ============================================
 // List/Query Operations
 // ============================================
-
-/**
- * Get paginated list of production runs with filtering
- */
-export async function getProductionRunsFn(
-  filters?: Partial<z.infer<typeof productionRunFilterSchema>>
-): Promise<ActionResult<PaginatedProductionRuns>> {
-  return withAction((ctx) => readProductionRuns(ctx, filters), {
-    fallbackMessage: "Failed to load production runs",
-    log: {
-      message: "production run action failed",
-      context: { op: "production-run:list" },
-    },
-    zodErrorPrefix: "Invalid filter parameters",
-  });
-}
 
 /**
  * Get a single production run by ID
@@ -99,21 +75,6 @@ export async function getProductionRunByIdFn(
       ),
     };
   }
-}
-
-/**
- * Get production run statistics
- */
-export async function getProductionRunStatsFn(
-  facilityId?: string
-): Promise<ActionResult<ProductionRunStats>> {
-  return withAction((ctx) => readProductionRunStats(ctx, facilityId), {
-    fallbackMessage: "Failed to load production run stats",
-    log: {
-      message: "production run action failed",
-      context: { op: "production-run:stats" },
-    },
-  });
 }
 
 /**

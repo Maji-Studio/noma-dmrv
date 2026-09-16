@@ -22,8 +22,9 @@ components (UI)
 - `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
 - `src/lib/read-models/` holds server-only read cores that take an already
   resolved `OrgContext` and return domain data. They are not Server Actions and
-  are not exported from a `"use server"` file; both entry points (a `fn/`
-  wrapper and an `/api/reads/*` handler) authenticate before calling one.
+  are not exported from a `"use server"` file; the caller authenticates first.
+  Today that caller is the `/api/reads/*` adapter; a `fn/` action that needs the
+  same read wraps the core in `withAction` rather than duplicating it.
 - `data-access/` owns query composition **and** org-scope enforcement.
 
 ## Tenancy — the actual authorization model
@@ -184,29 +185,36 @@ Actions remain the write transport. Do not replace a read with client-side
 `Promise.all` around Server Actions; those calls still share the Server
 Function queue.
 
-The seam has three parts. A read core in `src/lib/read-models/` validates its
-input, checks facility inputs with `requireOrgFacility`, and calls the same
-org-scoped data-access functions for a caller-supplied `OrgContext`. A `fn/`
-wrapper exposes that core to Server Action callers through `withAction`. The
-HTTP adapter `src/app/api/reads/read-response.ts` resolves the context once per
+The seam has two parts. A read core in `src/lib/read-models/` validates its
+input, checks facility inputs with `requireOrgFacility`, and calls the
+org-scoped data-access functions for a caller-supplied `OrgContext`. The HTTP
+adapter `src/app/api/reads/read-response.ts` resolves the context once per
 request with `resolveOrgContext()` and formats failures with the same
-`toActionFailure` helper `withAction` uses, so the two transports answer with
-the same `ActionResult` envelope, `conflict` included. Route handlers stay thin:
-they name the read, its log context, and its fallback message.
+`toActionFailure` helper `withAction` uses, so an HTTP read and a Server Action
+answer with the same `ActionResult` envelope, `conflict` included. Route
+handlers stay thin: they name the read, its log context, and its fallback
+message. A migrated read has no Server Action wrapper left; adding one back
+means wrapping the same core in `withAction`, never a second copy of the query.
 
 Status mapping belongs to the adapter alone: a denied org context answers 401
-when there is no session and 403 when the caller has no usable organization,
-rejected input and org-scoped lookups answer 400, a conflict answers 409, and an
-unexpected failure answers 500. Responses carry `Cache-Control: private,
-no-store`; the React Query function passes its abort signal to `fetch`.
+when there is no session and 403 when the caller has no usable organization
+(see [auth.md](./auth.md)), rejected input and org-scoped lookups answer 400, a
+conflict answers 409, and an unexpected failure answers 500. Request bodies are
+capped; resolving the context happens inside the same try/catch, so a database
+failure there is logged and answered rather than escaping the handler.
+Responses carry `Cache-Control: private, no-store`; the React Query function
+passes its abort signal to `fetch`.
 
 JSON is a deliberate transport contract: database `Date` values cross as ISO
 strings. The typed client adapter in `src/lib/read-api/client.ts` rehydrates the
 declared date fields before returning existing domain types to hooks; a null or
-absent timestamp stays null rather than becoming the epoch. Calendar date fields
-such as a credit batch's `startDate` and `endDate` remain strings. The adapter
-parses a response body only when it is JSON, so a gateway error page becomes a
-formatted transport failure instead of a raw parser message.
+absent timestamp stays null rather than becoming the epoch, and each decoder
+declares its timestamp columns through `dateFields<T>()`, which fails the build
+if the domain type gains one. Calendar date fields such as a credit batch's
+`startDate` and `endDate` remain strings. The adapter parses a response body
+only when it is JSON, so a gateway error page becomes a formatted transport
+failure instead of a raw parser message; a proxy's own error text never reaches
+the operator, and a 401 sends them to sign in the way any navigation would.
 
 ## next.config.ts — three load-bearing settings
 

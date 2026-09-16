@@ -5,6 +5,12 @@ import { getFacilitiesRead, getProductionRunsRead } from "./client";
 const TRANSPORT_ERROR =
   "The server could not be reached. Refresh the page and try again.";
 
+function stubBrowserLocation(pathname = "/production-runs", search = "") {
+  const replace = vi.fn();
+  vi.stubGlobal("window", { location: { pathname, search, replace } });
+  return replace;
+}
+
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
 const RUN_ID = "22222222-2222-4222-8222-222222222222";
 
@@ -246,20 +252,86 @@ describe("authenticated read client", () => {
     });
   });
 
-  it("preserves an authentication error returned by API middleware", async () => {
+  it("never shows the proxy's own error text to the operator", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        Response.json(
-          { error: "Authentication required" },
-          { status: 403 },
-        ),
+        Response.json({ error: "Email verification required" }, { status: 403 }),
       ),
     );
 
     await expect(getFacilitiesRead()).resolves.toEqual({
       success: false,
-      error: "Authentication required",
+      error: "Verify your email to continue.",
+    });
+  });
+
+  it("falls back to the transport message for any other proxy status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({ error: "upstream connect error" }, { status: 502 }),
+      ),
+    );
+
+    await expect(getFacilitiesRead()).resolves.toEqual({
+      success: false,
+      error: TRANSPORT_ERROR,
+    });
+  });
+
+  it("sends the operator to sign in when the session has expired", async () => {
+    const replace = stubBrowserLocation("/production-runs", "?facility=abc");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ error: "Unauthorized" }, { status: 401 }),
+        ),
+    );
+
+    await expect(getFacilitiesRead()).resolves.toEqual({
+      success: false,
+      error: "Your session has ended. Sign in to continue.",
+    });
+    expect(replace).toHaveBeenCalledWith(
+      `/login?from=${encodeURIComponent("/production-runs?facility=abc")}`,
+    );
+  });
+
+  it("does not redirect again once the sign-in page is showing", async () => {
+    const replace = stubBrowserLocation("/login", "?from=%2Fdashboard");
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          Response.json({ error: "Unauthorized" }, { status: 401 }),
+        ),
+    );
+
+    await getFacilitiesRead();
+
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("keeps the conflict reference a failure envelope carries", async () => {
+    const conflict = { entity: "productionRun", id: "run-1", code: "PR-001" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          { success: false, error: "Overlaps PR-001.", conflict },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(getProductionRunsRead()).resolves.toEqual({
+      success: false,
+      error: "Overlaps PR-001.",
+      conflict,
     });
   });
 });

@@ -26,12 +26,16 @@ const ORG_CONTEXT = {
   isPlatformAdmin: false,
 };
 
-function request(body: string): Request {
+function request(body: string, headers?: HeadersInit): Request {
   return new Request("https://app.example/api/reads/test", {
     method: "POST",
     body,
+    headers,
   });
 }
+
+const OVERSIZED_BODY_ERROR =
+  "The request was too large to read. Narrow the filters and try again.";
 
 describe("authenticated read response", () => {
   beforeEach(() => {
@@ -173,6 +177,32 @@ describe("authenticated read response", () => {
     });
   });
 
+  // Resolving the context reads the database, so it can fail like any other
+  // query. That must be logged and answered, not escape the handler.
+  it("answers 500 when resolving the org context itself fails", async () => {
+    mocks.resolveOrgContext.mockRejectedValue(
+      new Error("connection terminated unexpectedly"),
+    );
+    const read = vi.fn();
+
+    const response = await readResponse({
+      fallbackMessage: "Failed to load records",
+      logContext: "read:test",
+      read,
+    });
+
+    expect(response.status).toBe(500);
+    expect(read).not.toHaveBeenCalled();
+    expect(mocks.logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ op: "read:test" }),
+      "authenticated read failed",
+    );
+    await expect(response.json()).resolves.toEqual({
+      success: false,
+      error: "Records could not be loaded. Refresh the page and try again.",
+    });
+  });
+
   // A JSON.parse fault inside a read (stored metadata, a driver payload) is a
   // server fault, not a report that the operator's input was wrong.
   it("reports a SyntaxError raised inside a read as a server failure", async () => {
@@ -207,5 +237,19 @@ describe("read input decoding", () => {
     await expect(readInput(request("<html>"))).rejects.toThrow(
       "The request could not be read. Refresh the page and try again.",
     );
+  });
+
+  it("refuses a body larger than the read cap", async () => {
+    const oversized = JSON.stringify({ search: "x".repeat(17 * 1024) });
+
+    await expect(readInput(request(oversized))).rejects.toThrow(
+      OVERSIZED_BODY_ERROR,
+    );
+  });
+
+  it("refuses an oversized body before buffering it", async () => {
+    await expect(
+      readInput(request("{}", { "content-length": String(64 * 1024) })),
+    ).rejects.toThrow(OVERSIZED_BODY_ERROR);
   });
 });

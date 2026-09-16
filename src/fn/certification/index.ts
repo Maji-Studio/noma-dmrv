@@ -1,11 +1,9 @@
 export {
   deleteFacilityCertifierMapping,
   loadFacilityCertifierMapping,
-  loadFacilityCertifierSummary,
   loadIsometricProjectTemplates,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
-  type FacilityCertifierSummary,
 } from "./facility-mapping";
 export {
   loadRegistrySourceVisibility,

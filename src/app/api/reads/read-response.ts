@@ -46,6 +46,12 @@ const DENIAL_RESPONSES: Record<
 const MALFORMED_BODY_ERROR =
   "The request could not be read. Refresh the page and try again.";
 
+// A read request carries filters, not documents. The cap keeps a hostile or
+// broken client from making the handler buffer an arbitrary body.
+const MAX_READ_BODY_BYTES = 16 * 1024;
+const OVERSIZED_BODY_ERROR =
+  "The request was too large to read. Narrow the filters and try again.";
+
 const READ_LOG_MESSAGE = "authenticated read failed";
 
 interface ReadResponseOptions<T> {
@@ -61,13 +67,32 @@ interface ReadResponseOptions<T> {
  * a read is left alone and reported as a server fault.
  */
 export async function readInput(request: Request): Promise<unknown> {
+  if (declaredBodyBytes(request) > MAX_READ_BODY_BYTES) {
+    throw new SafeError(OVERSIZED_BODY_ERROR);
+  }
   const encoded = await request.text();
   if (encoded === "") return undefined;
+  if (byteLength(encoded) > MAX_READ_BODY_BYTES) {
+    throw new SafeError(OVERSIZED_BODY_ERROR);
+  }
   try {
     return JSON.parse(encoded);
   } catch {
     throw new SafeError(MALFORMED_BODY_ERROR);
   }
+}
+
+/** The body size the client declared, or 0 when it declared none. */
+function declaredBodyBytes(request: Request): number {
+  const declared = Number.parseInt(
+    request.headers.get("content-length") ?? "",
+    10,
+  );
+  return Number.isNaN(declared) ? 0 : declared;
+}
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
 }
 
 /**
@@ -82,13 +107,15 @@ export async function readResponse<T>({
   logContext,
   read,
 }: ReadResponseOptions<T>): Promise<Response> {
-  const resolution = await resolveOrgContext();
-  if (!resolution.ok) {
-    const denied = DENIAL_RESPONSES[resolution.denial];
-    return readJson({ success: false, error: denied.error }, denied.status);
-  }
-
   try {
+    // Resolving the context reads the database, so it is inside the same
+    // try/catch: a failure there is a server fault like any other, not an
+    // unhandled rejection that escapes without a log line.
+    const resolution = await resolveOrgContext();
+    if (!resolution.ok) {
+      const denied = DENIAL_RESPONSES[resolution.denial];
+      return readJson({ success: false, error: denied.error }, denied.status);
+    }
     return readJson(
       { success: true, data: await read(resolution.ctx) },
       STATUS.ok,
