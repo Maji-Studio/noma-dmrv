@@ -66,10 +66,12 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 actions and Zod schemas as the forms, so every seeded row is one the UI would
 have accepted. Run `pnpm db:ensure-admin` first if the bootstrap admin or
 organization is missing. The entry is `src/db/seed-data.ts`; the steps live in
-`src/db/seed/`. An existing Mafinga facility makes a repeat run exit without
-adding rows. A failed step aborts with its action error and leaves earlier steps
-in place, so a partial run also counts as "existing"; reset the development
-database before retrying.
+`src/db/seed/`. A repeat run matches the Mafinga facility by its code or its
+seeded name, then checks the completion marker (the delivery the seed creates
+last). A complete dataset exits without adding rows. A failed step aborts with
+its action error and leaves earlier steps in place, and a rerun refuses that
+partial dataset instead of duplicating it: run `pnpm db:reset` before
+reseeding.
 
 The demo covers infrastructure, suppliers, a customer, feedstock deliveries,
 completed production runs with imported CSV readings, a sampled credit batch
