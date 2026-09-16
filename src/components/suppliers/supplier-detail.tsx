@@ -16,29 +16,50 @@ import {
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
-import type { DetailPanelField } from "@/components/ui/detail-panel";
+import {
+  resolveDetailFieldValue,
+  type DetailPanelField,
+} from "@/components/ui/detail-panel";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
-import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
+import {
+  buildSupplierFallbackDistanceField,
+  buildSupplierLocationField,
+} from "./supplier-detail-fields";
 
 interface SupplierDetailProps {
   supplierId: string;
 }
 
-export function SupplierFallbackDistanceSummary({
-  field,
-}: {
-  field: DetailPanelField;
-}) {
+/** Columns in the supplier locations table, so its loading skeleton matches. */
+const LOCATION_TABLE_COLUMNS = 9;
+
+/**
+ * One field of the supplier header summary.
+ *
+ * The value runs through the shared `DetailField` contract, so a field whose
+ * value is still loading shows the skeleton instead of a missing-value token.
+ */
+export function SupplierSummaryField({ field }: { field: DetailPanelField }) {
+  const { displayValue } = resolveDetailFieldValue(field);
+
   return (
     <div>
       <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
         {field.label}
-        <CertificationFieldTag status={field.certifyStatus} />
+        {field.certifyRequired && (
+          <CertificationFieldTag status={field.certifyStatus} />
+        )}
       </dt>
-      <dd className="body-medium mt-16">{field.value}</dd>
+      <dd
+        className="body-medium mt-16"
+        aria-busy={field.pending || undefined}
+        data-pending={field.pending || undefined}
+      >
+        {displayValue}
+      </dd>
     </div>
   );
 }
@@ -87,6 +108,11 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
     legacySupplierDistanceKm: supplier.distanceToFacilityKm,
     locationsLoaded: !locationsLoading,
   });
+  const locationField = buildSupplierLocationField({
+    legacySupplierLocation: supplier.location,
+    locations,
+    locationsLoaded: !locationsLoading,
+  });
 
   return (
     <div className="container-max page-shell">
@@ -130,16 +156,8 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
               {supplier.contactPhone || MISSING_VALUE.notRecorded}
             </dd>
           </div>
-          <div>
-            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Location
-            </dt>
-            <dd className="body-medium mt-16">
-              {resolveSupplierLocationDisplay(supplier.location, locations) ||
-                MISSING_VALUE.notRecorded}
-            </dd>
-          </div>
-          <SupplierFallbackDistanceSummary field={fallbackDistanceField} />
+          <SupplierSummaryField field={locationField} />
+          <SupplierSummaryField field={fallbackDistanceField} />
         </div>
       </div>
 
@@ -165,7 +183,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
 
         {/* Locations List */}
         {locationsLoading ? (
-          <div className="body-large">Loading supplier locations...</div>
+          <TableSkeleton columns={LOCATION_TABLE_COLUMNS} rows={3} />
         ) : locations.length === 0 ? (
           <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] flex flex-col items-center justify-center gap-24 text-center">
             <div className="flex flex-col gap-16">
