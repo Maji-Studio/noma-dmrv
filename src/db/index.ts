@@ -3,6 +3,7 @@
  * Provides drizzle ORM instance with PostgreSQL connection
  */
 import { drizzle } from "drizzle-orm/node-postgres";
+import type { Client } from "pg";
 import { attachDatabasePool } from "@vercel/functions/db-connections";
 import { env } from "@/config/env";
 import { logger } from "@/lib/log";
@@ -49,6 +50,22 @@ export const db = drizzle(pool, { schema });
 export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
+ * Open a connection outside the shared pool. Both dedicated-lock helpers need
+ * the same settings: the app's connection configuration plus the pool's
+ * acquisition timeout, and deliberately not the pooled `lock_timeout` — an
+ * active registry DELETE must keep its fence until the callback finishes.
+ */
+function createDedicatedClient(): Client {
+  return createObservedClient(
+    {
+      ...getPgPoolConfig(env.DATABASE_URL),
+      connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+    },
+    telemetryOptions,
+  );
+}
+
+/**
  * Hold a session-scoped advisory lock while the callback performs separately
  * committed work through the shared pool. Session and transaction advisory
  * locks share PostgreSQL's lock namespace, so this serializes with callers of
@@ -58,13 +75,7 @@ export async function withDedicatedSessionAdvisoryLock<T>(
   lockKey: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const client = createObservedClient(
-    {
-      ...getPgPoolConfig(env.DATABASE_URL),
-      connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
-    },
-    telemetryOptions,
-  );
+  const client = createDedicatedClient();
 
   try {
     await client.connect();
@@ -94,13 +105,7 @@ export async function withDedicatedSessionAdvisoryLock<T>(
 export async function withDedicatedLockConnection<T>(
   fn: (tx: DbTransaction) => Promise<T>,
 ): Promise<T> {
-  const client = createObservedClient(
-    {
-      ...getPgPoolConfig(env.DATABASE_URL),
-      connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
-    },
-    telemetryOptions,
-  );
+  const client = createDedicatedClient();
 
   try {
     await client.connect();

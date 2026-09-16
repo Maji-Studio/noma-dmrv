@@ -9,10 +9,18 @@ import type { Logger } from "@/lib/log";
 
 // Durations are reported to one decimal place; sub-0.1 ms noise is not useful.
 const DURATION_PRECISION_FACTOR = 10;
+const DB_POOL_LOG_BINDINGS = { mod: "db-pool" };
 
 type Clock = () => number;
 
 interface ObservabilityOptions {
+  /**
+   * Opt-in for timing telemetry: connection and checkout successes, and both
+   * outcomes of every query. Connection failures, checkout failures, and
+   * idle-client errors are logged either way — they are infrastructure faults
+   * nobody opts in to, whereas a failed query is often ordinary control flow
+   * here (`55P03` lock timeouts, unique-violation retries).
+   */
   enabled: boolean;
   clock?: Clock;
   /**
@@ -45,12 +53,12 @@ export function instrumentClient(
   if (observedClient[OBSERVED_CLIENT]) return;
   observedClient[OBSERVED_CLIENT] = true;
 
-  const dbLog = log.child({ mod: "db-pool" });
+  const dbLog = log.child(DB_POOL_LOG_BINDINGS);
   const originalConnect = client.connect.bind(client);
   client.connect = ((callback?: (error?: Error) => void) => {
     const startedAt = clock();
     const finish = (success: boolean) => {
-      if (!enabled) return;
+      if (success && !enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
@@ -138,7 +146,7 @@ export function instrumentPoolAcquisition(
   pool: Pool,
   { enabled, clock = performance.now.bind(performance), log }: ObservabilityOptions,
 ): void {
-  const dbLog = log.child({ mod: "db-pool" });
+  const dbLog = log.child(DB_POOL_LOG_BINDINGS);
   const originalConnect = pool.connect.bind(pool);
 
   pool.connect = ((
@@ -151,7 +159,7 @@ export function instrumentPoolAcquisition(
     const startedAt = clock();
     const waitingBefore = pool.waitingCount;
     const finish = (success: boolean) => {
-      if (!enabled) return;
+      if (success && !enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
@@ -188,7 +196,11 @@ export function createObservedPool(
   config: PoolConfig,
   options: ObservabilityOptions,
 ): Pool {
-  class InstrumentedClient extends Client {
+  // Honour a caller-supplied client class (pg's own `PoolConfig.Client`) so
+  // the pooled path can be driven without a database.
+  const BaseClient = (config.Client ?? Client) as unknown as typeof Client;
+
+  class InstrumentedClient extends BaseClient {
     constructor(clientConfig?: string | ClientConfig) {
       super(clientConfig);
       instrumentClient(this, options);
@@ -197,9 +209,12 @@ export function createObservedPool(
 
   const pool = new Pool({ ...config, Client: InstrumentedClient });
   instrumentPoolAcquisition(pool, options);
+  // Always logged, and always listened for: an unhandled `error` event on an
+  // idle client would otherwise take the process down.
   pool.on("error", () => {
-    if (!options.enabled) return;
-    options.log.child({ mod: "db-pool" }).warn("idle database connection failed");
+    options.log
+      .child(DB_POOL_LOG_BINDINGS)
+      .warn("idle database connection failed");
   });
   return pool;
 }

@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "@/lib/log";
 import {
@@ -6,7 +7,7 @@ import {
   instrumentPoolAcquisition,
   type QueryableClient,
 } from "./observed-pg";
-import type { Pool, PoolClient } from "pg";
+import type { Pool, PoolClient, PoolConfig } from "pg";
 
 function createTestLogger() {
   const info = vi.fn();
@@ -24,6 +25,44 @@ function createTestLogger() {
     child,
   };
   return { info, log, warn };
+}
+
+/** Monotonic clock for paths whose internal call order is pg's business. */
+function createIncrementingClock(stepMs = 5): () => number {
+  let now = 0;
+  return () => (now += stepMs);
+}
+
+/**
+ * Minimal stand-in for a `pg.Client` that satisfies what `pg-pool` calls on the
+ * clients it creates, so the pooled path can run without a database.
+ */
+function createFakeClientClass(
+  { connectError }: { connectError?: Error } = {},
+): PoolConfig["Client"] {
+  class FakePoolClient extends EventEmitter {
+    _queryable = true;
+    _ending = false;
+
+    connect(callback?: (error?: Error) => void) {
+      if (callback) {
+        callback(connectError);
+        return;
+      }
+      return connectError ? Promise.reject(connectError) : Promise.resolve();
+    }
+
+    query() {
+      return Promise.resolve({ rows: [] });
+    }
+
+    end(callback?: () => void) {
+      callback?.();
+      return Promise.resolve();
+    }
+  }
+
+  return FakePoolClient as unknown as PoolConfig["Client"];
 }
 
 function createClock(...values: number[]): () => number {
@@ -64,7 +103,7 @@ describe("database client observability", () => {
     expect(JSON.stringify(info.mock.calls)).not.toContain("sensitive-id");
   });
 
-  it("suppresses failure telemetry when telemetry is disabled", async () => {
+  it("reports connection failures but not query failures when telemetry is disabled", async () => {
     const { log, warn } = createTestLogger();
     const failure = new Error("connection refused");
     const fakeClient = {
@@ -81,7 +120,13 @@ describe("database client observability", () => {
     await expect(fakeClient.connect()).rejects.toBe(failure);
     await expect(fakeClient.query("select 1")).rejects.toBe(failure);
 
-    expect(warn).not.toHaveBeenCalled();
+    // A failed query is often ordinary control flow (55P03, unique violations);
+    // a connection that cannot be established never is.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      { durationMs: 5, success: false },
+      "database connection establishment failed",
+    );
   });
 
   it("reports failures when telemetry is enabled", async () => {
@@ -146,9 +191,9 @@ describe("database pool acquisition observability", () => {
   });
 
   it.each([false, true])(
-    "logs failed checkouts only when telemetry enabled is %s",
+    "logs failed checkouts whatever the telemetry flag says (enabled %s)",
     async (enabled) => {
-      const { log, warn } = createTestLogger();
+      const { info, log, warn } = createTestLogger();
       const failure = new Error("checkout failed");
       const fakePool = {
         connect: () => Promise.reject(failure),
@@ -164,22 +209,65 @@ describe("database pool acquisition observability", () => {
       });
 
       await expect(fakePool.connect()).rejects.toBe(failure);
-      expect(warn).toHaveBeenCalledTimes(enabled ? 1 : 0);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(info).not.toHaveBeenCalled();
     },
   );
 });
 
 describe("database pool idle-client observability", () => {
   it.each([false, true])(
-    "logs idle-client failures only when telemetry enabled is %s",
+    "logs idle-client failures whatever the telemetry flag says (enabled %s)",
     async (enabled) => {
       const { log, warn } = createTestLogger();
       const pool = createObservedPool({}, { enabled, log });
 
       pool.emit("error", new Error("idle connection failed"));
 
-      expect(warn).toHaveBeenCalledTimes(enabled ? 1 : 0);
+      expect(warn).toHaveBeenCalledTimes(1);
       await pool.end();
     },
   );
+});
+
+describe("pooled client instrumentation", () => {
+  it("instruments the clients the pool creates and the checkout around them", async () => {
+    const { info, log, warn } = createTestLogger();
+    const pool = createObservedPool(
+      { Client: createFakeClientClass() },
+      { enabled: true, clock: createIncrementingClock(), log },
+    );
+
+    const client = await pool.connect();
+    await client.query("select private_data from records where id = $1", [
+      "sensitive-id",
+    ]);
+    client.release();
+    await pool.end();
+
+    const messages = info.mock.calls.map(([, message]) => message);
+    expect(messages).toContain("database connection established");
+    expect(messages).toContain("database connection acquired");
+    expect(messages).toContain("database query finished");
+    expect(warn).not.toHaveBeenCalled();
+    expect(JSON.stringify(info.mock.calls)).not.toContain("private_data");
+    expect(JSON.stringify(info.mock.calls)).not.toContain("sensitive-id");
+  });
+
+  it("reports a pooled connection that never establishes, telemetry off", async () => {
+    const { info, log, warn } = createTestLogger();
+    const failure = new Error("connection refused");
+    const pool = createObservedPool(
+      { Client: createFakeClientClass({ connectError: failure }) },
+      { enabled: false, clock: createIncrementingClock(), log },
+    );
+
+    await expect(pool.connect()).rejects.toBe(failure);
+
+    const messages = warn.mock.calls.map(([, message]) => message);
+    expect(messages).toContain("database connection establishment failed");
+    expect(messages).toContain("database connection acquisition failed");
+    expect(info).not.toHaveBeenCalled();
+    await pool.end();
+  });
 });

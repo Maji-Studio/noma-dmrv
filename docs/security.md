@@ -123,9 +123,11 @@ Non-obvious semantics only:
   emits connection-establishment, pool-checkout, and query-execution durations
   plus aggregate pool counts. It deliberately excludes SQL, parameters,
   connection strings, hostnames, database names, and application identifiers.
-  When disabled the pool emits nothing, failures included: expected `55P03` lock
-  timeouts and unique-violation retries are normal control flow and must not
-  become standing warnings.
+  When disabled, connection failures, checkout failures, and idle-client errors
+  are still logged at warn — nobody opts in to an infrastructure fault. Query
+  timings and query failures are not: expected `55P03` lock timeouts and
+  unique-violation retries are normal control flow and must not become standing
+  warnings.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 

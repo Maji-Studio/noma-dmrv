@@ -88,7 +88,8 @@ with session advisory locks.
 it for a bounded window and turn it off afterwards. Its records are
 privacy-safe — duration, success, pool totals, idle count, and queue count, and
 never SQL, parameters, hostnames, database names, or user data. With the flag
-off the pool emits nothing, failures included.
+off, connection failures, checkout failures, and idle-client errors are still
+logged at warn; query timings and query failures are not.
 
 ### Rollout — pool-size measurement
 

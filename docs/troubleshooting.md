@@ -67,12 +67,14 @@ close before suspension.
 establishment, connection acquisition, and query execution, with queue and pool
 counts but no SQL or values. Enable it for a bounded measurement window and
 disable it after the sample; an HTTP response time is not an SQL timing.
-**While the flag is off the pool logs nothing at all, failures included.**
+**With the flag off, connection failures, checkout failures, and idle-client
+errors are still logged at warn; query timings and query failures are not.**
 Expected `55P03` lock timeouts and unique-violation retries are ordinary control
-flow in this codebase, so a failed pooled query is not a `db-pool` warning —
-diagnose it from the error the caller surfaces. The pool's idle-client `error`
-listener stays registered either way, so a dropped idle connection can never
-become an unhandled event.
+flow in this codebase, so a failed pooled query is never a `db-pool` warning —
+diagnose it from the error the caller surfaces. An unreachable database, an
+acquisition that times out, or a dropped idle connection always leaves a record.
+The idle-client `error` listener also stays registered either way, so a dropped
+idle connection can never become an unhandled event.
 
 `withDedicatedLockConnection()` (same file) deliberately opens its own `pg.Client` **outside** the shared pool: lock-backed certification work holds the advisory lock while doing heavyweight nested work through the shared pool, so it must not consume a pooled connection. It is a second, invisible connection source when counting `pg_stat_activity` — and "cleaning up" the duplicate connection logic will deadlock certification.
 The dedicated connection does not inherit the pooled lock timeout. Do not add a transaction or statement timeout that could release an active registry DELETE's locks while the remote operation still runs.
