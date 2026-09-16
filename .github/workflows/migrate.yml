@@ -283,6 +283,10 @@ jobs:
       - name: Reset and seed staging database
         env:
           ALLOW_DEV_BOOTSTRAP: "1"
+          # The seed's import graph reaches src/config/env.ts, which requires
+          # a URL here. The seed never serves HTTP, so a loopback placeholder
+          # is enough (same as migration-gate.yml).
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
           # Optional, non-secret registry hints for the seed. Without the
           # facility ID the seed stores credentials but skips the facility
           # mapping; set it in Certification Settings afterwards.

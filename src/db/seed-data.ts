@@ -7,6 +7,7 @@
  * are optional hints (see docs/database.md). No registry submissions.
  */
 import { config } from "dotenv";
+import { sanitizeErrorMessage } from "../lib/log/sanitize";
 import { SeedError } from "./seed/actions";
 
 config({ path: ".env.local" });
@@ -21,9 +22,14 @@ async function main() {
 main().then(
   () => process.exit(0),
   (error: unknown) => {
-    // Action failures contain the named step and the action's safe error;
-    // never print raw database errors, SQL, environment values, or stacks.
-    console.error(error instanceof SeedError ? error.message : "Mafinga seed failed unexpectedly. Check application diagnostics.");
+    // Action failures contain the named step and the action's safe error.
+    // Anything else (env validation, storage, registry transport) goes
+    // through the log sanitizer: message only, no stack, params or emails.
+    console.error(
+      error instanceof SeedError
+        ? error.message
+        : `Mafinga seed failed before completing: ${sanitizeErrorMessage(error)}`,
+    );
     process.exit(1);
   },
 );
