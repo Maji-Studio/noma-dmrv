@@ -298,6 +298,9 @@ jobs:
           # Session-free server actions still initialize Better Auth, which
           # needs a signing secret. The runner never issues a session.
           export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+          # Validate the seed's environment before the wipe: a step that is
+          # missing a required variable must fail with staging data intact.
+          pnpm db:seed:preflight
           pnpm db:reset
           pnpm db:seed
           pnpm db:verify-schema

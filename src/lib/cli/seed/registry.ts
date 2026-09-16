@@ -7,7 +7,7 @@ import {
 import { loadIsometricFeedstockTypes } from "@/fn/certification/feedstock-types";
 import { createFeedstockTypeFn, importIsometricFeedstockTypeFn } from "@/fn/feedstock-types";
 import { selectForestryEntry } from "./forestry-catalogue";
-import { DEC_ORG_ID } from "../org-defaults";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { FORESTRY, MANURE } from "./constants";
 import { SeedError, unwrap, type SeedCounts } from "./actions";
 
@@ -48,6 +48,11 @@ export function registryEnvironment(): RegistryEnvironment | null {
 /** Same project list the Certification Settings dialog shows the operator. */
 async function resolveProjectId(facilityId: string, pinned: string | null): Promise<string> {
   const mapping = await unwrap("list registry projects", loadFacilityCertifierMapping(facilityId));
+  // The demo dataset is fabricated. Never let it reach a production registry
+  // project, and never confirm that prompt on the operator's behalf.
+  if (mapping.isProduction) {
+    throw new SeedError("registry project: the demo seed never maps a facility to a production Isometric registry. Point ISOMETRIC_ENVIRONMENT at the sandbox.");
+  }
   const projects = mapping.availableProjects;
   if (pinned) {
     if (!projects.some((project) => project.id === pinned)) {
@@ -91,7 +96,7 @@ export async function seedRegistryAndTypes(facilityId: string, counts: SeedCount
     // Empty template is the UI default. Linking a project does not submit anything.
     await unwrap("link registry project", saveFacilityCertifierMapping({
       facilityId, externalProjectId, protocolSlug: DEFAULT_PROTOCOL_SLUG,
-      externalFacilityId: credentials.externalFacilityId, defaultRemovalTemplateId: "", confirmProduction: true,
+      externalFacilityId: credentials.externalFacilityId, defaultRemovalTemplateId: "", confirmProduction: false,
     }));
     counts.add("registry mappings");
     registryStatus = `credentials stored + facility mapped to ${externalProjectId}`;

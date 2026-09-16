@@ -9,7 +9,8 @@ on:
       - "drizzle.config.ts"
       # Validate canonical development fixtures against the candidate schema.
       - "src/db/seed-data.ts"
-      - "src/db/seed/**"
+      - "src/lib/cli/seed/**"
+      - "src/lib/cli/org-context.ts"
       # Runtime inputs of the gate itself: edits to the workflow or the CLI
       # scripts it invokes should exercise the gate.
       - ".github/workflows/migration-gate.yml"

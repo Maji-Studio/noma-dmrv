@@ -22,6 +22,7 @@
     "db:verify-schema": "tsx src/lib/cli/verify-db-schema.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed-data.ts",
+    "db:seed:preflight": "tsx src/lib/cli/seed-preflight.ts",
     "db:ensure-admin": "tsx src/lib/cli/ensure-admin.ts",
     "db:reset": "tsx src/lib/cli/reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin",
     "env:local": "tsx scripts/env-local-inject.ts",

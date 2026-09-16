@@ -10,6 +10,10 @@ import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
 import { hashPassword } from 'better-auth/crypto';
 import { encryptSecret } from '../crypto/secrets';
 import { getPgPoolConfig } from '../pg-pool-config';
+import {
+  DEV_BOOTSTRAP_OVERRIDE,
+  PRODUCTION_NODE_ENV,
+} from '../../config/bootstrap';
 
 export type EnsureAdminDb = NodePgDatabase<typeof schema>;
 
@@ -19,8 +23,6 @@ export type EnsureAdminDb = NodePgDatabase<typeof schema>;
 const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';
 const TEAMMATE_NAME = 'Dev Teammate';
 const CREDENTIAL_PROVIDER = 'credential';
-const PRODUCTION_NODE_ENV = 'production';
-const DEV_BOOTSTRAP_OVERRIDE = '1';
 const LOCAL_DATABASE_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 
 export type BootstrapMode = 'development' | 'production';
