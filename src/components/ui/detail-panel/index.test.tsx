@@ -100,6 +100,50 @@ describe("DetailField empty contract", () => {
   });
 });
 
+describe("DetailField pending contract", () => {
+  it("shows the skeleton instead of naming a situation the app has not read", () => {
+    const markup = renderToStaticMarkup(
+      <DetailField label="Distance" value={null} pending />,
+    );
+
+    expect(markup).toContain("animate-skeleton");
+    expect(markup).not.toContain(MISSING_VALUE.notRecorded);
+    expect(markup).not.toContain("data-empty");
+    expect(markup).toContain('aria-busy="true"');
+  });
+
+  it("keeps the CERT chip neutral until the value settles", () => {
+    const markup = renderToStaticMarkup(
+      <DetailField label="Distance" value={null} certifyRequired pending />,
+    );
+
+    expect(markup).not.toContain("--st-wait-border");
+    expect(markup).not.toContain("--st-ok-border");
+  });
+
+  it("names the omission once the field stops pending", () => {
+    const markup = renderToStaticMarkup(
+      <DetailField label="Distance" value={null} certifyRequired />,
+    );
+
+    expect(markup).toContain(MISSING_VALUE.notRecorded);
+    expect(markup).not.toContain("animate-skeleton");
+  });
+
+  it("passes pending through the sections config", () => {
+    const markup = renderToStaticMarkup(
+      <DetailSpine
+        sections={[
+          { title: "Sourcing", fields: [{ label: "Distance", value: null, pending: true }] },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain("animate-skeleton");
+    expect(markup).not.toContain(MISSING_VALUE.notRecorded);
+  });
+});
+
 describe("DetailField certification status", () => {
   it("renders present saved values with the satisfied treatment", () => {
     const markup = renderToStaticMarkup(
