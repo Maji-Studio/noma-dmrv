@@ -39,6 +39,7 @@ import {
   deleteSupplierLocationFn,
 } from "@/fn/suppliers";
 
+import { throwActionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
@@ -195,9 +196,9 @@ export function useUpdateSupplier(
   return useMutation({
     mutationFn: async (data: UpdateSupplierData) => {
       const result = await updateSupplierFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -462,7 +463,9 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
   return useMutation({
     mutationFn: async (data: UpdateSupplierLocationData) => {
       const result = await updateSupplierLocationFn(data);
-      if (!result.success) throw new Error(result.error);
+      // Keeps an expected-version refusal typed so the open edit dialog can
+      // show it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {

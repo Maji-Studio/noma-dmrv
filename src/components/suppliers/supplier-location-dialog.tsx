@@ -12,6 +12,7 @@ import {
   useUpdateSupplierLocation,
 } from "@/hooks/use-suppliers";
 import type { SupplierLocation } from "@/db/schema/parties";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
 import { SupplierLocationForm } from "./supplier-location-form";
 
@@ -56,6 +57,9 @@ export function SupplierLocationDialog({
       if (location) {
         await updateLocation.mutateAsync({
           locationId: location.id,
+          // The version the dialog opened on, so a concurrent edit is refused
+          // instead of silently overwritten (#768).
+          expectedUpdatedAt: location.updatedAt,
           ...data,
         });
       } else {
@@ -63,12 +67,15 @@ export function SupplierLocationDialog({
       }
       handleClose();
     } catch (err) {
+      // The dialog stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
       setError(
-        err instanceof Error
-          ? err.message
-          : isEditing
+        toSaveErrorMessage(
+          err,
+          isEditing
             ? "Location was not saved. Try again."
-            : "Location was not created. Check the form."
+            : "Location was not created. Check the form.",
+        ),
       );
     }
   };

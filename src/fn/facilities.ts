@@ -31,9 +31,27 @@ import {
 } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper above it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function facilityActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "facility action failed", context: { op } },
+  });
+}
 
 function facilityActionError(
   error: unknown,
@@ -172,6 +190,7 @@ export async function updateFacilityFn(
     const validated = updateFacilitySchema.parse(data);
 
     const facility = await updateFacility(ctx, validated.facilityId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       code: validated.code,
       name: validated.name,
       country: validated.country,
@@ -187,20 +206,7 @@ export async function updateFacilityFn(
 
     return { success: true, data: facility };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to update facility",
-        "facility:update",
-      ),
-    };
+    return facilityActionFailure(error, "Failed to update facility", "facility:update");
   }
 }
 

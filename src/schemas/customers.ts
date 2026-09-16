@@ -7,6 +7,7 @@ import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
   defaultSoilTemperatureSchema,
+  expectedUpdatedAtSchema,
   optionalPositiveNumber,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
@@ -127,6 +128,7 @@ export const createCustomerSchema = customerFormSchema;
  */
 export const updateCustomerSchema = z.object({
   customerId: z.string().uuid("Choose a valid customer."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)
@@ -178,6 +180,7 @@ export const createCustomerLocationSchema = z.object({
  */
 export const updateCustomerLocationSchema = z.object({
   locationId: z.string().uuid("Choose a valid location."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   name: z.string().trim().min(1).max(255).optional(),
   country: z.string().min(1).max(LOCATION_PART_MAX).optional(),
   stateRegion: locationPartSchema,

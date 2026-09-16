@@ -365,6 +365,20 @@ export const optionalDateOnly = z
   ])
   .optional();
 
+// ============================================
+// Expected-version (optimistic concurrency)
+// ============================================
+
+/**
+ * The `updatedAt` an edit form loaded, echoed back so the updater can refuse a
+ * save built on a stale read (issue #768). Optional on purpose: payloads that
+ * never carried a version — quick-add, imports, older clients — still save.
+ *
+ * `z.coerce.date()` because the value crosses the server-action boundary and
+ * may arrive as an ISO string.
+ */
+export const expectedUpdatedAtSchema = z.coerce.date().optional();
+
 /** Preprocess form string values to int | null. Empty/whitespace strings become null. Rejects partial parses like "12abc". */
 export const toIntOrNull = (v: unknown): unknown => {
   if (v === null || v === undefined) return null;

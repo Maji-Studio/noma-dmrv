@@ -43,6 +43,11 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { sumNullableBy } from "@/lib/nullable-sum";
+import {
+  isStaleVersionFailure,
+  STALE_VERSION_MESSAGE,
+  toSaveErrorMessage,
+} from "@/lib/stale-version";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
   applicationEvidenceMethods,
@@ -359,6 +364,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     try {
       const result = await updateApplication.mutateAsync({
         applicationId,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
         ...data,
       });
       if (result.success) {
@@ -384,10 +392,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setSideSheet(null);
         toast.success("Application updated.");
       } else {
-        setUpdateError(result.error || "Application was not saved. Try again.");
+        // The side sheet stays open on every failure, so the operator's draft
+        // survives an expected-version refusal untouched. This hook answers
+        // with the result instead of throwing, so the refusal is read off it.
+        setUpdateError(
+          isStaleVersionFailure(result)
+            ? STALE_VERSION_MESSAGE
+            : result.error || "Application was not saved. Try again.",
+        );
       }
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Application was not saved. Try again.");
+      setUpdateError(toSaveErrorMessage(error, "Application was not saved. Try again."));
     }
   };
 

@@ -38,9 +38,27 @@ import {
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper above it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function supplierActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "supplier action failed", context: { op } },
+  });
+}
 
 function supplierActionError(
   error: unknown,
@@ -258,6 +276,7 @@ export async function updateSupplierFn(
     const validated = updateSupplierSchema.parse(data);
 
     const supplier = await updateSupplier(ctx, validated.supplierId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       code: validated.code,
       name: validated.name,
       location: validated.location,
@@ -277,20 +296,7 @@ export async function updateSupplierFn(
 
     return { success: true, data: supplier };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to update supplier",
-        "supplier:update",
-      ),
-    };
+    return supplierActionFailure(error, "Failed to update supplier", "supplier:update");
   }
 }
 
@@ -411,6 +417,7 @@ export async function updateSupplierLocationFn(
     const validated = updateSupplierLocationSchema.parse(data);
 
     const location = await updateSupplierLocation(ctx, validated.locationId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       name: validated.name || null,
       country: validated.country,
       stateRegion: validated.stateRegion || null,
@@ -428,20 +435,7 @@ export async function updateSupplierLocationFn(
 
     return { success: true, data: location };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to update supplier location",
-        "supplier-location:update",
-      ),
-    };
+    return supplierActionFailure(error, "Failed to update supplier location", "supplier-location:update");
   }
 }
 

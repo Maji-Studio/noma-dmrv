@@ -28,6 +28,7 @@ import {
   type StorageLocationSortKey,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
+import { assertExpectedVersion } from "./expected-version";
 import { storageLocationLastActivityAt } from "./storage-location-activity";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -61,6 +62,9 @@ export type {
  * `capacityKg` needs an explicit NULLS LAST. Both are handled in
  * `getStorageLocations`.
  */
+/** Entity key on a storage bin's expected-version conflict. */
+const STORAGE_LOCATION_CONFLICT_ENTITY = "storageLocation";
+
 const SORT_COLUMNS: Partial<Record<StorageLocationSortKey, AnyPgColumn>> = {
   code: storageLocations.code,
   name: storageLocations.name,
@@ -406,8 +410,9 @@ async function readEditableStorageLocation(
   ctx: OrgContext,
   tx: DbTransaction,
   storageLocationId: string,
+  { forUpdate = false }: { forUpdate?: boolean } = {},
 ): Promise<StorageLocation> {
-  const [existing] = await tx
+  const query = tx
     .select()
     .from(storageLocations)
     .where(
@@ -416,6 +421,7 @@ async function readEditableStorageLocation(
         eq(storageLocations.organizationId, ctx.organizationId),
       ),
     );
+  const [existing] = await (forUpdate ? query.for("update") : query);
 
   if (!existing) {
     throw new SafeError("Storage bin not found");
@@ -449,6 +455,8 @@ export async function updateStorageLocation(
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
+    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
+    expectedUpdatedAt?: Date;
   }
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
@@ -458,11 +466,21 @@ export async function updateStorageLocation(
     // vocabulary, and an edit needs the restore instruction instead.
     await readEditableStorageLocation(ctx, tx, storageLocationId);
     await lockBinStock(ctx, tx, storageLocationId);
+    // `FOR UPDATE` on the bin row itself: the advisory lock above serializes
+    // stock writes, but archive and restore change `updatedAt` without taking
+    // it, so only the row lock makes the version check below race-free.
     const existing = await readEditableStorageLocation(
       ctx,
       tx,
       storageLocationId,
+      { forUpdate: true },
     );
+    assertExpectedVersion({
+      entity: STORAGE_LOCATION_CONFLICT_ENTITY,
+      id: storageLocationId,
+      expectedUpdatedAt: data.expectedUpdatedAt,
+      actualUpdatedAt: existing.updatedAt,
+    });
 
     // If code is being changed, check for duplicates
     if (data.code && data.code !== existing.code) {
@@ -582,6 +600,7 @@ export async function updateStorageLocation(
     const dataWithoutNormalized = { ...data };
     delete dataWithoutNormalized.formulationId;
     delete dataWithoutNormalized.feedstockTypeId;
+    delete dataWithoutNormalized.expectedUpdatedAt;
     // A rename OR a facility move can collide with the per-facility name index.
     const [updated] = await guardStorageLocationName(
       ctx,

@@ -19,6 +19,7 @@ import {
 } from "@/fn/facilities";
 import { getFacilitiesRead } from "@/lib/read-api/client";
 import { missingRecordMessage } from "@/lib/errors";
+import { throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateOnboardingProgress } from "./use-onboarding";
@@ -198,9 +199,9 @@ export function useUpdateFacility(
   return useMutation({
     mutationFn: async (data: UpdateFacilityData) => {
       const result = await updateFacilityFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {

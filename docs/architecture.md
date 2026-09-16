@@ -98,6 +98,19 @@ disclosure bug.
 `conflict?: { entity, id, code }` so a form can deep-link the operator to the
 blocking record instead of only showing text. Forms are expected to honor it.
 
+### Expected-version checks on consequential edit forms
+
+`src/lib/stale-version.ts` (client-safe vocabulary) + `assertExpectedVersion`
+in `src/data-access/expected-version.ts`. An edit form sends the `updatedAt` it
+loaded as `expectedUpdatedAt`; the updater compares it against the row it read
+under `FOR UPDATE` and throws `ActionConflictError` with
+`code: "stale-version"` when they differ. The hook re-throws that as
+`StaleVersionError`, and the form shows `STALE_VERSION_MESSAGE` in its error
+banner while keeping the operator's draft. The field is always optional, so a
+payload that never loaded a version still saves. Covers facility, feedstock,
+storage bin, customer (+ location), supplier (+ location), application and
+production run.
+
 ### Facility context
 
 Invariants (implementation: `src/hooks/use-facility-context.ts`): the active

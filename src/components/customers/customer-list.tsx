@@ -36,6 +36,7 @@ import type { CustomerWithRelations } from "@/data-access/customers";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 
 // ============================================
 // Column Definitions
@@ -203,11 +204,19 @@ export function CustomerList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateCustomer.mutateAsync({ customerId: sideSheet.entity.id, ...data });
+      await updateCustomer.mutateAsync({
+        customerId: sideSheet.entity.id,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        ...data,
+      });
       setSideSheet(null);
       toast.success("Customer updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Customer was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setUpdateError(toSaveErrorMessage(error, "Customer was not saved. Try again."));
     }
   };
 

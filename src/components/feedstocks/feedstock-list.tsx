@@ -25,6 +25,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { FeedstockForm } from "./feedstock-form";
 import {
@@ -327,6 +328,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     try {
       await updateFeedstock.mutateAsync({
         feedstockId: editing.id,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: editing.updatedAt,
         facilityId: data.facilityId,
         deliveryDate: data.deliveryDate,
         supplierId: data.supplierId,
@@ -352,7 +356,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setDeepLinkFocus(null);
       toast.success("Feedstock updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Feedstock was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setUpdateError(toSaveErrorMessage(error, "Feedstock was not saved. Try again."));
     }
   };
 

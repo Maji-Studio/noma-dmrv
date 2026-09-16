@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
+  expectedUpdatedAtSchema,
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
@@ -95,6 +96,7 @@ export const createSupplierSchema = supplierFormSchema;
  */
 export const updateSupplierSchema = z.object({
   supplierId: z.string().uuid("Choose a valid supplier."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)
@@ -202,6 +204,7 @@ export const createSupplierWithLocationsSchema = z.object({
  */
 export const updateSupplierLocationSchema = z.object({
   locationId: z.string().uuid("Choose a valid location."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   name: z.string().max(255).optional().nullable().or(z.literal("")),
   country: z.string().min(1).max(100).optional(),
   stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),

@@ -36,6 +36,7 @@ import {
 } from "@/hooks/use-storage-locations";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import {
   formatStorageLocationType,
   type StorageLocationFilterData,
@@ -244,12 +245,17 @@ export function StorageLocationList() {
     try {
       await updateStorageLocation.mutateAsync({
         storageLocationId: sideSheet.entity.id,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
         ...data,
       });
       setSideSheet(null);
       toast.success("Storage bin updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Storage bin was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setFormError(toSaveErrorMessage(error, "Storage bin was not saved. Try again."));
     }
   };
 

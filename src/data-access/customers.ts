@@ -15,6 +15,11 @@ import {
 } from "@/db/schema";
 import type { CustomerFilterData } from "@/schemas/customers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { assertExpectedVersion } from "./expected-version";
+
+/** Entity keys on a customer's and a customer location's version conflicts. */
+const CUSTOMER_CONFLICT_ENTITY = "customer";
+const CUSTOMER_LOCATION_CONFLICT_ENTITY = "customerLocation";
 
 // ============================================
 // Types
@@ -331,47 +336,60 @@ export async function updateCustomer(
     address?: string | null;
     contactEmail?: string | null;
     contactPhone?: string | null;
+    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
+    expectedUpdatedAt?: Date;
   }
 ): Promise<Customer> {
   requireOrgScope(ctx);
+  const { expectedUpdatedAt, ...customerData } = data;
 
-  // Verify customer exists
-  const [existing] = await db
-    .select()
-    .from(customers)
-    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Customer not found");
-  }
-
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: customers.id })
+  // One transaction so the row lock below spans the version check, the code
+  // duplicate probe and the write they guard.
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
       .from(customers)
-      .where(and(eq(customers.code, data.code), eq(customers.organizationId, ctx.organizationId)));
+      .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
+      .for("update");
 
-    if (duplicate) {
-      throw new SafeError("A customer with this code already exists");
+    if (!existing) {
+      throw new SafeError("Customer not found");
     }
-  }
+    assertExpectedVersion({
+      entity: CUSTOMER_CONFLICT_ENTITY,
+      id: customerId,
+      expectedUpdatedAt,
+      actualUpdatedAt: existing.updatedAt,
+    });
 
-  const [updated] = await guardCustomerName(
-    ctx,
-    data.name ?? existing.name,
-    () =>
-      db
-        .update(customers)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
-        .returning()
-  );
+    // If code is being changed, check for duplicates
+    if (customerData.code && customerData.code !== existing.code) {
+      const [duplicate] = await tx
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.code, customerData.code), eq(customers.organizationId, ctx.organizationId)));
 
-  return updated;
+      if (duplicate) {
+        throw new SafeError("A customer with this code already exists");
+      }
+    }
+
+    const [updated] = await guardCustomerName(
+      ctx,
+      customerData.name ?? existing.name,
+      () =>
+        tx
+          .update(customers)
+          .set({
+            ...customerData,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
+          .returning()
+    );
+
+    return updated;
+  });
 }
 
 // ============================================
@@ -524,19 +542,11 @@ export async function updateCustomerLocation(
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     defaultSoilTemperatureC?: number | null;
     isDefault?: boolean;
+    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
+    expectedUpdatedAt?: Date;
   }
 ): Promise<CustomerLocation> {
   requireOrgScope(ctx);
-
-  // Verify location exists
-  const [existing] = await db
-    .select({ id: customerLocations.id, customerId: customerLocations.customerId })
-    .from(customerLocations)
-    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Customer location not found");
-  }
 
   const updateData: {
     name?: string;
@@ -577,6 +587,28 @@ export async function updateCustomerLocation(
     if (routeAnchorCanChange) {
       await lockBiocharTransportRouteTopology(ctx, tx);
     }
+
+    // Locked read after the topology lock, so the version check and the write
+    // it guards see the same row.
+    const [existing] = await tx
+      .select({
+        id: customerLocations.id,
+        customerId: customerLocations.customerId,
+        updatedAt: customerLocations.updatedAt,
+      })
+      .from(customerLocations)
+      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
+      .for("update");
+
+    if (!existing) {
+      throw new SafeError("Customer location not found");
+    }
+    assertExpectedVersion({
+      entity: CUSTOMER_LOCATION_CONFLICT_ENTITY,
+      id: locationId,
+      expectedUpdatedAt: data.expectedUpdatedAt,
+      actualUpdatedAt: existing.updatedAt,
+    });
 
     // Promoting this location to default demotes the customer's current default.
     if (data.isDefault === true) {
