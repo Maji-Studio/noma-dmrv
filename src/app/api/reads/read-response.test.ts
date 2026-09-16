@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-const mocks = vi.hoisted(() => ({
-  resolveOrgContext: vi.fn(),
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
-}));
+const mocks = vi.hoisted(() => {
+  // `@/db` calls `logger.child` at module load and the pool calls `child`
+  // again on the result (see the waiver in docs/architecture.md).
+  const logger = {
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    child: () => logger,
+  };
+  return { resolveOrgContext: vi.fn(), logger };
+});
 
 vi.mock("@/lib/auth/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth/server")>();
