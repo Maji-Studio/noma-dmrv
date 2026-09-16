@@ -555,27 +555,19 @@ are clean deferrals.
   per mirror, shrinks the loopback-host allowlist surface, and kills the dev-only
   `STORAGE_SIGNING_SECRET` dependency on this path.
 
-- **`storage/sources-sync-events-tx` — move `certifier_sync_events` writes out
-  of the mirror business transaction. ⚠️ NOT MITIGATED — live at the default
-  pool size.** `appendSyncEventBestEffort` (`src/fn/certification/shared.ts`)
-  runs on the root `db` while being called from inside the transaction opened in
-  `mirrorDocumentToSource` (`src/fn/certification/sources.ts`). With a
-  single-connection pool the audit write deadlocks waiting for a connection held
-  by the open business transaction — **the same pool-starvation failure the
-  `assertSameOrg` `executor` parameter exists to prevent** (see the invariants
-  section).
-  A previous version of this entry claimed the risk was band-aided with
-  `DB_POOL_MAX=10`. **That is false.** `resolveAppPoolConfig`
-  (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX`, which is 1, and
-  `.env.local` records `DB_POOL_MAX skipped — no
-  "DB_POOL_MAX" field in the 1Password item`, so the effective pool size is
-  **1** and the starvation path is fully live. Treat this as unmitigated until
-  fixed.
-  **Resolve via:** accumulate event payloads in a closure and flush after the
-  transaction settles (success or rollback). Touch points:
-  `src/fn/certification/sources.ts` (`withSourceSyncEventOnFailure`, the
-  `appendSyncEventBestEffort` calls inside the mirror transaction),
-  `src/data-access/certification.ts` (`appendSyncEvent`).
+- **`storage/sources-sync-events-tx` — `certifier_sync_events` writes are out of
+  the mirror business transaction. ✅ RESOLVED (issue #772).**
+  `mirrorDocumentToSourceForUser` (`src/fn/certification/sources.ts`) now wraps
+  its transaction in `withStagedSyncEvents`
+  (`src/fn/certification/sync-event-stage.ts`): every audit payload, including
+  the ones `withSourceSyncEventOnFailure` produces on each Isometric failure
+  path, is staged in a closure and flushed once the transaction settles —
+  success rows after commit, failure diagnostics after rollback, with the
+  original error rethrown untouched. Nothing asks the root pooled `db` for a
+  second connection while the transaction holds one, so the audit trail
+  survives at `DEFAULT_DB_POOL_MAX = 1`. Pinned by
+  `tests/certifier-source-sync-events-tx.test.ts`, which runs the mirror against
+  a real `max: 1` pool.
 
 - **`ux/sources-panel-row-layout` — Mirror clips on narrow viewports.** The
   Mirror action in `src/components/certification/sources-panel.tsx` can clip

@@ -49,12 +49,15 @@ code today; breaking one compiles cleanly and fails silently.
 - **`assertSameOrg`'s `executor` is a pool-starvation invariant, not an
   optimization.** A caller inside a transaction MUST pass its `tx`; reading
   through the global pool from inside an open transaction holds one connection
-  while waiting for another, and starves the pool under parallel load. This is
-  the same failure the `storage/sources-sync-events-tx` entry below describes —
-  and that one is **not** mitigated: `resolveAppPoolConfig`
-  (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX`, which is 1, and
-  `DB_POOL_MAX` is unset in every environment. Applies to every
-  tx-scoped read, not just this helper.
+  while waiting for another, and starves the pool under parallel load. The
+  effective pool size really is 1: `resolveAppPoolConfig`
+  (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX` and
+  `DB_POOL_MAX` is unset in every environment. The Source mirror hit this
+  through its audit writes and is fixed (`storage/sources-sync-events-tx` in
+  [`open-questions-isometric.md`](./open-questions-isometric.md)); where an
+  executor cannot be threaded through, stage the work and flush it after the
+  transaction settles (`src/fn/certification/sync-event-stage.ts`). Applies to
+  every tx-scoped read, not just this helper.
 - **`transport_legs.tripType` defaults to `'return'` and is credit-bearing.**
   `roundTripDistanceFactor` (defined in `src/schemas/trip-type.ts`; imported by
   `src/lib/isometric/utils/aggregation.ts` and
