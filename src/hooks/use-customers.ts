@@ -30,25 +30,11 @@ import {
 } from "@/fn/customers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { customerKeys } from "./customer-query-keys";
 
-// ============================================
-// Query Keys
-// ============================================
+export { customerKeys } from "./customer-query-keys";
 
-const customerKeys = {
-  all: ["customers"] as const,
-  lists: () => [...customerKeys.all, "list"] as const,
-  list: (filters?: Partial<CustomerFilterData>) =>
-    [...customerKeys.lists(), filters] as const,
-  details: () => [...customerKeys.all, "detail"] as const,
-  detail: (id: string) => [...customerKeys.details(), id] as const,
-  detailWithRelations: (id: string) =>
-    [...customerKeys.details(), id, "relations"] as const,
-  locations: (id: string) => [...customerKeys.all, id, "locations"] as const,
-  cropTypes: () => [...customerKeys.all, "cropTypes"] as const,
-  codeCheck: (code: string, excludeId?: string) =>
-    [...customerKeys.all, "codeCheck", code, excludeId] as const,
-};
+const CUSTOMER_DETAIL_STALE_TIME_MS = 30_000;
 
 const customerLocationKeys = {
   all: ["customerLocations"] as const,
@@ -90,7 +76,7 @@ export function useCustomerWithRelations(customerId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!customerId,
-    staleTime: 30000,
+    staleTime: CUSTOMER_DETAIL_STALE_TIME_MS,
   });
 }
 
@@ -277,6 +263,7 @@ export function useUpdateCustomer(
       // Refetch to ensure cache consistency after mutation settles
       queryClient.invalidateQueries({
         queryKey: customerKeys.detail(variables.customerId),
+        exact: true,
       });
 
       await callbacks?.onSettled?.(data, error, variables);

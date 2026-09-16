@@ -14,7 +14,6 @@ import type { Supplier, SupplierLocation } from "@/db/schema";
 import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
-const SUPPLIERS_STALE_TIME_MS = 60_000;
 import type {
   SupplierFilterData,
   CreateSupplierData,
@@ -42,24 +41,12 @@ import {
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateOnboardingProgress } from "./use-onboarding";
+import { supplierKeys } from "./supplier-query-keys";
 
-// ============================================
-// Query Keys
-// ============================================
+export { supplierKeys } from "./supplier-query-keys";
 
-const supplierKeys = {
-  all: ["suppliers"] as const,
-  lists: () => [...supplierKeys.all, "list"] as const,
-  list: (filters?: Partial<SupplierFilterData>) =>
-    [...supplierKeys.lists(), filters] as const,
-  details: () => [...supplierKeys.all, "detail"] as const,
-  detail: (id: string) => [...supplierKeys.details(), id] as const,
-  locations: () => [...supplierKeys.all, "locations"] as const,
-  supplierLocations: (supplierId: string) => [...supplierKeys.all, "supplierLocations", supplierId] as const,
-  options: () => [...supplierKeys.all, "options"] as const,
-  codeCheck: (code: string, excludeId?: string) =>
-    [...supplierKeys.all, "codeCheck", code, excludeId] as const,
-};
+const SUPPLIER_DETAIL_STALE_TIME_MS = 30_000;
+const SUPPLIER_LOCATIONS_STALE_TIME_MS = 60_000;
 
 function seedCreatedSupplierCaches(
   queryClient: QueryClient,
@@ -111,7 +98,7 @@ export function useSupplier(supplierId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!supplierId,
-    staleTime: 30000,
+    staleTime: SUPPLIER_DETAIL_STALE_TIME_MS,
   });
 }
 
@@ -432,7 +419,10 @@ export function useDeleteSupplier(
 // Supplier Location Hooks
 // ============================================
 
-export function useSupplierLocationsBySupplier(supplierId: string, enabled = true) {
+export function useSupplierLocationsBySupplier(
+  supplierId: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: supplierKeys.supplierLocations(supplierId),
     queryFn: async () => {
@@ -441,7 +431,7 @@ export function useSupplierLocationsBySupplier(supplierId: string, enabled = tru
       return result.data;
     },
     enabled: !!supplierId && enabled,
-    staleTime: SUPPLIERS_STALE_TIME_MS,
+    staleTime: SUPPLIER_LOCATIONS_STALE_TIME_MS,
   });
 }
 

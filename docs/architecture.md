@@ -175,6 +175,16 @@ runtime.
   (including `0`, 5s–5m, and `Infinity`). Read the neighbouring hook and match
   its intent instead of repeating the global values mechanically.
 - Invalidate related keys after every mutation.
+- A Server Component that has already authorized and loaded a record seeds the
+  client cache with `createServerHydrationState`
+  (`src/lib/react-query/server-hydration.ts`) and renders the page inside
+  React Query's `HydrationBoundary`, so the first client render reuses that
+  read instead of refetching it. It builds a fresh `QueryClient` per call, so
+  records can never cross requests or organizations, and stamps every seeded
+  key with one request-local `updatedAt` so they age together. Seed the keys
+  the page's own hooks use, imported from the plain `src/hooks/*-query-keys.ts`
+  module rather than the `"use client"` hook file. The supplier and customer
+  detail routes are the reference.
 - No `"use cache"`, no Cache Components — React Query owns all caching. See
   [modern-patterns.md](./modern-patterns.md).
 

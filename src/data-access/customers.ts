@@ -32,25 +32,6 @@ export interface PaginatedCustomers {
   totalPages: number;
 }
 
-export interface CustomerDetail extends Customer {
-  locations: Array<{
-    id: string;
-    name: string | null;
-    country: string;
-    stateRegion: string | null;
-    city: string | null;
-    gpsLatitude: number | null;
-    gpsLongitude: number | null;
-    address: string | null;
-    distanceFromFacilityKm: number | null;
-    distanceSource: DistanceSourceValue | null;
-    defaultSoilTemperatureC: number | null;
-    isDefault: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  }>;
-}
-
 export interface CustomerLocationDetail extends CustomerLocation {
   customer: {
     id: string;
@@ -71,6 +52,12 @@ import {
   syncBiocharLegsForCustomerLocation,
 } from "./transport-legs";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
+import {
+  findCustomerWithRelations,
+  type CustomerDetail,
+} from "./customer-detail";
+
+export type { CustomerDetail } from "./customer-detail";
 
 // ============================================
 // Customer Read Operations
@@ -222,44 +209,13 @@ export async function getCustomerWithRelations(
   ctx: OrgContext,
   customerId: string
 ): Promise<CustomerDetail> {
-  requireOrgScope(ctx);
-
-  // Get customer
-  const [customer] = await db
-    .select()
-    .from(customers)
-    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
+  const customer = await findCustomerWithRelations(ctx, customerId);
 
   if (!customer) {
     throw new SafeError("Customer not found");
   }
 
-  // Get associated locations
-  const locations = await db
-    .select({
-      id: customerLocations.id,
-      name: customerLocations.name,
-      country: customerLocations.country,
-      stateRegion: customerLocations.stateRegion,
-      city: customerLocations.city,
-      gpsLatitude: customerLocations.gpsLatitude,
-      gpsLongitude: customerLocations.gpsLongitude,
-      address: customerLocations.address,
-      distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
-      distanceSource: customerLocations.distanceSource,
-      defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
-      isDefault: customerLocations.isDefault,
-      createdAt: customerLocations.createdAt,
-      updatedAt: customerLocations.updatedAt,
-    })
-    .from(customerLocations)
-    .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))
-    .orderBy(sql`${customerLocations.name} asc nulls last`);
-
-  return {
-    ...customer,
-    locations,
-  };
+  return customer;
 }
 
 /**

@@ -18,6 +18,11 @@ import {
 import type { SupplierFilterData } from "@/schemas/suppliers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { formatSupplierLocationDisplay } from "@/lib/supplier-location-display";
+import {
+  findSupplierLocations,
+  findSupplierRow,
+  SUPPLIER_LOCATION_ORDER,
+} from "./supplier-detail";
 
 const SUPPLIER_INTAKE_BLOCKER =
   "Supplier was not deleted because feedstock intakes still use it. Review the linked intakes or keep this supplier.";
@@ -251,10 +256,7 @@ export async function getSuppliers(
               eq(supplierLocations.organizationId, ctx.organizationId),
             ),
           )
-          .orderBy(
-            desc(supplierLocations.isDefault),
-            asc(supplierLocations.createdAt),
-          );
+          .orderBy(...SUPPLIER_LOCATION_ORDER);
 
   const defaultLocationBySupplier = new Map<string, string | null>();
   for (const locationRow of locationRows) {
@@ -289,15 +291,7 @@ export async function getSupplierById(
 ): Promise<Supplier> {
   await ensureSupplierExists(ctx, supplierId);
 
-  const [supplier] = await db
-    .select()
-    .from(suppliers)
-    .where(
-      and(
-        eq(suppliers.id, supplierId),
-        eq(suppliers.organizationId, ctx.organizationId),
-      ),
-    );
+  const supplier = await findSupplierRow(ctx, supplierId);
 
   if (!supplier) {
     throw new SafeError("Supplier not found");
@@ -587,16 +581,7 @@ export async function getSupplierLocationsBySupplier(
   requireOrgScope(ctx);
   await ensureSupplierExists(ctx, supplierId);
 
-  return db
-    .select()
-    .from(supplierLocations)
-    .where(
-      and(
-        eq(supplierLocations.supplierId, supplierId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ),
-    )
-    .orderBy(desc(supplierLocations.isDefault), asc(supplierLocations.createdAt));
+  return findSupplierLocations(ctx, supplierId);
 }
 
 export async function createSupplierLocation(
