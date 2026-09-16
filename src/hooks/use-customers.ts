@@ -4,8 +4,15 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { Customer, CustomerLocation } from "@/db/schema";
+import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
+import type { EntityOption } from "@/components/forms/entity-select/types";
 import type {
   CustomerFilterData,
   CreateCustomerData,
@@ -31,6 +38,7 @@ import {
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { customerKeys } from "./customer-query-keys";
+import { entityKeys } from "./entity-query-keys";
 
 export { customerKeys } from "./customer-query-keys";
 
@@ -40,6 +48,40 @@ const customerLocationKeys = {
   all: ["customerLocations"] as const,
   detail: (id: string) => [...customerLocationKeys.all, "detail", id] as const,
 };
+
+const CUSTOMER_ENTITY_TYPE = "customer" as const;
+
+/**
+ * Seed the customer detail cache and the EntitySelect caches so the order form
+ * and order list customer pickers see a newly created customer immediately.
+ */
+function seedCreatedCustomerCaches(
+  queryClient: QueryClient,
+  customer: Customer,
+) {
+  const option: EntityOption = {
+    id: customer.id,
+    code: customer.code,
+    name: customer.name,
+    subtitle: customer.cropType ?? undefined,
+  };
+
+  queryClient.setQueryData(customerKeys.detail(customer.id), customer);
+  seedEntityCache(queryClient, CUSTOMER_ENTITY_TYPE, option);
+}
+
+/**
+ * Refresh the EntitySelect customer caches after a customer changed or was
+ * removed, so the pickers never serve a stale or deleted option.
+ */
+function invalidateCustomerEntityQueries(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.listPrefix(CUSTOMER_ENTITY_TYPE),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.detailPrefix(CUSTOMER_ENTITY_TYPE),
+  });
+}
 
 // ============================================
 // Customer Query Hooks
@@ -128,8 +170,8 @@ export function useCreateCustomer(
       // Invalidate crop types in case a new crop type was added
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
 
-      // Pre-populate the detail cache with the new customer
-      queryClient.setQueryData(customerKeys.detail(data.id), data);
+      // Pre-populate the detail cache and the customer pickers
+      seedCreatedCustomerCaches(queryClient, data);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -232,6 +274,7 @@ export function useUpdateCustomer(
       });
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
+      invalidateCustomerEntityQueries(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -339,6 +382,11 @@ export function useDeleteCustomer(
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       // Invalidate crop types in case the deleted customer was the only one with its crop type
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
+      // Drop the deleted customer from the pickers
+      queryClient.removeQueries({
+        queryKey: entityKeys.detail(CUSTOMER_ENTITY_TYPE, customerId),
+      });
+      invalidateCustomerEntityQueries(queryClient);
 
       await callbacks?.onSuccess?.(undefined, customerId);
     },
