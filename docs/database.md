@@ -105,8 +105,8 @@ GitHub repository variables. The PR migration gate seeds without credentials.
 The seed runs real server actions, so its import graph reaches
 `src/config/env.ts`, which validates at module load and requires
 `NEXT_PUBLIC_APP_URL` alongside `DATABASE_URL`, `BETTER_AUTH_SECRET`, and
-`NODE_ENV`. The staging job loads the app URL from the same 1Password item and
-runs `pnpm db:seed:preflight` (`src/lib/cli/seed-preflight.ts`) before
+`NODE_ENV`. The staging job sets a loopback placeholder for the app URL (the
+seed never serves HTTP) and runs `pnpm db:seed:preflight` (`src/lib/cli/seed-preflight.ts`) before
 `pnpm db:reset`, so an incomplete environment fails with staging data intact
 instead of after the wipe.
 

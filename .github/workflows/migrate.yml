@@ -247,9 +247,6 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
-          # src/config/env.ts requires this at module load, so the seed's
-          # server actions cannot start without it.
-          NEXT_PUBLIC_APP_URL: op://Environment Variables/noma-dmrv env staging/NEXT_PUBLIC_APP_URL
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
@@ -286,6 +283,10 @@ jobs:
       - name: Reset and seed staging database
         env:
           ALLOW_DEV_BOOTSTRAP: "1"
+          # The seed's import graph reaches src/config/env.ts, which requires
+          # a URL here. The seed never serves HTTP, so a loopback placeholder
+          # is enough (same as migration-gate.yml).
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
           # Optional, non-secret registry hints for the seed. Without the
           # facility ID the seed stores credentials but skips the facility
           # mapping; set it in Certification Settings afterwards.
