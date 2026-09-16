@@ -5,7 +5,7 @@ This records what actually ran during the lifecycle audit. A passing existing re
 ## Baseline and isolation
 
 - Audit date: 2026-09-08, Europe/Zurich.
-- Checkout: `/Users/kenji/.codex/worktrees/d483/noma-dmrv`, clean detached HEAD at start.
+- Checkout: local detached worktree (path not recorded), clean detached HEAD at start.
 - HEAD and remote `refs/heads/staging`: `ef857545b11fa298f0f08e128868ed14e37fbf5f`, verified with `git ls-remote`.
 - Baseline matches the handoff exactly. No baseline diff or branch switch was needed.
 - Original dirty checkout was not modified. Existing staging/Isometric records named in the handoff were not opened for mutation, deleted, resubmitted, reset or recreated.
