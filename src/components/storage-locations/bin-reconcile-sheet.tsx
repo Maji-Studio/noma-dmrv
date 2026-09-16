@@ -105,6 +105,11 @@ function LossForm({
     lossMassKg: number;
   } | null>(null);
   const recordLoss = useRecordLoss();
+  // One key per open form instance, so a double submit replays the saved
+  // movement instead of posting a second deduction.
+  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+    crypto.randomUUID(),
+  );
   const lane = laneForStorageType(storageLocation.type);
   const availableKg = binCurrentMassKg(storageLocation);
 
@@ -143,9 +148,11 @@ function LossForm({
       await recordLoss.mutateAsync({
         storageLocationId: storageLocation.id,
         lane,
+        idempotencyKey,
         reason: values.reason,
         lossMassKg: values.lossMassKg,
       });
+      setIdempotencyKey(crypto.randomUUID());
       toast.success("Loss recorded");
       onRecorded?.();
     } catch (error) {
