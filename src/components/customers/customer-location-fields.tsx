@@ -234,7 +234,9 @@ export function CustomerLocationFields({
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}
             onDistanceChange={(km, source) => {
-              distanceFromFacilityField.onChange(km ?? undefined);
+              // `null` is the explicit clear; `undefined` would read as
+              // "field omitted" and leave the stored distance in place.
+              distanceFromFacilityField.onChange(km);
               distanceSourceField.onChange(source);
             }}
             origin={facilityPoint}

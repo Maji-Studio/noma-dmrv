@@ -83,12 +83,53 @@ repeats.
 | Raw preprocessor, empty → `undefined` | `toNumberOrUndefined` |
 | Integer, empty → `null` | `toIntOrNull` |
 | Soil temperature (°C) | `defaultSoilTemperatureSchema` |
+| Clearable patch field (see below) | `clearableNumber` · `clearablePositiveNumber` · `clearableDefaultSoilTemperature` · `toClearableNumber` |
 
 `requiredNumber()` already packages the Zod 4 `error: (iss) => iss.input === undefined ? … : …` callback — do not hand-write that lambda.
 
 `toIntOrNull` does **not** `parseInt`. It uses `Number(trimmed)` and, when the result is `NaN` or non-integer, returns the **raw trimmed string** so Zod reports a type error. That is the point: it rejects partial parses like `"12abc"` instead of silently accepting `12`.
 
 > **Gotcha — clearing a value on edit needs empty → `null`, never empty → `undefined`.** Drizzle's `.set()` drops `undefined` keys, so an update built from `undefined` leaves the old value in the database: the field appears un-clearable and the change silently reverts. `null` is an explicit value Drizzle persists. (Reference: `src/components/storage-locations/storage-location-form.tsx`.)
+
+### The partial-update contract: omitted / null / zero
+
+One meaning per value, the whole way down — form field, Zod schema, server
+action, data access:
+
+| Value | Meaning | What the writer does |
+|---|---|---|
+| `undefined` | omitted from this patch | leaves the stored value alone |
+| `null` | explicit clear | writes `NULL` |
+| `0` | the number zero | writes `0` |
+
+Three rules follow.
+
+**Clearable numeric inputs register with `nullableNumericValue`, not
+`numericValue`.** `numericValue` maps `""` to `undefined`, which the contract
+reads as "omitted", so clearing the field is a silent no-op. Use
+`numericValue` only where the schema requires the field (it can never be
+cleared) or where the schema's own preprocessor normalizes `undefined` away.
+The same trap in reverse is `value ?? undefined` in a submit handler or a
+`setValue` call: pass the `null` through instead.
+
+**Update schemas use the `clearable*` family; create and whole-form schemas
+keep `optionalNumber` / `optionalPositiveNumber`.** `toNumberOrNull` folds
+omitted into cleared, which is right when every field is present (a create, or
+a form that always submits the whole record) and wrong for an `update*Schema`,
+where an absent key must not overwrite a column. `toClearableNumber` keeps
+`undefined` as `undefined` and turns `""` / `null` into `null`.
+`updateFeedstockSchema.transportDistanceKm` is the reference case: the derived
+transport leg preserves its stored distance only while that key is absent, so
+folding to `null` wiped a manual distance on every unrelated edit.
+
+**The server derives values it owns rather than trusting the patch.** Feedstock
+dry mass is derived from the *effective* wet mass and moisture (patch value
+falling back to the stored row) inside the same locked transaction, so a
+moisture-only edit yields the right dry mass. A client-sent `massDryKg` is
+advisory and is refused when it disagrees materially with the derivation.
+Cross-field rules work the same way: `updateFeedstockType` re-validates the
+merged category/usage pair against the stored row, because a refine on the
+patch alone never fires when only one half of the pair is present.
 
 ### Mass and integer caps
 
