@@ -18,17 +18,20 @@ import type {
   CreateCustomerData,
   UpdateCustomerData,
   CreateCustomerLocationData,
+  CreateCustomerWithLocationsData,
   UpdateCustomerLocationData,
 } from "@/schemas/customers";
 import type {
   PaginatedCustomers,
   CustomerWithRelations,
+  CreatedCustomerWithLocations,
 } from "@/data-access/customers";
 import {
   getCustomersFn,
   getCustomerWithRelationsFn,
   getCustomerLocationsFn,
   createCustomerFn,
+  createCustomerWithLocationsFn,
   updateCustomerFn,
   deleteCustomerFn,
   createCustomerLocationFn,
@@ -172,6 +175,62 @@ export function useCreateCustomer(
 
       // Pre-populate the detail cache and the customer pickers
       seedCreatedCustomerCaches(queryClient, data);
+
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+/**
+ * Hook to create a customer together with the locations captured on its create
+ * form. One server round trip, one transaction: nothing is saved unless every
+ * location is.
+ */
+export function useCreateCustomerWithLocations(
+  callbacks?: MutationCallbacks<
+    CreatedCustomerWithLocations,
+    CreateCustomerWithLocationsData
+  >
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateCustomerWithLocationsData) => {
+      const result = await createCustomerWithLocationsFn(data);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onMutate: async (variables) => {
+      await callbacks?.onMutate?.(variables);
+    },
+    onSuccess: async (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
+      queryClient.invalidateQueries({
+        queryKey: customerKeys.locations(data.customer.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: customerKeys.detailWithRelations(data.customer.id),
+      });
+
+      queryClient.setQueryData(
+        customerKeys.detail(data.customer.id),
+        data.customer,
+      );
+      for (const location of data.locations) {
+        queryClient.setQueryData(
+          customerLocationKeys.detail(location.id),
+          location,
+        );
+      }
 
       await callbacks?.onSuccess?.(data, variables);
     },
