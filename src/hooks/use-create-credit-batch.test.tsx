@@ -53,12 +53,14 @@ describe("useCreateCreditBatch", () => {
     expect(mocks.readiness).not.toHaveBeenCalled();
   });
 
-  it("returns the created row and seeds authoritative detail while onboarding refresh remains pending", async () => {
+  it("returns the created row and refetches the detail rather than seeding it, while onboarding refresh remains pending", async () => {
     mocks.create.mockResolvedValueOnce({ success: true, data: row });
     const key = onboardingKeys.status(row.facilityId, "org-1");
     client.setQueryData(key, { creditBatchCount: 0 });
     const listKey = creditBatchKeys.list({ facilityId: row.facilityId });
     client.setQueryData(listKey, []);
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const setData = vi.spyOn(client, "setQueryData");
     let releaseList!: () => void;
     const listHeld = new Promise<void>((resolve) => { releaseList = resolve; });
     const listObserver = new QueryObserver(client, {
@@ -83,9 +85,17 @@ describe("useCreateCreditBatch", () => {
     expect(client.getQueryData(listKey)).toEqual([]);
     await act(async () => {
       releaseList();
-      await expect(save).resolves.toEqual(row);
+      // The mutation answers with the committed batch and whether its
+      // accounting roll-up loaded with it (issue #769).
+      await expect(save).resolves.toEqual({ creditBatch: row, warning: undefined });
     });
-    expect(client.getQueryData(creditBatchKeys.detail(row.id))).toEqual(row);
+    // The created row is not an authoritative detail: its post-commit roll-up
+    // may not have loaded, so the detail is refetched, never seeded (#769).
+    expect(setData).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: creditBatchKeys.detail(row.id),
+    });
+    expect(client.getQueryData(creditBatchKeys.detail(row.id))).toBeUndefined();
     expect(client.getQueryData(listKey)).toEqual([row]);
     expect(mocks.readiness).toHaveBeenCalledWith(client);
     expect(observer.getCurrentResult().isFetching).toBe(true);

@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { bootstrapInvitationAccountAction } from "@/fn/invitation-bootstrap";
+import { stashPendingWarning } from "@/lib/pending-warning";
 import {
   invitationBootstrapSchema,
   type InvitationBootstrapInput,
@@ -35,6 +36,10 @@ export function InvitationBootstrapForm({
       setServerError(result.error);
       return;
     }
+    // The account exists and the invitation is accepted. A warning says only
+    // that the organization was not remembered as the default, so it is handed
+    // to the dashboard rather than lost to this reload.
+    stashPendingWarning(result.warning);
     window.location.assign("/dashboard");
   }
 

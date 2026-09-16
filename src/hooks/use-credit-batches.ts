@@ -158,19 +158,28 @@ export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // The batch and the warning are two facts about one committed write: the
+    // batch is saved either way, and `warning` says its accounting roll-up did
+    // not load with it (issue #769).
     mutationFn: async (data: CreditBatchFormData) => {
       const result = await createCreditBatchFn(data);
       if (!result.success) throw new Error(result.error);
-      return result.data;
+      return { creditBatch: result.data, warning: result.warning };
     },
-    onSuccess: (data) => {
-      queryClient.setQueryData(creditBatchKeys.detail(data.id), data);
+    onSuccess: ({ creditBatch }) => {
+      // The created row is not an authoritative detail: when its post-commit
+      // roll-up did not load, its applied tonnage and application slices are
+      // unknown, and seeding it would serve those unknowns for the whole
+      // staleTime window. Refetch the detail instead (issue #769).
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.detail(creditBatch.id),
+      });
       const listRefresh = queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
       invalidateCertificationReadiness(queryClient);
-      invalidateOnboardingProgress(queryClient, data.facilityId);
+      invalidateOnboardingProgress(queryClient, creditBatch.facilityId);
       // The create sheet closes after this resolves; its own list must show the row.
       return listRefresh;
     },

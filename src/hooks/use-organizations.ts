@@ -17,6 +17,7 @@ import {
 } from "@/fn/organizations";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
+import { stashPendingWarning } from "@/lib/pending-warning";
 
 const organizationKeys = {
   all: ["organizations"] as const,
@@ -39,10 +40,16 @@ export function useActiveOrganizationProfile() {
 }
 
 export function useResetAfterOrgSwitch() {
-  return function resetAfterOrgSwitch() {
+  /**
+   * `warning` is a non-fatal outcome of the switch itself (the "remember my
+   * organization" preference was not saved). The reload below discards any
+   * toast raised here, so it is handed to the page the operator lands on.
+   */
+  return function resetAfterOrgSwitch(warning?: string) {
     if (typeof window === "undefined") {
       return;
     }
+    stashPendingWarning(warning);
     try {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
     } finally {
@@ -60,8 +67,13 @@ export function useEnterOrganization() {
 
   return async function enterOrganization(organizationId: string) {
     const result = await setActiveOrganizationAction({ organizationId });
+    // Success means the server session moved, whether or not the "remember my
+    // organization" preference was saved with it. Always reset, or the client
+    // sits in the old organization while the session is in the new one
+    // (issue #769). A `warning` on the result is the preference, not the
+    // switch.
     if (result.success) {
-      resetAfterOrgSwitch();
+      resetAfterOrgSwitch(result.warning);
     }
     return result;
   };

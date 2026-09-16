@@ -53,6 +53,7 @@ import { productionRunDateExpr } from "./production-runs/date-expr";
 import {
   getFacilityCertifierWithExecutor,
   loadCreditBatchAccounting,
+  loadCreditBatchAccountingSafely,
   loadCreditBatchRollups,
   type CreditBatchAccounting,
   type CreditBatchCo2eStoredPreview,
@@ -123,6 +124,23 @@ type CreditBatchWithOptionalPreview = Omit<
   "co2eStoredPreview"
 > & {
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
+};
+
+/**
+ * A credit batch as it comes back from its own create. The insert committed,
+ * but the accounting roll-up opens its own transaction after that commit and
+ * can fail on its own, so its fields are nullable here: `null` means the
+ * roll-up did not load, never that nothing is applied. A row answering `0 t`
+ * would describe a batch nobody read (issue #769). Readers render the shared
+ * missing-value token for a null, never a zero.
+ */
+export type CreatedCreditBatch = Omit<
+  CreditBatchWithRelations,
+  "appliedWeightTons" | "applicationIds" | "applicationCount"
+> & {
+  appliedWeightTons: number | null;
+  applicationIds: string[] | null;
+  applicationCount: number | null;
 };
 
 export interface CreditBatchProductionRunOption {
@@ -369,7 +387,7 @@ export async function createCreditBatch(
     code: string;
     sampling?: CreditBatchSampling;
   }
-): Promise<CreditBatchWithRelations> {
+): Promise<CreatedCreditBatch> {
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
   let resolvedProductionRunIds = productionRunIds ?? [];
@@ -379,7 +397,7 @@ export async function createCreditBatch(
       ? await hasCertifierCredentials(ctx, "isometric")
       : false;
 
-  const creditBatch = await db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
     // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
@@ -492,40 +510,47 @@ export async function createCreditBatch(
       creditBatchIds: [batch.id],
     });
 
-    return batch;
+    // Read the batch's own relations inside the transaction so the commit and
+    // the description of it cannot come apart (issue #769).
+    const [facility] = await tx
+      .select({ name: facilities.name, durabilityOption: facilities.durabilityOption })
+      .from(facilities)
+      .where(and(eq(facilities.id, batch.facilityId), eq(facilities.organizationId, ctx.organizationId)));
+    const [feedstockType] = await tx
+      .select({ name: feedstockTypes.name })
+      .from(feedstockTypes)
+      .where(and(eq(feedstockTypes.id, batch.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
+    return { batch, facility, feedstockType };
   });
 
-  // Fetch facility name + the facility-derived durability tier (ADR 0021).
-  const [facility] = await db
-    .select({ name: facilities.name, durabilityOption: facilities.durabilityOption })
-    .from(facilities)
-    .where(and(eq(facilities.id, creditBatch.facilityId), eq(facilities.organizationId, ctx.organizationId)));
-  const [feedstockType] = await db
-    .select({ name: feedstockTypes.name })
-    .from(feedstockTypes)
-    .where(and(eq(feedstockTypes.id, creditBatch.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
+  const { batch: creditBatch, facility, feedstockType } = created;
   const durabilityOption = facility?.durabilityOption ?? DURABILITY_TIER_FALLBACK;
-  const accounting = (await loadCreditBatchAccounting(ctx, [creditBatch.id]))[
-    creditBatch.id
-  ];
-  if (!accounting) {
-    throw new SafeError("Credit batch accounting could not be loaded");
-  }
-  const memberProductionRunIds = accounting.lineageFacts.productionRunIds;
-  const applicationIds = accounting.lineageFacts.applicationIds;
+
+  // The accounting roll-up opens its own transaction, so it cannot join the
+  // write above and necessarily runs after the commit. The batch exists either
+  // way: when the roll-up does not load, the batch comes back with
+  // `previewAvailable: false` (as list reads already do) instead of failing a
+  // create that succeeded. The caller turns that into a warning (issue #769).
+  const accounting = await loadCreditBatchAccountingSafely(ctx, creditBatch.id);
+  // The member runs are known from the write itself, so they stay populated
+  // either way. The application slices and the applied tonnage are only known
+  // from the roll-up: without it they are unknown, not zero.
+  const memberProductionRunIds =
+    accounting?.lineageFacts.productionRunIds ?? resolvedProductionRunIds;
+  const applicationIds = accounting?.lineageFacts.applicationIds ?? null;
 
   return {
     ...creditBatch,
     facility: facility ? { name: facility.name } : null,
     durabilityOption,
     feedstockTypeName: feedstockType?.name ?? null,
-    applicationCount: applicationIds.length,
+    applicationCount: applicationIds?.length ?? null,
     applicationIds,
     productionRunCount: memberProductionRunIds.length,
     productionRunIds: memberProductionRunIds,
-    appliedWeightTons: accounting.appliedWeightTons,
-    co2eStoredPreview: accounting.co2ePreview,
-    previewAvailable: true,
+    appliedWeightTons: accounting?.appliedWeightTons ?? null,
+    co2eStoredPreview: accounting?.co2ePreview ?? null,
+    previewAvailable: accounting !== undefined,
   };
 }
 

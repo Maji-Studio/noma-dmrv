@@ -31,7 +31,9 @@ export function AcceptInvitation({
         setError(result.error);
         return;
       }
-      resetAfterOrgSwitch();
+      // Accepted and switched. A warning says only that the organization was
+      // not remembered as the default, so it travels with the reload.
+      resetAfterOrgSwitch(result.warning);
     } catch {
       // Rejected request (network/server): don't leave the button stuck.
       setStatus("error");
