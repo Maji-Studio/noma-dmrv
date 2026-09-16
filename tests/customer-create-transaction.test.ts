@@ -156,6 +156,14 @@ describe("createCustomerWithLocations", () => {
 
     expect(created.locations).toHaveLength(2);
 
+    // The returned rows are what the hook seeds into the location detail cache,
+    // so they must show the demotion, not the pre-demotion insert snapshot.
+    const returnedDefaults = created.locations.filter(
+      (location) => location.isDefault,
+    );
+    expect(returnedDefaults).toHaveLength(1);
+    expect(returnedDefaults[0]?.name).toBe("Upper Field");
+
     const stored = await db
       .select({
         name: customerLocations.name,

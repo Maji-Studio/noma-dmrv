@@ -187,13 +187,48 @@ export async function createCustomerWithLocations(
   return db.transaction(async (tx) => {
     const customer = await insertCustomer(ctx, tx, input.customer);
 
-    const locations: CustomerLocation[] = [];
+    const inserted: CustomerLocation[] = [];
     for (const location of input.locations) {
-      locations.push(
+      inserted.push(
         await createCustomerLocationInTransaction(ctx, tx, customer.id, location),
       );
     }
 
-    return { customer, locations };
+    return {
+      customer,
+      locations: await readBackInInsertOrder(ctx, tx, customer.id, inserted),
+    };
   });
+}
+
+/**
+ * Re-read the locations just inserted, keeping the caller's insertion order.
+ *
+ * An `INSERT ... RETURNING` row is a snapshot taken before any later location
+ * demotes it, so a row collected earlier in the loop can still claim
+ * `isDefault: true` after it was demoted. Callers seed these rows into the
+ * location detail cache, so they must carry the committed state.
+ */
+async function readBackInInsertOrder(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  customerId: string,
+  inserted: CustomerLocation[],
+): Promise<CustomerLocation[]> {
+  if (inserted.length < 2) {
+    return inserted;
+  }
+
+  const rows = await tx
+    .select()
+    .from(customerLocations)
+    .where(
+      and(
+        eq(customerLocations.customerId, customerId),
+        eq(customerLocations.organizationId, ctx.organizationId),
+      ),
+    );
+
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return inserted.map((row) => byId.get(row.id) ?? row);
 }
