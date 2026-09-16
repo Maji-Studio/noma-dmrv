@@ -60,6 +60,11 @@ export function useEnterOrganization() {
 
   return async function enterOrganization(organizationId: string) {
     const result = await setActiveOrganizationAction({ organizationId });
+    // Success means the server session moved, whether or not the "remember my
+    // organization" preference was saved with it. Always reset, or the client
+    // sits in the old organization while the session is in the new one
+    // (issue #769). A `warning` on the result is the preference, not the
+    // switch.
     if (result.success) {
       resetAfterOrgSwitch();
     }

@@ -24,6 +24,7 @@ import {
 } from "@/db/schema";
 import { applicationOutputAllocations } from "@/db/schema/application-output-allocations";
 import type { OrgContext } from "@/lib/auth/server";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import {
   BLUEPRINT_1000_YEAR_REPLICATES_INPUT,
   CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION,
@@ -732,6 +733,31 @@ export async function loadCreditBatchRollups(
  * assembly: callers ask for complete accounting records and never preload or
  * thread facts back into another public query.
  */
+/**
+ * Load one batch's accounting roll-up, answering `undefined` rather than
+ * throwing when the read fails. Used only after a commit, where a failed read
+ * must not be reported as a failed write (issue #769).
+ */
+export async function loadCreditBatchAccountingSafely(
+  ctx: OrgContext,
+  creditBatchId: string,
+): Promise<CreditBatchAccounting | undefined> {
+  try {
+    return (await loadCreditBatchAccounting(ctx, [creditBatchId]))[creditBatchId];
+  } catch (error) {
+    logger.error(
+      {
+        creditBatchId,
+        organizationId: ctx.organizationId,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: sanitizeErrorMessage(error),
+      },
+      "credit batch accounting could not be loaded after create",
+    );
+    return undefined;
+  }
+}
+
 export async function loadCreditBatchAccounting(
   ctx: OrgContext,
   batchIds: string[],

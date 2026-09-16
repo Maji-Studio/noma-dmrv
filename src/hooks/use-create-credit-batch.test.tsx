@@ -83,7 +83,9 @@ describe("useCreateCreditBatch", () => {
     expect(client.getQueryData(listKey)).toEqual([]);
     await act(async () => {
       releaseList();
-      await expect(save).resolves.toEqual(row);
+      // The mutation answers with the committed batch and whether its
+      // accounting roll-up loaded with it (issue #769).
+      await expect(save).resolves.toEqual({ creditBatch: row, warning: undefined });
     });
     expect(client.getQueryData(creditBatchKeys.detail(row.id))).toEqual(row);
     expect(client.getQueryData(listKey)).toEqual([row]);

@@ -26,6 +26,7 @@ import {
   deleteCreditBatchSchema,
 } from "@/schemas/credit-batches";
 import { formatZodActionError } from "./action-errors";
+import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
 
 const MAX_BATCH_PREVIEWS = 50;
 
@@ -144,7 +145,13 @@ export async function createCreditBatchFn(
       (code) => createCreditBatchData(ctx, { ...validated, code })
     );
 
-    return { success: true, data: creditBatch };
+    // The batch is committed. Its accounting roll-up runs after that commit and
+    // can fail on its own; when it does the batch comes back without a preview,
+    // and the operator is told what is saved rather than that nothing is
+    // (issue #769).
+    return creditBatch.previewAvailable
+      ? { success: true, data: creditBatch }
+      : { success: true, data: creditBatch, warning: SAVED_DETAILS_UNAVAILABLE };
   } catch (error) {
     logCreditBatchError("Failed to create credit batch", error);
     if (error instanceof z.ZodError) {

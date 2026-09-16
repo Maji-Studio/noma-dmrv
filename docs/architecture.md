@@ -98,6 +98,15 @@ disclosure bug.
 `conflict?: { entity, id, code }` so a form can deep-link the operator to the
 blocking record instead of only showing text. Forms are expected to honor it.
 
+The success branch may carry `warning?: string`: the write committed and a
+non-fatal follow-up did not (a preference that was not stored, an enrichment
+read that failed). A writer that enriches its result with a separate read
+passes its `tx` to that read (`Executor` in `src/data-access/utils.ts`) so a
+failed read rolls the write back rather than describing a saved row as
+missing; `warning` is for the reads that genuinely cannot join the
+transaction. Never use it to describe a rollback. Copy vocabulary:
+[ux-writing.md](./ux-writing.md).
+
 ### Facility context
 
 Invariants (implementation: `src/hooks/use-facility-context.ts`): the active

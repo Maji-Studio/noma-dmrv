@@ -236,6 +236,15 @@ Pure starter residue; org scoping came later via ADR 0010.
   artifact locks), or record why the discard seam stays. The marker and its
   writer stay either way.
 
+### A write whose commit is genuinely unknown has no operation identity (`architecture/uncertain-commit-identity`, opened 2026-09-16)
+
+- Issue #769 removed the writers that reported a *known* commit as "not
+  found". A connection lost between `COMMIT` and its acknowledgement is a
+  different case: nothing in the app can tell a committed write from a rolled
+  back one, so no result is honest. **To resolve:** decide whether writes
+  carry a client-supplied operation id the server records and a retry can look
+  up, or whether the retry-and-duplicate risk stays with the operator.
+
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
 - The certifier settings pane replaces keys by typing over a masked field, and

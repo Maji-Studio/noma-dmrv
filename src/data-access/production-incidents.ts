@@ -7,7 +7,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { incidentReports, operators, reactors, productionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { assertSameOrg, requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
@@ -65,11 +65,12 @@ export async function getProductionIncidents(
 
 export async function getProductionIncidentById(
   ctx: OrgContext,
-  id: string
+  id: string,
+  executor: Executor = db
 ): Promise<ProductionIncidentWithRelations> {
   requireOrgScope(ctx);
 
-  const rows = await db
+  const rows = await executor
     .select(incidentSelect)
     .from(incidentReports)
     .leftJoin(operators, and(eq(incidentReports.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
@@ -110,23 +111,27 @@ export async function createProductionIncident(
     throw new SafeError("Production run not found");
   }
 
-  const [inserted] = await db
-    .insert(incidentReports)
-    .values({
-      organizationId: ctx.organizationId,
-      productionRunId: data.productionRunId,
-      incidentTime: data.incidentTime,
-      incidentDate: data.incidentTime,
-      operatorId: data.operatorId ?? null,
-      reactorId: data.reactorId ?? null,
-      description: data.description,
-      severity: data.severity,
-      correctiveActions: data.correctiveActions ?? null,
-      notes: data.notes ?? null,
-    })
-    .returning({ id: incidentReports.id });
+  return db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(incidentReports)
+      .values({
+        organizationId: ctx.organizationId,
+        productionRunId: data.productionRunId,
+        incidentTime: data.incidentTime,
+        incidentDate: data.incidentTime,
+        operatorId: data.operatorId ?? null,
+        reactorId: data.reactorId ?? null,
+        description: data.description,
+        severity: data.severity,
+        correctiveActions: data.correctiveActions ?? null,
+        notes: data.notes ?? null,
+      })
+      .returning({ id: incidentReports.id });
 
-  return getProductionIncidentById(ctx, inserted.id);
+    // Read the row back inside the transaction, so a failed read never reports
+    // a saved incident as missing (issue #769).
+    return getProductionIncidentById(ctx, inserted.id, tx);
+  });
 }
 
 export async function updateProductionIncident(
@@ -173,12 +178,15 @@ export async function updateProductionIncident(
   }
   if (data.notes !== undefined) updateData.notes = data.notes;
 
-  await db
-    .update(incidentReports)
-    .set(updateData)
-    .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)));
+  return db.transaction(async (tx) => {
+    await tx
+      .update(incidentReports)
+      .set(updateData)
+      .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)));
 
-  return getProductionIncidentById(ctx, id);
+    // Read the row back inside the transaction (issue #769).
+    return getProductionIncidentById(ctx, id, tx);
+  });
 }
 
 export async function deleteProductionIncident(

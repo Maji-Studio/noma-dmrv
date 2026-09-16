@@ -263,9 +263,12 @@ export function CreditBatchList({
   const handleCreate = async (data: CreditBatchFormData) => {
     setCreateError(null);
     try {
-      await createCreditBatch.mutateAsync(data);
+      const { warning } = await createCreditBatch.mutateAsync(data);
       closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
-      toast.success("Credit batch created.");
+      // The batch is saved. A warning says only that part of its detail did
+      // not load, so the operator is told what to do, not that it failed.
+      if (warning) toast.warning(`${warning} Refresh the page.`);
+      else toast.success("Credit batch created.");
     } catch (err) {
       const message =
         err instanceof Error
