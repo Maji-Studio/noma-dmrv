@@ -375,6 +375,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             deferredAttachments.flush("application", applicationId),
           );
           if (!flushResult.ok) {
+            // The update itself committed, so the still-open sheet has to adopt
+            // the version it wrote. Leaving the opened-on snapshot in place
+            // would get the operator's next Save refused as stale against
+            // their own write (#768).
+            const saved = result.data;
+            setSideSheet((prev) =>
+              prev?.entity && prev.entity.id === applicationId
+                ? { ...prev, entity: { ...prev.entity, ...saved } }
+                : prev,
+            );
             setUpdateError(
               `Application updated, but ${flushResult.failed.length} ${
                 flushResult.failed.length === 1
