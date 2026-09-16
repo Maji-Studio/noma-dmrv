@@ -43,12 +43,12 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
-  appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
 } from "./shared";
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
+import { withStagedSyncEvents } from "./sync-event-stage";
 import { buildRemovalSourceDescription } from "@/lib/certification/removal-source-bindings";
 import {
   collectCandidateDocumentIdsForRemoval as collectCandidateDocumentIdsForRemovalCandidate,
@@ -399,191 +399,201 @@ export async function mirrorDocumentToSourceForUser(
     // (loser's externalId stays on Isometric, never linked locally). The
     // lock is keyed on (provider, documentId) so unrelated mirrors run in
     // parallel. Held across HTTP calls; acceptable for single-tenant v1.
-    return db.transaction(async (tx) => {
-      await acquireMirrorLock(tx, documentId);
-      if (options.enforceRemovalLifecycle) {
-        // Submission claims acquire the same document lock before persisting
-        // their lifecycle transition. Re-decide after the lock so a mirror
-        // that queued behind a claim cannot mutate the claimed Source set.
-        await assertRemovalSourcesEditable(
+    // Sync events are staged rather than written inline: `appendSyncEvent`
+    // inserts through the root pooled `db`, so an audit write issued while
+    // this transaction holds the only pooled connection can only time out.
+    // `withStagedSyncEvents` flushes them once the transaction settles.
+    return withStagedSyncEvents(orgCtx, (stage) =>
+      db.transaction(async (tx) => {
+        await acquireMirrorLock(tx, documentId);
+        if (options.enforceRemovalLifecycle) {
+          // Submission claims acquire the same document lock before persisting
+          // their lifecycle transition. Re-decide after the lock so a mirror
+          // that queued behind a claim cannot mutate the claimed Source set.
+          await assertRemovalSourcesEditable(
+            orgCtx,
+            removalId,
+            removal.facilityId,
+            tx,
+          );
+        }
+
+        // Idempotency short-circuit (inside the lock) ─────────────────────
+        const existingLocal = await getDocumentUploadByDocument(
           orgCtx,
-          removalId,
-          removal.facilityId,
+          ISOMETRIC_PROVIDER,
+          documentId,
           tx,
         );
-      }
-
-      // Idempotency short-circuit (inside the lock) ─────────────────────
-      const existingLocal = await getDocumentUploadByDocument(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        documentId,
-        tx,
-      );
-      if (existingLocal) {
-        const meta = existingLocal.metadata as DocumentUploadMetadata;
-        return {
-          externalDocumentId: existingLocal.externalDocumentId,
-          isPublic: meta?.isPublic ?? false,
-          recovered: false,
-        };
-      }
-
-      let sourceExternalId: string;
-      let signedUploadUrl: string | null = null;
-      let recoveredFlag = false;
-      // Fresh creates use the persisted organization policy. Reconciliation
-      // trusts the existing remote Source because Isometric remains the
-      // registry of record for Sources created before a policy change.
-      let resolvedIsPublic = policyIsPublic;
-
-      // Reconciliation: was a Source already created in a previous attempt?
-      const remoteExisting = await withSourceSyncEventOnFailure(
-        orgCtx,
-        {
-          documentId,
-          removalId,
-          operation: "source:lookup",
-          requestPayload: { supplierRefId, phase: "lookup" },
-        },
-        () => findSourceBySupplierRef(client, supplierRefId),
-      );
-
-      if (remoteExisting) {
-        sourceExternalId = remoteExisting.id;
-        resolvedIsPublic = remoteExisting.is_public;
-        const result = await withSourceSyncEventOnFailure(
-          orgCtx,
-          {
-            documentId,
-            removalId,
-            operation: "source:create:reconciled",
-            requestPayload: { supplierRefId, externalId: remoteExisting.id },
-          },
-          () =>
-            requestSignedUploadUrl(client, remoteExisting.id, {
-              content_length: fileSizeBytes,
-              content_type: mimeType,
-            }),
-        );
-        if (result.kind === "url" && result.uploadUrl) {
-          signedUploadUrl = result.uploadUrl;
+        if (existingLocal) {
+          const meta = existingLocal.metadata as DocumentUploadMetadata;
+          return {
+            externalDocumentId: existingLocal.externalDocumentId,
+            isPublic: meta?.isPublic ?? false,
+            recovered: false,
+          };
         }
-        recoveredFlag = true;
-      } else {
-        const created = await withSourceSyncEventOnFailure(
+
+        let sourceExternalId: string;
+        let signedUploadUrl: string | null = null;
+        let recoveredFlag = false;
+        // Fresh creates use the persisted organization policy. Reconciliation
+        // trusts the existing remote Source because Isometric remains the
+        // registry of record for Sources created before a policy change.
+        let resolvedIsPublic = policyIsPublic;
+
+        // Reconciliation: was a Source already created in a previous attempt?
+        const remoteExisting = await withSourceSyncEventOnFailure(
           orgCtx,
           {
             documentId,
             removalId,
-            operation: "source:create",
-            requestPayload: { supplierRefId },
+            operation: "source:lookup",
+            requestPayload: { supplierRefId, phase: "lookup" },
+            stage,
           },
-          () =>
-            createSource(
-              client,
-              buildSourceRequestBody({
-                externalProjectId: mapping.externalProjectId,
-                document,
-                supplierRefId,
-                isPublic: policyIsPublic,
-                sourceDescription: buildRemovalSourceDescription(
-                  sourceBinding,
-                  sourceLineageLabel,
-                ),
+          () => findSourceBySupplierRef(client, supplierRefId),
+        );
+
+        if (remoteExisting) {
+          sourceExternalId = remoteExisting.id;
+          resolvedIsPublic = remoteExisting.is_public;
+          const result = await withSourceSyncEventOnFailure(
+            orgCtx,
+            {
+              documentId,
+              removalId,
+              operation: "source:create:reconciled",
+              requestPayload: { supplierRefId, externalId: remoteExisting.id },
+              stage,
+            },
+            () =>
+              requestSignedUploadUrl(client, remoteExisting.id, {
+                content_length: fileSizeBytes,
+                content_type: mimeType,
               }),
-            ),
-        );
-        sourceExternalId = created.source.id;
-        signedUploadUrl = created.signed_upload_url;
-      }
+          );
+          if (result.kind === "url" && result.uploadUrl) {
+            signedUploadUrl = result.uploadUrl;
+          }
+          recoveredFlag = true;
+        } else {
+          const created = await withSourceSyncEventOnFailure(
+            orgCtx,
+            {
+              documentId,
+              removalId,
+              operation: "source:create",
+              requestPayload: { supplierRefId },
+              stage,
+            },
+            () =>
+              createSource(
+                client,
+                buildSourceRequestBody({
+                  externalProjectId: mapping.externalProjectId,
+                  document,
+                  supplierRefId,
+                  isPublic: policyIsPublic,
+                  sourceDescription: buildRemovalSourceDescription(
+                    sourceBinding,
+                    sourceLineageLabel,
+                  ),
+                }),
+              ),
+          );
+          sourceExternalId = created.source.id;
+          signedUploadUrl = created.signed_upload_url;
+        }
 
-      // Upload bytes if a URL was returned ───────────────────────────────
-      if (signedUploadUrl) {
-        await withSourceSyncEventOnFailure(
+        // Upload bytes if a URL was returned ───────────────────────────────
+        if (signedUploadUrl) {
+          await withSourceSyncEventOnFailure(
+            orgCtx,
+            {
+              documentId,
+              removalId,
+              operation: "source:upload",
+              requestPayload: { supplierRefId, externalId: sourceExternalId },
+              stage,
+            },
+            async () => {
+              const { blob, contentType } = await downloadDocumentBlob(document);
+              await putBlobToSignedUrl(signedUploadUrl!, blob, contentType);
+            },
+          );
+        }
+
+        // Persist the local mapping ────────────────────────────────────────
+        const metadata: DocumentUploadMetadata = {
+          mirroredBy: orgCtx.userId,
+          supplierRefId,
+          contentLength: fileSizeBytes,
+          contentType: mimeType,
+          isPublic: resolvedIsPublic,
+          ...(document.checksumSha256
+            ? { fileChecksum: document.checksumSha256 }
+            : {}),
+        };
+        const { row, inserted } = await insertOrGetDocumentUpload(
           orgCtx,
           {
             documentId,
-            removalId,
-            operation: "source:upload",
-            requestPayload: { supplierRefId, externalId: sourceExternalId },
+            provider: ISOMETRIC_PROVIDER,
+            externalDocumentId: sourceExternalId,
+            metadata,
           },
-          async () => {
-            const { blob, contentType } = await downloadDocumentBlob(document);
-            await putBlobToSignedUrl(signedUploadUrl!, blob, contentType);
-          },
+          tx,
         );
-      }
 
-      // Persist the local mapping ────────────────────────────────────────
-      const metadata: DocumentUploadMetadata = {
-        mirroredBy: orgCtx.userId,
-        supplierRefId,
-        contentLength: fileSizeBytes,
-        contentType: mimeType,
-        isPublic: resolvedIsPublic,
-        ...(document.checksumSha256
-          ? { fileChecksum: document.checksumSha256 }
-          : {}),
-      };
-      const { row, inserted } = await insertOrGetDocumentUpload(
-        orgCtx,
-        {
-          documentId,
-          provider: ISOMETRIC_PROVIDER,
-          externalDocumentId: sourceExternalId,
-          metadata,
-        },
-        tx,
-      );
+        // Defense-in-depth orphan check. With `acquireMirrorLock(tx, documentId)`
+        // held across the whole block, two callers cannot reach the insert
+        // concurrently for the same documentId — so this branch is expected to
+        // be unreachable. Kept because a future entry point that mints a Source
+        // without first acquiring the lock would silently orphan the
+        // externalDocumentId we just created; the sync_event lets an out-of-
+        // band sweep reconcile rather than swallowing the leak.
+        if (!inserted && row.externalDocumentId !== sourceExternalId) {
+          stage.onCommit({
+            provider: ISOMETRIC_PROVIDER,
+            entityType: "document",
+            entityId: documentId,
+            operation: "source:create:orphaned",
+            status: "failed",
+            requestPayload: { supplierRefId },
+            responsePayload: {
+              orphan_external_id: sourceExternalId,
+              winning_external_id: row.externalDocumentId,
+            },
+            errorMessage:
+              "Lost the mirror race; the Source created by this attempt is unreferenced on Isometric.",
+          });
+        } else {
+          stage.onCommit({
+            provider: ISOMETRIC_PROVIDER,
+            entityType: "document",
+            entityId: documentId,
+            operation: recoveredFlag
+              ? "source:create:reconciled"
+              : "source:create",
+            status: "succeeded",
+            requestPayload: { supplierRefId },
+            responsePayload: {
+              id: row.externalDocumentId,
+              upload_skipped: signedUploadUrl === null,
+              source: recoveredFlag ? "reconciliation" : "fresh",
+            },
+          });
+        }
 
-      // Defense-in-depth orphan check. With `acquireMirrorLock(tx, documentId)`
-      // held across the whole block, two callers cannot reach the insert
-      // concurrently for the same documentId — so this branch is expected to
-      // be unreachable. Kept because a future entry point that mints a Source
-      // without first acquiring the lock would silently orphan the
-      // externalDocumentId we just created; the sync_event lets an out-of-
-      // band sweep reconcile rather than swallowing the leak.
-      if (!inserted && row.externalDocumentId !== sourceExternalId) {
-        await appendSyncEventBestEffort(orgCtx, {
-          provider: ISOMETRIC_PROVIDER,
-          entityType: "document",
-          entityId: documentId,
-          operation: "source:create:orphaned",
-          status: "failed",
-          requestPayload: { supplierRefId },
-          responsePayload: {
-            orphan_external_id: sourceExternalId,
-            winning_external_id: row.externalDocumentId,
-          },
-          errorMessage:
-            "Lost the mirror race; the Source created by this attempt is unreferenced on Isometric.",
-        });
-      } else {
-        await appendSyncEventBestEffort(orgCtx, {
-          provider: ISOMETRIC_PROVIDER,
-          entityType: "document",
-          entityId: documentId,
-          operation: recoveredFlag
-            ? "source:create:reconciled"
-            : "source:create",
-          status: "succeeded",
-          requestPayload: { supplierRefId },
-          responsePayload: {
-            id: row.externalDocumentId,
-            upload_skipped: signedUploadUrl === null,
-            source: recoveredFlag ? "reconciliation" : "fresh",
-          },
-        });
-      }
-
-      const persistedMeta = row.metadata as DocumentUploadMetadata;
-      return {
-        externalDocumentId: row.externalDocumentId,
-        isPublic: persistedMeta?.isPublic ?? resolvedIsPublic,
-        recovered: recoveredFlag,
-      };
-    });
+        const persistedMeta = row.metadata as DocumentUploadMetadata;
+        return {
+          externalDocumentId: row.externalDocumentId,
+          isPublic: persistedMeta?.isPublic ?? resolvedIsPublic,
+          recovered: recoveredFlag,
+        };
+      }),
+    );
 }
 
 // ───────────────────────────────────────────────────────────────────────────

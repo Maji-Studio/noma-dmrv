@@ -1,5 +1,20 @@
 # Isometric Docs Change Log
 
+## 2026-09-16: Source audit events are staged outside the mirror transaction
+
+- `mirrorDocumentToSourceForUser` (`src/fn/certification/sources.ts`) runs its
+  transaction inside `withStagedSyncEvents`
+  (`src/fn/certification/sync-event-stage.ts`), so every `certifier_sync_events`
+  payload, including the failure diagnostics from `withSourceSyncEventOnFailure`
+  (`src/fn/certification/source-sync-events.ts`), is held in a closure and
+  written once the transaction settles: success rows after commit, failure rows
+  after rollback. Nothing asks the root pooled `db` for a second connection
+  while the transaction holds one, so the audit trail survives at
+  `DEFAULT_DB_POOL_MAX = 1` (`src/db/pool-config.ts`).
+- Pinned by `tests/certifier-source-sync-events-tx.test.ts`, which runs the
+  mirror against a real `max: 1` pool. This closes the
+  `storage/sources-sync-events-tx` open question (issue #772).
+
 ## 2026-09-10: Removal deletion deletes the Sources it released
 
 - Verified through the `how_to` MCP tool and the public Certify OpenAPI:
