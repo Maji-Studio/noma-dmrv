@@ -17,6 +17,7 @@ import {
 import { FormField, FormInput, FormTextarea, FormActions, FormSection } from "@/components/forms";
 import {
   customerFormSchema,
+  MAX_PENDING_CUSTOMER_LOCATIONS,
   type CustomerFormData,
   type CustomerLocationFormData,
 } from "@/schemas/customers";
@@ -266,6 +267,9 @@ function CreateModeLocationsSection({
   error: string | null;
 }) {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  // The server action caps the compound payload at the same constant, so the
+  // form must stop here rather than submit something the server rejects.
+  const isAtLocationLimit = locations.length >= MAX_PENDING_CUSTOMER_LOCATIONS;
 
   return (
     <FormSection
@@ -278,6 +282,7 @@ function CreateModeLocationsSection({
         <Button
           variant="noOutline"
           size="small"
+          disabled={isAtLocationLimit}
           onClick={() => setIsLocationDialogOpen(true)}
           className="text-[var(--color-interaction)]"
         >
@@ -289,6 +294,12 @@ function CreateModeLocationsSection({
       {error && (
         <p className="text-[var(--text-s)] text-[var(--color-signal-red)]" role="alert">
           {error}
+        </p>
+      )}
+
+      {isAtLocationLimit && (
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          {`Add at most ${MAX_PENDING_CUSTOMER_LOCATIONS} locations here. Create the customer, then add the rest from its detail page.`}
         </p>
       )}
 
