@@ -38,6 +38,24 @@ Measured on staging on 2026-09-16 with browser resource timing, two runs.
 - No `loading.tsx` exists under `src/app`, so nothing streams before data.
 - Hovering the sidebar fired about 60 RSC prefetches at 250 ms each, one per link.
 
+## After Phase 1 (measured 2026-09-16, warm, signed in, staging on DigitalOcean Frankfurt + fra1)
+
+Three hard reloads of the Dashboard with the resource-timing snippet below.
+The dashboard now dispatches 10 to 11 startup fetches (the #763 read endpoints
+run in parallel with the remaining Server Actions).
+
+| Phase | Run 1 | Run 2 | Run 3 | Baseline (warm) |
+| --- | --- | --- | --- | --- |
+| HTML document streamed | 0.93 s | 0.34 s | 0.51 s | 1.3 s |
+| First startup fetch starts | 1.09 s | 0.38 s | 0.62 s | 1.4 s |
+| Last startup fetch finishes | 1.77 s | 1.09 s | 1.63 s | 11.5 s |
+| Longest single fetch | 0.26 s | 0.21 s | 0.44 s | 4.1 to 5.6 s |
+
+The longest fetch is now the dashboard overview action at 0.2 to 0.45 s, down
+from 4.1 to 5.6 s. Cold start was not measured: DigitalOcean does not scale to
+zero. Phases 2 to 4 are still worth doing, but each is now a sub-second win and
+should be re-prioritised against the query budget in Phase 3.
+
 ## Measurement protocol
 
 Use this before and after every step. Single samples do not rank changes.
