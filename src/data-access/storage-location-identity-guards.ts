@@ -17,24 +17,16 @@
  * refusing is the reversible half of it.
  */
 
-import { and, count, eq } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import {
-  biocharProducts,
-  biocharProductSourceAllocations,
-  biocharStorageInventory,
-  binMovements,
-  deliveries,
-  feedstocks,
-  outputStockAllocations,
-  productionRunFeedstockDraws,
-  productionRuns,
-} from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { deriveBinLaneAvailableKg, hasNonZeroStock } from "./bin-stock-guards";
+import {
+  countStorageLocationReferences,
+  hasStorageLocationReferences,
+} from "./storage-location-references";
 import { requireOrgScope } from "./utils";
 
 const STOCK_BLOCKS_MESSAGE =
@@ -44,112 +36,6 @@ const STOCK_BLOCKS_MESSAGE =
 const HISTORY_BLOCKS_MESSAGE =
   "This bin has stock history in its current material lane. Its setup was not " +
   "changed. Review its stock and movement history before changing Storage type.";
-
-/** Every table that records mass moving into or out of one bin. */
-async function hasStockHistory(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  storageLocationId: string,
-): Promise<boolean> {
-  const organizationId = ctx.organizationId;
-  const results = await Promise.all([
-    tx
-      .select({ value: count() })
-      .from(feedstocks)
-      .where(
-        and(
-          eq(feedstocks.storageLocationId, storageLocationId),
-          eq(feedstocks.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(productionRunFeedstockDraws)
-      .where(
-        and(
-          eq(productionRunFeedstockDraws.storageLocationId, storageLocationId),
-          eq(productionRunFeedstockDraws.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(productionRuns)
-      .where(
-        and(
-          eq(productionRuns.biocharStorageLocationId, storageLocationId),
-          eq(productionRuns.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharProducts)
-      .where(
-        and(
-          eq(biocharProducts.storageLocationId, storageLocationId),
-          eq(biocharProducts.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharProducts)
-      .where(
-        and(
-          eq(biocharProducts.sourceBiocharStorageLocationId, storageLocationId),
-          eq(biocharProducts.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharProductSourceAllocations)
-      .where(
-        and(
-          eq(
-            biocharProductSourceAllocations.sourceStorageLocationId,
-            storageLocationId,
-          ),
-          eq(biocharProductSourceAllocations.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(deliveries)
-      .where(
-        and(
-          eq(deliveries.storageLocationId, storageLocationId),
-          eq(deliveries.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(biocharStorageInventory)
-      .where(
-        and(
-          eq(biocharStorageInventory.storageLocationId, storageLocationId),
-          eq(biocharStorageInventory.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(binMovements)
-      .where(
-        and(
-          eq(binMovements.storageLocationId, storageLocationId),
-          eq(binMovements.organizationId, organizationId),
-        ),
-      ),
-    tx
-      .select({ value: count() })
-      .from(outputStockAllocations)
-      .where(
-        and(
-          eq(outputStockAllocations.sourceStorageLocationId, storageLocationId),
-          eq(outputStockAllocations.organizationId, organizationId),
-        ),
-      ),
-  ]);
-
-  return results.some(([row]) => Number(row.value) > 0);
-}
 
 /**
  * Refuse a `type` or `feedstockTypeId` change on a bin that still holds stock
@@ -173,7 +59,8 @@ export async function assertBinIdentityChangeAllowed(
     throw new SafeError(STOCK_BLOCKS_MESSAGE);
   }
 
-  if (await hasStockHistory(ctx, tx, bin.id)) {
+  const references = await countStorageLocationReferences(ctx, tx, bin.id);
+  if (hasStorageLocationReferences(references)) {
     throw new SafeError(HISTORY_BLOCKS_MESSAGE);
   }
 }
