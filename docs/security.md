@@ -123,6 +123,9 @@ Non-obvious semantics only:
   emits connection-establishment, pool-checkout, and query-execution durations
   plus aggregate pool counts. It deliberately excludes SQL, parameters,
   connection strings, hostnames, database names, and application identifiers.
+  When disabled the pool emits nothing, failures included: expected `55P03` lock
+  timeouts and unique-violation retries are normal control flow and must not
+  become standing warnings.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
@@ -267,7 +270,7 @@ redirecting to Settings. Restore manually via the organization admin area
 
 - Better Auth rate limits are on by default, stricter for auth-sensitive
   endpoints.
-- DB pool limits are centralized in `src/db/index.ts`, configurable via env.
+- DB pool limits are centralized in `src/db/pool-config.ts` (`resolveAppPoolConfig`), applied by `src/db/index.ts`, and configurable via env.
 
 ## Dependency Supply Chain
 

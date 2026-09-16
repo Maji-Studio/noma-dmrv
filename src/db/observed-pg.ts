@@ -5,14 +5,21 @@ import {
   type PoolClient,
   type PoolConfig,
 } from "pg";
-import { logger, type Logger } from "@/lib/log";
+import type { Logger } from "@/lib/log";
+
+// Durations are reported to one decimal place; sub-0.1 ms noise is not useful.
+const DURATION_PRECISION_FACTOR = 10;
 
 type Clock = () => number;
 
 interface ObservabilityOptions {
   enabled: boolean;
   clock?: Clock;
-  log?: Logger;
+  /**
+   * Injected by `src/db/index.ts`. The pool never reaches for the ambient
+   * logger itself, so only the pool entry point touches `@/lib/log`.
+   */
+  log: Logger;
 }
 
 export interface QueryableClient {
@@ -24,12 +31,15 @@ const OBSERVED_CLIENT = Symbol("noma-observed-pg-client");
 type ObservedClient = QueryableClient & { [OBSERVED_CLIENT]?: true };
 
 function roundDuration(durationMs: number): number {
-  return Math.round(durationMs * 10) / 10;
+  return (
+    Math.round(durationMs * DURATION_PRECISION_FACTOR) /
+    DURATION_PRECISION_FACTOR
+  );
 }
 
 export function instrumentClient(
   client: QueryableClient,
-  { enabled, clock = performance.now.bind(performance), log = logger }: ObservabilityOptions,
+  { enabled, clock = performance.now.bind(performance), log }: ObservabilityOptions,
 ): void {
   const observedClient = client as ObservedClient;
   if (observedClient[OBSERVED_CLIENT]) return;
@@ -126,7 +136,7 @@ export function instrumentClient(
 
 export function instrumentPoolAcquisition(
   pool: Pool,
-  { enabled, clock = performance.now.bind(performance), log = logger }: ObservabilityOptions,
+  { enabled, clock = performance.now.bind(performance), log }: ObservabilityOptions,
 ): void {
   const dbLog = log.child({ mod: "db-pool" });
   const originalConnect = pool.connect.bind(pool);
@@ -189,9 +199,7 @@ export function createObservedPool(
   instrumentPoolAcquisition(pool, options);
   pool.on("error", () => {
     if (!options.enabled) return;
-    (options.log ?? logger)
-      .child({ mod: "db-pool" })
-      .warn("idle database connection failed");
+    options.log.child({ mod: "db-pool" }).warn("idle database connection failed");
   });
   return pool;
 }

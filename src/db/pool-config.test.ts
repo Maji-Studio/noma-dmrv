@@ -4,6 +4,7 @@ import {
   DEFAULT_DB_POOL_IDLE_TIMEOUT_MS,
   DEFAULT_DB_POOL_LOCK_TIMEOUT_MS,
   DEFAULT_DB_POOL_MAX,
+  MAX_VERCEL_DB_POOL_MAX,
   resolveAppPoolConfig,
 } from "./pool-config";
 
@@ -25,20 +26,23 @@ describe("resolveAppPoolConfig", () => {
     });
   });
 
-  it.each([1, 3, 5])("accepts the planned Vercel candidate %i", (configuredMax) => {
-    expect(
-      resolveAppPoolConfig({ connection, configuredMax, isVercel: true }).max,
-    ).toBe(configuredMax);
-  });
+  it.each([1, MAX_VERCEL_DB_POOL_MAX])(
+    "accepts a Vercel pool size of %i, within the ceiling",
+    (configuredMax) => {
+      expect(
+        resolveAppPoolConfig({ connection, configuredMax, isVercel: true }).max,
+      ).toBe(configuredMax);
+    },
+  );
 
   it("rejects a Vercel pool larger than the bounded candidate ceiling", () => {
     expect(() =>
       resolveAppPoolConfig({
         connection,
-        configuredMax: 6,
+        configuredMax: MAX_VERCEL_DB_POOL_MAX + 1,
         isVercel: true,
       }),
-    ).toThrow("DB_POOL_MAX cannot exceed 5 on Vercel");
+    ).toThrow(`DB_POOL_MAX cannot exceed ${MAX_VERCEL_DB_POOL_MAX} on Vercel`);
   });
 
   it("does not impose the serverless ceiling on a long-running deployment", () => {

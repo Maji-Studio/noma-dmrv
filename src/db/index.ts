@@ -19,6 +19,9 @@ const poolConfig = resolveAppPoolConfig({
   configuredLockTimeoutMs: env.DB_POOL_LOCK_TIMEOUT_MS,
   isVercel: process.env.VERCEL === "1",
 });
+// Logger import waiver for `src/db/`: see docs/architecture.md, "Structured
+// logging". The pool is built at module scope, so the telemetry logger is
+// resolved here and injected into everything below it.
 const poolLog = logger.child({
   computeRegion: process.env.VERCEL_REGION ?? "non-vercel",
 });
