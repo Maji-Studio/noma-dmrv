@@ -7,7 +7,7 @@
  * are optional hints (see docs/database.md). No registry submissions.
  */
 import { config } from "dotenv";
-import { SeedError } from "@/lib/cli/seed/actions";
+import { describeSeedFailure } from "@/lib/cli/seed/actions";
 
 config({ path: ".env.local" });
 (process.env as Record<string, string | undefined>).NODE_ENV ??= "development";
@@ -23,7 +23,7 @@ main().then(
   (error: unknown) => {
     // Action failures contain the named step and the action's safe error;
     // never print raw database errors, SQL, environment values, or stacks.
-    console.error(error instanceof SeedError ? error.message : "Mafinga seed failed unexpectedly. Check application diagnostics.");
+    console.error(`Mafinga seed failed. ${describeSeedFailure(error)}`);
     process.exit(1);
   },
 );

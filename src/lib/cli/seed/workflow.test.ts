@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const calls = vi.hoisted(() => ({ inputs: new Map<string, unknown[]>(), sequence: [] as string[] }));
 
@@ -106,7 +107,7 @@ import { registryEnvironment, seedRegistryAndTypes } from "./registry";
 import { saveMappingSchema } from "@/schemas/certification";
 import { importProductionRunReadingsFromDocumentFn } from "@/fn/production-run-reading-imports";
 import { seedReadings } from "./readings";
-import { SeedCounts, unwrap } from "./actions";
+import { SeedCounts, describeSeedFailure, unwrap } from "./actions";
 import { seedInfrastructure } from "./infrastructure";
 import { seedProduction } from "./production";
 import { seedDistribution } from "./distribution";
@@ -225,6 +226,21 @@ describe("Mafinga operator-action seed", () => {
   it("rejects incomplete readings imports instead of claiming success", async () => {
     vi.mocked(importProductionRunReadingsFromDocumentFn).mockResolvedValueOnce({ success: true, data: { insertedRows: 0 } } as Awaited<ReturnType<typeof importProductionRunReadingsFromDocumentFn>>);
     await expect(seedReadings(randomUUID(), new Date("2026-09-08T05:00:00Z"), new SeedCounts())).rejects.toThrow("expected 96 inserted rows, got 0");
+  });
+
+  it("summarizes an unexpected failure without leaking values or SQL", () => {
+    let zodError: unknown;
+    try {
+      z.object({ NEXT_PUBLIC_APP_URL: z.string().url() }).parse({ NEXT_PUBLIC_APP_URL: "not-a-url" });
+    } catch (error) {
+      zodError = error;
+    }
+    const summary = describeSeedFailure(zodError);
+    expect(summary).toContain("NEXT_PUBLIC_APP_URL");
+    expect(summary).not.toContain("not-a-url");
+    const databaseError = Object.assign(new Error("duplicate key value violates constraint"), { name: "DatabaseError", code: "23505" });
+    expect(describeSeedFailure(databaseError)).toBe("DatabaseError. Check application diagnostics.");
+    expect(describeSeedFailure(new Error("Registry unreachable"))).toBe("Error: Registry unreachable");
   });
 
   it("stops on action failure with the step and error", async () => {
