@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import path from "path";
+import { BINARY_CONTENT_TYPE } from "./get-object";
 import { isSafeStorageKey } from "./keys";
 import type {
   StorageProvider,
@@ -13,8 +14,6 @@ import type {
   StoredObject,
 } from "./types";
 import { StorageError } from "./types";
-
-const BINARY_CONTENT_TYPE = "application/octet-stream";
 
 const DEFAULT_UPLOAD_TTL_SECONDS = 60 * 5;
 const DEFAULT_DOWNLOAD_TTL_SECONDS = 60 * 5;
