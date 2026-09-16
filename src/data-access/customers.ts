@@ -56,8 +56,21 @@ import {
   findCustomerWithRelations,
   type CustomerDetail,
 } from "./customer-detail";
+import {
+  createCustomerLocationInTransaction,
+  insertCustomer,
+  type CustomerInsertInput,
+  type CustomerLocationInsertInput,
+} from "./customer-create";
 
 export type { CustomerDetail } from "./customer-detail";
+export {
+  createCustomerWithLocations,
+  type CreateCustomerWithLocationsInput,
+  type CreatedCustomerWithLocations,
+  type CustomerInsertInput,
+  type CustomerLocationInsertInput,
+} from "./customer-create";
 
 // ============================================
 // Customer Read Operations
@@ -281,37 +294,14 @@ export async function getCustomerLocations(
 // ============================================
 
 /**
- * Create a new customer
+ * Create a new customer on its own. Customers created together with their
+ * locations go through `createCustomerWithLocations` instead.
  */
 export async function createCustomer(
   ctx: OrgContext,
-  data: {
-    code: string;
-    name: string;
-    cropType?: string | null;
-    address?: string | null;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-  }
+  data: CustomerInsertInput
 ): Promise<Customer> {
-  requireOrgScope(ctx);
-
-  const [customer] = await guardCustomerName(ctx, data.name, () =>
-    db
-      .insert(customers)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        cropType: data.cropType ?? null,
-        address: data.address ?? null,
-        contactEmail: data.contactEmail ?? null,
-        contactPhone: data.contactPhone ?? null,
-      })
-      .returning()
-  );
-
-  return customer;
+  return insertCustomer(ctx, db, data);
 }
 
 // ============================================
@@ -430,80 +420,18 @@ export async function deleteCustomer(
 // ============================================
 
 /**
- * Create a new customer location
+ * Create a new customer location on an existing customer.
  */
 export async function createCustomerLocation(
   ctx: OrgContext,
-  data: {
-    customerId: string;
-    name: string;
-    country?: string;
-    stateRegion?: string | null;
-    city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    defaultSoilTemperatureC?: number | null;
-    isDefault?: boolean;
-  }
+  data: CustomerLocationInsertInput & { customerId: string }
 ): Promise<CustomerLocation> {
   requireOrgScope(ctx);
 
-  // Verify customer exists
-  const [customer] = await db
-    .select({ id: customers.id })
-    .from(customers)
-    .where(and(eq(customers.id, data.customerId), eq(customers.organizationId, ctx.organizationId)));
-
-  if (!customer) {
-    throw new SafeError("Customer not found");
-  }
-
-  return db.transaction(async (tx) => {
-    // The customer's first location is always its default.
-    const [{ value: existingCount }] = await tx
-      .select({ value: count() })
-      .from(customerLocations)
-      .where(and(eq(customerLocations.customerId, data.customerId), eq(customerLocations.organizationId, ctx.organizationId)));
-    const makeDefault = data.isDefault === true || existingCount === 0;
-
-    // Clear the prior default first so the partial unique index never sees two.
-    if (makeDefault) {
-      await tx
-        .update(customerLocations)
-        .set({ isDefault: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(customerLocations.customerId, data.customerId),
-            eq(customerLocations.organizationId, ctx.organizationId),
-            eq(customerLocations.isDefault, true)
-          )
-        );
-    }
-
-    const [location] = await tx
-      .insert(customerLocations)
-      .values({
-        organizationId: ctx.organizationId,
-        customerId: data.customerId,
-        name: data.name,
-        country: data.country ?? 'UNKNOWN',
-        stateRegion: data.stateRegion ?? null,
-        city: data.city ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
-        address: data.address ?? null,
-        distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
-        defaultSoilTemperatureC: data.defaultSoilTemperatureC ?? null,
-        isDefault: makeDefault,
-      })
-      .returning();
-
-    return location;
-  });
+  const { customerId, ...location } = data;
+  return db.transaction((tx) =>
+    createCustomerLocationInTransaction(ctx, tx, customerId, location)
+  );
 }
 
 /**

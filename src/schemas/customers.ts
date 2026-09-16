@@ -174,6 +174,35 @@ export const createCustomerLocationSchema = z.object({
 });
 
 /**
+ * Locations captured on the customer create form, before the customer exists.
+ * Same fields as `createCustomerLocationSchema` minus the customer it belongs
+ * to, which the compound writer fills in from the row it just inserted.
+ */
+export const pendingCustomerLocationSchema =
+  createCustomerLocationSchema.omit({ customerId: true });
+
+/**
+ * One create form cannot reasonably capture more sites than this, so the cap
+ * bounds the payload and the transaction without constraining real operators.
+ */
+export const MAX_PENDING_CUSTOMER_LOCATIONS = 50;
+
+/**
+ * Schema for creating a customer together with its locations in one
+ * transaction (server action).
+ */
+export const createCustomerWithLocationsSchema = z.object({
+  customer: createCustomerSchema,
+  locations: z
+    .array(pendingCustomerLocationSchema)
+    .max(
+      MAX_PENDING_CUSTOMER_LOCATIONS,
+      `Add at most ${MAX_PENDING_CUSTOMER_LOCATIONS} locations at a time. Create the customer, then add the rest from its detail page.`,
+    )
+    .default([]),
+});
+
+/**
  * Schema for updating a customer location (server action)
  */
 export const updateCustomerLocationSchema = z.object({
@@ -237,5 +266,12 @@ export type CustomerLocationFormData = z.infer<typeof customerLocationFormSchema
 export type CreateCustomerData = z.infer<typeof createCustomerSchema>;
 export type UpdateCustomerData = z.infer<typeof updateCustomerSchema>;
 export type CreateCustomerLocationData = z.infer<typeof createCustomerLocationSchema>;
+export type PendingCustomerLocationData = z.infer<typeof pendingCustomerLocationSchema>;
+export type CreateCustomerWithLocationsInput = z.input<
+  typeof createCustomerWithLocationsSchema
+>;
+export type CreateCustomerWithLocationsData = z.infer<
+  typeof createCustomerWithLocationsSchema
+>;
 export type UpdateCustomerLocationData = z.infer<typeof updateCustomerLocationSchema>;
 export type CustomerFilterData = z.infer<typeof customerFilterSchema>;
