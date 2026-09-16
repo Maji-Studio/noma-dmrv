@@ -19,8 +19,13 @@ import { createHash } from 'node:crypto';
 import { requireOrgScope } from './utils';
 
 const IDEMPOTENCY_LOCK_SEED = 0;
-/** One namespace for every lane, because the stored key is org-unique. */
-const REQUEST_LOCK_NAMESPACE = 'movement-request';
+/**
+ * One namespace for every lane, because the stored key is org-unique. Keep the
+ * historical 'output-request' string: renaming it would send same-key retries
+ * on either side of a rolling deploy to different advisory locks, so they race
+ * into a unique violation instead of replaying the stored movement.
+ */
+const REQUEST_LOCK_NAMESPACE = 'output-request';
 
 /** Stable digest of a request payload, used to detect a reused key. */
 export function requestFingerprint(value: unknown): string {
