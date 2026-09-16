@@ -76,7 +76,7 @@ acquisition that times out, or a dropped idle connection always leaves a record.
 The idle-client `error` listener also stays registered either way, so a dropped
 idle connection can never become an unhandled event.
 
-`withDedicatedLockConnection()` (same file) deliberately opens its own `pg.Client` **outside** the shared pool: lock-backed certification work holds the advisory lock while doing heavyweight nested work through the shared pool, so it must not consume a pooled connection. It is a second, invisible connection source when counting `pg_stat_activity` — and "cleaning up" the duplicate connection logic will deadlock certification.
+`withDedicatedLockConnection()` (`src/db/index.ts`) deliberately opens its own `pg.Client` **outside** the shared pool: lock-backed certification work holds the advisory lock while doing heavyweight nested work through the shared pool, so it must not consume a pooled connection. It is a second, invisible connection source when counting `pg_stat_activity` — and "cleaning up" the duplicate connection logic will deadlock certification.
 The dedicated connection does not inherit the pooled lock timeout. Do not add a transaction or statement timeout that could release an active registry DELETE's locks while the remote operation still runs.
 
 ### Connection Pool Exhaustion / "too many clients already"

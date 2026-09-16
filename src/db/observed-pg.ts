@@ -5,7 +5,15 @@ import {
   type PoolClient,
   type PoolConfig,
 } from "pg";
-import type { Logger } from "@/lib/log";
+import { sanitizeErrorMessage, type Logger } from "@/lib/log";
+
+/** Non-PII identity of a driver fault: SQLSTATE/errno plus the scrubbed message. */
+function faultFields(error: unknown) {
+  return {
+    code: (error as { code?: string } | null)?.code,
+    reason: sanitizeErrorMessage(error),
+  };
+}
 
 // Durations are reported to one decimal place; sub-0.1 ms noise is not useful.
 const DURATION_PRECISION_FACTOR = 10;
@@ -57,19 +65,23 @@ export function instrumentClient(
   const originalConnect = client.connect.bind(client);
   client.connect = ((callback?: (error?: Error) => void) => {
     const startedAt = clock();
-    const finish = (success: boolean) => {
+    const finish = (success: boolean, error?: unknown) => {
       if (success && !enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
       };
       if (success) dbLog.info(fields, "database connection established");
-      else dbLog.warn(fields, "database connection establishment failed");
+      else
+        dbLog.warn(
+          { ...fields, ...faultFields(error) },
+          "database connection establishment failed",
+        );
     };
 
     if (callback) {
       return originalConnect((error?: Error) => {
-        finish(!error);
+        finish(!error, error);
         callback(error);
       });
     }
@@ -77,7 +89,7 @@ export function instrumentClient(
     return originalConnect().then(
       () => finish(true),
       (error: unknown) => {
-        finish(false);
+        finish(false, error);
         throw error;
       },
     );
@@ -158,7 +170,7 @@ export function instrumentPoolAcquisition(
   ) => {
     const startedAt = clock();
     const waitingBefore = pool.waitingCount;
-    const finish = (success: boolean) => {
+    const finish = (success: boolean, error?: unknown) => {
       if (success && !enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
@@ -169,12 +181,16 @@ export function instrumentPoolAcquisition(
         idleConnections: pool.idleCount,
       };
       if (success) dbLog.info(fields, "database connection acquired");
-      else dbLog.warn(fields, "database connection acquisition failed");
+      else
+        dbLog.warn(
+          { ...fields, ...faultFields(error) },
+          "database connection acquisition failed",
+        );
     };
 
     if (callback) {
       return originalConnect((error, client, done) => {
-        finish(!error);
+        finish(!error, error);
         callback(error, client, done);
       });
     }
@@ -185,7 +201,7 @@ export function instrumentPoolAcquisition(
         return client;
       },
       (error: unknown) => {
-        finish(false);
+        finish(false, error);
         throw error;
       },
     );
@@ -211,10 +227,10 @@ export function createObservedPool(
   instrumentPoolAcquisition(pool, options);
   // Always logged, and always listened for: an unhandled `error` event on an
   // idle client would otherwise take the process down.
-  pool.on("error", () => {
+  pool.on("error", (error: unknown) => {
     options.log
       .child(DB_POOL_LOG_BINDINGS)
-      .warn("idle database connection failed");
+      .warn(faultFields(error), "idle database connection failed");
   });
   return pool;
 }

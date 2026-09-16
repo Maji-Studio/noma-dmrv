@@ -124,7 +124,12 @@ describe("database client observability", () => {
     // a connection that cannot be established never is.
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(
-      { durationMs: 5, success: false },
+      {
+        durationMs: 5,
+        success: false,
+        code: undefined,
+        reason: "connection refused",
+      },
       "database connection establishment failed",
     );
   });
@@ -148,7 +153,12 @@ describe("database client observability", () => {
 
     expect(warn).toHaveBeenNthCalledWith(
       1,
-      { durationMs: 5, success: false },
+      {
+        durationMs: 5,
+        success: false,
+        code: undefined,
+        reason: "connection refused",
+      },
       "database connection establishment failed",
     );
     expect(warn).toHaveBeenNthCalledWith(

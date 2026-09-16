@@ -143,6 +143,9 @@ Read directly from `process.env`, **not** validated by `env.ts`:
 - `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
   literal string `"true"` permits a remote reset; the manually confirmed staging
   and production reset jobs load it from their matching 1Password item.
+- `VERCEL` and `VERCEL_REGION` — platform-injected, read by `src/db/index.ts`
+  only to register the pool with Fluid Compute lifecycle hooks and to tag pool
+  telemetry with the compute region. Absent locally; never set by hand.
 - `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
   `process.env.DISABLE_RATE_LIMIT !== "true"` read
   (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
