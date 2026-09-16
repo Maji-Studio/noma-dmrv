@@ -101,7 +101,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     const today = new Date().toISOString().split("T")[0];
     await page.fill('input[name="orderDate"]', today);
-    await page.selectOption('select[name="customerId"]', seededData.customer.id);
+    await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
 
     // Wait for customer locations to load (cascading from customer selection)
     await page.waitForSelector(
@@ -232,7 +232,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheet(page);
 
     await page.fill('input[name="orderDate"]', today);
-    await page.selectOption('select[name="customerId"]', seededData.customer.id);
+    await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
     await page.waitForSelector(
       'select[name="customerLocationId"]:not([disabled])',
       { timeout: 8000 }

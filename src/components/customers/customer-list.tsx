@@ -10,8 +10,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { UsersIcon, PlusIcon, MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Customer } from "@/db/schema";
 import {
-  useCreateCustomer,
-  useCreateCustomerLocation,
+  useCreateCustomerWithLocations,
   useDeleteCustomer,
   useCustomerLocations,
   useCustomers,
@@ -134,8 +133,7 @@ export function CustomerList() {
     sideSheet?.entity?.id ?? "",
     !!sideSheet?.entity,
   );
-  const createCustomer = useCreateCustomer();
-  const createLocation = useCreateCustomerLocation();
+  const createCustomer = useCreateCustomerWithLocations();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
   const toast = useToast();
@@ -184,19 +182,20 @@ export function CustomerList() {
   const handleCreate = async (data: CustomerFormData, pendingLocations?: PendingLocation[]) => {
     setCreateError(null);
     try {
-      const customer = await createCustomer.mutateAsync(data);
-      if (pendingLocations?.length) {
-        for (const loc of pendingLocations) {
-          await createLocation.mutateAsync({
-            customerId: customer.id,
-            ...loc,
-          });
-        }
-      }
+      // One transaction on the server: a location that fails takes the customer
+      // with it, so the operator never keeps a half-saved customer.
+      await createCustomer.mutateAsync({
+        customer: data,
+        locations: pendingLocations ?? [],
+      });
       setSideSheet(null);
       toast.success("Customer created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Customer was not created. Check the form.");
+      setCreateError(
+        error instanceof Error
+          ? error.message
+          : "The customer and its locations were not created. Check the form and save again.",
+      );
     }
   };
 
@@ -406,7 +405,7 @@ export function CustomerList() {
           customerId={sideSheetEntity && sideSheetMode === "edit" ? sideSheetEntity.id : undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
-          isSubmitting={createCustomer.isPending || createLocation.isPending || updateCustomer.isPending}
+          isSubmitting={createCustomer.isPending || updateCustomer.isPending}
           errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Customer"}
         />

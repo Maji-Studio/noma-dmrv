@@ -7,6 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { members, users } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import { cliOrgContextStore } from "./cli-org-context-store";
 import {
   getBetterAuthSession,
   mapBetterAuthUser,
@@ -164,6 +165,11 @@ export type OrgContextResolution =
  * it was denied. Platform Admins pass without a membership row (override).
  */
 export async function resolveOrgContext(): Promise<OrgContextResolution> {
+  // Read-only: the seam that writes this store lives in src/lib/cli.
+  const cliContext = cliOrgContextStore.getStore();
+  if (cliContext) {
+    return { ok: true, ctx: cliContext };
+  }
   const session = await getBetterAuthSession();
   const userId = session?.user?.id;
   if (!userId) {

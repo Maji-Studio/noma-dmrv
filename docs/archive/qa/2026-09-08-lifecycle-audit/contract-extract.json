@@ -1,0 +1,485 @@
+[
+  {
+    "path": "/biochar_applications/{id}",
+    "method": "delete",
+    "description": "Deletes a biochar application in the Isometric system",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_BiocharSpreadEvent_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "204": {
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/production_batches/{id}",
+    "method": "delete",
+    "description": "Deletes a production batch in the Isometric system",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_ProductionBatch_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "204": {
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/projects/{project_id}/storage_locations/{id}",
+    "method": "delete",
+    "description": "Deletes a storage location for a project",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "project_id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_Project_"
+        }
+      },
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_StorageLocation_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "204": {
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/projects/{project_id}/storage_locations/{id}",
+    "method": "patch",
+    "description": "Patches storage location in the Isometric system.",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "project_id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_Project_"
+        }
+      },
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_StorageLocation_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StorageLocation"
+            }
+          }
+        },
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/removals/{id}",
+    "method": "delete",
+    "description": "This endpoint deletes a removal - this is irreversible and the removal cannot be recovered.\n\nIt will return an error if the removal is not in DRAFT status.",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_GhgEntry_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "204": {
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/removals/{id}",
+    "method": "patch",
+    "description": "Updates a removal in the Isometric system. The removal will be recalculated, if it is are not in an immutable state.",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_GhgEntry_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Removal"
+            }
+          }
+        },
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/ghg_statements",
+    "method": "post",
+    "description": "Submits a series of removals for verification",
+    "parameters": [
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GhgStatement"
+            }
+          }
+        },
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/ghg_statements/{id}/submit",
+    "method": "post",
+    "description": null,
+    "parameters": [
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_GhgStatement_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GhgStatement"
+            }
+          }
+        },
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/sources/{id}",
+    "method": "delete",
+    "description": "Deletes a source in the Isometric system. This is irreversible and the source cannot be recovered.",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_Source_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "204": {
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  },
+  {
+    "path": "/sources/{id}",
+    "method": "patch",
+    "description": "Patches metadata associated with a source in the Isometric system.",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "id",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/IsometricIDPathParam_Source_"
+        }
+      },
+      {
+        "description": "A secret token identifying the client connecting to the API",
+        "in": "header",
+        "name": "x-client-secret",
+        "required": true,
+        "schema": {
+          "description": "A secret token identifying the client connecting to the API",
+          "examples": [
+            "Syou3EZiO5vuMEgNyBeA8cjEMYOnQDwP"
+          ],
+          "title": "Client secret",
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Source"
+            }
+          }
+        },
+        "description": "Successful Response"
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/HTTPValidationError"
+            }
+          }
+        },
+        "description": "Validation Error"
+      }
+    }
+  }
+]

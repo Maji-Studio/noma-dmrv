@@ -47,12 +47,13 @@ const NEGATIVE_STOCK_MESSAGE =
 const NEGATIVE_STOCK_DELETE_MESSAGE =
   "Feedstock was not deleted because this change would make the bin's stock " +
   "negative. Review its intake and withdrawals.";
-const STOCK_BLOCKS_MESSAGE =
+/** The refusal names the field the operator moved, not always Storage type. */
+const stockBlocksMessage = (changedField: string) =>
   "This bin still has stock in its current material lane. Its setup was not " +
-  "changed. Review its stock and movement history before changing Storage type.";
-const HISTORY_BLOCKS_MESSAGE =
-  "This bin has stock history in its current material lane. Its setup was not " +
-  "changed. Review its stock and movement history before changing Storage type.";
+  `changed. Review its stock and movement history before changing ${changedField}.`;
+const historyBlocksMessage = (changedField: string) =>
+  "This bin has stock history. Its setup was not changed. Review its stock " +
+  `and movement history before changing ${changedField}.`;
 
 const ORG_PREFIX = "e2e-bin-integrity-org-";
 
@@ -366,7 +367,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
       updateStorageLocation(f.ctx, f.binId, {
         feedstockTypeId: f.otherFeedstockTypeId,
       }),
-    ).rejects.toThrow(STOCK_BLOCKS_MESSAGE);
+    ).rejects.toThrow(stockBlocksMessage("Feedstock type"));
 
     const bin = await readBin(f);
     expect(bin.feedstockTypeId).not.toBe(f.otherFeedstockTypeId);
@@ -380,7 +381,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
 
     await expect(
       updateStorageLocation(f.ctx, f.binId, { type: "biochar_bin" }),
-    ).rejects.toThrow(STOCK_BLOCKS_MESSAGE);
+    ).rejects.toThrow(stockBlocksMessage("Storage type"));
 
     expect((await readBin(f)).type).toBe("feedstock_bin");
   });
@@ -439,7 +440,9 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
 
     // Refused on history, not stock: the identity change read the lane only
     // after the withdrawal committed, so it saw the emptied bin.
-    await expect(identityChange).rejects.toThrow(HISTORY_BLOCKS_MESSAGE);
+    await expect(identityChange).rejects.toThrow(
+      historyBlocksMessage("Feedstock type"),
+    );
     const bin = await readBin(f);
     expect(bin.feedstockTypeId).not.toBe(f.otherFeedstockTypeId);
     expect(await deriveFeedstockWetStockKg(f.ctx, db, f.binId)).toBe(0);

@@ -13,6 +13,7 @@ import {
 } from "@/data-access/code-generator";
 import {
   createCustomer,
+  createCustomerWithLocations,
   deleteCustomer,
   getCustomers as getCustomersData,
   getCustomerWithRelations as getCustomerWithRelationsData,
@@ -23,10 +24,12 @@ import {
   deleteCustomerLocation,
   type PaginatedCustomers,
   type CustomerDetail,
+  type CreatedCustomerWithLocations,
 } from "@/data-access/customers";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createCustomerSchema,
+  createCustomerWithLocationsSchema,
   deleteCustomerSchema,
   updateCustomerSchema,
   customerFilterSchema,
@@ -43,6 +46,7 @@ import {
   toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
+import { withAction } from "./with-action";
 
 /**
  * Failure shape for the write paths. Unlike the read helper below it keeps an
@@ -223,6 +227,66 @@ export async function createCustomerFn(
       ),
     };
   }
+}
+
+/**
+ * Create a customer together with the locations captured on its create form.
+ * One transaction: a location that fails rolls the customer back, so the form
+ * never reports a failure over a half-saved customer.
+ */
+export async function createCustomerWithLocationsFn(
+  data: z.infer<typeof createCustomerWithLocationsSchema>
+): Promise<ActionResult<CreatedCustomerWithLocations>> {
+  return withAction(
+    async (ctx) => {
+      const validated = createCustomerWithLocationsSchema.parse(data);
+
+      return withAutoCode(
+        ctx,
+        "CUS",
+        customers,
+        customers.code,
+        undefined,
+        (code) =>
+          createCustomerWithLocations(ctx, {
+            customer: {
+              code,
+              name: validated.customer.name,
+              cropType: validated.customer.cropType || null,
+              address: validated.customer.address || null,
+              contactEmail: validated.customer.contactEmail || null,
+              contactPhone: validated.customer.contactPhone || null,
+            },
+            locations: validated.locations.map((location) => ({
+              name: location.name,
+              country: location.country,
+              stateRegion: location.stateRegion || null,
+              city: location.city || null,
+              gpsLatitude: location.gpsLatitude,
+              gpsLongitude: location.gpsLongitude,
+              // An empty textarea submits "", which must land as NULL.
+              address: location.address || null,
+              distanceFromFacilityKm: location.distanceFromFacilityKm,
+              distanceSource: resolveDistanceSource(
+                location.distanceFromFacilityKm ?? null,
+                location.distanceSource,
+              ),
+              defaultSoilTemperatureC: location.defaultSoilTemperatureC,
+              isDefault: location.isDefault,
+            })),
+          }),
+        CODE_CONFLICT_MESSAGES.customer,
+      );
+    },
+    {
+      fallbackMessage:
+        "The customer and its locations were not created. Try again.",
+      log: {
+        message: "customer action failed",
+        context: { op: "customer:create-with-locations" },
+      },
+    },
+  );
 }
 
 // ============================================
