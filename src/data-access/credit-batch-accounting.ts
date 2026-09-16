@@ -729,11 +729,6 @@ export async function loadCreditBatchRollups(
 }
 
 /**
- * Deep, set-based credit-batch accounting read. This is the only full preview
- * assembly: callers ask for complete accounting records and never preload or
- * thread facts back into another public query.
- */
-/**
  * Load one batch's accounting roll-up, answering `undefined` rather than
  * throwing when the read fails. Used only after a commit, where a failed read
  * must not be reported as a failed write (issue #769).
@@ -758,6 +753,11 @@ export async function loadCreditBatchAccountingSafely(
   }
 }
 
+/**
+ * Deep, set-based credit-batch accounting read. This is the only full preview
+ * assembly: callers ask for complete accounting records and never preload or
+ * thread facts back into another public query.
+ */
 export async function loadCreditBatchAccounting(
   ctx: OrgContext,
   batchIds: string[],
