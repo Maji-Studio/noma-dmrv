@@ -1,5 +1,5 @@
 
- RUN  v4.1.0 /Users/kenji/.codex/worktrees/d483/noma-dmrv
+ RUN  v4.1.0 <audited checkout>
 
 stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts
 [dotenv@17.2.4] injecting env (0) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
