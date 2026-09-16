@@ -59,6 +59,9 @@ describe("stale-version transport", () => {
   });
 
   it("carries the conflict through to the form helper", () => {
+    // Both assertions live in the catch, so the count is what proves the call
+    // threw at all rather than passing the test by doing nothing.
+    expect.assertions(2);
     try {
       throwActionError({ error: STALE_VERSION_MESSAGE, conflict: staleConflict });
     } catch (error) {
