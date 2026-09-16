@@ -102,7 +102,7 @@ The dedicated connection does not inherit the pooled lock timeout. Do not add a 
 
 - Local Postgres runs in Docker: `pnpm docker:up` then `pnpm db:wait`. Do this before suspecting the URL.
 - **`sslmode` in `DATABASE_URL` is ignored.** `getPgPoolConfig` (`src/lib/pg-pool-config.ts`) strips `sslmode` from the URL before building the pool, because pg 8.18 derives SSL behaviour from the connection string and would override the explicit `ssl` option. Adding `?sslmode=require` has **no effect**.
-- SSL is decided by hostname: `localhost` / `127.0.0.1` / `::1` → `ssl: false`; anything else → `ssl: true`, unless `PG_ALLOW_UNVERIFIED_SSL=true` (→ `rejectUnauthorized: false`).
+- SSL is decided by hostname: `localhost` / `127.0.0.1` / `::1` → `ssl: false`; anything else → `ssl: true`. A provider with a private CA (DigitalOcean managed Postgres reports `self-signed certificate in certificate chain`) needs `DATABASE_CA_CERT` set to its CA PEM, which keeps verification on. `PG_ALLOW_UNVERIFIED_SSL=true` (→ `rejectUnauthorized: false`) is the last resort. `drizzle-kit migrate` uses `ssl: "allow"` outside production, so a green migrate job does not prove the pg pool can connect.
 - Then check firewall/security groups and credentials.
 
 ### DATABASE_URL Not Found
