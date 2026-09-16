@@ -140,9 +140,9 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   and deployed builds leave it unset or false.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
-- `ALLOW_DEV_BOOTSTRAP` — the literal `"1"` and two separate meanings, both
-  CLI-only. In `src/lib/cli/ensure-admin-core.ts` it permits the destructive
-  development bootstrap against a non-local database. In
+- `ALLOW_DEV_BOOTSTRAP` carries the literal `"1"` and has two separate
+  meanings, both CLI-only. In `src/lib/cli/ensure-admin-core.ts` it permits the
+  destructive development bootstrap against a non-local database. In
   `src/lib/cli/org-context.ts` it permits the CLI org-context seam (the seed
   calling real server actions without a session) to run under
   `NODE_ENV=production`. Both refuse without it; the shared literals live in
