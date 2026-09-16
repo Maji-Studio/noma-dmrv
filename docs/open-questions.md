@@ -53,8 +53,8 @@ code today; breaking one compiles cleanly and fails silently.
   effective pool size really is 1: `resolveAppPoolConfig`
   (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX` and
   `DB_POOL_MAX` is unset in every environment. The Source mirror hit this
-  through its audit writes and is fixed (`storage/sources-sync-events-tx` in
-  [`open-questions-isometric.md`](./open-questions-isometric.md)); where an
+  through its audit writes and is fixed (2026-09-16 entry in
+  [`isometric/changes.md`](./isometric/changes.md)); where an
   executor cannot be threaded through, stage the work and flush it after the
   transaction settles (`src/fn/certification/sync-event-stage.ts`). Applies to
   every tx-scoped read, not just this helper.

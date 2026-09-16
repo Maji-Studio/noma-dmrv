@@ -540,7 +540,7 @@ threshold for the same PR; revisit next time the area is touched.
 ### Phase 3.5 Sources panel test-pass follow-ups (opened 2026-05-27)
 
 Surfaced while exercising the Sources panel against the sandbox (Cases A–H).
-A–E and the precondition guards (G/H) passed; the three below were band-aided or
+A–E and the precondition guards (G/H) passed; the two below were band-aided or
 are clean deferrals.
 
 - **`storage/sources-storage-loopback` — replace the HTTP loopback in
@@ -554,20 +554,6 @@ are clean deferrals.
   Browser→storage signed URLs stay for genuine browser use. Removes one HTTP hop
   per mirror, shrinks the loopback-host allowlist surface, and kills the dev-only
   `STORAGE_SIGNING_SECRET` dependency on this path.
-
-- **`storage/sources-sync-events-tx` — `certifier_sync_events` writes are out of
-  the mirror business transaction. ✅ RESOLVED (issue #772).**
-  `mirrorDocumentToSourceForUser` (`src/fn/certification/sources.ts`) now wraps
-  its transaction in `withStagedSyncEvents`
-  (`src/fn/certification/sync-event-stage.ts`): every audit payload, including
-  the ones `withSourceSyncEventOnFailure` produces on each Isometric failure
-  path, is staged in a closure and flushed once the transaction settles —
-  success rows after commit, failure diagnostics after rollback, with the
-  original error rethrown untouched. Nothing asks the root pooled `db` for a
-  second connection while the transaction holds one, so the audit trail
-  survives at `DEFAULT_DB_POOL_MAX = 1`. Pinned by
-  `tests/certifier-source-sync-events-tx.test.ts`, which runs the mirror against
-  a real `max: 1` pool.
 
 - **`ux/sources-panel-row-layout` — Mirror clips on narrow viewports.** The
   Mirror action in `src/components/certification/sources-panel.tsx` can clip
