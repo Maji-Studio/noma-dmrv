@@ -56,15 +56,15 @@ export type {
   StorageLocationLastActivity,
 };
 
+/** Entity key on a storage bin's expected-version conflict. */
+const STORAGE_LOCATION_CONFLICT_ENTITY = "storageLocation";
+
 /**
  * Non-null columns the list can sort by, ordered with Drizzle's `asc`/`desc`.
  * The two nullable keys are absent on purpose: `lastActivityAt` is derived, and
  * `capacityKg` needs an explicit NULLS LAST. Both are handled in
  * `getStorageLocations`.
  */
-/** Entity key on a storage bin's expected-version conflict. */
-const STORAGE_LOCATION_CONFLICT_ENTITY = "storageLocation";
-
 const SORT_COLUMNS: Partial<Record<StorageLocationSortKey, AnyPgColumn>> = {
   code: storageLocations.code,
   name: storageLocations.name,

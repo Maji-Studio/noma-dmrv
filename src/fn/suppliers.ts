@@ -45,7 +45,7 @@ import {
 } from "./action-errors";
 
 /**
- * Failure shape for the write paths. Unlike the read helper above it keeps an
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
  * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
  * refusal from an ordinary save failure and hold on to the operator's draft.
  */
