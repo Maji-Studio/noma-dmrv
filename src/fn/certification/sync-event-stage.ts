@@ -23,15 +23,9 @@ import { appendSyncEventBestEffort } from "./shared";
  */
 export interface SyncEventStage {
   /** Write this event after the surrounding transaction commits. */
-  onCommit(
-    input: AppendSyncEventInput,
-    logContext?: Record<string, unknown>,
-  ): void;
+  onCommit(input: AppendSyncEventInput): void;
   /** Write this diagnostic after the surrounding transaction rolls back. */
-  onRollback(
-    input: AppendSyncEventInput,
-    logContext?: Record<string, unknown>,
-  ): void;
+  onRollback(input: AppendSyncEventInput): void;
 }
 
 type FlushPhase = "commit" | "rollback";
@@ -39,7 +33,6 @@ type FlushPhase = "commit" | "rollback";
 interface StagedSyncEvent {
   phase: FlushPhase;
   input: AppendSyncEventInput;
-  logContext?: Record<string, unknown>;
 }
 
 /**
@@ -56,11 +49,11 @@ export async function withStagedSyncEvents<T>(
 ): Promise<T> {
   const staged: StagedSyncEvent[] = [];
   const stage: SyncEventStage = {
-    onCommit(input, logContext) {
-      staged.push({ phase: "commit", input, logContext });
+    onCommit(input) {
+      staged.push({ phase: "commit", input });
     },
-    onRollback(input, logContext) {
-      staged.push({ phase: "rollback", input, logContext });
+    onRollback(input) {
+      staged.push({ phase: "rollback", input });
     },
   };
 
@@ -92,7 +85,7 @@ async function flushStagedSyncEvents(
     // covers everything else on the path (logger, serialization) so a broken
     // audit trail can never surface as a failed mirror.
     try {
-      await appendSyncEventBestEffort(orgCtx, event.input, event.logContext);
+      await appendSyncEventBestEffort(orgCtx, event.input);
     } catch {
       // Intentionally ignored: the audit trail is never load-bearing here.
     }
