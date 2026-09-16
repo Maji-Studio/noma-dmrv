@@ -60,6 +60,44 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 - The module-scope pool is registered with Vercel's [`attachDatabasePool`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#database-connection-pool-management), which keeps a Fluid Compute instance alive until `pg` releases its idle clients. The idle default is 5 seconds. `DB_POOL_MAX` defaults to 1 until the database connection budget is known, and a Vercel deployment fails closed above `MAX_VERCEL_DB_POOL_MAX` because per-instance pools multiply.
 - Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
 
+### Mafinga demo seed
+
+`pnpm db:seed` creates the September 2026 Mafinga demo through the same server
+actions and Zod schemas as the forms, so every seeded row is one the UI would
+have accepted. Run `pnpm db:ensure-admin` first if the bootstrap admin or
+organization is missing. The entry is `src/db/seed-data.ts`; the steps live in
+`src/db/seed/`. An existing Mafinga facility makes a repeat run exit without
+adding rows. A failed step aborts with its action error and leaves earlier steps
+in place, so a partial run also counts as "existing"; reset the development
+database before retrying.
+
+The demo covers infrastructure, suppliers, a customer, feedstock deliveries,
+completed production runs with imported CSV readings, a sampled credit batch
+with lab samples, BCF products, an order, and a delivery. It creates no
+application and no registry submission.
+
+Registry setup is driven by environment variables:
+
+- `ISOMETRIC_CLIENT_SECRET` + `ISOMETRIC_ACCESS_TOKEN`: stored encrypted with
+  `CREDENTIALS_ENCRYPTION_KEY` as the organization's credentials, then the
+  forestry feedstock type is imported from the registry catalogue. Absent, the
+  seed skips registry setup and creates the feedstock type locally.
+- `ISOMETRIC_DEMO_PROJECT_ID` (optional): pins the project when the credentials
+  can see more than one. With exactly one visible project the seed uses it.
+- `ISOMETRIC_DEMO_FACILITY_ID` (optional): the `fcl_` ID from Certify that the
+  mapping form requires. Absent, credentials are stored but the facility mapping
+  is skipped; finish it in Certification Settings.
+
+The seed only reads from the registry (projects, catalogue, templates). It never
+creates registry business records.
+
+The CLI uses `runWithOrgContext` (`src/lib/auth/server.ts`) to call real actions
+without a request session. The seam is forbidden in request code and rejects
+production use unless `ALLOW_DEV_BOOTSTRAP=1`. The manually confirmed staging
+reset-and-seed job sets that flag, loads the registry trio and the storage
+settings from the staging 1Password item, and passes the two optional IDs from
+GitHub repository variables. The PR migration gate seeds without credentials.
+
 ### Pool sizing and compute placement
 
 `DB_POOL_MAX` is a per-environment deployment decision, never a default to
