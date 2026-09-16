@@ -27,6 +27,7 @@ import { spawnSync } from "child_process";
 import { readFileSync, writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+import { pathToFileURL } from "url";
 import {
   REQUIRED_DEPLOYED_VARS,
   fetchItemFieldNames,
@@ -257,20 +258,7 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
       process.exit(1);
     }
 
-    const envVars = new Map<string, string>();
-    const lines = result.stdout.split("\n");
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-
-      const match = trimmed.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-      if (match) {
-        const [, key, value] = match;
-        const cleanValue = value.replace(/^["']|["']$/g, "");
-        envVars.set(key, cleanValue);
-      }
-    }
+    const envVars = parseInjectedEnv(result.stdout);
 
     console.log(`Fetched ${envVars.size} variables from 1Password`);
     return envVars;
@@ -283,6 +271,45 @@ function fetchFromOnePassword(opEnv: string): Map<string, string> {
     console.error(`Failed to process template: ${error}`);
     process.exit(1);
   }
+}
+
+/**
+ * Parse `op inject` output into key/value pairs. A double-quoted value may span
+ * several lines (a PEM certificate, for one); it runs until the line that ends
+ * with the closing quote. Single-line values keep their previous handling.
+ */
+export function parseInjectedEnv(output: string): Map<string, string> {
+  const envVars = new Map<string, string>();
+  const lines = output.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const match = trimmed.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+
+    const opensQuote = rawValue.startsWith('"');
+    const closesQuote = rawValue.length > 1 && rawValue.endsWith('"');
+    if (opensQuote && !closesQuote) {
+      const parts = [rawValue.slice(1)];
+      while (++i < lines.length) {
+        const next = lines[i].trimEnd();
+        if (next.endsWith('"')) {
+          parts.push(next.slice(0, -1));
+          break;
+        }
+        parts.push(next);
+      }
+      envVars.set(key, parts.join("\n"));
+      continue;
+    }
+
+    envVars.set(key, rawValue.replace(/^["']|["']$/g, ""));
+  }
+
+  return envVars;
 }
 
 /**
@@ -576,7 +603,14 @@ async function main() {
   );
 }
 
-main().catch((error) => {
-  console.error("\nUnexpected error:", error);
-  process.exit(1);
-});
+// Run only when executed directly, so tests can import the parser.
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedDirectly) {
+  main().catch((error) => {
+    console.error("\nUnexpected error:", error);
+    process.exit(1);
+  });
+}
