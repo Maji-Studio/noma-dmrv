@@ -2,7 +2,8 @@ import { StorageError } from "./types";
 import type { StoredObject } from "./types";
 
 export const STORAGE_GET_OBJECT_TIMEOUT_MS = 30_000;
-const BINARY_CONTENT_TYPE = "application/octet-stream";
+/** Fallback when a stored object carries no content type of its own. */
+export const BINARY_CONTENT_TYPE = "application/octet-stream";
 
 export async function fetchStoredObject(url: string): Promise<StoredObject> {
   const controller = new AbortController();

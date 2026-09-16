@@ -7,29 +7,23 @@
  * are optional hints (see docs/database.md). No registry submissions.
  */
 import { config } from "dotenv";
-import { sanitizeErrorMessage } from "../lib/log/sanitize";
-import { SeedError } from "./seed/actions";
+import { describeSeedFailure } from "@/lib/cli/seed/actions";
 
 config({ path: ".env.local" });
 (process.env as Record<string, string | undefined>).NODE_ENV ??= "development";
 
 async function main() {
   // Import all application/env-dependent modules only after dotenv has run.
-  const { seedMafinga } = await import("./seed/run");
+  const { seedMafinga } = await import("@/lib/cli/seed/run");
   await seedMafinga();
 }
 
 main().then(
   () => process.exit(0),
   (error: unknown) => {
-    // Action failures contain the named step and the action's safe error.
-    // Anything else (env validation, storage, registry transport) goes
-    // through the log sanitizer: message only, no stack, params or emails.
-    console.error(
-      error instanceof SeedError
-        ? error.message
-        : `Mafinga seed failed before completing: ${sanitizeErrorMessage(error)}`,
-    );
+    // Action failures contain the named step and the action's safe error;
+    // never print raw database errors, SQL, environment values, or stacks.
+    console.error(`Mafinga seed failed. ${describeSeedFailure(error)}`);
     process.exit(1);
   },
 );
