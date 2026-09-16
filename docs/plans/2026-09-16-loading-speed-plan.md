@@ -1,7 +1,7 @@
 # Loading speed plan (2026-09-16)
 
 - **Owner**: Kenji Nguyen
-- **Status**: proposed
+- **Status**: in progress. Phase 0 and Phase 1 step 1 done 2026-09-16; database moving to DigitalOcean before Phase 2
 - **Last reviewed**: 2026-09-16
 
 Staging pages sit on a skeleton for 11 s warm and 20 s cold. The measured cause is
@@ -53,6 +53,10 @@ Use this before and after every step. Single samples do not rank changes.
 
 ## Phase 0: finish the open PRs
 
+Done 2026-09-16: #762, #761, #763 merged in that order after two review-suite
+rounds each. The #763 read cores live in `src/lib/read-models/`, not `fn/`.
+Follow-up: issue #765 (customer side sheet loading state).
+
 Merge order stays #762, then #761, then #763. All six merge permutations produced the
 same tree, so the order is operational, not textual.
 
@@ -99,16 +103,23 @@ connection-exhaustion or lock-timeout spike in telemetry.
 
 These are Vercel and Neon settings. Record the before and after measurement.
 
-1. **Move the Vercel function region to fra1.** Confirm with `x-vercel-id` reading
+1. **Move the Vercel function region to fra1.** Done in #789 via `vercel.json`;
+   staging now answers with `x-vercel-id: fra1::…`. Confirm with `x-vercel-id` reading
    `fra1::fra1`. Expected: every round trip drops from about 100 ms to single digits,
    the document time falls below 400 ms, and the overview action falls below 1 s.
-2. **Neon scale-to-zero: suspend it only for the measurement window.** Turn the
+2. **Neon scale-to-zero: void.** The Neon project is on the Free plan, where the
+   five-minute suspend cannot be changed, and the database is moving to
+   DigitalOcean Managed Postgres before Phase 2. Place the cluster in Frankfurt,
+   and point `DATABASE_URL` at the direct port or a session-mode pool, never a
+   transaction-mode PgBouncer pool (session advisory locks). Original text kept
+   for the record: suspend it only for the measurement window. Turn the
    suspend timeout off (or set the minimum compute) while Phases 1 through 3 are being
    measured, so cold-start noise does not mask the code changes. Restore the
    five-minute suspend once Phase 3 is measured. It is not a permanent fix and must
    not become one; note the restore date in `docs/open-questions.md` if it slips.
-3. Confirm `DATABASE_URL` is the direct Neon host, not `-pooler`, while
-   session-scoped advisory locks remain in use (PR #762 documents why).
+3. Confirm `DATABASE_URL` has session semantics (direct host, or session-mode
+   pool) while session-scoped advisory locks remain in use (PR #762 documents
+   why). Re-check after the DigitalOcean cutover.
 
 ## Phase 2: per-request auth cost (one PR)
 
