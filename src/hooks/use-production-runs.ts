@@ -37,6 +37,7 @@ import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { invalidateOnboardingProgress } from "@/hooks/use-onboarding";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
+import { isStaleVersionFailure, throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
@@ -51,10 +52,12 @@ function throwProductionRunActionError(result: {
   error: string;
   conflict?: { entity: string; id: string; code: string };
 }): never {
-  if (result.conflict) {
+  // A stale-version refusal is not an overlap: it belongs in the form's error
+  // banner, not on the start-time field, so it keeps its own error type.
+  if (result.conflict && !isStaleVersionFailure(result)) {
     throw new ProductionRunConflictError(result.error, result.conflict);
   }
-  throw new Error(result.error);
+  throwActionError(result);
 }
 
 // ============================================

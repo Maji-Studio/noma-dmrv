@@ -41,10 +41,28 @@ import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
 import { withAction } from "./with-action";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function customerActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "customer action failed", context: { op } },
+  });
+}
 
 function customerActionError(
   error: unknown,
@@ -287,6 +305,7 @@ export async function updateCustomerFn(
     const validated = updateCustomerSchema.parse(data);
 
     const customer = await updateCustomer(ctx, validated.customerId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       code: validated.code,
       name: validated.name,
       cropType: validated.cropType,
@@ -297,20 +316,7 @@ export async function updateCustomerFn(
 
     return { success: true, data: customer };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to update customer",
-        "customer:update",
-      ),
-    };
+    return customerActionFailure(error, "Failed to update customer", "customer:update");
   }
 }
 
@@ -414,6 +420,7 @@ export async function updateCustomerLocationFn(
     const validated = updateCustomerLocationSchema.parse(data);
 
     const location = await updateCustomerLocation(ctx, validated.locationId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       name: validated.name,
       country: validated.country,
       // `undefined` leaves the column untouched (partial update); "" clears it.
@@ -437,20 +444,7 @@ export async function updateCustomerLocationFn(
 
     return { success: true, data: location };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to update customer location",
-        "customer-location:update",
-      ),
-    };
+    return customerActionFailure(error, "Failed to update customer location", "customer-location:update");
   }
 }
 

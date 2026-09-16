@@ -9,6 +9,7 @@ import {
   emptyToNull,
   MASS_INPUT_MAX_KG,
   massKgSchema,
+  expectedUpdatedAtSchema,
   optionalDateOnly,
   optionalStoredPercent,
   PG_INTEGER_MAX,
@@ -495,7 +496,7 @@ export const updateProductionRunSchema = z.object({
   facilityId: z.string().uuid().optional(),
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
-  expectedUpdatedAt: z.coerce.date().optional(),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
   startTime: z.union([
     z.date(),

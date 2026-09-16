@@ -39,12 +39,15 @@ import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertExpectedVersion } from "./expected-version";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import { assertFeedstockBinLanesNotNegative } from "./feedstock-bin-stock-integrity";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
+/** Entity key on a feedstock's expected-version conflict. */
+const FEEDSTOCK_CONFLICT_ENTITY = "feedstock";
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
   "Enter a justification when allocated wet mass exceeds the declared delivery mass";
 const DRY_MASS_DISAGREEMENT_MESSAGE =
@@ -200,6 +203,8 @@ export interface UpdateFeedstockInput {
   transportDistanceKm?: number | null;
   transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
   transportTripType?: FeedstockTransportOverride["tripType"];
+  /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
+  expectedUpdatedAt?: Date;
 }
 
 export interface CreateFeedstockResult {
@@ -570,6 +575,7 @@ export async function updateFeedstock(
     transportDistanceKm,
     transportDistanceSource,
     transportTripType,
+    expectedUpdatedAt,
     ...feedstockData
   } = data;
   if (feedstockData.supplierId) await assertSameOrg(ctx, suppliers, feedstockData.supplierId);
@@ -604,6 +610,12 @@ export async function updateFeedstock(
     if (!locked) {
       throw new SafeError("Feedstock not found");
     }
+    assertExpectedVersion({
+      entity: FEEDSTOCK_CONFLICT_ENTITY,
+      id: feedstockId,
+      expectedUpdatedAt,
+      actualUpdatedAt: locked.updatedAt,
+    });
 
     await assertCanMutateCertifiedLineage(
       ctx,

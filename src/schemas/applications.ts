@@ -11,6 +11,7 @@ import {
   MASS_MIN_KG_MESSAGE,
   MASS_MIN_TONNES_MESSAGE,
   MASS_TONNES_INPUT_STEP,
+  expectedUpdatedAtSchema,
   requiredNumber,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
@@ -213,6 +214,7 @@ export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
  */
 export const updateApplicationSchema = z.object({
   applicationId: z.string().uuid("Choose a valid application."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)

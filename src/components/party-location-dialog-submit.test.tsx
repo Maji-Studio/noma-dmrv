@@ -27,6 +27,7 @@ const SUPPLIER_LOCATION_ID = "11111111-2222-4333-8444-555555555555";
 const GPS_LATITUDE = -6.8;
 const GPS_LONGITUDE = 39.28;
 const DISTANCE_KM = 12.5;
+const CUSTOMER_LOCATION_UPDATED_AT = new Date("2026-01-01T00:00:00.000Z");
 
 type SubmitHandler = (data: never) => Promise<void> | void;
 
@@ -140,6 +141,7 @@ const customerLocation: EditableCustomerLocation = {
   distanceSource: "manual",
   defaultSoilTemperatureC: 25,
   isDefault: true,
+  updatedAt: CUSTOMER_LOCATION_UPDATED_AT,
 };
 
 const supplierLocation: SupplierLocation = {
@@ -192,6 +194,7 @@ describe("CustomerLocationDialog submission", () => {
     expect(harness.customerUpdate).toHaveBeenCalledTimes(1);
     expect(harness.customerUpdate).toHaveBeenCalledWith({
       locationId: CUSTOMER_LOCATION_ID,
+      expectedUpdatedAt: CUSTOMER_LOCATION_UPDATED_AT,
       name: "Updated field",
       country: "Tanzania",
       stateRegion: null,
@@ -254,6 +257,7 @@ describe("SupplierLocationDialog submission", () => {
     expect(harness.supplierUpdate).toHaveBeenCalledTimes(1);
     expect(harness.supplierUpdate).toHaveBeenCalledWith({
       locationId: SUPPLIER_LOCATION_ID,
+      expectedUpdatedAt: supplierLocation.updatedAt,
       ...supplierFormData,
     });
     expect(harness.supplierUpdate.mock.calls[0]?.[0]).toMatchObject({

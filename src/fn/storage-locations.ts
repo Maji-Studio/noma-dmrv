@@ -32,10 +32,28 @@ import {
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
 import { withAction } from "./with-action";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function storageLocationActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "storage bin action failed", context: { op } },
+  });
+}
 
 function storageLocationActionError(
   error: unknown,
@@ -165,6 +183,7 @@ export async function updateStorageLocationFn(
       ctx,
       validated.storageLocationId,
       {
+        expectedUpdatedAt: validated.expectedUpdatedAt,
         code: validated.code,
         name: validated.name,
         type: validated.type,
@@ -180,20 +199,7 @@ export async function updateStorageLocationFn(
 
     return { success: true, data: storageLocation };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to update storage bin",
-        "storage-location:update",
-      ),
-    };
+    return storageLocationActionFailure(error, "Failed to update storage bin", "storage-location:update");
   }
 }
 

@@ -4,7 +4,11 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, positiveMassKgSchema } from "./helpers";
+import {
+  emptyToNull,
+  expectedUpdatedAtSchema,
+  positiveMassKgSchema,
+} from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -142,6 +146,7 @@ export const createStorageLocationSchema = storageLocationFormSchema;
  */
 export const updateStorageLocationSchema = z.object({
   storageLocationId: z.string().uuid("Choose a valid storage bin."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)

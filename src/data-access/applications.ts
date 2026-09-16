@@ -54,6 +54,7 @@ import { SafeError } from "@/lib/errors";
 import { parseGisBoundary } from "@/schemas/gis-boundary";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertExpectedVersion } from "./expected-version";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { retireDocumentsForEntities } from "./documents";
@@ -133,6 +134,9 @@ type CreateApplicationInput = Omit<
 };
 
 type UpdateApplicationInput = Omit<UpdateApplicationData, "applicationId">;
+
+/** Entity key on an application's expected-version conflict. */
+const APPLICATION_CONFLICT_ENTITY = "application";
 
 function optionalText(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? "";
@@ -683,6 +687,12 @@ export async function updateApplication(
     if (!existingApplication) {
       throw new SafeError("Application not found");
     }
+    assertExpectedVersion({
+      entity: APPLICATION_CONFLICT_ENTITY,
+      id,
+      expectedUpdatedAt: data.expectedUpdatedAt,
+      actualUpdatedAt: existingApplication.updatedAt,
+    });
     await tx.select({ id: deliveries.id }).from(deliveries)
       .where(and(eq(deliveries.organizationId, ctx.organizationId), inArray(deliveries.id, [...new Set([existingApplication.deliveryId, data.deliveryId ?? existingApplication.deliveryId])].sort())))
       .orderBy(deliveries.id).for("update");

@@ -25,6 +25,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { FeedstockForm } from "./feedstock-form";
 import {
@@ -327,6 +328,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     try {
       await updateFeedstock.mutateAsync({
         feedstockId: editing.id,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: editing.updatedAt,
         facilityId: data.facilityId,
         deliveryDate: data.deliveryDate,
         supplierId: data.supplierId,
@@ -352,7 +356,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setDeepLinkFocus(null);
       toast.success("Feedstock updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Feedstock was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setUpdateError(toSaveErrorMessage(error, "Feedstock was not saved. Try again."));
     }
   };
 
@@ -438,13 +444,43 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     toast,
   ]);
 
-  const deepLinkedSideSheet =
-    focusedFeedstockId && focusedFeedstock.data
-      ? ({
-          entity: focusedFeedstock.data,
-          mode: deepLinkMode === "edit" ? "edit" : "view",
-        } as const)
-      : null;
+  // A deep-linked edit sheet (?feedstock=...&mode=edit) has to save against the
+  // version it opened on, exactly like the click-opened path, so the first
+  // loaded entity is frozen into state here (#768). Reading the live query
+  // instead would let an evidence upload that invalidates it hand a stale draft
+  // a fresh version. This is a render-phase state adjustment, not an effect:
+  // the snapshot is derived from the id the sheet is pinned to.
+  const [deepLinkEditEntity, setDeepLinkEditEntity] = useState<{
+    id: string;
+    entity: FeedstockWithRelations;
+  } | null>(null);
+  const wantsDeepLinkEdit =
+    !sideSheet && deepLinkMode === "edit" && !!focusedFeedstockId;
+  if (!wantsDeepLinkEdit) {
+    // Dropped as soon as the sheet closes or switches away, so reopening the
+    // same record deep-links onto a freshly read version.
+    if (deepLinkEditEntity) setDeepLinkEditEntity(null);
+  } else if (
+    focusedFeedstockId &&
+    focusedFeedstock.data &&
+    deepLinkEditEntity?.id !== focusedFeedstockId
+  ) {
+    setDeepLinkEditEntity({
+      id: focusedFeedstockId,
+      entity: focusedFeedstock.data,
+    });
+  }
+  const frozenDeepLinkEntity =
+    deepLinkEditEntity?.id === focusedFeedstockId ? deepLinkEditEntity.entity : null;
+  const deepLinkedSideSheet = !focusedFeedstockId
+    ? null
+    : wantsDeepLinkEdit
+      ? frozenDeepLinkEntity
+        ? ({ entity: frozenDeepLinkEntity, mode: "edit" } as const)
+        : null
+      : focusedFeedstock.data
+        ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
+        : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
   const activeFocusTarget = sideSheet
     ? null

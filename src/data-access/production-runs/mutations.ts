@@ -32,6 +32,7 @@ import {
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
+import { assertExpectedVersion } from "../expected-version";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
@@ -69,6 +70,8 @@ import { assertProductionRunOutputBasisChange, getProductionRunDependentProduct 
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 
+/** Entity key on a production run's expected-version conflict. */
+const PRODUCTION_RUN_CONFLICT_ENTITY = "productionRun";
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
 const PREFLIGHT_OUTCOME_VIOLATIONS = [
@@ -587,14 +590,12 @@ export async function updateProductionRun(
     }
     const lockedFeedstockStorageLocationIds =
       await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
-    if (
-      data.expectedUpdatedAt &&
-      data.expectedUpdatedAt.getTime() !== locked.updatedAt.getTime()
-    ) {
-      throw new SafeError(
-        "This production run changed since you opened it. Reload it before saving.",
-      );
-    }
+    assertExpectedVersion({
+      entity: PRODUCTION_RUN_CONFLICT_ENTITY,
+      id: productionRunId,
+      expectedUpdatedAt: data.expectedUpdatedAt,
+      actualUpdatedAt: locked.updatedAt,
+    });
     assertProductionRunStockSnapshot(
       {
         feedstockStorageLocationIds: existingFeedstockStorageLocationIds,

@@ -25,6 +25,7 @@ import {
 } from "@/hooks/use-facilities";
 import { formatMass } from "@/lib/format-utils";
 import { formatCount } from "@/lib/copy-utils";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -157,11 +158,19 @@ export function FacilityList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateFacility.mutateAsync({ facilityId: sideSheet.entity.id, ...data });
+      await updateFacility.mutateAsync({
+        facilityId: sideSheet.entity.id,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        ...data,
+      });
       setSideSheet(null);
       toast.success("Facility updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Facility was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setUpdateError(toSaveErrorMessage(error, "Facility was not saved. Try again."));
     }
   };
 

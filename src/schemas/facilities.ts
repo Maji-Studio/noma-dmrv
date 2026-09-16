@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  expectedUpdatedAtSchema,
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
@@ -174,6 +175,7 @@ export const createFacilitySchema = facilityFormSchema;
  */
 export const updateFacilitySchema = z.object({
   facilityId: z.string().uuid("Choose a valid facility."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)
