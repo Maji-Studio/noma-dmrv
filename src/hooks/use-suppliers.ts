@@ -166,11 +166,6 @@ export function useCreateSupplierWithLocations(
     onSuccess: async (data, variables) => {
       seedCreatedSupplierCaches(queryClient, data);
 
-      patchListCachesWithSavedRow<SupplierWithRelations>(
-        queryClient,
-        supplierKeys.lists(),
-        data,
-      );
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
@@ -270,6 +265,11 @@ export function useUpdateSupplier(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<SupplierWithRelations>(
+        queryClient,
+        supplierKeys.lists(),
+        data,
+      );
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
