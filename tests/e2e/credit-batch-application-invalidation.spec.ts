@@ -44,7 +44,7 @@ async function createApplicationForLineage(
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', today);
-  await page.selectOption('select[name="customerId"]', seededData.customer.id);
+  await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
   await page.waitForSelector(
     'select[name="customerLocationId"]:not([disabled])',
     { timeout: 8000 },

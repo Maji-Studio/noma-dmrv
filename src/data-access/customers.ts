@@ -411,14 +411,16 @@ export async function deleteCustomer(
     ]);
 
   if (Number(orderCount) > 0) {
+    // Orders have no cancellation state, so the copy can only offer the two
+    // actions that exist: reassign the order, or keep the customer (#774).
     throw new SafeError(
-      "Cannot delete customer with orders. Cancel or reassign those orders first."
+      "Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."
     );
   }
 
   if (Number(locationCount) > 0) {
     throw new SafeError(
-      "Cannot delete customer with associated locations. Remove locations first."
+      "Customer was not deleted because it still has locations. Edit the customer and remove its locations first."
     );
   }
 

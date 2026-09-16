@@ -67,7 +67,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.getByRole("button", { name: "New Order" }).click();
   await waitForSideSheet(page);
   await page.locator("#orderDate").fill(today);
-  await page.locator("#customerId").selectOption(seededData.customer.id);
+  await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
   await page.waitForSelector(
     'select[name="customerLocationId"]:not([disabled])',
     { timeout: COLD_COMPILE_TIMEOUT_MS },
