@@ -150,7 +150,7 @@ describe("Mafinga operator-action seed", () => {
   });
 
   const PROJECTS = [{ id: "prj_demo", name: "Tanzania biochar" }];
-  function stubCredentialedRegistry(projects = PROJECTS) {
+  function stubCredentialedRegistry(projects = PROJECTS, isProduction = false) {
     vi.stubEnv("ISOMETRIC_ACCESS_TOKEN", "test-token");
     vi.stubEnv("ISOMETRIC_CLIENT_SECRET", "test-secret");
     vi.stubEnv("CREDENTIALS_ENCRYPTION_KEY", "test-key");
@@ -158,7 +158,7 @@ describe("Mafinga operator-action seed", () => {
       calls.sequence.push("credentials");
       return { success: true, data: { verification: { ok: true, message: "Connected" }, status: {} } } as Awaited<ReturnType<typeof setOrgCertifierCredentialsFn>>;
     });
-    vi.mocked(loadFacilityCertifierMapping).mockResolvedValueOnce({ success: true, data: { availableProjects: projects } } as Awaited<ReturnType<typeof loadFacilityCertifierMapping>>);
+    vi.mocked(loadFacilityCertifierMapping).mockResolvedValueOnce({ success: true, data: { availableProjects: projects, isProduction } } as Awaited<ReturnType<typeof loadFacilityCertifierMapping>>);
     vi.mocked(loadIsometricFeedstockTypes).mockResolvedValueOnce({ success: true, data: [{ id: "ftt_forest", name: "Forestry residues", supplier_reference_id: null }] });
     vi.mocked(importIsometricFeedstockTypeFn).mockImplementationOnce(async input => {
       expect(input).toEqual({ isometricFeedstockTypeId: "ftt_forest", category: "forestry" });
@@ -202,6 +202,24 @@ describe("Mafinga operator-action seed", () => {
     const result = await seedRegistryAndTypes(randomUUID(), new SeedCounts());
     expect(calls.sequence.slice(0, 3)).toEqual(["credentials", "mapping", "import-type"]);
     expect(result.registryStatus).toBe("credentials stored + facility mapped to prj_demo");
+  });
+
+  it("refuses to map the demo facility against a production registry", async () => {
+    stubCredentialedRegistry(PROJECTS, true);
+    vi.stubEnv("ISOMETRIC_DEMO_FACILITY_ID", "fcl_demo");
+    await expect(seedRegistryAndTypes(randomUUID(), new SeedCounts())).rejects.toThrow("production Isometric registry");
+    expect(saveFacilityCertifierMapping).not.toHaveBeenCalled();
+  });
+
+  it("never confirms the production prompt on the operator's behalf", async () => {
+    stubCredentialedRegistry();
+    vi.stubEnv("ISOMETRIC_DEMO_FACILITY_ID", "fcl_demo");
+    vi.mocked(saveFacilityCertifierMapping).mockImplementationOnce(async (input) => {
+      expect(input.confirmProduction).toBe(false);
+      return { success: true, data: {} } as Awaited<ReturnType<typeof saveFacilityCertifierMapping>>;
+    });
+    await seedRegistryAndTypes(randomUUID(), new SeedCounts());
+    expect(saveFacilityCertifierMapping).toHaveBeenCalledTimes(1);
   });
 
   it("rejects incomplete readings imports instead of claiming success", async () => {
