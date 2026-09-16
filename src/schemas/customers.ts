@@ -266,10 +266,6 @@ export type CustomerLocationFormData = z.infer<typeof customerLocationFormSchema
 export type CreateCustomerData = z.infer<typeof createCustomerSchema>;
 export type UpdateCustomerData = z.infer<typeof updateCustomerSchema>;
 export type CreateCustomerLocationData = z.infer<typeof createCustomerLocationSchema>;
-export type PendingCustomerLocationData = z.infer<typeof pendingCustomerLocationSchema>;
-export type CreateCustomerWithLocationsInput = z.input<
-  typeof createCustomerWithLocationsSchema
->;
 export type CreateCustomerWithLocationsData = z.infer<
   typeof createCustomerWithLocationsSchema
 >;
