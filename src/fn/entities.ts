@@ -4,11 +4,11 @@
  */
 "use server";
 
-import { z } from "zod";
+import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import { getEntities, getEntityById } from "@/data-access/entities";
 import { requireOrgFacility } from "@/data-access/utils";
-import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { ActionResult } from "@/types/actions";
+import { z } from "zod";
 import { withAction } from "./with-action";
 
 const ENTITY_TYPES = [
@@ -78,6 +78,7 @@ export async function searchEntitiesFn(
 const entityByIdFilterSchema = z
   .object({
     excludeOrderId: z.uuid().optional(),
+    physicalDate: z.iso.date().optional(),
   })
   .optional();
 

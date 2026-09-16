@@ -110,6 +110,10 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      for (const feedstock of data.feedstocks) {
+        queryClient.setQueryData(feedstockKeys.detail(feedstock.id), feedstock);
+      }
+
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
       queryClient.invalidateQueries({
@@ -121,7 +125,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, variables.facilityId);
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,

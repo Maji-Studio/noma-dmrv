@@ -1,3 +1,4 @@
+import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
 import { REMOVAL_DELETION_LEASE_KEY } from "@/lib/certification/removal-deletion-lease";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -118,9 +119,7 @@ afterAll(async () => {
     await db
       .delete(certifierProjects)
       .where(inArray(certifierProjects.facilityId, createdFacilityIds));
-    await db
-      .delete(facilities)
-      .where(inArray(facilities.id, createdFacilityIds));
+    await deleteOutputFacilityFixtures(db, inArray(facilities.id, createdFacilityIds));
   }
   if (createdFeedstockTypeIds.length > 0) {
     await db

@@ -118,11 +118,11 @@ Flow: change schema → `pnpm db:generate` → review the emitted SQL → run ta
 
 **Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that ran the original — CI reports success while the new DDL never executes, and the drift only surfaces in `db:verify-schema`. Need more changes? Generate a new migration. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it no-ops where the objects exist.
 
-### Constraint-repair pattern
+### Development reset policy
 
-Migrations adding `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows **in the same migration** before enforcing the rule. Reference: `drizzle/0079_volatile_plazm.sql` — add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`. Likewise backfill or deduplicate before adding constraints or unique indexes.
+No production database exists yet. Keep the full migration chain usable for development and tests; required columns and destructive schema changes may require resetting a development database. Do not add production-data backfills or transitional compatibility solely to preserve obsolete demo rows. Notify the user before a change requires resetting shared staging, and use the existing manual reset workflow for that environment.
 
-When a migration is destructive, document the rationale in the related feature doc or [`open-questions.md`](./open-questions.md) if the dropped surface may return.
+Document destructive changes and their reset requirement in the related feature documentation. Existing migration history remains immutable once applied in a shared environment.
 
 ### CI (`.github/workflows/migrate.yml`)
 
@@ -132,9 +132,9 @@ When a migration is destructive, document the rationale in the related feature d
 
 ### PR migration gate (`.github/workflows/migration-gate.yml`)
 
-Builds the PR base-branch schema in a throwaway database, seeds it from `src/db/seed-data.ts`, applies the merge candidate's new migrations, and verifies the result. It catches data-versus-constraint conflicts reproducible from the canonical seed; it cannot prove compatibility with every row in staging or production.
+The development gate applies the merge candidate's complete migration chain to an empty, disposable database, bootstraps its admin and organization, seeds current development data, and verifies the schema. It tests the supported reset-and-seed development path without requiring upgrades of obsolete demo rows.
 
-A `staging` → `main` PR labelled `first-production-deployment` adds a second job, `fresh-database-gate`: full chain against an empty database, production bootstrap run twice to prove idempotence, then schema verify. It is **additive to the seeded gate, never a substitute**; both are required.
+The independent `fresh-database-gate` also runs on every matching PR or manual run. It applies the full chain to another empty database, runs production-mode bootstrap twice to prove idempotence, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
 
 ## Certification Tables
 

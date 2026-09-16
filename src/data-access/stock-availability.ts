@@ -1,16 +1,14 @@
-import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { biocharProducts, orders } from "@/db/schema";
+import { orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import type { StockAvailabilityRequest } from "@/schemas/stock-availability";
+import { and, eq } from "drizzle-orm";
 import {
-  deriveBiocharAvailableKg,
-  deriveBiocharProductDeliveredKg,
-  deriveProductAvailableKg,
+  deriveBiocharAvailableKg
 } from "./bin-stock-guards";
+import { deriveDeliveryOrderAvailableKg } from "./delivery-order-balance";
 import { deriveFeedstockWetStockKg } from "./feedstock-wet-stock";
 import { requireOrgScope } from "./utils";
-import { deriveDeliveryOrderAvailableKg } from "./delivery-order-balance";
 
 export interface StockAvailability {
   availableKg: number | null;
@@ -52,72 +50,11 @@ async function getDeliveryAvailability(
   ctx: OrgContext,
   request: Extract<StockAvailabilityRequest, { kind: "delivery" }>,
 ): Promise<StockAvailability> {
-  const [order] = await db
-    .select({
-      biocharProductId: orders.biocharProductId,
-      quantityKg: orders.quantityKg,
-    })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.id, request.orderId),
-        eq(orders.organizationId, ctx.organizationId),
-      ),
-    )
-    .limit(1);
-  const orderAvailableKg = order
-    ? await deriveDeliveryOrderAvailableKg(ctx, db, {
-        orderId: request.orderId,
-        orderQuantityKg: order.quantityKg,
-        excludeDeliveryId: request.deliveryId,
-      })
-    : null;
-  const productId = request.biocharProductId ?? order?.biocharProductId;
-  if (!productId) {
-    return { availableKg: null, orderAvailableKg };
-  }
-
-  const [product] = await db
-    .select({
-      massKg: biocharProducts.massKg,
-      waterAddedKg: biocharProducts.waterAddedKg,
-      storageLocationId: biocharProducts.storageLocationId,
-    })
-    .from(biocharProducts)
-    .where(
-      and(
-        eq(biocharProducts.id, productId),
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ),
-    )
-    .limit(1);
-  if (!product) {
-    return { availableKg: null, orderAvailableKg };
-  }
-
-  const deliveredKg = await deriveBiocharProductDeliveredKg(
-    ctx,
-    db,
-    productId,
-    request.deliveryId,
-  );
-  const batchAvailableKg =
-    Number(product.massKg ?? 0) +
-    Number(product.waterAddedKg ?? 0) -
-    deliveredKg;
-  const binAvailableKg = product.storageLocationId
-    ? await deriveProductAvailableKg(
-        ctx,
-        db,
-        product.storageLocationId,
-        request.deliveryId,
-      )
-    : batchAvailableKg;
-
-  return {
-    availableKg: Math.min(batchAvailableKg, binAvailableKg),
-    orderAvailableKg,
-  };
+  requireOrgScope(ctx);
+  const [order] = await db.select({ quantityKg: orders.quantityKg }).from(orders).where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, request.orderId)));
+  const orderAvailableKg = order ? await deriveDeliveryOrderAvailableKg(ctx, db, { orderId: request.orderId, orderQuantityKg: order.quantityKg, excludeDeliveryId: request.deliveryId }) : null;
+  // A wet capacity cannot be inferred without the selected bin and measured moisture.
+  return { availableKg: null, orderAvailableKg };
 }
 
 export async function getStockAvailability(

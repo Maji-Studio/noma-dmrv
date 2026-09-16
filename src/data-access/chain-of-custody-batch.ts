@@ -8,15 +8,15 @@
  * `buildBatchSankey` builder; the geo roll-up merges the per-application
  * Phase 2 geo payloads so the Carbon Transit map renders unchanged.
  */
-import { and, eq } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import { creditBatches, facilities } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   buildBatchSankey,
   type CreditBatchSankeyData,
 } from "@/lib/chain-of-custody/sankey";
 import { SafeError } from "@/lib/errors";
+import { and, eq } from "drizzle-orm";
 import {
   projectChainOfCustodyFromBatchFacts,
   type ChainFacility,
@@ -66,6 +66,7 @@ async function resolveBatchScope(
   ctx: OrgContext,
   creditBatchId: string,
 ): Promise<ResolvedBatchScope> {
+  requireOrgScope(ctx);
   const [batch] = await db
     .select({
       id: creditBatches.id,
@@ -188,7 +189,11 @@ export async function getCreditBatchChainGeoData(
       if (!nodeById.has(node.id)) nodeById.set(node.id, node);
     }
     for (const leg of payload.legs) {
-      if (!legById.has(leg.id)) legById.set(leg.id, leg);
+      const existing = legById.get(leg.id);
+      if (!existing) legById.set(leg.id, leg);
+      else if (leg.kind === "outbound") {
+        legById.set(leg.id, { ...existing, appliedWetMassKg: (existing.appliedWetMassKg ?? 0) + (leg.appliedWetMassKg ?? 0) });
+      }
     }
     for (const warning of payload.warnings) {
       warnings.add(warning);
@@ -204,6 +209,7 @@ export async function getCreditBatchChainGeoData(
 }
 
 async function getFacilityIdentity(ctx: OrgContext, facilityId: string): Promise<ChainFacility> {
+  requireOrgScope(ctx);
   const [row] = await db
     .select({
       id: facilities.id,
@@ -223,6 +229,7 @@ async function getFacilityGeoIdentity(
   ctx: OrgContext,
   facilityId: string,
 ): Promise<ChainOfCustodyGeoData["facility"]> {
+  requireOrgScope(ctx);
   const [row] = await db
     .select({
       id: facilities.id,

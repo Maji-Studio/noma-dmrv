@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Credit Batch Production-Run Validation Tests
@@ -320,30 +323,30 @@ beforeAll(async () => {
   // Create biochar products (needs formulation)
   const [productA] = await db
     .insert(biocharProducts)
-    .values({
+    .values(await outputProductFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `BP-VAL-A-${runId}`,
       facilityId: facilityA.id,
       formulationId: formulation.id,
       linkedProductionRunId: runInFacilityA.id,
-    })
+    }))
     .returning({ id: biocharProducts.id });
   const [productB] = await db
     .insert(biocharProducts)
-    .values({
+    .values(await outputProductFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `BP-VAL-B-${runId}`,
       facilityId: facilityB.id,
       formulationId: formulation.id,
       linkedProductionRunId: runInFacilityB.id,
-    })
+    }))
     .returning({ id: biocharProducts.id });
   createdIds.biocharProducts.push(productA.id, productB.id);
 
   // Create orders (needs customer, product, required fields)
   const [orderA] = await db
     .insert(orders)
-    .values({
+    .values(await outputOrderFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `OR-VAL-A-${runId}`,
       facilityId: facilityA.id,
@@ -352,11 +355,11 @@ beforeAll(async () => {
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
-    })
+    }))
     .returning({ id: orders.id });
   const [orderB] = await db
     .insert(orders)
-    .values({
+    .values(await outputOrderFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `OR-VAL-B-${runId}`,
       facilityId: facilityB.id,
@@ -365,56 +368,48 @@ beforeAll(async () => {
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
-    })
+    }))
     .returning({ id: orders.id });
   createdIds.orders.push(orderA.id, orderB.id);
 
   // Create deliveries (link to facility via facilityId)
-  const [deliveryA] = await db
-    .insert(deliveries)
-    .values({
+  const [deliveryA] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
       code: `DL-VAL-A-${runId}`,
       facilityId: facilityA.id,
       orderId: orderA.id,
       deliveryDate: new Date("2025-06-10"),
-    })
-    .returning({ id: deliveries.id });
-  const [deliveryB] = await db
-    .insert(deliveries)
-    .values({
+      deliveredWetMassKg: 5_000,
+      massDryKg: 4_500,
+    }, row => ({ id: row.id }));
+  const [deliveryB] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
       code: `DL-VAL-B-${runId}`,
       facilityId: facilityB.id,
       orderId: orderB.id,
       deliveryDate: new Date("2025-06-10"),
-    })
-    .returning({ id: deliveries.id });
+      deliveredWetMassKg: 5_000,
+      massDryKg: 4_500,
+    }, row => ({ id: row.id }));
   createdIds.deliveries.push(deliveryA.id, deliveryB.id);
 
   // Create applications linked to each facility via deliveries
-  const [aA] = await db
-    .insert(applications)
-    .values({
+  const [aA] = await insertOutputApplicationFixture(db, {
       organizationId: TEST_ORG_ID,
       code: `AP-VAL-A-${runId}`,
       deliveryId: deliveryA.id,
       applicationDate: new Date("2025-06-15"),
       biocharAppliedTons: 5,
       biocharAppliedDryTons: 4.5,
-    })
-    .returning({ id: applications.id });
-  const [aB] = await db
-    .insert(applications)
-    .values({
+    }, row => ({ id: row.id }));
+  const [aB] = await insertOutputApplicationFixture(db, {
       organizationId: TEST_ORG_ID,
       code: `AP-VAL-B-${runId}`,
       deliveryId: deliveryB.id,
       applicationDate: new Date("2025-06-15"),
       biocharAppliedTons: 5,
       biocharAppliedDryTons: 4.5,
-    })
-    .returning({ id: applications.id });
+    }, row => ({ id: row.id }));
   appInFacilityA = aA;
   createdIds.applications.push(aA.id, aB.id);
 });
@@ -434,14 +429,10 @@ afterAll(async () => {
         .where(inArray(creditBatches.id, createdIds.creditBatches));
     }
     if (createdIds.applications.length > 0) {
-      await tx
-        .delete(applications)
-        .where(inArray(applications.id, createdIds.applications));
+      await deleteOutputApplicationFixtures(tx, inArray(applications.id, createdIds.applications));
     }
     if (createdIds.deliveries.length > 0) {
-      await tx
-        .delete(deliveries)
-        .where(inArray(deliveries.id, createdIds.deliveries));
+      await deleteOutputDeliveryFixtures(tx, inArray(deliveries.id, createdIds.deliveries));
     }
     if (createdIds.orders.length > 0) {
       await tx
@@ -449,9 +440,7 @@ afterAll(async () => {
         .where(inArray(orders.id, createdIds.orders));
     }
     if (createdIds.biocharProducts.length > 0) {
-      await tx
-        .delete(biocharProducts)
-        .where(inArray(biocharProducts.id, createdIds.biocharProducts));
+      await deleteOutputProductFixtures(tx, inArray(biocharProducts.id, createdIds.biocharProducts));
     }
     if (createdIds.productionRuns.length > 0) {
       await tx
@@ -493,9 +482,7 @@ afterAll(async () => {
       await tx
         .delete(productionProcesses)
         .where(inArray(productionProcesses.facilityId, createdIds.facilities));
-      await tx
-        .delete(facilities)
-        .where(inArray(facilities.id, createdIds.facilities));
+      await deleteOutputFacilityFixtures(tx, inArray(facilities.id, createdIds.facilities));
     }
     if (createdIds.feedstockTypes.length > 0) {
       await tx

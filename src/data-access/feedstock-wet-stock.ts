@@ -31,6 +31,7 @@ export async function deriveFeedstockWetStockKg(
   const [stock] = await deriveLaneStock(ctx, executor, {
     storageLocationIds: [storageLocationId],
     ...options,
+    lanes: "feedstock",
   });
   return stock?.feedstockStockWetKg ?? 0;
 }

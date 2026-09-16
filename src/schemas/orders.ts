@@ -3,13 +3,13 @@
  * Zod schemas for order forms, server actions, and filtering
  */
 
-import { z } from "zod";
+import { orderFulfillmentStatuses } from "@/lib/orders/fulfillment";
 import {
   emptyToNull,
   MASS_INPUT_MAX_KG,
   MASS_MAX_KG_MESSAGE,
 } from "@/schemas/helpers";
-import { orderFulfillmentStatuses } from "@/lib/orders/fulfillment";
+import { z } from "zod";
 
 // ============================================
 // Constants and Enums
@@ -35,7 +35,7 @@ export const orderFormSchema = z.object({
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   customerId: z.string().min(1, "Select a customer.").uuid("Choose a valid customer."),
   customerLocationId: emptyToNull.or(z.string().uuid("Choose a valid customer location.")).optional().nullable(),
-  biocharProductId: z.string().min(1, "Select a product bin.").uuid("Choose a valid product bin."),
+  formulationId: z.string().min(1, "Select a formulation.").pipe(z.uuid("Choose a valid formulation.")),
   orderDate: z.coerce.date({ error: "Order date is required" }),
   quantityKg: z
     .number({ error: "Quantity is required" })
@@ -79,7 +79,7 @@ export const updateOrderSchema = z.object({
   facilityId: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
   customerLocationId: z.string().uuid().optional().nullable(),
-  biocharProductId: z.string().uuid().optional(),
+  formulationId: z.uuid().optional(),
   orderDate: z.coerce.date().optional(),
   quantityKg: z.number().min(0.01).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).finite().optional(),
   packaging: z.enum(packagingTypes).optional(),
