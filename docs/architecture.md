@@ -112,11 +112,21 @@ See [forms.md](./forms.md).
 ### Structured logging — `@/lib/log` (server-only)
 
 `logger.info({ userId, removalId }, "msg")`; `logger.child(bindings)` merges
-bindings into every record. Import only from `fn/`, `data-access/`, and the
-isometric client boundary — never a client component. NDJSON out, level via
-`LOG_LEVEL`. Redacts `email`/`token`/`secret`/`authorization` keys at any depth —
-a backstop, not a license to log PII. The in-house implementation replaces pino
-because of a Turbopack/Vercel runtime bug.
+bindings into every record. Import only from `fn/`, `data-access/`, the
+isometric client boundary, and `src/db/index.ts` — never a client component.
+NDJSON out, level via `LOG_LEVEL`. Redacts
+`email`/`token`/`secret`/`authorization` keys at any depth — a backstop, not a
+license to log PII. The in-house implementation replaces pino because of a
+Turbopack/Vercel runtime bug.
+
+**Waiver — `src/db/index.ts`.** The connection pool is the bottom layer and is
+constructed at module scope, so there is no layer above it to inject a logger
+from; pool telemetry has to be wired up where the pool is built. That module
+calls `logger.child` during module evaluation, so a test that mocks
+`@/lib/log` and transitively imports `@/db` must give the mock a `child` that
+returns a logger. The rest of `src/db/` receives its logger as an argument
+(`createObservedPool`, `createObservedClient`) and never imports `@/lib/log` at
+runtime.
 
 ## Routing & Auth
 
@@ -201,7 +211,8 @@ local, and deployed builds remain on the stable default.
 ## Database Boundaries
 
 `src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
-permission checks; pooling defaults are centralized in `src/db/index.ts`. See
+permission checks; pooling defaults are centralized in `src/db/pool-config.ts`
+(`resolveAppPoolConfig`) and applied by `src/db/index.ts`. See
 [database.md](./database.md) and [schema-overview.md](./schema-overview.md).
 
 ## Computed Method-B Eligibility (Isometric)
