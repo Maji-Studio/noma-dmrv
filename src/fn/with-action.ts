@@ -3,10 +3,10 @@
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { OrgContext } from "@/lib/auth/server";
-import { ActionConflictError, toActionError } from "@/lib/errors";
+import { ActionConflictError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
-import { formatZodActionError, logActionError } from "./action-errors";
+import { toActionFailure } from "./action-errors";
 
 /** The failure shape a `mapError` callback may answer with. */
 type MappedFailure = { success: false; error: string };
@@ -76,25 +76,13 @@ export async function withAction<T, E extends MappedFailure = never>(
     const data = await fn(ctx);
     return { success: true, data };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, zodErrorPrefix),
-      };
-    }
-    if (error instanceof ActionConflictError) {
-      return {
-        success: false,
-        error: error.message,
-        conflict: error.conflict,
-      };
-    }
-    const mapped = mapError?.(error);
-    if (mapped) return mapped;
-    logActionError(error, log);
-    return {
-      success: false,
-      error: toActionError(error, fallbackMessage),
-    };
+    // The Zod and conflict branches stay ahead of `mapError`; everything else
+    // is formatted by the helper the read transport shares.
+    const claimed =
+      error instanceof z.ZodError || error instanceof ActionConflictError
+        ? undefined
+        : mapError?.(error);
+    if (claimed) return claimed;
+    return toActionFailure(error, { fallbackMessage, log, zodErrorPrefix });
   }
 }

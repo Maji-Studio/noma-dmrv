@@ -9,7 +9,6 @@ import type { Facility } from "@/db/schema";
 import type { FacilityFilterData, CreateFacilityData, UpdateFacilityData } from "@/schemas/facilities";
 import type { PaginatedFacilities, FacilityWithRelations } from "@/data-access/facilities";
 import {
-  getFacilitiesFn,
   getFacilityByIdFn,
   getFacilityCountriesFn,
   getFacilityArchiveImpactFn,
@@ -18,6 +17,7 @@ import {
   archiveFacilityFn,
   restoreFacilityFn,
 } from "@/fn/facilities";
+import { getFacilitiesRead } from "@/lib/read-api/client";
 import { missingRecordMessage } from "@/lib/errors";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
@@ -70,8 +70,8 @@ export function useFacilities(
       organizationId === undefined
         ? facilityKeys.list(filters)
         : [...facilityKeys.list(filters), { organizationId }],
-    queryFn: async () => {
-      const result = await getFacilitiesFn(filters);
+    queryFn: async ({ signal }) => {
+      const result = await getFacilitiesRead(filters, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }

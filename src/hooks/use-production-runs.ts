@@ -20,15 +20,17 @@ import type {
   ProductionRunWithRelations,
 } from "@/data-access/production-runs";
 import {
-  getProductionRunsFn,
   getProductionRunByIdFn,
-  getProductionRunStatsFn,
   getFacilityEnergyTotalsFn,
   getProductionRunReadingsFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
 } from "@/fn/production-runs";
+import {
+  getProductionRunsRead,
+  getProductionRunStatsRead,
+} from "@/lib/read-api/client";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import { facilityKeys } from "@/hooks/use-facilities";
@@ -106,8 +108,8 @@ export function useProductionRuns(
   const results = useQueries({
     queries: requests.map((request) => ({
       queryKey: productionRunKeys.list(request),
-      queryFn: async () => {
-        const result = await getProductionRunsFn(request);
+      queryFn: async ({ signal }) => {
+        const result = await getProductionRunsRead(request, { signal });
         if (!result.success) throw new Error(result.error);
         return result.data;
       },
@@ -157,8 +159,8 @@ export function useProductionRun(productionRunId: string, enabled = true) {
 export function useProductionRunStats(facilityId?: string, enabled = true) {
   return useQuery({
     queryKey: productionRunKeys.stats(facilityId),
-    queryFn: async () => {
-      const result = await getProductionRunStatsFn(facilityId);
+    queryFn: async ({ signal }) => {
+      const result = await getProductionRunStatsRead(facilityId, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }
