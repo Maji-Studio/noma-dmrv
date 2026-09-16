@@ -211,6 +211,8 @@ function resolveDetailFieldValue({
   displayValue: React.ReactNode;
   isEmpty: boolean;
   present: boolean;
+  /** The value slot's ink and weight, so surfaces with their own markup match. */
+  valueClassName: string;
 } {
   const isBlank = value === null || value === undefined || value === "";
   const rendersSharedToken = isMissingValueCopy(value);
@@ -221,13 +223,23 @@ function resolveDetailFieldValue({
   // Loading is not absence: a pending field shows the skeleton and claims
   // nothing about the value, so it is neither empty nor provided.
   if (pending) {
-    return { displayValue: <DetailValueSkeleton />, isEmpty: false, present };
+    return {
+      displayValue: <DetailValueSkeleton />,
+      isEmpty: false,
+      present,
+      valueClassName: PRESENT_DETAIL_VALUE_CLASS,
+    };
   }
+
+  const isEmpty = isBlank || rendersSharedToken || valuePresent === false;
 
   return {
     displayValue: isBlank ? MISSING_VALUE[emptySituation] : value,
-    isEmpty: isBlank || rendersSharedToken || valuePresent === false,
+    isEmpty,
     present,
+    valueClassName: isEmpty
+      ? EMPTY_DETAIL_VALUE_CLASS
+      : PRESENT_DETAIL_VALUE_CLASS,
   };
 }
 
@@ -241,12 +253,8 @@ function DetailField({
   valuePresent,
   pending,
 }: DetailFieldProps) {
-  const { displayValue, isEmpty, present } = resolveDetailFieldValue({
-    value,
-    emptySituation,
-    valuePresent,
-    pending,
-  });
+  const { displayValue, isEmpty, present, valueClassName } =
+    resolveDetailFieldValue({ value, emptySituation, valuePresent, pending });
   // A pending field makes no claim yet, so its CERT chip stays neutral until
   // the query settles.
   const resolvedCertifyStatus =
@@ -259,10 +267,7 @@ function DetailField({
         {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
       </span>
       <span
-        className={cn(
-          "body-medium break-words",
-          isEmpty ? EMPTY_DETAIL_VALUE_CLASS : PRESENT_DETAIL_VALUE_CLASS,
-        )}
+        className={cn("body-medium break-words", valueClassName)}
         aria-busy={pending || undefined}
         data-empty={isEmpty || undefined}
         data-pending={pending || undefined}

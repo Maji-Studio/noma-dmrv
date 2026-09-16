@@ -72,6 +72,32 @@ describe("supplier detail header while locations load", () => {
     expect(distance).toContain(SKELETON_MARKER);
   });
 
+  it("gives a settled empty header field the shared placeholder treatment", () => {
+    queries.supplier = { data: supplier, isLoading: false, error: null };
+    queries.locations = { data: [], isLoading: false };
+
+    const location = valueSlot(renderDetail(), "Location");
+
+    expect(location).toContain(MISSING_VALUE.notRecorded);
+    expect(location).toContain('data-empty="true"');
+    expect(location).toContain("--color-text-tertiary");
+    expect(location).not.toContain("--color-text-primary");
+  });
+
+  it("leaves a real header value at full strength", () => {
+    queries.supplier = {
+      data: { ...supplier, location: "Kaunas, Lithuania" },
+      isLoading: false,
+      error: null,
+    };
+    queries.locations = { data: [], isLoading: false };
+
+    const location = valueSlot(renderDetail(), "Location");
+
+    expect(location).toContain("--color-text-primary");
+    expect(location).not.toContain("data-empty");
+  });
+
   it("names the omission once the locations query settles empty", () => {
     queries.supplier = { data: supplier, isLoading: false, error: null };
     queries.locations = { data: [], isLoading: false };

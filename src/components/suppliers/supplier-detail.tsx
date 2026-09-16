@@ -24,6 +24,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { cn } from "@/lib/utils";
 import {
   buildSupplierFallbackDistanceField,
   buildSupplierLocationField,
@@ -39,11 +40,14 @@ const LOCATION_TABLE_COLUMNS = 9;
 /**
  * One field of the supplier header summary.
  *
- * The value runs through the shared `DetailField` contract, so a field whose
- * value is still loading shows the skeleton instead of a missing-value token.
+ * The header keeps its own `<dt>/<dd>` markup for the summary grid, but the
+ * value runs through the whole shared `DetailField` contract: a pending field
+ * shows the skeleton, and a settled empty one takes the same placeholder ink,
+ * weight, and `data-empty` hook as every other detail surface.
  */
 export function SupplierSummaryField({ field }: { field: DetailPanelField }) {
-  const { displayValue } = resolveDetailFieldValue(field);
+  const { displayValue, isEmpty, valueClassName } =
+    resolveDetailFieldValue(field);
 
   return (
     <div>
@@ -54,8 +58,9 @@ export function SupplierSummaryField({ field }: { field: DetailPanelField }) {
         )}
       </dt>
       <dd
-        className="body-medium mt-16"
+        className={cn("body-medium mt-16", valueClassName)}
         aria-busy={field.pending || undefined}
+        data-empty={isEmpty || undefined}
         data-pending={field.pending || undefined}
       >
         {displayValue}
@@ -140,22 +145,12 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-32 mt-32 pt-32 border-t border-[var(--color-border-secondary)]">
-          <div>
-            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact email
-            </dt>
-            <dd className="body-medium mt-16">
-              {supplier.contactEmail || MISSING_VALUE.notRecorded}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact phone
-            </dt>
-            <dd className="body-medium mt-16">
-              {supplier.contactPhone || MISSING_VALUE.notRecorded}
-            </dd>
-          </div>
+          <SupplierSummaryField
+            field={{ label: "Contact email", value: supplier.contactEmail }}
+          />
+          <SupplierSummaryField
+            field={{ label: "Contact phone", value: supplier.contactPhone }}
+          />
           <SupplierSummaryField field={locationField} />
           <SupplierSummaryField field={fallbackDistanceField} />
         </div>
