@@ -12,18 +12,18 @@ in [forms.md](./forms.md); naming and React rules in
 ```text
 components (UI)
   -> hooks (React Query)
-  -> read Route Handlers (queries) / fn (server-action writes)
-  -> fn/read-models (transport-neutral read orchestration)
+  -> /api/reads Route Handlers (migrated reads) / fn (everything else)
+  -> lib/read-models (transport-neutral read orchestration)
   -> data-access (org scope + queries)
   -> db (Drizzle schema + connection)
 ```
 
 - UI never talks directly to `db`; no layer skipping.
 - `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
-- `fn/read-models/` is the server-only exception to the `"use server"` file
-  directive: its validated orchestration cores accept an `OrgContext` supplied
-  by either a Server Action compatibility wrapper or an authenticated read
-  Route Handler. They never resolve authentication themselves.
+- `src/lib/read-models/` holds server-only read cores that take an already
+  resolved `OrgContext` and return domain data. They are not Server Actions and
+  are not exported from a `"use server"` file; both entry points (a `fn/`
+  wrapper and an `/api/reads/*` handler) authenticate before calling one.
 - `data-access/` owns query composition **and** org-scope enforcement.
 
 ## Tenancy — the actual authorization model
@@ -184,17 +184,29 @@ Actions remain the write transport. Do not replace a read with client-side
 `Promise.all` around Server Actions; those calls still share the Server
 Function queue.
 
-Each private read handler resolves `requireOrgContext()` once, then delegates
-to a validated core in `src/fn/read-models/`, which calls the same org-scoped
-data-access functions as its Server Action compatibility wrapper. Facility
-inputs are checked with `requireOrgFacility` before the domain read. Responses
-use an `ActionResult`-shaped JSON envelope and `Cache-Control: private,
+The seam has three parts. A read core in `src/lib/read-models/` validates its
+input, checks facility inputs with `requireOrgFacility`, and calls the same
+org-scoped data-access functions for a caller-supplied `OrgContext`. A `fn/`
+wrapper exposes that core to Server Action callers through `withAction`. The
+HTTP adapter `src/app/api/reads/read-response.ts` resolves the context once per
+request with `resolveOrgContext()` and formats failures with the same
+`toActionFailure` helper `withAction` uses, so the two transports answer with
+the same `ActionResult` envelope, `conflict` included. Route handlers stay thin:
+they name the read, its log context, and its fallback message.
+
+Status mapping belongs to the adapter alone: a denied org context answers 401
+when there is no session and 403 when the caller has no usable organization,
+rejected input and org-scoped lookups answer 400, a conflict answers 409, and an
+unexpected failure answers 500. Responses carry `Cache-Control: private,
 no-store`; the React Query function passes its abort signal to `fetch`.
 
 JSON is a deliberate transport contract: database `Date` values cross as ISO
 strings. The typed client adapter in `src/lib/read-api/client.ts` rehydrates the
-declared date fields before returning existing domain types to hooks. Calendar
-date fields such as a credit batch's `startDate` and `endDate` remain strings.
+declared date fields before returning existing domain types to hooks; a null or
+absent timestamp stays null rather than becoming the epoch. Calendar date fields
+such as a credit batch's `startDate` and `endDate` remain strings. The adapter
+parses a response body only when it is JSON, so a gateway error page becomes a
+formatted transport failure instead of a raw parser message.
 
 ## next.config.ts — three load-bearing settings
 

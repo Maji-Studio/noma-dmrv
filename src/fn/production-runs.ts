@@ -32,12 +32,13 @@ import {
 import {
   readProductionRuns,
   readProductionRunStats,
-} from "@/fn/read-models/production-runs";
+} from "@/lib/read-models/production-runs";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   formatZodActionError,
   toLoggedActionError,
 } from "./action-errors";
+import { withAction } from "./with-action";
 import {
   createProductionRunSchema,
   deleteProductionRunSchema,
@@ -67,28 +68,14 @@ function productionRunActionError(
 export async function getProductionRunsFn(
   filters?: Partial<z.infer<typeof productionRunFilterSchema>>
 ): Promise<ActionResult<PaginatedProductionRuns>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const runs = await readProductionRuns(ctx, filters);
-
-    return { success: true, data: runs };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load production runs",
-        "production-run:list",
-      ),
-    };
-  }
+  return withAction((ctx) => readProductionRuns(ctx, filters), {
+    fallbackMessage: "Failed to load production runs",
+    log: {
+      message: "production run action failed",
+      context: { op: "production-run:list" },
+    },
+    zodErrorPrefix: "Invalid filter parameters",
+  });
 }
 
 /**
@@ -120,21 +107,13 @@ export async function getProductionRunByIdFn(
 export async function getProductionRunStatsFn(
   facilityId?: string
 ): Promise<ActionResult<ProductionRunStats>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const stats = await readProductionRunStats(ctx, facilityId);
-    return { success: true, data: stats };
-  } catch (error) {
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load production run stats",
-        "production-run:stats",
-      ),
-    };
-  }
+  return withAction((ctx) => readProductionRunStats(ctx, facilityId), {
+    fallbackMessage: "Failed to load production run stats",
+    log: {
+      message: "production run action failed",
+      context: { op: "production-run:stats" },
+    },
+  });
 }
 
 /**

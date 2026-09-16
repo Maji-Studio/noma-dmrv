@@ -6,11 +6,15 @@ import {
 } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
 import type { OrgContext } from "@/lib/auth/server";
-import { ISOMETRIC_PROVIDER } from "@/fn/certification/shared";
-import { z } from "zod";
+import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
+import { facilityIdSchema } from "./facility-id";
 
-const facilityIdSchema = z.string().uuid("Choose a valid facility.");
-
+/**
+ * What the certification settings surface needs before it can offer to link,
+ * relink, or unlink a facility: the current mapping, how many facilities share
+ * that registry project, the registry environment, and whether this viewer may
+ * change any of it.
+ */
 export interface FacilityCertifierSummary {
   mapping: CertifierProjectRow | null;
   linkedFacilityCount: number;
@@ -18,6 +22,7 @@ export interface FacilityCertifierSummary {
   viewerCanManage: boolean;
 }
 
+/** The certification settings summary for one facility. */
 export async function readFacilityCertifierSummary(
   ctx: OrgContext,
   input: unknown,

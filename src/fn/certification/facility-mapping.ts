@@ -34,9 +34,9 @@ import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
 import {
   readFacilityCertifierSummary,
   type FacilityCertifierSummary,
-} from "@/fn/read-models/facility-certifier-summary";
+} from "@/lib/read-models/facility-certifier-summary";
 
-export type { FacilityCertifierSummary } from "@/fn/read-models/facility-certifier-summary";
+export type { FacilityCertifierSummary } from "@/lib/read-models/facility-certifier-summary";
 
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;

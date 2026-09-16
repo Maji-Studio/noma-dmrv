@@ -1,4 +1,4 @@
-import { readFacilityCertifierSummary } from "@/fn/read-models";
+import { readFacilityCertifierSummary } from "@/lib/read-models";
 import { readResponse } from "../../../read-response";
 
 export const runtime = "nodejs";

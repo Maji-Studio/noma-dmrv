@@ -1,4 +1,4 @@
-import { readProductionRuns } from "@/fn/read-models";
+import { readProductionRuns } from "@/lib/read-models";
 import { readInput, readResponse } from "../read-response";
 
 export const runtime = "nodejs";

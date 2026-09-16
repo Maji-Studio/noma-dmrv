@@ -1,4 +1,4 @@
-import { readCreditBatches } from "@/fn/read-models";
+import { readCreditBatches } from "@/lib/read-models";
 import { readInput, readResponse } from "../read-response";
 
 export const runtime = "nodejs";

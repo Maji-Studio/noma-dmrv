@@ -9,19 +9,23 @@ import {
 import { requireOrgFacility } from "@/data-access/utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { productionRunFilterSchema } from "@/schemas/production-runs";
+import { optionalFacilityIdSchema } from "./facility-id";
 
-// Route Handler JSON turns Date inputs into strings. The transport-neutral
-// orchestration core accepts both representations, while the existing action
-// and data-access interfaces continue to operate on Date values.
-const productionRunReadFilterSchema = productionRunFilterSchema.extend({
-  startDate: z.coerce.date().optional(),
-  endDate: z.coerce.date().optional(),
-});
-const optionalFacilityIdSchema = z
-  .string()
-  .uuid("Choose a valid facility.")
+// Route Handler JSON delivers a Date filter as an ISO string, while a Server
+// Action caller still passes a Date. Both are accepted; anything else (a null
+// boundary in particular) is rejected rather than coerced to the epoch.
+const INVALID_DATE_FILTER = "Enter a valid date.";
+const transportDateSchema = z
+  .union([z.date(), z.string()], INVALID_DATE_FILTER)
+  .pipe(z.coerce.date(INVALID_DATE_FILTER))
   .optional();
 
+const productionRunReadFilterSchema = productionRunFilterSchema.extend({
+  startDate: transportDateSchema,
+  endDate: transportDateSchema,
+});
+
+/** One filtered page of Production Runs, for both read transports. */
 export async function readProductionRuns(
   ctx: OrgContext,
   input?: unknown,
@@ -33,6 +37,7 @@ export async function readProductionRuns(
   return getProductionRuns(ctx, filters);
 }
 
+/** Production Run totals for one facility, or for the whole organization. */
 export async function readProductionRunStats(
   ctx: OrgContext,
   input?: unknown,

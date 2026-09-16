@@ -18,7 +18,7 @@ import {
   type PaginatedFacilities,
   type FacilityArchiveImpact,
 } from "@/data-access/facilities";
-import { readFacilities } from "@/fn/read-models/facilities";
+import { readFacilities } from "@/lib/read-models/facilities";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   archiveFacilitySchema,
@@ -37,6 +37,7 @@ import {
   formatZodActionError,
   toLoggedActionError,
 } from "./action-errors";
+import { withAction } from "./with-action";
 
 function facilityActionError(
   error: unknown,
@@ -59,28 +60,11 @@ function facilityActionError(
 export async function getFacilitiesFn(
   filters?: Partial<z.infer<typeof facilityFilterSchema>>
 ): Promise<ActionResult<PaginatedFacilities>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const facilities = await readFacilities(ctx, filters);
-
-    return { success: true, data: facilities };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facilities",
-        "facility:list",
-      ),
-    };
-  }
+  return withAction((ctx) => readFacilities(ctx, filters), {
+    fallbackMessage: "Failed to load facilities",
+    log: { message: "facility action failed", context: { op: "facility:list" } },
+    zodErrorPrefix: "Invalid filter parameters",
+  });
 }
 
 /**

@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getFacilitiesRead, getProductionRunsRead } from "./client";
 
+const TRANSPORT_ERROR =
+  "The server could not be reached. Refresh the page and try again.";
+
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
 const RUN_ID = "22222222-2222-4222-8222-222222222222";
 
@@ -114,6 +117,111 @@ describe("authenticated read client", () => {
     );
     expect(result.data.items[0]?.createdAt).toBeInstanceOf(Date);
     expect(result.data.items[0]?.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("keeps a null or absent timestamp null instead of the epoch", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          success: true,
+          data: {
+            items: [
+              {
+                id: RUN_ID,
+                startTime: "2026-09-15T08:00:00.000Z",
+                endTime: null,
+                createdAt: "2026-09-15T10:01:00.000Z",
+                updatedAt: "2026-09-15T10:02:00.000Z",
+              },
+            ],
+            total: 1,
+            page: 1,
+            pageSize: 20,
+            totalPages: 1,
+          },
+        }),
+      ),
+    );
+
+    const result = await getProductionRunsRead();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.items[0]?.endTime).toBeNull();
+  });
+
+  it("keeps an omitted nullable timestamp null", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json({
+          success: true,
+          data: {
+            items: [
+              {
+                id: FACILITY_ID,
+                createdAt: "2026-09-15T10:01:00.000Z",
+                updatedAt: "2026-09-15T10:02:00.000Z",
+              },
+            ],
+            total: 1,
+            page: 1,
+            pageSize: 20,
+            totalPages: 1,
+          },
+        }),
+      ),
+    );
+
+    const result = await getFacilitiesRead();
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.items[0]?.archivedAt).toBeNull();
+    expect(result.data.items[0]?.createdAt).toBeInstanceOf(Date);
+  });
+
+  it("answers with a transport error when a gateway returns HTML", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("<html><body>504 Gateway Timeout</body></html>", {
+          status: 504,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      ),
+    );
+
+    await expect(getFacilitiesRead()).resolves.toEqual({
+      success: false,
+      error: TRANSPORT_ERROR,
+    });
+  });
+
+  // A parse failure is the transport's fault; it must never reach the operator
+  // as a report that their filters were invalid.
+  it("answers with a transport error when a JSON body cannot be parsed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("{ truncated", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(
+      getProductionRunsRead({ facilityId: FACILITY_ID }),
+    ).resolves.toEqual({ success: false, error: TRANSPORT_ERROR });
+  });
+
+  it("propagates an aborted read to the caller", async () => {
+    const abortError = new DOMException("The read was aborted.", "AbortError");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortError));
+
+    await expect(getFacilitiesRead()).rejects.toBe(abortError);
   });
 
   it("preserves the server's formatted error result", async () => {

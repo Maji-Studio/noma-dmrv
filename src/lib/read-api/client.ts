@@ -10,7 +10,7 @@ import type {
 } from "@/data-access/production-runs";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { Facility } from "@/db/schema";
-import type { FacilityCertifierSummary } from "@/fn/certification";
+import type { FacilityCertifierSummary } from "@/lib/read-models";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
@@ -29,6 +29,16 @@ interface ReadRequestOptions {
   signal?: AbortSignal;
 }
 
+const JSON_MEDIA_TYPE = "application/json";
+
+// A gateway timeout or platform error page arrives as HTML, and a truncated
+// response is not parseable at all. Neither is the operator's fault, so the
+// transport answers with its own message instead of leaking a parser error.
+const TRANSPORT_ERROR =
+  "The server could not be reached. Refresh the page and try again.";
+const INVALID_ENVELOPE_ERROR =
+  "The server returned an unreadable response. Refresh the page and try again.";
+
 type JsonContract<T> = T extends Date
   ? string
   : T extends Array<infer Item>
@@ -42,20 +52,45 @@ async function requestRead<T>(
   input?: unknown,
   options?: ReadRequestOptions,
 ): Promise<ActionResult<JsonContract<T>>> {
+  // An aborted read rejects here, which is what React Query expects; only the
+  // body is decoded defensively.
   const response = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": JSON_MEDIA_TYPE },
     body: input === undefined ? undefined : JSON.stringify(input),
     cache: "no-store",
     signal: options?.signal,
   });
-  const parsed = readResultSchema.safeParse(await response.json());
+
+  const body = await readJsonBody(response);
+  if (!body.ok) return { success: false, error: body.error };
+
+  const parsed = readResultSchema.safeParse(body.value);
   if (!parsed.success) {
-    throw new Error("The server returned an invalid read response.");
+    return { success: false, error: INVALID_ENVELOPE_ERROR };
   }
   return "success" in parsed.data
     ? (parsed.data as ActionResult<JsonContract<T>>)
     : { success: false, error: parsed.data.error };
+}
+
+/**
+ * Decode a response body only when the response claims to be JSON. A
+ * `SyntaxError` from a downstream gateway is a transport failure, never a
+ * report that the operator's input was invalid.
+ */
+async function readJsonBody(
+  response: Response,
+): Promise<{ ok: true; value: unknown } | { ok: false; error: string }> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes(JSON_MEDIA_TYPE)) {
+    return { ok: false, error: TRANSPORT_ERROR };
+  }
+  try {
+    return { ok: true, value: await response.json() };
+  } catch {
+    return { ok: false, error: TRANSPORT_ERROR };
+  }
 }
 
 function mapReadData<Wire, Value>(
@@ -67,20 +102,22 @@ function mapReadData<Wire, Value>(
     : result;
 }
 
-function date(value: string): Date {
-  return new Date(value);
-}
-
-function nullableDate(value: string | null): Date | null {
-  return value === null ? null : date(value);
+/**
+ * Rehydrate a timestamp the transport delivered as an ISO string. A null or
+ * absent value stays null: "no date" is never turned into the epoch.
+ */
+function decodeDate(value: string): Date;
+function decodeDate(value: string | null | undefined): Date | null;
+function decodeDate(value: string | null | undefined): Date | null {
+  return value === null || value === undefined ? null : new Date(value);
 }
 
 function decodeFacility<T extends JsonContract<Facility>>(wire: T): Facility {
   return {
     ...wire,
-    archivedAt: nullableDate(wire.archivedAt),
-    createdAt: date(wire.createdAt),
-    updatedAt: date(wire.updatedAt),
+    archivedAt: decodeDate(wire.archivedAt),
+    createdAt: decodeDate(wire.createdAt),
+    updatedAt: decodeDate(wire.updatedAt),
   } as Facility;
 }
 
@@ -89,10 +126,10 @@ function decodeProductionRun(
 ): ProductionRunWithRelations {
   return {
     ...wire,
-    startTime: date(wire.startTime),
-    endTime: nullableDate(wire.endTime),
-    createdAt: date(wire.createdAt),
-    updatedAt: date(wire.updatedAt),
+    startTime: decodeDate(wire.startTime),
+    endTime: decodeDate(wire.endTime),
+    createdAt: decodeDate(wire.createdAt),
+    updatedAt: decodeDate(wire.updatedAt),
   };
 }
 
@@ -101,9 +138,9 @@ function decodeCreditBatch(
 ): CreditBatchWithRelations {
   return {
     ...wire,
-    archivedAt: nullableDate(wire.archivedAt),
-    createdAt: date(wire.createdAt),
-    updatedAt: date(wire.updatedAt),
+    archivedAt: decodeDate(wire.archivedAt),
+    createdAt: decodeDate(wire.createdAt),
+    updatedAt: decodeDate(wire.updatedAt),
   } as CreditBatchWithRelations;
 }
 
@@ -115,8 +152,8 @@ function decodeCertifierSummary(
     mapping: wire.mapping
       ? {
           ...wire.mapping,
-          createdAt: date(wire.mapping.createdAt),
-          updatedAt: date(wire.mapping.updatedAt),
+          createdAt: decodeDate(wire.mapping.createdAt),
+          updatedAt: decodeDate(wire.mapping.updatedAt),
         }
       : null,
   } as FacilityCertifierSummary;

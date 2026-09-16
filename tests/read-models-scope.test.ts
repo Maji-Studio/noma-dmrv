@@ -13,7 +13,7 @@ vi.mock("@/data-access/utils", () => ({
 }));
 
 import { SafeError } from "@/lib/errors";
-import { readProductionRuns } from "@/fn/read-models/production-runs";
+import { readProductionRuns } from "@/lib/read-models/production-runs";
 
 const ACTIVE_CONTEXT = {
   userId: "user-1",
@@ -46,5 +46,36 @@ describe("read-model facility isolation", () => {
       FOREIGN_FACILITY_ID,
     );
     expect(mocks.getProductionRuns).not.toHaveBeenCalled();
+  });
+
+  // JSON has no Date, so a client can send null where a Date filter belongs.
+  // Coercing that to the epoch would silently apply a 1970 boundary.
+  it("rejects a null date boundary instead of coercing it to the epoch", async () => {
+    await expect(
+      readProductionRuns(ACTIVE_CONTEXT, { startDate: null }),
+    ).rejects.toThrow();
+
+    expect(mocks.getProductionRuns).not.toHaveBeenCalled();
+  });
+
+  it("accepts an ISO date boundary from the JSON transport", async () => {
+    mocks.getProductionRuns.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 0,
+    });
+
+    await readProductionRuns(ACTIVE_CONTEXT, {
+      startDate: "2026-09-15T00:00:00.000Z",
+    });
+
+    expect(mocks.getProductionRuns).toHaveBeenCalledWith(
+      ACTIVE_CONTEXT,
+      expect.objectContaining({
+        startDate: new Date("2026-09-15T00:00:00.000Z"),
+      }),
+    );
   });
 });

@@ -1,4 +1,4 @@
-import { readFacilities } from "@/fn/read-models";
+import { readFacilities } from "@/lib/read-models";
 import { readInput, readResponse } from "../read-response";
 
 export const runtime = "nodejs";
