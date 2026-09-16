@@ -67,27 +67,57 @@ export const FEEDSTOCK_TYPE_USAGE_OPTIONS: ReadonlyArray<{ value: FeedstockTypeU
 const pyrolysisCategorySet = new Set<string>(pyrolysisFeedstockCategories);
 const blendCategorySet = new Set<string>(blendFeedstockCategories);
 
+/**
+ * The one rule that decides whether a category belongs to a usage. Both the
+ * form refine and the server-side merged check read it, so a patch that names
+ * only one of the pair cannot reach a combination the form would reject.
+ */
+export function categoryMatchesUsage(
+  // `feedstock_types.category` is a text column, so a stored value read back
+  // for the merged check arrives as a plain string, not the narrowed union.
+  category: string,
+  usage: FeedstockTypeUsage,
+): boolean {
+  const allowedSet =
+    usage === "pyrolysis" ? pyrolysisCategorySet : blendCategorySet;
+  return allowedSet.has(category);
+}
+
+/** Field-level message for a category that does not belong to the usage. */
+export function categoryUsageMismatchMessage(
+  usage: FeedstockTypeUsage,
+): string {
+  const allowedSet =
+    usage === "pyrolysis" ? pyrolysisCategorySet : blendCategorySet;
+  const allowedList = Array.from(allowedSet).sort().join(", ");
+  const suffix = allowedList
+    ? `. Allowed: ${allowedList}`
+    : ". No allowed categories";
+  return usage === "pyrolysis"
+    ? `Select a pyrolysis feedstock category${suffix}`
+    : `Select a blend material category${suffix}`;
+}
+
+/**
+ * Record-level message for a merged patch. The form refine can point at the
+ * Category field; a partial update that supplies only one half of the pair
+ * cannot, so it names both fields instead.
+ */
+export const FEEDSTOCK_TYPE_CATEGORY_USAGE_CONFLICT_MESSAGE =
+  "Feedstock type was not saved because its category and usage disagree. " +
+  "Review Category and Usage.";
+
 function validateCategoryUsage(
   data: { category?: FeedstockCategory; usage?: FeedstockTypeUsage },
   ctx: z.RefinementCtx
 ) {
   if (!data.category || !data.usage) return;
-  const allowedSet =
-    data.usage === "pyrolysis" ? pyrolysisCategorySet : blendCategorySet;
-  const allowed = allowedSet.has(data.category);
-
-  if (!allowed) {
-    const allowedList = Array.from(allowedSet).sort().join(", ");
-    const suffix = allowedList ? `. Allowed: ${allowedList}` : ". No allowed categories";
-    ctx.addIssue({
-      code: "custom",
-      path: ["category"],
-      message:
-        data.usage === "pyrolysis"
-          ? `Select a pyrolysis feedstock category${suffix}`
-          : `Select a blend material category${suffix}`,
-    });
-  }
+  if (categoryMatchesUsage(data.category, data.usage)) return;
+  ctx.addIssue({
+    code: "custom",
+    path: ["category"],
+    message: categoryUsageMismatchMessage(data.usage),
+  });
 }
 
 // ============================================
