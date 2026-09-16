@@ -122,7 +122,7 @@ pnpm db:reset         # local only — destructive
 
 - ❌ Never `pnpm db:push` (or `drizzle-kit push --force`) on a shared environment. See [database.md](./database.md).
 - `pnpm db:reset` = `reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin`. It replays tracked migrations and re-creates the admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (`requireEnvironmentVariable('ADMIN_PASSWORD')` throws if unset).
-- `db:reset` does **not** re-seed demo data — that is the separate `pnpm db:seed`. Resetting and then hunting for "missing" demo rows is a common wasted hour.
+- `db:reset` does **not** seed demo data. Run `pnpm db:seed` separately for the September 2026 Mafinga demo (see [database.md](./database.md#mafinga-demo-seed)). An existing Mafinga facility makes the seed skip; a validation error aborts and leaves earlier steps in place. Without Isometric credentials the seed skips registry setup and creates the forestry feedstock type locally.
 
 ### Duplicate Key on `code` Columns
 
@@ -256,15 +256,10 @@ linkedId: emptyToNull.or(z.string().uuid("Invalid selection")).nullable().option
 
 **Root Cause** — Zod v4's `.uuid()` enforces RFC 4122: position 13 must be the version (`1`-`8`) and position 17 the variant (`8`-`b`). Zod v3 only checked the hex shape. Flat sequential IDs like `00000000-0000-0000-0000-000000000160` fail.
 
-**Fix** — `.uuid()` stays in schemas; **seed IDs must carry version/variant
-bits**. Follow the `demoId` helper in `src/db/seed-data.ts` (mirrored in
-`src/db/seed-certification-evidence.ts`):
-
-```typescript
-const demoId = (n: number) => `de000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
-```
-
-Re-seed after changing it (`pnpm db:seed`). There is no relaxed `uuidFormat` helper in this repo — do not import one.
+**Fix:** keep UUID validation intact. The Mafinga seed uses server actions and
+keeps their returned IDs, so generated entity IDs satisfy the form schemas.
+For standalone test IDs, use `crypto.randomUUID()` or RFC 4122 fixtures.
+There is no relaxed `uuidFormat` helper in this repo.
 
 ### Zod Validation Not Firing At All
 
