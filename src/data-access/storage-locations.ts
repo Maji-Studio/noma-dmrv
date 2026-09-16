@@ -523,16 +523,21 @@ export async function updateStorageLocation(
       : null;
 
     // These two columns select the bin's material lane, so a stocked bin keeps
-    // the setup its recorded stock and history were written against.
-    if (
-      effectiveType !== existing.type ||
-      normalizedFeedstockTypeId !== existing.feedstockTypeId
-    ) {
-      await assertBinIdentityChangeAllowed(ctx, tx, {
+    // the setup its recorded stock and history were written against. The guard
+    // compares the two identities itself and returns when neither moved.
+    await assertBinIdentityChangeAllowed(
+      ctx,
+      tx,
+      {
         id: storageLocationId,
         type: existing.type as StorageLocationType,
-      });
-    }
+        feedstockTypeId: existing.feedstockTypeId,
+      },
+      {
+        type: effectiveType as StorageLocationType,
+        feedstockTypeId: normalizedFeedstockTypeId,
+      },
+    );
 
     const normalizedFormulationId =
       effectiveType === "product_bin"

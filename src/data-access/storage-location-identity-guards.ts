@@ -29,25 +29,70 @@ import {
 } from "./storage-location-references";
 import { requireOrgScope } from "./utils";
 
-const STOCK_BLOCKS_MESSAGE =
-  "This bin still has stock in its current material lane. Its setup was not " +
-  "changed. Review its stock and movement history before changing Storage type.";
+/**
+ * Field labels, exactly as the storage bin form shows them, so the refusal
+ * names the control the operator just changed.
+ */
+const STORAGE_TYPE_FIELD = "Storage type";
+const FEEDSTOCK_TYPE_FIELD = "Feedstock type";
 
-const HISTORY_BLOCKS_MESSAGE =
-  "This bin has stock history in its current material lane. Its setup was not " +
-  "changed. Review its stock and movement history before changing Storage type.";
+/** The bin identity columns a stock derivation reads. */
+interface BinIdentity {
+  type: StorageLocationType;
+  feedstockTypeId: string | null;
+}
+
+/**
+ * The first sentence is quoted from #767. The closing sentence names whichever
+ * field actually moved, so a feedstock-type edit is not told to review a
+ * Storage type it never touched.
+ */
+function stockBlocksMessage(changedField: string): string {
+  return (
+    "This bin still has stock in its current material lane. Its setup was not " +
+    `changed. Review its stock and movement history before changing ${changedField}.`
+  );
+}
+
+function historyBlocksMessage(changedField: string): string {
+  return (
+    "This bin has stock history. Its setup was not changed. Review its stock " +
+    `and movement history before changing ${changedField}.`
+  );
+}
+
+/**
+ * Name the field the operator moved, or null when the identity is unchanged.
+ * A storage-type change clears the feedstock type by itself, so the type wins:
+ * naming both would report a field the operator never touched.
+ */
+function changedIdentityField(
+  current: BinIdentity,
+  next: BinIdentity,
+): string | null {
+  if (current.type !== next.type) return STORAGE_TYPE_FIELD;
+  if (current.feedstockTypeId !== next.feedstockTypeId) {
+    return FEEDSTOCK_TYPE_FIELD;
+  }
+  return null;
+}
 
 /**
  * Refuse a `type` or `feedstockTypeId` change on a bin that still holds stock
  * or already carries stock history. Call it under the bin's stock lock, after
- * re-reading the effective row, and only when one of those two columns moves.
+ * re-reading the effective row; it returns without a query when neither
+ * identity column moves.
  */
 export async function assertBinIdentityChangeAllowed(
   ctx: OrgContext,
   tx: DbTransaction,
-  bin: { id: string; type: StorageLocationType },
+  bin: BinIdentity & { id: string },
+  next: BinIdentity,
 ): Promise<void> {
   requireOrgScope(ctx);
+
+  const changedField = changedIdentityField(bin, next);
+  if (!changedField) return;
 
   const availableKg = await deriveBinLaneAvailableKg(
     ctx,
@@ -56,11 +101,11 @@ export async function assertBinIdentityChangeAllowed(
     laneForStorageType(bin.type),
   );
   if (hasNonZeroStock(availableKg)) {
-    throw new SafeError(STOCK_BLOCKS_MESSAGE);
+    throw new SafeError(stockBlocksMessage(changedField));
   }
 
   const references = await countStorageLocationReferences(ctx, tx, bin.id);
   if (hasStorageLocationReferences(references)) {
-    throw new SafeError(HISTORY_BLOCKS_MESSAGE);
+    throw new SafeError(historyBlocksMessage(changedField));
   }
 }
