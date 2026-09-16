@@ -29,13 +29,28 @@ export function getPgPoolConfig(databaseUrl: string): PoolConfig {
   url.searchParams.delete('sslmode');
 
   const allowUnverifiedSsl = process.env.PG_ALLOW_UNVERIFIED_SSL === 'true';
+  const caCert = readCaCert();
 
   return {
     connectionString: url.toString(),
     ssl: isLocal
       ? false
-      : allowUnverifiedSsl
-        ? { rejectUnauthorized: false }
-        : true,
+      : caCert
+        ? { ca: caCert, rejectUnauthorized: true }
+        : allowUnverifiedSsl
+          ? { rejectUnauthorized: false }
+          : true,
   };
+}
+
+/**
+ * Managed Postgres providers (DigitalOcean, for one) sign with a private CA
+ * that Node does not trust by default. Pinning the provider's CA keeps full
+ * verification on, unlike PG_ALLOW_UNVERIFIED_SSL. Secret stores often keep
+ * the PEM on one line with literal "\n" escapes, so those are restored.
+ */
+function readCaCert(): string | undefined {
+  const raw = process.env.DATABASE_CA_CERT?.trim();
+  if (!raw) return undefined;
+  return raw.replace(/\\n/g, '\n');
 }
