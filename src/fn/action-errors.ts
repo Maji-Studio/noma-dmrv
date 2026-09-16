@@ -22,6 +22,26 @@ interface ActionFailureOptions {
 
 const DEFAULT_ZOD_ACTION_ERROR = "Check the highlighted fields.";
 
+/**
+ * A body result whose work has a committed part and a non-fatal follow-up:
+ * a preference that was not stored, an enrichment read that failed.
+ */
+export interface ResultWithWarning<T> {
+  data: T;
+  warning?: string;
+}
+
+/**
+ * Format a committed result, keeping any follow-up warning on the success
+ * branch. The commit is known, so this is never a failure (issue #769).
+ */
+export function toWarnableSuccess<T>({
+  data,
+  warning,
+}: ResultWithWarning<T>): ActionResult<T> {
+  return warning ? { success: true, data, warning } : { success: true, data };
+}
+
 function asSentence(message: string): string {
   return /[.!?]$/.test(message) ? message : `${message}.`;
 }

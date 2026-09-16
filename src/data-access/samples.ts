@@ -119,7 +119,7 @@ export interface SampleStats {
 // Auth Guards
 // ============================================
 
-import { assertSameOrg, requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import { SafeError } from "@/lib/errors";
 import {
   isPgCheckViolationMessage,
@@ -337,11 +337,12 @@ export async function getSamples(
  */
 export async function getSampleById(
   ctx: OrgContext,
-  sampleId: string
+  sampleId: string,
+  executor: Executor = db
 ): Promise<SampleWithRelations> {
   requireOrgScope(ctx);
 
-  const [sample] = await db
+  const [sample] = await executor
     .select({
       id: samples.id,
       sampleCode: samples.sampleCode,
@@ -656,10 +657,12 @@ export async function createSample(
         ironPercent: data.ironPercent ?? null,
       })
       .returning();
-    return created;
+    // Read the row back inside the transaction, so a failed read never reports
+    // a saved sample as "Sample not found" (issue #769).
+    return getSampleById(ctx, created.id, tx);
   });
 
-  return getSampleById(ctx, sample.id);
+  return sample;
 }
 
 /**
@@ -783,7 +786,7 @@ export async function updateSample(
   if (data.calciumPercent !== undefined) updateData.calciumPercent = data.calciumPercent;
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
-  await guardSampleMutation(() => db.transaction(async (tx) => {
+  return guardSampleMutation(() => db.transaction(async (tx) => {
     const [locked] = await tx
       .select()
       .from(samples)
@@ -853,9 +856,10 @@ export async function updateSample(
     }
 
     await tx.update(samples).set(updateData).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  }));
 
-  return getSampleById(ctx, sampleId);
+    // Read the row back inside the transaction (issue #769).
+    return getSampleById(ctx, sampleId, tx);
+  }));
 }
 
 // ============================================

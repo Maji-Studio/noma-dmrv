@@ -23,7 +23,7 @@ import type {
   FeedstockStatsFilterData,
 } from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
-import { assertSameOrg, requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import {
   computeClampedDryMass,
   deriveMassDryKg,
@@ -245,8 +245,13 @@ const feedstockSelectFields = {
   transportTripType: transportLegs.tripType,
 } as const;
 
-function feedstockBaseQuery(ctx: OrgContext) {
-  return db
+/**
+ * The joined feedstock projection. `executor` lets a writer run its enrichment
+ * read inside the same transaction as the write, so a post-commit read can
+ * never report a saved feedstock as missing (issue #769).
+ */
+function feedstockBaseQuery(ctx: OrgContext, executor: Executor = db) {
+  return executor
     .select({
       ...feedstockSelectFields,
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
@@ -368,11 +373,12 @@ export async function getFeedstocks(
 
 export async function getFeedstockById(
   ctx: OrgContext,
-  feedstockId: string
+  feedstockId: string,
+  executor: Executor = db
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
 
-  const [item] = await feedstockBaseQuery(ctx).where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+  const [item] = await feedstockBaseQuery(ctx, executor).where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!item) {
     throw new SafeError("Feedstock not found");
@@ -466,7 +472,7 @@ export async function createFeedstock(
   const binIds = data.allocations.map((a) => a.storageLocationId);
   const codes = await codesFn(data.allocations.length);
 
-  const createdFeedstocks = await db.transaction(async (tx) => {
+  const items = await db.transaction(async (tx) => {
     await lockActiveFacilityReference(ctx, tx, data.facilityId);
     await lockBinStocks(ctx, tx, binIds);
     await validateFeedstockStorageLocations(
@@ -534,12 +540,12 @@ export async function createFeedstock(
         );
     }
 
-    return results;
+    // Read the created records back inside the transaction. A read after the
+    // commit can fail on its own, and an empty result then looks identical to
+    // "nothing was created" (issue #769).
+    return feedstockBaseQuery(ctx, tx)
+      .where(and(inArray(feedstocks.id, results), eq(feedstocks.organizationId, ctx.organizationId)));
   });
-
-  // Fetch the created records with relations in one query
-  const items = await feedstockBaseQuery(ctx)
-    .where(and(inArray(feedstocks.id, createdFeedstocks), eq(feedstocks.organizationId, ctx.organizationId)));
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
@@ -580,7 +586,7 @@ export async function updateFeedstock(
     throw new SafeError("Feedstock not found");
   }
 
-  await db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     if (feedstockData.facilityId !== undefined) {
       await lockActiveFacilityReference(ctx, tx, feedstockData.facilityId);
     }
@@ -690,10 +696,15 @@ export async function updateFeedstock(
         !explicitDistanceSupplied &&
         !explicitDistanceSourceSupplied,
     });
+
+    // Read the updated record back inside the transaction, so a failed read
+    // rolls the update back instead of reporting a saved feedstock as
+    // "Feedstock not found" (issue #769).
+    return getFeedstockById(ctx, feedstockId, tx);
   });
   await processPendingStorageObjectDeletions(ctx);
 
-  return getFeedstockById(ctx, feedstockId);
+  return updated;
 }
 
 // ============================================
