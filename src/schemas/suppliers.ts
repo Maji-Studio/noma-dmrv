@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
+  clearablePositiveNumber,
   expectedUpdatedAtSchema,
   gpsPairSuperRefine,
   latitudeSchema,
@@ -112,7 +113,7 @@ export const updateSupplierSchema = z.object({
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   sourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
-  distanceToFacilityKm: optionalPositiveNumber,
+  distanceToFacilityKm: clearablePositiveNumber,
   distanceSource: optionalDistanceSource,
 });
 
@@ -212,7 +213,7 @@ export const updateSupplierLocationSchema = z.object({
   gpsLatitude: latitudeSchema,
   gpsLongitude: longitudeSchema,
   address: z.string().max(500).optional().nullable().or(z.literal("")),
-  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceFromFacilityKm: clearablePositiveNumber,
   distanceSource: optionalDistanceSource,
   isDefault: z.boolean().optional(),
 });

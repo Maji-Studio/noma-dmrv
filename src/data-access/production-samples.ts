@@ -7,7 +7,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { productionSamples, operators } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { assertSameOrg, requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
@@ -84,11 +84,12 @@ export async function getProductionSamples(
  */
 export async function getProductionSampleById(
   ctx: OrgContext,
-  id: string
+  id: string,
+  executor: Executor = db
 ): Promise<ProductionSampleWithRelations> {
   requireOrgScope(ctx);
 
-  const rows = await db
+  const rows = await executor
     .select(sampleSelect)
     .from(productionSamples)
     .leftJoin(operators, and(eq(productionSamples.sampledById, operators.id), eq(operators.organizationId, ctx.organizationId)))
@@ -129,27 +130,32 @@ export async function createProductionSample(
   requireOrgScope(ctx);
   if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById);
 
-  const [inserted] = await db
-    .insert(productionSamples)
-    .values({
-      organizationId: ctx.organizationId,
-      productionRunId: data.productionRunId,
-      sampleCode: data.sampleCode ?? null,
-      timestamp: data.timestamp,
-      weightGrams: data.weightGrams ?? null,
-      volumeMl: data.volumeMl ?? null,
-      temperatureC: data.temperatureC ?? null,
-      moistureContentPercent: data.moistureContentPercent ?? null,
-      fixedCarbonPercent: data.fixedCarbonPercent ?? null,
-      volatileMatterPercent: data.volatileMatterPercent ?? null,
-      ashContentPercent: data.ashContentPercent ?? null,
-      photoUrl: data.photoUrl ?? null,
-      sampledById: data.sampledById ?? null,
-      notes: data.notes ?? null,
-    })
-    .returning({ id: productionSamples.id });
+  return db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(productionSamples)
+      .values({
+        organizationId: ctx.organizationId,
+        productionRunId: data.productionRunId,
+        sampleCode: data.sampleCode ?? null,
+        timestamp: data.timestamp,
+        weightGrams: data.weightGrams ?? null,
+        volumeMl: data.volumeMl ?? null,
+        temperatureC: data.temperatureC ?? null,
+        moistureContentPercent: data.moistureContentPercent ?? null,
+        fixedCarbonPercent: data.fixedCarbonPercent ?? null,
+        volatileMatterPercent: data.volatileMatterPercent ?? null,
+        ashContentPercent: data.ashContentPercent ?? null,
+        photoUrl: data.photoUrl ?? null,
+        sampledById: data.sampledById ?? null,
+        notes: data.notes ?? null,
+      })
+      .returning({ id: productionSamples.id });
 
-  return getProductionSampleById(ctx, inserted.id);
+    // Read the row back inside the transaction. After the commit, a failed
+    // read leaves nothing to report but "not found" for a measurement that is
+    // in fact saved (issue #769).
+    return getProductionSampleById(ctx, inserted.id, tx);
+  });
 }
 
 // ============================================
@@ -179,12 +185,16 @@ export async function updateProductionSample(
   requireOrgScope(ctx);
   if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById);
 
-  await db
-    .update(productionSamples)
-    .set({ ...data, updatedAt: new Date() })
-    .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)));
+  return db.transaction(async (tx) => {
+    await tx
+      .update(productionSamples)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)));
 
-  return getProductionSampleById(ctx, id);
+    // Read the row back inside the transaction (issue #769): a read that fails
+    // after the commit can only report a saved measurement as missing.
+    return getProductionSampleById(ctx, id, tx);
+  });
 }
 
 // ============================================

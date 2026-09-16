@@ -374,11 +374,11 @@ export async function createCustomerLocationFn(
       customerId: validated.customerId,
       name: validated.name,
       country: validated.country,
+      // An empty input submits "", which must land as NULL, not a blank string.
       stateRegion: validated.stateRegion || null,
       city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      // An empty textarea submits "", which must land as NULL, not a blank string.
       address: validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(
@@ -423,11 +423,14 @@ export async function updateCustomerLocationFn(
       expectedUpdatedAt: validated.expectedUpdatedAt,
       name: validated.name,
       country: validated.country,
-      stateRegion: validated.stateRegion || null,
-      city: validated.city || null,
+      // `undefined` leaves the column untouched (partial update); "" clears it.
+      stateRegion:
+        validated.stateRegion === undefined
+          ? undefined
+          : validated.stateRegion || null,
+      city: validated.city === undefined ? undefined : validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      // `undefined` leaves the column untouched (partial update); "" clears it.
       address:
         validated.address === undefined ? undefined : validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,

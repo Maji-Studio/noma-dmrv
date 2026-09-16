@@ -23,10 +23,12 @@ import type {
   FeedstockStatsFilterData,
 } from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
-import { assertSameOrg, requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import {
+  computeClampedDryMass,
   deriveMassDryKg,
   exceedsMassWithTolerance,
+  MASS_COMPARISON_EPSILON_KG,
 } from "@/lib/calculations/mass-dry";
 import {
   deleteTransportLegsForEntity,
@@ -48,6 +50,8 @@ const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 const FEEDSTOCK_CONFLICT_ENTITY = "feedstock";
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
   "Enter a justification when allocated wet mass exceeds the declared delivery mass";
+const DRY_MASS_DISAGREEMENT_MESSAGE =
+  "Feedstock was not saved because its mass values disagree. Review wet mass and moisture.";
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
@@ -246,8 +250,13 @@ const feedstockSelectFields = {
   transportTripType: transportLegs.tripType,
 } as const;
 
-function feedstockBaseQuery(ctx: OrgContext) {
-  return db
+/**
+ * The joined feedstock projection. `executor` lets a writer run its enrichment
+ * read inside the same transaction as the write, so a post-commit read can
+ * never report a saved feedstock as missing (issue #769).
+ */
+function feedstockBaseQuery(ctx: OrgContext, executor: Executor = db) {
+  return executor
     .select({
       ...feedstockSelectFields,
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
@@ -369,11 +378,12 @@ export async function getFeedstocks(
 
 export async function getFeedstockById(
   ctx: OrgContext,
-  feedstockId: string
+  feedstockId: string,
+  executor: Executor = db
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
 
-  const [item] = await feedstockBaseQuery(ctx).where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+  const [item] = await feedstockBaseQuery(ctx, executor).where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!item) {
     throw new SafeError("Feedstock not found");
@@ -467,7 +477,7 @@ export async function createFeedstock(
   const binIds = data.allocations.map((a) => a.storageLocationId);
   const codes = await codesFn(data.allocations.length);
 
-  const createdFeedstocks = await db.transaction(async (tx) => {
+  const items = await db.transaction(async (tx) => {
     await lockActiveFacilityReference(ctx, tx, data.facilityId);
     await lockBinStocks(ctx, tx, binIds);
     await validateFeedstockStorageLocations(
@@ -535,12 +545,12 @@ export async function createFeedstock(
         );
     }
 
-    return results;
+    // Read the created records back inside the transaction. A read after the
+    // commit can fail on its own, and an empty result then looks identical to
+    // "nothing was created" (issue #769).
+    return feedstockBaseQuery(ctx, tx)
+      .where(and(inArray(feedstocks.id, results), eq(feedstocks.organizationId, ctx.organizationId)));
   });
-
-  // Fetch the created records with relations in one query
-  const items = await feedstockBaseQuery(ctx)
-    .where(and(inArray(feedstocks.id, createdFeedstocks), eq(feedstocks.organizationId, ctx.organizationId)));
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
@@ -582,7 +592,7 @@ export async function updateFeedstock(
     throw new SafeError("Feedstock not found");
   }
 
-  await db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     if (feedstockData.facilityId !== undefined) {
       await lockActiveFacilityReference(ctx, tx, feedstockData.facilityId);
     }
@@ -614,7 +624,15 @@ export async function updateFeedstock(
       "update",
     );
 
-    const status = determineFeedstockStatus({ ...locked, ...feedstockData });
+    // Derive before anything reads the new masses: the status, the stock-lane
+    // check, and the write below must all see the same dry figure.
+    const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
+    const effectiveChanges =
+      derivedMassDryKg === undefined
+        ? feedstockData
+        : { ...feedstockData, massDryKg: derivedMassDryKg };
+
+    const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
     const routeAnchorChanged =
       (feedstockData.supplierId !== undefined &&
         feedstockData.supplierId !== locked.supplierId) ||
@@ -637,7 +655,8 @@ export async function updateFeedstock(
       feedstockData.facilityId !== undefined;
     const stockDerivationChanged =
       status !== locked.status ||
-      (feedstockData.massDryKg !== undefined && feedstockData.massDryKg !== locked.massDryKg) ||
+      (effectiveChanges.massDryKg !== undefined &&
+        effectiveChanges.massDryKg !== locked.massDryKg) ||
       (feedstockData.massWetKg !== undefined &&
         feedstockData.massWetKg !== locked.massWetKg) ||
       (feedstockData.storageLocationId !== undefined &&
@@ -662,7 +681,7 @@ export async function updateFeedstock(
     await tx
       .update(feedstocks)
       .set({
-        ...feedstockData,
+        ...effectiveChanges,
         status,
         updatedAt: new Date(),
       })
@@ -689,10 +708,15 @@ export async function updateFeedstock(
         !explicitDistanceSupplied &&
         !explicitDistanceSourceSupplied,
     });
+
+    // Read the updated record back inside the transaction, so a failed read
+    // rolls the update back instead of reporting a saved feedstock as
+    // "Feedstock not found" (issue #769).
+    return getFeedstockById(ctx, feedstockId, tx);
   });
   await processPendingStorageObjectDeletions(ctx);
 
-  return getFeedstockById(ctx, feedstockId);
+  return updated;
 }
 
 // ============================================
@@ -795,6 +819,49 @@ export async function deleteFeedstock(
 // ============================================
 // Helpers
 // ============================================
+
+/**
+ * Dry mass is server-owned. It is always the effective wet mass carried through
+ * the effective moisture, so a moisture-only patch re-derives it instead of
+ * leaving yesterday's figure in place, and the three mass columns can never
+ * drift apart (100 wet / 50 % / 90 dry used to save).
+ *
+ * A client-supplied `massDryKg` is advisory: `createFeedstock` derives its own
+ * from `deriveMassDryKg`, and the edit form sends the same derivation, so a
+ * value that disagrees means a stale or hand-built payload and is refused
+ * rather than silently overwritten. Returns `undefined` when there is nothing
+ * to derive from (a legacy row with no wet mass or moisture), leaving the
+ * caller's own value untouched.
+ */
+function resolveFeedstockDryMass(
+  stored: { massWetKg: number | null; moistureContentPercent: number | null },
+  patch: {
+    massWetKg?: number | null;
+    moistureContentPercent?: number | null;
+    massDryKg?: number;
+  },
+): number | undefined {
+  const effectiveWetKg =
+    patch.massWetKg !== undefined ? patch.massWetKg : stored.massWetKg;
+  const effectiveMoisturePercent =
+    patch.moistureContentPercent !== undefined
+      ? patch.moistureContentPercent
+      : stored.moistureContentPercent;
+
+  const derivedKg = computeClampedDryMass(
+    effectiveWetKg,
+    effectiveMoisturePercent,
+  );
+  if (derivedKg === null) return patch.massDryKg;
+
+  if (
+    patch.massDryKg !== undefined &&
+    Math.abs(patch.massDryKg - derivedKg) > MASS_COMPARISON_EPSILON_KG
+  ) {
+    throw new SafeError(DRY_MASS_DISAGREEMENT_MESSAGE);
+  }
+  return derivedKg;
+}
 
 function determineFeedstockStatus(data: {
   feedstockTypeId?: string | null;

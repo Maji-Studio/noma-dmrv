@@ -25,7 +25,11 @@ components (UI)
   are not exported from a `"use server"` file; the caller authenticates first.
   Today that caller is the `/api/reads/*` adapter; a `fn/` action that needs the
   same read wraps the core in `withAction` rather than duplicating it.
-- `data-access/` owns query composition **and** org-scope enforcement.
+- `data-access/` owns query composition **and** org-scope enforcement. A
+  partial update reads `undefined` as omitted, `null` as an explicit clear,
+  and `0` as zero; values the server owns (derived masses) and cross-field
+  rules are resolved against the locked stored row, never trusted from the
+  patch. See [forms.md](./forms.md#the-partial-update-contract-omitted--null--zero).
 
 ## Tenancy — the actual authorization model
 
@@ -97,6 +101,15 @@ disclosure bug.
 `src/types/actions.ts`. The failure branch may carry
 `conflict?: { entity, id, code }` so a form can deep-link the operator to the
 blocking record instead of only showing text. Forms are expected to honor it.
+
+The success branch may carry `warning?: string`: the write committed and a
+non-fatal follow-up did not (a preference that was not stored, an enrichment
+read that failed). A writer that enriches its result with a separate read
+passes its `tx` to that read (`Executor` in `src/data-access/utils.ts`) so a
+failed read rolls the write back rather than describing a saved row as
+missing; `warning` is for the reads that genuinely cannot join the
+transaction. Never use it to describe a rollback. Copy vocabulary:
+[ux-writing.md](./ux-writing.md).
 
 ### Expected-version checks on consequential edit forms
 

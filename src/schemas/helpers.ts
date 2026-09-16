@@ -144,6 +144,46 @@ export function requiredNumber(
   );
 }
 
+// ============================================
+// Clearable (patch) numeric fields
+// ============================================
+
+/**
+ * Preprocess a **patch** field to number | null | undefined.
+ *
+ * This is `toNumberOrNull`'s partial-update sibling and the only preprocessor
+ * that keeps the three states of the partial-update contract apart:
+ * `undefined` = omitted (leave the stored value alone), `null`/`""` = explicit
+ * clear, `0` = zero. `toNumberOrNull` folds omitted into cleared, which is
+ * right for a create or a whole-form submit — every field is present there —
+ * and wrong for an update schema, where an omitted key must not overwrite a
+ * column. Use this family on `update*Schema` fields whose server-side writer
+ * distinguishes "not supplied" from "cleared".
+ */
+export const toClearableNumber = (v: unknown): unknown => {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (trimmed === "") return null;
+    return Number(trimmed);
+  }
+  return v;
+};
+
+/** Clearable numeric patch field: omitted stays omitted, empty clears. */
+export const clearableNumber = z.preprocess(
+  toClearableNumber,
+  z.number().finite().nullable().optional(),
+);
+
+/** Clearable non-negative numeric patch field: omitted stays omitted, empty clears. */
+export const clearablePositiveNumber = z.preprocess(
+  toClearableNumber,
+  z.number().finite().min(0, "Must be a non-negative number").nullable().optional(),
+);
+
 /** Optional percent field: preprocess form string → number | null, then validate 0–100 range. */
 export const optionalPercent = z.preprocess(
   toNumberOrNull,
@@ -300,6 +340,16 @@ const SOIL_TEMPERATURE_RANGE_MESSAGE = `Soil temperature must be between ${SOIL_
  * identically (to null) on both surfaces.
  */
 export const defaultSoilTemperatureSchema = optionalNumber.pipe(
+  z
+    .number()
+    .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
+    .max(SOIL_TEMPERATURE_MAX_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
+    .nullable()
+    .optional(),
+);
+
+/** The same field on an update schema, where omitted must stay omitted. */
+export const clearableDefaultSoilTemperature = clearableNumber.pipe(
   z
     .number()
     .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)

@@ -6,6 +6,8 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
+  clearableDefaultSoilTemperature,
+  clearablePositiveNumber,
   defaultSoilTemperatureSchema,
   expectedUpdatedAtSchema,
   optionalPositiveNumber,
@@ -217,9 +219,9 @@ export const updateCustomerLocationSchema = z.object({
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationDescriptionSchema,
-  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceFromFacilityKm: clearablePositiveNumber,
   distanceSource: optionalDistanceSource,
-  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
+  defaultSoilTemperatureC: clearableDefaultSoilTemperature,
   isDefault: z.boolean().optional(),
 });
 

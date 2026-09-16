@@ -249,7 +249,9 @@ export function SupplierLocationForm({
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}
             onDistanceChange={(km, source) => {
-              setValue("distanceFromFacilityKm", km ?? undefined, {
+              // `null` is the explicit clear; `undefined` would read as
+              // "field omitted" and leave the stored distance in place.
+              setValue("distanceFromFacilityKm", km, {
                 shouldDirty: true,
                 shouldValidate: true,
               });
