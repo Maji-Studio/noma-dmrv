@@ -1,18 +1,11 @@
 {
-  "_doc": "Nightly read-only sandbox inventory for `pnpm isometric:coverage-check --source=fixture` (ADR 0005 / ADR 0018). `allowedSandboxPeriodInputs` contains exact normalized group/blueprint/component/input keys for the six known temporary period inputs on this sandbox template; all other PROJECT-scope tuples fail.",
+  "_doc": "Read-only sandbox inventory for `pnpm isometric:coverage-check --source=fixture` (ADR 0005 / ADR 0018). The pinned live template has no allowed PROJECT-scope period inputs. Any future exception must identify the exact normalized group/blueprint/component/input tuple; stale exceptions fail the check.",
   "facilities": [
     {
       "label": "Dark Earth sandbox demo",
       "externalProjectId": "prj_1K9YJ33RKSBX9FFF",
       "defaultRemovalTemplateId": "rvt_1KS4S43VPSBXA26X",
-      "allowedSandboxPeriodInputs": [
-        "direct-emissions/ghg_direct_emissions/pyrolyzer co emissions/concentration",
-        "direct-emissions/ghg_direct_emissions/pyrolyzer co emissions/mass_flow",
-        "direct-emissions/ghg_direct_emissions/pyrolyzer ch₄ emissions/concentration",
-        "direct-emissions/ghg_direct_emissions/pyrolyzer ch₄ emissions/mass_flow",
-        "staff-travel/distance_based_ci_emissions/staff travel flights/distance",
-        "staff-travel/distance_based_ci_emissions/staff travel local/distance"
-      ]
+      "allowedSandboxPeriodInputs": []
     }
   ]
 }

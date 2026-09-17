@@ -4,7 +4,7 @@ name: Isometric API health
 # breakage (auth regressions, schema drift, downtime) before it surfaces as a
 # user-facing submit failure. Reuses the existing opt-in vitest in
 # tests/isometric-sandbox.integration.test.ts — the registry's read paths,
-# including projects, templates, components, GHG entries, and blueprints.
+# including projects, templates, GHG entries, and blueprints.
 # No writes. No noma DB. No app boot.
 #
 # This workflow intentionally uses its dedicated environment credential pair
@@ -41,6 +41,7 @@ jobs:
       ISOMETRIC_OPENAPI_URL: "https://docs.isometric.com/api-reference/certify/mrv.openapi.json"
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           # Don't persist GITHUB_TOKEN into the workspace — read-only ping,
@@ -48,10 +49,28 @@ jobs:
           # avoids leaking it to later steps or artifacts.
           persist-credentials: false
 
+      - name: Setup pnpm
+        id: pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        id: node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        id: install
+        run: pnpm install --frozen-lockfile
+
       # Not gated on OP_SERVICE_ACCOUNT_TOKEN: a health check that skips its own
       # credentials reports green while the registry is unreachable. Missing
       # secrets fail the run.
       - name: Load Isometric secrets from 1Password
+        id: credentials
         uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
@@ -61,34 +80,26 @@ jobs:
           ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET
           ISOMETRIC_DEMO_PROJECT_ID: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_DEMO_PROJECT_ID
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Ping Isometric sandbox (read paths)
-        run: pnpm test:integration
+        id: api
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.credentials.outcome == 'success' }}
+        run: pnpm test:isometric-health
 
-      # ADR 0005 / Plan §7 (Thread B1). Asserts every (group, blueprint,
+      # Asserts every (group, blueprint,
       # input) tuple in the live template has an ordinary or sequestration
-      # binding. The fixture explicitly allowlists the six temporary sandbox
-      # period inputs; every other PROJECT-scope tuple fails. No DB required.
-      - name: Isometric template + Project-Component coverage
+      # binding. The fixture has no period-input exceptions; PROJECT-scope
+      # tuples fail. No DB required.
+      - name: Live template input coverage (fixture-selected templates)
+        id: coverage
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.credentials.outcome == 'success' }}
         run: pnpm isometric:coverage-check -- --source=fixture
 
       # Plan §8 (Thread B2). Regenerates `certify.d.ts` from the pinned
       # spec URL and fails if the working tree differs — surfaces upstream
       # OpenAPI changes the day they ship. Fix is local regen + commit.
       - name: Detect Certify OpenAPI drift
+        id: openapi
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           pnpm regenerate-certify-types
           if ! git diff --exit-code src/lib/isometric/generated/certify.d.ts; then
@@ -96,3 +107,48 @@ jobs:
             git --no-pager diff src/lib/isometric/generated/certify.d.ts
             exit 1
           fi
+
+      - name: Summarize and enforce health outcomes
+        if: ${{ always() }}
+        env:
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          PNPM: ${{ steps.pnpm.outcome }}
+          NODE: ${{ steps.node.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          CREDENTIALS: ${{ steps.credentials.outcome }}
+          API: ${{ steps.api.outcome }}
+          COVERAGE: ${{ steps.coverage.outcome }}
+          OPENAPI: ${{ steps.openapi.outcome }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Isometric sandbox health
+
+          | Step | Outcome |
+          | --- | --- |
+          | Checkout | $CHECKOUT |
+          | pnpm setup | $PNPM |
+          | Node setup | $NODE |
+          | Dependency install | $INSTALL |
+          | Sandbox credentials | $CREDENTIALS |
+          | API read health | $API |
+          | Live template input coverage (fixture source) | $COVERAGE |
+          | Public OpenAPI drift | $OPENAPI |
+
+          Sandbox/read-only checks only; no production readiness claim, DB checks,
+          registry writes, or Project Component coverage. Fixture mode selects project
+          and template IDs locally but fetches templates live.
+
+          - Setup failure: inspect the failed setup step; reproduce install with \`pnpm install --frozen-lockfile\`.
+          - Credentials failure: check OP_SERVICE_ACCOUNT_TOKEN and the three Isometric fields in the staging 1Password item; confirm they belong to the sandbox demo project's organization. Never paste credentials into logs.
+          - API failure: with sandbox credentials, ISOMETRIC_ENVIRONMENT=sandbox and ISOMETRIC_DEMO_PROJECT_ID configured, run \`pnpm test:isometric-health\`.
+          - Coverage failure: with sandbox credentials configured, run \`pnpm isometric:coverage-check -- --source=fixture\`; inspect live template bindings and the explicit fixture allowlist.
+          - OpenAPI failure: run \`pnpm regenerate-certify-types\`; inspect fetch/generation errors or review \`git diff -- src/lib/isometric/generated/certify.d.ts\` before committing an intentional type refresh.
+          - Skipped or cancelled checks are incomplete, never evidence of health. Fix prerequisites and rerun the workflow.
+          EOF
+
+          for outcome in "$CHECKOUT" "$PNPM" "$NODE" "$INSTALL" "$CREDENTIALS" "$API" "$COVERAGE" "$OPENAPI"; do
+            if [ "$outcome" != success ]; then
+              echo "::error::Isometric health is incomplete or failed; see the step summary."
+              exit 1
+            fi
+          done
