@@ -9,24 +9,53 @@ import { and, eq } from 'drizzle-orm';
 import { findMovementRequest, lockMovementRequest } from './bin-movement-requests';
 import { assertCanMutateCertifiedLineage } from './certification-lineage-guards';
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
-import { lockBinStock } from './lock-bin-stocks';
+import { lockBinStocks } from './lock-bin-stocks';
 import { prepareOutputStock, stockFingerprint } from './output-stock-operations';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
 
 const OUTPUT_REQUEST_CONFLICT_MESSAGE = 'This request key was already used with different values.';
 
-/** Serializes a request even if a reused key names a different bin. */
-export async function lockOutputRequest(ctx: OrgContext, tx: DbTransaction, key: string) {
-  return lockMovementRequest(ctx, tx, key);
-}
-/** Output-lane view of the shared replay guard. */
-export async function findOutputRequest(ctx: OrgContext, tx: DbTransaction, input: OutputStockPostInput, payload: unknown = input) {
-  return findMovementRequest(ctx, tx, { idempotencyKey: input.idempotencyKey, payload, storageLocationId: input.storageLocationId, conflictMessage: OUTPUT_REQUEST_CONFLICT_MESSAGE });
+type PostedOutputRequest = NonNullable<Awaited<ReturnType<typeof findMovementRequest>>>;
+type PersistOptions = { deliveryId?: string; targetBiocharProductId?: string; payload?: unknown };
+type PostedOutputStock = Awaited<ReturnType<typeof persistOutputStock>>;
+
+export interface OutputStockPosting<T> {
+  input: OutputStockPostInput;
+  /** Operator facts a replayed key must match. Defaults to the posting input. */
+  payload?: unknown;
+  /** Bins the action reads or writes besides the source bin. */
+  additionalBinIds?: ReadonlyArray<string | null | undefined>;
+  /** Set when the action can change product transport legs. */
+  locksTransportRoutes?: boolean;
+  /** The key was already posted: return the saved result without writing. */
+  replay: (tx: DbTransaction, existing: PostedOutputRequest) => Promise<T>;
+  /** Runs under every lock. `post` writes the draw; the domain row may need a fresher source fingerprint. */
+  write: (tx: DbTransaction, post: (options?: Omit<PersistOptions, 'payload'> & { basisFingerprint?: string }) => Promise<PostedOutputStock>) => Promise<T>;
 }
 
-/** Caller owns the bin/request locks and cross-entity transaction. */
-export async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: OutputStockPostInput, options: { deliveryId?: string; targetBiocharProductId?: string; payload?: unknown } = {}) {
+/**
+ * The one way to post output stock. Owns the transaction and the lock order
+ * (transport routes, request key, bins in sorted order), so a replayed key
+ * never writes and no caller can post without holding the bin lock.
+ */
+export async function withOutputStockPosting<T>(ctx: OrgContext, posting: OutputStockPosting<T>): Promise<T> {
+  requireOrgScope(ctx);
+  const { input, payload = input } = posting;
+  return db.transaction(async tx => {
+    if (posting.locksTransportRoutes) await lockBiocharTransportRouteTopology(ctx, tx);
+    // Serializes a request even if a reused key names a different bin.
+    await lockMovementRequest(ctx, tx, input.idempotencyKey);
+    const existing = await findMovementRequest(ctx, tx, { idempotencyKey: input.idempotencyKey, payload, storageLocationId: input.storageLocationId, conflictMessage: OUTPUT_REQUEST_CONFLICT_MESSAGE });
+    if (existing) return posting.replay(tx, existing);
+    await lockBinStocks(ctx, tx, [input.storageLocationId, ...(posting.additionalBinIds ?? [])]);
+    return posting.write(tx, ({ basisFingerprint, ...options } = {}) =>
+      persistOutputStock(ctx, tx, basisFingerprint ? { ...input, basisFingerprint } : input, { ...options, payload }));
+  });
+}
+
+/** Requires the request and bin locks held by withOutputStockPosting. */
+async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: OutputStockPostInput, options: PersistOptions = {}) {
   requireOrgScope(ctx);
   // Applications serialize on the delivery row. Acquire that same lock before
   // discovering dependencies so an application cannot appear after the check.
@@ -99,13 +128,13 @@ export async function postOutputStock(ctx: OrgContext, raw: OutputStockPostInput
   requireOrgScope(ctx);
   const input = outputStockPostSchema.parse(raw);
   if (!['loss', 'count'].includes(input.kind) && !(input.kind === 'delivery' && input.correctsMovementId)) throw new SafeError('Save deliveries and products through their own forms.');
-  return db.transaction(async tx => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-    await lockOutputRequest(ctx, tx, input.idempotencyKey);
-    const existing = await findOutputRequest(ctx, tx, input);
-    if (existing) return { movementId: existing.id, preview: existing.inputSnapshot!.preview as unknown as Awaited<ReturnType<typeof prepareOutputStock>>['preview'] };
-    await lockBinStock(ctx, tx, input.storageLocationId);
-    const result = await persistOutputStock(ctx, tx, input);
-    return { movementId: result.movement.id, preview: result.preview };
+  return withOutputStockPosting(ctx, {
+    input,
+    locksTransportRoutes: true,
+    replay: async (_tx, existing) => ({ movementId: existing.id, preview: existing.inputSnapshot!.preview as unknown as PostedOutputStock['preview'] }),
+    write: async (_tx, post) => {
+      const result = await post();
+      return { movementId: result.movement.id, preview: result.preview };
+    },
   });
 }

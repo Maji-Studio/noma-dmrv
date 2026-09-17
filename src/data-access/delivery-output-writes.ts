@@ -10,7 +10,7 @@ import { assertCanMutateCertifiedLineage } from './certification-lineage-guards'
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
 import { lockBinStock } from './lock-bin-stocks';
 import { getOutputStockAllocationProjection } from './output-stock';
-import { findOutputRequest, lockOutputRequest, persistOutputStock } from './output-stock-post';
+import { withOutputStockPosting } from './output-stock-post';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { assertSameOrg, requireOrgScope } from './utils';
 
@@ -22,16 +22,11 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
   const payload = Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'code'));
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
-  return db.transaction(async tx => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-    await lockOutputRequest(ctx, tx, input.idempotencyKey);
-    const existing = await findOutputRequest(ctx, tx, input, payload);
-    if (existing) {
+  return withOutputStockPosting(ctx, { input, payload, locksTransportRoutes: true, replay: async (tx, existing) => {
       const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, String(existing.inputSnapshot?.deliveryId))));
       if (!delivery) throw new SafeError('Posted delivery not found');
       return delivery;
-    }
-    await lockBinStock(ctx, tx, input.storageLocationId);
+    }, write: async (tx, post) => {
     const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
     if (!facility) throw new SafeError('Facility not found or archived');
     await lockDeliveryOrderAndAssertBalance(ctx, tx, { orderId: data.orderId, requestedWetKg: data.deliveredWetMassKg });
@@ -43,11 +38,11 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
       storageLocationId: data.storageLocationId, deliveryDate: data.deliveryDate, status: 'delivered', deliveredWetMassKg: data.deliveredWetMassKg,
       moistureContentPercent: data.moistureContentPercent, driverId: data.driverId, vehicleId: data.vehicleId,
       distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote, tripType: data.tripType ?? 'return' }).returning();
-    const posted = await persistOutputStock(ctx, tx, input, { deliveryId: delivery.id, payload });
+    const posted = await post({ deliveryId: delivery.id });
     const [saved] = await tx.update(deliveries).set({ massDryKg: posted.preview.removedDryKg }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
     await syncBiocharProductTransportLegs(ctx, tx, posted.preview.allocations.map(a => a.layerId));
     return saved;
-  });
+  } });
 }
 export async function updateDelivery(ctx: OrgContext, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<Delivery> {
   requireOrgScope(ctx);
