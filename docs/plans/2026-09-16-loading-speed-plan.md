@@ -1,7 +1,7 @@
 # Loading speed plan (2026-09-16)
 
 - **Owner**: Kenji Nguyen
-- **Status**: in progress. Phases 0 and 1 done 2026-09-16; Phase 3 merged and measured 2026-09-17 (#803), pool ladder pending an owner env change; Phases 2 and 4 deferred as sub-second wins after the Frankfurt move; Phase 5 criterion still met (five sequential dashboard actions), decision open
+- **Status**: in progress. Phases 0 and 1 done 2026-09-16; Phase 3 merged and measured 2026-09-17 (#803); pool ladder settled at `DB_POOL_MAX=3` on 2026-09-17 (no checkout queueing, see below); Phases 2 and 4 deferred as sub-second wins after the Frankfurt move; Phase 5 approved 2026-09-17, implementation pending
 - **Last reviewed**: 2026-09-17
 
 Staging pages sit on a skeleton for 11 s warm and 20 s cold. The measured cause is
@@ -158,8 +158,50 @@ dashboard action at 0.10 to 0.34 s. Excluding that outlier, the overview action
 sits at 0.10 to 0.34 s and the startup sequence ends at 1.05 to 1.68 s. The
 remaining time is the sequential dispatch of the five dashboard actions at about
 0.10 s each, not any single query, so the next lever is Phase 5 (action count),
-not the query budget. The pool ladder (Phase 3 step 7) has not run: the Preview
-env upsert needs the owner.
+not the query budget.
+
+## Pool ladder (measured 2026-09-17, staging at 7907c1e3, `DB_POOL_MAX=3`, `DB_POOL_TELEMETRY=true`)
+
+Same protocol, four warm hard reloads, then three more to feed the telemetry
+window. Startup fetch count stayed at 9.
+
+| Run | Last startup fetch finishes | Longest single fetch |
+| --- | --- | --- |
+| 1 | 2.10 s | 0.97 s |
+| 2 | 1.12 s | 0.20 s |
+| 3 | 0.93 s | 0.24 s |
+| 4 | 3.03 s | 1.52 s |
+
+Runs 1 and 4 each had one slow dashboard action; the rest matched the
+`DB_POOL_MAX=1` numbers. Page latency is not the decision input. The
+checkout-queue telemetry over a 75 s window (`mod: db-pool`, fra1) is:
+
+| Metric | Value |
+| --- | --- |
+| Connection acquisitions | 65 |
+| Acquisitions with `waitingBefore > 0` | 0 |
+| Acquisition duration | 0.1 ms in every case |
+| Pool size at acquisition | 1 in 38 cases, 3 in 27 cases |
+| Idle connections at acquisition | 0 to 2 |
+| New connections established | 17, 33 ms median, 124 ms max |
+
+Read the last two rows together with care: `pg` resolves a checkout that has to
+open a connection only once the new client has finished connecting, so an
+acquisition that opened one carries that open time in its own duration
+(`src/db/observed-pg.ts` wraps `pool.connect`, and pg-pool calls back from inside
+`newClient`). The captured window was not re-read to separate those 17 checkouts
+from the rest, so treat the 0.1 ms as the acquisitions that found a client ready,
+not as a figure covering every checkout. It does not change the decision: no
+acquisition waited behind another, and the slowest number in the window (124 ms)
+is a connection being opened, not a checkout queueing.
+
+Acquisition duration is the deciding evidence: every acquisition duration
+captured in the window is 0.1 ms, with no slower value among them, and none of
+the 65 checkouts had another waiting ahead of it. Nothing queues at 3, so the
+rollout rule ("move from 3 to 5 only when acquisition still queues at 3") stops
+the ladder at 3. `DB_POOL_MAX=3` stays
+on Preview; Production stays at 1 until it carries real traffic, at which point
+the same telemetry window decides. `DB_POOL_TELEMETRY` goes back off.
 
 ## Phase 2: per-request auth cost (one PR)
 
@@ -247,11 +289,15 @@ touches `src/components/navigation/sidebar-content.tsx`.
 
 ## Phase 5: remaining startup actions (only if still needed)
 
-After Phases 1 through 4, re-measure the eight startup actions. If the shell still
-queues more than three sequential actions (the After Phase 3 measurement shows five
-sequential dashboard actions, so the criterion is met; owner decision pending), extend the #763 read transport to the
-remaining ones (org profile, onboarding status, organization list) following the
-boundary agreed in Phase 0. Do not start this phase before the measurement.
+The original precondition was to re-measure the eight startup actions after
+Phases 1 through 4 and to proceed only if the shell still queued more than three
+sequential actions. The owner's approval on 2026-09-17 replaces that
+precondition: the After Phase 3 measurement already shows five sequential
+dashboard actions, so the criterion is met and Phase 5 starts now, with Phases 2
+and 4 still deferred. Extend the #763 read transport to the remaining actions
+(org profile, onboarding status, organization list) following the boundary agreed
+in Phase 0. One PR, measured with the same protocol; if that measurement shows
+three or fewer sequential actions, stop there rather than extending further.
 
 ## Sequence and handoff
 
@@ -261,7 +307,7 @@ boundary agreed in Phase 0. Do not start this phase before the measurement.
 4. Phase 3 PR, measured, then pool ladder.
 5. Phase 4 PR, measured.
 6. Restore Neon scale-to-zero. Re-measure cold once and record it here.
-7. Phase 5 decision.
+7. Phase 5 decision (approved 2026-09-17), then the Phase 5 PR, measured.
 
 Each PR: feature branch off `staging`, `pnpm lint`, `pnpm typecheck`, focused Vitest,
 `pnpm check:org-scoping`, `pnpm docs:check`, review suite capped at two rounds, merge
