@@ -85,7 +85,7 @@ The dedicated connection does not inherit the pooled lock timeout. Do not add a 
    SELECT count(*) FROM pg_stat_activity;
    ```
 2. Account for `active Vercel instances × DB_POOL_MAX`, plus simultaneous dedicated lock operations and non-app consumers.
-3. Raise `DB_POOL_MAX` one measured step at a time, never past the budget above, and on Vercel never past `MAX_VERCEL_DB_POOL_MAX`. The current measurement procedure is in [database.md](./database.md#rollout--pool-size-measurement).
+3. Raise `DB_POOL_MAX` one measured step at a time, never past the budget above, and on Vercel never past `MAX_VERCEL_DB_POOL_MAX`. Decide from the checkout-queue telemetry (`LOG_LEVEL=trace` for a bounded window), not from page latency: on `database connection acquired`, the acquisition `durationMs` is the primary signal, and `waitingBefore > 0` is evidence of a deeper queue behind it (it counts only the checkouts already waiting ahead of this one, so a single waiter at a time still reads 0). See [database.md](./database.md#pool-sizing-and-compute-placement).
 4. If adding a pooler, use direct/session semantics or prove compatibility with `withDedicatedSessionAdvisoryLock`; transaction pooling is not automatically safe for session locks.
 
 ### Connection Refused / Connection Timeout
