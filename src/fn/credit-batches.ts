@@ -17,7 +17,7 @@ import {
   deleteCreditBatch as deleteCreditBatchData,
   creditBatchCodeExists,
   type CreditBatchWithRelations,
-  type CreatedCreditBatch,
+  type SavedCreditBatch,
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
 } from "@/data-access/credit-batches";
@@ -131,7 +131,7 @@ export async function getCreditBatchProductionRunOptionsFn(
  */
 export async function createCreditBatchFn(
   data: z.infer<typeof createCreditBatchSchema>
-): Promise<ActionResult<CreatedCreditBatch>> {
+): Promise<ActionResult<SavedCreditBatch>> {
   try {
     const ctx = await requireOrgContext();
 
@@ -170,7 +170,7 @@ export async function createCreditBatchFn(
  */
 export async function updateCreditBatchFn(
   data: z.infer<typeof updateCreditBatchSchema>
-): Promise<ActionResult<CreditBatchWithRelations>> {
+): Promise<ActionResult<SavedCreditBatch>> {
   try {
     const ctx = await requireOrgContext();
 
@@ -199,7 +199,12 @@ export async function updateCreditBatchFn(
     }
 
     const creditBatch = await updateCreditBatchData(ctx, creditBatchId, updateData);
-    return { success: true, data: creditBatch };
+    // The update is committed. As with create, its accounting roll-up runs
+    // after that commit and can fail on its own; the operator is told what is
+    // saved rather than that nothing is (issue #797).
+    return creditBatch.previewAvailable
+      ? { success: true, data: creditBatch }
+      : { success: true, data: creditBatch, warning: SAVED_DETAILS_UNAVAILABLE };
   } catch (error) {
     logCreditBatchError("Failed to update credit batch", error);
     if (error instanceof z.ZodError) {
