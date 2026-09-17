@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
-  getActiveOrganizationProfile,
   inviteMemberAction,
   listInvitationsFn,
   listMembersFn,
@@ -15,9 +14,16 @@ import {
   revokeInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
+import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
+import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
+
+// How many times the active-organization read is re-attempted after a
+// transport or server fault before the sidebar settles on an error. A
+// no-organization answer never spends one; it is refused outright below.
+const ACTIVE_ORGANIZATION_MAX_RETRIES = 3;
 
 const organizationKeys = {
   all: ["organizations"] as const,
@@ -35,7 +41,12 @@ const organizationKeys = {
 export function useActiveOrganizationProfile() {
   return useQuery({
     queryKey: organizationKeys.activeProfile(),
-    queryFn: () => getActiveOrganizationProfile(),
+    queryFn: async ({ signal }) => unwrap(await getActiveOrganizationRead({ signal })),
+    // A denied context answers the same on every attempt; transient transport
+    // and server faults still retry so one blip does not settle the sidebar.
+    retry: (failureCount, error) =>
+      !(error instanceof Error && error.message === NO_ORGANIZATION_MESSAGE) &&
+      failureCount < ACTIVE_ORGANIZATION_MAX_RETRIES,
   });
 }
 

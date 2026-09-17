@@ -6,7 +6,7 @@ import {
   type OrgContext,
   type OrgContextDenial,
 } from "@/lib/auth/server";
-import { SafeError } from "@/lib/errors";
+import { NO_ORGANIZATION_MESSAGE, SafeError } from "@/lib/errors";
 import type { ActionResult } from "@/types/actions";
 
 const PRIVATE_READ_HEADERS = {
@@ -38,7 +38,7 @@ const DENIAL_RESPONSES: Record<
     status: STATUS.unauthenticated,
   },
   "no-organization": {
-    error: "Select an Organization to continue.",
+    error: NO_ORGANIZATION_MESSAGE,
     status: STATUS.forbidden,
   },
 };
@@ -59,6 +59,12 @@ interface ReadResponseOptions<T> {
   invalidInputContext?: string;
   logContext: string;
   read: (ctx: OrgContext) => Promise<T>;
+  /**
+   * Operator copy for a server fault the read recognises (for example a
+   * database schema that lags the deployment). The fault is still logged and
+   * still answers 500; only the message changes from the generic fallback.
+   */
+  knownFaultMessage?: (error: unknown) => string | undefined;
 }
 
 /**
@@ -106,6 +112,7 @@ export async function readResponse<T>({
   invalidInputContext,
   logContext,
   read,
+  knownFaultMessage,
 }: ReadResponseOptions<T>): Promise<Response> {
   try {
     // Resolving the context reads the database, so it is inside the same
@@ -121,9 +128,13 @@ export async function readResponse<T>({
       STATUS.ok,
     );
   } catch (error) {
+    const knownFault = knownFaultMessage?.(error);
     const failure = toActionFailure(error, {
-      fallbackMessage,
-      log: { message: READ_LOG_MESSAGE, context: { op: logContext } },
+      fallbackMessage: knownFault ?? fallbackMessage,
+      log: {
+        message: READ_LOG_MESSAGE,
+        context: { op: logContext, ...(knownFault ? { knownFault: true } : {}) },
+      },
       zodErrorPrefix: invalidInputContext,
     });
     return readJson(failure, failureStatus(error, failure));

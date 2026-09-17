@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
   resolveOrgContext: vi.fn(),
   requireOrgFacility: vi.fn(),
   getFacilities: vi.fn(),
+  getFacilityById: vi.fn(),
+  getActiveOrganization: vi.fn(),
+  getOnboardingStatus: vi.fn(),
+  getDashboardOverview: vi.fn(),
   getProductionRuns: vi.fn(),
   getProductionRunStats: vi.fn(),
   getCreditBatches: vi.fn(),
@@ -25,6 +29,7 @@ vi.mock("@/data-access/utils", () => ({
 }));
 vi.mock("@/data-access/facilities", () => ({
   getFacilities: mocks.getFacilities,
+  getFacilityById: mocks.getFacilityById,
 }));
 vi.mock("@/data-access/production-runs", () => ({
   getProductionRuns: mocks.getProductionRuns,
@@ -37,6 +42,9 @@ vi.mock("@/data-access/certification", () => ({
   getCertifierProjectByFacility: mocks.getCertifierProjectByFacility,
   listFacilitiesLinkedToExternal: mocks.listFacilitiesLinkedToExternal,
 }));
+vi.mock("@/data-access/organizations", () => ({ getActiveOrganization: mocks.getActiveOrganization }));
+vi.mock("@/data-access/onboarding", () => ({ getOnboardingStatus: mocks.getOnboardingStatus }));
+vi.mock("@/data-access/dashboard-overview", () => ({ getDashboardOverview: mocks.getDashboardOverview }));
 vi.mock("@/config/env", () => ({
   env: { ISOMETRIC_ENVIRONMENT: "sandbox" },
 }));
@@ -52,6 +60,12 @@ import { POST as certifierSummaryRoute } from "./facilities/[facilityId]/certifi
 import { POST as facilitiesRoute } from "./facilities/route";
 import { POST as productionRunsRoute } from "./production-runs/route";
 import { POST as productionRunStatsRoute } from "./production-runs/stats/route";
+
+import { POST as facilityRoute } from "./facilities/[facilityId]/route";
+import { POST as activeOrganizationRoute } from "./organizations/active/route";
+import { POST as onboardingRoute } from "./onboarding/status/route";
+import { POST as dashboardRoute } from "./dashboard/overview/route";
+import { DASHBOARD_SCHEMA_MISMATCH_MESSAGE } from "@/lib/read-models/dashboard-overview";
 
 const ORG_CONTEXT = {
   userId: "user-1",
@@ -90,9 +104,9 @@ interface ReadEndpoint {
   ok: () => Promise<Response>;
   /** The data the arranged read answers with, as JSON. */
   data: unknown;
-  /** A request whose input cannot be validated. */
-  badInput: () => Promise<Response>;
-  badInputError: string;
+  /** A request whose input cannot be validated; absent when the read takes none. */
+  badInput?: () => Promise<Response>;
+  badInputError?: string;
   /** A request naming a facility outside the active organization. */
   foreignFacility?: () => Promise<Response>;
   /** The data-access call a foreign facility must never reach. */
@@ -100,6 +114,30 @@ interface ReadEndpoint {
 }
 
 const endpoints: Record<string, ReadEndpoint> = {
+  "facility detail": {
+    ok: () => facilityRoute(post("/api/reads/facilities"), facilityParams(FACILITY_ID)),
+    data: { id: FACILITY_ID },
+    badInput: () => facilityRoute(post("/api/reads/facilities"), facilityParams(MALFORMED_ID)),
+    badInputError: "Invalid facility identifier: Choose a valid facility.",
+  },
+  "active organization": {
+    ok: () => activeOrganizationRoute(),
+    data: { id: ORG_CONTEXT.organizationId },
+  },
+  "onboarding status": {
+    ok: () => onboardingRoute(post("/api/reads/onboarding/status", { facilityId: FACILITY_ID })),
+    data: { facilityCount: 1 },
+    badInput: () => onboardingRoute(post("/api/reads/onboarding/status", { facilityId: MALFORMED_ID })),
+    badInputError: "Invalid onboarding filters: Choose a valid facility.",
+  },
+  "dashboard overview": {
+    ok: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID })),
+    data: { generatedAt: "2026-09-15T10:00:00.000Z" },
+    badInput: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: MALFORMED_ID })),
+    badInputError: "Invalid dashboard filters: Choose a valid facility.",
+    foreignFacility: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FOREIGN_FACILITY_ID })),
+    guardedRead: () => mocks.getDashboardOverview,
+  },
   facilities: {
     ok: () => facilitiesRoute(post("/api/reads/facilities", { pageSize: 20 })),
     data: EMPTY_PAGE,
@@ -189,6 +227,10 @@ describe.each(Object.entries(endpoints))(
       mocks.resolveOrgContext.mockResolvedValue({ ok: true, ctx: ORG_CONTEXT });
       mocks.requireOrgFacility.mockResolvedValue(undefined);
       mocks.getFacilities.mockResolvedValue(EMPTY_PAGE);
+      mocks.getFacilityById.mockResolvedValue({ id: FACILITY_ID });
+      mocks.getActiveOrganization.mockResolvedValue({ id: ORG_CONTEXT.organizationId });
+      mocks.getOnboardingStatus.mockResolvedValue({ facilityCount: 1 });
+      mocks.getDashboardOverview.mockResolvedValue({ generatedAt: "2026-09-15T10:00:00.000Z" });
       mocks.getProductionRuns.mockResolvedValue(EMPTY_PAGE);
       mocks.getProductionRunStats.mockResolvedValue(RUN_STATS);
       mocks.getCreditBatches.mockResolvedValue([CREDIT_BATCH]);
@@ -240,8 +282,8 @@ describe.each(Object.entries(endpoints))(
       expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
     });
 
-    it("answers 400 for input it cannot validate", async () => {
-      const response = await endpoint.badInput();
+    it.runIf(endpoint.badInput)("answers 400 for input it cannot validate", async () => {
+      const response = await endpoint.badInput!();
 
       expect(response.status).toBe(400);
       await expect(response.json()).resolves.toEqual({
@@ -298,5 +340,49 @@ describe("private read route: malformed body", () => {
       error: "The request could not be read. Refresh the page and try again.",
     });
     expect(mocks.getFacilities).not.toHaveBeenCalled();
+  });
+});
+
+describe("startup read contracts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveOrgContext.mockResolvedValue({ ok: true, ctx: ORG_CONTEXT });
+    mocks.requireOrgFacility.mockResolvedValue(undefined);
+  });
+
+  it("preserves the scoped facility lookup's missing-row response", async () => {
+    mocks.getFacilityById.mockRejectedValueOnce(new SafeError("Facility not found"));
+    const response = await facilityRoute(post("/api/reads/facilities"), facilityParams(FOREIGN_FACILITY_ID));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ success: false, error: "Facility was not found." });
+    expect(mocks.getFacilityById).toHaveBeenCalledWith(ORG_CONTEXT, FOREIGN_FACILITY_ID);
+  });
+
+  it("reads organization-wide onboarding without a facility guard", async () => {
+    await onboardingRoute(post("/api/reads/onboarding/status", { facilityId: null }));
+    expect(mocks.requireOrgFacility).not.toHaveBeenCalled();
+    expect(mocks.getOnboardingStatus).toHaveBeenCalledWith(ORG_CONTEXT, null);
+  });
+
+  it("defaults the dashboard range to month", async () => {
+    await dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID }));
+    expect(mocks.getDashboardOverview).toHaveBeenCalledWith(ORG_CONTEXT, FACILITY_ID, "month");
+  });
+
+  it("rejects an unsupported dashboard range before data access", async () => {
+    const response = await dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID, range: "year" }));
+    expect(response.status).toBe(400);
+    expect(mocks.getDashboardOverview).not.toHaveBeenCalled();
+  });
+
+  it("answers a schema mismatch as a logged server fault with its own message", async () => {
+    mocks.getDashboardOverview.mockRejectedValueOnce({ cause: { code: "42703" } });
+    const response = await dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID }));
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ success: false, error: DASHBOARD_SCHEMA_MISMATCH_MESSAGE });
+    expect(mocks.logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ op: "read:dashboard:overview", knownFault: true }),
+      "authenticated read failed",
+    );
   });
 });

@@ -7,7 +7,7 @@ import { onboardingKeys } from "@/hooks/use-onboarding";
 import { useOnboardingGate, type OnboardingGate } from "./use-onboarding-gate";
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), sessionPending: false }));
-vi.mock("@/fn/onboarding", () => ({ fetchOnboardingStatus: mocks.fetch }));
+vi.mock("@/lib/read-api/client", () => ({ getOnboardingStatusRead: mocks.fetch }));
 vi.mock("@/lib/auth/client", () => ({
   authClient: { useSession: () => ({ data: null, isPending: mocks.sessionPending }) },
 }));

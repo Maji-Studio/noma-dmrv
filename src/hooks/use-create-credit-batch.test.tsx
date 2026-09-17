@@ -8,7 +8,7 @@ import { onboardingKeys } from "./use-onboarding";
 
 const mocks = vi.hoisted(() => ({ create: vi.fn(), readiness: vi.fn() }));
 vi.mock("@/fn/credit-batches", () => ({ createCreditBatchFn: mocks.create }));
-vi.mock("@/fn/onboarding", () => ({ fetchOnboardingStatus: vi.fn() }));
+vi.mock("@/lib/read-api/client", () => ({ getOnboardingStatusRead: vi.fn() }));
 vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: mocks.readiness }));
 
 const row = { id: "batch-1", facilityId: "facility-1", code: "CB-001" };

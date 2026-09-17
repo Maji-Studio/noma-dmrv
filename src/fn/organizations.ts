@@ -14,7 +14,6 @@ import { db } from "@/db";
 import { organizations, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/better-auth";
 import {
-  getOrgContext,
   requireOrgContext,
   requireOrgRole,
   requirePlatformAdmin,
@@ -35,7 +34,6 @@ import {
   createOrganizationWithOwner,
   findMembershipRole,
   findUserIdByEmail,
-  getActiveOrganization,
   listAllOrganizations,
   listOrgInvitations,
   listOrgMembers,
@@ -353,11 +351,4 @@ export async function acceptInvitationAction(
     const warning = await saveOrgPreference(session.user.id, organizationId);
     return { data: { organizationId }, warning };
   }, "Failed to accept invitation.");
-}
-
-/** Server-component helper: the active org profile for identity chrome. */
-export async function getActiveOrganizationProfile() {
-  const ctx = await getOrgContext();
-  if (!ctx) return null;
-  return getActiveOrganization(ctx);
 }

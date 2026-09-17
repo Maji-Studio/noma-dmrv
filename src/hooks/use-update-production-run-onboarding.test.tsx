@@ -7,7 +7,7 @@ import { onboardingKeys } from "./use-onboarding";
 
 const mocks = vi.hoisted(() => ({ update: vi.fn() }));
 vi.mock("@/fn/production-runs", () => ({ updateProductionRunFn: mocks.update }));
-vi.mock("@/fn/onboarding", () => ({ fetchOnboardingStatus: vi.fn() }));
+vi.mock("@/lib/read-api/client", () => ({ getOnboardingStatusRead: vi.fn() }));
 vi.mock("./use-certification", () => ({ invalidateCertificationReadiness: vi.fn() }));
 
 it.each([

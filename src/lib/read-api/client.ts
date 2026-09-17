@@ -10,8 +10,13 @@ import type {
 } from "@/data-access/production-runs";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import type { Facility } from "@/db/schema";
+import type { OnboardingStatus } from "@/data-access/onboarding";
+import type { DashboardOverview } from "@/data-access/dashboard-overview";
+import type { OnboardingStatusInput, DashboardOverviewInput } from "@/lib/read-models";
+import type { Facility, Organization } from "@/db/schema";
+import { missingRecordMessage } from "@/lib/errors";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
+import { facilityIdSchema } from "@/lib/read-models/facility-id";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
@@ -53,6 +58,10 @@ const INVALID_ENVELOPE_ERROR =
   "The server returned an unreadable response. Refresh the page and try again.";
 const SESSION_EXPIRED_ERROR = "Your session has ended. Sign in to continue.";
 const UNVERIFIED_EMAIL_ERROR = "Verify your email to continue.";
+// The same answer the org-scoped lookup gives for a facility that is not this
+// organization's, so a malformed id and a foreign one read alike to the hooks
+// that key their retry rule on it.
+const MISSING_FACILITY_ERROR = missingRecordMessage("Facility");
 
 type JsonContract<T> = T extends Date
   ? string
@@ -170,6 +179,10 @@ function dateFields<Value>() {
   ) => Object.keys(fields) as (DateKeys<Value> & string)[];
 }
 
+const ORGANIZATION_DATE_FIELDS = dateFields<Organization>()({
+  createdAt: true,
+  updatedAt: true,
+});
 const FACILITY_DATE_FIELDS = dateFields<Facility>()({
   archivedAt: true,
   createdAt: true,
@@ -303,4 +316,59 @@ export async function getFacilityCertifierSummaryRead(
     options,
   );
   return mapReadData(result, decodeCertifierSummary);
+}
+
+/**
+ * Refuse an id that is not a facility identifier before it is interpolated
+ * into a request path. The id arrives from the `?facility=` URL param and
+ * localStorage, so it can be anything, and a dot segment ("." or "..") makes
+ * the URL parser resolve the path onto a neighbouring route: the read would
+ * answer with a different resource, which the caller would then store as the
+ * selected facility. The server rejects it too; this keeps the wrong route
+ * from being asked in the first place.
+ */
+function rejectMalformedFacilityId(
+  facilityId: string,
+): { success: false; error: string } | null {
+  return facilityIdSchema.safeParse(facilityId).success
+    ? null
+    : { success: false, error: MISSING_FACILITY_ERROR };
+}
+
+export async function getFacilityRead(
+  facilityId: string,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<Facility>> {
+  const malformed = rejectMalformedFacilityId(facilityId);
+  if (malformed) return malformed;
+  const result = await requestRead<Facility>(
+    `/api/reads/facilities/${encodeURIComponent(facilityId)}`,
+    undefined,
+    options,
+  );
+  return mapReadData(result, decodeFacility);
+}
+
+export async function getActiveOrganizationRead(
+  options?: ReadRequestOptions,
+): Promise<ActionResult<Organization | null>> {
+  const result = await requestRead<Organization | null>(
+    "/api/reads/organizations/active", undefined, options,
+  );
+  return mapReadData(result, (wire) => wire === null ? null :
+    decodeDates<Organization>(wire, ORGANIZATION_DATE_FIELDS));
+}
+
+export function getOnboardingStatusRead(
+  input: OnboardingStatusInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<OnboardingStatus>> {
+  return requestRead<OnboardingStatus>("/api/reads/onboarding/status", input, options);
+}
+
+export function getDashboardOverviewRead(
+  input: DashboardOverviewInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<DashboardOverview>> {
+  return requestRead<DashboardOverview>("/api/reads/dashboard/overview", input, options);
 }

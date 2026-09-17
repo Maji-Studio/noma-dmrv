@@ -12,7 +12,6 @@ import {
   createFacility,
   getFacilityArchiveImpact,
   restoreFacility,
-  getFacilityById as getFacilityByIdData,
   getFacilityCountries as getFacilityCountriesData,
   updateFacility,
   type FacilityArchiveImpact,
@@ -67,29 +66,6 @@ function facilityActionError(
 // ============================================
 // List/Query Operations
 // ============================================
-
-/**
- * Get a single facility by ID
- */
-export async function getFacilityByIdFn(
-  facilityId: string
-): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const facility = await getFacilityByIdData(ctx, facilityId);
-    return { success: true, data: facility };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility",
-        "facility:get",
-      ),
-    };
-  }
-}
 
 /**
  * Get unique countries for the facility filter — active facilities by
