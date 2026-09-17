@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { members, users } from "@/db/schema";
-import { SafeError } from "@/lib/errors";
+import { NO_ORGANIZATION_MESSAGE, SafeError } from "@/lib/errors";
 import { cliOrgContextStore } from "./cli-org-context-store";
 import {
   getBetterAuthSession,
@@ -235,7 +235,7 @@ export async function getOrgContext(): Promise<OrgContext | null> {
 export async function requireOrgContext(): Promise<OrgContext> {
   const ctx = await getOrgContext();
   if (!ctx) {
-    throw new SafeError("Select an Organization to continue.");
+    throw new SafeError(NO_ORGANIZATION_MESSAGE);
   }
   return ctx;
 }

@@ -38,19 +38,15 @@ import {
 } from "./removal-reporting-window";
 import type { ResolvedFixedInput } from "./removal-snapshot-readers";
 import {
-  attachSourcesToBiocharApplicationIntents,
   compileBiocharApplicationIntents,
   type BiocharApplicationIntent,
 } from "./biochar-application-intents";
-import {
-  collectCandidateSourceDocumentsForRemoval,
-  resolveSourceBindingCandidates,
-  type CandidateSourceDocument,
-  type ResolvedSourceBindingCandidate,
+import type {
+  CandidateSourceDocument,
+  ResolvedSourceBindingCandidate,
 } from "./sources";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import {
-  buildRemovalSourceBindingPlan,
   sourceIdsForDatapointTarget,
   type RemovalSourceBindingPlanEntry,
 } from "@/lib/certification/removal-source-bindings";
@@ -63,7 +59,7 @@ import {
   productionClaimContribution,
 } from "./production-claim-policy";
 import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
-import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
+import { planRemovalEvidence } from "./removal-evidence-plan";
 
 export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 
@@ -736,132 +732,22 @@ export async function buildRemovalSubmissionBuild(args: {
     );
   }
 
-  // A caller-supplied Source set makes this a side-effect-free preflight or a
-  // locked rebuild. Skip the document walk in that case; the caller already
-  // owns the authoritative IDs and does not consume `candidateDocumentIds`.
-  const candidateSourceDocuments =
-    args.candidateSourceDocuments ??
-    (args.sourceIds || args.sourceBindingCandidates
-      ? []
-      : filterCandidateSourcesForSubmissionLifecycle(
-          await collectCandidateSourceDocumentsForRemoval(orgCtx, {
-            removalId,
-            lineages: ctx.lineages,
-            memberBatches: ctx.memberBatches,
-            memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
-              batch.samples.map((sample) => ({
-                id: sample.id,
-                code: sample.sampleCode,
-              })),
-            ),
-          }),
-          ctx.latestSubmission,
-        ));
-  const sourceBindingCandidates =
-    args.sourceBindingCandidates ??
-    (args.sourceIds
-      ? []
-      : await resolveSourceBindingCandidates(orgCtx, {
-          candidates: candidateSourceDocuments,
-        }));
-  const candidateDocumentIds =
-    args.candidateDocumentIds ??
-    Array.from(
-      new Set(candidateSourceDocuments.map((candidate) => candidate.documentId)),
-    ).sort();
-  const sourceIds =
-    args.sourceIds ??
-    Array.from(
-      new Set(sourceBindingCandidates.map((candidate) => candidate.sourceId)),
-    ).sort();
-  const datapointSourceCandidates = sourceBindingCandidates.filter(
-    (
-      candidate,
-    ): candidate is ResolvedSourceBindingCandidate & {
-      binding: NonNullable<ResolvedSourceBindingCandidate["binding"]>;
-    } => candidate.binding !== null,
-  );
-  const datapointSourceIds =
-    args.sourceIds ??
-    Array.from(
-      new Set(datapointSourceCandidates.map((candidate) => candidate.sourceId)),
-    ).sort();
-  const biocharApplicationIntents = attachSourcesToBiocharApplicationIntents(
+  const {
+    candidateSourceDocuments,
+    candidateDocumentIds,
+    readySourceDocumentCount,
+    sourceIds,
+    datapointSourceIds,
+    biocharApplicationIntents,
+    sourceBindingPlan,
+    semanticSourceBindingPlan,
+  } = await planRemovalEvidence({
+    orgCtx,
+    removalId,
+    ctx,
+    template: defaultTemplate,
     compiledBiocharApplicationIntents,
-    sourceBindingCandidates,
-  );
-  const sourceIdByDocumentId = new Map(
-    sourceBindingCandidates.map((candidate) => [
-      candidate.documentId,
-      candidate.sourceId,
-    ]),
-  );
-  // Delivery bills of lading target batch-scoped transport inputs.
-  const deliveryIdByApplicationId = new Map(
-    ctx.lineages.map((lineage) => [
-      lineage.application.id,
-      lineage.delivery.id,
-    ]),
-  );
-  const deliveryIdsByCreditBatchId = new Map(
-    ctx.memberBatchClaims.map((batch) => [
-      batch.creditBatchId,
-      Array.from(
-        new Set(
-          batch.applicationIds.flatMap((applicationId) => {
-            const deliveryId = deliveryIdByApplicationId.get(applicationId);
-            return deliveryId ? [deliveryId] : [];
-          }),
-        ),
-      ),
-    ]),
-  );
-  const sourceBindingPlan = buildRemovalSourceBindingPlan({
-    candidates: datapointSourceCandidates,
-    template: defaultTemplate,
-    applicationIdsByCreditBatchId: new Map(
-      ctx.memberBatchClaims.map((batch) => [
-        batch.creditBatchId,
-        batch.applicationIds,
-      ]),
-    ),
-    sampleIdsByCreditBatchId: new Map(
-      ctx.batchesWithSamples.map((batch) => [
-        batch.creditBatchId,
-        batch.samples.map((sample) => sample.id),
-      ]),
-    ),
-    deliveryIdsByCreditBatchId,
-  });
-  // The semantic plan includes pending files with placeholder Source IDs. The
-  // operational plan above remains strict, so placeholders never reach the API.
-  const semanticSourceBindingPlan = buildRemovalSourceBindingPlan({
-    candidates: candidateSourceDocuments
-      .filter(
-        (
-          candidate,
-        ): candidate is CandidateSourceDocument & {
-          binding: NonNullable<CandidateSourceDocument["binding"]>;
-        } => candidate.binding !== null,
-      )
-      .map((candidate) => ({
-        ...candidate,
-        sourceId: sourceIdByDocumentId.get(candidate.documentId) ?? "",
-      })),
-    template: defaultTemplate,
-    applicationIdsByCreditBatchId: new Map(
-      ctx.memberBatchClaims.map((batch) => [
-        batch.creditBatchId,
-        batch.applicationIds,
-      ]),
-    ),
-    sampleIdsByCreditBatchId: new Map(
-      ctx.batchesWithSamples.map((batch) => [
-        batch.creditBatchId,
-        batch.samples.map((sample) => sample.id),
-      ]),
-    ),
-    deliveryIdsByCreditBatchId,
+    supplied: args,
   });
 
   const {
@@ -962,7 +848,7 @@ export async function buildRemovalSubmissionBuild(args: {
     reportingWindow,
     candidateDocumentIds,
     candidateSourceDocuments,
-    readySourceDocumentCount: sourceBindingCandidates.length,
+    readySourceDocumentCount,
     sourceIds,
     datapointSourceIds,
     sourceBindingPlan,

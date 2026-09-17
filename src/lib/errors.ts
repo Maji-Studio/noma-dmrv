@@ -14,6 +14,13 @@ export class SafeError extends Error {
 }
 
 /**
+ * Answer for a signed-in caller with no usable active organization. Shared by
+ * the org-context guards, the read adapter, and the one client hook that
+ * treats it as a deterministic failure it must not retry.
+ */
+export const NO_ORGANIZATION_MESSAGE = "Select an Organization to continue.";
+
+/**
  * Normalize terse missing-record errors from shared data access without
  * exposing internal IDs. Call sites may still provide a tailored recovery
  * action when the operator can do something specific.

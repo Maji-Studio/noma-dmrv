@@ -268,6 +268,39 @@ Pure starter residue; org scoping came later via ADR 0010.
   form in the reconcile sheet, and point the refusal copy and the feedstock
   edit sheet at it. Until then the refusal stays a review instruction.
 
+### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
+
+- **Rule:** every updater behind an edit form checks `expectedUpdatedAt`
+  (`src/data-access/expected-version.ts:assertExpectedVersion`) and every edit
+  form sends it, so a save built on a stale cached row is refused
+  ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
+- **Observed:** the check is implemented for facility, feedstock, storage
+  location, customer (+ location), supplier (+ location), application and
+  production run. These edit-form updaters do not accept or check the field
+  (some lock their row, some do not):
+  `src/data-access/reactors.ts:updateReactor`,
+  `src/data-access/formulations.ts:updateFormulation`,
+  `src/data-access/credit-batches.ts:updateCreditBatch`,
+  `src/data-access/biochar-products.ts:updateBiocharProduct`,
+  `src/data-access/samples.ts:updateSample`,
+  `src/data-access/orders.ts:updateOrder`,
+  `src/data-access/feedstock-types.ts:updateFeedstockType`,
+  `src/data-access/delivery-output-writes.ts:updateDelivery`,
+  `src/data-access/transport-legs.ts:updateTransportLeg`,
+  `src/data-access/production-incidents.ts:updateProductionIncident`,
+  `src/data-access/production-samples.ts:updateProductionSample`. Their edit
+  sheets (`src/components/<entity>/<entity>-list.tsx`,
+  `src/components/transport-legs/transport-legs-editor.tsx`,
+  `src/components/production-runs/production-incident-table.tsx`,
+  `src/components/production-runs/production-sample-table.tsx`) call the
+  matching `useUpdate*` hook without a version.
+- **Resolve via:** add `expectedUpdatedAt` to each updater's schema and input,
+  lock the row and call `assertExpectedVersion` after the locked read, send
+  `updatedAt` from the edit sheet, re-throw through `throwActionError`
+  (`src/lib/stale-version.ts`), and add each updater to the parametrised
+  expected-version spec in `tests/`. One PR per entity family is fine; delete
+  this entry when that spec covers all of them.
+
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
 - The certifier settings pane replaces keys by typing over a masked field, and

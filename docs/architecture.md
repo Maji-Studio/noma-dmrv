@@ -51,17 +51,19 @@ components (UI)
 
 ## Key Patterns
 
-### `withAction()` — the preferred pattern for new and changed server actions
+### `withAction()` — the preferred pattern for new server actions
 
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
 `ctx`, converts distinct `ZodError` issues into readable sentences, and formats
 `ActionResult`.
-Use it for new actions and migrate a legacy direct wrapper when materially
-changing that action. Some older entity modules still call
-`requireOrgContext()` and format `ActionResult` in their own try/catch; their
-presence is compatibility debt, not a pattern to copy. Until migrated, those
-wrappers must keep routing unexpected failures through the shared safe logging
-and error conversion helpers rather than returning raw `error.message`.
+It is a preference, not a rule. Use it for new actions. Migrate an existing
+direct wrapper only when the change already rewrites that action's error
+handling (for example to carry a typed `conflict` to its form); do not sweep
+the remaining wrappers, and there is no lint rule for it. Some older entity
+modules still call `requireOrgContext()` and format `ActionResult` in their own
+try/catch; that is acceptable as long as they route unexpected failures through
+the shared safe logging and error conversion helpers rather than returning raw
+`error.message`.
 
 ```typescript
 export async function createItem(input: CreateItem) {
@@ -126,7 +128,7 @@ missing; `warning` is for the reads that genuinely cannot join the
 transaction. Never use it to describe a rollback. Copy vocabulary:
 [ux-writing.md](./ux-writing.md).
 
-### Expected-version checks on consequential edit forms
+### Expected-version checks on edit forms
 
 `src/lib/stale-version.ts` (client-safe vocabulary) + `assertExpectedVersion`
 in `src/data-access/expected-version.ts`. An edit form sends the `updatedAt` it
@@ -135,9 +137,14 @@ under `FOR UPDATE` and throws `ActionConflictError` with
 `code: "stale-version"` when they differ. The hook re-throws that as
 `StaleVersionError`, and the form shows `STALE_VERSION_MESSAGE` in its error
 banner while keeping the operator's draft. The field is always optional, so a
-payload that never loaded a version still saves. Covers facility, feedstock,
-storage bin, customer (+ location), supplier (+ location), application and
-production run.
+payload that never loaded a version still saves. The check guards against a
+stale cached row as much as a second operator: two tabs, or an edit sheet
+opened off a cached list. The rule is blanket: every updater with an edit form
+must do the check, and every edit form must send `expectedUpdatedAt`.
+Implemented today for facility, feedstock, storage bin, customer (+ location),
+supplier (+ location), application and production run. The edit forms that do
+not check yet are listed in [open-questions.md](./open-questions.md) under
+`architecture/expected-version-gaps`.
 
 ### Facility context
 

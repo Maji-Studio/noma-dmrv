@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, type QueryClient } from "@tanstack/react-query";
-import { fetchOnboardingStatus } from "@/fn/onboarding";
+import { getOnboardingStatusRead } from "@/lib/read-api/client";
 
 const ONBOARDING_STATUS_STALE_TIME_MS = 30_000;
 
@@ -40,8 +40,8 @@ export function useOnboardingStatus(
 ) {
   return useQuery({
     queryKey: onboardingKeys.status(facilityId, organizationId),
-    queryFn: async () => {
-      const result = await fetchOnboardingStatus({ facilityId });
+    queryFn: async ({ signal }) => {
+      const result = await getOnboardingStatusRead({ facilityId }, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }
