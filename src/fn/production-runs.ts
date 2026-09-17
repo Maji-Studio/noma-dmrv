@@ -27,27 +27,34 @@ import {
   type FacilityEnergyTotals,
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
-import { requireOrgContext } from "@/lib/auth/server";
-import {
-  formatZodActionError,
-  toLoggedActionError,
-} from "./action-errors";
 import {
   createProductionRunSchema,
   deleteProductionRunSchema,
   updateProductionRunSchema,
 } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
+import { withAction } from "./with-action";
 
-function productionRunActionError(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): string {
-  return toLoggedActionError(error, fallbackMessage, {
-    message: "production run action failed",
-    context: { op },
-  });
+const LOG_MESSAGE = "production run action failed";
+
+/** Keep the per-operation log context the legacy wrapper emitted. */
+function logFor(op: string) {
+  return { message: LOG_MESSAGE, context: { op } };
+}
+
+/**
+ * Domain conflicts this module answers itself. A stale-version refusal is an
+ * `ActionConflictError`, which `withAction` formats before consulting this, so
+ * the form receives its typed `conflict` and keeps the operator's draft.
+ */
+function mapProductionRunConflict(error: unknown) {
+  if (
+    error instanceof ProductionRunOverlapError ||
+    error instanceof ProductionRunDependencyError
+  ) {
+    return { success: false as const, error: error.message, conflict: error.conflict };
+  }
+  return undefined;
 }
 
 // ============================================
@@ -60,21 +67,13 @@ function productionRunActionError(
 export async function getProductionRunByIdFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionRunWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const run = await getProductionRunByIdData(ctx, productionRunId);
-    return { success: true, data: run };
-  } catch (error) {
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load production run",
-        "production-run:get",
-      ),
-    };
-  }
+  return withAction(
+    (ctx) => getProductionRunByIdData(ctx, productionRunId),
+    {
+      fallbackMessage: "Failed to load production run",
+      log: logFor("production-run:get"),
+    },
+  );
 }
 
 /**
@@ -83,22 +82,16 @@ export async function getProductionRunByIdFn(
 export async function getFacilityEnergyTotalsFn(
   facilityId: string
 ): Promise<ActionResult<FacilityEnergyTotals>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    await requireOrgFacility(ctx, facilityId);
-    const totals = await getFacilityEnergyTotalsData(ctx, facilityId);
-    return { success: true, data: totals };
-  } catch (error) {
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load facility energy totals",
-        "production-run:energy-totals",
-      ),
-    };
-  }
+  return withAction(
+    async (ctx) => {
+      await requireOrgFacility(ctx, facilityId);
+      return getFacilityEnergyTotalsData(ctx, facilityId);
+    },
+    {
+      fallbackMessage: "Failed to load facility energy totals",
+      log: logFor("production-run:energy-totals"),
+    },
+  );
 }
 
 /**
@@ -107,21 +100,13 @@ export async function getFacilityEnergyTotalsFn(
 export async function getProductionRunReadingsFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionRunReadingRecord[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const readings = await getProductionRunReadingsData(ctx, productionRunId);
-    return { success: true, data: readings };
-  } catch (error) {
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to load production run readings",
-        "production-run:readings",
-      ),
-    };
-  }
+  return withAction(
+    (ctx) => getProductionRunReadingsData(ctx, productionRunId),
+    {
+      fallbackMessage: "Failed to load production run readings",
+      log: logFor("production-run:readings"),
+    },
+  );
 }
 
 // ============================================
@@ -134,64 +119,49 @@ export async function getProductionRunReadingsFn(
 export async function createProductionRunFn(
   data: z.infer<typeof createProductionRunSchema>
 ): Promise<ActionResult<ProductionRunWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(
+    async (ctx) => {
+      const validated = createProductionRunSchema.parse(data);
 
-    const validated = createProductionRunSchema.parse(data);
-
-    const run = await withAutoCode(
-      ctx,
-      "PR",
-      productionRuns,
-      productionRuns.code,
-      undefined,
-      (code) =>
-        createProductionRun(ctx, {
-          code,
-          facilityId: validated.facilityId,
-          reactorId: validated.reactorId,
-          status: validated.status,
-          cancellationReason: validated.cancellationReason || null,
-          startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
-          // Absent end time now stores NULL (an open run) — no silent coercion
-          // to startTime, which produced misleading zero-duration windows (#259).
-          endTime: validated.endTime instanceof Date ? validated.endTime : null,
-          operatorId: validated.operatorId || null,
-          feedstockDraws: validated.feedstockDraws,
-          feedstockMoisturePercent: validated.feedstockMoisturePercent ?? null,
-          feedingRateKgHr: validated.feedingRateKgHr ?? null,
-          residenceTimeMinutes: validated.residenceTimeMinutes ?? null,
-          dieselOperationLiters: validated.dieselOperationLiters ?? null,
-          dieselGensetLiters: validated.dieselGensetLiters ?? null,
-          preprocessingFuelLiters: validated.preprocessingFuelLiters ?? null,
-          electricityKwh: validated.electricityKwh ?? null,
-          biocharOutputKg: validated.biocharOutputKg ?? null,
-          biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
-          biocharStorageLocationId: validated.biocharStorageLocationId || null,
-        }),
-      CODE_CONFLICT_MESSAGES.productionRun,
-    );
-
-    return { success: true, data: run };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    if (error instanceof ProductionRunOverlapError) {
-      return { success: false, error: error.message, conflict: error.conflict };
-    }
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to create production run",
-        "production-run:create",
-      ),
-    };
-  }
+      return withAutoCode(
+        ctx,
+        "PR",
+        productionRuns,
+        productionRuns.code,
+        undefined,
+        (code) =>
+          createProductionRun(ctx, {
+            code,
+            facilityId: validated.facilityId,
+            reactorId: validated.reactorId,
+            status: validated.status,
+            cancellationReason: validated.cancellationReason || null,
+            startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
+            // Absent end time now stores NULL (an open run) — no silent coercion
+            // to startTime, which produced misleading zero-duration windows (#259).
+            endTime: validated.endTime instanceof Date ? validated.endTime : null,
+            operatorId: validated.operatorId || null,
+            feedstockDraws: validated.feedstockDraws,
+            feedstockMoisturePercent: validated.feedstockMoisturePercent ?? null,
+            feedingRateKgHr: validated.feedingRateKgHr ?? null,
+            residenceTimeMinutes: validated.residenceTimeMinutes ?? null,
+            dieselOperationLiters: validated.dieselOperationLiters ?? null,
+            dieselGensetLiters: validated.dieselGensetLiters ?? null,
+            preprocessingFuelLiters: validated.preprocessingFuelLiters ?? null,
+            electricityKwh: validated.electricityKwh ?? null,
+            biocharOutputKg: validated.biocharOutputKg ?? null,
+            biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
+            biocharStorageLocationId: validated.biocharStorageLocationId || null,
+          }),
+        CODE_CONFLICT_MESSAGES.productionRun,
+      );
+    },
+    {
+      fallbackMessage: "Failed to create production run",
+      log: logFor("production-run:create"),
+      mapError: mapProductionRunConflict,
+    },
+  );
 }
 
 // ============================================
@@ -204,62 +174,47 @@ export async function createProductionRunFn(
 export async function updateProductionRunFn(
   data: z.infer<typeof updateProductionRunSchema>
 ): Promise<ActionResult<ProductionRunWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(
+    async (ctx) => {
+      const validated = updateProductionRunSchema.parse(data);
 
-    const validated = updateProductionRunSchema.parse(data);
-
-    const run = await updateProductionRun(ctx, validated.productionRunId, {
-      code: validated.code,
-      facilityId: validated.facilityId,
-      reactorId: validated.reactorId,
-      status: validated.status,
-      expectedUpdatedAt: validated.expectedUpdatedAt,
-      cancellationReason: validated.cancellationReason,
-      startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
-      // null clears the end time; undefined leaves it unchanged.
-      endTime:
-        validated.endTime === null
-          ? null
-          : validated.endTime instanceof Date
-            ? validated.endTime
-            : validated.endTime
-              ? new Date(validated.endTime)
-              : undefined,
-      operatorId: validated.operatorId,
-      feedstockDraws: validated.feedstockDraws,
-      feedstockMoisturePercent: validated.feedstockMoisturePercent,
-      feedingRateKgHr: validated.feedingRateKgHr,
-      residenceTimeMinutes: validated.residenceTimeMinutes,
-      dieselOperationLiters: validated.dieselOperationLiters,
-      dieselGensetLiters: validated.dieselGensetLiters,
-      preprocessingFuelLiters: validated.preprocessingFuelLiters,
-      electricityKwh: validated.electricityKwh,
-      biocharOutputKg: validated.biocharOutputKg,
-      biocharMoisturePercent: validated.biocharMoisturePercent,
-      biocharStorageLocationId: validated.biocharStorageLocationId,
-    });
-
-    return { success: true, data: run };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    if (error instanceof ProductionRunOverlapError) {
-      return { success: false, error: error.message, conflict: error.conflict };
-    }
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to update production run",
-        "production-run:update",
-      ),
-    };
-  }
+      return updateProductionRun(ctx, validated.productionRunId, {
+        code: validated.code,
+        facilityId: validated.facilityId,
+        reactorId: validated.reactorId,
+        status: validated.status,
+        expectedUpdatedAt: validated.expectedUpdatedAt,
+        cancellationReason: validated.cancellationReason,
+        startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
+        // null clears the end time; undefined leaves it unchanged.
+        endTime:
+          validated.endTime === null
+            ? null
+            : validated.endTime instanceof Date
+              ? validated.endTime
+              : validated.endTime
+                ? new Date(validated.endTime)
+                : undefined,
+        operatorId: validated.operatorId,
+        feedstockDraws: validated.feedstockDraws,
+        feedstockMoisturePercent: validated.feedstockMoisturePercent,
+        feedingRateKgHr: validated.feedingRateKgHr,
+        residenceTimeMinutes: validated.residenceTimeMinutes,
+        dieselOperationLiters: validated.dieselOperationLiters,
+        dieselGensetLiters: validated.dieselGensetLiters,
+        preprocessingFuelLiters: validated.preprocessingFuelLiters,
+        electricityKwh: validated.electricityKwh,
+        biocharOutputKg: validated.biocharOutputKg,
+        biocharMoisturePercent: validated.biocharMoisturePercent,
+        biocharStorageLocationId: validated.biocharStorageLocationId,
+      });
+    },
+    {
+      fallbackMessage: "Failed to update production run",
+      log: logFor("production-run:update"),
+      mapError: mapProductionRunConflict,
+    },
+  );
 }
 
 // ============================================
@@ -272,30 +227,15 @@ export async function updateProductionRunFn(
 export async function deleteProductionRunFn(
   data: z.infer<typeof deleteProductionRunSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validated = deleteProductionRunSchema.parse(data);
-    await deleteProductionRun(ctx, validated.productionRunId);
-
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    if (error instanceof ProductionRunDependencyError) {
-      return { success: false, error: error.message, conflict: error.conflict };
-    }
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to delete production run",
-        "production-run:delete",
-      ),
-    };
-  }
+  return withAction(
+    async (ctx) => {
+      const validated = deleteProductionRunSchema.parse(data);
+      await deleteProductionRun(ctx, validated.productionRunId);
+    },
+    {
+      fallbackMessage: "Failed to delete production run",
+      log: logFor("production-run:delete"),
+      mapError: mapProductionRunConflict,
+    },
+  );
 }
