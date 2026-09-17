@@ -22,14 +22,6 @@ const DB_POOL_LOG_BINDINGS = { mod: "db-pool" };
 type Clock = () => number;
 
 interface ObservabilityOptions {
-  /**
-   * Opt-in for timing telemetry: connection and checkout successes, and both
-   * outcomes of every query. Connection failures, checkout failures, and
-   * idle-client errors are logged either way — they are infrastructure faults
-   * nobody opts in to, whereas a failed query is often ordinary control flow
-   * here (`55P03` lock timeouts, unique-violation retries).
-   */
-  enabled: boolean;
   clock?: Clock;
   /**
    * Injected by `src/db/index.ts`. The pool never reaches for the ambient
@@ -55,7 +47,7 @@ function roundDuration(durationMs: number): number {
 
 export function instrumentClient(
   client: QueryableClient,
-  { enabled, clock = performance.now.bind(performance), log }: ObservabilityOptions,
+  { clock = performance.now.bind(performance), log }: ObservabilityOptions,
 ): void {
   const observedClient = client as ObservedClient;
   if (observedClient[OBSERVED_CLIENT]) return;
@@ -66,12 +58,11 @@ export function instrumentClient(
   client.connect = ((callback?: (error?: Error) => void) => {
     const startedAt = clock();
     const finish = (success: boolean, error?: unknown) => {
-      if (success && !enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
       };
-      if (success) dbLog.info(fields, "database connection established");
+      if (success) dbLog.trace(fields, "database connection established");
       else
         dbLog.warn(
           { ...fields, ...faultFields(error) },
@@ -102,13 +93,15 @@ export function instrumentClient(
     const finish = (success: boolean) => {
       if (finished) return;
       finished = true;
-      if (!enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
       };
-      if (success) dbLog.info(fields, "database query finished");
-      else dbLog.warn(fields, "database query failed");
+      // Both outcomes at trace: a failed query is often ordinary control flow
+      // here (`55P03` lock timeouts, unique-violation retries), unlike the
+      // infrastructure faults below, which always warn.
+      if (success) dbLog.trace(fields, "database query finished");
+      else dbLog.trace(fields, "database query failed");
     };
 
     const lastIndex = queryArgs.length - 1;
@@ -156,7 +149,7 @@ export function instrumentClient(
 
 export function instrumentPoolAcquisition(
   pool: Pool,
-  { enabled, clock = performance.now.bind(performance), log }: ObservabilityOptions,
+  { clock = performance.now.bind(performance), log }: ObservabilityOptions,
 ): void {
   const dbLog = log.child(DB_POOL_LOG_BINDINGS);
   const originalConnect = pool.connect.bind(pool);
@@ -171,7 +164,6 @@ export function instrumentPoolAcquisition(
     const startedAt = clock();
     const waitingBefore = pool.waitingCount;
     const finish = (success: boolean, error?: unknown) => {
-      if (success && !enabled) return;
       const fields = {
         durationMs: roundDuration(clock() - startedAt),
         success,
@@ -180,7 +172,7 @@ export function instrumentPoolAcquisition(
         totalConnections: pool.totalCount,
         idleConnections: pool.idleCount,
       };
-      if (success) dbLog.info(fields, "database connection acquired");
+      if (success) dbLog.trace(fields, "database connection acquired");
       else
         dbLog.warn(
           { ...fields, ...faultFields(error) },
