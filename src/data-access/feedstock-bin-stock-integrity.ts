@@ -11,13 +11,16 @@
  * bin's stock lock (`lockBinStocks`). A negative lane rolls the whole
  * transaction back.
  *
- * The refusal names the one sanctioned repair, a stock reconciliation on the
- * bin, carries the bin as its `conflict` so the form can open the reconcile
- * sheet, and lists the withdrawals still drawing on the bin as `blockers`
- * (decision 2026-09-17).
+ * The refusal carries the bin as its `conflict` and lists the withdrawals
+ * still drawing on it as `blockers`, so the form can show the operator which
+ * records hold the mass (decision 2026-09-17). It does not name a repair: a
+ * stock take can only confirm or reduce stock
+ * (`bin-movements.ts:recordStockTakeMovement`), so no movement in the app can
+ * lift a negative lane. See docs/open-questions.md, "A negative feedstock bin
+ * has no repair path".
  */
 
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
@@ -30,6 +33,7 @@ import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { ActionConflictError } from "@/lib/errors";
 import { formatMassKg } from "@/lib/format-utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
 import { deriveFeedstockWetStockKg } from "./feedstock-wet-stock";
 import { requireOrgScope } from "./utils";
@@ -42,12 +46,9 @@ const WRITE_OUTCOME: Record<FeedstockStockWrite, string> = {
   delete: "Feedstock was not deleted.",
 };
 
-/** Button label in the reconcile sheet; the message names it exactly. */
-const RECONCILE_ACTION_LABEL = "Reconcile stock";
-
-const CONFLICT_ENTITY = "storageLocation";
-const RUN_BLOCKER_ENTITY = "productionRun";
-const PRODUCT_BLOCKER_ENTITY = "biocharProduct";
+const CONFLICT_ENTITY = STOCK_CONFLICT_ENTITY.storageLocation;
+const RUN_BLOCKER_ENTITY = STOCK_CONFLICT_ENTITY.productionRun;
+const PRODUCT_BLOCKER_ENTITY = STOCK_CONFLICT_ENTITY.biocharProduct;
 
 /** Bound the payload: the form lists the first few, the bin page has the rest. */
 const MAX_BLOCKERS = 10;
@@ -58,8 +59,9 @@ function isNegativeStock(availableKg: number): boolean {
 }
 
 /**
- * Copy for the refusal: the record and the problem first, then the one action
- * that clears it (docs/ux-writing.md).
+ * Copy for the refusal: the record and the problem first, then the next
+ * action (docs/ux-writing.md). The action is to review the withdrawals the
+ * blockers name, because nothing in the app can add mass back to a bin.
  */
 export function negativeLaneMessage(
   write: FeedstockStockWrite,
@@ -68,14 +70,14 @@ export function negativeLaneMessage(
 ): string {
   return (
     `${WRITE_OUTCOME[write]} Bin ${binCode} would go ${formatMassKg(shortfallWetKg)} below zero. ` +
-    `Open bin ${binCode}, choose ${RECONCILE_ACTION_LABEL} and record a count first, then try again.`
+    `Review the production runs and products that draw on bin ${binCode}, then try again.`
   );
 }
 
 /**
  * The withdrawals still drawing on the bin: every non-cancelled production run
- * with a draw from it, then every product that mixed it in as an ingredient.
- * These are the records a reconciliation has to account for.
+ * with a draw from it, then every product whose composition takes a positive
+ * mass from it, matching what `deriveLaneStock` counts as consumption.
  */
 async function listLaneWithdrawals(
   ctx: OrgContext,
@@ -106,14 +108,24 @@ async function listLaneWithdrawals(
   const products =
     remaining > 0
       ? await tx
-          .select({ id: biocharProducts.id, code: biocharProducts.code })
+          .selectDistinct({ id: biocharProducts.id, code: biocharProducts.code })
           .from(biocharProducts)
+          .innerJoin(
+            sql`LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(${biocharProducts.composition} -> 'ingredients') = 'array'
+                THEN ${biocharProducts.composition} -> 'ingredients'
+                ELSE '[]'::jsonb
+              END
+            ) AS ingredient(value)`,
+            sql`true`,
+          )
           .where(
             and(
               eq(biocharProducts.organizationId, ctx.organizationId),
-              sql`${biocharProducts.composition} -> 'ingredients' @> ${JSON.stringify([
-                { storageLocationId },
-              ])}::jsonb`,
+              sql`ingredient.value ->> 'storageLocationId' = ${storageLocationId}`,
+              sql`jsonb_typeof(ingredient.value -> 'massKg') = 'number'`,
+              gt(sql`(ingredient.value ->> 'massKg')::numeric`, 0),
             ),
           )
           .orderBy(biocharProducts.code)

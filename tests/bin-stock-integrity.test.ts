@@ -17,9 +17,11 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   binMovements,
+  biocharProducts,
   facilities,
   feedstocks,
   feedstockTypes,
+  formulations,
   organizations,
   productionRunFeedstockDraws,
   productionRuns,
@@ -28,6 +30,7 @@ import {
   users,
 } from "@/db/schema";
 import { negativeLaneMessage } from "@/data-access/feedstock-bin-stock-integrity";
+import { deleteOutputProductFixtures, outputProductFixtureValues } from "./helpers/output-contract-fixtures";
 import { deleteFeedstock, updateFeedstock } from "@/data-access/feedstocks";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { updateStorageLocation } from "@/data-access/storage-locations";
@@ -47,6 +50,8 @@ const LOCK_HOLD_PROBE_MS = 150;
 
 const SHORTFALL_AFTER_REDUCTION_KG = LOSS_WET_KG - REDUCED_BELOW_LOSS_WET_KG;
 const RUN_DRAW_WET_KG = LOSS_WET_KG;
+/** Small enough to leave the lane positive; the loss below drives it negative. */
+const PRODUCT_DRAW_WET_KG = 5;
 const binCodeOf = (f: Fixture) => `E2E-BINT-B-${f.tag}`;
 const negativeStockMessage = (f: Fixture) =>
   negativeLaneMessage("save", binCodeOf(f), SHORTFALL_AFTER_REDUCTION_KG);
@@ -180,6 +185,10 @@ async function cleanup(fixture: Fixture): Promise<void> {
     throw new Error("Expected an isolated bin-integrity test organization");
   }
   await db.transaction(async (tx) => {
+    await deleteOutputProductFixtures(
+      tx,
+      eq(biocharProducts.organizationId, organizationId),
+    );
     for (const table of [
       "bin_movements",
       "transport_legs",
@@ -188,6 +197,7 @@ async function cleanup(fixture: Fixture): Promise<void> {
       "reactors",
       "feedstocks",
       "storage_locations",
+      "formulations",
       "feedstock_types",
       "facilities",
     ]) {
@@ -361,6 +371,50 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
       name: "ActionConflictError",
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
       blockers: [{ entity: "productionRun", code: runCode }],
+    });
+  });
+
+  it("lists only products whose composition takes a positive mass from the bin", async () => {
+    const f = await fixture();
+    const drawingCode = `E2E-BINT-BP-DRAW-${f.tag}`;
+    const zeroCode = `E2E-BINT-BP-ZERO-${f.tag}`;
+    await db.transaction(async (tx) => {
+      const [formulation] = await tx
+        .insert(formulations)
+        .values({
+          organizationId: f.ctx.organizationId,
+          code: `E2E-BINT-FM-${f.tag}`,
+          name: `E2E Bin integrity formulation ${f.tag}`,
+        })
+        .returning({ id: formulations.id });
+      const productValues = await outputProductFixtureValues(tx, [
+        {
+          organizationId: f.ctx.organizationId,
+          code: drawingCode,
+          facilityId: f.facilityId,
+          formulationId: formulation.id,
+          composition: { ingredients: [{ storageLocationId: f.binId, massKg: PRODUCT_DRAW_WET_KG }] },
+        },
+        {
+          organizationId: f.ctx.organizationId,
+          code: zeroCode,
+          facilityId: f.facilityId,
+          formulationId: formulation.id,
+          composition: { ingredients: [{ storageLocationId: f.binId, massKg: 0 }] },
+        },
+      ]);
+      await tx.insert(biocharProducts).values(productValues);
+    });
+    await recordLoss(f, LOSS_WET_KG);
+
+    await expect(
+      updateFeedstock(f.ctx, f.feedstockId, {
+        massWetKg: REDUCED_BELOW_LOSS_WET_KG,
+        massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
+      }),
+    ).rejects.toMatchObject({
+      name: "ActionConflictError",
+      blockers: [{ entity: "biocharProduct", code: drawingCode }],
     });
   });
 

@@ -103,15 +103,19 @@ disclosure bug.
 record instead of only showing text, and `blockers?: ConflictRef[]` next to it
 for the further records that also stand in the way, in the order the operator
 should clear them. `ConflictRef` (`src/lib/conflict-ref.ts`) is
-`{ entity, id, code }` where `code` is the record's human code, branded
-through `conflictCode()` so a blank or composed value cannot type-check into
-the slot; a record with no code is not a valid conflict target, point at the
-record the operator opens instead. Mutation hooks re-throw a failure through
-`throwActionError` (`src/lib/stale-version.ts`): a stale save becomes
-`StaleVersionError`, any other conflict becomes `ConflictError` with its
-blockers. Forms are expected to honor both: the first list consumer is the
-feedstock edit sheet, which opens the bin's reconcile sheet from a
-negative-stock refusal.
+`{ entity, id, code }`. `code` is what the operator reads for that record,
+branded through `conflictCode()`, which proves only that it is not blank; the
+type does not prove it is a stored record code. The convention is the record's
+human code, and `conflict` points at a record that has one (the bin, not the
+movement). Known exceptions: a bin movement rides as a `blocker` under its
+history-row label, the stale-version sentinel `stale-version`, and two
+feedstock-type delete targets (production process, formulation ingredient)
+that carry their id because they have no code. Mutation hooks re-throw a
+failure through `throwActionError` (`src/lib/stale-version.ts`): a stale save
+becomes `StaleVersionError`, any other conflict becomes `ConflictError` with
+its blockers. Forms are expected to honor both; the first list consumer is
+the feedstock edit sheet, which shows the runs and products a negative-stock
+refusal named.
 
 The success branch may carry `warning?: string`: the write committed and a
 non-fatal follow-up did not (a preference that was not stored, an enrichment
