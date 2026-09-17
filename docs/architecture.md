@@ -127,10 +127,9 @@ stale cached row as much as a second operator: two tabs, or an edit sheet
 opened off a cached list. The rule is blanket: every updater with an edit form
 must do the check, and every edit form must send `expectedUpdatedAt`.
 Implemented today for facility, feedstock, storage bin, customer (+ location),
-supplier (+ location), application and production run
-(`tests/expected-version-blanket.test.ts` pins them). The edit forms that do
-not check yet are listed in
-[open-questions.md](./open-questions.md#nine-edit-forms-still-save-without-an-expected-version-check-architectureexpected-version-gaps-opened-2026-09-17).
+supplier (+ location), application and production run. The edit forms that do
+not check yet are listed in [open-questions.md](./open-questions.md) under
+`architecture/expected-version-gaps`.
 
 ### Facility context
 
