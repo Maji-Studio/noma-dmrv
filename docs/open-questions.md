@@ -248,6 +248,34 @@ Pure starter residue; org scoping came later via ADR 0010.
   carry a client-supplied operation id the server records and a retry can look
   up, or whether the retry-and-duplicate risk stays with the operator.
 
+### Nine edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
+
+- **Rule:** every updater behind an edit form checks `expectedUpdatedAt`
+  (`src/data-access/expected-version.ts:assertExpectedVersion`) and every edit
+  form sends it, so a save built on a stale cached row is refused
+  ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
+- **Observed:** the check is implemented for the nine updaters
+  `tests/expected-version-blanket.test.ts` pins. These edit-form updaters do not
+  take the field and read their row without `FOR UPDATE`:
+  `src/data-access/reactors.ts:updateReactor`,
+  `src/data-access/formulations.ts:updateFormulation`,
+  `src/data-access/credit-batches.ts:updateCreditBatch`,
+  `src/data-access/biochar-products.ts:updateBiocharProduct`,
+  `src/data-access/samples.ts:updateSample`,
+  `src/data-access/orders.ts:updateOrder`,
+  `src/data-access/feedstock-types.ts:updateFeedstockType`,
+  `src/data-access/delivery-output-writes.ts:updateDelivery`,
+  `src/data-access/transport-legs.ts:updateTransportLeg`. Their edit sheets
+  (`src/components/<entity>/<entity>-list.tsx` and
+  `src/components/transport-legs/transport-legs-editor.tsx`) call the matching
+  `useUpdate*` hook without a version.
+- **Resolve via:** add `expectedUpdatedAt` to each updater's schema and input,
+  lock the row and call `assertExpectedVersion` after the locked read, send
+  `updatedAt` from the edit sheet, re-throw through `throwActionError`
+  (`src/lib/stale-version.ts`), and add each updater to the blanket spec. One
+  PR per entity family is fine; delete this entry when the spec covers all of
+  them.
+
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
 - The certifier settings pane replaces keys by typing over a masked field, and

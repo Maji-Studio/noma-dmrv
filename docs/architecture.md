@@ -51,7 +51,7 @@ components (UI)
 
 ## Key Patterns
 
-### `withAction()` — the preferred pattern for new and changed server actions
+### `withAction()` — the preferred pattern for new server actions
 
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
 `ctx`, converts distinct `ZodError` issues into readable sentences, and formats
@@ -113,7 +113,7 @@ missing; `warning` is for the reads that genuinely cannot join the
 transaction. Never use it to describe a rollback. Copy vocabulary:
 [ux-writing.md](./ux-writing.md).
 
-### Expected-version checks on consequential edit forms
+### Expected-version checks on edit forms
 
 `src/lib/stale-version.ts` (client-safe vocabulary) + `assertExpectedVersion`
 in `src/data-access/expected-version.ts`. An edit form sends the `updatedAt` it
@@ -124,10 +124,13 @@ under `FOR UPDATE` and throws `ActionConflictError` with
 banner while keeping the operator's draft. The field is always optional, so a
 payload that never loaded a version still saves. The check guards against a
 stale cached row as much as a second operator: two tabs, or an edit sheet
-opened off a cached list. It is a blanket rule: every updater with an edit form
-does the check, and every edit form sends `expectedUpdatedAt`. Covers facility,
-feedstock, storage bin, customer (+ location), supplier (+ location),
-application and production run.
+opened off a cached list. The rule is blanket: every updater with an edit form
+must do the check, and every edit form must send `expectedUpdatedAt`.
+Implemented today for facility, feedstock, storage bin, customer (+ location),
+supplier (+ location), application and production run
+(`tests/expected-version-blanket.test.ts` pins them). The edit forms that do
+not check yet are listed in
+[open-questions.md](./open-questions.md#nine-edit-forms-still-save-without-an-expected-version-check-architectureexpected-version-gaps-opened-2026-09-17).
 
 ### Facility context
 
