@@ -5,6 +5,7 @@
  */
 
 import {
+  keepPreviousData,
   type QueryClient,
   useMutation,
   useQuery,
@@ -83,6 +84,11 @@ export function useSuppliers(filters?: Partial<SupplierFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    // A search or page change creates a new query key. Without this the list
+    // blanks to skeletons for the round trip, which unmounts an open row menu
+    // mid-click (issue #798). Keeping the previous page means the control the
+    // operator just used stays put until the new page is in.
+    placeholderData: keepPreviousData,
   });
 }
 
