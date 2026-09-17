@@ -1,4 +1,3 @@
-import { db } from '@/db';
 import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, storageLocations, type BiocharProduct } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
@@ -6,9 +5,8 @@ import { grams, kilograms } from '@/lib/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
 import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, getCompositionIngredientDraws, validateCompositionIngredientBins } from './biochar-product-composition';
 import { insertBiocharProductSourceAllocations } from './biochar-product-source-allocations';
-import { lockBinStocks } from './lock-bin-stocks';
 import { revalidateProductStock } from './product-stock-preview';
-import { findOutputRequest, lockOutputRequest, persistOutputStock } from './output-stock-post';
+import { withOutputStockPosting } from './output-stock-post';
 import { requireOrgScope } from './utils';
 
 export interface CreateBiocharProductInput {
@@ -42,15 +40,12 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
     idempotencyKey: data.idempotencyKey, basisFingerprint: data.basisFingerprint, reason: `Product ${data.code}` };
   // Auto-generated display codes may change on a retried request; all operator facts must match.
   const payload = Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'code'));
-  return db.transaction(async tx => {
-    await lockOutputRequest(ctx, tx, input.idempotencyKey);
-    const existing = await findOutputRequest(ctx, tx, input, payload);
-    if (existing) {
+  const additionalBinIds = [data.storageLocationId, ...getCompositionIngredientDraws(data.composition).map(d => d.storageLocationId)];
+  return withOutputStockPosting(ctx, { input, payload, additionalBinIds, replay: async (tx, existing) => {
       const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, String(existing.inputSnapshot?.targetBiocharProductId))));
       if (!product) throw new SafeError('The posted product could not be found.');
       return product;
-    }
-    await lockBinStocks(ctx, tx, [data.storageLocationId, input.storageLocationId, ...getCompositionIngredientDraws(data.composition).map(d => d.storageLocationId)]);
+    }, write: async (tx, post) => {
     const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
     if (!facility) throw new SafeError('Facility not found or archived');
     const [formulation] = await tx.select().from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, data.formulationId))).for('share');
@@ -75,7 +70,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
       storageLocationId: data.storageLocationId, massKg: data.massKg, moistureContentPercent: data.moistureContentPercent, densityKgM3: data.densityKgM3,
       waterAddedKg: data.waterAddedKg, composition }).returning();
     // Post before source snapshots, so the locked read cannot subtract the new product twice.
-    const posted = await persistOutputStock(ctx, tx, { ...input, basisFingerprint: prepared.preview.basisFingerprint }, { targetBiocharProductId: product.id, payload });
+    const posted = await post({ targetBiocharProductId: product.id, basisFingerprint: prepared.preview.basisFingerprint });
     const effects = await tx.select().from(outputStockAllocations).where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.movementId, posted.movement.id)));
     await insertBiocharProductSourceAllocations(ctx, tx, { biocharProductId: product.id, sourceStorageLocationId: input.storageLocationId,
       allocations: prepared.preview.allocations.map(a => ({ productionRunId: a.layerId, producedAt: new Date(`${prepared.layers.find(l => l.id === a.layerId)!.physicalDate}T00:00:00.000Z`), allocatedWetMassKg: Number(effects.find(e => e.productionRunId === a.layerId)!.wetMassKg), allocatedDryMassKg: a.dryMassKg })) });
@@ -90,5 +85,5 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
     }
     if (!bin.formulationId) await tx.update(storageLocations).set({ formulationId: data.formulationId, updatedAt: new Date() }).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, bin.id)));
     return product;
-  });
+  } });
 }
