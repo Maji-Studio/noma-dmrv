@@ -7,7 +7,7 @@ import { onboardingKeys } from "./use-onboarding";
 
 const mocks = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock("@/fn/facilities", () => ({ createFacilityFn: mocks.create }));
-vi.mock("@/fn/onboarding", () => ({ fetchOnboardingStatus: vi.fn() }));
+vi.mock("@/lib/read-api/client", () => ({ getOnboardingStatusRead: vi.fn() }));
 
 it("keeps facility creation pending for the active list but not country or onboarding refreshes", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

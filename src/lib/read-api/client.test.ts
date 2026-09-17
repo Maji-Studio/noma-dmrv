@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getFacilitiesRead, getProductionRunsRead } from "./client";
+import { getFacilitiesRead, getProductionRunsRead, getFacilityRead, getActiveOrganizationRead } from "./client";
 
 const TRANSPORT_ERROR =
   "The server could not be reached. Refresh the page and try again.";
@@ -25,6 +25,40 @@ function deferredResponse() {
 describe("authenticated read client", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ["facility detail", () => getFacilityRead(FACILITY_ID), "/api/reads/facilities/" + FACILITY_ID],
+    ["active organization", () => getActiveOrganizationRead(), "/api/reads/organizations/active"],
+  ] as const)("decodes all %s timestamps", async (_name, read, path) => {
+    const timestamp = "2026-09-15T10:00:00.000Z";
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      success: true,
+      data: { id: FACILITY_ID, createdAt: timestamp, updatedAt: timestamp, archivedAt: null },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await read();
+    expect(fetchMock).toHaveBeenCalledWith(path, expect.objectContaining({ method: "POST", cache: "no-store" }));
+    expect(result.success).toBe(true);
+    if (!result.success || !result.data) return;
+    expect(result.data.createdAt).toEqual(new Date(timestamp));
+    expect(result.data.updatedAt).toEqual(new Date(timestamp));
+    if ("archivedAt" in result.data) expect(result.data.archivedAt).toBeNull();
+  });
+
+  it("decodes a populated facility archive timestamp", async () => {
+    const timestamp = "2026-09-15T10:00:00.000Z";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, data: {
+      id: FACILITY_ID, createdAt: timestamp, updatedAt: timestamp, archivedAt: timestamp,
+    } })));
+    const result = await getFacilityRead(FACILITY_ID);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.archivedAt).toEqual(new Date(timestamp));
+  });
+
+  it("preserves a missing active organization", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, data: null })));
+    await expect(getActiveOrganizationRead()).resolves.toEqual({ success: true, data: null });
   });
 
   it("starts independent resource reads without waiting for an earlier response", async () => {

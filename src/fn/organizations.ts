@@ -35,7 +35,6 @@ import {
   createOrganizationWithOwner,
   findMembershipRole,
   findUserIdByEmail,
-  getActiveOrganization,
   listAllOrganizations,
   listOrgInvitations,
   listOrgMembers,
@@ -45,6 +44,7 @@ import {
   type OrgInvitationRow,
   type OrgMemberRow,
 } from "@/data-access/organizations";
+import { readActiveOrganization } from "@/lib/read-models/active-organization";
 import type { ActionResult } from "@/types/actions";
 import {
   createOrganizationSchema,
@@ -359,5 +359,5 @@ export async function acceptInvitationAction(
 export async function getActiveOrganizationProfile() {
   const ctx = await getOrgContext();
   if (!ctx) return null;
-  return getActiveOrganization(ctx);
+  return readActiveOrganization(ctx);
 }

@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
-  getActiveOrganizationProfile,
   inviteMemberAction,
   listInvitationsFn,
   listMembersFn,
@@ -15,6 +14,7 @@ import {
   revokeInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
+import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
 import { stashPendingWarning } from "@/lib/pending-warning";
@@ -35,7 +35,8 @@ const organizationKeys = {
 export function useActiveOrganizationProfile() {
   return useQuery({
     queryKey: organizationKeys.activeProfile(),
-    queryFn: () => getActiveOrganizationProfile(),
+    queryFn: async ({ signal }) => unwrap(await getActiveOrganizationRead({ signal })),
+    retry: false,
   });
 }
 

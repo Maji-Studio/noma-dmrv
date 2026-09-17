@@ -10,7 +10,10 @@ import type {
 } from "@/data-access/production-runs";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import type { Facility } from "@/db/schema";
+import type { OnboardingStatus } from "@/data-access/onboarding";
+import type { DashboardOverview } from "@/data-access/dashboard-overview";
+import type { OnboardingStatusInput, DashboardOverviewInput } from "@/lib/read-models";
+import type { Facility, Organization } from "@/db/schema";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
@@ -170,6 +173,10 @@ function dateFields<Value>() {
   ) => Object.keys(fields) as (DateKeys<Value> & string)[];
 }
 
+const ORGANIZATION_DATE_FIELDS = dateFields<Organization>()({
+  createdAt: true,
+  updatedAt: true,
+});
 const FACILITY_DATE_FIELDS = dateFields<Facility>()({
   archivedAt: true,
   createdAt: true,
@@ -303,4 +310,40 @@ export async function getFacilityCertifierSummaryRead(
     options,
   );
   return mapReadData(result, decodeCertifierSummary);
+}
+
+export async function getFacilityRead(
+  facilityId: string,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<Facility>> {
+  const result = await requestRead<Facility>(
+    `/api/reads/facilities/${encodeURIComponent(facilityId)}`,
+    undefined,
+    options,
+  );
+  return mapReadData(result, decodeFacility);
+}
+
+export async function getActiveOrganizationRead(
+  options?: ReadRequestOptions,
+): Promise<ActionResult<Organization | null>> {
+  const result = await requestRead<Organization | null>(
+    "/api/reads/organizations/active", undefined, options,
+  );
+  return mapReadData(result, (wire) => wire === null ? null :
+    decodeDates<Organization>(wire, ORGANIZATION_DATE_FIELDS));
+}
+
+export function getOnboardingStatusRead(
+  input: OnboardingStatusInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<OnboardingStatus>> {
+  return requestRead<OnboardingStatus>("/api/reads/onboarding/status", input, options);
+}
+
+export function getDashboardOverviewRead(
+  input: DashboardOverviewInput,
+  options?: ReadRequestOptions,
+): Promise<ActionResult<DashboardOverview>> {
+  return requestRead<DashboardOverview>("/api/reads/dashboard/overview", input, options);
 }

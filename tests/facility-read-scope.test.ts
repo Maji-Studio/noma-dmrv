@@ -21,7 +21,7 @@ vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: mocks.requireOrgContext,
 }));
 
-import { getDashboardOverviewFn } from "@/fn/dashboard-overview";
+import { readDashboardOverview } from "@/lib/read-models/dashboard-overview";
 
 const ACTIVE_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
 const FOREIGN_FACILITY_ID = "00000000-0000-4000-8000-000000000002";
@@ -43,16 +43,12 @@ describe("facility-scoped read guard", () => {
   });
 
   it("returns the standard error instead of querying dashboard data for a foreign facility", async () => {
-    const result = await getDashboardOverviewFn({
+    const result = readDashboardOverview(await mocks.requireOrgContext(), {
       facilityId: FOREIGN_FACILITY_ID,
       range: "month",
     });
 
-    expect(result).toEqual({
-      success: false,
-      error:
-        "Facility was not found in this Organization.",
-    });
+    await expect(result).rejects.toThrow("Facility was not found in this Organization.");
     expect(mocks.select).toHaveBeenCalledOnce();
     expect(mocks.getDashboardOverview).not.toHaveBeenCalled();
   });
