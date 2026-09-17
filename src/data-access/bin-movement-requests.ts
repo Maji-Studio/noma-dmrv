@@ -11,9 +11,10 @@
  */
 
 import type { DbTransaction } from '@/db';
-import { binMovements } from '@/db/schema';
+import { binMovements, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { ActionConflictError } from '@/lib/errors';
+import { conflictCode } from '@/lib/conflict-ref';
+import { ActionConflictError, SafeError } from '@/lib/errors';
 import { and, eq, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { requireOrgScope } from './utils';
@@ -56,7 +57,10 @@ export async function findMovementRequest(ctx: OrgContext, tx: DbTransaction, lo
   const [existing] = await tx.select().from(binMovements)
     .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.idempotencyKey, lookup.idempotencyKey)));
   if (existing && existing.inputSnapshot?.payloadHash !== requestFingerprint(lookup.payload)) {
-    throw new ActionConflictError(lookup.conflictMessage, { entity: 'storageLocation', id: lookup.storageLocationId, code: '' });
+    const [bin] = await tx.select({ code: storageLocations.code }).from(storageLocations)
+      .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, lookup.storageLocationId)));
+    if (!bin) throw new SafeError('Storage location not found');
+    throw new ActionConflictError(lookup.conflictMessage, { entity: 'storageLocation', id: lookup.storageLocationId, code: conflictCode(bin.code) });
   }
   return existing;
 }

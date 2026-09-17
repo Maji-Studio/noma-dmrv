@@ -99,8 +99,19 @@ disclosure bug.
 ### `ActionResult` — every server function returns this
 
 `src/types/actions.ts`. The failure branch may carry
-`conflict?: { entity, id, code }` so a form can deep-link the operator to the
-blocking record instead of only showing text. Forms are expected to honor it.
+`conflict?: ConflictRef` so a form can deep-link the operator to the blocking
+record instead of only showing text, and `blockers?: ConflictRef[]` next to it
+for the further records that also stand in the way, in the order the operator
+should clear them. `ConflictRef` (`src/lib/conflict-ref.ts`) is
+`{ entity, id, code }` where `code` is the record's human code, branded
+through `conflictCode()` so a blank or composed value cannot type-check into
+the slot; a record with no code is not a valid conflict target, point at the
+record the operator opens instead. Mutation hooks re-throw a failure through
+`throwActionError` (`src/lib/stale-version.ts`): a stale save becomes
+`StaleVersionError`, any other conflict becomes `ConflictError` with its
+blockers. Forms are expected to honor both: the first list consumer is the
+feedstock edit sheet, which opens the bin's reconcile sheet from a
+negative-stock refusal.
 
 The success branch may carry `warning?: string`: the write committed and a
 non-fatal follow-up did not (a preference that was not stored, an enrichment

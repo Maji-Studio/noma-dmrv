@@ -23,6 +23,7 @@ import {
   computeClampedDryMass,
   deriveMassDryKg,
 } from "@/lib/calculations/mass-dry";
+import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
 import {
   assertProductionRunOutcome,
@@ -80,12 +81,9 @@ const PREFLIGHT_OUTCOME_VIOLATIONS = [
 ] as const;
 
 export class ProductionRunDependencyError extends SafeError {
-  readonly conflict: { entity: string; id: string; code: string };
+  readonly conflict: ConflictRef;
 
-  constructor(
-    message: string,
-    conflict: { entity: string; id: string; code: string },
-  ) {
+  constructor(message: string, conflict: ConflictRef) {
     super(message);
     this.name = "ProductionRunDependencyError";
     this.conflict = conflict;
@@ -949,9 +947,10 @@ export async function deleteProductionRun(
         dependentProduct ? "biochar products" : null,
         dependentCreditBatch ? "credit batches" : null,
       ].filter((kind): kind is string => kind != null);
-      const conflict = dependentProduct
+      const dependent = dependentProduct
         ? { entity: "biocharProduct", ...dependentProduct }
         : { entity: "creditBatch", ...dependentCreditBatch! };
+      const conflict = { ...dependent, code: conflictCode(dependent.code) };
       throw new ProductionRunDependencyError(
         `This production run cannot be deleted because dependent ${dependentKinds.join(" and ")} exist. Remove those records first.`,
         conflict,

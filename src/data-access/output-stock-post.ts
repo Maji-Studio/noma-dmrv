@@ -1,6 +1,7 @@
 import { db, type DbTransaction } from '@/db';
 import { binMovements, deliveries, outputStockAllocations, outputStockRunAllocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
+import { conflictCode } from '@/lib/conflict-ref';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, decimal, grams, GRAMS_PER_KG, kilograms, multiply, rational, readRational, round, storeRational } from '@/lib/output-stock';
 import { outputStockPostSchema } from '@/schemas/output-stock';
@@ -67,7 +68,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
   }
   const prepared = await prepareOutputStock(ctx, input, tx);
   const { plan, preview, correction } = prepared;
-  if (preview.basisFingerprint !== input.basisFingerprint) throw new ActionConflictError('Stock changed since this preview. Refresh the preview and try again.', { entity: 'storageLocation', id: input.storageLocationId, code: prepared.bin.code });
+  if (preview.basisFingerprint !== input.basisFingerprint) throw new ActionConflictError('Stock changed since this preview. Refresh the preview and try again.', { entity: 'storageLocation', id: input.storageLocationId, code: conflictCode(prepared.bin.code) });
   if (!plan || preview.blockingMessage) throw new SafeError(preview.blockingMessage ?? 'Stock cannot be allocated.');
   const productIds = new Set<string>();
   for (const layer of prepared.layers.filter(l => plan.allocations.some(a => a.layerId === l.id) || correction?.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === l.id))) {

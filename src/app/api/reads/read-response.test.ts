@@ -23,6 +23,7 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
+import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { readInput, readResponse } from "./read-response";
 
@@ -145,7 +146,7 @@ describe("authenticated read response", () => {
   });
 
   it("keeps the conflict branch the Server Action wrapper returns", async () => {
-    const conflict = { entity: "productionRun", id: "run-1", code: "PR-001" };
+    const conflict = { entity: "productionRun", id: "run-1", code: conflictCode("PR-001") };
 
     const response = await readResponse({
       fallbackMessage: "Failed to load records",

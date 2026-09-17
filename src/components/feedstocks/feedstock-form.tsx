@@ -6,6 +6,7 @@
  */
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -76,6 +77,8 @@ interface FeedstockFormProps {
   isSubmitting?: boolean;
   submitLabel?: string;
   serverError?: string;
+  /** Rendered under `serverError`: the way past a refusal that names a record. */
+  serverErrorAction?: ReactNode;
   deferredAttachments?: UseDeferredAttachmentsResult;
   /** All rows a failed create produced, so evidence retry reaches each. */
   retryEntityIds?: string[];
@@ -89,6 +92,7 @@ export function FeedstockForm({
   isSubmitting = false,
   submitLabel,
   serverError,
+  serverErrorAction,
   deferredAttachments,
   retryEntityIds,
   focusTarget,
@@ -799,6 +803,7 @@ export function FeedstockForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={serverError}
+        errorAction={serverErrorAction}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
         // The update path rebuilds the derived transport leg from the

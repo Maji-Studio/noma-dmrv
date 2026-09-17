@@ -13,29 +13,32 @@
  * Kept free of server-only imports so client components can use it.
  */
 
+import {
+  ConflictError,
+  conflictCode,
+  type ConflictRef,
+} from "@/lib/conflict-ref";
+
 /**
  * Discriminator on `ActionResult["conflict"].code` for a refused stale save.
  * Every other conflict puts the conflicting record's human code in that slot,
  * so this sentinel must stay a value no entity code can take (lowercase with a
  * hyphen; entity codes are `^[A-Z0-9-]+$`).
  */
-export const STALE_VERSION_CONFLICT_CODE = "stale-version";
+export const STALE_VERSION_CONFLICT_CODE = conflictCode("stale-version");
 
 /** The one message every entity shows when its version check refuses a save. */
 export const STALE_VERSION_MESSAGE =
   "This record changed since you opened it. Your changes were not saved. Review the latest values before saving again.";
 
 /** Structured reference to the record whose version moved on. */
-export interface StaleVersionConflict {
-  entity: string;
-  id: string;
-  code: string;
-}
+export type StaleVersionConflict = ConflictRef;
 
 /** Failure half of `ActionResult`, narrowed to what the conflict check needs. */
 interface ConflictCarryingFailure {
   error: string;
-  conflict?: { entity: string; id: string; code: string };
+  conflict?: ConflictRef;
+  blockers?: ConflictRef[];
 }
 
 /**
@@ -69,12 +72,19 @@ export function isStaleVersionFailure(
 
 /**
  * Throw a failed action result from a mutation hook, preserving a stale-version
- * refusal as a typed error. Anything else stays a plain `Error`, so the hooks
- * that already threw one behave exactly as before.
+ * refusal as `StaleVersionError` and any other conflicting record as
+ * `ConflictError` (with its blockers). Anything else stays a plain `Error`, so
+ * the hooks that already threw one behave exactly as before.
  */
 export function throwActionError(result: ConflictCarryingFailure): never {
   if (result.conflict && isStaleVersionFailure(result)) {
     throw new StaleVersionError(result.error, result.conflict);
+  }
+  if (result.conflict) {
+    throw new ConflictError(result.error, {
+      conflict: result.conflict,
+      blockers: result.blockers,
+    });
   }
   throw new Error(result.error);
 }
