@@ -29,9 +29,9 @@ import {
 } from "./helpers/test-org";
 
 /** Statements one dashboard overview read may send, with any number of batches. */
-const OVERVIEW_QUERY_BUDGET = 41;
+const OVERVIEW_QUERY_BUDGET = 19;
 /** Statements one onboarding status read may send for a selected facility. */
-const ONBOARDING_QUERY_BUDGET = 8;
+const ONBOARDING_QUERY_BUDGET = 2;
 const BATCH_COUNT = 3;
 
 interface Fixture {
@@ -160,6 +160,32 @@ describe("dashboard query budget", () => {
     expect(result.certification.totalBatches).toBe(BATCH_COUNT);
     expect(result.kpis.find((kpi) => kpi.key === "feedstockProcessed")?.value).toBe(6);
     expect(result.stations.find((s) => s.key === "feedstock")?.attention).toBe(1);
+    expect(result.stations.find((s) => s.key === "production")?.total).toBe(BATCH_COUNT);
+    expect(result.certification.pendingBatches).toBe(1);
+    expect(result.certification.batches.map((b) => b.status).sort()).toEqual([
+      "draft",
+      "draft",
+      "pending",
+    ]);
+    // Activity: newest first, ISO dates, runs and batches interleaved by date.
+    const activityTitles = result.activity.map((item) => item.title);
+    expect(activityTitles.filter((t) => t === "Production run completed")).toHaveLength(BATCH_COUNT);
+    expect(activityTitles.filter((t) => t === "Credit batch created")).toHaveLength(BATCH_COUNT);
+    const activityMs = result.activity.map((item) => Date.parse(item.dateIso));
+    expect(activityMs.every(Number.isFinite)).toBe(true);
+    expect([...activityMs].sort((a, b) => b - a)).toEqual(activityMs);
+    expect(result.activity.find((item) => item.title === "Feedstock received")?.dateIso).toBe(
+      "2026-06-22T00:00:00.000Z",
+    );
+    // Attention: flags before pending batches, the overdue pending batch counted once.
+    expect(result.attention.map((item) => item.title)).toEqual([
+      "Feedstock record missing data",
+      "Period ended · awaiting verification",
+    ]);
+    expect(result.attention[1]?.date).toBe("2026-07-31");
+    expect(result.attentionTotal).toBe(
+      1 + 1 + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
+    );
     expect(queries).toBeLessThanOrEqual(OVERVIEW_QUERY_BUDGET);
 
     // One more batch must not add a round trip.

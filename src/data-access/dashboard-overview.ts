@@ -9,7 +9,8 @@
  *
  * Deliberately lean: row-level fetches are facility-scoped and column-narrow,
  * aggregation happens in JS — facilities operate at hundreds of records, not
- * millions, and this keeps the module free of fragile SQL bucketing.
+ * millions, and this keeps the module free of fragile SQL bucketing. Round
+ * trips are budgeted by `tests/dashboard-query-budget.test.ts`.
  */
 import { db } from "@/db";
 import {
@@ -25,7 +26,19 @@ import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-import { and, asc, count, desc, eq, gte, isNull, ne } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  isNull,
+  ne,
+  sql,
+  type SQL,
+  type SQLWrapper,
+} from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import { getCo2eStoredPreviews } from "./credit-batches";
 import {
   applicationEvidenceGapWhere,
@@ -195,10 +208,39 @@ export async function getDashboardOverview(
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
+  // Derived CO₂e stored per batch (issue #285): the same preview figure the
+  // credit-batch detail page shows — the stored column no longer exists.
+  // The walk is set-based (one lineage read for every batch id), so it starts
+  // as soon as the batch rows are known instead of after the whole fan-out.
+  const batchesWithPreviews = db
+    .select({
+      id: creditBatches.id,
+      endDate: creditBatches.endDate,
+    })
+    .from(creditBatches)
+    .where(
+      and(
+        eq(creditBatches.organizationId, ctx.organizationId),
+        eq(creditBatches.facilityId, facilityId),
+        isNull(creditBatches.archivedAt),
+        ne(creditBatches.status, "rejected"),
+        ...(fetchStart
+          ? [gte(creditBatches.endDate, fetchStart.toISOString().slice(0, 10))]
+          : []),
+      ),
+    )
+    .then(async (rows) => ({
+      rows,
+      previews: await getCo2eStoredPreviews(
+        ctx,
+        rows.map((row) => row.id),
+      ),
+    }));
+
   const [
-    [runRows, lotRows, applicationRows, batchRows, feedstockRows],
-    attentionResult,
-    stationsData,
+    [runRows, lotRows, applicationRows, { rows: batchRows, previews: batchPreviews }, feedstockRows],
+    attentionItems,
+    { overdueBatches, ...stationsData },
     structuralGapCounts,
   ] =
     await Promise.all([
@@ -261,23 +303,7 @@ export async function getDashboardOverview(
               ...(fetchStart ? [gte(applications.applicationDate, fetchStart)] : []),
             ),
           ),
-        db
-          .select({
-            id: creditBatches.id,
-            endDate: creditBatches.endDate,
-          })
-          .from(creditBatches)
-          .where(
-            and(
-              eq(creditBatches.organizationId, ctx.organizationId),
-              eq(creditBatches.facilityId, facilityId),
-              isNull(creditBatches.archivedAt),
-              ne(creditBatches.status, "rejected"),
-              ...(fetchStart
-                ? [gte(creditBatches.endDate, fetchStart.toISOString().slice(0, 10))]
-                : []),
-            ),
-          ),
+        batchesWithPreviews,
         db
           .select({
             massDryKg: feedstocks.massDryKg,
@@ -298,15 +324,6 @@ export async function getDashboardOverview(
       loadDashboardStructuralGapCounts(ctx, facilityId),
     ]);
 
-  // Derived CO₂e stored per batch (issue #285): the same preview figure the
-  // credit-batch detail page shows — the stored column no longer exists.
-  // The "all" period fetches every batch in the facility (fetchStart null),
-  // so the helper's internal PREVIEW_FANOUT_CONCURRENCY chunking is what
-  // keeps the per-batch chain-of-custody walks from bursting the pool.
-  const batchPreviews = await getCo2eStoredPreviews(
-    ctx,
-    batchRows.map((row) => row.id),
-  );
   const storedTonnesOf = (batchId: string): number | null =>
     batchPreviews[batchId]?.co2eStoredTonnes ?? null;
 
@@ -490,7 +507,7 @@ export async function getDashboardOverview(
   );
   const attentionTotal =
     stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
-    attentionResult.overdueBatchesCount +
+    overdueBatches +
     structuralGapTotal;
 
   return {
@@ -498,7 +515,7 @@ export async function getDashboardOverview(
     generatedAt: new Date().toISOString(),
     kpis,
     massFlow,
-    attention: attentionResult.items,
+    attention: attentionItems,
     structuralGaps,
     attentionTotal,
     ...stationsData,
@@ -509,42 +526,86 @@ export async function getDashboardOverview(
 // Needs-attention queue
 // ============================================
 
-interface AttentionResult {
-  /** Capped sample of open items (flags first) — the list rows. */
-  items: DashboardAttentionItem[];
-  /**
-   * Exact uncapped count of overdue credit batches. The other checks map 1:1
-   * to a flow station, so `getDashboardOverview` derives the true queue size
-   * from the (uncapped) station badge counts plus this batch-only count.
-   */
-  overdueBatchesCount: number;
+type AttentionKind =
+  | "run-mass"
+  | "lot-unlinked"
+  | "feedstock-missing"
+  | "application-evidence"
+  | "batch-pending";
+
+function attentionKind(kind: AttentionKind): SQL<AttentionKind> {
+  return sql<AttentionKind>`${kind}::text`;
+}
+
+/** Record dates are `timestamp` or `date` columns; both cast to text for the union. */
+function attentionDate(column: SQLWrapper): SQL<string | null> {
+  return sql<string | null>`${column}::text`;
+}
+
+interface AttentionRow {
+  kind: AttentionKind;
+  id: string;
+  code: string;
+  date: string | null;
+}
+
+const ATTENTION_TITLES: Record<AttentionKind, string> = {
+  "run-mass": "Complete run missing mass data",
+  "lot-unlinked": "Production run not linked",
+  "feedstock-missing": "Feedstock record missing data",
+  "application-evidence": "Application missing evidence",
+  "batch-pending": "Period ended · awaiting verification",
+};
+
+/** Flags sort before pending batches; within a kind the query order holds. */
+const ATTENTION_ORDER: AttentionKind[] = [
+  "run-mass",
+  "lot-unlinked",
+  "feedstock-missing",
+  "application-evidence",
+  "batch-pending",
+];
+
+function attentionHref(
+  kind: AttentionKind,
+  id: string,
+  facilityId: string,
+): string {
+  const facilityQuery = `?facility=${facilityId}`;
+  switch (kind) {
+    case "run-mass":
+      return productionRunHref(facilityId, id);
+    case "lot-unlinked":
+      return `/biochar-products${facilityQuery}`;
+    case "feedstock-missing":
+      return `/feedstocks${facilityQuery}`;
+    case "application-evidence":
+      return `/applications${facilityQuery}`;
+    case "batch-pending":
+      return creditBatchDeepLinkHref(id, facilityId);
+  }
 }
 
 /**
- * Cheap record checks derived from existing MRV data. Each check is one
- * narrow indexed query with a row cap; an item disappears the moment the
- * underlying record is fixed (no independent lifecycle).
+ * Cheap record checks derived from existing MRV data, fetched as one
+ * `union all` of capped, narrow, indexed selects. An item disappears the
+ * moment the underlying record is fixed (no independent lifecycle). The
+ * uncapped overdue-batch count comes from the station aggregates.
  */
 async function getAttentionItems(
   ctx: OrgContext,
   facilityId: string,
-): Promise<AttentionResult> {
+): Promise<DashboardAttentionItem[]> {
   const todayStr = new Date().toISOString().slice(0, 10);
   const orgId = ctx.organizationId;
 
-  const [
-    runsMissingMass,
-    unlinkedLots,
-    feedstocksMissingData,
-    applicationsMissingEvidence,
-    batchesAwaitingVerification,
-    [overdueBatchesRow],
-  ] = await Promise.all([
+  const rows: AttentionRow[] = await unionAll(
     db
       .select({
+        kind: attentionKind("run-mass"),
         id: productionRuns.id,
         code: productionRuns.code,
-        date: productionRunDateExpr(),
+        date: attentionDate(productionRunDateExpr()),
       })
       .from(productionRuns)
       .where(runsMissingMassWhere(orgId, facilityId))
@@ -552,9 +613,10 @@ async function getAttentionItems(
       .limit(ATTENTION_PER_CHECK),
     db
       .select({
+        kind: attentionKind("lot-unlinked"),
         id: biocharProducts.id,
         code: biocharProducts.code,
-        date: biocharProducts.productionDate,
+        date: attentionDate(biocharProducts.productionDate),
       })
       .from(biocharProducts)
       .where(productsUnlinkedWhere(orgId, facilityId))
@@ -562,10 +624,12 @@ async function getAttentionItems(
       .limit(ATTENTION_PER_CHECK),
     db
       .select({
+        kind: attentionKind("feedstock-missing"),
         id: feedstocks.id,
         code: feedstocks.code,
-        deliveryDate: feedstocks.deliveryDate,
-        createdAt: feedstocks.createdAt,
+        date: attentionDate(
+          sql`coalesce(${feedstocks.deliveryDate}, ${feedstocks.createdAt})`,
+        ),
       })
       .from(feedstocks)
       .where(feedstocksMissingDataWhere(orgId, facilityId))
@@ -573,9 +637,10 @@ async function getAttentionItems(
       .limit(ATTENTION_PER_CHECK),
     db
       .select({
+        kind: attentionKind("application-evidence"),
         id: applications.id,
         code: applications.code,
-        date: applications.applicationDate,
+        date: attentionDate(applications.applicationDate),
       })
       .from(applications)
       .innerJoin(
@@ -590,9 +655,10 @@ async function getAttentionItems(
       .limit(ATTENTION_PER_CHECK),
     db
       .select({
+        kind: attentionKind("batch-pending"),
         id: creditBatches.id,
         code: creditBatches.code,
-        date: creditBatches.endDate,
+        date: attentionDate(creditBatches.endDate),
       })
       .from(creditBatches)
       // Redundant org predicate for the lexical guard (see note above).
@@ -604,61 +670,18 @@ async function getAttentionItems(
       )
       .orderBy(asc(creditBatches.endDate))
       .limit(ATTENTION_PER_CHECK),
-    db
-      .select({ count: count() })
-      .from(creditBatches)
-      // Redundant org predicate for the lexical guard (see note above).
-      .where(
-        and(
-          overdueBatchesWhere(orgId, facilityId, todayStr),
-          eq(creditBatches.organizationId, orgId),
-        ),
-      ),
-  ]);
+  );
 
-  const facilityQuery = `?facility=${facilityId}`;
-  const flags: DashboardAttentionItem[] = [
-    ...runsMissingMass.map((row) => ({
-      id: `run-mass-${row.id}`,
+  const rank = (kind: AttentionKind) => ATTENTION_ORDER.indexOf(kind);
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => rank(a.row.kind) - rank(b.row.kind) || a.index - b.index)
+    .slice(0, ATTENTION_TOTAL)
+    .map(({ row }) => ({
+      id: `${row.kind}-${row.id}`,
       entityCode: row.code,
       date: row.date,
-      title: "Complete run missing mass data",
-      href: productionRunHref(facilityId, row.id),
-    })),
-    ...unlinkedLots.map((row) => ({
-      id: `lot-unlinked-${row.id}`,
-      entityCode: row.code,
-      date: row.date,
-      title: "Production run not linked",
-      href: `/biochar-products${facilityQuery}`,
-    })),
-    ...feedstocksMissingData.map((row) => ({
-      id: `feedstock-missing-${row.id}`,
-      entityCode: row.code,
-      date: row.deliveryDate ?? row.createdAt,
-      title: "Feedstock record missing data",
-      href: `/feedstocks${facilityQuery}`,
-    })),
-    ...applicationsMissingEvidence.map((row) => ({
-      id: `application-evidence-${row.id}`,
-      entityCode: row.code,
-      date: row.date,
-      title: "Application missing evidence",
-      href: `/applications${facilityQuery}`,
-    })),
-  ];
-  const pending: DashboardAttentionItem[] = [
-    ...batchesAwaitingVerification.map((row) => ({
-      id: `batch-pending-${row.id}`,
-      entityCode: row.code,
-      date: row.date,
-      title: "Period ended · awaiting verification",
-      href: creditBatchDeepLinkHref(row.id, facilityId),
-    })),
-  ];
-
-  return {
-    items: [...flags, ...pending].slice(0, ATTENTION_TOTAL),
-    overdueBatchesCount: Number(overdueBatchesRow?.count ?? 0),
-  };
+      title: ATTENTION_TITLES[row.kind],
+      href: attentionHref(row.kind, row.id, facilityId),
+    }));
 }

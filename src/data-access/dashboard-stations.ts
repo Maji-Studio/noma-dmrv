@@ -6,8 +6,9 @@
  *
  * Range-independent by design — the stations describe where the facility
  * stands now; the period-scoped numbers (KPIs, mass flow) live in
- * `dashboard-overview.ts`. Queries are narrow, indexed, facility-scoped;
- * anything that isn't a cheap count/group-by happens in JS.
+ * `dashboard-overview.ts`. Two round trips: one statement of filtered
+ * aggregates for every count, one `union all` for the newest rows per entity;
+ * the merge sort and labelling happen in JS.
  */
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
@@ -23,9 +24,21 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import type { StatusStateClass } from "@/lib/status-state";
-import { and, count, countDistinct, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  countDistinct,
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  sql,
+  type SQL,
+  type SQLWrapper,
+} from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import {
   applicationEvidenceGapWhere,
+  overdueBatchesWhere,
   productsUnlinkedWhere,
   runsMissingMassWhere,
 } from "./dashboard-attention";
@@ -122,388 +135,364 @@ function plural(n: number, singular: string, pluralWord?: string): string {
   return `${n} ${n === 1 ? singular : (pluralWord ?? `${singular}s`)}`;
 }
 
-interface StatusCountRow {
-  status: string;
-  count: number;
+/** Milliseconds since the epoch for a timestamp column, for cross-entity sorting. */
+function epochMs(column: SQLWrapper): SQL<number> {
+  return sql<number>`(extract(epoch from ${column}) * 1000)`.mapWith(Number);
 }
 
-function countByStatus(rows: StatusCountRow[], statuses: string[]): number {
-  const wanted = new Set(statuses);
-  return rows
-    .filter((row) => wanted.has(row.status))
-    .reduce((acc, row) => acc + Number(row.count), 0);
-}
-
-function totalCount(rows: StatusCountRow[]): number {
-  return rows.reduce((acc, row) => acc + Number(row.count), 0);
-}
-
-async function loadStatusCounts(ctx: OrgContext, facilityId: string) {
-  const [feedstockRows, runRows, productRows, deliveryRows, applicationRows, batchRows] =
-    await Promise.all([
-      db
-        .select({ status: feedstocks.status, count: count() })
-        .from(feedstocks)
-        .where(
-          and(
-            eq(feedstocks.organizationId, ctx.organizationId),
-            eq(feedstocks.facilityId, facilityId),
-            isNull(feedstocks.archivedAt),
-          ),
-        )
-        .groupBy(feedstocks.status),
-      db
-        .select({ status: productionRuns.status, count: count() })
-        .from(productionRuns)
-        .where(
-          and(
-            eq(productionRuns.organizationId, ctx.organizationId),
-            eq(productionRuns.facilityId, facilityId),
-            isNull(productionRuns.archivedAt),
-          ),
-        )
-        .groupBy(productionRuns.status),
-      db
-        .select({ status: biocharProducts.status, count: count() })
-        .from(biocharProducts)
-        .where(
-          and(
-            eq(biocharProducts.organizationId, ctx.organizationId),
-            eq(biocharProducts.facilityId, facilityId),
-            isNull(biocharProducts.archivedAt),
-          ),
-        )
-        .groupBy(biocharProducts.status),
-      db
-        .select({ status: deliveries.status, count: count() })
-        .from(deliveries)
-        .where(
-          and(
-            eq(deliveries.organizationId, ctx.organizationId),
-            eq(deliveries.facilityId, facilityId),
-            isNull(deliveries.archivedAt),
-          ),
-        )
-        .groupBy(deliveries.status),
-      db
-        .select({ status: applications.status, count: count() })
-        .from(applications)
-        .innerJoin(
-          deliveries,
-          and(
-            eq(applications.deliveryId, deliveries.id),
-            eq(deliveries.organizationId, ctx.organizationId),
-          ),
-        )
-        .where(
-          and(
-            eq(applications.organizationId, ctx.organizationId),
-            eq(deliveries.facilityId, facilityId),
-            isNull(deliveries.archivedAt),
-          ),
-        )
-        .groupBy(applications.status),
-      db
-        .select({ status: creditBatches.status, count: count() })
-        .from(creditBatches)
-        .where(
-          and(
-            eq(creditBatches.organizationId, ctx.organizationId),
-            eq(creditBatches.facilityId, facilityId),
-            isNull(creditBatches.archivedAt),
-          ),
-        )
-        .groupBy(creditBatches.status),
-    ]);
-
-  return {
-    feedstocks: feedstockRows,
-    productionRuns: runRows,
-    biocharProducts: productRows,
-    deliveries: deliveryRows,
-    applications: applicationRows,
-    creditBatches: batchRows,
-  };
-}
-
-/** Suppliers actually feeding this facility (distinct across its feedstocks). */
-async function loadSupplierCount(ctx: OrgContext, facilityId: string): Promise<number> {
-  const [row] = await db
-    .select({ count: countDistinct(feedstocks.supplierId) })
+/**
+ * Every station and certification count in one statement: each entity is one
+ * filtered-aggregate subquery scanned once, and the cross join of their
+ * single rows is the snapshot. `overdueBatches` feeds the attention total in
+ * `dashboard-overview.ts`; it is not a station badge.
+ */
+async function loadStationAggregates(
+  ctx: OrgContext,
+  facilityId: string,
+  todayStr: string,
+) {
+  const orgId = ctx.organizationId;
+  const feedstockAgg = db
+    .select({
+      total: countRows().as("feedstock_total"),
+      missingData: countRows(eq(feedstocks.status, "missing_data")).as(
+        "feedstock_missing_data",
+      ),
+      // count(distinct …) skips null supplier ids by itself.
+      suppliers: countDistinct(feedstocks.supplierId).mapWith(Number).as(
+        "feedstock_suppliers",
+      ),
+    })
     .from(feedstocks)
     .where(
       and(
-        eq(feedstocks.organizationId, ctx.organizationId),
+        eq(feedstocks.organizationId, orgId),
         eq(feedstocks.facilityId, facilityId),
         isNull(feedstocks.archivedAt),
-        isNotNull(feedstocks.supplierId),
       ),
-    );
-  return Number(row?.count ?? 0);
-}
-
-async function loadApplicationEvidenceGapCount(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<number> {
-  const [row] = await db
-    .select({ count: count() })
+    )
+    .as("feedstock_agg");
+  const runAgg = db
+    .select({
+      total: countRows().as("run_total"),
+      running: countRows(eq(productionRuns.status, "running")).as("run_running"),
+      missingMass: countRows(runsMissingMassWhere(orgId, facilityId)).as(
+        "run_missing_mass",
+      ),
+    })
+    .from(productionRuns)
+    .where(
+      and(
+        eq(productionRuns.organizationId, orgId),
+        eq(productionRuns.facilityId, facilityId),
+        isNull(productionRuns.archivedAt),
+      ),
+    )
+    .as("run_agg");
+  const productAgg = db
+    .select({
+      total: countRows().as("product_total"),
+      unlinked: countRows(productsUnlinkedWhere(orgId, facilityId)).as(
+        "product_unlinked",
+      ),
+    })
+    .from(biocharProducts)
+    .where(
+      and(
+        eq(biocharProducts.organizationId, orgId),
+        eq(biocharProducts.facilityId, facilityId),
+        isNull(biocharProducts.archivedAt),
+      ),
+    )
+    .as("product_agg");
+  const deliveryAgg = db
+    .select({ total: countRows().as("delivery_total") })
+    .from(deliveries)
+    .where(
+      and(
+        eq(deliveries.organizationId, orgId),
+        eq(deliveries.facilityId, facilityId),
+        isNull(deliveries.archivedAt),
+      ),
+    )
+    .as("delivery_agg");
+  const applicationAgg = db
+    .select({
+      total: countRows().as("application_total"),
+      evidenceGaps: countRows(applicationEvidenceGapWhere(orgId, facilityId)).as(
+        "application_evidence_gaps",
+      ),
+    })
     .from(applications)
     .innerJoin(
       deliveries,
       and(
         eq(applications.deliveryId, deliveries.id),
-        eq(deliveries.organizationId, ctx.organizationId),
+        eq(deliveries.organizationId, orgId),
       ),
     )
-    .where(applicationEvidenceGapWhere(ctx.organizationId, facilityId));
-  return Number(row?.count ?? 0);
-}
-
-/** Complete runs missing a mass reading — the production station's badge. */
-async function loadRunsMissingMassCount(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<number> {
-  const [row] = await db
-    .select({ count: count() })
-    .from(productionRuns)
-    .where(runsMissingMassWhere(ctx.organizationId, facilityId));
-  return Number(row?.count ?? 0);
-}
-
-/** Biochar products not linked to a production run — the biochar station's badge. */
-async function loadProductsUnlinkedCount(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<number> {
-  const [row] = await db
-    .select({ count: count() })
-    .from(biocharProducts)
-    .where(productsUnlinkedWhere(ctx.organizationId, facilityId));
-  return Number(row?.count ?? 0);
-}
-
-// Samples anchor on the credit batch (issue #309): a batch with zero pooled
-// samples has no chemistry behind its carbon figures.
-async function loadBatchesWithoutSamplesCount(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<number> {
+    .where(
+      and(
+        eq(applications.organizationId, orgId),
+        eq(deliveries.facilityId, facilityId),
+        isNull(deliveries.archivedAt),
+      ),
+    )
+    .as("application_agg");
+  // Samples anchor on the credit batch (issue #309): a batch with zero pooled
+  // samples has no chemistry behind its carbon figures.
   const sampleCounts = db
     .select({
       creditBatchId: samples.creditBatchId,
       sampleCount: countRows().as("sample_count"),
     })
     .from(samples)
-    .where(eq(samples.organizationId, ctx.organizationId))
+    .where(eq(samples.organizationId, orgId))
     .groupBy(samples.creditBatchId)
     .as("sample_counts");
-
-  const [row] = await db
-    .select({ count: count() })
+  const batchAgg = db
+    .select({
+      total: countRows().as("batch_total"),
+      pending: countRows(eq(creditBatches.status, "pending")).as("batch_pending"),
+      withoutSamples: countRows(
+        sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
+      ).as("batch_without_samples"),
+      overdue: countRows(
+        overdueBatchesWhere(orgId, facilityId, todayStr),
+      ).as("batch_overdue"),
+    })
     .from(creditBatches)
     .leftJoin(sampleCounts, eq(sampleCounts.creditBatchId, creditBatches.id))
     .where(
       and(
-        eq(creditBatches.organizationId, ctx.organizationId),
-        eq(creditBatches.facilityId, facilityId),
-        isNull(creditBatches.archivedAt),
-        sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
-      ),
-    );
-  return Number(row?.count ?? 0);
-}
-
-async function loadRecentBatches(
-  ctx: OrgContext,
-  facilityId: string,
-): Promise<DashboardCertificationBatch[]> {
-  const rows = await db
-    .select({
-      id: creditBatches.id,
-      code: creditBatches.code,
-      status: creditBatches.status,
-    })
-    .from(creditBatches)
-    .where(
-      and(
-        eq(creditBatches.organizationId, ctx.organizationId),
+        eq(creditBatches.organizationId, orgId),
         eq(creditBatches.facilityId, facilityId),
         isNull(creditBatches.archivedAt),
       ),
     )
-    .orderBy(desc(creditBatches.createdAt))
-    .limit(CERTIFICATION_BATCH_ROWS);
+    .as("batch_agg");
 
-  return rows.map((row) => ({
-    id: row.id,
-    code: row.code,
-    status: row.status as DashboardCreditBatchStatus,
-  }));
+  const [row] = await db
+    .select({
+      feedstockTotal: feedstockAgg.total,
+      feedstockMissingData: feedstockAgg.missingData,
+      supplierCount: feedstockAgg.suppliers,
+      runTotal: runAgg.total,
+      runningRuns: runAgg.running,
+      runsMissingMass: runAgg.missingMass,
+      productTotal: productAgg.total,
+      productsUnlinked: productAgg.unlinked,
+      deliveryTotal: deliveryAgg.total,
+      applicationTotal: applicationAgg.total,
+      evidenceGaps: applicationAgg.evidenceGaps,
+      batchTotal: batchAgg.total,
+      pendingBatches: batchAgg.pending,
+      batchesWithoutSamples: batchAgg.withoutSamples,
+      overdueBatches: batchAgg.overdue,
+    })
+    .from(feedstockAgg)
+    .crossJoin(runAgg)
+    .crossJoin(productAgg)
+    .crossJoin(deliveryAgg)
+    .crossJoin(applicationAgg)
+    .crossJoin(batchAgg);
+  if (!row) throw new Error("station aggregate returned no row");
+  return row;
 }
 
 // ============================================
 // Activity feed
 // ============================================
 
-async function loadActivity(
+type ActivityKind = "feedstock" | "run" | "delivery" | "application" | "batch";
+
+function activityKind(kind: ActivityKind): SQL<ActivityKind> {
+  return sql<ActivityKind>`${kind}::text`;
+}
+
+interface ActivityRow {
+  kind: ActivityKind;
+  id: string;
+  code: string;
+  /** Credit batch status; null for every other kind. */
+  status: string | null;
+  sortMs: number;
+}
+
+/**
+ * Newest events per entity, fetched as one `union all` so the merge sort in
+ * JS sees each entity's own top-N. The batch rows double as the
+ * certification block's recent-batch list (same filter, same order).
+ */
+async function loadActivityRows(
   ctx: OrgContext,
   facilityId: string,
-): Promise<DashboardActivityItem[]> {
-  const [feedstockRows, runRows, deliveryRows, applicationRows, batchRows] =
-    await Promise.all([
-      db
-        .select({
-          id: feedstocks.id,
-          code: feedstocks.code,
-          date: feedstocks.deliveryDate,
-        })
-        .from(feedstocks)
-        .where(
-          and(
-            eq(feedstocks.organizationId, ctx.organizationId),
-            eq(feedstocks.facilityId, facilityId),
-            isNull(feedstocks.archivedAt),
-            isNotNull(feedstocks.deliveryDate),
-          ),
-        )
-        .orderBy(desc(feedstocks.deliveryDate))
-        .limit(ACTIVITY_PER_ENTITY),
-      db
-        .select({
-          id: productionRuns.id,
-          code: productionRuns.code,
-          date: productionRuns.endTime,
-        })
-        .from(productionRuns)
-        .where(
-          and(
-            eq(productionRuns.organizationId, ctx.organizationId),
-            eq(productionRuns.facilityId, facilityId),
-            isNull(productionRuns.archivedAt),
-            eq(productionRuns.status, "complete"),
-            isNotNull(productionRuns.endTime),
-          ),
-        )
-        .orderBy(desc(productionRuns.endTime))
-        .limit(ACTIVITY_PER_ENTITY),
-      db
-        .select({
-          id: deliveries.id,
-          code: deliveries.code,
-          date: deliveries.deliveryDate,
-        })
-        .from(deliveries)
-        .where(
-          and(
-            eq(deliveries.organizationId, ctx.organizationId),
-            eq(deliveries.facilityId, facilityId),
-            isNull(deliveries.archivedAt),
-            eq(deliveries.status, "delivered"),
-            isNotNull(deliveries.deliveryDate),
-          ),
-        )
-        .orderBy(desc(deliveries.deliveryDate))
-        .limit(ACTIVITY_PER_ENTITY),
-      db
-        .select({
-          id: applications.id,
-          code: applications.code,
-          date: applications.applicationDate,
-        })
-        .from(applications)
-        .innerJoin(
-          deliveries,
-          and(
-            eq(applications.deliveryId, deliveries.id),
-            eq(deliveries.organizationId, ctx.organizationId),
-          ),
-        )
-        .where(
-          and(
-            eq(applications.organizationId, ctx.organizationId),
-            eq(deliveries.facilityId, facilityId),
-            isNull(deliveries.archivedAt),
-            // "Biochar applied to soil" — only applications actually applied,
-            // not ones still in the `delivered` state.
-            eq(applications.status, "applied"),
-            isNotNull(applications.applicationDate),
-          ),
-        )
-        .orderBy(desc(applications.applicationDate))
-        .limit(ACTIVITY_PER_ENTITY),
-      db
-        .select({
-          id: creditBatches.id,
-          code: creditBatches.code,
-          date: creditBatches.createdAt,
-        })
-        .from(creditBatches)
-        .where(
-          and(
-            eq(creditBatches.organizationId, ctx.organizationId),
-            eq(creditBatches.facilityId, facilityId),
-            isNull(creditBatches.archivedAt),
-          ),
-        )
-        .orderBy(desc(creditBatches.createdAt))
-        .limit(ACTIVITY_PER_ENTITY),
-    ]);
+): Promise<ActivityRow[]> {
+  const orgId = ctx.organizationId;
+  const noStatus = sql<string | null>`null::text`;
+  return unionAll(
+    db
+      .select({
+        kind: activityKind("feedstock"),
+        id: feedstocks.id,
+        code: feedstocks.code,
+        status: noStatus,
+        sortMs: epochMs(feedstocks.deliveryDate),
+      })
+      .from(feedstocks)
+      .where(
+        and(
+          eq(feedstocks.organizationId, orgId),
+          eq(feedstocks.facilityId, facilityId),
+          isNull(feedstocks.archivedAt),
+          isNotNull(feedstocks.deliveryDate),
+        ),
+      )
+      .orderBy(desc(feedstocks.deliveryDate))
+      .limit(ACTIVITY_PER_ENTITY),
+    db
+      .select({
+        kind: activityKind("run"),
+        id: productionRuns.id,
+        code: productionRuns.code,
+        status: noStatus,
+        sortMs: epochMs(productionRuns.endTime),
+      })
+      .from(productionRuns)
+      .where(
+        and(
+          eq(productionRuns.organizationId, orgId),
+          eq(productionRuns.facilityId, facilityId),
+          isNull(productionRuns.archivedAt),
+          eq(productionRuns.status, "complete"),
+          isNotNull(productionRuns.endTime),
+        ),
+      )
+      .orderBy(desc(productionRuns.endTime))
+      .limit(ACTIVITY_PER_ENTITY),
+    db
+      .select({
+        kind: activityKind("delivery"),
+        id: deliveries.id,
+        code: deliveries.code,
+        status: noStatus,
+        sortMs: epochMs(deliveries.deliveryDate),
+      })
+      .from(deliveries)
+      .where(
+        and(
+          eq(deliveries.organizationId, orgId),
+          eq(deliveries.facilityId, facilityId),
+          isNull(deliveries.archivedAt),
+          eq(deliveries.status, "delivered"),
+          isNotNull(deliveries.deliveryDate),
+        ),
+      )
+      .orderBy(desc(deliveries.deliveryDate))
+      .limit(ACTIVITY_PER_ENTITY),
+    db
+      .select({
+        kind: activityKind("application"),
+        id: applications.id,
+        code: applications.code,
+        status: noStatus,
+        sortMs: epochMs(applications.applicationDate),
+      })
+      .from(applications)
+      .innerJoin(
+        deliveries,
+        and(
+          eq(applications.deliveryId, deliveries.id),
+          eq(deliveries.organizationId, orgId),
+        ),
+      )
+      .where(
+        and(
+          eq(applications.organizationId, orgId),
+          eq(deliveries.facilityId, facilityId),
+          isNull(deliveries.archivedAt),
+          // "Biochar applied to soil" — only applications actually applied,
+          // not ones still in the `delivered` state.
+          eq(applications.status, "applied"),
+          isNotNull(applications.applicationDate),
+        ),
+      )
+      .orderBy(desc(applications.applicationDate))
+      .limit(ACTIVITY_PER_ENTITY),
+    db
+      .select({
+        kind: activityKind("batch"),
+        id: creditBatches.id,
+        code: creditBatches.code,
+        status: sql<string | null>`${creditBatches.status}::text`,
+        sortMs: epochMs(creditBatches.createdAt),
+      })
+      .from(creditBatches)
+      .where(
+        and(
+          eq(creditBatches.organizationId, orgId),
+          eq(creditBatches.facilityId, facilityId),
+          isNull(creditBatches.archivedAt),
+        ),
+      )
+      .orderBy(desc(creditBatches.createdAt))
+      .limit(ACTIVITY_PER_ENTITY),
+  );
+}
 
-  const toIso = (value: string | Date | null): string | null => {
-    if (value == null) return null;
-    const ms = value instanceof Date ? value.getTime() : Date.parse(value);
-    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
-  };
+const ACTIVITY_TITLES: Record<ActivityKind, string> = {
+  feedstock: "Feedstock received",
+  run: "Production run completed",
+  delivery: "Delivery completed",
+  application: "Biochar applied to soil",
+  batch: "Credit batch created",
+};
 
-  const items: (DashboardActivityItem & { ms: number })[] = [];
-  const push = (
-    idPrefix: string,
-    rows: { id: string; code: string; date: string | Date | null }[],
-    title: string,
-    href: string,
-  ) => {
-    for (const row of rows) {
-      const iso = toIso(row.date);
-      if (iso == null) continue;
-      items.push({
-        id: `${idPrefix}-${row.id}`,
-        code: row.code,
-        title,
-        dateIso: iso,
-        href,
-        ms: Date.parse(iso),
-      });
-    }
-  };
-
-  push("feedstock", feedstockRows, "Feedstock received", facilityHref("/feedstocks", facilityId));
-  push("run", runRows, "Production run completed", facilityHref("/production-runs", facilityId));
-  push("delivery", deliveryRows, "Delivery completed", facilityHref("/deliveries", facilityId));
-  push("application", applicationRows, "Biochar applied to soil", facilityHref("/applications", facilityId));
-  for (const row of batchRows) {
-    const iso = toIso(row.date);
-    if (iso == null) continue;
-    items.push({
-      id: `batch-${row.id}`,
-      code: row.code,
-      title: "Credit batch created",
-      dateIso: iso,
-      href: creditBatchDeepLinkHref(row.id, facilityId),
-      ms: Date.parse(iso),
-    });
+function activityHref(
+  kind: ActivityKind,
+  id: string,
+  facilityId: string,
+): string {
+  switch (kind) {
+    case "feedstock":
+      return facilityHref("/feedstocks", facilityId);
+    case "run":
+      return facilityHref("/production-runs", facilityId);
+    case "delivery":
+      return facilityHref("/deliveries", facilityId);
+    case "application":
+      return facilityHref("/applications", facilityId);
+    case "batch":
+      return creditBatchDeepLinkHref(id, facilityId);
   }
+}
 
-  return items
-    .sort((a, b) => b.ms - a.ms)
+function buildActivity(
+  rows: ActivityRow[],
+  facilityId: string,
+): DashboardActivityItem[] {
+  return rows
+    .filter((row) => Number.isFinite(row.sortMs))
+    .sort((a, b) => b.sortMs - a.sortMs)
     .slice(0, ACTIVITY_TOTAL)
-    .map((item) => ({
-      id: item.id,
-      code: item.code,
-      title: item.title,
-      dateIso: item.dateIso,
-      href: item.href,
+    .map((row) => ({
+      id: `${row.kind}-${row.id}`,
+      code: row.code,
+      title: ACTIVITY_TITLES[row.kind],
+      dateIso: new Date(row.sortMs).toISOString(),
+      href: activityHref(row.kind, row.id, facilityId),
+    }));
+}
+
+function buildRecentBatches(rows: ActivityRow[]): DashboardCertificationBatch[] {
+  return rows
+    .filter((row) => row.kind === "batch")
+    .sort((a, b) => b.sortMs - a.sortMs)
+    .slice(0, CERTIFICATION_BATCH_ROWS)
+    .map((row) => ({
+      id: row.id,
+      code: row.code,
+      status: row.status as DashboardCreditBatchStatus,
     }));
 }
 
@@ -511,39 +500,37 @@ async function loadActivity(
 // Aggregate
 // ============================================
 
+/** Station snapshot plus the batch-only attention count the overview adds to the queue size. */
+export interface DashboardStationsSnapshot extends DashboardStationsData {
+  /** Pending credit batches whose measurement period has closed (uncapped). */
+  overdueBatches: number;
+}
+
 export async function getDashboardStations(
   ctx: OrgContext,
   facilityId: string,
-): Promise<DashboardStationsData> {
+): Promise<DashboardStationsSnapshot> {
   requireOrgScope(ctx);
+  const todayStr = new Date().toISOString().slice(0, 10);
 
-  const [
-    counts,
-    supplierCount,
-    evidenceGaps,
-    runsMissingMass,
-    productsUnlinked,
-    batchesWithoutSamples,
-    batches,
-    activity,
-  ] = await Promise.all([
-    loadStatusCounts(ctx, facilityId),
-    loadSupplierCount(ctx, facilityId),
-    loadApplicationEvidenceGapCount(ctx, facilityId),
-    loadRunsMissingMassCount(ctx, facilityId),
-    loadProductsUnlinkedCount(ctx, facilityId),
-    loadBatchesWithoutSamplesCount(ctx, facilityId),
-    loadRecentBatches(ctx, facilityId),
-    loadActivity(ctx, facilityId),
+  const [counts, activityRows] = await Promise.all([
+    loadStationAggregates(ctx, facilityId, todayStr),
+    loadActivityRows(ctx, facilityId),
   ]);
 
-  const feedstockTotal = totalCount(counts.feedstocks);
-  const feedstockMissing = countByStatus(counts.feedstocks, ["missing_data"]);
-  const runTotal = totalCount(counts.productionRuns);
-  const runningRuns = countByStatus(counts.productionRuns, ["running"]);
-  const productTotal = totalCount(counts.biocharProducts);
-  const deliveryTotal = totalCount(counts.deliveries);
-  const applicationTotal = totalCount(counts.applications);
+  const {
+    feedstockTotal,
+    feedstockMissingData: feedstockMissing,
+    supplierCount,
+    runTotal,
+    runningRuns,
+    runsMissingMass,
+    productTotal,
+    productsUnlinked,
+    deliveryTotal,
+    applicationTotal,
+    evidenceGaps,
+  } = counts;
 
   const stations: DashboardStation[] = [
     {
@@ -621,12 +608,13 @@ export async function getDashboardStations(
   return {
     stations,
     runningRuns,
-    activity,
+    activity: buildActivity(activityRows, facilityId),
     certification: {
-      totalBatches: totalCount(counts.creditBatches),
-      pendingBatches: countByStatus(counts.creditBatches, ["pending"]),
-      batches,
-      batchesWithoutSamples,
+      totalBatches: counts.batchTotal,
+      pendingBatches: counts.pendingBatches,
+      batches: buildRecentBatches(activityRows),
+      batchesWithoutSamples: counts.batchesWithoutSamples,
     },
+    overdueBatches: counts.overdueBatches,
   };
 }
