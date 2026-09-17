@@ -5,6 +5,7 @@
  */
 
 import {
+  keepPreviousData,
   type QueryClient,
   useMutation,
   useQuery,
@@ -43,7 +44,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { throwActionError } from "@/lib/stale-version";
 import { customerKeys } from "./customer-query-keys";
-import { entityKeys } from "./entity-query-keys";
+import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
 
 export { customerKeys } from "./customer-query-keys";
 
@@ -75,18 +76,6 @@ function seedCreatedCustomerCaches(
   seedEntityCache(queryClient, CUSTOMER_ENTITY_TYPE, option);
 }
 
-/**
- * Refresh the EntitySelect customer caches after a customer changed or was
- * removed, so the pickers never serve a stale or deleted option.
- */
-function invalidateCustomerEntityQueries(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({
-    queryKey: entityKeys.listPrefix(CUSTOMER_ENTITY_TYPE),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: entityKeys.detailPrefix(CUSTOMER_ENTITY_TYPE),
-  });
-}
 
 // ============================================
 // Customer Query Hooks
@@ -106,6 +95,11 @@ export function useCustomers(filters?: Partial<CustomerFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    // A search or page change creates a new query key. Without this the list
+    // blanks to skeletons for the round trip, which unmounts an open row menu
+    // mid-click (issue #798). Keeping the previous page means the control the
+    // operator just used stays put until the new page is in.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -339,7 +333,7 @@ export function useUpdateCustomer(
       );
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
-      invalidateCustomerEntityQueries(queryClient);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -451,7 +445,7 @@ export function useDeleteCustomer(
       queryClient.removeQueries({
         queryKey: entityKeys.detail(CUSTOMER_ENTITY_TYPE, customerId),
       });
-      invalidateCustomerEntityQueries(queryClient);
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(undefined, customerId);
     },

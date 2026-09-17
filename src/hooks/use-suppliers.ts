@@ -5,6 +5,7 @@
  */
 
 import {
+  keepPreviousData,
   type QueryClient,
   useMutation,
   useQuery,
@@ -12,7 +13,10 @@ import {
 } from "@tanstack/react-query";
 import type { Supplier, SupplierLocation } from "@/db/schema";
 import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
-import type { EntityOption } from "@/components/forms/entity-select/types";
+import type {
+  EntityOption,
+  EntityType,
+} from "@/components/forms/entity-select/types";
 
 import type {
   SupplierFilterData,
@@ -44,8 +48,11 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
+import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
 
 export { supplierKeys } from "./supplier-query-keys";
+
+const SUPPLIER_ENTITY_TYPE: EntityType = "supplier";
 
 const SUPPLIER_DETAIL_STALE_TIME_MS = 30_000;
 const SUPPLIER_LOCATIONS_STALE_TIME_MS = 60_000;
@@ -62,8 +69,9 @@ function seedCreatedSupplierCaches(
   };
 
   queryClient.setQueryData(supplierKeys.detail(supplier.id), supplier);
-  seedEntityCache(queryClient, "supplier", option);
+  seedEntityCache(queryClient, SUPPLIER_ENTITY_TYPE, option);
 }
+
 
 // ============================================
 // Supplier Query Hooks
@@ -83,6 +91,11 @@ export function useSuppliers(filters?: Partial<SupplierFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    // A search or page change creates a new query key. Without this the list
+    // blanks to skeletons for the round trip, which unmounts an open row menu
+    // mid-click (issue #798). Keeping the previous page means the control the
+    // operator just used stays put until the new page is in.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -275,6 +288,8 @@ export function useUpdateSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      // Feedstock and delivery pickers read the supplier through EntitySelect.
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -377,6 +392,12 @@ export function useDeleteSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      // Drop the deleted supplier from the pickers
+      queryClient.removeQueries({
+        queryKey: entityKeys.detail(SUPPLIER_ENTITY_TYPE, supplierId),
+      });
+      // Feedstock and delivery pickers read the supplier through EntitySelect.
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(undefined, supplierId);
     },

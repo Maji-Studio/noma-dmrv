@@ -13,6 +13,7 @@ import { onboardingKeys } from "./use-onboarding";
 import type {
   CreateSupplierData,
   CreateSupplierWithLocationsData,
+  UpdateSupplierData,
 } from "@/schemas/suppliers";
 import type { Supplier, SupplierLocation } from "@/db/schema";
 
@@ -21,26 +22,30 @@ const mocks = vi.hoisted(() => ({
   createSupplierWithLocationsFn: vi.fn(),
   getSupplierByIdFn: vi.fn(),
   getSupplierLocationsBySupplierFn: vi.fn(),
+  updateSupplierFn: vi.fn(),
+  deleteSupplierFn: vi.fn(),
 }));
 
 vi.mock("@/fn/suppliers", () => ({
   createSupplierFn: mocks.createSupplierFn,
   createSupplierLocationFn: vi.fn(),
   createSupplierWithLocationsFn: mocks.createSupplierWithLocationsFn,
-  deleteSupplierFn: vi.fn(),
+  deleteSupplierFn: mocks.deleteSupplierFn,
   deleteSupplierLocationFn: vi.fn(),
   getSupplierByIdFn: mocks.getSupplierByIdFn,
   getSupplierLocationsBySupplierFn: mocks.getSupplierLocationsBySupplierFn,
   getSuppliersFn: vi.fn(),
-  updateSupplierFn: vi.fn(),
+  updateSupplierFn: mocks.updateSupplierFn,
   updateSupplierLocationFn: vi.fn(),
 }));
 
 import {
   useCreateSupplier,
   useCreateSupplierWithLocations,
+  useDeleteSupplier,
   useSupplier,
   useSupplierLocationsBySupplier,
+  useUpdateSupplier,
 } from "./use-suppliers";
 import { supplierKeys } from "./supplier-query-keys";
 
@@ -54,6 +59,28 @@ type CreateMutation = ReturnType<typeof useCreateSupplier>;
 type CreateWithLocationsMutation = ReturnType<
   typeof useCreateSupplierWithLocations
 >;
+type UpdateMutation = ReturnType<typeof useUpdateSupplier>;
+type DeleteMutation = ReturnType<typeof useDeleteSupplier>;
+
+function UpdateSupplierHarness({
+  onCapture,
+}: {
+  onCapture: (mutation: UpdateMutation) => void;
+}) {
+  const mutation = useUpdateSupplier();
+  useEffect(() => onCapture(mutation), [mutation, onCapture]);
+  return null;
+}
+
+function DeleteSupplierHarness({
+  onCapture,
+}: {
+  onCapture: (mutation: DeleteMutation) => void;
+}) {
+  const mutation = useDeleteSupplier();
+  useEffect(() => onCapture(mutation), [mutation, onCapture]);
+  return null;
+}
 
 function CreateSupplierHarness({
   onCapture,
@@ -119,6 +146,13 @@ beforeEach(() => {
   mocks.createSupplierWithLocationsFn.mockReset();
   mocks.getSupplierByIdFn.mockReset();
   mocks.getSupplierLocationsBySupplierFn.mockReset();
+  mocks.updateSupplierFn.mockReset();
+  mocks.deleteSupplierFn.mockReset();
+  mocks.updateSupplierFn.mockResolvedValue({
+    success: true,
+    data: createdSupplier,
+  });
+  mocks.deleteSupplierFn.mockResolvedValue({ success: true, data: undefined });
   mocks.createSupplierFn.mockResolvedValue({
     success: true,
     data: createdSupplier,
@@ -460,6 +494,79 @@ describe("supplier creation onboarding interaction", () => {
         entityKeys.detail("supplier", createdSupplier.id),
       ),
     ).toBeUndefined();
+
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+});
+
+describe("supplier mutations keep the EntitySelect caches fresh", () => {
+  it("invalidates the entity caches after an update", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const listKey = entityKeys.list("supplier");
+    const detailKey = entityKeys.detail("supplier", createdSupplier.id);
+    queryClient.setQueryData(listKey, []);
+    queryClient.setQueryData(detailKey, { ...createdSupplier, name: "Stale" });
+
+    let capturedMutation: UpdateMutation | undefined;
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <TestProvider queryClient={queryClient}>
+          <UpdateSupplierHarness
+            onCapture={(mutation) => {
+              capturedMutation = mutation;
+            }}
+          />
+        </TestProvider>,
+      );
+    });
+
+    await act(async () => {
+      await capturedMutation?.mutateAsync({
+        supplierId: createdSupplier.id,
+        name: "Renamed Supplier",
+      } as UpdateSupplierData);
+    });
+
+    expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(detailKey)?.isInvalidated).toBe(true);
+
+    await act(async () => renderer?.unmount());
+    queryClient.clear();
+  });
+
+  it("drops the deleted supplier from the entity caches", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const listKey = entityKeys.list("supplier");
+    const detailKey = entityKeys.detail("supplier", createdSupplier.id);
+    queryClient.setQueryData(listKey, []);
+    queryClient.setQueryData(detailKey, createdSupplier);
+
+    let capturedMutation: DeleteMutation | undefined;
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <TestProvider queryClient={queryClient}>
+          <DeleteSupplierHarness
+            onCapture={(mutation) => {
+              capturedMutation = mutation;
+            }}
+          />
+        </TestProvider>,
+      );
+    });
+
+    await act(async () => {
+      await capturedMutation?.mutateAsync(createdSupplier.id);
+    });
+
+    expect(queryClient.getQueryData(detailKey)).toBeUndefined();
+    expect(queryClient.getQueryState(listKey)?.isInvalidated).toBe(true);
 
     await act(async () => renderer?.unmount());
     queryClient.clear();
