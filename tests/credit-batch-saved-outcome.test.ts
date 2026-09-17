@@ -7,7 +7,8 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  * fields null and `previewAvailable: false`, never a thrown failure for a
  * save that landed.
  *
- * Only the roll-up read is mocked; every write goes to the real database.
+ * Nothing in the data-access layer is mocked: the roll-up's own read-only
+ * transaction is made to throw, so the safe loader's catch path runs for real.
  * Requires a running database (DATABASE_URL from .env.test or test defaults).
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,26 +16,35 @@ import { eq, inArray } from "drizzle-orm";
 
 const mocks = vi.hoisted(() => ({
   rollupFailure: null as Error | null,
+  loggerError: vi.fn(),
 }));
 
-// The safe loader is the post-commit seam both writes read through. It is
-// swapped here rather than the deep read beneath it because the module calls
-// that read through its own binding, which a module mock cannot intercept.
-vi.mock("@/data-access/credit-batch-accounting", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/data-access/credit-batch-accounting")>();
+vi.mock("@/lib/log", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/log")>();
   return {
     ...actual,
-    loadCreditBatchAccountingSafely: async (
-      ...args: Parameters<typeof actual.loadCreditBatchAccountingSafely>
-    ) => {
-      if (mocks.rollupFailure) return undefined;
-      return actual.loadCreditBatchAccountingSafely(...args);
-    },
+    logger: { ...actual.logger, error: mocks.loggerError },
   };
 });
 
 import { db } from "@/db";
+
+// The roll-up is the only read here that opens a read-only transaction, so
+// failing exactly those transactions makes the real safe loader hit its
+// catch path while every write still lands.
+const realTransaction = db.transaction.bind(db);
+function failReadOnlyTransactionsWhenArmed() {
+  vi.spyOn(db, "transaction").mockImplementation(((
+    ...args: Parameters<typeof db.transaction>
+  ) => {
+    const config = args[1];
+    if (mocks.rollupFailure && config?.accessMode === "read only") {
+      throw mocks.rollupFailure;
+    }
+    return realTransaction(...args);
+  }) as typeof db.transaction);
+}
+
 import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
@@ -109,6 +119,9 @@ beforeAll(async () => {
 
 beforeEach(() => {
   mocks.rollupFailure = null;
+  mocks.loggerError.mockClear();
+  // Installed per test: the vitest config restores spies between tests.
+  failReadOnlyTransactionsWhenArmed();
 });
 
 afterAll(async () => {
@@ -149,6 +162,10 @@ describe("credit batch writes describe what they committed", () => {
     expect(batch.applicationCount).toBeNull();
     expect(batch.productionRunIds).toEqual([]);
     expect(await storedRatio(batch.id)).toBe(H_TO_CORG_BEFORE);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ creditBatchId: batch.id }),
+      "credit batch accounting could not be loaded after a committed write",
+    );
   });
 
   it("update answers the committed row with its roll-up when the roll-up loads", async () => {
@@ -182,5 +199,9 @@ describe("credit batch writes describe what they committed", () => {
     expect(updated.co2eStoredPreview).toBeNull();
     expect(updated.productionRunIds).toEqual([]);
     expect(await storedRatio(batch.id)).toBe(H_TO_CORG_AFTER);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({ creditBatchId: batch.id }),
+      "credit batch accounting could not be loaded after a committed write",
+    );
   });
 });

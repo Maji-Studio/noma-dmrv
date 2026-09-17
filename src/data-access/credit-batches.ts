@@ -538,6 +538,22 @@ async function describeSavedCreditBatch(
   };
 }
 
+/** The batch's member production-run ids, read under the given transaction. */
+async function readMemberProductionRunIds(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  creditBatchId: string,
+): Promise<string[]> {
+  const links = await tx
+    .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+    .from(creditBatchProductionRuns)
+    .where(and(
+      eq(creditBatchProductionRuns.creditBatchId, creditBatchId),
+      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+    ));
+  return links.map((link) => link.productionRunId);
+}
+
 /**
  * Update a credit batch
  */
@@ -600,14 +616,8 @@ export async function updateCreditBatch(
     // batch. Every writer follows run -> process scope -> batch ->
     // removal/certification order; production-run reopen also locks the run
     // before checking membership.
-    const currentMembership = shouldRefreshMembership
-      ? await tx
-          .select({ productionRunId: creditBatchProductionRuns.productionRunId })
-          .from(creditBatchProductionRuns)
-          .where(and(
-            eq(creditBatchProductionRuns.creditBatchId, id),
-            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-          ))
+    const currentProductionRunIds = shouldRefreshMembership
+      ? await readMemberProductionRunIds(ctx, tx, id)
       : [];
     const [declarationSnapshot] = shouldRefreshMembership
       ? await tx
@@ -633,9 +643,6 @@ export async function updateCreditBatch(
       ReturnType<typeof lockCreditBatchDeclarationRuns>
     >["lockedRuns"];
     if (shouldRefreshMembership && declarationSnapshot) {
-      const currentProductionRunIds = currentMembership.map(
-        (link) => link.productionRunId,
-      );
       const declaration = await lockCreditBatchDeclarationRuns(ctx, tx, {
         facilityId:
           updateFields.facilityId ?? declarationSnapshot.facilityId,
@@ -678,9 +685,7 @@ export async function updateCreditBatch(
           eq(creditBatchProductionRuns.creditBatchId, id),
           eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
         ));
-      const discoveredIds = currentMembership
-        .map((link) => link.productionRunId)
-        .sort();
+      const discoveredIds = [...currentProductionRunIds].sort();
       const lockedIds = lockedCurrentMembership
         .map((link) => link.productionRunId)
         .sort();
@@ -818,15 +823,7 @@ export async function updateCreditBatch(
     // touched, otherwise the untouched links read under the same transaction.
     const memberProductionRunIds = shouldRefreshMembership
       ? (resolvedProductionRunIds ?? [])
-      : (
-          await tx
-            .select({ productionRunId: creditBatchProductionRuns.productionRunId })
-            .from(creditBatchProductionRuns)
-            .where(and(
-              eq(creditBatchProductionRuns.creditBatchId, id),
-              eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-            ))
-        ).map((link) => link.productionRunId);
+      : await readMemberProductionRunIds(ctx, tx, id);
 
     return {
       ...(await readCommittedCreditBatch(ctx, tx, updatedBatch)),
