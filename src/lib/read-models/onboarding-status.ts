@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { getOnboardingStatus } from "@/data-access/onboarding";
 import type { OrgContext } from "@/lib/auth/server";
+import { facilityIdSchema } from "./facility-id";
 
 const onboardingStatusInputSchema = z.object({
-  facilityId: z.uuid().nullable(),
+  facilityId: facilityIdSchema.nullable(),
 });
 
 export type OnboardingStatusInput = z.input<typeof onboardingStatusInputSchema>;

@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 export function POST(request: Request): Promise<Response> {
   return readResponse({
     fallbackMessage: "Failed to load onboarding status",
+    invalidInputContext: "Invalid onboarding filters",
     logContext: "read:onboarding:status",
     read: async (ctx) => readOnboardingStatus(ctx, await readInput(request)),
   });

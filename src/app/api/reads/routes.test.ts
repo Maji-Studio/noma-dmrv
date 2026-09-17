@@ -128,13 +128,13 @@ const endpoints: Record<string, ReadEndpoint> = {
     ok: () => onboardingRoute(post("/api/reads/onboarding/status", { facilityId: FACILITY_ID })),
     data: { facilityCount: 1 },
     badInput: () => onboardingRoute(post("/api/reads/onboarding/status", { facilityId: MALFORMED_ID })),
-    badInputError: "Invalid UUID.",
+    badInputError: "Invalid onboarding filters: Choose a valid facility.",
   },
   "dashboard overview": {
     ok: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID })),
     data: { generatedAt: "2026-09-15T10:00:00.000Z" },
     badInput: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: MALFORMED_ID })),
-    badInputError: "Invalid UUID.",
+    badInputError: "Invalid dashboard filters: Choose a valid facility.",
     foreignFacility: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FOREIGN_FACILITY_ID })),
     guardedRead: () => mocks.getDashboardOverview,
   },
@@ -375,11 +375,14 @@ describe("startup read contracts", () => {
     expect(mocks.getDashboardOverview).not.toHaveBeenCalled();
   });
 
-  it("preserves the exact schema mismatch message and log context", async () => {
+  it("answers a schema mismatch as a logged server fault with its own message", async () => {
     mocks.getDashboardOverview.mockRejectedValueOnce({ cause: { code: "42703" } });
     const response = await dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID }));
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ success: false, error: DASHBOARD_SCHEMA_MISMATCH_MESSAGE });
-    expect(mocks.logger.error).toHaveBeenCalledWith(expect.objectContaining({ schemaMismatch: true }), "dashboard overview action failed");
+    expect(mocks.logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ op: "read:dashboard:overview", knownFault: true }),
+      "authenticated read failed",
+    );
   });
 });

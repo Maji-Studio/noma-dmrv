@@ -4,6 +4,13 @@
  * Unexpected errors (DB failures, network errors, etc.) should use plain Error
  * so withAction can suppress their messages in production.
  */
+/**
+ * Answer for a signed-in caller with no usable active organization. Shared by
+ * the org-context guards, the read adapter, and the one client hook that
+ * treats it as a deterministic failure it must not retry.
+ */
+export const NO_ORGANIZATION_MESSAGE = "Select an Organization to continue.";
+
 export class SafeError extends Error {
   constructor(message: string) {
     super(formatSafeErrorMessage(message));

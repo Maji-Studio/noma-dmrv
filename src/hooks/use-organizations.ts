@@ -17,11 +17,11 @@ import {
 import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
+import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
 
-// Exact text the read adapter (src/app/api/reads/read-response.ts) answers
-// with when the session has no usable organization. Deterministic, never retried.
-const NO_ORGANIZATION_MESSAGE = "Select an Organization to continue.";
+// A no-organization answer is deterministic and never retried; see the
+// constant's definition for who else shares it.
 const ACTIVE_ORGANIZATION_MAX_RETRIES = 3;
 
 const organizationKeys = {
