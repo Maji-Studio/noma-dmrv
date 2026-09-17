@@ -747,7 +747,7 @@ export async function loadCreditBatchAccountingSafely(
         errorName: error instanceof Error ? error.name : typeof error,
         errorMessage: sanitizeErrorMessage(error),
       },
-      "credit batch accounting could not be loaded after create",
+      "credit batch accounting could not be loaded after a committed write",
     );
     return undefined;
   }

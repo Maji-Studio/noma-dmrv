@@ -1,14 +1,18 @@
 /**
- * Creating a credit batch and reading its accounting roll-up are two outcomes,
- * not one (issue #769). The insert commits first; the roll-up read runs after
- * that commit and can fail on its own, and when it does the action still
+ * Saving a credit batch and reading its accounting roll-up are two outcomes,
+ * not one (issues #769, #797). The write commits first; the roll-up read runs
+ * after that commit and can fail on its own, and when it does the action still
  * reports the batch as saved and says only that its details did not load.
+ * The data-access layer is mocked here; the committed-write contract itself is
+ * exercised against a real database in tests/credit-batch-saved-outcome.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireOrgContext: vi.fn(),
   createCreditBatch: vi.fn(),
+  updateCreditBatch: vi.fn(),
+  getCreditBatchById: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -33,10 +37,10 @@ vi.mock("@/data-access/code-generator", () => ({
 
 vi.mock("@/data-access/credit-batches", () => ({
   createCreditBatch: mocks.createCreditBatch,
-  getCreditBatchById: vi.fn(),
+  getCreditBatchById: mocks.getCreditBatchById,
   getCo2eStoredPreviews: vi.fn(),
   getCreditBatchProductionRunOptions: vi.fn(),
-  updateCreditBatch: vi.fn(),
+  updateCreditBatch: mocks.updateCreditBatch,
   deleteCreditBatch: vi.fn(),
   creditBatchCodeExists: vi.fn(),
 }));
@@ -47,7 +51,7 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
-import { createCreditBatchFn } from "./credit-batches";
+import { createCreditBatchFn, updateCreditBatchFn } from "./credit-batches";
 import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
 
 const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
@@ -114,6 +118,44 @@ describe("createCreditBatchFn", () => {
     mocks.createCreditBatch.mockRejectedValue(new Error("insert failed"));
 
     const result = await createCreditBatchFn(input);
+
+    expect(result.success).toBe(false);
+    expect(result).not.toHaveProperty("warning");
+  });
+});
+
+describe("updateCreditBatchFn", () => {
+  const updateInput = { creditBatchId: BATCH_ID, hToCorgRatio: 0.5 };
+
+  beforeEach(() => {
+    mocks.getCreditBatchById.mockResolvedValue({ id: BATCH_ID, code: "CB-001" });
+  });
+
+  it("reports a plain success when the roll-up loads with the batch", async () => {
+    mocks.updateCreditBatch.mockResolvedValue(createdRow(true));
+
+    const result = await updateCreditBatchFn(updateInput);
+
+    expect(result.success).toBe(true);
+    expect(result).not.toHaveProperty("warning");
+  });
+
+  it("still reports the batch as saved when the post-commit roll-up does not load", async () => {
+    mocks.updateCreditBatch.mockResolvedValue(createdRow(false));
+
+    const result = await updateCreditBatchFn(updateInput);
+
+    expect(result).toMatchObject({
+      success: true,
+      warning: SAVED_DETAILS_UNAVAILABLE,
+    });
+    expect(result.success && result.data.appliedWeightTons).toBeNull();
+  });
+
+  it("reports a failed write as a failure, never as a warning", async () => {
+    mocks.updateCreditBatch.mockRejectedValue(new Error("update failed"));
+
+    const result = await updateCreditBatchFn(updateInput);
 
     expect(result.success).toBe(false);
     expect(result).not.toHaveProperty("warning");
