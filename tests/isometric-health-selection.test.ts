@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { realpathSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync, symlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
@@ -128,6 +128,40 @@ test("actual summary shell fails for every incomplete required outcome", () => {
         assert.throws(() => execute({ [key]: outcome }), `${key}=${outcome} must fail`);
       }
     }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, collectionTimeoutMs);
+
+// Run the actual CLI without local dotenv files or Vitest's app env defaults.
+// Missing registry credentials must reach its registry guard, not fail app-env
+// validation first; no request can be made with this deliberately empty pair.
+test("coverage CLI boots in a clean CI environment and fails closed without registry credentials", () => {
+  const coverage = steps.find((step) => step.id === "coverage");
+  assert.ok(coverage?.env);
+  const directory = mkdtempSync(join(tmpdir(), "isometric-health-coverage-"));
+  try {
+    mkdirSync(join(directory, "tests/fixtures"), { recursive: true });
+    writeFileSync(join(directory, "tests/fixtures/isometric-coverage.json"),
+      readFileSync(join(root, "tests/fixtures/isometric-coverage.json")));
+    const result = spawnSync(process.execPath, [
+      "--import", require.resolve("tsx"),
+      join(root, "scripts/isometric-coverage-check.ts"), "--source=fixture",
+    ], {
+      cwd: directory,
+      env: {
+        NODE_ENV: "development",
+        PATH: process.env.PATH,
+        TSX_TSCONFIG_PATH: join(root, "tsconfig.json"),
+        ISOMETRIC_ENVIRONMENT: "sandbox",
+        ...coverage.env,
+      },
+      encoding: "utf8",
+      timeout: collectionTimeoutMs,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /registry connection is not configured/);
+    assert.doesNotMatch(result.stderr, /invalid_type|ECONNREFUSED/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

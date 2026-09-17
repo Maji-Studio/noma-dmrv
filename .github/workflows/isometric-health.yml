@@ -92,6 +92,13 @@ jobs:
       - name: Live template input coverage (fixture-selected templates)
         id: coverage
         if: ${{ !cancelled() && steps.install.outcome == 'success' && steps.credentials.outcome == 'success' }}
+        # The shared client/logger validate the app env at import time. These
+        # inert values satisfy that schema; fixture mode never connects to a DB
+        # or starts auth. Real registry credentials still come from 1Password.
+        env:
+          DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+          NEXT_PUBLIC_APP_URL: http://localhost:3100
+          BETTER_AUTH_SECRET: health-check-placeholder-not-an-auth-secret
         run: pnpm isometric:coverage-check -- --source=fixture
 
       # Plan §8 (Thread B2). Regenerates `certify.d.ts` from the pinned

@@ -164,7 +164,10 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
 independently after setup. Fixture source selects local project/template IDs and
 sandbox period-input exceptions; it still fetches live templates. It does not
 check Project Components. OpenAPI checking does not require sandbox credentials
-and still runs if credential loading or another health check fails.
+and still runs if credential loading or another health check fails. The coverage
+step supplies inert app-environment placeholders because the shared client/logger
+validate those settings at import time; it never connects to that database or
+starts an authentication server. Registry credentials remain mandatory.
 
 The always-run step summary reports setup and check outcomes with repair commands.
 Any required setup or check that fails or is skipped prevents a green result.
