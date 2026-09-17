@@ -13,7 +13,10 @@ import {
 } from "@tanstack/react-query";
 import type { Supplier, SupplierLocation } from "@/db/schema";
 import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
-import type { EntityOption } from "@/components/forms/entity-select/types";
+import type {
+  EntityOption,
+  EntityType,
+} from "@/components/forms/entity-select/types";
 
 import type {
   SupplierFilterData,
@@ -45,8 +48,11 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
+import { entityKeys } from "./entity-query-keys";
 
 export { supplierKeys } from "./supplier-query-keys";
+
+const SUPPLIER_ENTITY_TYPE: EntityType = "supplier";
 
 const SUPPLIER_DETAIL_STALE_TIME_MS = 30_000;
 const SUPPLIER_LOCATIONS_STALE_TIME_MS = 60_000;
@@ -63,7 +69,21 @@ function seedCreatedSupplierCaches(
   };
 
   queryClient.setQueryData(supplierKeys.detail(supplier.id), supplier);
-  seedEntityCache(queryClient, "supplier", option);
+  seedEntityCache(queryClient, SUPPLIER_ENTITY_TYPE, option);
+}
+
+/**
+ * Refresh the EntitySelect supplier caches after a supplier changed or was
+ * removed, so the feedstock and delivery pickers never serve a stale or
+ * deleted option (the customer counterpart landed in #779).
+ */
+function invalidateSupplierEntityQueries(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.listPrefix(SUPPLIER_ENTITY_TYPE),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.detailPrefix(SUPPLIER_ENTITY_TYPE),
+  });
 }
 
 // ============================================
@@ -281,6 +301,7 @@ export function useUpdateSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      invalidateSupplierEntityQueries(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -383,6 +404,11 @@ export function useDeleteSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      // Drop the deleted supplier from the pickers
+      queryClient.removeQueries({
+        queryKey: entityKeys.detail(SUPPLIER_ENTITY_TYPE, supplierId),
+      });
+      invalidateSupplierEntityQueries(queryClient);
 
       await callbacks?.onSuccess?.(undefined, supplierId);
     },
