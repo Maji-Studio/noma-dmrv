@@ -48,7 +48,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
-import { entityKeys } from "./entity-query-keys";
+import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
 
 export { supplierKeys } from "./supplier-query-keys";
 
@@ -72,19 +72,6 @@ function seedCreatedSupplierCaches(
   seedEntityCache(queryClient, SUPPLIER_ENTITY_TYPE, option);
 }
 
-/**
- * Refresh the EntitySelect supplier caches after a supplier changed or was
- * removed, so the feedstock and delivery pickers never serve a stale or
- * deleted option (the customer counterpart landed in #779).
- */
-function invalidateSupplierEntityQueries(queryClient: QueryClient) {
-  void queryClient.invalidateQueries({
-    queryKey: entityKeys.listPrefix(SUPPLIER_ENTITY_TYPE),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: entityKeys.detailPrefix(SUPPLIER_ENTITY_TYPE),
-  });
-}
 
 // ============================================
 // Supplier Query Hooks
@@ -301,7 +288,8 @@ export function useUpdateSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
-      invalidateSupplierEntityQueries(queryClient);
+      // Feedstock and delivery pickers read the supplier through EntitySelect.
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -408,7 +396,8 @@ export function useDeleteSupplier(
       queryClient.removeQueries({
         queryKey: entityKeys.detail(SUPPLIER_ENTITY_TYPE, supplierId),
       });
-      invalidateSupplierEntityQueries(queryClient);
+      // Feedstock and delivery pickers read the supplier through EntitySelect.
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(undefined, supplierId);
     },
