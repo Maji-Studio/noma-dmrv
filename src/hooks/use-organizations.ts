@@ -20,8 +20,9 @@ import { unwrap } from "@/hooks/types";
 import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
 import { stashPendingWarning } from "@/lib/pending-warning";
 
-// A no-organization answer is deterministic and never retried; see the
-// constant's definition for who else shares it.
+// How many times the active-organization read is re-attempted after a
+// transport or server fault before the sidebar settles on an error. A
+// no-organization answer never spends one; it is refused outright below.
 const ACTIVE_ORGANIZATION_MAX_RETRIES = 3;
 
 const organizationKeys = {
