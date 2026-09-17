@@ -204,6 +204,8 @@ export async function getDashboardOverview(
   requireOrgScope(ctx);
 
   const bounds = resolveRange(range);
+  // One clock read for the overdue-batch list and its uncapped count.
+  const todayStr = new Date().toISOString().slice(0, 10);
   // Fetch back to the previous-period start so delta needs no second query.
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
@@ -319,8 +321,8 @@ export async function getDashboardOverview(
             ),
           ),
       ]),
-      getAttentionItems(ctx, facilityId),
-      getDashboardStations(ctx, facilityId),
+      getAttentionItems(ctx, facilityId, todayStr),
+      getDashboardStations(ctx, facilityId, todayStr),
       loadDashboardStructuralGapCounts(ctx, facilityId),
     ]);
 
@@ -537,16 +539,36 @@ function attentionKind(kind: AttentionKind): SQL<AttentionKind> {
   return sql<AttentionKind>`${kind}::text`;
 }
 
-/** Record dates are `timestamp` or `date` columns; both cast to text for the union. */
-function attentionDate(column: SQLWrapper): SQL<string | null> {
+const MS_PER_SECOND = 1_000;
+
+/**
+ * Record dates come from two column families. A `date` column stays the
+ * 'YYYY-MM-DD' text it always was; a `timestamp` column travels as epoch
+ * milliseconds and is rebuilt as a `Date` in JS, so the UTC instant survives
+ * the union instead of turning into zone-less text.
+ */
+function dayColumn(column: SQLWrapper): SQL<string | null> {
   return sql<string | null>`${column}::text`;
+}
+const noDay = sql<string | null>`null::text`;
+function instantColumn(column: SQLWrapper): SQL<number | null> {
+  return sql<number | null>`(extract(epoch from ${column}) * ${MS_PER_SECOND})`.mapWith(
+    (value) => (value == null ? null : Number(value)),
+  );
+}
+const noInstant = sql<number | null>`null::double precision`;
+/** Position within the branch's own ORDER BY; `union all` does not keep it. */
+function branchOrdinal(orderBy: SQL): SQL<number> {
+  return sql<number>`row_number() over (order by ${orderBy})`.mapWith(Number);
 }
 
 interface AttentionRow {
   kind: AttentionKind;
   id: string;
   code: string;
-  date: string | null;
+  dateDay: string | null;
+  dateMs: number | null;
+  ord: number;
 }
 
 const ATTENTION_TITLES: Record<AttentionKind, string> = {
@@ -557,7 +579,7 @@ const ATTENTION_TITLES: Record<AttentionKind, string> = {
   "batch-pending": "Period ended · awaiting verification",
 };
 
-/** Flags sort before pending batches; within a kind the query order holds. */
+/** Flags sort before pending batches; within a kind the branch ordinal holds. */
 const ATTENTION_ORDER: AttentionKind[] = [
   "run-mass",
   "lot-unlinked",
@@ -595,8 +617,8 @@ function attentionHref(
 async function getAttentionItems(
   ctx: OrgContext,
   facilityId: string,
+  todayStr: string,
 ): Promise<DashboardAttentionItem[]> {
-  const todayStr = new Date().toISOString().slice(0, 10);
   const orgId = ctx.organizationId;
 
   const rows: AttentionRow[] = await unionAll(
@@ -605,7 +627,9 @@ async function getAttentionItems(
         kind: attentionKind("run-mass"),
         id: productionRuns.id,
         code: productionRuns.code,
-        date: attentionDate(productionRunDateExpr()),
+        dateDay: dayColumn(productionRunDateExpr()),
+        dateMs: noInstant,
+        ord: branchOrdinal(desc(productionRuns.startTime)),
       })
       .from(productionRuns)
       .where(runsMissingMassWhere(orgId, facilityId))
@@ -616,7 +640,9 @@ async function getAttentionItems(
         kind: attentionKind("lot-unlinked"),
         id: biocharProducts.id,
         code: biocharProducts.code,
-        date: attentionDate(biocharProducts.productionDate),
+        dateDay: noDay,
+        dateMs: instantColumn(biocharProducts.productionDate),
+        ord: branchOrdinal(desc(biocharProducts.productionDate)),
       })
       .from(biocharProducts)
       .where(productsUnlinkedWhere(orgId, facilityId))
@@ -627,9 +653,11 @@ async function getAttentionItems(
         kind: attentionKind("feedstock-missing"),
         id: feedstocks.id,
         code: feedstocks.code,
-        date: attentionDate(
+        dateDay: noDay,
+        dateMs: instantColumn(
           sql`coalesce(${feedstocks.deliveryDate}, ${feedstocks.createdAt})`,
         ),
+        ord: branchOrdinal(desc(feedstocks.createdAt)),
       })
       .from(feedstocks)
       .where(feedstocksMissingDataWhere(orgId, facilityId))
@@ -640,7 +668,9 @@ async function getAttentionItems(
         kind: attentionKind("application-evidence"),
         id: applications.id,
         code: applications.code,
-        date: attentionDate(applications.applicationDate),
+        dateDay: noDay,
+        dateMs: instantColumn(applications.applicationDate),
+        ord: branchOrdinal(desc(applications.applicationDate)),
       })
       .from(applications)
       .innerJoin(
@@ -658,7 +688,9 @@ async function getAttentionItems(
         kind: attentionKind("batch-pending"),
         id: creditBatches.id,
         code: creditBatches.code,
-        date: attentionDate(creditBatches.endDate),
+        dateDay: dayColumn(creditBatches.endDate),
+        dateMs: noInstant,
+        ord: branchOrdinal(asc(creditBatches.endDate)),
       })
       .from(creditBatches)
       // Redundant org predicate for the lexical guard (see note above).
@@ -674,13 +706,12 @@ async function getAttentionItems(
 
   const rank = (kind: AttentionKind) => ATTENTION_ORDER.indexOf(kind);
   return rows
-    .map((row, index) => ({ row, index }))
-    .sort((a, b) => rank(a.row.kind) - rank(b.row.kind) || a.index - b.index)
+    .sort((a, b) => rank(a.kind) - rank(b.kind) || a.ord - b.ord)
     .slice(0, ATTENTION_TOTAL)
-    .map(({ row }) => ({
+    .map((row) => ({
       id: `${row.kind}-${row.id}`,
       entityCode: row.code,
-      date: row.date,
+      date: row.dateDay ?? (row.dateMs == null ? null : new Date(row.dateMs)),
       title: ATTENTION_TITLES[row.kind],
       href: attentionHref(row.kind, row.id, facilityId),
     }));

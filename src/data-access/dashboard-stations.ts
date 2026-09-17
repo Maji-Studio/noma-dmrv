@@ -54,6 +54,7 @@ const ACTIVITY_TOTAL = 8;
 const ACTIVITY_PER_ENTITY = ACTIVITY_TOTAL;
 /** Recent credit batches listed in the certification block. */
 const CERTIFICATION_BATCH_ROWS = 4;
+const MS_PER_SECOND = 1_000;
 
 export type DashboardStationKey =
   | "suppliers"
@@ -137,7 +138,7 @@ function plural(n: number, singular: string, pluralWord?: string): string {
 
 /** Milliseconds since the epoch for a timestamp column, for cross-entity sorting. */
 function epochMs(column: SQLWrapper): SQL<number> {
-  return sql<number>`(extract(epoch from ${column}) * 1000)`.mapWith(Number);
+  return sql<number>`(extract(epoch from ${column}) * ${MS_PER_SECOND})`.mapWith(Number);
 }
 
 /**
@@ -506,12 +507,16 @@ export interface DashboardStationsSnapshot extends DashboardStationsData {
   overdueBatches: number;
 }
 
+/**
+ * `todayStr` ('YYYY-MM-DD', UTC) is the overdue-batch cutoff; the overview
+ * passes the same value to its attention list so count and list agree.
+ */
 export async function getDashboardStations(
   ctx: OrgContext,
   facilityId: string,
+  todayStr: string,
 ): Promise<DashboardStationsSnapshot> {
   requireOrgScope(ctx);
-  const todayStr = new Date().toISOString().slice(0, 10);
 
   const [counts, activityRows] = await Promise.all([
     loadStationAggregates(ctx, facilityId, todayStr),

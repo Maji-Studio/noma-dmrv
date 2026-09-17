@@ -183,6 +183,11 @@ describe("dashboard query budget", () => {
       "Period ended · awaiting verification",
     ]);
     expect(result.attention[1]?.date).toBe("2026-07-31");
+    // Timestamp-backed dates stay UTC instants (a zone-less string would
+    // shift the day for viewers outside UTC); date-only columns stay text.
+    const feedstockDate = result.attention[0]?.date;
+    expect(feedstockDate).toBeInstanceOf(Date);
+    expect((feedstockDate as Date).toISOString()).toBe("2026-06-20T00:00:00.000Z");
     expect(result.attentionTotal).toBe(
       1 + 1 + result.structuralGaps.reduce((total, gap) => total + gap.count, 0),
     );
