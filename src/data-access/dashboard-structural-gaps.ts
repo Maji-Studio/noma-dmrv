@@ -16,6 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "@/db";
+import { countRows } from "@/db/aggregate";
 import {
   biocharProducts,
   creditBatches,
@@ -68,20 +69,21 @@ interface TransportGapRow {
   endpointGpsTargetId: string | null;
 }
 
-function transportGapSelection() {
+const ENDPOINT_GPS_MISSING = sql`(
+    ${transportLegs.originGpsLatitude} is null
+    or ${transportLegs.originGpsLongitude} is null
+    or ${transportLegs.destinationGpsLatitude} is null
+    or ${transportLegs.destinationGpsLongitude} is null
+  )`;
+
+function transportGapSelection(entityType: TransportGapTarget["entityType"]) {
+  const gapOfType = and(
+    eq(transportLegs.entityType, entityType),
+    ENDPOINT_GPS_MISSING,
+  );
   return {
-    endpointGpsGaps: sql<number>`count(*) filter (where
-    ${transportLegs.originGpsLatitude} is null
-    or ${transportLegs.originGpsLongitude} is null
-    or ${transportLegs.destinationGpsLatitude} is null
-    or ${transportLegs.destinationGpsLongitude} is null
-  )::int`,
-    endpointGpsTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where
-    ${transportLegs.originGpsLatitude} is null
-    or ${transportLegs.originGpsLongitude} is null
-    or ${transportLegs.destinationGpsLatitude} is null
-    or ${transportLegs.destinationGpsLongitude} is null
-  )`,
+    endpointGpsGaps: countRows(gapOfType),
+    endpointGpsTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where ${gapOfType})`,
   };
 }
 
@@ -207,13 +209,7 @@ export async function loadDashboardStructuralGapCounts(
   requireOrgScope(ctx);
 
   const orgId = ctx.organizationId;
-  const [
-    [facilityGps],
-    [feedstockGps],
-    [feedstockTransport],
-    [biocharTransport],
-    [sampleTransport],
-  ] = await Promise.all([
+  const [[facilityGps], [feedstockGps], [transportRow]] = await Promise.all([
     db
       .select({ count: count() })
       .from(facilities)
@@ -258,10 +254,17 @@ export async function loadDashboardStructuralGapCounts(
           or(isNull(suppliers.gpsLatitude), isNull(suppliers.gpsLongitude)),
         ),
       ),
+    // One pass over the facility's legs: each parent type is a left join
+    // keyed on its entity type, and the row filter keeps a leg only when its
+    // own parent is active at this facility.
     db
-      .select(transportGapSelection())
+      .select({
+        feedstock: transportGapSelection("feedstock"),
+        biochar: transportGapSelection("biochar"),
+        sample: transportGapSelection("sample"),
+      })
       .from(transportLegs)
-      .innerJoin(
+      .leftJoin(
         feedstocks,
         and(
           eq(transportLegs.entityType, "feedstock"),
@@ -269,17 +272,7 @@ export async function loadDashboardStructuralGapCounts(
           eq(feedstocks.organizationId, orgId),
         ),
       )
-      .where(
-        and(
-          eq(transportLegs.organizationId, orgId),
-          eq(feedstocks.facilityId, facilityId),
-          isNull(feedstocks.archivedAt),
-        ),
-      ),
-    db
-      .select(transportGapSelection())
-      .from(transportLegs)
-      .innerJoin(
+      .leftJoin(
         biocharProducts,
         and(
           eq(transportLegs.entityType, "biochar"),
@@ -287,17 +280,7 @@ export async function loadDashboardStructuralGapCounts(
           eq(biocharProducts.organizationId, orgId),
         ),
       )
-      .where(
-        and(
-          eq(transportLegs.organizationId, orgId),
-          eq(biocharProducts.facilityId, facilityId),
-          isNull(biocharProducts.archivedAt),
-        ),
-      ),
-    db
-      .select(transportGapSelection())
-      .from(transportLegs)
-      .innerJoin(
+      .leftJoin(
         samples,
         and(
           eq(transportLegs.entityType, "sample"),
@@ -324,11 +307,20 @@ export async function loadDashboardStructuralGapCounts(
           eq(transportLegs.organizationId, orgId),
           or(
             and(
+              eq(feedstocks.facilityId, facilityId),
+              isNull(feedstocks.archivedAt),
+            ),
+            and(
+              eq(biocharProducts.facilityId, facilityId),
+              isNull(biocharProducts.archivedAt),
+            ),
+            and(
               isNotNull(samples.creditBatchId),
               eq(creditBatches.facilityId, facilityId),
               isNull(creditBatches.archivedAt),
             ),
             and(
+              isNotNull(samples.id),
               isNull(samples.creditBatchId),
               eq(productionRuns.facilityId, facilityId),
               isNull(productionRuns.archivedAt),
@@ -340,9 +332,9 @@ export async function loadDashboardStructuralGapCounts(
   ]);
 
   const transport = addTransportGapRows([
-    { ...feedstockTransport, entityType: "feedstock" },
-    { ...biocharTransport, entityType: "biochar" },
-    { ...sampleTransport, entityType: "sample" },
+    { ...transportRow.feedstock, entityType: "feedstock" },
+    { ...transportRow.biochar, entityType: "biochar" },
+    { ...transportRow.sample, entityType: "sample" },
   ]);
 
   return {
