@@ -513,8 +513,12 @@ describe.each(UPDATERS)("$entity saves carry an expected version", (updater) => 
     const opened = await updater.readUpdatedAt(id);
 
     await updater.save(f, id, `${f.tag} first`, opened);
+    const afterFirst = await updater.readUpdatedAt(id);
+
     await updater.save(f, id, `${f.tag} second`, undefined);
 
-    expect((await updater.readUpdatedAt(id)).getTime()).not.toBe(opened.getTime());
+    // The versioned save already moved the row on; only a change past that
+    // point proves the unversioned save was written.
+    expect((await updater.readUpdatedAt(id)).getTime()).not.toBe(afterFirst.getTime());
   });
 });

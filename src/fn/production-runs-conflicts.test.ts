@@ -141,13 +141,17 @@ describe("updateProductionRunFn", () => {
     );
   });
 
-  it("answers invalid input with the field message", async () => {
+  it("answers invalid input with the field message before touching data", async () => {
     const result = await updateProductionRunFn({
       productionRunId: "not-a-uuid",
     });
 
-    expect(result.success).toBe(false);
+    expect(result).toEqual({
+      success: false,
+      error: "Choose a valid production run.",
+    });
     expect(mocks.updateProductionRun).not.toHaveBeenCalled();
+    expect(mocks.loggerError).not.toHaveBeenCalled();
   });
 });
 
