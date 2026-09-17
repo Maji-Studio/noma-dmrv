@@ -14,7 +14,9 @@ import type { OnboardingStatus } from "@/data-access/onboarding";
 import type { DashboardOverview } from "@/data-access/dashboard-overview";
 import type { OnboardingStatusInput, DashboardOverviewInput } from "@/lib/read-models";
 import type { Facility, Organization } from "@/db/schema";
+import { missingRecordMessage } from "@/lib/errors";
 import type { FacilityCertifierSummary } from "@/lib/read-models";
+import { facilityIdSchema } from "@/lib/read-models/facility-id";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
@@ -56,6 +58,10 @@ const INVALID_ENVELOPE_ERROR =
   "The server returned an unreadable response. Refresh the page and try again.";
 const SESSION_EXPIRED_ERROR = "Your session has ended. Sign in to continue.";
 const UNVERIFIED_EMAIL_ERROR = "Verify your email to continue.";
+// The same answer the org-scoped lookup gives for a facility that is not this
+// organization's, so a malformed id and a foreign one read alike to the hooks
+// that key their retry rule on it.
+const MISSING_FACILITY_ERROR = missingRecordMessage("Facility");
 
 type JsonContract<T> = T extends Date
   ? string
@@ -312,10 +318,29 @@ export async function getFacilityCertifierSummaryRead(
   return mapReadData(result, decodeCertifierSummary);
 }
 
+/**
+ * Refuse an id that is not a facility identifier before it is interpolated
+ * into a request path. The id arrives from the `?facility=` URL param and
+ * localStorage, so it can be anything, and a dot segment ("." or "..") makes
+ * the URL parser resolve the path onto a neighbouring route: the read would
+ * answer with a different resource, which the caller would then store as the
+ * selected facility. The server rejects it too; this keeps the wrong route
+ * from being asked in the first place.
+ */
+function rejectMalformedFacilityId(
+  facilityId: string,
+): { success: false; error: string } | null {
+  return facilityIdSchema.safeParse(facilityId).success
+    ? null
+    : { success: false, error: MISSING_FACILITY_ERROR };
+}
+
 export async function getFacilityRead(
   facilityId: string,
   options?: ReadRequestOptions,
 ): Promise<ActionResult<Facility>> {
+  const malformed = rejectMalformedFacilityId(facilityId);
+  if (malformed) return malformed;
   const result = await requestRead<Facility>(
     `/api/reads/facilities/${encodeURIComponent(facilityId)}`,
     undefined,

@@ -56,6 +56,23 @@ describe("authenticated read client", () => {
     if (result.success) expect(result.data.archivedAt).toEqual(new Date(timestamp));
   });
 
+  // A dot segment resolves the interpolated path onto a neighbouring route, so
+  // the read would answer with a different resource, which the caller stores as
+  // the selected facility.
+  it.each([".", "..", "not-a-uuid"])(
+    "refuses the facility id %j instead of requesting a path it did not mean",
+    async (facilityId) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(getFacilityRead(facilityId)).resolves.toEqual({
+        success: false,
+        error: "Facility was not found.",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("preserves a missing active organization", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ success: true, data: null })));
     await expect(getActiveOrganizationRead()).resolves.toEqual({ success: true, data: null });
