@@ -20,7 +20,6 @@ DB_POOL_MAX="op://Environment Variables/noma-dmrv env local/DB_POOL_MAX"
 DB_POOL_IDLE_TIMEOUT_MS="op://Environment Variables/noma-dmrv env local/DB_POOL_IDLE_TIMEOUT_MS"
 DB_POOL_CONNECTION_TIMEOUT_MS="op://Environment Variables/noma-dmrv env local/DB_POOL_CONNECTION_TIMEOUT_MS"
 DB_POOL_LOCK_TIMEOUT_MS="op://Environment Variables/noma-dmrv env local/DB_POOL_LOCK_TIMEOUT_MS"
-DB_POOL_TELEMETRY="op://Environment Variables/noma-dmrv env local/DB_POOL_TELEMETRY"
 
 # -----------------------------------------------------------------------------
 # App URL (localhost dev server)

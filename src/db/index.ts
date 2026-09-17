@@ -21,29 +21,18 @@ const poolConfig = resolveAppPoolConfig({
   isVercel: process.env.VERCEL === "1",
 });
 // Logger import waiver for `src/db/`: see docs/architecture.md, "Structured
-// logging". The pool is built at module scope, so the telemetry logger is
-// resolved here and injected into everything below it.
+// logging". The pool is built at module scope, so the pool logger is resolved
+// here and injected into everything below it. Timing records are emitted at
+// trace, so `LOG_LEVEL=trace` is the measurement window; faults always warn.
 const poolLog = logger.child({
   computeRegion: process.env.VERCEL_REGION ?? "non-vercel",
 });
-const telemetryOptions = { enabled: env.DB_POOL_TELEMETRY, log: poolLog };
+const telemetryOptions = { log: poolLog };
 const pool = createObservedPool(poolConfig, telemetryOptions);
 
 // Fluid Compute shares this module-scope pool across concurrent invocations.
 // Keep the instance alive until pg's idle timer releases unused connections.
 attachDatabasePool(pool);
-
-if (env.DB_POOL_TELEMETRY) {
-  poolLog.info(
-    {
-      maxConnections: poolConfig.max,
-      idleTimeoutMs: poolConfig.idleTimeoutMillis,
-      connectionTimeoutMs: poolConfig.connectionTimeoutMillis,
-      lockTimeoutMs: poolConfig.lock_timeout,
-    },
-    "database pool telemetry enabled",
-  );
-}
 
 export const db = drizzle(pool, { schema });
 

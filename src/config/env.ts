@@ -96,14 +96,6 @@ const envSchema = z.object({
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
   ),
-  DB_POOL_TELEMETRY: z.preprocess(
-    emptyToUndefined,
-    z
-      .enum(["true", "false"])
-      .optional()
-      .default("false")
-      .transform((value) => value === "true")
-  ),
 
   // Isometric Certify API (optional — boot must stay clean without these)
   ISOMETRIC_CLIENT_SECRET: z.preprocess(
