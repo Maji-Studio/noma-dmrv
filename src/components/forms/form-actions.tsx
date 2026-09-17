@@ -43,7 +43,7 @@ interface FormActionsProps<
   isSubmitting?: boolean;
   /** Submission-level error rendered with the CTA footer. */
   errorMessage?: string;
-  /** Rendered under `errorMessage`: the way past a refusal that names a record. */
+  /** Rendered under `errorMessage`: detail about the records the refusal named. */
   errorAction?: React.ReactNode;
   submitLabel?: string;
   submittingLabel?: string;

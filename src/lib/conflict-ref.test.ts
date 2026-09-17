@@ -10,6 +10,11 @@ describe("conflictCode", () => {
     expect(conflictCode(" FB-001 ")).toBe("FB-001");
   });
 
+  it("accepts display labels and ids without proving a stored record code", () => {
+    expect(conflictCode("Documented loss (2026-09-17)")).toBe("Documented loss (2026-09-17)");
+    expect(conflictCode("ingredient-id")).toBe("ingredient-id");
+  });
+
   it("refuses a blank code, because a conflict must name a record", () => {
     expect(() => conflictCode("")).toThrow("A conflict must carry the record's code.");
     expect(() => conflictCode("   ")).toThrow("A conflict must carry the record's code.");

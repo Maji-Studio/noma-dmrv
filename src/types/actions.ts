@@ -24,13 +24,14 @@ export type ActionResult<T> =
        * Optional structured reference to a conflicting entity, so a form can
        * link the operator straight to it (e.g. the production run whose time
        * window overlaps — issue #259). Backwards-compatible: consumers that
-       * only read `error` are unaffected. `code` is the record's human code
-       * and is never blank.
+       * only read `error` are unaffected. `code` is the operator-readable label.
+       * Its brand proves only that it is not blank, not that it is a stored
+       * record code. See docs/architecture.md for known exceptions.
        */
       conflict?: ConflictRef;
       /**
        * Further records that also block the save, next to `conflict`, in the
-       * order the operator should clear them. Only present together with
+       * display order. Only present together with
        * `conflict`.
        */
       blockers?: ConflictRef[];

@@ -20,10 +20,11 @@
  * has no repair path".
  */
 
-import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
   biocharProducts,
+  binMovements,
   productionRunFeedstockDraws,
   productionRuns,
   storageLocations,
@@ -31,7 +32,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { ActionConflictError } from "@/lib/errors";
-import { formatMassKg } from "@/lib/format-utils";
+import { formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { isStockOverdraw } from "@/lib/stock-overdraw";
@@ -70,14 +71,15 @@ export function negativeLaneMessage(
 ): string {
   return (
     `${WRITE_OUTCOME[write]} Bin ${binCode} would go ${formatMassKg(shortfallWetKg)} below zero. ` +
-    `Review the production runs and products that draw on bin ${binCode}, then try again.`
+    `Review bin ${binCode} intake and withdrawal history, including recorded losses.`
   );
 }
 
 /**
  * The withdrawals still drawing on the bin: every non-cancelled production run
  * with a draw from it, then every product whose composition takes a positive
- * mass from it, matching what `deriveLaneStock` counts as consumption.
+ * mass from it, then negative feedstock movements, matching the withdrawals
+ * counted by `deriveLaneStock`.
  */
 async function listLaneWithdrawals(
   ctx: OrgContext,
@@ -132,6 +134,28 @@ async function listLaneWithdrawals(
           .limit(remaining)
       : [];
 
+  const movementSlots = remaining - products.length;
+  const movements =
+    movementSlots > 0
+      ? await tx
+          .select({
+            id: binMovements.id,
+            reason: binMovements.reason,
+            createdAt: binMovements.createdAt,
+          })
+          .from(binMovements)
+          .where(
+            and(
+              eq(binMovements.organizationId, ctx.organizationId),
+              eq(binMovements.storageLocationId, storageLocationId),
+              eq(binMovements.lane, "feedstock"),
+              lt(binMovements.massDeltaKg, 0),
+            ),
+          )
+          .orderBy(binMovements.createdAt, binMovements.id)
+          .limit(movementSlots)
+      : [];
+
   return [
     ...runs.map((run) => ({
       entity: RUN_BLOCKER_ENTITY,
@@ -143,13 +167,19 @@ async function listLaneWithdrawals(
       id: product.id,
       code: conflictCode(product.code),
     })),
+    ...movements.map((movement) => ({
+      entity: STOCK_CONFLICT_ENTITY.binMovement,
+      id: movement.id,
+      // Feedstock history shows the reason and recorded time, not an output physical date.
+      code: conflictCode(`${movement.reason} (${formatDateTime(movement.createdAt)})`),
+    })),
   ];
 }
 
 /**
  * Refuse the transaction when any of these bins now derives a negative wet
- * feedstock lane. The conflict carries the offending bin so the UI can open
- * its reconcile sheet, and the withdrawals still drawing on it as blockers.
+ * feedstock lane. The conflict names the offending bin, and the blockers
+ * name its withdrawals for the operator to review.
  * A reduction that lands on exactly zero passes.
  */
 export async function assertFeedstockBinLanesNotNegative(

@@ -77,7 +77,7 @@ interface FeedstockFormProps {
   isSubmitting?: boolean;
   submitLabel?: string;
   serverError?: string;
-  /** Rendered under `serverError`: the way past a refusal that names a record. */
+  /** Rendered under `serverError`: detail about the records the refusal named. */
   serverErrorAction?: ReactNode;
   deferredAttachments?: UseDeferredAttachmentsResult;
   /** All rows a failed create produced, so evidence retry reaches each. */

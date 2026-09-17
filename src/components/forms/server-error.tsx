@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 
 interface ServerErrorProps {
   message?: string;
-  /** The way past the error when the server named one (a blocking record to open). */
+  /** Detail about the records the refusal named, rendered under the message. */
   action?: ReactNode;
 }
 

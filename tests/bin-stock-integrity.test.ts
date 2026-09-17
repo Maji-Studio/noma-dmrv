@@ -29,6 +29,7 @@ import {
   storageLocations,
   users,
 } from "@/db/schema";
+import { formatDateTime } from "@/lib/format-utils";
 import { negativeLaneMessage } from "@/data-access/feedstock-bin-stock-integrity";
 import { deleteOutputProductFixtures, outputProductFixtureValues } from "./helpers/output-contract-fixtures";
 import { deleteFeedstock, updateFeedstock } from "@/data-access/feedstocks";
@@ -167,8 +168,8 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
   };
 }
 
-async function recordLoss(fixture: Fixture, wetKg: number): Promise<void> {
-  await db.insert(binMovements).values({
+async function recordLoss(fixture: Fixture, wetKg: number) {
+  const [movement] = await db.insert(binMovements).values({
     organizationId: fixture.ctx.organizationId,
     storageLocationId: fixture.binId,
     lane: "feedstock",
@@ -176,7 +177,12 @@ async function recordLoss(fixture: Fixture, wetKg: number): Promise<void> {
     massDeltaKg: -wetKg,
     reason: "E2E bin integrity documented loss",
     createdBy: fixture.ctx.userId,
-  });
+  }).returning();
+  return {
+    entity: "binMovement",
+    id: movement.id,
+    code: `${movement.reason} (${formatDateTime(movement.createdAt)})`,
+  };
 }
 
 async function cleanup(fixture: Fixture): Promise<void> {
@@ -258,9 +264,9 @@ afterEach(async () => {
 });
 
 describe("feedstock writes cannot drive a bin lane negative", () => {
-  it("refuses an intake reduction below the withdrawals already recorded", async () => {
+  it("refuses an intake reduction below a recorded loss and names it for review", async () => {
     const f = await fixture();
-    await recordLoss(f, LOSS_WET_KG);
+    const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
     await expect(
       updateFeedstock(f.ctx, f.feedstockId, {
@@ -269,7 +275,8 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
       }),
     ).rejects.toMatchObject({
       name: "ActionConflictError",
-      message: negativeStockMessage(f),
+      message: `Feedstock was not saved. Bin ${binCodeOf(f)} would go ${SHORTFALL_AFTER_REDUCTION_KG} kg below zero. Review bin ${binCodeOf(f)} intake and withdrawal history, including recorded losses.`,
+      blockers: [lossBlocker],
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
     });
 
@@ -318,11 +325,12 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
 
   it("refuses a deletion that would leave the bin below zero", async () => {
     const f = await fixture();
-    await recordLoss(f, LOSS_WET_KG);
+    const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
     await expect(deleteFeedstock(f.ctx, f.feedstockId)).rejects.toMatchObject({
       name: "ActionConflictError",
       message: negativeStockDeleteMessage(f),
+      blockers: [lossBlocker],
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
     });
 
@@ -405,7 +413,7 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
       ]);
       await tx.insert(biocharProducts).values(productValues);
     });
-    await recordLoss(f, LOSS_WET_KG);
+    const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
     await expect(
       updateFeedstock(f.ctx, f.feedstockId, {
@@ -414,7 +422,7 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
       }),
     ).rejects.toMatchObject({
       name: "ActionConflictError",
-      blockers: [{ entity: "biocharProduct", code: drawingCode }],
+      blockers: [{ entity: "biocharProduct", code: drawingCode }, lossBlocker],
     });
   });
 

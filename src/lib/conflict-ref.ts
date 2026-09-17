@@ -3,14 +3,15 @@
  *
  * A refused action names the record it collides with so a form can link the
  * operator straight to it, and may list further `blockers` that also stand in
- * the way. `code` is the record's human code, the thing the operator reads on
- * screen; it is branded so a blank or made-up value cannot type-check into
- * the slot. Kept free of server-only imports so client components can use it.
+ * the way. `code` is the label the operator reads. The brand proves only that
+ * it is not blank, not that it is a stored record code. Known exceptions are
+ * documented in docs/architecture.md. Kept free of server-only imports so
+ * client components can use it.
  */
 
 declare const CONFLICT_CODE_BRAND: unique symbol;
 
-/** A record's human code, proven non-blank by `conflictCode()`. */
+/** An operator-readable label, proven non-blank by `conflictCode()`. */
 export type ConflictCode = string & { readonly [CONFLICT_CODE_BRAND]: true };
 
 /** Structured reference to a record a refused save points at. */
@@ -23,12 +24,12 @@ export interface ConflictRef {
 /** Failure payload that carries one conflicting record and optional blockers. */
 export interface ConflictPayload {
   conflict: ConflictRef;
-  /** Further records that stand in the way, in the order the operator should clear them. */
+  /** Further records that stand in the way, in display order. */
   blockers?: ConflictRef[];
 }
 
 /**
- * Brand a record code for a conflict payload. Throws a plain `Error` on a
+ * Brand an operator-readable label for a conflict payload. Throws a plain `Error` on a
  * blank value: a conflict without a readable code is a programming error, not
  * an operator-facing condition.
  */
@@ -42,8 +43,8 @@ export function conflictCode(value: string): ConflictCode {
 
 /**
  * Thrown by a mutation hook when the server refused a save because of another
- * record. Distinct from a plain `Error` so the form can offer the way past the
- * blocking record instead of only showing text.
+ * record. Distinct from a plain `Error` so the form can show detail about
+ * the records the refusal named.
  */
 export class ConflictError extends Error implements ConflictPayload {
   readonly conflict: ConflictRef;
