@@ -2,6 +2,7 @@ import { db, type DbTransaction } from '@/db';
 import { storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { conflictCode } from '@/lib/conflict-ref';
+import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import type { BiocharProductFormData } from '@/schemas/biochar-products';
 import type { AffectedStockPreview } from '@/types/output-stock';
@@ -92,7 +93,7 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
 export function assertProductStockBasis(expected: string, prepared: Awaited<ReturnType<typeof prepareProductStock>>) {
   if (expected !== prepared.basisFingerprint) throw new ActionConflictError(
     STOCK_CHANGED_MESSAGE,
-    { entity: 'storageLocation', id: prepared.source.bin.id, code: conflictCode(prepared.source.bin.code) },
+    { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: prepared.source.bin.id, code: conflictCode(prepared.source.bin.code) },
   );
 }
 
@@ -111,6 +112,6 @@ export async function revalidateProductStock(ctx: OrgContext, input: ProductStoc
       .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId)));
     if (!bin) throw error;
     throw new ActionConflictError(STOCK_CHANGED_MESSAGE,
-      { entity: 'storageLocation', id: input.storageLocationId, code: conflictCode(bin.code) });
+      { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) });
   }
 }

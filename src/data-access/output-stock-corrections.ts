@@ -3,6 +3,7 @@ import { applications, binMovements, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { outputStockEventLabel } from '@/lib/output-stock/labels';
 import { conflictCode } from '@/lib/conflict-ref';
+import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, grams, kilograms, readRational, type OutputStockLayer } from '@/lib/output-stock';
 import type { OutputStockPreviewInput } from '@/types/output-stock';
@@ -34,9 +35,9 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
   const [bin] = await reader.select({ code: storageLocations.code }).from(storageLocations)
     .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId)));
   if (!bin) throw new SafeError('Storage location not found');
-  const binConflict = { entity: 'storageLocation', id: input.storageLocationId, code: conflictCode(bin.code) };
+  const binConflict = { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) };
   const movementBlocker = (movement: { id: string; reason: string; outputKind: string | null; physicalDate: string | null }) => ({
-    entity: 'binMovement', id: movement.id,
+    entity: STOCK_CONFLICT_ENTITY.binMovement, id: movement.id,
     code: conflictCode(`${movement.reason || outputStockEventLabel(movement.outputKind!)} (${movement.physicalDate})`),
   });
   if (later) throw new ActionConflictError(`Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${later.movement.physicalDate}).`, binConflict, { blockers: [movementBlocker(later.movement)] });

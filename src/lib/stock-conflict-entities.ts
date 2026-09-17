@@ -9,4 +9,5 @@ export const STOCK_CONFLICT_ENTITY = {
   storageLocation: "storageLocation",
   productionRun: "productionRun",
   biocharProduct: "biocharProduct",
+  binMovement: "binMovement",
 } as const;
