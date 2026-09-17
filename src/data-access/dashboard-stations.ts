@@ -136,9 +136,15 @@ function plural(n: number, singular: string, pluralWord?: string): string {
   return `${n} ${n === 1 ? singular : (pluralWord ?? `${singular}s`)}`;
 }
 
-/** Milliseconds since the epoch for a timestamp column, for cross-entity sorting. */
-function epochMs(column: SQLWrapper): SQL<number> {
-  return sql<number>`(extract(epoch from ${column}) * ${MS_PER_SECOND})`.mapWith(Number);
+/**
+ * Milliseconds since the epoch for a `timestamp` column: the one shape that
+ * survives a `union all` across entities and rebuilds the UTC instant in JS.
+ * Null when the column is null.
+ */
+export function epochMs(column: SQLWrapper): SQL<number | null> {
+  return sql<number | null>`(extract(epoch from ${column}) * ${MS_PER_SECOND})`.mapWith(
+    (value) => (value == null ? null : Number(value)),
+  );
 }
 
 /**
@@ -317,7 +323,8 @@ interface ActivityRow {
   code: string;
   /** Credit batch status; null for every other kind. */
   status: string | null;
-  sortMs: number;
+  /** Never null in practice: every branch filters its date column not-null. */
+  sortMs: number | null;
 }
 
 /**
@@ -468,13 +475,19 @@ function activityHref(
   }
 }
 
+type DatedActivityRow = ActivityRow & { sortMs: number };
+
+function newestFirst(rows: ActivityRow[]): DatedActivityRow[] {
+  return rows
+    .filter((row): row is DatedActivityRow => row.sortMs != null)
+    .sort((a, b) => b.sortMs - a.sortMs);
+}
+
 function buildActivity(
   rows: ActivityRow[],
   facilityId: string,
 ): DashboardActivityItem[] {
-  return rows
-    .filter((row) => Number.isFinite(row.sortMs))
-    .sort((a, b) => b.sortMs - a.sortMs)
+  return newestFirst(rows)
     .slice(0, ACTIVITY_TOTAL)
     .map((row) => ({
       id: `${row.kind}-${row.id}`,
@@ -486,9 +499,7 @@ function buildActivity(
 }
 
 function buildRecentBatches(rows: ActivityRow[]): DashboardCertificationBatch[] {
-  return rows
-    .filter((row) => row.kind === "batch")
-    .sort((a, b) => b.sortMs - a.sortMs)
+  return newestFirst(rows.filter((row) => row.kind === "batch"))
     .slice(0, CERTIFICATION_BATCH_ROWS)
     .map((row) => ({
       id: row.id,

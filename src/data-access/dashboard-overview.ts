@@ -48,6 +48,7 @@ import {
   runsMissingMassWhere,
 } from "./dashboard-attention";
 import {
+  epochMs,
   getDashboardStations,
   type DashboardStationsData,
 } from "./dashboard-stations";
@@ -539,23 +540,16 @@ function attentionKind(kind: AttentionKind): SQL<AttentionKind> {
   return sql<AttentionKind>`${kind}::text`;
 }
 
-const MS_PER_SECOND = 1_000;
-
 /**
  * Record dates come from two column families. A `date` column stays the
  * 'YYYY-MM-DD' text it always was; a `timestamp` column travels as epoch
- * milliseconds and is rebuilt as a `Date` in JS, so the UTC instant survives
- * the union instead of turning into zone-less text.
+ * milliseconds (`epochMs`) and is rebuilt as a `Date` in JS, so the UTC
+ * instant survives the union instead of turning into zone-less text.
  */
 function dayColumn(column: SQLWrapper): SQL<string | null> {
   return sql<string | null>`${column}::text`;
 }
 const noDay = sql<string | null>`null::text`;
-function instantColumn(column: SQLWrapper): SQL<number | null> {
-  return sql<number | null>`(extract(epoch from ${column}) * ${MS_PER_SECOND})`.mapWith(
-    (value) => (value == null ? null : Number(value)),
-  );
-}
 const noInstant = sql<number | null>`null::double precision`;
 /** Position within the branch's own ORDER BY; `union all` does not keep it. */
 function branchOrdinal(orderBy: SQL): SQL<number> {
@@ -641,7 +635,7 @@ async function getAttentionItems(
         id: biocharProducts.id,
         code: biocharProducts.code,
         dateDay: noDay,
-        dateMs: instantColumn(biocharProducts.productionDate),
+        dateMs: epochMs(biocharProducts.productionDate),
         ord: branchOrdinal(desc(biocharProducts.productionDate)),
       })
       .from(biocharProducts)
@@ -654,7 +648,7 @@ async function getAttentionItems(
         id: feedstocks.id,
         code: feedstocks.code,
         dateDay: noDay,
-        dateMs: instantColumn(
+        dateMs: epochMs(
           sql`coalesce(${feedstocks.deliveryDate}, ${feedstocks.createdAt})`,
         ),
         ord: branchOrdinal(desc(feedstocks.createdAt)),
@@ -669,7 +663,7 @@ async function getAttentionItems(
         id: applications.id,
         code: applications.code,
         dateDay: noDay,
-        dateMs: instantColumn(applications.applicationDate),
+        dateMs: epochMs(applications.applicationDate),
         ord: branchOrdinal(desc(applications.applicationDate)),
       })
       .from(applications)
