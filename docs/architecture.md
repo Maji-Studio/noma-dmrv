@@ -56,12 +56,14 @@ components (UI)
 `src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
 `ctx`, converts distinct `ZodError` issues into readable sentences, and formats
 `ActionResult`.
-Use it for new actions and migrate a legacy direct wrapper when materially
-changing that action. Some older entity modules still call
-`requireOrgContext()` and format `ActionResult` in their own try/catch; their
-presence is compatibility debt, not a pattern to copy. Until migrated, those
-wrappers must keep routing unexpected failures through the shared safe logging
-and error conversion helpers rather than returning raw `error.message`.
+It is a preference, not a rule. Use it for new actions. Migrate an existing
+direct wrapper only when the change already rewrites that action's error
+handling (for example to carry a typed `conflict` to its form); do not sweep
+the remaining wrappers, and there is no lint rule for it. Some older entity
+modules still call `requireOrgContext()` and format `ActionResult` in their own
+try/catch; that is acceptable as long as they route unexpected failures through
+the shared safe logging and error conversion helpers rather than returning raw
+`error.message`.
 
 ```typescript
 export async function createItem(input: CreateItem) {
@@ -120,9 +122,12 @@ under `FOR UPDATE` and throws `ActionConflictError` with
 `code: "stale-version"` when they differ. The hook re-throws that as
 `StaleVersionError`, and the form shows `STALE_VERSION_MESSAGE` in its error
 banner while keeping the operator's draft. The field is always optional, so a
-payload that never loaded a version still saves. Covers facility, feedstock,
-storage bin, customer (+ location), supplier (+ location), application and
-production run.
+payload that never loaded a version still saves. The check guards against a
+stale cached row as much as a second operator: two tabs, or an edit sheet
+opened off a cached list. It is a blanket rule: every updater with an edit form
+does the check, and every edit form sends `expectedUpdatedAt`. Covers facility,
+feedstock, storage bin, customer (+ location), supplier (+ location),
+application and production run.
 
 ### Facility context
 
