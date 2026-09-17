@@ -119,15 +119,6 @@ Non-obvious semantics only:
   than inheriting the sandbox default. Targeting the sandbox is the opt-in.
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
-- **`DB_POOL_TELEMETRY`** — strict `true`/`false`, default `false`. When enabled,
-  emits connection-establishment, pool-checkout, and query-execution durations
-  plus aggregate pool counts. It deliberately excludes SQL, parameters,
-  connection strings, hostnames, database names, and application identifiers.
-  When disabled, connection failures, checkout failures, and idle-client errors
-  are still logged at warn — nobody opts in to an infrastructure fault. Query
-  timings and query failures are not: expected `55P03` lock timeouts and
-  unique-violation retries are normal control flow and must not become standing
-  warnings.
 
 Read directly from `process.env`, **not** validated by `env.ts`:
 
