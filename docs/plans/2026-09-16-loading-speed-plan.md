@@ -185,8 +185,21 @@ checkout-queue telemetry over a 75 s window (`mod: db-pool`, fra1) is:
 | Idle connections at acquisition | 0 to 2 |
 | New connections established | 17, 33 ms median, 124 ms max |
 
-Nothing queues at 3, so the rollout rule ("move from 3 to 5 only when
-acquisition still queues at 3") stops the ladder at 3. `DB_POOL_MAX=3` stays
+Read the last two rows together with care: `pg` resolves a checkout that has to
+open a connection only once the new client has finished connecting, so an
+acquisition that opened one carries that open time in its own duration
+(`src/db/observed-pg.ts` wraps `pool.connect`, and pg-pool calls back from inside
+`newClient`). The captured window was not re-read to separate those 17 checkouts
+from the rest, so treat the 0.1 ms as the acquisitions that found a client ready,
+not as a figure covering every checkout. It does not change the decision: no
+acquisition waited behind another, and the slowest number in the window (124 ms)
+is a connection being opened, not a checkout queueing.
+
+Acquisition duration is the deciding evidence: every acquisition duration
+captured in the window is 0.1 ms, with no slower value among them, and none of
+the 65 checkouts had another waiting ahead of it. Nothing queues at 3, so the
+rollout rule ("move from 3 to 5 only when acquisition still queues at 3") stops
+the ladder at 3. `DB_POOL_MAX=3` stays
 on Preview; Production stays at 1 until it carries real traffic, at which point
 the same telemetry window decides. `DB_POOL_TELEMETRY` goes back off.
 
@@ -276,12 +289,15 @@ touches `src/components/navigation/sidebar-content.tsx`.
 
 ## Phase 5: remaining startup actions (only if still needed)
 
-After Phases 1 through 4, re-measure the eight startup actions. If the shell still
-queues more than three sequential actions, extend the #763 read transport to the
-remaining ones (org profile, onboarding status, organization list) following the
-boundary agreed in Phase 0. The After Phase 3 measurement shows five sequential
-dashboard actions, so the criterion is met; the owner approved the phase on
-2026-09-17. One PR, measured with the same protocol.
+The original precondition was to re-measure the eight startup actions after
+Phases 1 through 4 and to proceed only if the shell still queued more than three
+sequential actions. The owner's approval on 2026-09-17 replaces that
+precondition: the After Phase 3 measurement already shows five sequential
+dashboard actions, so the criterion is met and Phase 5 starts now, with Phases 2
+and 4 still deferred. Extend the #763 read transport to the remaining actions
+(org profile, onboarding status, organization list) following the boundary agreed
+in Phase 0. One PR, measured with the same protocol; if that measurement shows
+three or fewer sequential actions, stop there rather than extending further.
 
 ## Sequence and handoff
 
