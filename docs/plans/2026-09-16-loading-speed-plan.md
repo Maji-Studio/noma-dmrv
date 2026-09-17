@@ -1,8 +1,8 @@
 # Loading speed plan (2026-09-16)
 
 - **Owner**: Kenji Nguyen
-- **Status**: in progress. Phase 0 and Phase 1 step 1 done 2026-09-16; database moving to DigitalOcean before Phase 2
-- **Last reviewed**: 2026-09-16
+- **Status**: in progress. Phases 0 and 1 done 2026-09-16; Phase 3 code landed 2026-09-17 (pool ladder pending); Phases 2 and 4 deferred as sub-second wins after the Frankfurt move
+- **Last reviewed**: 2026-09-17
 
 Staging pages sit on a skeleton for 11 s warm and 20 s cold. The measured cause is
 round-trip count multiplied by cross-region latency, not bundle size or rendering.
@@ -163,6 +163,28 @@ Expected: two fewer round trips per server action, two fewer in the layout. With
 Phase 1 done this is worth about 20 ms per action; without it, about 200 ms.
 
 ## Phase 3: dashboard overview fan-out (one PR)
+
+Landed 2026-09-17 on `refactor/dashboard-overview-query-budget`. Counted with
+`tests/dashboard-query-budget.test.ts` (every `pg` statement, including
+transaction control, on a three-batch fixture):
+
+| Read | Before | After |
+| --- | --- | --- |
+| `getDashboardOverview`, any number of batches | 41 | 19 |
+| `getOnboardingStatus` with a facility | 8 | 2 |
+
+Of the 19, 8 are the set-based CO₂e preview walk (`loadCreditBatchAccounting`:
+transaction control, batch identity, four lineage reads, samples, certifier);
+that seam was already set-based when Phase 3 started, so step 4 needed no
+change and the "per-batch transaction" it describes no longer exists. The
+target of 8 is not reachable without folding the accounting seam into the
+dashboard read, which the deep-module boundary forbids. What changed: station
+counts are one statement of cross-joined filtered aggregates, the activity
+feed and the attention queue are one `union all` each, the recent-batch list
+is derived from the activity rows, the three transport-gap queries are one
+pass over the facility's legs, onboarding counts are one statement, and the
+preview walk starts as soon as the batch rows are known. Step 7 (pool ladder)
+is still to do.
 
 Branch `refactor/dashboard-overview-query-budget`. Touches
 `src/data-access/dashboard-overview.ts`, `dashboard-stations.ts`,
