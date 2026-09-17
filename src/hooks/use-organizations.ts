@@ -19,6 +19,11 @@ import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
 import { stashPendingWarning } from "@/lib/pending-warning";
 
+// Exact text the read adapter (src/app/api/reads/read-response.ts) answers
+// with when the session has no usable organization. Deterministic, never retried.
+const NO_ORGANIZATION_MESSAGE = "Select an Organization to continue.";
+const ACTIVE_ORGANIZATION_MAX_RETRIES = 3;
+
 const organizationKeys = {
   all: ["organizations"] as const,
   members: () => [...organizationKeys.all, "members"] as const,
@@ -36,7 +41,11 @@ export function useActiveOrganizationProfile() {
   return useQuery({
     queryKey: organizationKeys.activeProfile(),
     queryFn: async ({ signal }) => unwrap(await getActiveOrganizationRead({ signal })),
-    retry: false,
+    // A denied context answers the same on every attempt; transient transport
+    // and server faults still retry so one blip does not settle the sidebar.
+    retry: (failureCount, error) =>
+      !(error instanceof Error && error.message === NO_ORGANIZATION_MESSAGE) &&
+      failureCount < ACTIVE_ORGANIZATION_MAX_RETRIES,
   });
 }
 
