@@ -59,6 +59,8 @@ const createdBatchIds: string[] = [];
 let facilityId: string;
 let feedstockTypeId: string;
 
+const ACCOUNTING_LOAD_FAILURE_MESSAGE =
+  "credit batch accounting could not be loaded after a committed write";
 const H_TO_CORG_BEFORE = 0.4;
 const H_TO_CORG_AFTER = 0.5;
 
@@ -164,7 +166,7 @@ describe("credit batch writes describe what they committed", () => {
     expect(await storedRatio(batch.id)).toBe(H_TO_CORG_BEFORE);
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.objectContaining({ creditBatchId: batch.id }),
-      "credit batch accounting could not be loaded after a committed write",
+      ACCOUNTING_LOAD_FAILURE_MESSAGE,
     );
   });
 
@@ -201,7 +203,7 @@ describe("credit batch writes describe what they committed", () => {
     expect(await storedRatio(batch.id)).toBe(H_TO_CORG_AFTER);
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.objectContaining({ creditBatchId: batch.id }),
-      "credit batch accounting could not be loaded after a committed write",
+      ACCOUNTING_LOAD_FAILURE_MESSAGE,
     );
   });
 });
