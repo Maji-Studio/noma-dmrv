@@ -1,7 +1,7 @@
 # Loading speed plan (2026-09-16)
 
 - **Owner**: Kenji Nguyen
-- **Status**: in progress. Phases 0 and 1 done 2026-09-16; Phase 3 code landed 2026-09-17 (pool ladder pending); Phases 2 and 4 deferred as sub-second wins after the Frankfurt move
+- **Status**: in progress. Phases 0 and 1 done 2026-09-16; Phase 3 merged and measured 2026-09-17 (#803), pool ladder pending an owner env change; Phases 2 and 4 deferred as sub-second wins after the Frankfurt move; Phase 5 criterion still met (five sequential dashboard actions), decision open
 - **Last reviewed**: 2026-09-17
 
 Staging pages sit on a skeleton for 11 s warm and 20 s cold. The measured cause is
@@ -139,6 +139,28 @@ These are Vercel and Neon settings. Record the before and after measurement.
    pool) while session-scoped advisory locks remain in use (PR #762 documents
    why). Re-check after the DigitalOcean cutover.
 
+## After Phase 3 (measured 2026-09-17, warm, signed in, staging at 7907c1e3, `DB_POOL_MAX` still 1)
+
+Four hard reloads of the Dashboard with a facility selected, same snippet, RSC
+prefetches excluded. The dashboard now dispatches 9 startup fetches (was 10 to
+11): session, organization list, facilities read, certifier-summary read, and
+five sequential dashboard Server Actions. `x-vercel-id` reads `fra1::fra1`.
+
+| Phase | Run 1 | Run 2 | Run 3 | Run 4 | After Phase 1 |
+| --- | --- | --- | --- | --- | --- |
+| HTML document streamed | 0.78 s | 0.33 s | 0.16 s | 0.16 s | 0.34 to 0.93 s |
+| First startup fetch starts | 0.92 s | 0.37 s | 0.19 s | 0.21 s | 0.38 to 1.09 s |
+| Last startup fetch finishes | 1.68 s | 1.10 s | 2.14 s | 1.05 s | 1.09 to 1.77 s |
+| Longest single fetch | 0.29 s | 0.23 s | 1.36 s | 0.34 s | 0.21 to 0.44 s |
+
+Run 3's 1.36 s was a single dashboard action; the other three runs put every
+dashboard action at 0.10 to 0.34 s. Excluding that outlier, the overview action
+sits at 0.10 to 0.34 s and the startup sequence ends at 1.05 to 1.68 s. The
+remaining time is the sequential dispatch of the five dashboard actions at about
+0.10 s each, not any single query, so the next lever is Phase 5 (action count),
+not the query budget. The pool ladder (Phase 3 step 7) has not run: the Preview
+env upsert needs the owner.
+
 ## Phase 2: per-request auth cost (one PR)
 
 Branch `fix/request-scoped-org-context`. Touches `src/lib/auth/server.ts`,
@@ -226,7 +248,8 @@ touches `src/components/navigation/sidebar-content.tsx`.
 ## Phase 5: remaining startup actions (only if still needed)
 
 After Phases 1 through 4, re-measure the eight startup actions. If the shell still
-queues more than three sequential actions, extend the #763 read transport to the
+queues more than three sequential actions (the After Phase 3 measurement shows five
+sequential dashboard actions, so the criterion is met; owner decision pending), extend the #763 read transport to the
 remaining ones (org profile, onboarding status, organization list) following the
 boundary agreed in Phase 0. Do not start this phase before the measurement.
 
