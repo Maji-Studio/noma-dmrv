@@ -291,7 +291,10 @@ export function CreditBatchList({
       });
       if (result.success) {
         setSideSheet(null);
-        toast.success("Credit batch updated.");
+        // The batch is saved. A warning says only that part of its detail did
+        // not load, so the operator is told what to do, not that it failed.
+        if (result.warning) toast.warning(`${result.warning} Refresh the page.`);
+        else toast.success("Credit batch updated.");
       } else {
         setUpdateError(
           result.error || "Credit batch was not saved. Try again.",
