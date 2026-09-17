@@ -34,16 +34,6 @@ const pool = createObservedPool(poolConfig, telemetryOptions);
 // Keep the instance alive until pg's idle timer releases unused connections.
 attachDatabasePool(pool);
 
-poolLog.trace(
-  {
-    maxConnections: poolConfig.max,
-    idleTimeoutMs: poolConfig.idleTimeoutMillis,
-    connectionTimeoutMs: poolConfig.connectionTimeoutMillis,
-    lockTimeoutMs: poolConfig.lock_timeout,
-  },
-  "database pool configured",
-);
-
 export const db = drizzle(pool, { schema });
 
 export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
