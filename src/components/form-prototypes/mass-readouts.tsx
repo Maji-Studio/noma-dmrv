@@ -26,7 +26,8 @@ export function Facts({ facts, paired = false, quiet = false }: { facts: Fact[];
 
 type Segment = Fact & { className: string };
 export const BIOCHAR_FILL = "bg-[var(--clr-dark-purple-80)]";
-export const INGREDIENT_FILL = "bg-[var(--color-moisture-added-water)]";
+export const INGREDIENT_FILL = "bg-[var(--clr-dark-purple-40)]";
+export const ADDED_WATER_FILL = "bg-[var(--color-moisture-added-water)]";
 export const WATER_FILL = "moisture-water-hatch";
 export function Composition({ label, segments }: { label: string; segments: Segment[] }) {
   const total = segments.reduce((sum, segment) => sum + (segment.mass ?? 0), 0);

@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { VariantSections, VariantSwitcher, readVariant, type PrototypeSection } from "./variant-layout";
-import { BIOCHAR_FILL, INGREDIENT_FILL, WATER_FILL, Calculation, Composition, Disclosure, Facts, Ledger, MaterialReadout, derivedMass } from "./mass-readouts";
+import { ADDED_WATER_FILL, BIOCHAR_FILL, INGREDIENT_FILL, WATER_FILL, Calculation, Composition, Disclosure, Facts, Ledger, MaterialReadout, derivedMass } from "./mass-readouts";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PageHeader } from "@/components/ui";
@@ -77,7 +77,7 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
   const dryIngredient = ingredientSplit?.dryKg ?? null;
   const finalWet = sourceWet !== null && ingredientWet !== null && water !== null ? sourceWet + ingredientWet + water : null;
   const totalDry = dryBiochar !== null && dryIngredient !== null ? dryBiochar + dryIngredient : null;
-  const totalWater = sourceSplit && ingredientSplit && water !== null ? sourceSplit.waterKg + ingredientSplit.waterKg + water : null;
+  const existingWater = sourceSplit && ingredientSplit ? sourceSplit.waterKg + ingredientSplit.waterKg : null;
   // Each material and basis is checked independently of unrelated form errors.
   const sourceExceeded = sourceWet !== null && sourceWet > STOCK.sourceWet;
   const sourceDryExceeded = dryBiochar !== null && dryBiochar > STOCK.sourceDry;
@@ -115,7 +115,8 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
     {variant === "C" && <Composition label="Wet product composition" segments={[
       { label: "Dry biochar", mass: dryBiochar, className: BIOCHAR_FILL },
       ...(isBlend ? [{ label: "Ingredient dry solids", mass: dryIngredient, className: INGREDIENT_FILL }] : []),
-      { label: "Water", mass: totalWater, className: WATER_FILL },
+      { label: "Existing water", mass: existingWater, className: WATER_FILL },
+      { label: "Added water", mass: water, className: ADDED_WATER_FILL },
     ]} />}
     {variant === "D" && <Disclosure label="How this is calculated">
       <Calculation split={sourceSplit} label="Dry biochar" />
@@ -140,7 +141,7 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
   const orderFacts = [{ label: "Requested wet", mass: massValue(values.requestedWet) }, { label: "Available dry biochar", mass: STOCK.orderDry }];
   const orderSummary = <section aria-label="Order mass" className="space-y-12">
     {variant === "E" ? <table className="w-full body-small"><caption className="sr-only">Order mass bases</caption><tbody>{orderFacts.map((fact) => <tr key={fact.label} className="border-b border-[var(--hair-3)]"><th scope="row" className="py-8 text-left font-normal">{fact.label}</th><td className="py-8 text-right tabular-nums">{derivedMass(fact.mass)}</td></tr>)}</tbody></table> : <Facts facts={orderFacts} paired={variant === "B"} quiet={variant === "A"} />}
-    {variant === "C" && <Composition label="Available dry biochar by batch" segments={BATCHES.filter((batch) => batch.dry > 0).map((batch, index) => ({ label: `${batch.code} dry biochar`, mass: batch.dry, className: index === 0 ? BIOCHAR_FILL : INGREDIENT_FILL }))} />}
+    {variant === "C" && <Composition label="Available dry biochar by batch" segments={BATCHES.filter((batch) => batch.dry > 0).map((batch) => ({ label: `${batch.code} dry biochar`, mass: batch.dry, className: `${BIOCHAR_FILL} border-r border-[var(--paper)] last:border-r-0` }))} />}
     {variant === "D" && <Disclosure label="How this is calculated">
       <p>Available dry biochar: {BATCHES.map((batch) => formatMassKg(batch.dry)).join(" + ")} = {formatMassKg(STOCK.orderDry)}</p>
       <p>Requested wet is entered directly. No moisture is recorded for conversion to dry mass.</p>
