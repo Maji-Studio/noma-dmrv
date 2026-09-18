@@ -13,13 +13,14 @@ import { FormSection } from "@/components/forms/form-section";
 import { FormSpine } from "@/components/forms/form-spine";
 import { FormActions } from "@/components/forms/form-actions";
 import { formatMassKg } from "@/lib/format-utils";
+import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { productOrderPrototypeSchema } from "@/schemas/product-order-ui-prototype";
 import { PrototypeSwitcher } from "./prototype-switcher";
 import { PROTOTYPE_NAMES, type PrototypeVariant } from "./prototype-variants";
 
 const PERCENT_MAX = 100;
 const FIXTURE = {
-  sourceWet: 250, sourceMoisture: 3, water: 50,
+  placedAt: "2026-09-18", sourceWet: 250, sourceMoisture: 3, water: 50,
   ingredientWet: 100, ingredientMoisture: 30, requestedWet: 200,
   formulation: "blend" as const, destination: "A" as const,
 };
@@ -61,7 +62,7 @@ export function ProductOrderUiPrototype({ mode, variant, standalone = false }: {
 
   function numberField(name: NumberField, label: string) {
     return <FormField id={`prototype-${name}`} label={label} error={form.formState.errors[name]?.message}>
-      <FormInput id={`prototype-${name}`} type="number" step="any" min={0} {...form.register(name)} />
+      <FormInput id={`prototype-${name}`} type="number" step={name === "sourceMoisture" || name === "ingredientMoisture" ? "any" : MASS_KG_INPUT_STEP} min={0} {...form.register(name)} />
     </FormField>;
   }
   const detail = isProduct ? <div className="space-y-20">
@@ -79,19 +80,19 @@ export function ProductOrderUiPrototype({ mode, variant, standalone = false }: {
   const disclosure = <details className="border-t border-[var(--hair-2)]"><summary className={summaryClass}>{isProduct ? "Composition and stock changes" : "View batch stock"}</summary>{data && detail}</details>;
 
   const inputs = <FormSpine control={form.control}>
-    <FormSection title={isProduct ? "Source material" : "Customer and location"}>
-      {isProduct ? <FormField id="prototype-source" label="Source biochar"><FormSelect id="prototype-source" options={[{ value: "source", label: "Demo biochar bin · Maize cobs" }]} /></FormField> : <div className={grid}><FormField id="prototype-customer" label="Customer"><FormSelect id="prototype-customer" options={[{ value: "demo", label: "Demo customer" }]} /></FormField><FormField id="prototype-location" label="Delivery location"><FormSelect id="prototype-location" options={[{ value: "demo", label: "Demo farm" }]} /></FormField></div>}
+    <FormSection title={isProduct ? "Placement" : "Customer and location"} fields={isProduct ? ["placedAt"] : []}>
+      {isProduct ? <FormField id="prototype-placed-at" label="Mixing and placement date" required error={form.formState.errors.placedAt?.message}><FormInput id="prototype-placed-at" type="date" {...form.register("placedAt")} /></FormField> : <div className={grid}><FormField id="prototype-customer" label="Customer"><FormSelect id="prototype-customer" options={[{ value: "demo", label: "Demo customer" }]} /></FormField><FormField id="prototype-location" label="Delivery location"><FormSelect id="prototype-location" options={[{ value: "demo", label: "Demo farm" }]} /></FormField></div>}
     </FormSection>
-    <FormSection title={isProduct ? "Source quantities" : "Product details"}>
-      {isProduct ? <><div className={grid}>{numberField("sourceWet", "Wet biochar mass (kg)")}{numberField("sourceMoisture", "Biochar moisture (%)")}</div>{numberField("water", "Water added (kg)")}{variant === "C" && data && <MassRow label="Dry biochar from source" mass={dryBiochar} />}</> : <><FormField id="prototype-order-formulation" label="Formulation"><FormSelect id="prototype-order-formulation" options={[{ value: "bcf", label: "BCF" }]} /></FormField>{numberField("requestedWet", "Requested wet mass (kg)")}{variant === "C" && <div className="space-y-12">{summary}{disclosure}</div>}</>}
+    <FormSection title={isProduct ? "Source" : "Product details"} fields={isProduct ? ["sourceWet", "sourceMoisture", "water"] : ["requestedWet"]}>
+      {isProduct ? <><FormField id="prototype-source" label="Source biochar"><FormSelect id="prototype-source" options={[{ value: "source", label: "Demo biochar bin · Maize cobs" }]} /></FormField><div className={grid}>{numberField("sourceWet", "Wet biochar mass (kg)")}{numberField("sourceMoisture", "Biochar moisture (%)")}</div>{numberField("water", "Water added (kg)")}{variant === "C" && data && <MassRow label="Dry biochar from source" mass={dryBiochar} />}</> : <><FormField id="prototype-order-formulation" label="Formulation"><FormSelect id="prototype-order-formulation" options={[{ value: "bcf", label: "BCF" }]} /></FormField>{numberField("requestedWet", "Requested wet mass (kg)")}{variant === "C" && <div className="space-y-12">{summary}{disclosure}</div>}</>}
     </FormSection>
-    {isProduct && <FormSection title="Formulation and ingredients">
+    {isProduct && <FormSection title="Formulation and ingredients" fields={isBlend ? ["formulation", "ingredientWet", "ingredientMoisture"] : ["formulation"]}>
       <FormField id="prototype-formulation" label="Formulation"><FormSelect id="prototype-formulation" {...form.register("formulation", { onChange: (event) => {
         if (event.target.value === "plain") form.clearErrors(["ingredientWet", "ingredientMoisture"]);
       } })} options={[{ value: "blend", label: "Chicken manure 50/50" }, { value: "plain", label: "Unblended biochar" }]} /></FormField>
       {isBlend && <><FormField id="prototype-ingredient" label="Ingredient bin"><FormSelect id="prototype-ingredient" options={[{ value: "manure", label: "Demo chicken manure bin" }]} /></FormField><div className={grid}>{numberField("ingredientWet", "Ingredient wet mass (kg)")}{numberField("ingredientMoisture", "Ingredient moisture (%)")}</div>{variant === "C" && data && <MassRow label="Ingredient dry solids" mass={dryIngredient} />}</>}
     </FormSection>}
-    {isProduct && <FormSection title="Product bin"><fieldset className="space-y-8"><legend className="body-small mb-8">Choose the destination bin</legend>{(["A", "B"] as const).map((bin) => <label key={bin} className="flex min-h-44 cursor-pointer items-center gap-12 border border-[var(--hair-2)] px-12"><input type="radio" value={bin} {...form.register("destination")} /><span className="body-small">Product bin {bin} · Empty</span></label>)}</fieldset>{variant === "C" && <div className="space-y-12">{summary}{disclosure}</div>}</FormSection>}
+    {isProduct && <FormSection title="Product bin" fields={["destination"]}><fieldset className="space-y-8"><legend className="body-small mb-8">Choose the destination bin</legend>{(["A", "B"] as const).map((bin) => <label key={bin} className="flex min-h-44 cursor-pointer items-center gap-12 border border-[var(--hair-2)] px-12"><input type="radio" value={bin} {...form.register("destination")} /><span className="body-small">Product bin {bin} · Empty</span></label>)}</fieldset>{variant === "C" && <div className="space-y-12">{summary}{disclosure}</div>}</FormSection>}
   </FormSpine>;
 
   return <div className="h-[calc(100dvh-var(--spacing-160))] overflow-y-auto md:h-[calc(100dvh-var(--spacing-96))]">
