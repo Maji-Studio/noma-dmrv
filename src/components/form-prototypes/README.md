@@ -19,21 +19,25 @@ When reusing another worktree's dependency directory, `pnpm --config.verify-deps
 
 The preview uses the actual prototype components and app CSS in a synthetic shell. It does not start the Next.js app, read environment files, authenticate, fetch domain data, or write records. It is a loopback-only component preview, not an application authentication bypass.
 
-## Five inline layouts for each form
+## Five wet/dry displays for each form
+
+All five options preserve exactly the same synthetic input controls, grouping and order in fixed `FormSection` sections. All fields remain visible, except the existing unblended ingredient condition. Only read-only mass presentation changes. Supporting details expand inline; there are no steps or collapsed input sections.
 
 | Variant | Product | Order |
 | --- | --- | --- |
-| A. Compact overview | Complete inputs followed by concise mass totals and separate composition/stock disclosures. | Complete inputs followed by requested wet mass, dry availability and batch disclosure. |
-| B. At the source | Source and ingredient stock balances beneath their inputs; output at the destination. | Dry stock and batch details beside formulation, with requested wet mass in a separate section. |
-| C. Expandable sections | Four editable summary rows with a live overview below. | Three editable summary rows with a live overview below. |
-| D. Guided inline steps | Placement, source, ingredients and destination reveal in sequence, followed by review. | Customer/location, formulation and requested amount reveal in sequence, followed by review. |
-| E. Review on demand | Lean inputs; Review reveals full composition and stock detail inline. | Lean inputs; Review reveals requested wet mass and full batch stock inline. |
+| A. Quiet captions | Small dry captions under each wet/moisture pair and compact final mass facts. | Compact requested wet and available dry biochar facts. |
+| B. Paired readouts | Wet and explicitly named dry values side by side, with ingredient dry solids separate. | Requested wet and available dry biochar side by side. |
+| C. Visual composition | Token-based strips separate dry biochar, ingredient dry solids and water, with text values. | Clearly labeled available dry biochar composition by batch only. |
+| D. Inline calculation | Visible mass facts with optional live wet-basis equations and final sums. | Visible mass facts with optional batch-total basis; no wet-to-dry conversion. |
+| E. Compact ledger | Material wet/dry rows and optional stock before/after. Whole-product dry includes ingredient solids. | Concise rows with explicit mass bases and optional batch stock. |
 
-Guided Continue validates the revealed fields and product stock limits before advancing. Completed steps remain editable inline. Errors open their section or remain clearly identified on its disclosure row. Review validates the whole form, including values in collapsed sections. An open review updates when values change; editing clears the reviewed acknowledgement. Reset example restores fixture values and the initial guided/review state. Native disclosures support keyboard operation. Inputs and action controls have mobile touch targets of at least 44px. No sticky or floating panels are used.
+One Review action validates the form and acknowledges the preview in memory. Editing clears that acknowledgement; Reset example restores fixture values. Switching A–E retains input values without remounting the form controls. Product/Order navigation preserves the variant and starts a fresh fixture. Native disclosures contain only read-only detail and the existing empty-batch display toggle. No sticky or floating panels are used.
 
-Input errors and exceeded source/ingredient wet stock stay beside the affected field. Switching to unblended biochar excludes ingredient values from validation and clears ingredient errors. Requested wet order mass is never compared against dry stock availability. Destination bins use visible radio choices. All state stays in memory.
+Independent wet and dry stock feedback remains beside each affected material's mass or moisture field even if other fields are invalid. Invalid component inputs render unavailable derived values, never fabricated zeros. Unsupported stock-after values are unavailable rather than negative. Unblended biochar excludes ingredient values from validation and clears ingredient errors. Requested wet order mass is never compared against dry stock availability or converted without moisture.
 
-The synthetic example is 250 kg wet biochar at 3% moisture + 50 kg water + 100 kg ingredient at 30% moisture: 400 kg wet product, 242.5 kg dry biochar, 70 kg ingredient dry solids. This demo does not enforce formulation ratios or reproduce FIFO/accounting logic. Its calculations are not a production contract.
+The unchanged synthetic example is 250 kg wet biochar at 3% moisture + 50 kg water + 100 kg ingredient at 30% moisture: 400 kg wet product, 242.5 kg dry biochar, 70 kg ingredient dry solids. Derived dry amounts use canonical `splitWetMass`.
+
+Synthetic limits are independent: source 500 kg wet / 485 kg dry biochar; ingredient 400 kg wet / 280 kg dry solids. Changing moisture can exceed the dry limit before the wet limit, which blocks Review. Order stock is 332.5 kg dry biochar across DEMO-01 (0), DEMO-02 (90), DEMO-03 (242.5). No wet stock or batch moisture is invented. This demo does not enforce formulation ratios or reproduce FIFO/accounting logic. Its calculations are not a production contract. The existing simplified fixtures are retained rather than copying production fields or mutations.
 
 ## Application boundaries
 
