@@ -26,7 +26,7 @@ const FIXTURE = {
 const STOCK = { sourceWet: 500, sourceDry: 485, ingredientWet: 400, ingredientDry: 280, orderDry: 332.5 };
 const BATCHES = [{ code: "DEMO-01", dry: 0 }, { code: "DEMO-02", dry: 90 }, { code: "DEMO-03", dry: 242.5 }];
 const grid = "grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2";
-const panel = "border border-[var(--hair)] bg-[var(--paper)] p-24";
+const panel = "min-w-0 border border-[var(--hair)] bg-[var(--paper)] p-24";
 const summaryClass = "min-h-44 cursor-pointer py-12 body-small font-medium";
 
 type Mode = "product" | "order";
@@ -98,14 +98,14 @@ export function ProductOrderUiPrototype({ mode, variant, standalone = false }: {
     <div className="container-max page-shell">
     <PageHeader area={isProduct ? "production" : "distribution"} eyebrow="PROTOTYPE · synthetic data" title={isProduct ? "Create Biochar Product" : "Create Order"} subtitle={`${variant} · ${PROTOTYPE_NAMES[variant]}. Explore the layout. Nothing is saved.`} />
     <div className="flex flex-wrap items-center gap-16 body-small"><Link className="underline" href={`/biochar-products?prototype=stock&variant=${variant}`}>Product prototype</Link><Link className="underline" href={`/orders?prototype=stock&variant=${variant}`}>Order prototype</Link>{!standalone && <Link className="underline" href={isProduct ? "/biochar-products" : "/orders"}>Exit prototype</Link>}</div>
-    <form onSubmit={form.handleSubmit(() => setReviewed(true))} onChange={() => setReviewed(false)} className={variant === "B" ? "grid items-start gap-24 lg:grid-cols-3" : "mx-auto w-full max-w-2xl"}>
+    <form onSubmit={form.handleSubmit(() => setReviewed(true))} onChange={() => setReviewed(false)} className={variant === "B" ? "grid min-w-0 grid-cols-1 items-start gap-24 lg:grid-cols-3" : "mx-auto w-full max-w-2xl"}>
       <div className={`${panel} space-y-20 ${variant === "B" ? "lg:col-span-2" : ""}`}>
         {inputs}
         {stockExceeded && <p role="alert" className="body-small text-[var(--st-bad)]">Reduce the source or ingredient wet mass to the available demo stock.</p>}
         {variant === "A" && <section aria-label="Preview" className="space-y-12 border-t border-[var(--hair)] pt-16">{summary}{disclosure}</section>}
-        {variant !== "B" && <><p role="status" className="body-small">{reviewed ? "Preview reviewed. No record was created." : ""}</p><FormActions sticky={false} submitLabel="Review prototype" submitDisabled={stockExceeded} onCancel={() => { form.reset(); setReviewed(false); }} cancelLabel="Reset example" /></>}
+        {variant !== "B" && <><p role="status" className="body-small">{reviewed ? "Preview reviewed. No record was created." : ""}</p><div className="[&>div>div]:flex-wrap"><FormActions sticky={false} submitLabel="Review prototype" submitDisabled={stockExceeded} onCancel={() => { form.reset(); setReviewed(false); }} cancelLabel="Reset example" /></div></>}
       </div>
-      {variant === "B" && <aside aria-label="Review" className={`${panel} space-y-20 lg:sticky lg:top-24`}><h2 className="title-heading-3">Review</h2>{summary}{disclosure}<p role="status" className="body-small">{reviewed ? "Preview reviewed. No record was created." : ""}</p><FormActions sticky={false} submitLabel="Review prototype" submitDisabled={stockExceeded} onCancel={() => { form.reset(); setReviewed(false); }} cancelLabel="Reset example" /></aside>}
+      {variant === "B" && <aside aria-label="Review" className={`${panel} space-y-20 lg:sticky lg:top-24`}><h2 className="title-heading-3">Review</h2>{summary}{disclosure}<p role="status" className="body-small">{reviewed ? "Preview reviewed. No record was created." : ""}</p><div className="[&>div>div]:flex-wrap"><FormActions sticky={false} submitLabel="Review prototype" submitDisabled={stockExceeded} onCancel={() => { form.reset(); setReviewed(false); }} cancelLabel="Reset example" /></div></aside>}
     </form>
     <details className="body-small"><summary className={summaryClass}>Prototype state and assumptions</summary><p>Layout exploration only. Example quantities are synthetic and do not enforce formulation ratios or model FIFO. Existing accounting and order behavior are unchanged.</p><pre className="mt-12 overflow-auto">{JSON.stringify({ mode, variant, inputs: values, previewValid: !!data, stockExceeded }, null, 2)}</pre></details>
     </div>
