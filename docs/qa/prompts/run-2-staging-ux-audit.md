@@ -10,7 +10,7 @@ sweep requires a DB reset and belongs on **local**, not staging.
 
 Follow `.agents/skills/codex-computer-use/SKILL.md`: substitute the real artifact
 directory for `<ARTIFACT_DIR>`, write the prompt below to that directory, and run Codex
-with computer use from the repository root. gpt-5.6-sol drives every browser flow; opus is
+with computer use from the repository root. gpt-6-astra drives every browser flow; opus is
 used only where Isometric/registry interpretation is needed.
 
 ---
@@ -47,8 +47,8 @@ PREMISE (read carefully — differs from the generic base prompt)
   non-sandbox / production Isometric environment.
 
 MODEL / TOOL ROUTING
-- Drive ALL browser flows with gpt-5.6-sol via computer use.
-- Use opus-4.8 ONLY for Isometric/registry interpretation (call the isometric MCP `how_to`
+- Drive ALL browser flows with gpt-6-astra via computer use.
+- Use opus-5 ONLY for Isometric/registry interpretation (call the isometric MCP `how_to`
   first). Never use opus to click through the UI. Never use Haiku. pnpm only.
 
 STEP 0 — LOG IN EVERYWHERE FIRST (halt if any login fails)

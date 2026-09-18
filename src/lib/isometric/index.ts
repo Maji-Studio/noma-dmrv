@@ -15,13 +15,9 @@ export {
   listProjects,
   listGhgEntryTemplates,
   listComponentBlueprints,
-  listComponents,
   type IsometricProject,
   type IsometricGhgEntryTemplate,
   type IsometricComponentBlueprint,
-  type IsometricComponent,
-  type IsometricComponentScope,
-  type ListComponentsArgs,
 } from "./projects";
 export {
   listFeedstockTypes,
@@ -31,19 +27,16 @@ export {
   createDatapoint,
   patchDatapoint,
   createGhgEntry,
+  deleteGhgEntry,
   getGhgEntry,
-  createComponent,
   findGhgEntryBySupplierRef,
   findDatapointBySupplierRef,
-  listDatapoints,
   type CreateDatapointRequest,
   type PatchDatapointRequest,
   type Datapoint,
   type CreateGhgEntryRequest,
   type GhgEntry,
-  type CreateComponentRequest,
   type Component,
-  type ListDatapointsArgs,
 } from "./submissions";
 export {
   createGhgStatement,
@@ -70,6 +63,7 @@ export {
 export { buildSourceSupplierRef } from "./utils/source-ref";
 export {
   createSource,
+  deleteSource,
   requestSignedUploadUrl,
   findSourceBySupplierRef,
   type CreateDocumentSourceRequest,
@@ -104,7 +98,9 @@ export {
   buildBiocharApplicationReference,
   buildCreateBiocharApplicationRequest,
   createBiocharApplication,
+  deleteBiocharApplication,
   findBiocharApplicationBySupplierReference,
+  getBiocharApplication,
   biocharApplicationMismatchMessage,
   type CreateBiocharApplicationRequest,
   type IsometricBiocharApplication,
@@ -121,16 +117,13 @@ export {
   aggregateProductionRuns,
   aggregateTransportMassDistance,
   enrichWithTransportLegs,
-  validateForTemplate,
   type AggregatedProductionData,
   type ProductionRunWithSamples,
-  type ResolvedTemplateInput,
-  type MissingInput,
   type TransportLegsByCategory,
 } from "./utils/aggregation";
 export {
   collectTransportEntityIds,
   type TransportEntityIdsByCategory,
 } from "./utils/transport-lineage";
-export { isometricRegistry, isometricDocs } from "./links";
+export { isometricRegistry } from "./links";
 export type { paths, components, operations } from "./generated/certify";

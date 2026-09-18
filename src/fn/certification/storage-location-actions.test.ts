@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrgContext } from "@/lib/auth/server";
 
-const ORG_CTX: OrgContext = {
+const ORG_CTX = vi.hoisted((): OrgContext => ({
   organizationId: "org-test",
   userId: "user-test",
   orgRole: "admin",
   isPlatformAdmin: false,
-};
+}));
 const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 const CUSTOMER_LOCATION_ID = "22222222-2222-4222-8222-222222222222";
 
@@ -19,18 +19,10 @@ const mocks = vi.hoisted(() => ({
   appendEvent: vi.fn(),
 }));
 
-vi.mock("../with-action", () => ({
-  withAction: async <T>(fn: (ctx: OrgContext) => Promise<T>) => {
-    try {
-      return { success: true as const, data: await fn(ORG_CTX) };
-    } catch (error) {
-      return {
-        success: false as const,
-        error: error instanceof Error ? error.message : "Unexpected error",
-      };
-    }
-  },
-}));
+vi.mock("../with-action", async () => {
+  const { mockWithAction } = await import("../../../tests/helpers/mock-with-action");
+  return mockWithAction(ORG_CTX);
+});
 vi.mock("@/config/env", () => ({
   env: { ISOMETRIC_ENVIRONMENT: "sandbox" },
 }));

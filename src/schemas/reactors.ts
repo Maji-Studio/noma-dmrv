@@ -118,17 +118,6 @@ export const reactorFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
-/**
- * Schema for selecting a reactor (e.g., in dropdowns)
- */
-export const reactorSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  identifier: z.string(),
-  facilityId: z.string().uuid(),
-  reactorType: z.string(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -136,10 +125,7 @@ export const reactorSelectSchema = z.object({
 export type ReactorFormData = z.infer<typeof reactorFormSchema>;
 export type CreateReactorData = z.infer<typeof createReactorSchema>;
 export type UpdateReactorData = z.infer<typeof updateReactorSchema>;
-export type DeleteReactorData = z.infer<typeof deleteReactorSchema>;
 export type ReactorFilterData = z.infer<typeof reactorFilterSchema>;
-export type ReactorSelectData = z.infer<typeof reactorSelectSchema>;
-
 // ============================================
 // Helper Functions
 // ============================================

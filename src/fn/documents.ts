@@ -1,7 +1,6 @@
 "use server";
 
 import { BYTES_PER_MB } from "@/lib/format-utils";
-import { DELIVERY_EVIDENCE_ROLE_METADATA_KEY } from "@/lib/certification/delivery-evidence";
 import { SafeError } from "@/lib/errors";
 import { getStorageProvider, buildStorageKey } from "@/lib/storage";
 import {
@@ -45,7 +44,6 @@ function buildDocumentMetadata(input: {
   gpsLongitude?: number;
   applicationEvidenceRole?: string;
   applicationLogbookEvidenceType?: string;
-  deliveryEvidenceRole?: string;
 }): Record<string, unknown> {
   const applicationMetadata =
     input.entityType === "application"
@@ -58,15 +56,8 @@ function buildDocumentMetadata(input: {
             : {}),
         }
       : {};
-  // Removal Source classification reads this role to bind a delivery photo as
-  // proof of delivery (lib/certification/delivery-evidence.ts).
-  const deliveryMetadata =
-    input.entityType === "delivery" && input.deliveryEvidenceRole
-      ? { [DELIVERY_EVIDENCE_ROLE_METADATA_KEY]: input.deliveryEvidenceRole }
-      : {};
-
   if (input.documentType !== "photo" && input.documentType !== "video") {
-    return { ...applicationMetadata, ...deliveryMetadata };
+    return applicationMetadata;
   }
 
   const missingExif: string[] = [];
@@ -80,7 +71,6 @@ function buildDocumentMetadata(input: {
     // application photos that carry both timestamp and GPS EXIF.
     geotagStatus: missingExif.length === 0 ? "present" : "missing",
     ...applicationMetadata,
-    ...deliveryMetadata,
     missingExif,
     exif: {
       capturedAt: input.capturedAt ?? null,
@@ -159,7 +149,6 @@ export async function requestUpload(
       applicationEvidenceRole: parsed.data.applicationEvidenceRole,
       applicationLogbookEvidenceType:
         parsed.data.applicationLogbookEvidenceType,
-      deliveryEvidenceRole: parsed.data.deliveryEvidenceRole,
     });
 
     const row = await insertDocument(ctx, {

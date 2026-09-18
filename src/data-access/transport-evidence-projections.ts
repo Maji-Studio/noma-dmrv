@@ -1,5 +1,8 @@
-import { sql, type SQLWrapper } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { TRANSPORT_EVIDENCE_DOCUMENT_TYPES } from "@/lib/certification/transport-evidence";
+import { is, sql, type SQLWrapper } from "drizzle-orm";
+import { PgColumn } from "drizzle-orm/pg-core";
+import { requireOrgScope } from "./utils";
 
 type TransportEvidenceEntityReference =
   | "deliveryId"
@@ -50,14 +53,22 @@ export function transportEvidenceDocumentCount(
  * and the dashboard gap query read) deliveries, so the result is > 0 only
  * when EVERY contributing delivery carries at least one accepted file. This
  * keeps `hasCompleteTransportEvidence` over this count consistent with the
- * dashboard's per-delivery evidence rule — a file on an upcoming, archived,
+ * dashboard's per-delivery evidence rule — a file on an archived
  * or sibling delivery must not turn the leg green. No contributing
  * deliveries → 0 (fails closed).
  */
 export function biocharTransportEvidenceDocumentCount(
-  organizationId: string,
+  ctx: OrgContext,
   biocharProductId: SQLWrapper,
 ) {
+  requireOrgScope(ctx);
+  const organizationId = ctx.organizationId;
+  // A single-table Drizzle SELECT unqualifies interpolated columns even inside
+  // subqueries. Build a table + identifier reference so an outer `id` cannot
+  // accidentally bind to the delivery/allocation being scanned.
+  const productReference = is(biocharProductId, PgColumn)
+    ? sql`${biocharProductId.table}.${sql.identifier(biocharProductId.name)}`
+    : biocharProductId;
   // Table/column names are written LITERALLY, not via `${table.column}`:
   // drizzle renders column references inside raw sql templates unqualified
   // when their table is absent from the outer query builder, and this
@@ -87,7 +98,14 @@ export function biocharTransportEvidenceDocumentCount(
       where deliveries.organization_id = ${organizationId}
         and deliveries.status = 'delivered'
         and deliveries.archived_at is null
-        and coalesce(deliveries.biochar_product_id, orders.biochar_product_id) = ${biocharProductId}
+        and exists (
+          select 1 from output_stock_allocations osa
+          where osa.organization_id = ${organizationId}
+            and osa.delivery_id = deliveries.id
+            and osa.biochar_product_id = ${productReference}
+          group by osa.delivery_id, osa.biochar_product_id
+          having sum(osa.dry_mass_kg) > 0 or sum(osa.wet_mass_kg) > 0
+        )
     ) per_delivery
   )`;
 }

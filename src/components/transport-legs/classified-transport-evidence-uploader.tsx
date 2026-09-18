@@ -7,7 +7,6 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import {
   DELIVERY_EVIDENCE_DOCUMENT_LABELS,
   DELIVERY_EVIDENCE_DOCUMENT_TYPES,
-  PROOF_OF_DELIVERY_EVIDENCE_ROLE,
   type DeliveryEvidenceDocumentType,
 } from "@/lib/certification/delivery-evidence";
 import {
@@ -22,8 +21,7 @@ type EvidenceUploaderDocumentType =
   | TransportEvidenceDocumentType
   | DeliveryEvidenceDocumentType;
 
-// Deliveries add the two proof-of-delivery classifications (receipt,
-// role-stamped photo); feedstock and transport-leg owners keep the three
+// Deliveries add receipt and photo classifications; feedstock and transport-leg owners keep the three
 // transport classifications.
 const CHIP_DOCUMENT_TYPES: Record<
   EvidenceUploaderEntityType,
@@ -76,13 +74,6 @@ export function ClassifiedTransportEvidenceUploader({
     useState<EvidenceUploaderDocumentType>("bill_of_lading");
   const deferred = !entityId;
   const chipDocumentTypes = CHIP_DOCUMENT_TYPES[entityType];
-  // The "Delivery photo" chip stamps the proof-of-delivery role so the photo
-  // classifies as registry mass evidence; a bare photo never binds.
-  const deliveryEvidenceRole =
-    entityType === "delivery" && documentType === "photo"
-      ? PROOF_OF_DELIVERY_EVIDENCE_ROLE
-      : undefined;
-
   return (
     <div className="space-y-12">
       <fieldset className="space-y-8">
@@ -127,7 +118,6 @@ export function ClassifiedTransportEvidenceUploader({
         entityType={entityId ? entityType : undefined}
         entityId={entityId}
         documentType={documentType}
-        deliveryEvidenceRole={deliveryEvidenceRole}
         deferred={deferred}
         deferredFiles={(deferredAttachments?.attachments ?? []).map(
           (attachment) => ({
@@ -139,11 +129,7 @@ export function ClassifiedTransportEvidenceUploader({
           }),
         )}
         onDeferredAdd={(files) =>
-          deferredAttachments?.add(
-            files,
-            documentType,
-            deliveryEvidenceRole ? { deliveryEvidenceRole } : undefined,
-          )
+          deferredAttachments?.add(files, documentType, undefined)
         }
         onDeferredRemove={(key) => deferredAttachments?.remove(key)}
         onUploaded={() => {

@@ -710,3 +710,20 @@ describe("decideSubmissionClaim", () => {
     ).toThrowError(/Unhandled submission status: wat/);
   });
 });
+
+describe("reviewed evidence restart", () => {
+  const input = { payloadHash: OTHER_HASH, now: NOW, lockTtlMs: LOCK_TTL_MS, policy: { ...SUPERSEDE, allowEvidenceRefresh: true } };
+  it("creates a new version linked to the preserved interrupted snapshot", () => {
+    const latest = row({ metadata: {evidenceRefreshCandidates: [{documentId: "proof"}], lastAttemptOutcome: "interrupted", externalMutation: "none"} });
+    expect(decideSubmissionClaim({...input, latest})).toEqual({kind: "create-new-version", nextVersion: 2, supersedePreviousId: latest.id, reason: "evidence-refresh"});
+  });
+  it.each(["possible", "confirmed", null])("does not rebuild an attempt with %s registry mutation state", (externalMutation) => {
+    const latest = row({ metadata: { evidenceRefreshCandidates: [{ documentId: "proof" }], lastAttemptOutcome: "interrupted", externalMutation } });
+    expect(decideSubmissionClaim({ ...input, latest }).kind).not.toBe("create-new-version");
+  });
+  it("cannot restart a registry-backed attempt or an active process", () => {
+    const metadata = {evidenceRefreshCandidates: [{documentId: "proof"}]};
+    expect(decideSubmissionClaim({...input, latest: row({externalId: "rmv-existing", metadata})}).kind).toBe("resume");
+    expect(decideSubmissionClaim({...input, latest: row({lockedAt: new Date(NOW), metadata})}).kind).toBe("blocked-in-flight");
+  });
+});

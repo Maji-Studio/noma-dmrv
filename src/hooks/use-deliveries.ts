@@ -1,35 +1,33 @@
+import { outputStockKeys } from "./use-output-stock";
 /**
  * Deliveries React Query Hooks
  * Client-side state management for delivery operations
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Delivery } from "@/db/schema";
 import type {
-  DeliveryFilterData,
+  DeliveryWithRelations,
+  PaginatedDeliveries,
+} from "@/data-access/deliveries";
+import type { Delivery } from "@/db/schema";
+import {
+  createDeliveryFn,
+  deleteDeliveryFn,
+  getDeliveriesFn,
+  getDeliveryStatsFn,
+  getDeliveryWithRelationsFn,
+  updateDeliveryFn,
+} from "@/fn/deliveries";
+import type {
   CreateDeliveryData,
+  DeliveryFilterData,
   UpdateDeliveryData,
 } from "@/schemas/deliveries";
-import type {
-  PaginatedDeliveries,
-  DeliveryWithRelations,
-} from "@/data-access/deliveries";
-import {
-  getDeliveriesFn,
-  getDeliveryByIdFn,
-  getDeliveryWithRelationsFn,
-  getDeliveriesForSelectFn,
-  getDeliveryStatsFn,
-  checkDeliveryCodeFn,
-  createDeliveryFn,
-  updateDeliveryFn,
-  deleteDeliveryFn,
-} from "@/fn/deliveries";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { MutationCallbacks } from "./types";
-import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { certificationKeys } from "./use-certification";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import type { MutationCallbacks } from "./types";
+import { certificationKeys } from "./use-certification";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
 // Query Keys
@@ -86,24 +84,6 @@ export function useDeliveries(
 }
 
 /**
- * Hook to fetch a single delivery by ID
- */
-export function useDelivery(deliveryId: string, enabled = true) {
-  return useQuery({
-    queryKey: deliveryKeys.detail(deliveryId),
-    queryFn: async () => {
-      const result = await getDeliveryByIdFn(deliveryId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!deliveryId,
-    staleTime: 30000,
-  });
-}
-
-/**
  * Hook to fetch a delivery with all its relations
  */
 export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
@@ -147,45 +127,6 @@ export function useDeliveryStats(
   });
 }
 
-/**
- * Hook to fetch deliveries for dropdown selection
- */
-export function useDeliveriesForSelect(orderId?: string) {
-  return useQuery({
-    queryKey: deliveryKeys.select(orderId),
-    queryFn: async () => {
-      const result = await getDeliveriesForSelectFn(orderId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to check if a delivery code is available
- */
-export function useDeliveryCodeCheck(
-  code: string,
-  excludeDeliveryId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: deliveryKeys.codeCheck(code, excludeDeliveryId),
-    queryFn: async () => {
-      const result = await checkDeliveryCodeFn(code, excludeDeliveryId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds
-  });
-}
-
 // ============================================
 // Mutation Hooks
 // ============================================
@@ -218,6 +159,7 @@ export function useCreateDelivery(
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
@@ -225,6 +167,7 @@ export function useCreateDelivery(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -321,11 +264,13 @@ export function useUpdateDelivery(
       // Delivery writes resync the derived biochar distribution leg and its
       // evidence set, inputs to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
 
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {
@@ -415,11 +360,13 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Deleting a delivery shrinks the derived biochar leg's evidence set.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "delivery");
 
       await callbacks?.onSuccess?.(undefined, deliveryId);
     },
     onError: async (error, deliveryId, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (context) {
         const { previousDelivery, previousLists } = context as {
@@ -454,44 +401,3 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access delivery cache invalidation functions
- */
-export function useDeliveryCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all delivery data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.all }),
-
-    /** Invalidate all delivery lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() }),
-
-    /** Invalidate delivery statistics */
-    invalidateStats: () =>
-      queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() }),
-
-    /** Invalidate a specific delivery detail */
-    invalidateDetail: (deliveryId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: deliveryKeys.detail(deliveryId),
-      }),
-
-    /** Invalidate a delivery with its relations */
-    invalidateDetailWithRelations: (deliveryId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: deliveryKeys.detailWithRelations(deliveryId),
-      }),
-
-    /** Remove a specific delivery from cache (use after deletion) */
-    removeFromCache: (deliveryId: string) => {
-      queryClient.removeQueries({ queryKey: deliveryKeys.detail(deliveryId) });
-      queryClient.removeQueries({
-        queryKey: deliveryKeys.detailWithRelations(deliveryId),
-      });
-    },
-  };
-}

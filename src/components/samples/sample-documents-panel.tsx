@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { FileIcon, EyeIcon, EyeSlashIcon, TrashIcon, ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
-import { ServerError } from "@/components/forms";
+import { FormField, ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -181,17 +181,19 @@ export function SampleDocumentsPanel({
       )}
 
       {!readOnly && (
-        <FormFileUpload
-          id={`sample-${sampleId}-documents-upload`}
-          accept="image/*,.pdf,.csv,.xlsx"
-          multiple
-          maxSizeMb={50}
-          entityType={ENTITY_TYPE}
-          entityId={sampleId}
-          documentType={SAMPLE_DOC_TYPE}
-          onUploaded={() => setUploadError(null)}
-          onUploadError={(err) => setUploadError(err)}
-        />
+        <FormField id={`sample-${sampleId}-documents-upload`} label="Lab report">
+          <FormFileUpload
+            id={`sample-${sampleId}-documents-upload`}
+            accept="image/*,.pdf,.csv,.xlsx"
+            multiple
+            maxSizeMb={50}
+            entityType={ENTITY_TYPE}
+            entityId={sampleId}
+            documentType={SAMPLE_DOC_TYPE}
+            onUploaded={() => setUploadError(null)}
+            onUploadError={(err) => setUploadError(err)}
+          />
+        </FormField>
       )}
 
       {deleteError && <ServerError message={deleteError} />}

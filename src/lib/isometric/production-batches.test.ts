@@ -61,7 +61,7 @@ describe("buildCreateProductionBatchRequest", () => {
     expect(body.facility_id).toBe(BASE.externalFacilityId);
     expect(body.feedstock_type_ids).toEqual(["ftt_a", "ftt_b"]);
     expect(body.supplier_reference_id).toBe(BASE.supplierReferenceId);
-    expect(body.display_name).toBe(BASE.creditBatchCode);
+    expect(body.display_name).toBe(`${BASE.creditBatchCode} (${BASE.supplierReferenceId})`);
     expect(body.started_at).toBe(BASE.startedAt);
     expect(body.ended_at).toBe(BASE.endedAt);
   });
@@ -121,6 +121,13 @@ describe("buildCreateProductionBatchRequest", () => {
       creditBatchCode: "C".repeat(140),
     });
     expect(body.display_name).toHaveLength(100);
+  });
+
+  it("keeps identical local codes distinct after a database reset", () => {
+    const before = buildCreateProductionBatchRequest(BASE);
+    const after = buildCreateProductionBatchRequest({ ...BASE, supplierReferenceId: "nm-ptb-new-identity" });
+    expect(after.display_name).not.toBe(before.display_name);
+    expect(after.display_name).toContain("nm-ptb-new-identity");
   });
 
   it("is deterministic for the same inputs", () => {

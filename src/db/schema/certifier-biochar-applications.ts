@@ -13,6 +13,7 @@ import {
 import type { CreateBiocharApplicationRequest } from "@/lib/isometric/biochar-applications";
 import { applications } from "./application";
 import { organizations } from "./auth";
+import { certificationSubmissions } from "./certification";
 import {
   certifierBiocharApplicationCorrectionStatus,
   certifierBiocharApplicationLifecycleStatus,
@@ -24,7 +25,8 @@ import { creditBatches } from "./credits";
 
 /**
  * Idempotency journal for Isometric Biochar Applications.
- * One row binds an Application to exactly one credit/Production Batch.
+ * One row binds an Application and credit/Production Batch slice to one
+ * immutable Removal submission version.
  */
 export const certifierBiocharApplications = pgTable(
   "certifier_biochar_applications",
@@ -36,6 +38,7 @@ export const certifierBiocharApplications = pgTable(
     provider: certifierProvider("provider").notNull().default("isometric"),
     applicationId: uuid("application_id").notNull(),
     creditBatchId: uuid("credit_batch_id").notNull(),
+    removalSubmissionId: uuid("removal_submission_id").notNull(),
     productionBatchRegistrationId: uuid(
       "production_batch_registration_id",
     ).notNull(),
@@ -46,21 +49,23 @@ export const certifierBiocharApplications = pgTable(
     externalStorageLocationId: text("external_storage_location_id").notNull(),
     externalApplicationId: text("external_application_id"),
     supplierReference: text("supplier_reference").notNull(),
-    submittedPayload: jsonb("submitted_payload").$type<CreateBiocharApplicationRequest>(),
-    payloadHash: text("payload_hash"),
+    submittedPayload: jsonb("submitted_payload")
+      .$type<CreateBiocharApplicationRequest>()
+      .notNull(),
+    payloadHash: text("payload_hash").notNull(),
     observedGhgEntryId: text("observed_ghg_entry_id"),
     observedRemovalId: text("observed_removal_id"),
     lifecycleStatus: certifierBiocharApplicationLifecycleStatus(
       "lifecycle_status",
     )
       .notNull()
-      .default("gated"),
+      .default("creating"),
     correctionStatus: certifierBiocharApplicationCorrectionStatus(
       "correction_status",
     )
       .notNull()
       .default("none"),
-    gateReason: text("gate_reason"),
+    driftReason: text("drift_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -68,10 +73,21 @@ export const certifierBiocharApplications = pgTable(
     index("certifier_biochar_applications_organization_id_idx").on(
       table.organizationId,
     ),
+    index("certifier_biochar_applications_removal_submission_id_idx").on(
+      table.removalSubmissionId,
+    ),
     unique("certifier_biochar_applications_id_organization_id_unique").on(
       table.id,
       table.organizationId,
     ),
+    foreignKey({
+      name: "certifier_bca_removal_submission_org_fk",
+      columns: [table.removalSubmissionId, table.organizationId],
+      foreignColumns: [
+        certificationSubmissions.id,
+        certificationSubmissions.organizationId,
+      ],
+    }),
     foreignKey({
       columns: [table.applicationId, table.organizationId],
       foreignColumns: [applications.id, applications.organizationId],
@@ -95,8 +111,13 @@ export const certifierBiocharApplications = pgTable(
       ],
     }),
     unique(
-      "certifier_biochar_applications_provider_application_batch_unique",
-    ).on(table.provider, table.applicationId, table.creditBatchId),
+      "certifier_biochar_applications_provider_application_batch_submission_unique",
+    ).on(
+      table.provider,
+      table.applicationId,
+      table.creditBatchId,
+      table.removalSubmissionId,
+    ),
     unique("certifier_biochar_applications_provider_reference_unique").on(
       table.provider,
       table.supplierReference,
@@ -110,12 +131,8 @@ export const certifierBiocharApplications = pgTable(
       sql`${table.provider} = 'isometric'`,
     ),
     check(
-      "certifier_biochar_applications_payload_pair",
-      sql`(${table.submittedPayload} is null) = (${table.payloadHash} is null)`,
-    ),
-    check(
       "certifier_biochar_applications_confirmed_identity",
-      sql`${table.lifecycleStatus} <> 'confirmed' or (${table.externalApplicationId} is not null and ${table.submittedPayload} is not null)`,
+      sql`${table.lifecycleStatus} <> 'confirmed' or ${table.externalApplicationId} is not null`,
     ),
   ],
 );

@@ -310,4 +310,50 @@ describe("owning-document certification safety", () => {
       await cleanupFixture(fixture);
     }
   });
+
+  it("refuses deletion when a Biochar Application intent references the Source", async () => {
+    const fixture = await createFixture(crypto.randomUUID().slice(0, 8));
+    await db.insert(certificationSubmissions).values({
+      organizationId: TEST_ORG_ID,
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: fixture.removalId,
+      version: 1,
+      status: "submitted",
+      payloadSnapshot: {
+        transport: {
+          biocharApplicationIntents: [
+            { sourceIds: [fixture.externalDocumentId] },
+          ],
+        },
+      },
+    });
+
+    try {
+      await expect(
+        deleteDocumentWithCertificationSafety(
+          makeTestOrgContext(TEST_USER_ID),
+          fixture.documentId,
+        ),
+      ).rejects.toThrow(/submitted certification history/i);
+
+      expect(provider.deleteCalls).toEqual([]);
+      expect(provider.objects.has(fixture.storageKey)).toBe(true);
+      expect(
+        await db
+          .select()
+          .from(certifierDocumentUploads)
+          .where(eq(certifierDocumentUploads.documentId, fixture.documentId)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(documents)
+          .where(eq(documents.id, fixture.documentId)),
+      ).toHaveLength(1);
+    } finally {
+      await cleanupFixture(fixture);
+    }
+  });
 });

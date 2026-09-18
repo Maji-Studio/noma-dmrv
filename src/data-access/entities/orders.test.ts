@@ -1,128 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { toOrderEntityOption } from "./orders";
 
+const REQUEST = { id: "order-1", code: "OR-26-001", customerName: "North Farm", formulationName: "Compost blend", quantityKg: 1_000, totalDeliveredKg: 100 };
+
 describe("toOrderEntityOption", () => {
-  it("labels the remaining order mass for delivery selection", () => {
-    expect(
-      toOrderEntityOption({
-        id: "order-1",
-        code: "OR-26-001",
-        orderDate: new Date("2026-05-17T00:00:00.000Z"),
-        quantityKg: 1_000,
-        customerName: "North Farm",
-        productBinName: "Finished product north",
-        productMassKg: 1_000,
-        productWaterAddedKg: 0,
-        productMoisturePercent: 15,
-        totalDeliveredKg: 100,
-        totalDeliveredDryKg: 85,
-        unresolvedDeliveredDryCount: 0,
-        productAllocatedWetKg: 100,
-        productAllocatedDryKg: 85,
-        productUnresolvedDryCount: 0,
-      }),
-    ).toEqual({
-      id: "order-1",
-      code: "OR-26-001",
-      name: "North Farm · Finished product north · May 17, 2026",
-      remainingMass: {
-        wetKg: 900,
-        dryKg: 765,
-      },
-      subtitle: "Wet biochar product: 900kg remaining",
+  it("labels the formulation request and remaining wet mass", () => {
+    expect(toOrderEntityOption(REQUEST)).toEqual({
+      id: REQUEST.id, code: REQUEST.code, name: "North Farm · Compost blend",
+      remainingMass: { wetKg: 900, dryKg: null },
+      subtitle: "Requested wet mass remaining: 900 kg",
     });
   });
-
-  it("uses the product's tracked dry-biochar share for remaining dry mass", () => {
-    expect(
-      toOrderEntityOption({
-        id: "order-1",
-        code: "OR-26-001",
-        orderDate: new Date("2026-05-17T00:00:00.000Z"),
-        quantityKg: 100,
-        customerName: "North Farm",
-        productBinName: "Finished product north",
-        productMassKg: 100,
-        productWaterAddedKg: 50,
-        productMoisturePercent: 10,
-        totalDeliveredKg: 0,
-        totalDeliveredDryKg: 0,
-        unresolvedDeliveredDryCount: 0,
-        productAllocatedWetKg: 0,
-        productAllocatedDryKg: 0,
-        productUnresolvedDryCount: 0,
-      }).subtitle,
-    ).toBe("Wet biochar product: 100kg remaining");
+  it("does not reserve dry stock for an unfulfilled request", () => {
+    expect(toOrderEntityOption({ ...REQUEST, totalDeliveredKg: 0 }).remainingMass).toEqual({ wetKg: 1_000, dryKg: null });
   });
-
-  it("keeps remaining dry mass unknown when a delivery has no dry mass", () => {
-    const option = toOrderEntityOption({
-      id: "order-1",
-      code: "OR-26-001",
-      orderDate: new Date("2026-05-17T00:00:00.000Z"),
-      quantityKg: 100,
-      customerName: "North Farm",
-      productBinName: "Finished product north",
-      productMassKg: 100,
-      productWaterAddedKg: 0,
-      productMoisturePercent: 10,
-      totalDeliveredKg: 10,
-      totalDeliveredDryKg: 0,
-      unresolvedDeliveredDryCount: 1,
-      productAllocatedWetKg: 10,
-      productAllocatedDryKg: 0,
-      productUnresolvedDryCount: 1,
-    });
-
-    expect(option.subtitle).toBe("Wet biochar product: 90kg remaining");
-    expect(option.remainingMass).toEqual({ wetKg: 90, dryKg: null });
+  it("subtracts posted deliveries from requested wet mass", () => {
+    expect(toOrderEntityOption({ ...REQUEST, totalDeliveredKg: 250 }).remainingMass).toEqual({ wetKg: 750, dryKg: null });
   });
-
-  it("uses tracked product dry biochar for the order planning estimate", () => {
-    const option = toOrderEntityOption({
-      id: "order-2",
-      code: "OR-26-002",
-      orderDate: new Date("2026-05-17T00:00:00.000Z"),
-      quantityKg: 1_000,
-      customerName: "North Farm",
-      productBinName: "Finished product north",
-      productMassKg: 4_000,
-      productWaterAddedKg: 0,
-      productMoisturePercent: 40,
-      productComposition: { ingredients: [{ massKg: 2_000 }] },
-      sourceAllocatedDryMassKg: 1_800,
-      totalDeliveredKg: 250,
-      totalDeliveredDryKg: 112.5,
-      unresolvedDeliveredDryCount: 0,
-      productAllocatedWetKg: 250,
-      productAllocatedDryKg: 112.5,
-      productUnresolvedDryCount: 0,
-    });
-
-    expect(option.remainingMass).toEqual({ wetKg: 750, dryKg: 337.5 });
+  it("clamps fulfilled requests at zero", () => {
+    expect(toOrderEntityOption({ ...REQUEST, totalDeliveredKg: 1_100 }).remainingMass).toEqual({ wetKg: 0, dryKg: null });
   });
-
-  it("uses the authoritative remaining product basis after its wet mass changes", () => {
-    const option = toOrderEntityOption({
-      id: "order-3",
-      code: "OR-26-003",
-      orderDate: new Date("2026-05-17T00:00:00.000Z"),
-      quantityKg: 800,
-      customerName: "North Farm",
-      productBinName: "Finished product north",
-      productMassKg: 2_000,
-      productWaterAddedKg: 0,
-      productMoisturePercent: 40,
-      productComposition: { ingredients: [{ massKg: 500 }] },
-      sourceAllocatedDryMassKg: 900,
-      totalDeliveredKg: 200,
-      totalDeliveredDryKg: 90,
-      unresolvedDeliveredDryCount: 0,
-      productAllocatedWetKg: 1_000,
-      productAllocatedDryKg: 450,
-      productUnresolvedDryCount: 0,
-    });
-
-    expect(option.remainingMass).toEqual({ wetKg: 600, dryKg: 270 });
+  it("omits missing labels without adding separators", () => {
+    expect(toOrderEntityOption({ ...REQUEST, customerName: null }).name).toBe("Compost blend");
+    expect(toOrderEntityOption({ ...REQUEST, formulationName: null }).name).toBe("North Farm");
   });
 });

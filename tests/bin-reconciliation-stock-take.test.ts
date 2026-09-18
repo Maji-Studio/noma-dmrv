@@ -1,15 +1,12 @@
+import { postedStockFixture, postDelivery, postMeasurement, cleanupPostedStock } from "./helpers/posted-output-stock-fixture";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   binMovements,
-  biocharProducts,
-  customers,
-  deliveries,
   facilities,
   feedstocks,
   feedstockTypes,
-  orders,
   storageLocations,
   users,
 } from "@/db/schema";
@@ -51,85 +48,17 @@ beforeAll(async () => {
 });
 
 describe("bin reconciliation stock-take integrity", () => {
-  it("subtracts delivered product mass from product-bin stock", async () => {
-    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const [facility] = await db
-      .insert(facilities)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FAC-DEL-STOCK-${tag}`,
-        name: `Delivered Stock Facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [bin] = await db
-      .insert(storageLocations)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `BIN-DEL-STOCK-${tag}`,
-        name: `Delivered Stock Bin ${tag}`,
-        type: "product_bin",
-      })
-      .returning({ id: storageLocations.id });
-    const [product] = await db
-      .insert(biocharProducts)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        storageLocationId: bin.id,
-        code: `BP-DEL-STOCK-${tag}`,
-        massKg: 100,
-      })
-      .returning({ id: biocharProducts.id });
-    const [customer] = await db
-      .insert(customers)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `CU-DEL-STOCK-${tag}`,
-        name: `Delivered Stock Customer ${tag}`,
-      })
-      .returning({ id: customers.id });
-    const [order] = await db
-      .insert(orders)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        biocharProductId: product.id,
-        customerId: customer.id,
-        code: `OR-DEL-STOCK-${tag}`,
-        orderDate: new Date("2026-07-01T00:00:00Z"),
-        quantityKg: 40,
-        packaging: "bagged",
-      })
-      .returning({ id: orders.id });
-    const [delivery] = await db
-      .insert(deliveries)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        orderId: order.id,
-        biocharProductId: product.id,
-        storageLocationId: bin.id,
-        code: `DL-DEL-STOCK-${tag}`,
-        deliveryDate: new Date("2026-07-02T00:00:00Z"),
-        status: "delivered",
-        deliveredWetMassKg: 40,
-      })
-      .returning({ id: deliveries.id });
-
+  it("subtracts saved delivered dry shares from product-bin stock", async () => {
+    const f = await postedStockFixture({ stockKg: 100 });
     try {
-      const enriched = await getStorageLocationWithFacility(
-        makeTestOrgContext(TEST_USER_ID),
-        bin.id,
-      );
+      await postDelivery(f, 40);
+      const enriched = await getStorageLocationWithFacility(f.ctx, f.bin.id);
       expect(enriched.productInventory.currentMassKg).toBe(60);
+      const count = await postMeasurement(f, { kind: "count", wetMassKg: 120, moisturePercent: 50 });
+      expect(count.preview.removedDryKg).toBe(0);
+      expect(count.preview.afterDryKg).toBe(60);
     } finally {
-      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
-      await db.delete(orders).where(eq(orders.id, order.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
-      await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
-      await db.delete(customers).where(eq(customers.id, customer.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await cleanupPostedStock(f);
     }
   });
 

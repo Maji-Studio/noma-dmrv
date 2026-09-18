@@ -12,7 +12,13 @@ import {
 function uploadedDocumentSql(
   predicate: ApplicationEvidenceUploadedDocumentPredicate,
 ): SQL {
-  return sql`(${documents[predicate.uploadStatusField]} = ${predicate.uploadStatus} or ${documents[predicate.fileUrlField]} is not null)`;
+  return sql`(
+    ${documents[predicate.uploadStatusField]} = ${predicate.uploadStatus}
+    or (
+      ${documents[predicate.uploadStatusField]} is null
+      and ${documents[predicate.fileUrlField]} is not null
+    )
+  )`;
 }
 
 function documentMatcherSql(

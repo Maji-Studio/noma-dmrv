@@ -7,6 +7,9 @@ import {
 // productionDate is intentionally absent: a biochar product's production date is
 // the selected source bin's oldest allocated run date, derived server-side.
 const validBiocharProductInput = {
+  placedAt: "2026-09-01",
+  idempotencyKey: "product-request",
+  basisFingerprint: "product-preview",
   facilityId: "11111111-1111-4111-8111-111111111111",
   formulationId: "22222222-2222-4222-8222-222222222222",
   sourceBiocharStorageLocationId:
@@ -20,6 +23,30 @@ const validBiocharProductInput = {
 };
 
 describe("biocharProductFormSchema", () => {
+  it.each(["formulationId", "placedAt", "idempotencyKey", "basisFingerprint"] as const)("requires %s before posting", (field) => {
+    const result = biocharProductFormSchema.safeParse({ ...validBiocharProductInput, [field]: undefined });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: [field] }),
+        ]),
+      );
+    }
+  });
+
+  it("rejects an invalid calendar placement date", () => {
+    const result = biocharProductFormSchema.safeParse({ ...validBiocharProductInput, placedAt: "2026-02-30" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ["placedAt"] }),
+        ]),
+      );
+    }
+  });
+
   it("requires transfer source, measurements, water added, and destination bin", () => {
     const result = biocharProductFormSchema.safeParse({
       ...validBiocharProductInput,

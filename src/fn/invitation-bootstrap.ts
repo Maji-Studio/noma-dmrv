@@ -5,13 +5,15 @@ import { z } from "zod";
 import {
   formatZodActionError,
   logActionError,
+  toWarnableSuccess,
+  type ResultWithWarning,
 } from "@/fn/action-errors";
 import {
   createInvitedAccount,
   getInvitationBootstrapState as readInvitationBootstrapState,
   type InvitationBootstrapState,
 } from "@/data-access/invitation-bootstrap";
-import { persistLastActiveOrganization } from "@/data-access/organizations";
+import { saveOrgPreference } from "@/fn/org-preference";
 import { auth } from "@/lib/auth/better-auth";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
@@ -27,8 +29,19 @@ async function toResult<T>(
   work: () => Promise<T>,
   fallback: string
 ): Promise<ActionResult<T>> {
+  return toWarnableResult(async () => ({ data: await work() }), fallback);
+}
+
+/**
+ * As `toResult`, for bodies whose work has a committed part and a non-fatal
+ * follow-up. A returned `warning` keeps the result a success (issue #769).
+ */
+async function toWarnableResult<T>(
+  work: () => Promise<ResultWithWarning<T>>,
+  fallback: string
+): Promise<ActionResult<T>> {
   try {
-    return { success: true, data: await work() };
+    return toWarnableSuccess(await work());
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
@@ -71,7 +84,7 @@ export async function getInvitationBootstrapState(
 export async function bootstrapInvitationAccountAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {
-  return toResult(async () => {
+  return toWarnableResult(async () => {
     const { invitationId, name, password } =
       invitationBootstrapSchema.parse(input);
     const existingSession = await auth.api.getSession({
@@ -113,7 +126,9 @@ export async function bootstrapInvitationAccountAction(
       body: { organizationId },
       headers: await currentAuthHeaders(),
     });
-    await persistLastActiveOrganization(account.userId, organizationId);
-    return { organizationId };
+    // The account exists and the session is in the organization. A failed
+    // preference write is a warning, not a failed bootstrap (issue #769).
+    const warning = await saveOrgPreference(account.userId, organizationId);
+    return { data: { organizationId }, warning };
   }, INVITATION_BOOTSTRAP_FALLBACK);
 }

@@ -6,7 +6,7 @@
 "use client";
 
 import { useGhgStatementBreakdown } from "@/hooks/use-certification";
-import { CarbonBreakdownSkeleton } from "./carbon-breakdown";
+import { CarbonBreakdownSkeleton } from "./carbon-breakdown-skeleton";
 import { RegistryCarbonResultCard } from "./registry-carbon-result-card";
 import { RegistryObservationMessage } from "./removal-carbon-breakdown";
 

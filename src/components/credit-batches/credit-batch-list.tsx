@@ -263,16 +263,12 @@ export function CreditBatchList({
   const handleCreate = async (data: CreditBatchFormData) => {
     setCreateError(null);
     try {
-      const result = await createCreditBatch.mutateAsync(data);
-      if (result.success) {
-        closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
-        toast.success("Credit batch created.");
-      } else {
-        setCreateError(
-          result.error ||
-            "Credit batch was not created. Check the form.",
-        );
-      }
+      const { warning } = await createCreditBatch.mutateAsync(data);
+      closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
+      // The batch is saved. A warning says only that part of its detail did
+      // not load, so the operator is told what to do, not that it failed.
+      if (warning) toast.warning(`${warning} Refresh the page.`);
+      else toast.success("Credit batch created.");
     } catch (err) {
       const message =
         err instanceof Error
@@ -295,7 +291,10 @@ export function CreditBatchList({
       });
       if (result.success) {
         setSideSheet(null);
-        toast.success("Credit batch updated.");
+        // The batch is saved. A warning says only that part of its detail did
+        // not load, so the operator is told what to do, not that it failed.
+        if (result.warning) toast.warning(`${result.warning} Refresh the page.`);
+        else toast.success("Credit batch updated.");
       } else {
         setUpdateError(
           result.error || "Credit batch was not saved. Try again.",

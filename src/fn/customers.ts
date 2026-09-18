@@ -13,24 +13,23 @@ import {
 } from "@/data-access/code-generator";
 import {
   createCustomer,
+  createCustomerWithLocations,
   deleteCustomer,
   getCustomers as getCustomersData,
-  getCustomerById as getCustomerByIdData,
   getCustomerWithRelations as getCustomerWithRelationsData,
   getCustomerLocations as getCustomerLocationsData,
-  getCustomerCropTypes as getCustomerCropTypesData,
-  isCustomerCodeAvailable as isCustomerCodeAvailableData,
   updateCustomer,
   createCustomerLocation,
   updateCustomerLocation,
   deleteCustomerLocation,
-  getCustomerLocationById as getCustomerLocationByIdData,
   type PaginatedCustomers,
   type CustomerDetail,
+  type CreatedCustomerWithLocations,
 } from "@/data-access/customers";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createCustomerSchema,
+  createCustomerWithLocationsSchema,
   deleteCustomerSchema,
   updateCustomerSchema,
   customerFilterSchema,
@@ -42,9 +41,28 @@ import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
+import { withAction } from "./with-action";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function customerActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "customer action failed", context: { op } },
+  });
+}
 
 function customerActionError(
   error: unknown,
@@ -89,29 +107,6 @@ export async function getCustomersFn(
         error,
         "Failed to load customers",
         "customer:list",
-      ),
-    };
-  }
-}
-
-/**
- * Get a single customer by ID
- */
-export async function getCustomerByIdFn(
-  customerId: string
-): Promise<ActionResult<Customer>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const customer = await getCustomerByIdData(ctx, customerId);
-    return { success: true, data: customer };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load customer",
-        "customer:get",
       ),
     };
   }
@@ -182,57 +177,6 @@ export async function getCustomerLocationsFn(
   }
 }
 
-/**
- * Get unique crop types from all customers
- */
-export async function getCustomerCropTypesFn(): Promise<
-  ActionResult<string[]>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const cropTypes = await getCustomerCropTypesData(ctx);
-    return { success: true, data: cropTypes };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load crop types",
-        "customer:crop-types",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a customer code is available
- */
-export async function checkCustomerCodeFn(
-  code: string,
-  excludeCustomerId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isCustomerCodeAvailableData(
-      ctx,
-      code,
-      excludeCustomerId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to check customer code",
-        "customer:check-code",
-      ),
-    };
-  }
-}
-
 // ============================================
 // Customer Create Operations
 // ============================================
@@ -285,6 +229,66 @@ export async function createCustomerFn(
   }
 }
 
+/**
+ * Create a customer together with the locations captured on its create form.
+ * One transaction: a location that fails rolls the customer back, so the form
+ * never reports a failure over a half-saved customer.
+ */
+export async function createCustomerWithLocationsFn(
+  data: z.infer<typeof createCustomerWithLocationsSchema>
+): Promise<ActionResult<CreatedCustomerWithLocations>> {
+  return withAction(
+    async (ctx) => {
+      const validated = createCustomerWithLocationsSchema.parse(data);
+
+      return withAutoCode(
+        ctx,
+        "CUS",
+        customers,
+        customers.code,
+        undefined,
+        (code) =>
+          createCustomerWithLocations(ctx, {
+            customer: {
+              code,
+              name: validated.customer.name,
+              cropType: validated.customer.cropType || null,
+              address: validated.customer.address || null,
+              contactEmail: validated.customer.contactEmail || null,
+              contactPhone: validated.customer.contactPhone || null,
+            },
+            locations: validated.locations.map((location) => ({
+              name: location.name,
+              country: location.country,
+              stateRegion: location.stateRegion || null,
+              city: location.city || null,
+              gpsLatitude: location.gpsLatitude,
+              gpsLongitude: location.gpsLongitude,
+              // An empty textarea submits "", which must land as NULL.
+              address: location.address || null,
+              distanceFromFacilityKm: location.distanceFromFacilityKm,
+              distanceSource: resolveDistanceSource(
+                location.distanceFromFacilityKm ?? null,
+                location.distanceSource,
+              ),
+              defaultSoilTemperatureC: location.defaultSoilTemperatureC,
+              isDefault: location.isDefault,
+            })),
+          }),
+        CODE_CONFLICT_MESSAGES.customer,
+      );
+    },
+    {
+      fallbackMessage:
+        "The customer and its locations were not created. Try again.",
+      log: {
+        message: "customer action failed",
+        context: { op: "customer:create-with-locations" },
+      },
+    },
+  );
+}
+
 // ============================================
 // Customer Update Operations
 // ============================================
@@ -301,6 +305,7 @@ export async function updateCustomerFn(
     const validated = updateCustomerSchema.parse(data);
 
     const customer = await updateCustomer(ctx, validated.customerId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       code: validated.code,
       name: validated.name,
       cropType: validated.cropType,
@@ -311,20 +316,7 @@ export async function updateCustomerFn(
 
     return { success: true, data: customer };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to update customer",
-        "customer:update",
-      ),
-    };
+    return customerActionFailure(error, "Failed to update customer", "customer:update");
   }
 }
 
@@ -368,29 +360,6 @@ export async function deleteCustomerFn(
 // ============================================
 
 /**
- * Get a single customer location by ID
- */
-export async function getCustomerLocationByIdFn(
-  locationId: string
-): Promise<ActionResult<CustomerLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const location = await getCustomerLocationByIdData(ctx, locationId);
-    return { success: true, data: location };
-  } catch (error) {
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to load customer location",
-        "customer-location:get",
-      ),
-    };
-  }
-}
-
-/**
  * Create a new customer location
  */
 export async function createCustomerLocationFn(
@@ -405,11 +374,11 @@ export async function createCustomerLocationFn(
       customerId: validated.customerId,
       name: validated.name,
       country: validated.country,
+      // An empty input submits "", which must land as NULL, not a blank string.
       stateRegion: validated.stateRegion || null,
       city: validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      // An empty textarea submits "", which must land as NULL, not a blank string.
       address: validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
       distanceSource: resolveDistanceSource(
@@ -451,13 +420,17 @@ export async function updateCustomerLocationFn(
     const validated = updateCustomerLocationSchema.parse(data);
 
     const location = await updateCustomerLocation(ctx, validated.locationId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       name: validated.name,
       country: validated.country,
-      stateRegion: validated.stateRegion || null,
-      city: validated.city || null,
+      // `undefined` leaves the column untouched (partial update); "" clears it.
+      stateRegion:
+        validated.stateRegion === undefined
+          ? undefined
+          : validated.stateRegion || null,
+      city: validated.city === undefined ? undefined : validated.city || null,
       gpsLatitude: validated.gpsLatitude,
       gpsLongitude: validated.gpsLongitude,
-      // `undefined` leaves the column untouched (partial update); "" clears it.
       address:
         validated.address === undefined ? undefined : validated.address || null,
       distanceFromFacilityKm: validated.distanceFromFacilityKm,
@@ -471,20 +444,7 @@ export async function updateCustomerLocationFn(
 
     return { success: true, data: location };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to update customer location",
-        "customer-location:update",
-      ),
-    };
+    return customerActionFailure(error, "Failed to update customer location", "customer-location:update");
   }
 }
 

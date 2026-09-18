@@ -1,8 +1,12 @@
+import { deleteOutputApplicationFixtures, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   applications,
+  certificationSubmissions,
   certifierBiocharApplications,
   certifierProductionBatches,
   certifierProjects,
@@ -56,6 +60,18 @@ beforeAll(async () => {
       slug: `biochar-application-foreign-${tag}`,
     })
     .onConflictDoNothing();
+  const [foreignSubmission] = await db
+    .insert(certificationSubmissions)
+    .values({
+      organizationId: FOREIGN_ORG_ID,
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: crypto.randomUUID(),
+      version: 1,
+    })
+    .returning({ id: certificationSubmissions.id });
+  ids.foreignSubmission = foreignSubmission.id;
   const [facility] = await db
     .insert(facilities)
     .values({
@@ -140,17 +156,17 @@ beforeAll(async () => {
   ids.formulation = formulation.id;
   const [product] = await db
     .insert(biocharProducts)
-    .values({
+    .values(await outputProductFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       formulationId: formulation.id,
       code: `BP-BCA-${tag}`,
-    })
+    }))
     .returning({ id: biocharProducts.id });
   ids.product = product.id;
   const [order] = await db
     .insert(orders)
-    .values({
+    .values(await outputOrderFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       customerId: customer.id,
@@ -160,12 +176,10 @@ beforeAll(async () => {
       orderDate: new Date("2026-04-01T00:00:00Z"),
       quantityKg: 12_000,
       packaging: "loose",
-    })
+    }))
     .returning({ id: orders.id });
   ids.order = order.id;
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
+  const [delivery] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       orderId: order.id,
@@ -174,14 +188,9 @@ beforeAll(async () => {
       status: "delivered",
       deliveredWetMassKg: 12_000,
       massDryKg: 10_800,
-      truckMassOnArrivalKg: 15_000,
-      truckMassOnDepartureKg: 3_000,
-    })
-    .returning({ id: deliveries.id });
+    }, row => ({ id: row.id }));
   ids.delivery = delivery.id;
-  const [application] = await db
-    .insert(applications)
-    .values({
+  const [application] = await insertOutputApplicationFixture(db, {
       organizationId: TEST_ORG_ID,
       deliveryId: delivery.id,
       code: `AP-BCA-${tag}`,
@@ -189,8 +198,7 @@ beforeAll(async () => {
       biocharAppliedTons: 12,
       biocharAppliedDryTons: 10.8,
       fieldSizeHa: 4,
-    })
-    .returning({ id: applications.id });
+    }, row => ({ id: row.id }));
   ids.application = application.id;
   const [production] = await db
     .insert(certifierProductionBatches)
@@ -226,6 +234,30 @@ beforeAll(async () => {
     },
   );
   ids.storage = storage.id;
+  const [submission] = await db
+    .insert(certificationSubmissions)
+    .values({
+      organizationId: TEST_ORG_ID,
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: crypto.randomUUID(),
+      version: 1,
+    })
+    .returning({ id: certificationSubmissions.id });
+  ids.submission = submission.id;
+  const [secondSubmission] = await db
+    .insert(certificationSubmissions)
+    .values({
+      organizationId: TEST_ORG_ID,
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: crypto.randomUUID(),
+      version: 2,
+    })
+    .returning({ id: certificationSubmissions.id });
+  ids.secondSubmission = secondSubmission.id;
 });
 
 afterAll(async () => {
@@ -241,10 +273,13 @@ afterAll(async () => {
   );
   await cleanup(certifierStorageLocations, ids.storage);
   await cleanup(certifierProductionBatches, ids.production);
-  await cleanup(applications, ids.application);
-  await cleanup(deliveries, ids.delivery);
+  await cleanup(certificationSubmissions, ids.submission);
+  await cleanup(certificationSubmissions, ids.secondSubmission);
+  await cleanup(certificationSubmissions, ids.foreignSubmission);
+  await deleteOutputApplicationFixtures(db, eq(applications.id, ids.application));
+  await deleteOutputDeliveryFixtures(db, eq(deliveries.id, ids.delivery));
   await cleanup(orders, ids.order);
-  await cleanup(biocharProducts, ids.product);
+  await deleteOutputProductFixtures(db, eq(biocharProducts.id, ids.product));
   await cleanup(formulations, ids.formulation);
   await cleanup(customerLocations, ids.location);
   await cleanup(customers, ids.customer);
@@ -252,7 +287,7 @@ afterAll(async () => {
   await cleanup(creditBatches, ids.batch);
   await cleanup(productionProcesses, ids.process);
   await cleanup(feedstockTypes, ids.feedstock);
-  await cleanup(facilities, ids.facility);
+  await deleteOutputFacilityFixtures(db, eq(facilities.id, ids.facility));
   await db.delete(organizations).where(eq(organizations.id, FOREIGN_ORG_ID));
 });
 
@@ -266,8 +301,6 @@ describe("certifier Biochar Application data access", () => {
         applicationId: ids.application,
         fieldSizeHa: 4,
         deliveredWetMassKg: 12_000,
-        truckMassOnArrivalKg: 15_000,
-        truckMassOnDepartureKg: 3_000,
       }),
     ]);
     await expect(
@@ -277,19 +310,38 @@ describe("certifier Biochar Application data access", () => {
     const body = buildCreateBiocharApplicationRequest({
       applicationCode: `AP-BCA-${tag}`,
       applicationDate: "2026-04-05",
-      appliedTonnes: 12,
+      applicationWetMassKg: 12_000,
       fieldSizeHa: 4,
-      truckMassOnArrivalKg: 15_000,
-      truckMassOnDepartureKg: 3_000,
       externalProjectId: `prj_bca_${tag}`,
       externalProductionBatchId: `ptb_bca_${tag}`,
       externalStorageLocationId: `slc_bca_${tag}`,
       supplierReferenceId: `nm-isometric-sandbox-bca-${tag}-v1`,
       sourceIds: [],
     });
+    await expect(
+      db.insert(certifierBiocharApplications).values({
+        organizationId: TEST_ORG_ID,
+        applicationId: ids.application,
+        creditBatchId: ids.batch,
+        removalSubmissionId: ids.foreignSubmission,
+        productionBatchRegistrationId: ids.production,
+        storageLocationRegistrationId: ids.storage,
+        externalProductionBatchId: `ptb_bca_${tag}`,
+        externalStorageLocationId: `slc_bca_${tag}`,
+        supplierReference: `nm-isometric-sandbox-bca-${tag}-foreign-v1`,
+        submittedPayload: body,
+        payloadHash: payloadHash(body),
+      }),
+    ).rejects.toMatchObject({
+      cause: {
+        code: "23503",
+        constraint: "certifier_bca_removal_submission_org_fk",
+      },
+    });
     const journal = await claimBiocharApplicationRegistration(ctx, {
       applicationId: ids.application,
       creditBatchId: ids.batch,
+      removalSubmissionId: ids.submission,
       productionBatchRegistrationId: ids.production,
       storageLocationRegistrationId: ids.storage,
       externalProductionBatchId: `ptb_bca_${tag}`,
@@ -301,12 +353,17 @@ describe("certifier Biochar Application data access", () => {
       observedRemovalId: null,
     });
     await expect(
-      getBiocharApplicationRegistration(foreignCtx, ids.application, ids.batch),
+      getBiocharApplicationRegistration(
+        foreignCtx,
+        ids.application,
+        ids.batch,
+        ids.submission,
+      ),
     ).resolves.toBeNull();
     await expect(
       confirmBiocharApplicationRegistration(foreignCtx, {
         registrationId: journal.id,
-        expectedPayloadHash: journal.payloadHash!,
+        expectedPayloadHash: journal.payloadHash,
         externalApplicationId: "bca-foreign",
         observedGhgEntryId: "ghg-test",
         observedRemovalId: null,
@@ -315,7 +372,7 @@ describe("certifier Biochar Application data access", () => {
     await expect(
       confirmBiocharApplicationRegistration(ctx, {
         registrationId: journal.id,
-        expectedPayloadHash: journal.payloadHash!,
+        expectedPayloadHash: journal.payloadHash,
         externalApplicationId: "bca-test",
         observedGhgEntryId: "ghg-test",
         observedRemovalId: null,
@@ -323,6 +380,32 @@ describe("certifier Biochar Application data access", () => {
     ).resolves.toMatchObject({
       lifecycleStatus: "confirmed",
       externalApplicationId: "bca-test",
+    });
+
+    const secondSupplierReference =
+      `nm-isometric-sandbox-bca-${tag}-s2-v1`;
+    const secondBody = {
+      ...body,
+      supplier_reference_id: secondSupplierReference,
+    };
+    await expect(
+      claimBiocharApplicationRegistration(ctx, {
+        applicationId: ids.application,
+        creditBatchId: ids.batch,
+        removalSubmissionId: ids.secondSubmission,
+        productionBatchRegistrationId: ids.production,
+        storageLocationRegistrationId: ids.storage,
+        externalProductionBatchId: `ptb_bca_${tag}`,
+        externalStorageLocationId: `slc_bca_${tag}`,
+        supplierReference: secondSupplierReference,
+        submittedPayload: secondBody,
+        payloadHash: payloadHash(secondBody),
+        observedGhgEntryId: null,
+        observedRemovalId: null,
+      }),
+    ).resolves.toMatchObject({
+      removalSubmissionId: ids.secondSubmission,
+      supplierReference: secondSupplierReference,
     });
   });
 });

@@ -34,7 +34,8 @@ import { RangeToggle } from "./range-toggle";
 const DEFAULT_RANGE: DashboardRange = "month";
 
 export function DashboardView() {
-  const { facilityId, selectedFacility } = useFacilityContext();
+  const { activeOrganizationId, facilityId, selectedFacility } =
+    useFacilityContext();
   const [range, setRange] = useState<DashboardRange>(DEFAULT_RANGE);
   const { data, isLoading, error } = useDashboardOverview(facilityId, range);
 
@@ -42,7 +43,7 @@ export function DashboardView() {
   // (a fresh facility would render meaningless zeros), recede to a strip, or
   // stay out of the way once setup is complete. The wizard is always mounted —
   // the dashboard is the post-login landing.
-  const onboarding = useOnboardingGate(facilityId);
+  const onboarding = useOnboardingGate(facilityId, activeOrganizationId);
   const isTakeover =
     onboarding.mode === "takeover-guide" ||
     onboarding.mode === "takeover-member";

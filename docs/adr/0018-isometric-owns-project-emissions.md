@@ -68,10 +68,11 @@ the basis that the figure is sourced in Isometric.
 
 - One source of truth; no drift surface, no duplicate data entry.
 - noma cannot display project-scope emission values without asking the
-  registry. **Reversible-forward:** the read primitive already exists
-  (`listComponents({ projectId, scope: 'PROJECT' })`, previously used by the
-  drift panel) — a future read-only view can be rebuilt from the registry
-  without reintroducing a local copy.
+  registry. **Reversible-forward:** the registry exposes the read
+  (`GET /components?project_id=…&scope=PROJECT`; the `listComponents` wrapper
+  that the drift panel used was removed as dead code in PR #740 and is a
+  ten-line client call to restore) — a future read-only view can be rebuilt
+  from the registry without reintroducing a local copy.
 - The sandbox 0-stub escape hatch (`allowPeriodInputStub`) is unchanged:
   production still fails closed when a template wrongly declares a period
   input as REMOVAL-scope.

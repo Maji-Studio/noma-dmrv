@@ -1,0 +1,65 @@
+
+ RUN  v4.1.0 <audited checkout>
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts
+[dotenv@17.2.4] injecting env (0) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F01: changing a stocked bin's role removes its 25 kg from lane summaries
+F01: before=25 kg feedstock; after=0 kg all displayed lanes; movement still=25 kg
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F01: a stocked bin accepts a different feedstock type
+F01: 25 kg retained while bin identity changed from forestry/pyrolysis to mineral/blend
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F02: partial feedstock-type update persists an invalid category/usage pair
+F02: partial payload saved forestry/blend; equivalent complete payload rejected
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F03: a stale facility form silently overwrites a newer country change
+F03: operator A saved USA; stale operator B echoed CHE; final country=CHE, no conflict
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > feedstock baseline observations > F06: reducing intake below recorded withdrawal creates negative stock
+F06: 100 kg intake - 80 kg loss = 20 kg; edit intake to 50 kg succeeds; final stock=-30 kg
+
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F01: changing a stocked bin's role removes its 25 kg from lane summaries 32ms
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F01: a stocked bin accepts a different feedstock type 15ms
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F02: partial feedstock-type update persists an invalid category/usage pair 7ms
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > baseline defect observations (passing means reproduced) > F03: a stale facility form silently overwrites a newer country change 7ms
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > feedstock baseline observations > F06: reducing intake below recorded withdrawal creates negative stock 42ms
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > feedstock baseline observations > F07: moisture-only update leaves stored dry mass inconsistent
+F07: saved wet=100 kg moisture=50% dry=90 kg; consistent derived dry would be 50 kg
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > supplier deletion baseline observation > F08: a restrictive FK failure leaves the supplier but deletes its locations
+F08: delete rejected by feedstock_deliveries FK; supplier remains; locations were deleted
+
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > quick-add authorization baseline observation > F14: Member can insert through quick-add but canonical creation denies it
+F14: canonical Member creation denied; quick-add Member creation persisted
+
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > feedstock baseline observations > F07: moisture-only update leaves stored dry mass inconsistent 28ms
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > supplier deletion baseline observation > F08: a restrictive FK failure leaves the supplier but deletes its locations 19ms
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/lifecycle-simulation.ts > quick-add authorization baseline observation > F14: Member can insert through quick-add but canonical creation denies it 3ms
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/client-simulation.ts
+[dotenv@17.2.4] injecting env (0) from .env.test -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/client-simulation.ts > baseline response-body timeout observation > F05: successful headers clear the timer before a stalled body finishes 2ms
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/forms-simulation.ts
+[dotenv@17.2.4] injecting env (0) from .env.test -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/forms-simulation.ts > baseline form observations > F09: held GIS evidence blocks the pre-update guard 1ms
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/forms-simulation.ts > baseline form observations > F10: clearing an optional numeric input produces an omitted patch value 0ms
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/organization-simulation.ts
+[dotenv@17.2.4] injecting env (0) from .env.test -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/organization-simulation.ts > baseline partial-success observation > F04: organization switches but preference-write failure reports not switched 1ms
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/location-simulation.ts
+[dotenv@17.2.4] injecting env (0) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
+
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/location-simulation.ts > audit: partial customer-location updates > F10: omitted city and state become null in a default-only patch 1ms
+stdout | docs/archive/qa/2026-09-08-lifecycle-audit/invitation-simulation.ts
+[dotenv@17.2.4] injecting env (0) from .env.test -- tip: ⚙️  suppress all logs with { quiet: true }
+
+ ✓ docs/archive/qa/2026-09-08-lifecycle-audit/invitation-simulation.ts > invitation admission baseline observation > F28: anonymous invitation bootstrap request is redirected to login 2ms
+
+ Test Files  6 passed (6)
+      Tests  14 passed (14)
+   Start at  19:09:32
+   Duration  4.19s (transform 841ms, setup 54ms, import 3.40s, tests 179ms, environment 0ms)
+

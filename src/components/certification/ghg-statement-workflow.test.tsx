@@ -1,25 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { act, create, type ReactTestRenderer } from "react-test-renderer";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { Button } from "@/components/ui";
+import { describe, expect, it, vi } from "vitest";
 import {
   findApprovedGhgStatementReport,
   GhgStatementWorkflow,
 } from "./ghg-statement-workflow";
 
-const prepareMutation = {
-  mutate: vi.fn(),
-  mutateAsync: vi.fn(),
-  isPending: false,
-};
-const approveMutation = {
-  mutateAsync: vi.fn(),
-  isPending: false,
-};
-
 vi.mock("@/hooks/use-certification", () => ({
-  usePrepareGhgStatementReport: () => prepareMutation,
-  useApproveGhgStatementReport: () => approveMutation,
   useGhgStatementReports: vi.fn(),
 }));
 
@@ -50,20 +36,6 @@ function failedReportsRefresh(data: unknown[]) {
 }
 
 describe("GhgStatementWorkflow", () => {
-  beforeAll(() => {
-    (
-      globalThis as typeof globalThis & {
-        IS_REACT_ACT_ENVIRONMENT: boolean;
-      }
-    ).IS_REACT_ACT_ENVIRONMENT = true;
-  });
-
-  beforeEach(() => {
-    prepareMutation.mutateAsync.mockReset();
-    prepareMutation.mutate.mockReset();
-    approveMutation.mutateAsync.mockReset();
-  });
-
   it("does not reuse an older approval after generating a new version", () => {
     expect(
       findApprovedGhgStatementReport([
@@ -84,9 +56,7 @@ describe("GhgStatementWorkflow", () => {
   it("keeps the sheet workflow passive except for its Submit entry point", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
-        canManageReports
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([])}
       />,
@@ -96,135 +66,22 @@ describe("GhgStatementWorkflow", () => {
     expect(html).toContain("Report generated");
     expect(html).toContain("Report approved");
     expect(html).toContain("Submitted to verifier");
+    expect(html).toContain(
+      "The report is generated automatically when you submit.",
+    );
+    expect(html).toContain(
+      "The report is approved automatically when you submit.",
+    );
     expect(html).not.toContain(">Generate report<");
     expect(html).not.toContain("<textarea");
     expect(html).not.toContain('type="checkbox"');
   });
 
-  it("renders separate report actions inside the interactive submit flow", () => {
-    const html = renderToStaticMarkup(
-      <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
-        created
-        canManageReports
-        interactive
-        verifierStep={{ status: "skipped" }}
-        reportsQuery={reportsQuery([])}
-      />,
-    );
-
-    expect(html).toContain(">Generate report<");
-    expect(html).not.toContain(">Review report<");
-    expect(html).not.toContain(">Approve report<");
-  });
-
-  it("runs generation from its own step button", async () => {
-    prepareMutation.mutateAsync.mockResolvedValue({ id: "report-1" });
-    let renderer: ReactTestRenderer | undefined;
-    await act(async () => {
-      renderer = create(
-        <GhgStatementWorkflow
-          ghgStatementId="11111111-1111-4111-8111-111111111111"
-          created
-          canManageReports
-          interactive
-          verifierStep={{ status: "skipped" }}
-          reportsQuery={reportsQuery([])}
-        />,
-      );
-    });
-
-    const generate = renderer!.root
-      .findAllByType(Button)
-      .find((button) => button.props.children === "Generate report");
-    await act(async () => generate?.props.onClick());
-
-    expect(prepareMutation.mutateAsync).toHaveBeenCalledWith({
-      ghgStatementId: "11111111-1111-4111-8111-111111111111",
-      preparationKey: expect.any(String),
-    });
-    await act(async () => renderer?.unmount());
-  });
-
-  it("requires Review report before Approve report", async () => {
-    approveMutation.mutateAsync.mockResolvedValue({ id: "report-2" });
-    let renderer: ReactTestRenderer | undefined;
-    await act(async () => {
-      renderer = create(
-        <GhgStatementWorkflow
-          ghgStatementId="11111111-1111-4111-8111-111111111111"
-          created
-          canManageReports
-          interactive
-          verifierStep={{ status: "skipped" }}
-          reportsQuery={reportsQuery([
-            {
-              id: "22222222-2222-4222-8222-222222222222",
-              version: 2,
-              lifecycle: "prepared",
-              reviewUrl: "/api/documents/report",
-            },
-          ])}
-        />,
-      );
-    });
-
-    const review = renderer!.root
-      .findAllByType("a")
-      .find((link) => link.props.children === "Review report");
-    let approve = renderer!.root
-      .findAllByType(Button)
-      .find((button) => button.props.children === "Approve report");
-    expect(approve?.props.disabled).toBe(true);
-
-    await act(async () => review?.props.onClick());
-    approve = renderer!.root
-      .findAllByType(Button)
-      .find((button) => button.props.children === "Approve report");
-    expect(approve?.props.disabled).toBe(false);
-    await act(async () => approve?.props.onClick());
-
-    expect(approveMutation.mutateAsync).toHaveBeenCalledWith({
-      ghgStatementId: "11111111-1111-4111-8111-111111111111",
-      reportId: "22222222-2222-4222-8222-222222222222",
-      version: 2,
-    });
-    await act(async () => renderer?.unmount());
-  });
-
-  it("keeps review and approval explicit for a prepared version", () => {
-    const html = renderToStaticMarkup(
-      <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
-        created
-        canManageReports
-        interactive
-        verifierStep={{ status: "skipped" }}
-        reportsQuery={reportsQuery([
-          {
-            id: "22222222-2222-4222-8222-222222222222",
-            version: 2,
-            lifecycle: "prepared",
-            reviewUrl: "/api/documents/report",
-          },
-        ])}
-      />,
-    );
-
-    expect(html).toContain("Generate new version");
-    expect(html).toContain("Review report");
-    expect(html).toContain("Approve report");
-    expect(html).toContain("Review version 2, then approve it.");
-  });
-
   it("withholds generation until the live statement has entries", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
-        canManageReports
         canGenerate={false}
-        interactive
         generationUnavailableReason="Submit a Removal in this reporting period before generating a report."
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([])}
@@ -240,10 +97,7 @@ describe("GhgStatementWorkflow", () => {
   it("surfaces the verifier step detail next to the step", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
-        canManageReports
-        interactive
         verifierStep={{
           status: "met",
           detail: "In verification. No action is needed.",
@@ -266,9 +120,7 @@ describe("GhgStatementWorkflow", () => {
   it("keeps all four steps visible when reports cannot be loaded", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
-        canManageReports
         verifierStep={{ status: "skipped" }}
         reportsQuery={failedReportsQuery()}
       />,
@@ -285,14 +137,11 @@ describe("GhgStatementWorkflow", () => {
     expect(html).not.toContain("Generate report");
   });
 
-  it("keeps retained report actions after a background refresh fails", () => {
+  it("keeps retained report status after a background refresh fails", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
-        canManageReports
         canGenerate
-        interactive
         verifierStep={{ status: "active" }}
         onSubmit={() => undefined}
         reportsQuery={failedReportsRefresh([
@@ -312,9 +161,7 @@ describe("GhgStatementWorkflow", () => {
       />,
     );
 
-    expect(html).toContain("Generate new version");
     expect(html).toContain("Review");
-    expect(html).toContain("Approve");
     expect(html).toContain(">Submit<");
     expect(html).toContain(
       "Reports could not be refreshed. Showing the last loaded versions.",
@@ -326,9 +173,7 @@ describe("GhgStatementWorkflow", () => {
   it("renders the inline submit action on the verifier step when submittable", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
-        canManageReports
         verifierStep={{
           status: "active",
           detail: "Submit the approved report to the verifier.",
@@ -353,9 +198,7 @@ describe("GhgStatementWorkflow", () => {
   it("collapses older report versions behind a disclosure", () => {
     const html = renderToStaticMarkup(
       <GhgStatementWorkflow
-        ghgStatementId="11111111-1111-4111-8111-111111111111"
         created
-        canManageReports
         verifierStep={{ status: "skipped" }}
         reportsQuery={reportsQuery([
           {

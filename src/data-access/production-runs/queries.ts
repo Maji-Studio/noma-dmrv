@@ -605,34 +605,6 @@ export async function getFacilityEnergyTotals(
   };
 }
 
-/**
- * Check if a production run code is available
- */
-export async function isProductionRunCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeRunId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [
-    eq(productionRuns.organizationId, ctx.organizationId),
-    eq(productionRuns.code, code),
-  ];
-
-  if (excludeRunId) {
-    conditions.push(sql`${productionRuns.id} != ${excludeRunId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: productionRuns.id })
-    .from(productionRuns)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
 // Bulk loader used by the Certify submission orchestrator. Joins the lab-grade
 // `samples` table (carbon %, H/C and O/C ratios, ash) — NOT `productionSamples`,
 // which holds in-process proximate analysis. Runs missing from the lookup are
@@ -680,25 +652,4 @@ export async function getProductionRunsWithSamples(
     ...r,
     samples: samplesByRun.get(r.id) ?? [],
   }));
-}
-
-/**
- * Get production run options for dropdowns
- * Returns minimal data needed for select inputs
- */
-export async function getProductionRunOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string; date: string; status: string }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: productionRuns.id,
-      code: productionRuns.code,
-      date: productionRunDateExpr(),
-      status: productionRuns.status,
-    })
-    .from(productionRuns)
-    .where(and(isNull(productionRuns.archivedAt), eq(productionRuns.organizationId, ctx.organizationId)))
-    .orderBy(desc(productionRuns.startTime));
 }

@@ -3,62 +3,52 @@
  * feedstock allocation and storage-location validation.
  */
 
-import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgCheckViolation } from "@/db/errors";
 import {
-  productionRuns,
+  creditBatches,
+  creditBatchProductionRuns,
+  facilities,
+  incidentReports,
+  operators,
   productionRunFeedstockDraws,
   productionRunFeedstocks,
   productionRunReadings,
-  incidentReports,
-  facilities,
+  productionRuns,
   reactors,
   storageLocations,
-  operators,
-  creditBatches,
-  creditBatchProductionRuns,
 } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   computeClampedDryMass,
   deriveMassDryKg,
 } from "@/lib/calculations/mass-dry";
-import type { OrgContext } from "@/lib/auth/server";
-import { assertSameOrg, requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
-import {
-  CODE_CONFLICT_MESSAGES,
-  withUniqueCodeGuard,
-} from "../code-generator";
-import { getProductionRunById } from "./queries";
-import type { ProductionRunWithRelations } from "./types";
-import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
-import { lockActiveFacilityReference } from "../facility-reference-guards";
-import { lockBinStocks } from "../lock-bin-stocks";
-import {
-  assertProductionRunStockSnapshot,
-  assertProductionRunBiocharStockNotOverdrawn,
-  deriveProductionRunUpdateBiocharStockState,
-  lockProductionRunUpdateStock,
-} from "../production-run-stock-locks";
-import {
-  assertNoReactorRunOverlap,
-  isReactorStartUniqueViolation,
-} from "./overlap";
 import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
   statusOccupiesReactor,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
-import { retireDocumentsForEntities } from "../documents";
-import { processPendingStorageObjectDeletions } from "../storage-object-deletions";
-import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
+import { and, eq, isNull } from "drizzle-orm";
+import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
+import { assertExpectedVersion } from "../expected-version";
 import {
-  assertProductionRunTimesNotFuture,
-  type ProductionRunMutationOptions,
-} from "./future-time";
-import { getProductionRunDependentProduct } from "./product-dependencies";
+  CODE_CONFLICT_MESSAGES,
+  withUniqueCodeGuard,
+} from "../code-generator";
+import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
+import { retireDocumentsForEntities } from "../documents";
+import { lockActiveFacilityReference } from "../facility-reference-guards";
+import { lockBinStocks } from "../lock-bin-stocks";
+import {
+  assertProductionRunBiocharStockNotOverdrawn,
+  assertProductionRunStockSnapshot,
+  deriveProductionRunUpdateBiocharStockState,
+  lockProductionRunUpdateStock,
+} from "../production-run-stock-locks";
+import { processPendingStorageObjectDeletions } from "../storage-object-deletions";
+import { assertSameOrg, requireOrgScope } from "../utils";
 import {
   getProductionRunFeedstockDrawStorageIds,
   getProductionRunFeedstockDrawTotal,
@@ -68,7 +58,20 @@ import {
   validateProductionRunFeedstockDrawSources,
   type ProductionRunFeedstockDrawInput,
 } from "./feedstock-draws";
+import {
+  assertProductionRunTimesNotFuture,
+  type ProductionRunMutationOptions,
+} from "./future-time";
+import {
+  assertNoReactorRunOverlap,
+  isReactorStartUniqueViolation,
+} from "./overlap";
+import { assertProductionRunOutputBasisChange, getProductionRunDependentProduct } from "./product-dependencies";
+import { getProductionRunById } from "./queries";
+import type { ProductionRunWithRelations } from "./types";
 
+/** Entity key on a production run's expected-version conflict. */
+const PRODUCTION_RUN_CONFLICT_ENTITY = "productionRun";
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
 const PREFLIGHT_OUTCOME_VIOLATIONS = [
@@ -587,14 +590,12 @@ export async function updateProductionRun(
     }
     const lockedFeedstockStorageLocationIds =
       await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
-    if (
-      data.expectedUpdatedAt &&
-      data.expectedUpdatedAt.getTime() !== locked.updatedAt.getTime()
-    ) {
-      throw new SafeError(
-        "This production run changed since you opened it. Reload it before saving.",
-      );
-    }
+    assertExpectedVersion({
+      entity: PRODUCTION_RUN_CONFLICT_ENTITY,
+      id: productionRunId,
+      expectedUpdatedAt: data.expectedUpdatedAt,
+      actualUpdatedAt: locked.updatedAt,
+    });
     assertProductionRunStockSnapshot(
       {
         feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
@@ -606,6 +607,8 @@ export async function updateProductionRun(
       },
       { ...data, feedstockDraws: normalizedFeedstockDraws },
     );
+
+    await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
 
     const lockedTargetStatus = data.status ?? locked.status;
     const lockedTargetStartTime = data.startTime ?? locked.startTime;

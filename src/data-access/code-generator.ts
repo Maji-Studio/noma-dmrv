@@ -50,7 +50,7 @@ function currentYearShort(): string {
  * @param codeColumn - The code column on the table
  * @returns Next sequential code like "BP-26-001"
  */
-export async function generateNextCode(
+async function generateNextCode(
   ctx: OrgContext,
   prefix: string,
   table: OrgScopedCodeTable,

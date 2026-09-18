@@ -20,7 +20,7 @@ const GEOCODE_MIN_QUERY_LENGTH = 3;
 /** Geocode hits for the same query string never change mid-session. */
 const GEOCODE_STALE_TIME_MS = 5 * 60 * 1000;
 
-export const geoKeys = {
+const geoKeys = {
   all: ["geo"] as const,
   capabilities: () => [...geoKeys.all, "capabilities"] as const,
   geocode: (query: string) => [...geoKeys.all, "geocode", query] as const,

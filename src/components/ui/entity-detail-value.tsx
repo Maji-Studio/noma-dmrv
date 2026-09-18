@@ -2,11 +2,8 @@
 
 import { useEntityById } from "@/hooks/use-entities";
 import type { EntityType } from "@/components/forms/entity-select/types";
-import { Skeleton } from "@/components/ui/loading-skeleton";
+import { DetailValueSkeleton } from "@/components/ui/detail-panel";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-
-/** Matches the value line of a `DetailField` so the row does not jump on load. */
-const VALUE_SKELETON_CLASS = "inline-block h-16 w-96 align-middle";
 
 interface EntityDetailValueProps {
   entityType: EntityType;
@@ -27,7 +24,7 @@ export function EntityDetailValue({ entityType, id }: EntityDetailValueProps) {
 
   if (!id) return MISSING_VALUE.notSet;
   if (isPending) {
-    return <Skeleton className={VALUE_SKELETON_CLASS} />;
+    return <DetailValueSkeleton />;
   }
   if (!data) return MISSING_VALUE.notAvailable;
   return data.name || data.code || MISSING_VALUE.notAvailable;

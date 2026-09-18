@@ -3,6 +3,7 @@ import {
   isDatabaseSchemaMismatchError,
   isPgCheckViolation,
   isPgCheckViolationMessage,
+  isPgForeignKeyViolation,
 } from "./errors";
 
 describe("Postgres check-violation predicates", () => {
@@ -93,5 +94,28 @@ describe("isDatabaseSchemaMismatchError", () => {
     first.cause = second;
 
     expect(isDatabaseSchemaMismatchError(first)).toBe(false);
+  });
+});
+
+describe("Postgres foreign-key refusal", () => {
+  const constraint = "feedstock_deliveries_supplier_id_suppliers_id_fk";
+
+  it("recognizes a named FK refusal directly and through Drizzle", () => {
+    const error = { code: "23503", constraint };
+    expect(isPgForeignKeyViolation(error, constraint)).toBe(true);
+    expect(isPgForeignKeyViolation(new Error("query failed", { cause: error }), constraint)).toBe(true);
+  });
+
+  it("does not turn unrelated failures into supplier blocker copy", () => {
+    expect(isPgForeignKeyViolation({ code: "23505", constraint }, constraint)).toBe(false);
+    expect(isPgForeignKeyViolation({ code: "23503", constraint: "other_fk" }, constraint)).toBe(false);
+    expect(isPgForeignKeyViolation(new Error(constraint), constraint)).toBe(false);
+  });
+
+  it("terminates on cyclic or malformed causes", () => {
+    const error: { cause?: unknown } = {};
+    error.cause = error;
+    expect(isPgForeignKeyViolation(error, constraint)).toBe(false);
+    expect(isPgForeignKeyViolation(null, constraint)).toBe(false);
   });
 });

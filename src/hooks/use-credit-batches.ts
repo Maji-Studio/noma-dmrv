@@ -5,7 +5,6 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
-  getCreditBatchesFn,
   getCreditBatchByIdFn,
   getCo2eStoredPreviewsFn,
   getCreditBatchProductionRunOptionsFn,
@@ -13,6 +12,7 @@ import {
   updateCreditBatchFn,
   deleteCreditBatchFn,
 } from "@/fn/credit-batches";
+import { getCreditBatchesRead } from "@/lib/read-api/client";
 import type {
   CreditBatchFormData,
   UpdateCreditBatchData,
@@ -45,9 +45,9 @@ function chunkIds(ids: string[], size: number): string[][] {
 export function useCreditBatches(facilityId?: string) {
   return useQuery({
     queryKey: creditBatchKeys.list({ facilityId }),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!facilityId) return [];
-      const result = await getCreditBatchesFn(facilityId);
+      const result = await getCreditBatchesRead(facilityId, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -158,14 +158,30 @@ export function useCreateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
-    onSuccess: async () => {
-      queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+    // The batch and the warning are two facts about one committed write: the
+    // batch is saved either way, and `warning` says its accounting roll-up did
+    // not load with it (issue #769).
+    mutationFn: async (data: CreditBatchFormData) => {
+      const result = await createCreditBatchFn(data);
+      if (!result.success) throw new Error(result.error);
+      return { creditBatch: result.data, warning: result.warning };
+    },
+    onSuccess: ({ creditBatch }) => {
+      // The created row is not an authoritative detail: when its post-commit
+      // roll-up did not load, its applied tonnage and application slices are
+      // unknown, and seeding it would serve those unknowns for the whole
+      // staleTime window. Refetch the detail instead (issue #769).
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.detail(creditBatch.id),
+      });
+      const listRefresh = queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, creditBatch.facilityId);
+      // The create sheet closes after this resolves; its own list must show the row.
+      return listRefresh;
     },
   });
 }

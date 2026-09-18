@@ -217,12 +217,6 @@ export const formulationFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
-export const formulationSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  name: z.string(),
-});
-
 // ============================================
 // Percent-Based Form Entry (UI vocabulary)
 // ============================================
@@ -330,6 +324,4 @@ export function percentFormToRatioPayload(
 export type FormulationFormData = z.infer<typeof formulationFormSchema>;
 export type CreateFormulationData = z.infer<typeof createFormulationSchema>;
 export type UpdateFormulationData = z.infer<typeof updateFormulationSchema>;
-export type DeleteFormulationData = z.infer<typeof deleteFormulationSchema>;
 export type FormulationFilterData = z.infer<typeof formulationFilterSchema>;
-export type FormulationSelectData = z.infer<typeof formulationSelectSchema>;

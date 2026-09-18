@@ -9,6 +9,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useState,
   useCallback,
   type ReactNode,
@@ -16,10 +17,17 @@ import {
 import { XIcon, CheckCircleIcon, XCircleIcon, WarningIcon, InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { takePendingWarning } from "@/lib/pending-warning";
 
 // ============================================
 // Types
 // ============================================
+
+/**
+ * A warning carried across a full page load has no context on screen, so it
+ * stays up longer than one raised beside the action that caused it.
+ */
+const PENDING_WARNING_DURATION_MS = 8000;
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -111,10 +119,29 @@ export function ToastProvider({ children }: ToastProviderProps) {
     <ToastContext.Provider
       value={{ toasts, addToast, removeToast, success, error, warning, info }}
     >
+      <PendingWarningToast />
       {children}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </ToastContext.Provider>
   );
+}
+
+/**
+ * Shows the warning a flow stashed just before it reloaded the app (an org
+ * switch, an accepted invitation). A toast raised beside
+ * `window.location.assign` never survives that navigation, so the warning
+ * travels in session storage and is read here instead: once, after this
+ * document has mounted. This is the external-store sync an effect exists for.
+ * Reading during render would put a toast in the client's first paint that the
+ * server never rendered.
+ */
+function PendingWarningToast() {
+  const { warning } = useToast();
+  useEffect(() => {
+    const pending = takePendingWarning();
+    if (pending) warning(pending, PENDING_WARNING_DURATION_MS);
+  }, [warning]);
+  return null;
 }
 
 // ============================================

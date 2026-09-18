@@ -35,17 +35,28 @@ const stockEntityDependencies = {
 
 export type StockMutationType = keyof typeof stockEntityDependencies;
 
+/**
+ * Refresh every EntitySelect cache for one entity type (its option lists and
+ * its by-id details) so the pickers never serve a stale or deleted option.
+ */
+export function invalidateEntityTypeQueries(
+  queryClient: QueryClient,
+  entityType: EntityType,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.listPrefix(entityType),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: entityKeys.detailPrefix(entityType),
+  });
+}
+
 /** Refresh EntitySelect stock captions after a successful inventory mutation. */
 export function invalidateStockEntityQueries(
   queryClient: QueryClient,
   mutationType: StockMutationType,
 ) {
   for (const entityType of stockEntityDependencies[mutationType]) {
-    void queryClient.invalidateQueries({
-      queryKey: entityKeys.listPrefix(entityType),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: entityKeys.detailPrefix(entityType),
-    });
+    invalidateEntityTypeQueries(queryClient, entityType);
   }
 }

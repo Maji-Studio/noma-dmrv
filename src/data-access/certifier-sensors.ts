@@ -28,7 +28,6 @@ import {
   type IsometricSensor,
 } from "@/lib/isometric/sensors";
 import {
-  decodeMeasurementProperty,
   encodeMeasurementProperty,
   type IsometricMeasurementProperty,
 } from "@/lib/isometric/utils/measurement-property";
@@ -156,14 +155,4 @@ export async function listSensorsForReactors(
         eq(certifierSensors.organizationId, ctx.organizationId),
       ),
     );
-}
-
-/**
- * Convenience: hydrate the `MeasurementProperty` back from the
- * encoded key. Saves callers re-importing the encoder for read paths.
- */
-export function decodeRowMeasurementProperty(
-  row: CertifierSensorRow,
-): IsometricMeasurementProperty {
-  return decodeMeasurementProperty(row.measurementProperty);
 }

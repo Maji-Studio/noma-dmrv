@@ -1,5 +1,6 @@
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
+import { countRows } from "@/db/aggregate";
 import {
   certifierProjects,
   creditBatches,
@@ -33,6 +34,27 @@ export interface OnboardingStatus {
   };
 }
 
+/** One-row aggregate subqueries, cross joined so every count is one round trip. */
+function orgCountAggregates(organizationId: string) {
+  return {
+    facilityAgg: db
+      .select({ count: countRows().as("facility_count") })
+      .from(facilities)
+      .where(
+        and(
+          eq(facilities.organizationId, organizationId),
+          isNull(facilities.archivedAt),
+        ),
+      )
+      .as("facility_agg"),
+    supplierAgg: db
+      .select({ count: countRows().as("supplier_count") })
+      .from(suppliers)
+      .where(eq(suppliers.organizationId, organizationId))
+      .as("supplier_agg"),
+  };
+}
+
 export async function getOnboardingStatus(
   ctx: OrgContext,
   facilityId: string | null,
@@ -42,120 +64,116 @@ export async function getOnboardingStatus(
   const isOrgOwnerOrAdmin =
     ctx.orgRole === "owner" || ctx.orgRole === "admin";
   const isOwnerOrAdmin = ctx.isPlatformAdmin || isOrgOwnerOrAdmin;
+  const orgId = ctx.organizationId;
+  const { facilityAgg, supplierAgg } = orgCountAggregates(orgId);
 
   if (facilityId === null) {
-    const [[facilityCount], [supplierCount]] = await Promise.all([
-      db
-        .select({ count: count() })
-        .from(facilities)
-        .where(
-          and(
-            eq(facilities.organizationId, ctx.organizationId),
-            isNull(facilities.archivedAt),
-          ),
-        ),
-      db
-        .select({ count: count() })
-        .from(suppliers)
-        .where(eq(suppliers.organizationId, ctx.organizationId)),
-    ]);
+    const [row] = await db
+      .select({
+        facilityCount: facilityAgg.count,
+        supplierCount: supplierAgg.count,
+      })
+      .from(facilityAgg)
+      .crossJoin(supplierAgg);
 
     return {
       isOwnerOrAdmin,
       isOrgOwnerOrAdmin,
-      facilityCount: Number(facilityCount.count),
-      supplierCount: Number(supplierCount.count),
+      facilityCount: row?.facilityCount ?? 0,
+      supplierCount: row?.supplierCount ?? 0,
       facility: null,
     };
   }
 
-  await requireOrgFacility(ctx, facilityId);
+  const reactorAgg = db
+    .select({ count: countRows().as("reactor_count") })
+    .from(reactors)
+    .where(
+      and(
+        eq(reactors.organizationId, orgId),
+        eq(reactors.facilityId, facilityId),
+        isNull(reactors.archivedAt),
+      ),
+    )
+    .as("reactor_agg");
+  const projectAgg = db
+    .select({ count: countRows().as("certifier_project_count") })
+    .from(certifierProjects)
+    .where(
+      and(
+        eq(certifierProjects.organizationId, orgId),
+        eq(certifierProjects.facilityId, facilityId),
+      ),
+    )
+    .as("project_agg");
+  const feedstockAgg = db
+    .select({ count: countRows().as("feedstock_count") })
+    .from(feedstocks)
+    .where(
+      and(
+        eq(feedstocks.organizationId, orgId),
+        eq(feedstocks.facilityId, facilityId),
+        isNull(feedstocks.archivedAt),
+      ),
+    )
+    .as("feedstock_agg");
+  const runAgg = db
+    .select({ count: countRows().as("complete_run_count") })
+    .from(productionRuns)
+    .where(
+      and(
+        eq(productionRuns.organizationId, orgId),
+        eq(productionRuns.facilityId, facilityId),
+        eq(productionRuns.status, COMPLETE_PRODUCTION_RUN_STATUS),
+        isNull(productionRuns.archivedAt),
+      ),
+    )
+    .as("run_agg");
+  const batchAgg = db
+    .select({ count: countRows().as("credit_batch_count") })
+    .from(creditBatches)
+    .where(
+      and(
+        eq(creditBatches.organizationId, orgId),
+        eq(creditBatches.facilityId, facilityId),
+        isNull(creditBatches.archivedAt),
+      ),
+    )
+    .as("batch_agg");
 
-  const [
-    [facilityCount],
-    [supplierCount],
-    [reactorCount],
-    [certifierProjectCount],
-    [feedstockCount],
-    [completeProductionRunCount],
-    [creditBatchCount],
-  ] = await Promise.all([
+  const [, [row]] = await Promise.all([
+    requireOrgFacility(ctx, facilityId),
     db
-      .select({ count: count() })
-      .from(facilities)
-      .where(
-        and(
-          eq(facilities.organizationId, ctx.organizationId),
-          isNull(facilities.archivedAt),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(suppliers)
-      .where(eq(suppliers.organizationId, ctx.organizationId)),
-    db
-      .select({ count: count() })
-      .from(reactors)
-      .where(
-        and(
-          eq(reactors.organizationId, ctx.organizationId),
-          eq(reactors.facilityId, facilityId),
-          isNull(reactors.archivedAt),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(certifierProjects)
-      .where(
-        and(
-          eq(certifierProjects.organizationId, ctx.organizationId),
-          eq(certifierProjects.facilityId, facilityId),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(feedstocks)
-      .where(
-        and(
-          eq(feedstocks.organizationId, ctx.organizationId),
-          eq(feedstocks.facilityId, facilityId),
-          isNull(feedstocks.archivedAt),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(productionRuns)
-      .where(
-        and(
-          eq(productionRuns.organizationId, ctx.organizationId),
-          eq(productionRuns.facilityId, facilityId),
-          eq(productionRuns.status, COMPLETE_PRODUCTION_RUN_STATUS),
-          isNull(productionRuns.archivedAt),
-        ),
-      ),
-    db
-      .select({ count: count() })
-      .from(creditBatches)
-      .where(
-        and(
-          eq(creditBatches.organizationId, ctx.organizationId),
-          eq(creditBatches.facilityId, facilityId),
-          isNull(creditBatches.archivedAt),
-        ),
-      ),
+      .select({
+        facilityCount: facilityAgg.count,
+        supplierCount: supplierAgg.count,
+        reactorCount: reactorAgg.count,
+        certifierProjectCount: projectAgg.count,
+        feedstockCount: feedstockAgg.count,
+        completeProductionRunCount: runAgg.count,
+        creditBatchCount: batchAgg.count,
+      })
+      .from(facilityAgg)
+      .crossJoin(supplierAgg)
+      .crossJoin(reactorAgg)
+      .crossJoin(projectAgg)
+      .crossJoin(feedstockAgg)
+      .crossJoin(runAgg)
+      .crossJoin(batchAgg),
   ]);
+  if (!row) throw new Error("onboarding aggregate returned no row");
 
   return {
     isOwnerOrAdmin,
     isOrgOwnerOrAdmin,
-    facilityCount: Number(facilityCount.count),
-    supplierCount: Number(supplierCount.count),
+    facilityCount: row.facilityCount,
+    supplierCount: row.supplierCount,
     facility: {
-      reactorCount: Number(reactorCount.count),
-      registryConnected: Number(certifierProjectCount.count) > 0,
-      feedstockCount: Number(feedstockCount.count),
-      completeProductionRunCount: Number(completeProductionRunCount.count),
-      creditBatchCount: Number(creditBatchCount.count),
+      reactorCount: row.reactorCount,
+      registryConnected: row.certifierProjectCount > 0,
+      feedstockCount: row.feedstockCount,
+      completeProductionRunCount: row.completeProductionRunCount,
+      creditBatchCount: row.creditBatchCount,
     },
   };
 }

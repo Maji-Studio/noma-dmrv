@@ -15,8 +15,6 @@ import {
   getFeedstocks as getFeedstocksData,
   getFeedstockById as getFeedstockByIdData,
   getFeedstockStats as getFeedstockStatsData,
-  getFeedstockOptions as getFeedstockOptionsData,
-  isFeedstockCodeAvailable as isFeedstockCodeAvailableData,
   updateFeedstock,
   type PaginatedFeedstocks,
   type FeedstockWithRelations,
@@ -35,7 +33,9 @@ import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import {
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
+  type ActionFailure,
 } from "./action-errors";
 
 function feedstockActionError(
@@ -46,6 +46,21 @@ function feedstockActionError(
   return toLoggedActionError(error, fallbackMessage, {
     message: "feedstock action failed",
     context: { op },
+  });
+}
+
+/**
+ * Failure shape for the write paths. Unlike the read helper above it keeps an
+ * `ActionConflictError`'s `conflict`, so a bin-stock refusal can link the bin.
+ */
+function feedstockActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "feedstock action failed", context: { op } },
   });
 }
 
@@ -138,47 +153,6 @@ export async function getFeedstockStatsFn(
   }
 }
 
-export async function getFeedstockOptionsFn(): Promise<
-  ActionResult<Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const data = await getFeedstockOptionsData(ctx);
-    return { success: true, data };
-  } catch (error) {
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to load feedstock options",
-        "feedstock:options",
-      ),
-    };
-  }
-}
-
-export async function checkFeedstockCodeFn(
-  code: string,
-  excludeId?: string
-): Promise<ActionResult<boolean>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isFeedstockCodeAvailableData(ctx, code, excludeId);
-    return { success: true, data: available };
-  } catch (error) {
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to check code",
-        "feedstock:check-code",
-      ),
-    };
-  }
-}
-
 // ============================================
 // Create Operation
 // ============================================
@@ -255,20 +229,11 @@ export async function updateFeedstockFn(
 
     return { success: true, data };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to update feedstock",
-        "feedstock:update",
-      ),
-    };
+    return feedstockActionFailure(
+      error,
+      "Failed to update feedstock",
+      "feedstock:update",
+    );
   }
 }
 
@@ -287,19 +252,10 @@ export async function deleteFeedstockFn(
 
     return { success: true, data: undefined };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: feedstockActionError(
-        error,
-        "Failed to delete feedstock",
-        "feedstock:delete",
-      ),
-    };
+    return feedstockActionFailure(
+      error,
+      "Failed to delete feedstock",
+      "feedstock:delete",
+    );
   }
 }

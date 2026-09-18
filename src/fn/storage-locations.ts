@@ -17,14 +17,9 @@ import {
   createStorageLocation,
   deleteStorageLocation,
   getStorageLocations as getStorageLocationsData,
-  getStorageLocationById as getStorageLocationByIdData,
-  getStorageLocationWithFacility as getStorageLocationWithFacilityData,
-  getStorageLocationsByFacility as getStorageLocationsByFacilityData,
-  isStorageLocationCodeAvailable as isStorageLocationCodeAvailableData,
   restoreStorageLocation,
   updateStorageLocation,
   type PaginatedStorageLocations,
-  type StorageLocationWithFacility,
 } from "@/data-access/storage-locations";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
@@ -37,10 +32,28 @@ import {
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
 import { withAction } from "./with-action";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function storageLocationActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "storage bin action failed", context: { op } },
+  });
+}
 
 function storageLocationActionError(
   error: unknown,
@@ -91,113 +104,6 @@ export async function getStorageLocationsFn(
         error,
         "Failed to load storage bins",
         "storage-location:list",
-      ),
-    };
-  }
-}
-
-/**
- * Get a single storage bin by ID
- */
-export async function getStorageLocationByIdFn(
-  storageLocationId: string
-): Promise<ActionResult<StorageLocation>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const storageLocation = await getStorageLocationByIdData(
-      ctx,
-      storageLocationId
-    );
-    return { success: true, data: storageLocation };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to load storage bin",
-        "storage-location:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get a storage bin with its facility info
- */
-export async function getStorageLocationWithFacilityFn(
-  storageLocationId: string
-): Promise<ActionResult<StorageLocationWithFacility>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const storageLocation = await getStorageLocationWithFacilityData(
-      ctx,
-      storageLocationId
-    );
-    return { success: true, data: storageLocation };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to load storage bin details",
-        "storage-location:detail",
-      ),
-    };
-  }
-}
-
-/**
- * Get storage bins by facility ID
- */
-export async function getStorageLocationsByFacilityFn(
-  facilityId: string
-): Promise<ActionResult<StorageLocation[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    await requireOrgFacility(ctx, facilityId);
-    const storageLocations = await getStorageLocationsByFacilityData(
-      ctx,
-      facilityId
-    );
-    return { success: true, data: storageLocations };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to load storage bins for facility",
-        "storage-location:by-facility",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a storage bin code is available
- */
-export async function checkStorageLocationCodeFn(
-  code: string,
-  excludeStorageLocationId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isStorageLocationCodeAvailableData(
-      ctx,
-      code,
-      excludeStorageLocationId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to check storage bin code",
-        "storage-location:check-code",
       ),
     };
   }
@@ -277,6 +183,7 @@ export async function updateStorageLocationFn(
       ctx,
       validated.storageLocationId,
       {
+        expectedUpdatedAt: validated.expectedUpdatedAt,
         code: validated.code,
         name: validated.name,
         type: validated.type,
@@ -292,20 +199,7 @@ export async function updateStorageLocationFn(
 
     return { success: true, data: storageLocation };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to update storage bin",
-        "storage-location:update",
-      ),
-    };
+    return storageLocationActionFailure(error, "Failed to update storage bin", "storage-location:update");
   }
 }
 

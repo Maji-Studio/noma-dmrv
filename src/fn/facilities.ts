@@ -12,16 +12,8 @@ import {
   createFacility,
   getFacilityArchiveImpact,
   restoreFacility,
-  getFacilities as getFacilitiesData,
-  getFacilityById as getFacilityByIdData,
-  getFacilityWithRelations as getFacilityWithRelationsData,
-  getFacilityReactors as getFacilityReactorsData,
-  getFacilityStorageLocations as getFacilityStorageLocationsData,
   getFacilityCountries as getFacilityCountriesData,
-  isFacilityCodeAvailable as isFacilityCodeAvailableData,
   updateFacility,
-  type PaginatedFacilities,
-  type FacilityDetail,
   type FacilityArchiveImpact,
 } from "@/data-access/facilities";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -30,7 +22,6 @@ import {
   createFacilitySchema,
   restoreFacilitySchema,
   updateFacilitySchema,
-  facilityFilterSchema,
 } from "@/schemas/facilities";
 import type { ActionResult } from "@/types/actions";
 import {
@@ -39,9 +30,27 @@ import {
 } from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function facilityActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "facility action failed", context: { op } },
+  });
+}
 
 function facilityActionError(
   error: unknown,
@@ -57,159 +66,6 @@ function facilityActionError(
 // ============================================
 // List/Query Operations
 // ============================================
-
-/**
- * Get paginated list of facilities with filtering
- */
-export async function getFacilitiesFn(
-  filters?: Partial<z.infer<typeof facilityFilterSchema>>
-): Promise<ActionResult<PaginatedFacilities>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validatedFilters = filters
-      ? facilityFilterSchema.parse(filters)
-      : undefined;
-    const facilities = await getFacilitiesData(ctx, validatedFilters);
-
-    return { success: true, data: facilities };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error, "Invalid filter parameters"),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facilities",
-        "facility:list",
-      ),
-    };
-  }
-}
-
-/**
- * Get a single facility by ID
- */
-export async function getFacilityByIdFn(
-  facilityId: string
-): Promise<ActionResult<Facility>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const facility = await getFacilityByIdData(ctx, facilityId);
-    return { success: true, data: facility };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility",
-        "facility:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get a facility with all its relations (reactors, storage locations)
- */
-export async function getFacilityWithRelationsFn(
-  facilityId: string
-): Promise<ActionResult<FacilityDetail>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const facility = await getFacilityWithRelationsData(ctx, facilityId);
-    return { success: true, data: facility };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility details",
-        "facility:detail",
-      ),
-    };
-  }
-}
-
-/**
- * Get reactors associated with a facility
- */
-export async function getFacilityReactorsFn(
-  facilityId: string
-): Promise<
-  ActionResult<
-    Array<{
-      id: string;
-      code: string;
-      identifier: string;
-      reactorType: string;
-      nominalThroughputTph: number | null;
-      createdAt: Date;
-      updatedAt: Date;
-    }>
-  >
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const reactors = await getFacilityReactorsData(ctx, facilityId);
-    return { success: true, data: reactors };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility reactors",
-        "facility:reactors",
-      ),
-    };
-  }
-}
-
-/**
- * Get storage locations associated with a facility
- */
-export async function getFacilityStorageLocationsFn(
-  facilityId: string
-): Promise<
-  ActionResult<
-    Array<{
-      id: string;
-      code: string;
-      name: string;
-      type: string;
-      capacityKg: number | null;
-      storageMethod: string | null;
-      createdAt: Date;
-      updatedAt: Date;
-    }>
-  >
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const storageLocations = await getFacilityStorageLocationsData(
-      ctx,
-      facilityId
-    );
-    return { success: true, data: storageLocations };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to load facility storage bins",
-        "facility:storage-locations",
-      ),
-    };
-  }
-}
 
 /**
  * Get unique countries for the facility filter — active facilities by
@@ -232,34 +88,6 @@ export async function getFacilityCountriesFn(
         error,
         "Failed to load countries",
         "facility:countries",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a facility code is available
- */
-export async function checkFacilityCodeFn(
-  code: string,
-  excludeFacilityId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isFacilityCodeAvailableData(
-      ctx,
-      code,
-      excludeFacilityId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to check facility code",
-        "facility:check-code",
       ),
     };
   }
@@ -338,6 +166,7 @@ export async function updateFacilityFn(
     const validated = updateFacilitySchema.parse(data);
 
     const facility = await updateFacility(ctx, validated.facilityId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       code: validated.code,
       name: validated.name,
       country: validated.country,
@@ -353,20 +182,7 @@ export async function updateFacilityFn(
 
     return { success: true, data: facility };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: facilityActionError(
-        error,
-        "Failed to update facility",
-        "facility:update",
-      ),
-    };
+    return facilityActionFailure(error, "Failed to update facility", "facility:update");
   }
 }
 

@@ -20,22 +20,24 @@ import type {
   ProductionRunWithRelations,
 } from "@/data-access/production-runs";
 import {
-  getProductionRunsFn,
   getProductionRunByIdFn,
-  getProductionRunStatsFn,
   getFacilityEnergyTotalsFn,
   getProductionRunReadingsFn,
-  checkProductionRunCodeFn,
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
 } from "@/fn/production-runs";
+import {
+  getProductionRunsRead,
+  getProductionRunStatsRead,
+} from "@/lib/read-api/client";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { invalidateOnboardingProgress } from "@/hooks/use-onboarding";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
+import { isStaleVersionFailure, throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
@@ -50,10 +52,12 @@ function throwProductionRunActionError(result: {
   error: string;
   conflict?: { entity: string; id: string; code: string };
 }): never {
-  if (result.conflict) {
+  // A stale-version refusal is not an overlap: it belongs in the form's error
+  // banner, not on the start-time field, so it keeps its own error type.
+  if (result.conflict && !isStaleVersionFailure(result)) {
     throw new ProductionRunConflictError(result.error, result.conflict);
   }
-  throw new Error(result.error);
+  throwActionError(result);
 }
 
 // ============================================
@@ -107,8 +111,8 @@ export function useProductionRuns(
   const results = useQueries({
     queries: requests.map((request) => ({
       queryKey: productionRunKeys.list(request),
-      queryFn: async () => {
-        const result = await getProductionRunsFn(request);
+      queryFn: async ({ signal }) => {
+        const result = await getProductionRunsRead(request, { signal });
         if (!result.success) throw new Error(result.error);
         return result.data;
       },
@@ -158,8 +162,8 @@ export function useProductionRun(productionRunId: string, enabled = true) {
 export function useProductionRunStats(facilityId?: string, enabled = true) {
   return useQuery({
     queryKey: productionRunKeys.stats(facilityId),
-    queryFn: async () => {
-      const result = await getProductionRunStatsFn(facilityId);
+    queryFn: async ({ signal }) => {
+      const result = await getProductionRunStatsRead(facilityId, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -209,28 +213,6 @@ export function useProductionRunReadings(
   });
 }
 
-/**
- * Hook to check if a production run code is available
- */
-export function useProductionRunCodeCheck(
-  code: string,
-  excludeRunId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: productionRunKeys.codeCheck(code, excludeRunId),
-    queryFn: async () => {
-      const result = await checkProductionRunCodeFn(code, excludeRunId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
-  });
-}
-
 // ============================================
 // Mutation Hooks
 // ============================================
@@ -256,6 +238,9 @@ export function useCreateProductionRun(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      // Seed the authoritative record before any dependent background refresh.
+      queryClient.setQueryData(productionRunKeys.detail(data.id), data);
+
       // Invalidate all production run lists
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       // Invalidate stats
@@ -276,10 +261,7 @@ export function useCreateProductionRun(
       });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
-
-      // Pre-populate the detail cache with the new run
-      queryClient.setQueryData(productionRunKeys.detail(data.id), data);
+      invalidateOnboardingProgress(queryClient, data.facilityId);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -377,7 +359,8 @@ export function useUpdateProductionRun(
       // Return context with snapshots for rollback
       return { previousRun, previousLists };
     },
-    onSuccess: async (data, variables) => {
+    onSuccess: async (data, variables, context) => {
+      const previousFacilityId = context?.previousRun?.facilityId;
       // Update cache with actual server data
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
 
@@ -392,7 +375,15 @@ export function useUpdateProductionRun(
       });
       invalidateStockEntityQueries(queryClient, "productionRun");
       invalidateCertificationReadiness(queryClient);
-      await invalidateOnboardingProgress(queryClient);
+      if (variables.facilityId && !previousFacilityId) {
+        // A move without a cached prior row can affect an unknown old facility.
+        invalidateOnboardingProgress(queryClient);
+      } else {
+        invalidateOnboardingProgress(queryClient, data.facilityId);
+        if (previousFacilityId && previousFacilityId !== data.facilityId) {
+          invalidateOnboardingProgress(queryClient, previousFacilityId);
+        }
+      }
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -553,106 +544,6 @@ export function useDeleteProductionRun(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch production runs list for faster initial load
- */
-export function usePrefetchProductionRuns() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<ProductionRunFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: productionRunKeys.list(filters),
-      queryFn: async () => {
-        const result = await getProductionRunsFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single production run
- */
-export function usePrefetchProductionRun() {
-  const queryClient = useQueryClient();
-
-  return (productionRunId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: productionRunKeys.detail(productionRunId),
-      queryFn: async () => {
-        const result = await getProductionRunByIdFn(productionRunId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access production run cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useProductionRunCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all production run data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.all }),
-
-    /** Invalidate all production run lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() }),
-
-    /** Invalidate a specific production run detail */
-    invalidateDetail: (productionRunId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.detail(productionRunId),
-      }),
-
-    /** Invalidate production run stats (all facility variants) */
-    invalidateStats: () =>
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.statsPrefix(),
-      }),
-
-    /** Invalidate readings for a production run */
-    invalidateReadings: (productionRunId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
-      }),
-
-    /** Remove a specific production run from cache (use after deletion) */
-    removeFromCache: (productionRunId: string) => {
-      queryClient.removeQueries({
-        queryKey: productionRunKeys.detail(productionRunId),
-      });
-      queryClient.removeQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
-      });
-    },
-
-    /** Set production run data in cache (useful for optimistic updates) */
-    setProductionRunData: (
-      productionRunId: string,
-      data: ProductionRunWithRelations
-    ) => queryClient.setQueryData(productionRunKeys.detail(productionRunId), data),
-
-    /** Get cached production run data */
-    getCachedProductionRun: (productionRunId: string) =>
-      queryClient.getQueryData<ProductionRunWithRelations>(
-        productionRunKeys.detail(productionRunId)
-      ),
-  };
-}

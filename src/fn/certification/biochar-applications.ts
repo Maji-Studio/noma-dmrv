@@ -1,14 +1,15 @@
-import { env } from "@/config/env";
 import {
-  activateGatedBiocharApplicationRegistration,
+  getStorageLocationRegistration,
+  withCertifierExternalProjectLocks,
+} from "@/data-access/certifier-storage-locations";
+import {
   claimBiocharApplicationRegistration,
   confirmBiocharApplicationRegistration,
   getBiocharApplicationRegistration,
   markBiocharApplicationDrift,
-  recordGatedBiocharApplicationRegistration,
+  withBiocharApplicationRegistrationLock,
 } from "@/data-access/certifier-biochar-applications";
 import { getProductionBatchRegistrations } from "@/data-access/certifier-production-batches";
-import { withDedicatedSessionAdvisoryLock } from "@/db";
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgRole } from "@/lib/auth/server";
@@ -17,16 +18,18 @@ import {
   biocharApplicationMismatchMessage,
   createBiocharApplication,
   findBiocharApplicationBySupplierReference,
+  getBiocharApplication,
   type IsometricBiocharApplication,
 } from "@/lib/isometric/biochar-applications";
-import { getIsometricClientForOrg } from "@/lib/isometric/client";
+import {
+  getIsometricClientForOrg,
+  IsometricApiError,
+} from "@/lib/isometric/client";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
 import {
   buildBiocharApplicationRequestFromIntent,
-  isReadyBiocharApplicationIntent,
   type BiocharApplicationIntent,
-  type ReadyBiocharApplicationIntent,
 } from "./biochar-application-intents";
 import { ensureProductionBatchesForCreditBatches } from "./production-batches";
 import {
@@ -35,9 +38,7 @@ import {
   type RegistryExternalMutationReporter,
 } from "./registry-create";
 import { ensureStorageLocation } from "./storage-locations";
-
-const BIOCHAR_APPLICATION_LOCK_SCOPE =
-  "certifier-biochar-application:isometric";
+import { ISOMETRIC_PROVIDER } from "./shared";
 
 export async function ensureRemovalBiocharApplications(args: {
   orgCtx: OrgContext;
@@ -51,11 +52,6 @@ export async function ensureRemovalBiocharApplications(args: {
 }): Promise<void> {
   requireOrgRole(args.orgCtx, "admin");
   if (args.intents.length === 0) return;
-  if (env.ISOMETRIC_ENVIRONMENT === "production") {
-    throw new SafeError(
-      "Storage Location and Biochar Application synchronization is not enabled for production yet.",
-    );
-  }
   const creditBatchIds = [
     ...new Set(args.intents.map((intent) => intent.creditBatchId)),
   ].sort();
@@ -83,9 +79,11 @@ export async function ensureRemovalBiocharApplications(args: {
     Awaited<ReturnType<typeof ensureStorageLocation>>
   >();
   for (const intent of args.intents) {
+    if (storageByApplicationId.has(intent.applicationId)) continue;
     const storage = await ensureStorageLocation({
       orgCtx: args.orgCtx,
       applicationId: intent.applicationId,
+      onExternalMutation: args.onExternalMutation,
       expected: {
         customerLocationId: intent.customerLocationId,
         certifierProjectId: intent.certifierProjectId,
@@ -121,31 +119,6 @@ export async function ensureRemovalBiocharApplications(args: {
         `Application ${intent.applicationCode} could not resolve its registered Production Batch or Storage Location. Retry the Removal submission.`,
       );
     }
-    if (!isReadyBiocharApplicationIntent(intent)) {
-      // The delivery lacks observed truck masses, which the registry payload
-      // requires. Journal the gated registration (no POST) and continue; the
-      // Removal proceeds on documentation-based mass verification, and this
-      // registration un-gates on a later submission once the masses exist.
-      await recordGatedBiocharApplicationRegistration(args.orgCtx, {
-        applicationId: intent.applicationId,
-        creditBatchId: intent.creditBatchId,
-        productionBatchRegistrationId: production.id,
-        storageLocationRegistrationId: storage.registration.id,
-        externalProductionBatchId,
-        externalStorageLocationId: storage.externalStorageLocationId,
-        supplierReference: intent.supplierReference,
-        gateReason: intent.gateReason,
-      });
-      args.log.info(
-        {
-          applicationId: intent.applicationId,
-          creditBatchId: intent.creditBatchId,
-          gateReason: intent.gateReason,
-        },
-        "biochar application registration gated; registry create skipped",
-      );
-      continue;
-    }
     await ensureBiocharApplication({
       ...args,
       intent,
@@ -163,7 +136,7 @@ async function ensureBiocharApplication(args: {
   externalRemovalId: string;
   submissionRow: CertificationSubmissionRow;
   expectedLockedAt?: Date;
-  intent: ReadyBiocharApplicationIntent;
+  intent: BiocharApplicationIntent;
   productionBatchRegistrationId: string;
   externalProductionBatchId: string;
   storageLocationRegistrationId: string;
@@ -177,18 +150,33 @@ async function ensureBiocharApplication(args: {
     externalStorageLocationId: args.externalStorageLocationId,
   });
   const bodyHash = payloadHash(body);
-  await withDedicatedSessionAdvisoryLock(
-    `${BIOCHAR_APPLICATION_LOCK_SCOPE}:${args.orgCtx.organizationId}:${args.intent.applicationId}:${args.intent.creditBatchId}`,
+  await withBiocharApplicationDependencyLocks(
+    args,
     async () => {
+      const currentStorage = await getStorageLocationRegistration(
+        args.orgCtx,
+        args.intent.customerLocationId,
+        args.intent.externalProjectId,
+      );
+      if (
+        currentStorage?.id !== args.storageLocationRegistrationId ||
+        currentStorage.externalStorageLocationId !== args.externalStorageLocationId
+      ) {
+        throw new SafeError(
+          "The Storage Location changed while the Biochar Application was being prepared. Retry the Removal submission.",
+        );
+      }
       let registration = await getBiocharApplicationRegistration(
         args.orgCtx,
         args.intent.applicationId,
         args.intent.creditBatchId,
+        args.submissionRow.id,
       );
       if (!registration) {
         registration = await claimBiocharApplicationRegistration(args.orgCtx, {
           applicationId: args.intent.applicationId,
           creditBatchId: args.intent.creditBatchId,
+          removalSubmissionId: args.submissionRow.id,
           productionBatchRegistrationId:
             args.productionBatchRegistrationId,
           storageLocationRegistrationId: args.storageLocationRegistrationId,
@@ -200,35 +188,14 @@ async function ensureBiocharApplication(args: {
           observedGhgEntryId: null,
           observedRemovalId: null,
         });
-      } else if (
-        registration.lifecycleStatus === "gated" &&
-        registration.payloadHash === null
-      ) {
-        // A prior submission journaled this Application as mass-gated (no
-        // payload, no POST). The delivery now carries observed truck masses,
-        // so upgrade the placeholder into the in-flight claim instead of
-        // treating its null payload hash as journal drift.
-        const activated = await activateGatedBiocharApplicationRegistration(
-          args.orgCtx,
-          {
-            registrationId: registration.id,
-            applicationId: args.intent.applicationId,
-            creditBatchId: args.intent.creditBatchId,
-            productionBatchRegistrationId: args.productionBatchRegistrationId,
-            storageLocationRegistrationId: args.storageLocationRegistrationId,
-            externalProductionBatchId: args.externalProductionBatchId,
-            externalStorageLocationId: args.externalStorageLocationId,
-            supplierReference: args.intent.supplierReference,
-            submittedPayload: body,
-            payloadHash: bodyHash,
-          },
+      }
+      if (registration.externalStorageLocationId !== args.externalStorageLocationId) {
+        await markBiocharApplicationDrift(
+          args.orgCtx, registration.id, "storage_location_replaced",
         );
-        if (!activated) {
-          throw new Error(
-            "Gated Biochar Application registration changed before activation",
-          );
-        }
-        registration = activated;
+        throw new SafeError(
+          `Application ${args.intent.applicationCode}'s Storage Location was replaced. Its Biochar Application still references the previous registry site. Ask support to resolve that dependency before retrying this Removal.`,
+        );
       }
       const identityMatches =
         registration.payloadHash === bodyHash &&
@@ -251,6 +218,13 @@ async function ensureBiocharApplication(args: {
       const client = await getIsometricClientForOrg(
         args.orgCtx.organizationId,
       );
+      const remoteClaimContext = {
+        log: args.log,
+        applicationId: args.intent.applicationId,
+        creditBatchId: args.intent.creditBatchId,
+        removalId: args.removalId,
+        removalSubmissionId: args.submissionRow.id,
+      };
       let confirmedRemote: IsometricBiocharApplication | null = null;
       await performRegistryCreate({
         orgCtx: args.orgCtx,
@@ -266,25 +240,65 @@ async function ensureBiocharApplication(args: {
         // reconcile by stable reference before this non-idempotent create.
         resumed: true,
         create: async () => {
-          const remote = await createBiocharApplication(client, body);
-          assertRemoteMatchesCurrentRemoval(remote, body, args.externalRemovalId);
-          confirmedRemote = remote;
-          return remote.id;
+          confirmedRemote = await createBiocharApplication(client, body);
+          const associationAbsent = assertRemoteClaimableForCurrentRemoval(
+            confirmedRemote,
+            body,
+            args.externalRemovalId,
+          );
+          if (associationAbsent) {
+            logMissingRemoteAssociation(
+              confirmedRemote,
+              args.externalRemovalId,
+              remoteClaimContext,
+            );
+          }
+          return confirmedRemote.id;
         },
         reconcile: async () => {
-          const remote = await findBiocharApplicationBySupplierReference(
-            client,
-            args.intent.supplierReference,
-          );
+          let remote: IsometricBiocharApplication | null;
+          if (registration!.lifecycleStatus === "confirmed") {
+            const externalApplicationId = registration!.externalApplicationId;
+            if (!externalApplicationId) {
+              await markBiocharApplicationDrift(
+                args.orgCtx,
+                registration!.id,
+                "external_identity_drift",
+              );
+              return {
+                found: "refused" as const,
+                message: `Application ${args.intent.applicationCode}'s confirmed Biochar Application has no registry identity. Resolve the journal drift before retrying.`,
+              };
+            }
+            try {
+              remote = await getBiocharApplication(
+                client,
+                externalApplicationId,
+              );
+            } catch (error) {
+              if (!(error instanceof IsometricApiError) || error.status !== 404) {
+                throw error;
+              }
+              remote = null;
+            }
+          } else {
+            remote = await findBiocharApplicationBySupplierReference(
+              client,
+              args.intent.supplierReference,
+            );
+          }
           if (remote) {
             try {
-              if (registration!.lifecycleStatus === "confirmed") {
-                assertRemoteMatchesJournal(remote, body, registration!);
-              } else {
-                assertRemoteMatchesCurrentRemoval(
+              const associationAbsent = assertRemoteClaimableForCurrentRemoval(
+                remote,
+                body,
+                args.externalRemovalId,
+              );
+              if (associationAbsent) {
+                logMissingRemoteAssociation(
                   remote,
-                  body,
                   args.externalRemovalId,
+                  remoteClaimContext,
                 );
               }
             } catch (error) {
@@ -336,8 +350,10 @@ async function ensureBiocharApplication(args: {
             registrationId: registration!.id,
             expectedPayloadHash: bodyHash,
             externalApplicationId,
-            observedGhgEntryId: remote?.ghg_entry_id ?? null,
-            observedRemovalId: remote?.removal_id ?? null,
+            observedGhgEntryId:
+              remote?.ghg_entry_id ?? registration!.observedGhgEntryId ?? null,
+            observedRemovalId:
+              remote?.removal_id ?? registration!.observedRemovalId ?? null,
           });
         },
         failureMessagePrefix: `Biochar Application ${args.intent.applicationCode} could not be created`,
@@ -345,6 +361,32 @@ async function ensureBiocharApplication(args: {
         log: args.log,
       });
     },
+  );
+}
+
+/** Use the same project lock as Storage Location replacement through POST/confirmation. */
+async function withBiocharApplicationDependencyLocks<T>(
+  args: {
+    orgCtx: OrgContext;
+    intent: BiocharApplicationIntent;
+    submissionRow: Pick<CertificationSubmissionRow, "id">;
+  },
+  fn: () => Promise<T>,
+): Promise<T> {
+  return withBiocharApplicationRegistrationLock(
+    args.orgCtx,
+    {
+      applicationId: args.intent.applicationId,
+      creditBatchId: args.intent.creditBatchId,
+      removalSubmissionId: args.submissionRow.id,
+    },
+    () =>
+      withCertifierExternalProjectLocks(
+        args.orgCtx,
+        ISOMETRIC_PROVIDER,
+        [args.intent.externalProjectId],
+        fn,
+      ),
   );
 }
 
@@ -356,17 +398,17 @@ function assertRemotePayloadMatches(
   if (mismatch) throw new SafeError(mismatch);
 }
 
-function assertRemoteMatchesCurrentRemoval(
+function assertRemoteClaimableForCurrentRemoval(
   remote: IsometricBiocharApplication,
   body: Parameters<typeof biocharApplicationMismatchMessage>[1],
   externalRemovalId: string,
-): void {
+): boolean {
   assertRemotePayloadMatches(remote, body);
-  if (!remote.ghg_entry_id && !remote.removal_id) {
-    throw new SafeError(
-      `Isometric Biochar Application ${remote.id} is not linked to a GHG Entry yet. Retry after Isometric records the association.`,
-    );
-  }
+  // Isometric's create request has no GHG Entry field and the response schema
+  // makes both association fields nullable. Sandbox readback can therefore
+  // remain unassociated even after the Application is fully persisted. Treat
+  // a present association as an identity invariant, but do not turn an absent
+  // provider-managed association into an unrecoverable Removal submission.
   if (
     (remote.ghg_entry_id && remote.ghg_entry_id !== externalRemovalId) ||
     (remote.removal_id && remote.removal_id !== externalRemovalId)
@@ -375,28 +417,29 @@ function assertRemoteMatchesCurrentRemoval(
       `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry. Resolve the registry identity before retrying.`,
     );
   }
+  return !remote.ghg_entry_id && !remote.removal_id;
 }
 
-function assertRemoteMatchesJournal(
+function logMissingRemoteAssociation(
   remote: IsometricBiocharApplication,
-  body: Parameters<typeof biocharApplicationMismatchMessage>[1],
-  registration: {
-    observedGhgEntryId: string | null;
-    observedRemovalId: string | null;
+  externalRemovalId: string,
+  context: {
+    log: Logger;
+    applicationId: string;
+    creditBatchId: string;
+    removalId: string;
+    removalSubmissionId: string;
   },
 ): void {
-  assertRemotePayloadMatches(remote, body);
-  if (!registration.observedGhgEntryId && !registration.observedRemovalId) {
-    throw new SafeError(
-      `Isometric Biochar Application ${remote.id} has no confirmed journal association. Resolve the registry identity before retrying.`,
-    );
-  }
-  if (
-    remote.ghg_entry_id !== registration.observedGhgEntryId ||
-    remote.removal_id !== registration.observedRemovalId
-  ) {
-    throw new SafeError(
-      `Isometric Biochar Application ${remote.id} is linked to a different GHG Entry than its confirmed journal association. Resolve the registry identity before retrying.`,
-    );
-  }
+  context.log.warn(
+    {
+      applicationId: context.applicationId,
+      creditBatchId: context.creditBatchId,
+      removalId: context.removalId,
+      submissionId: context.removalSubmissionId,
+      externalApplicationId: remote.id,
+      externalRemovalId,
+    },
+    "Biochar Application has no registry GHG Entry association; accepting the provider-null readback",
+  );
 }

@@ -49,11 +49,15 @@ code today; breaking one compiles cleanly and fails silently.
 - **`assertSameOrg`'s `executor` is a pool-starvation invariant, not an
   optimization.** A caller inside a transaction MUST pass its `tx`; reading
   through the global pool from inside an open transaction holds one connection
-  while waiting for another, and starves the pool under parallel load. This is
-  the same failure the `storage/sources-sync-events-tx` entry below describes —
-  and that one is **not** mitigated: `src/db/index.ts` runs `max: env.DB_POOL_MAX
-  ?? 1`, and `DB_POOL_MAX` is unset in every environment. Applies to every
-  tx-scoped read, not just this helper.
+  while waiting for another, and starves the pool under parallel load. The
+  effective pool size really is 1: `resolveAppPoolConfig`
+  (`src/db/pool-config.ts`) falls back to `DEFAULT_DB_POOL_MAX` and
+  `DB_POOL_MAX` is unset in every environment. The Source mirror hit this
+  through its audit writes and is fixed (2026-09-16 entry in
+  [`isometric/changes.md`](./isometric/changes.md)); where an
+  executor cannot be threaded through, stage the work and flush it after the
+  transaction settles (`src/fn/certification/sync-event-stage.ts`). Applies to
+  every tx-scoped read, not just this helper.
 - **`transport_legs.tripType` defaults to `'return'` and is credit-bearing.**
   `roundTripDistanceFactor` (defined in `src/schemas/trip-type.ts`; imported by
   `src/lib/isometric/utils/aggregation.ts` and
@@ -214,6 +218,68 @@ Pure starter residue; org scoping came later via ADR 0010.
   `/settings/organization` for Owners. A slug change needs a decision on
   existing invitation-accept URLs, which embed the invitation id rather than the
   slug — so probably none, but confirm before assuming.
+
+### Discard-draft data access has no caller since Removal deletion (`certification/discard-draft-retirement`, opened 2026-09-08)
+
+- Removal deletion (`src/fn/certification/delete-removal.ts:deleteRemoval`)
+  replaced the wizard's discard control, and the discard hook and server
+  action were removed with it. The data-access seam
+  `src/data-access/certifier-removals.ts:discardLocalRemovalDraft` remains
+  with no production caller, exercised only by
+  `tests/registry-boundary-removal.test.ts`,
+  `tests/removal-application-slice-assignment.test.ts`, and
+  `tests/certification-submissions.test.ts` as the lock-protocol fixture.
+  The `submissionExternalMutationPossible` Removal marker it used to consult
+  is **not** dead: both delete surfaces read it as `registryBoundaryOpened`
+  for the confirmation copy (`src/lib/certification/removal-external-mutation.ts`,
+  consumed by `src/fn/certification/removals-hub.ts` and the certify
+  context); issue #746 decides whether it also becomes a role gate.
+- **To resolve:** retire `discardLocalRemovalDraft` and port the three
+  fixtures onto `claimRemovalDeletion` (which takes the same Removal row and
+  artifact locks), or record why the discard seam stays. The marker and its
+  writer stay either way.
+
+### A write whose commit is genuinely unknown has no operation identity (`architecture/uncertain-commit-identity`, opened 2026-09-16)
+
+- Issue #769 removed the writers that reported a *known* commit as "not
+  found". A connection lost between `COMMIT` and its acknowledgement is a
+  different case: nothing in the app can tell a committed write from a rolled
+  back one, so no result is honest. **To resolve:** decide whether writes
+  carry a client-supplied operation id the server records and a retry can look
+  up, or whether the retry-and-duplicate risk stays with the operator.
+
+### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
+
+- **Rule:** every updater behind an edit form checks `expectedUpdatedAt`
+  (`src/data-access/expected-version.ts:assertExpectedVersion`) and every edit
+  form sends it, so a save built on a stale cached row is refused
+  ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
+- **Observed:** the check is implemented for facility, feedstock, storage
+  location, customer (+ location), supplier (+ location), application and
+  production run. These edit-form updaters do not accept or check the field
+  (some lock their row, some do not):
+  `src/data-access/reactors.ts:updateReactor`,
+  `src/data-access/formulations.ts:updateFormulation`,
+  `src/data-access/credit-batches.ts:updateCreditBatch`,
+  `src/data-access/biochar-products.ts:updateBiocharProduct`,
+  `src/data-access/samples.ts:updateSample`,
+  `src/data-access/orders.ts:updateOrder`,
+  `src/data-access/feedstock-types.ts:updateFeedstockType`,
+  `src/data-access/delivery-output-writes.ts:updateDelivery`,
+  `src/data-access/transport-legs.ts:updateTransportLeg`,
+  `src/data-access/production-incidents.ts:updateProductionIncident`,
+  `src/data-access/production-samples.ts:updateProductionSample`. Their edit
+  sheets (`src/components/<entity>/<entity>-list.tsx`,
+  `src/components/transport-legs/transport-legs-editor.tsx`,
+  `src/components/production-runs/production-incident-table.tsx`,
+  `src/components/production-runs/production-sample-table.tsx`) call the
+  matching `useUpdate*` hook without a version.
+- **Resolve via:** add `expectedUpdatedAt` to each updater's schema and input,
+  lock the row and call `assertExpectedVersion` after the locked read, send
+  `updatedAt` from the edit sheet, re-throw through `throwActionError`
+  (`src/lib/stale-version.ts`), and add each updater to the parametrised
+  expected-version spec in `tests/`. One PR per entity family is fine; delete
+  this entry when that spec covers all of them.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 
@@ -478,31 +544,28 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
 
 ## Product bins & formulations
 
-### Conserve dry biochar through orders, deliveries, and applications (`product-mass/dry-biochar-lineage`, opened 2026-08-04) — **deferred · needs-registry-check**
+### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implementation pending
 
-- **Agreed invariant:** dry biochar mass is established before mixing from the
-  source biochar's wet mass and biochar-only moisture. Wet ingredients, added
-  water, and later changes to finished-product moisture do not create or remove
-  dry biochar. Finished-product moisture remains important evidence of the
-  condition and actual mass delivered to the customer, but it cannot distinguish
-  ingredient solids, ingredient water, biochar water, and added water.
-- **Accepted first version:** orders reserve a proportional planning estimate.
-  Deliveries and applications transfer tracked dry biochar in proportion to the
-  recorded wet-product basis, with the final full use carrying the exact dry
-  remainder. `deliveries.massDryKg` is the server-authoritative dry-biochar
-  allocation; finished-product moisture is independent delivery evidence.
-- **Deferred limitation:** partial allocation assumes the recorded mixture is
-  homogeneous. Recorded added water changes the remaining wet basis without
-  changing conserved dry biochar, but unrecorded stock changes, stock takes,
-  segregation, ingredient additions, and losses still need an auditable
-  reconciliation workflow.
-- **Registry check:** use the Isometric MCP `how_to` flow to confirm the required
-  grain and evidence for biochar moisture versus finished blended-product
-  moisture before changing certification field gates. Local protocol summaries
-  are not authoritative for closing this point.
-- **To resolve:** specify the mass-ledger and operator-reconciliation workflow
-  for departures from the accepted homogeneous recorded-basis assumption,
-  then regression-test those reconciliation paths.
+- **Accepted design:** [ADR 0029](./adr/0029-output-bin-stock-is-dry-biochar-drawn-fifo.md)
+  and the [implementation plan](./plans/2026-09-14-fifo-bin-accounting.md)
+  replace `src/data-access/delivery-dry-biochar.ts:deriveDeliveryDryBiocharKg`
+  and `src/data-access/biochar-product-source-allocations.ts:planBiocharProductSourceAllocations` under [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
+  Orders reserve nothing; completed deliveries post measured FIFO dry withdrawals. Applications retain proportional truck shares via `src/lib/biochar-mass-accounting.ts:allocateTrackedDryBiocharKg`.
+- **Reconciliation and corrections:** compare counted and tracked solids using
+  the count's moisture. Show dry losses explicitly. Retain linked corrections
+  and block affected dependent changes; late intake does not replay history.
+- **Registry follow-up:** validate physical oldest-first loading, fixed batch
+  composition, editable ingredient-moisture evidence, and the PDD method against
+  the pinned Biochar v1.1 and Agricultural Soils v1.1. FIFO attribution alone
+  does not establish actual composition if material is remixed.
+- **Deferred:** all whole and partial bin-to-bin transfers remain in
+  [#34](https://github.com/Maji-Studio/noma-dmrv/issues/34). Transfers must preserve
+  provenance and atomically update both bins; destination ordering is to be
+  settled there. Unknown-origin positive additions, arrival/application
+  moisture, and general historical replay are excluded from this implementation.
+- **History follow-up:** per-bin dry effects and correction comparisons are
+  required here. Facility-wide history and CSV remain in
+  [#33](https://github.com/Maji-Studio/noma-dmrv/issues/33).
 
 ### Product-bin formulation claim-release policy (`product-bins/formulation`, opened 2026-06-04) — **deferred**
 
@@ -527,6 +590,21 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   intended model, or (b) auto-clear a bin's `formulationId` when its last
   matching product leaves (`deleteBiocharProduct` + the move-out path of
   `updateBiocharProduct`).
+
+### May an emptied bin with stock history be repurposed? (`product-bins/identity-change-with-history`, opened 2026-09-16) — **decision pending**
+
+- `src/data-access/storage-location-identity-guards.ts:assertBinIdentityChangeAllowed`
+  refuses a `type` or `feedstockTypeId` change when the bin holds stock in its
+  current lane, and also when the bin is empty but carries stock history
+  (intake batches, run draws, products, allocations, deliveries, inventory,
+  bin movements). Refusing the empty-with-history case is deliberately the
+  conservative half of the decision: it is reversible, while silently
+  re-pointing the lane strands recorded mass.
+- **Resolve via:** the product decision on
+  [#767](https://github.com/Maji-Studio/noma-dmrv/issues/767) /
+  [#313](https://github.com/Maji-Studio/noma-dmrv/issues/313) — either keep the
+  refusal and point operators at archive plus a new bin, or allow the change on
+  an emptied bin and define what happens to the history that still names it.
 
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 

@@ -4,60 +4,78 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { Customer, CustomerLocation } from "@/db/schema";
+import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
+import type { EntityOption } from "@/components/forms/entity-select/types";
 import type {
   CustomerFilterData,
   CreateCustomerData,
   UpdateCustomerData,
   CreateCustomerLocationData,
+  CreateCustomerWithLocationsData,
   UpdateCustomerLocationData,
 } from "@/schemas/customers";
 import type {
   PaginatedCustomers,
   CustomerWithRelations,
+  CreatedCustomerWithLocations,
 } from "@/data-access/customers";
 import {
   getCustomersFn,
-  getCustomerByIdFn,
   getCustomerWithRelationsFn,
   getCustomerLocationsFn,
-  getCustomerCropTypesFn,
-  checkCustomerCodeFn,
   createCustomerFn,
+  createCustomerWithLocationsFn,
   updateCustomerFn,
   deleteCustomerFn,
-  getCustomerLocationByIdFn,
   createCustomerLocationFn,
   updateCustomerLocationFn,
   deleteCustomerLocationFn,
 } from "@/fn/customers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
+import { throwActionError } from "@/lib/stale-version";
+import { customerKeys } from "./customer-query-keys";
+import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
 
-// ============================================
-// Query Keys
-// ============================================
+export { customerKeys } from "./customer-query-keys";
 
-export const customerKeys = {
-  all: ["customers"] as const,
-  lists: () => [...customerKeys.all, "list"] as const,
-  list: (filters?: Partial<CustomerFilterData>) =>
-    [...customerKeys.lists(), filters] as const,
-  details: () => [...customerKeys.all, "detail"] as const,
-  detail: (id: string) => [...customerKeys.details(), id] as const,
-  detailWithRelations: (id: string) =>
-    [...customerKeys.details(), id, "relations"] as const,
-  locations: (id: string) => [...customerKeys.all, id, "locations"] as const,
-  cropTypes: () => [...customerKeys.all, "cropTypes"] as const,
-  codeCheck: (code: string, excludeId?: string) =>
-    [...customerKeys.all, "codeCheck", code, excludeId] as const,
-};
+const CUSTOMER_DETAIL_STALE_TIME_MS = 30_000;
 
-export const customerLocationKeys = {
+const customerLocationKeys = {
   all: ["customerLocations"] as const,
   detail: (id: string) => [...customerLocationKeys.all, "detail", id] as const,
 };
+
+const CUSTOMER_ENTITY_TYPE = "customer" as const;
+
+/**
+ * Seed the customer detail cache and the EntitySelect caches so the order form
+ * and order list customer pickers see a newly created customer immediately.
+ */
+function seedCreatedCustomerCaches(
+  queryClient: QueryClient,
+  customer: Customer,
+) {
+  const option: EntityOption = {
+    id: customer.id,
+    code: customer.code,
+    name: customer.name,
+    subtitle: customer.cropType ?? undefined,
+  };
+
+  queryClient.setQueryData(customerKeys.detail(customer.id), customer);
+  seedEntityCache(queryClient, CUSTOMER_ENTITY_TYPE, option);
+}
+
 
 // ============================================
 // Customer Query Hooks
@@ -77,24 +95,11 @@ export function useCustomers(filters?: Partial<CustomerFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
-  });
-}
-
-/**
- * Hook to fetch a single customer by ID
- */
-export function useCustomer(customerId: string, enabled = true) {
-  return useQuery({
-    queryKey: customerKeys.detail(customerId),
-    queryFn: async () => {
-      const result = await getCustomerByIdFn(customerId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!customerId,
-    staleTime: 30000,
+    // A search or page change creates a new query key. Without this the list
+    // blanks to skeletons for the round trip, which unmounts an open row menu
+    // mid-click (issue #798). Keeping the previous page means the control the
+    // operator just used stays put until the new page is in.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -112,7 +117,7 @@ export function useCustomerWithRelations(customerId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!customerId,
-    staleTime: 30000,
+    staleTime: CUSTOMER_DETAIL_STALE_TIME_MS,
   });
 }
 
@@ -131,45 +136,6 @@ export function useCustomerLocations(customerId: string, enabled = true) {
     },
     enabled: enabled && !!customerId,
     staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch unique crop types from all customers
- */
-export function useCustomerCropTypes() {
-  return useQuery({
-    queryKey: customerKeys.cropTypes(),
-    queryFn: async () => {
-      const result = await getCustomerCropTypesFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 60000, // 1 minute - crop types don't change often
-  });
-}
-
-/**
- * Hook to check if a customer code is available
- */
-export function useCustomerCodeCheck(
-  code: string,
-  excludeCustomerId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: customerKeys.codeCheck(code, excludeCustomerId),
-    queryFn: async () => {
-      const result = await checkCustomerCodeFn(code, excludeCustomerId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -203,8 +169,64 @@ export function useCreateCustomer(
       // Invalidate crop types in case a new crop type was added
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
 
-      // Pre-populate the detail cache with the new customer
-      queryClient.setQueryData(customerKeys.detail(data.id), data);
+      // Pre-populate the detail cache and the customer pickers
+      seedCreatedCustomerCaches(queryClient, data);
+
+      await callbacks?.onSuccess?.(data, variables);
+    },
+    onError: async (error, variables) => {
+      await callbacks?.onError?.(error, variables);
+    },
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
+    },
+  });
+}
+
+/**
+ * Hook to create a customer together with the locations captured on its create
+ * form. One server round trip, one transaction: nothing is saved unless every
+ * location is.
+ */
+export function useCreateCustomerWithLocations(
+  callbacks?: MutationCallbacks<
+    CreatedCustomerWithLocations,
+    CreateCustomerWithLocationsData
+  >
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CreateCustomerWithLocationsData) => {
+      const result = await createCustomerWithLocationsFn(data);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onMutate: async (variables) => {
+      await callbacks?.onMutate?.(variables);
+    },
+    onSuccess: async (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
+      queryClient.invalidateQueries({
+        queryKey: customerKeys.locations(data.customer.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: customerKeys.detailWithRelations(data.customer.id),
+      });
+
+      queryClient.setQueryData(
+        customerKeys.detail(data.customer.id),
+        data.customer,
+      );
+      for (const location of data.locations) {
+        queryClient.setQueryData(
+          customerLocationKeys.detail(location.id),
+          location,
+        );
+      }
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -231,9 +253,9 @@ export function useUpdateCustomer(
   return useMutation({
     mutationFn: async (data: UpdateCustomerData) => {
       const result = await updateCustomerFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -281,11 +303,10 @@ export function useUpdateCustomer(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.customerId
-                ? ({
-                    ...item,
-                    ...variables,
-                    updatedAt: new Date(),
-                  } as CustomerWithRelations)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as CustomerWithRelations)
                 : item
             ),
           };
@@ -305,8 +326,14 @@ export function useUpdateCustomer(
       queryClient.invalidateQueries({
         queryKey: customerKeys.detailWithRelations(data.id),
       });
+      patchListCachesWithSavedRow<CustomerWithRelations>(
+        queryClient,
+        customerKeys.lists(),
+        data,
+      );
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -338,6 +365,7 @@ export function useUpdateCustomer(
       // Refetch to ensure cache consistency after mutation settles
       queryClient.invalidateQueries({
         queryKey: customerKeys.detail(variables.customerId),
+        exact: true,
       });
 
       await callbacks?.onSettled?.(data, error, variables);
@@ -413,6 +441,11 @@ export function useDeleteCustomer(
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
       // Invalidate crop types in case the deleted customer was the only one with its crop type
       queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
+      // Drop the deleted customer from the pickers
+      queryClient.removeQueries({
+        queryKey: entityKeys.detail(CUSTOMER_ENTITY_TYPE, customerId),
+      });
+      invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(undefined, customerId);
     },
@@ -452,24 +485,6 @@ export function useDeleteCustomer(
 // ============================================
 // Customer Location Query Hooks
 // ============================================
-
-/**
- * Hook to fetch a single customer location by ID
- */
-export function useCustomerLocation(locationId: string, enabled = true) {
-  return useQuery({
-    queryKey: customerLocationKeys.detail(locationId),
-    queryFn: async () => {
-      const result = await getCustomerLocationByIdFn(locationId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!locationId,
-    staleTime: 30000,
-  });
-}
 
 // ============================================
 // Customer Location Mutation Hooks
@@ -531,9 +546,9 @@ export function useUpdateCustomerLocation(
   return useMutation({
     mutationFn: async (data: UpdateCustomerLocationData) => {
       const result = await updateCustomerLocationFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit dialog can
+      // show it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -614,107 +629,6 @@ export function useDeleteCustomerLocation(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch customers list for faster initial load
- */
-export function usePrefetchCustomers() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<CustomerFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: customerKeys.list(filters),
-      queryFn: async () => {
-        const result = await getCustomersFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single customer
- */
-export function usePrefetchCustomer() {
-  const queryClient = useQueryClient();
-
-  return (customerId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: customerKeys.detail(customerId),
-      queryFn: async () => {
-        const result = await getCustomerByIdFn(customerId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access customer cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useCustomerCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all customer data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: customerKeys.all }),
-
-    /** Invalidate all customer lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: customerKeys.lists() }),
-
-    /** Invalidate a specific customer detail */
-    invalidateDetail: (customerId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: customerKeys.detail(customerId),
-      }),
-
-    /** Invalidate a customer with its relations */
-    invalidateDetailWithRelations: (customerId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: customerKeys.detailWithRelations(customerId),
-      }),
-
-    /** Invalidate customer locations */
-    invalidateLocations: (customerId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: customerKeys.locations(customerId),
-      }),
-
-    /** Invalidate crop types list */
-    invalidateCropTypes: () =>
-      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() }),
-
-    /** Remove a specific customer from cache (use after deletion) */
-    removeFromCache: (customerId: string) => {
-      queryClient.removeQueries({ queryKey: customerKeys.detail(customerId) });
-      queryClient.removeQueries({
-        queryKey: customerKeys.detailWithRelations(customerId),
-      });
-      queryClient.removeQueries({
-        queryKey: customerKeys.locations(customerId),
-      });
-    },
-
-    /** Set customer data in cache (useful for optimistic updates) */
-    setCustomerData: (customerId: string, data: Customer) =>
-      queryClient.setQueryData(customerKeys.detail(customerId), data),
-
-    /** Get cached customer data */
-    getCachedCustomer: (customerId: string) =>
-      queryClient.getQueryData<Customer>(customerKeys.detail(customerId)),
-  };
-}

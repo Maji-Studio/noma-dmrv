@@ -16,7 +16,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowSquareOutIcon,
@@ -28,9 +28,16 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import {
-  useDiscardRemovalDraft,
+  useDeleteRemoval,
   useRemovalCompilation,
 } from "@/hooks/use-certification";
+import {
+  canDeleteRemovalRow,
+  removalDeletionTouchesRegistry,
+} from "@/components/certification/removal-list-state";
+import { removalDeletionCopy } from "@/components/certification/removal-deletion-copy";
+import { isSubmissionAttemptInterrupted } from "@/lib/certification/submission-metadata";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import type { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import {
@@ -74,12 +81,16 @@ export function SubmitStep({
 }: SubmitStepProps) {
   const router = useRouter();
   const compilationQuery = useRemovalCompilation(facilityId, removalId);
-  const discardMutation = useDiscardRemovalDraft();
+  const deleteMutation = useDeleteRemoval();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastConfirmProduction, setLastConfirmProduction] = useState(false);
+  const [attemptIsResubmission, setAttemptIsResubmission] = useState(
+    () => Boolean(ctx.latestSubmission),
+  );
+  const hasStartedSubmission = useRef(false);
   const [progressUpdates, setProgressUpdates] = useState<
     SubmissionProgressUpdate[]
   >([]);
@@ -96,42 +107,56 @@ export function SubmitStep({
   );
   const requirementsMet =
     allowsRemovalSubmission(readiness.state) && compilationReady === true;
-  const canDiscardLocalDraft =
-    ctx.latestSubmission === null &&
+  // Anything short of "Submission complete" may be deleted. Once a ledger
+  // row exists the server removes whatever the attempt created on Isometric
+  // before releasing the batches. No role gate yet (issue #746).
+  const deleteFacts = {
+    local: ctx.latestSubmission?.status ?? null,
+    lockInFlight: ctx.latestSubmission
+      ? isLockedInFlight(ctx.latestSubmission)
+      : false,
+    submissionInterrupted: ctx.latestSubmission
+      ? isSubmissionAttemptInterrupted(ctx.latestSubmission.metadata)
+      : false,
+    hasFinalizedSubmission: ctx.hasFinalizedSubmission,
+    registryBoundaryOpened: ctx.registryBoundaryOpened,
+  };
+  const hasRegistryHistory = removalDeletionTouchesRegistry(deleteFacts);
+  const canDeleteRemoval =
     ctx.linkedGhgStatement === null &&
-    !submitMutation.isPending;
+    !submitMutation.isPending &&
+    canDeleteRemovalRow(deleteFacts);
+  const deleteCopy = removalDeletionCopy(hasRegistryHistory);
 
-  const discardDialog = (
+  const deleteDialog = (
     <DeleteConfirmDialog
-      isOpen={discardConfirmOpen}
-      title="Discard Removal draft?"
-      message="This releases its credit batches so you can group them into separate Removals. This action cannot be undone."
+      isOpen={deleteConfirmOpen}
+      title={deleteCopy.title}
+      message={deleteCopy.message}
       onCancel={() => {
-        setDiscardConfirmOpen(false);
-        discardMutation.reset();
+        setDeleteConfirmOpen(false);
+        deleteMutation.reset();
       }}
       onConfirm={() => {
-        discardMutation.mutate(
+        deleteMutation.mutate(
           { facilityId, removalId },
           {
             onSuccess: () => {
-              setDiscardConfirmOpen(false);
-              toast.success(
-                "Removal draft discarded. Credit batches are available again.",
-              );
+              setDeleteConfirmOpen(false);
+              toast.success(deleteCopy.successToast);
               onDone();
             },
           },
         );
       }}
-      isPending={discardMutation.isPending || submitMutation.isPending}
+      isPending={deleteMutation.isPending || submitMutation.isPending}
       errorMessage={
-        discardMutation.error instanceof Error
-          ? discardMutation.error.message
+        deleteMutation.error instanceof Error
+          ? deleteMutation.error.message
           : undefined
       }
-      confirmLabel="Discard draft"
-      pendingLabel="Discarding..."
+      confirmLabel={deleteCopy.actionLabel}
+      pendingLabel={deleteCopy.pendingLabel}
     />
   );
 
@@ -148,6 +173,12 @@ export function SubmitStep({
     }
     setSubmitError(null);
     setLastConfirmProduction(confirmProduction);
+    // Freeze presentation mode before the attempt starts. A retry can resume
+    // persisted journal work before the registry has assigned an external ID.
+    setAttemptIsResubmission(
+      Boolean(ctx.latestSubmission) || hasStartedSubmission.current,
+    );
+    hasStartedSubmission.current = true;
     setProgressUpdates([]);
     submitMutation.mutate(
       {
@@ -234,7 +265,11 @@ export function SubmitStep({
             </span>
           </div>
         </div>
-        <SubmissionProgress kind="removal" updates={progressUpdates} />
+        <SubmissionProgress
+          kind="removal"
+          updates={progressUpdates}
+          isResubmission={attemptIsResubmission}
+        />
         <div className="flex flex-wrap items-center justify-end gap-12">
           {viewUrl && (
             <a
@@ -277,6 +312,7 @@ export function SubmitStep({
           updates={progressUpdates}
           error={terminalError}
           stalled={submissionStalled}
+          isResubmission={attemptIsResubmission}
         />
         {terminalError && <ServerError message={terminalError} />}
         <div className="flex flex-wrap items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
@@ -367,13 +403,13 @@ export function SubmitStep({
       {submitError && <ServerError message={submitError} />}
 
       <div className="flex items-center justify-between gap-12">
-        {canDiscardLocalDraft ? (
+        {canDeleteRemoval ? (
           <Button
             variant="default"
-            onClick={() => setDiscardConfirmOpen(true)}
+            onClick={() => setDeleteConfirmOpen(true)}
             disabled={submitMutation.isPending}
           >
-            Discard draft
+            {deleteCopy.actionLabel}
           </Button>
         ) : (
           <span />
@@ -390,7 +426,7 @@ export function SubmitStep({
       </div>
 
       {confirmDialog}
-      {discardDialog}
+      {deleteDialog}
     </div>
   );
 }

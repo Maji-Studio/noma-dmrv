@@ -9,7 +9,6 @@ vi.mock("@/components/forms/form-file-upload", () => ({
     multiple?: boolean;
     documentType?: string;
     accept?: string;
-    deliveryEvidenceRole?: string;
   }) => {
     latestUploaderProps = props;
     return (
@@ -18,7 +17,6 @@ vi.mock("@/components/forms/form-file-upload", () => ({
         data-multiple={String(props.multiple)}
         data-document-type={props.documentType}
         data-accept={props.accept}
-        data-delivery-evidence-role={props.deliveryEvidenceRole ?? ""}
       />
     );
   },
@@ -68,7 +66,6 @@ describe("ClassifiedTransportEvidenceUploader", () => {
     expect(html.match(/data-testid="file-uploader"/g)).toHaveLength(1);
     expect(html).toContain('data-multiple="true"');
     expect(html).toContain('data-document-type="bill_of_lading"');
-    expect(html).toContain('data-delivery-evidence-role=""');
   });
 
   it("offers the five delivery classifications with delivery labels", () => {
@@ -86,8 +83,6 @@ describe("ClassifiedTransportEvidenceUploader", () => {
     expect(html).toContain("Other transport evidence");
     expect(html).toContain("Delivery receipt");
     expect(html).toContain("Delivery photo");
-    // The default bill_of_lading chip stamps no role.
-    expect(html).toContain('data-delivery-evidence-role=""');
   });
 
   it("keeps the transport-leg chip list unchanged", () => {
@@ -104,7 +99,7 @@ describe("ClassifiedTransportEvidenceUploader", () => {
     expect(html).not.toContain("Delivery receipt");
   });
 
-  it("stamps Delivery photo on live upload requests", async () => {
+  it("classifies a live Delivery photo without registry metadata", async () => {
     const renderer = await selectDeliveryPhoto({
       id: "delivery-live-evidence-test",
       entityType: "delivery",
@@ -113,13 +108,13 @@ describe("ClassifiedTransportEvidenceUploader", () => {
 
     expect(latestUploaderProps).toMatchObject({
       documentType: "photo",
-      deliveryEvidenceRole: "proof_of_delivery",
       accept: "image/*",
     });
+    expect(latestUploaderProps).not.toHaveProperty("deliveryEvidenceRole");
     renderer.unmount();
   });
 
-  it("stamps Delivery photo on deferred attachment metadata", async () => {
+  it("classifies a deferred Delivery photo without registry metadata", async () => {
     const add = vi.fn();
     const renderer = await selectDeliveryPhoto({
       id: "delivery-deferred-evidence-test",
@@ -140,9 +135,7 @@ describe("ClassifiedTransportEvidenceUploader", () => {
 
     (latestUploaderProps.onDeferredAdd as (files: File[]) => void)(files);
 
-    expect(add).toHaveBeenCalledWith(files, "photo", {
-      deliveryEvidenceRole: "proof_of_delivery",
-    });
+    expect(add).toHaveBeenCalledWith(files, "photo", undefined);
     renderer.unmount();
   });
 });

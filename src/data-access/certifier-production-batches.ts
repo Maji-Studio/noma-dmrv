@@ -3,7 +3,7 @@
  * (issue #630).
  *
  * The local row is the idempotency journal for the Isometric `ProductionBatch`
- * a credit batch is registered as: present ⇒ reuse `ptb_…`, absent ⇒ the
+ * a credit batch is registered as: present ⇒ verify `ptb_…` remotely before reuse, absent ⇒ the
  * submission path reconciles by supplier reference before it POSTs. The remote
  * catalog stays the source of truth for the id itself.
  */
@@ -310,4 +310,41 @@ export async function upsertProductionBatchRegistration(
     );
   }
   return row;
+}
+
+/** Replace only a remotely confirmed missing identity and the exact observed row. */
+export async function replaceMissingProductionBatchRegistration(
+  ctx: OrgContext,
+  expected: CertifierProductionBatchRow,
+  input: UpsertProductionBatchRegistrationInput,
+): Promise<CertifierProductionBatchRow | null> {
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, creditBatches, input.creditBatchId);
+  const [row] = await db.update(certifierProductionBatches).set({
+    externalProductionBatchId: input.externalProductionBatchId,
+    supplierReference: input.supplierReference,
+    externalProjectId: input.externalProjectId,
+    externalFacilityId: input.externalFacilityId,
+    massKg: input.massKg,
+    startedOn: input.startedOn,
+    endedOn: input.endedOn,
+    payloadHash: input.payloadHash,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(certifierProductionBatches.organizationId, ctx.organizationId),
+    eq(certifierProductionBatches.provider, input.provider ?? DEFAULT_PROVIDER),
+    eq(certifierProductionBatches.creditBatchId, input.creditBatchId),
+    eq(certifierProductionBatches.id, expected.id),
+    eq(certifierProductionBatches.externalProductionBatchId, expected.externalProductionBatchId),
+    // PostgreSQL defaults retain microseconds; JS Date readback retains only milliseconds.
+    sql`date_trunc('milliseconds', ${certifierProductionBatches.updatedAt}) = ${expected.updatedAt.toISOString()}::timestamp`,
+    eq(certifierProductionBatches.supplierReference, expected.supplierReference),
+    sql`${certifierProductionBatches.externalProjectId} is not distinct from ${expected.externalProjectId}`,
+    sql`${certifierProductionBatches.externalFacilityId} is not distinct from ${expected.externalFacilityId}`,
+    eq(certifierProductionBatches.massKg, expected.massKg),
+    eq(certifierProductionBatches.startedOn, expected.startedOn),
+    eq(certifierProductionBatches.endedOn, expected.endedOn),
+    eq(certifierProductionBatches.payloadHash, expected.payloadHash),
+  )).returning();
+  return row ?? null;
 }

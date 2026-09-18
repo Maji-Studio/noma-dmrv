@@ -5,8 +5,6 @@
  * Server-side functions for delivery CRUD operations
  */
 
-import { z } from "zod";
-import { type Delivery, deliveries as deliveriesTable } from "@/db/schema";
 import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
@@ -15,28 +13,28 @@ import {
   createDelivery,
   deleteDelivery,
   getDeliveries as getDeliveriesData,
-  getDeliveryById as getDeliveryByIdData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
-  getDeliveriesForSelect as getDeliveriesForSelectData,
-  isDeliveryCodeAvailable as isDeliveryCodeAvailableData,
   updateDelivery,
-  type PaginatedDeliveries,
   type DeliveryDetail,
+  type PaginatedDeliveries,
 } from "@/data-access/deliveries";
 import {
   getDeliveryStats as getDeliveryStatsData,
   type DeliveryStats,
 } from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
+import { deliveries as deliveriesTable, type Delivery } from "@/db/schema";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createDeliverySchema,
   deleteDeliverySchema,
+  deliveryFilterSchema,
   resolveDeliveryDistanceSource,
   updateDeliverySchema,
-  deliveryFilterSchema,
 } from "@/schemas/deliveries";
+import { withAction } from "./with-action";
 import type { ActionResult } from "@/types/actions";
+import { z } from "zod";
 import {
   formatZodActionError,
   toLoggedActionError,
@@ -101,29 +99,6 @@ export async function getDeliveriesFn(
 }
 
 /**
- * Get a single delivery by ID
- */
-export async function getDeliveryByIdFn(
-  deliveryId: string
-): Promise<ActionResult<Delivery>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const delivery = await getDeliveryByIdData(ctx, deliveryId);
-    return { success: true, data: delivery };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load delivery",
-        "delivery:get",
-      ),
-    };
-  }
-}
-
-/**
  * Get a delivery with all its relations
  */
 export async function getDeliveryWithRelationsFn(
@@ -178,67 +153,6 @@ export async function getDeliveryStatsFn(
   }
 }
 
-/**
- * Get deliveries for dropdown selection
- */
-export async function getDeliveriesForSelectFn(
-  orderId?: string
-): Promise<
-  ActionResult<
-    Array<{
-      id: string;
-      code: string;
-      deliveryDate: Date;
-      status: string;
-      orderCode: string | null;
-    }>
-  >
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const deliveries = await getDeliveriesForSelectData(ctx, orderId);
-    return { success: true, data: deliveries };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to load deliveries for select",
-        "delivery:select-options",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a delivery code is available
- */
-export async function checkDeliveryCodeFn(
-  code: string,
-  excludeDeliveryId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isDeliveryCodeAvailableData(
-      ctx,
-      code,
-      excludeDeliveryId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to check delivery code",
-        "delivery:check-code",
-      ),
-    };
-  }
-}
-
 // ============================================
 // Create Operations
 // ============================================
@@ -249,9 +163,7 @@ export async function checkDeliveryCodeFn(
 export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
 ): Promise<ActionResult<Delivery>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const delivery = await withAutoCode(
       ctx,
       "DL",
@@ -265,13 +177,13 @@ export async function createDeliveryFn(
           orderId: validated.orderId,
           facilityId: validated.facilityId,
           deliveryDate: validated.deliveryDate,
-          biocharProductId: validated.biocharProductId ?? null,
+          storageLocationId: validated.storageLocationId,
+          idempotencyKey: validated.idempotencyKey,
+          basisFingerprint: validated.basisFingerprint,
           driverId: validated.driverId ?? null,
           vehicleId: validated.vehicleId ?? null,
           status: validated.status,
           deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
-          truckMassOnArrivalKg: validated.truckMassOnArrivalKg ?? null,
-          truckMassOnDepartureKg: validated.truckMassOnDepartureKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
           distanceKmOverride: validated.distanceKmOverride ?? null,
           distanceSource: resolveDeliveryDistanceSource(
@@ -285,23 +197,11 @@ export async function createDeliveryFn(
       CODE_CONFLICT_MESSAGES.delivery,
     );
 
-    return { success: true, data: delivery };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: deliveryActionError(
-        error,
-        "Failed to create delivery",
-        "delivery:create",
-      ),
-    };
-  }
+    return delivery;
+  }, {
+    fallbackMessage: "Failed to create delivery",
+    log: { message: "delivery action failed", context: { op: "delivery:create" } },
+  });
 }
 
 // ============================================
@@ -324,13 +224,11 @@ export async function updateDeliveryFn(
       orderId: validated.orderId,
       facilityId: validated.facilityId,
       deliveryDate: validated.deliveryDate,
-      biocharProductId: validated.biocharProductId,
+      storageLocationId: validated.storageLocationId,
       driverId: validated.driverId,
       vehicleId: validated.vehicleId,
       status: validated.status,
       deliveredWetMassKg: validated.deliveredWetMassKg,
-      truckMassOnArrivalKg: validated.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: validated.truckMassOnDepartureKg,
       moistureContentPercent: validated.moistureContentPercent,
       distanceKmOverride: validated.distanceKmOverride,
       distanceSource: resolveDeliveryDistanceSource(

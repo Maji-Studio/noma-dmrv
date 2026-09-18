@@ -16,13 +16,8 @@ import {
   createReactor,
   deleteReactor,
   getReactors as getReactorsData,
-  getReactorById as getReactorByIdData,
-  getReactorsByFacility as getReactorsByFacilityData,
-  getReactorTypes as getReactorTypesData,
-  isReactorCodeAvailable as isReactorCodeAvailableData,
   updateReactor,
   type PaginatedReactors,
-  type ReactorWithRelations,
 } from "@/data-access/reactors";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
@@ -83,102 +78,6 @@ export async function getReactorsFn(
         error,
         "Failed to load reactors",
         "reactor:list",
-      ),
-    };
-  }
-}
-
-/**
- * Get a single reactor by ID
- */
-export async function getReactorByIdFn(
-  reactorId: string
-): Promise<ActionResult<ReactorWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const reactor = await getReactorByIdData(ctx, reactorId);
-    return { success: true, data: reactor };
-  } catch (error) {
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to load reactor",
-        "reactor:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get reactors associated with a facility
- */
-export async function getReactorsByFacilityFn(
-  facilityId: string
-): Promise<ActionResult<Reactor[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    await requireOrgFacility(ctx, facilityId);
-    const reactors = await getReactorsByFacilityData(ctx, facilityId);
-    return { success: true, data: reactors };
-  } catch (error) {
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to load facility reactors",
-        "reactor:by-facility",
-      ),
-    };
-  }
-}
-
-/**
- * Get unique reactor types from all reactors
- */
-export async function getReactorTypesFn(): Promise<ActionResult<string[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const types = await getReactorTypesData(ctx);
-    return { success: true, data: types };
-  } catch (error) {
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to load reactor types",
-        "reactor:types",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a reactor code is available
- */
-export async function checkReactorCodeFn(
-  code: string,
-  excludeReactorId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isReactorCodeAvailableData(
-      ctx,
-      code,
-      excludeReactorId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to check reactor code",
-        "reactor:check-code",
       ),
     };
   }

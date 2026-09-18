@@ -18,12 +18,11 @@ import {
   getFeedstocksFn,
   getFeedstockByIdFn,
   getFeedstockStatsFn,
-  getFeedstockOptionsFn,
-  checkFeedstockCodeFn,
   createFeedstockFn,
   updateFeedstockFn,
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
+import { throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -98,31 +97,6 @@ export function useFeedstockStats(
   });
 }
 
-export function useFeedstockOptions() {
-  return useQuery({
-    queryKey: feedstockKeys.options(),
-    queryFn: async () => {
-      const result = await getFeedstockOptionsFn();
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    staleTime: 300000, // 5 min
-  });
-}
-
-export function useFeedstockCodeCheck(code: string, excludeId?: string) {
-  return useQuery({
-    queryKey: feedstockKeys.codeCheck(code, excludeId),
-    queryFn: async () => {
-      const result = await checkFeedstockCodeFn(code, excludeId);
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    enabled: code.length >= 3,
-    staleTime: 10000,
-  });
-}
-
 // ============================================
 // Mutation Hooks
 // ============================================
@@ -137,6 +111,10 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      for (const feedstock of data.feedstocks) {
+        queryClient.setQueryData(feedstockKeys.detail(feedstock.id), feedstock);
+      }
+
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
       queryClient.invalidateQueries({ queryKey: feedstockKeys.options() });
       queryClient.invalidateQueries({
@@ -148,7 +126,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       // Feedstock writes resync the derived transport leg (distance/provenance),
       // an input to certification readiness.
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, variables.facilityId);
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -161,7 +139,9 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
   return useMutation({
     mutationFn: async (data: UpdateFeedstockData) => {
       const result = await updateFeedstockFn(data);
-      if (!result.success) throw new Error(result.error);
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {

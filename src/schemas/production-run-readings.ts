@@ -28,7 +28,3 @@ export const deleteAllProductionRunReadingsSchema = z.object({
 // ============================================
 // Type Inference
 // ============================================
-
-export type DeleteAllProductionRunReadingsData = z.infer<
-  typeof deleteAllProductionRunReadingsSchema
->;

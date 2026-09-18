@@ -1,3 +1,4 @@
+import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 /**
  * Integration coverage for the `lastActivityAt` sort in `getStorageLocations`.
  *
@@ -275,7 +276,7 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
 
     const insertedProducts = await tx
       .insert(biocharProducts)
-      .values([
+      .values(await outputProductFixtureValues(tx, [
         // Branch 4: a product made from bin D's run, i.e. biochar drawn OUT of
         // bin D. Reached only through the join on `linked_production_run_id`.
         {
@@ -314,14 +315,17 @@ async function createFixture(runId: string): Promise<ActivitySortFixture> {
           code: `BP-ACT-STORED-${runId}`,
           facilityId: facility.id,
           storageLocationId: binE.id,
+          massKg: 1,
+          moistureContentPercent: 0,
           createdAt: T5_PRODUCT_STORED,
         },
-      ])
+      ]))
       .returning({ id: biocharProducts.id });
 
     const insertedAllocations = await tx
       .insert(biocharProductSourceAllocations)
       .values([
+        { organizationId: TEST_ORG_ID, biocharProductId: insertedProducts[2].id, productionRunId: binGRun1.id, sourceStorageLocationId: binG.id, allocatedWetMassKg: 1, allocatedDryMassKg: 1, createdAt: T5_PRODUCT_STORED },
         {
           organizationId: TEST_ORG_ID,
           biocharProductId: insertedProducts[1].id,
@@ -381,9 +385,7 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
           fixture.sourceAllocationIds,
         ),
       );
-    await tx
-      .delete(biocharProducts)
-      .where(inArray(biocharProducts.id, fixture.biocharProductIds));
+    await deleteOutputProductFixtures(tx, inArray(biocharProducts.id, fixture.biocharProductIds));
     await tx
       .delete(productionRunFeedstockDraws)
       .where(
@@ -408,7 +410,7 @@ async function cleanupFixture(fixture: ActivitySortFixture): Promise<void> {
       .delete(feedstockTypes)
       .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
     await tx.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-    await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
 }
 

@@ -108,11 +108,28 @@ function failedStep(
   latest: Map<SubmissionProgressStep, SubmissionProgressUpdate>,
 ): SubmissionProgressStep | null {
   if (latest.size === 0) return null;
+  const lastReportedIndex = steps.reduce(
+    (latestIndex, step, index) =>
+      latest.has(step) ? Math.max(latestIndex, index) : latestIndex,
+    -1,
+  );
   return (
     steps.find((step) => latest.get(step)?.state === "active") ??
-    steps.find((step) => !latest.has(step)) ??
+    steps.slice(lastReportedIndex + 1).find((step) => !latest.has(step)) ??
     steps[steps.length - 1]
   );
+}
+
+function resubmissionSteps(
+  steps: readonly SubmissionProgressStep[],
+  latest: Map<SubmissionProgressStep, SubmissionProgressUpdate>,
+  failed: SubmissionProgressStep | null,
+): SubmissionProgressStep[] {
+  return steps.filter((step) => {
+    if (step === failed) return true;
+    const state = latest.get(step)?.state;
+    return state !== undefined && state !== "reused" && state !== "skipped";
+  });
 }
 
 function displayState(
@@ -179,15 +196,24 @@ export function SubmissionProgress({
   updates,
   error = null,
   stalled = false,
+  isResubmission = false,
 }: {
   kind: ProgressKind;
   updates: SubmissionProgressUpdate[];
   error?: string | null;
   stalled?: boolean;
+  isResubmission?: boolean;
 }) {
   const steps = stepSequence(kind);
   const latest = latestUpdates(updates);
   const failed = error && !stalled ? failedStep(steps, latest) : null;
+  const retryDetected = [...latest.values()].some(
+    (update) => update.state === "reused",
+  );
+  const visibleSteps =
+    isResubmission || retryDetected
+      ? resubmissionSteps(steps, latest, failed)
+      : steps;
   const active = steps.find((step) => latest.get(step)?.state === "active");
   const terminal = steps[steps.length - 1];
   const liveStep =
@@ -211,7 +237,7 @@ export function SubmissionProgress({
         {statusCopy}
       </span>
       <ol aria-label="Submission progress">
-        {steps.map((step, index) => {
+        {visibleSteps.map((step, index) => {
           const update = latest.get(step);
           const state = displayState(step, update, failed);
           const copy = STEP_COPY[step];
@@ -228,7 +254,7 @@ export function SubmissionProgress({
               <span className="sr-only">{STATE_LABELS[state]}. </span>
               <div className="flex shrink-0 flex-col items-center">
                 <ProgressIcon state={state} />
-                {index < steps.length - 1 && (
+                {index < visibleSteps.length - 1 && (
                   <span
                     aria-hidden
                     className={`my-4 min-h-16 w-px grow ${

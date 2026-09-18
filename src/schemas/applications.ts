@@ -11,8 +11,15 @@ import {
   MASS_MIN_KG_MESSAGE,
   MASS_MIN_TONNES_MESSAGE,
   MASS_TONNES_INPUT_STEP,
+  expectedUpdatedAtSchema,
+  requiredNumber,
 } from "./helpers";
 import { gisBoundarySchema } from "./gis-boundary";
+import {
+  FIELD_SIZE_POSITIVE_MESSAGE,
+  FIELD_SIZE_REQUIRED_MESSAGE,
+  isPositiveApplicationFieldSize,
+} from "@/lib/application-field-size";
 
 // ============================================
 // Constants and Enums
@@ -47,8 +54,27 @@ export const applicationEvidenceMethods = [
 ] as const;
 export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[number];
 
+/** Methods offered for new operator selections. `visual` remains for legacy records. */
+export const selectableApplicationEvidenceMethods = [
+  "location",
+  "boundary",
+] as const satisfies readonly ApplicationEvidenceMethod[];
+
+export function isSelectableApplicationEvidenceMethod(
+  value: ApplicationEvidenceMethod,
+): value is (typeof selectableApplicationEvidenceMethods)[number] {
+  return selectableApplicationEvidenceMethods.includes(
+    value as (typeof selectableApplicationEvidenceMethods)[number],
+  );
+}
+
 const CUSTOMER_LOCATION_REQUIRED_MESSAGE =
   "Customer location coordinates are required.";
+const positiveFieldSizeHaSchema = requiredNumber(
+  FIELD_SIZE_REQUIRED_MESSAGE,
+  "Enter a valid field size",
+)
+  .refine(isPositiveApplicationFieldSize, FIELD_SIZE_POSITIVE_MESSAGE);
 
 function applicationEvidenceSuperRefine(
   data: {
@@ -119,11 +145,7 @@ const applicationFormBaseSchema = z.object({
     .min(MASS_KG_INPUT_STEP, MASS_MIN_KG_MESSAGE)
     .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
   // === Section 2: Field Details ===
-  fieldSizeHa: z
-    .number()
-    .min(0, "Field size must be a positive number")
-    .optional()
-    .nullable(),
+  fieldSizeHa: positiveFieldSizeHaSchema,
   fieldIdentifier: z
     .string()
     .max(255, "Field identifier must be less than 255 characters")
@@ -192,6 +214,7 @@ export const createApplicationSchema = applicationCreateBaseSchema.superRefine(
  */
 export const updateApplicationSchema = z.object({
   applicationId: z.string().uuid("Choose a valid application."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)
@@ -205,7 +228,7 @@ export const updateApplicationSchema = z.object({
     .min(MASS_TONNES_INPUT_STEP, MASS_MIN_TONNES_MESSAGE)
     .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
     .optional(),
-  fieldSizeHa: z.number().min(0).optional().nullable(),
+  fieldSizeHa: positiveFieldSizeHaSchema.optional(),
   fieldIdentifier: z.string().max(255).optional().nullable(),
   cropType: z.string().max(100).optional().nullable(),
   gpsLatitude: latitudeSchema,
@@ -234,17 +257,9 @@ export type ApplicationEvidenceState = z.infer<
 >;
 export type CreateApplicationData = z.infer<typeof createApplicationSchema>;
 export type UpdateApplicationData = z.infer<typeof updateApplicationSchema>;
-export type DeleteApplicationData = z.infer<typeof deleteApplicationSchema>;
-
 // ============================================
 // Validation Helpers
 // ============================================
-
-/**
- * Extended application form schema with GPS validation
- * Both latitude and longitude must be provided together
- */
-export const applicationFormSchemaWithGpsValidation = applicationFormSchema;
 
 /**
  * Formatting helpers for display

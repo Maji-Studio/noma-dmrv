@@ -14,6 +14,12 @@
 # Database (PostgreSQL via Drizzle ORM)
 # -----------------------------------------------------------------------------
 DATABASE_URL="op://Environment Variables/noma-dmrv env staging/DATABASE_URL"
+DB_POOL_MAX="op://Environment Variables/noma-dmrv env staging/DB_POOL_MAX"
+DB_POOL_IDLE_TIMEOUT_MS="op://Environment Variables/noma-dmrv env staging/DB_POOL_IDLE_TIMEOUT_MS"
+DB_POOL_CONNECTION_TIMEOUT_MS="op://Environment Variables/noma-dmrv env staging/DB_POOL_CONNECTION_TIMEOUT_MS"
+DB_POOL_LOCK_TIMEOUT_MS="op://Environment Variables/noma-dmrv env staging/DB_POOL_LOCK_TIMEOUT_MS"
+# Managed database CA (PEM) so the pg pool verifies TLS with full checking.
+DATABASE_CA_CERT="op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT"
 
 # -----------------------------------------------------------------------------
 # App URL (Used for Better Auth and general app links)

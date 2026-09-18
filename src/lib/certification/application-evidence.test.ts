@@ -14,6 +14,7 @@ import {
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import {
   getMissingApplicationEvidenceRequirements,
+  isApplicationEvidenceDocumentReady,
   type ApplicationEvidenceDocument,
 } from "./application-evidence";
 
@@ -118,6 +119,18 @@ describe("application evidence adapter contract", () => {
       );
       expect(adapterGaps).toHaveLength(fixture.expectedGapCount);
       expect(adapterGaps).toHaveLength(pureGaps.length);
+    },
+  );
+
+  it.each(["pending", "failed"])(
+    "does not accept an explicit %s upload merely because it has a URL",
+    (uploadStatus) => {
+      expect(
+        isApplicationEvidenceDocumentReady({
+          uploadStatus,
+          fileUrl: UPLOADED_FILE_URL,
+        }),
+      ).toBe(false);
     },
   );
 });

@@ -1,3 +1,6 @@
+import { insertEstablishedOutputApplicationFixture as insertOutputApplicationFixture } from "../helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "../helpers/output-contract-fixtures";
+import { preparePureOutputProductFixture, outputProductFixtureValues, outputOrderFixtureValues, insertEstablishedOutputDeliveryFixture as insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../helpers/output-contract-fixtures";
 /**
  * Full E2E Integration Test
  *
@@ -217,9 +220,11 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       facilityId: ids.facility,
       reactorId: ids.reactor,
       status: "complete",
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      startTime: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      endTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
       biocharOutputKg: 150,
+      biocharDryMassKg: 150,
+      biocharMoisturePercent: 0,
       biocharStorageLocationId: ids.biocharStorageLocation,
       feedstockStorageLocationId: ids.storageLocation,
     });
@@ -254,18 +259,20 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     });
 
     // 14. Create Biochar Product (links formulation, production run, storage)
-    await tx.insert(schema.biocharProducts).values({
+    await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.biocharProduct,
       code: codes.biocharProduct,
       facilityId: ids.facility,
       formulationId: ids.formulation,
       linkedProductionRunId: ids.productionRun,
-      storageLocationId: ids.biocharStorageLocation,
       productionDate: new Date(),
       status: "ready",
       massKg: 150,
-    });
+      moistureContentPercent: 0,
+    }));
+
+    const productSource = await preparePureOutputProductFixture(tx, ids.biocharProduct);
 
     // 15. Create Customer
     await tx.insert(schema.customers).values({
@@ -287,7 +294,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     });
 
     // 17. Create Order (links customer, customer location, biochar product)
-    await tx.insert(schema.orders).values({
+    await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.order,
       code: codes.order,
@@ -296,12 +303,12 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       customerId: ids.customer,
       customerLocationId: ids.customerLocation,
       biocharProductId: ids.biocharProduct,
-      quantityKg: 100,
+      quantityKg: 105,
       packaging: "bagged",
-    });
+    }));
 
     // 18. Create Delivery (links order, biochar product, storage)
-    await tx.insert(schema.deliveries).values({
+    await insertOutputDeliveryFixture(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.delivery,
       code: codes.delivery,
@@ -309,16 +316,16 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       deliveryDate: new Date(),
       orderId: ids.order,
       biocharProductId: ids.biocharProduct,
-      storageLocationId: ids.biocharStorageLocation,
+      storageLocationId: productSource.storageLocationId,
       deliveredWetMassKg: 105,
-      massDryKg: 100,
+      massDryKg: 99.75,
       moistureContentPercent: 5,
       status: "delivered",
       vehicleId: ids.vehicle,
-    });
+    }, row => row);
 
     // 19. Create Application (links delivery)
-    await tx.insert(schema.applications).values({
+    await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.application,
       code: codes.application,
@@ -333,7 +340,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       gpsLongitude: 37.0,
       soilTemperatureSource: "baseline",
       soilTemperatureC: 25,
-    });
+    }, row => row);
 
     await tx.insert(schema.productionProcesses).values({
         organizationId: DEC_ORG_ID,
@@ -412,14 +419,10 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
         .where(eq(schema.creditBatches.id, data.creditBatch.id));
 
       // Application
-      await tx
-        .delete(schema.applications)
-        .where(eq(schema.applications.id, data.application.id));
+      await deleteOutputApplicationFixtures(tx, eq(schema.applications.id, data.application.id));
 
       // Delivery
-      await tx
-        .delete(schema.deliveries)
-        .where(eq(schema.deliveries.id, data.delivery.id));
+      await deleteOutputDeliveryFixtures(tx, eq(schema.deliveries.id, data.delivery.id));
 
       // Order
       await tx.delete(schema.orders).where(eq(schema.orders.id, data.order.id));
@@ -435,9 +438,7 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
         .where(eq(schema.customers.id, data.customer.id));
 
       // Biochar product
-      await tx
-        .delete(schema.biocharProducts)
-        .where(eq(schema.biocharProducts.id, data.biocharProduct.id));
+      await deleteOutputProductFixtures(tx, eq(schema.biocharProducts.id, data.biocharProduct.id));
 
       // Formulation
       await tx
@@ -511,9 +512,7 @@ async function cleanupWorkflowData(data: TestWorkflowData): Promise<void> {
         .where(eq(schema.certifierGhgStatements.facilityId, data.facility.id));
 
       // Facility
-      await tx
-        .delete(schema.facilities)
-        .where(eq(schema.facilities.id, data.facility.id));
+      await deleteOutputFacilityFixtures(tx, eq(schema.facilities.id, data.facility.id));
     });
   } finally {
     await pool.end();
@@ -655,7 +654,7 @@ test.describe("Full E2E Workflow - Database Operations", () => {
     }
   });
 
-  test("order links customer, location, and biochar product", async () => {
+  test("order links customer, location, and formulation", async () => {
     const { db, pool } = createDbConnection();
 
     try {
@@ -668,7 +667,8 @@ test.describe("Full E2E Workflow - Database Operations", () => {
       expect(order).toBeDefined();
       expect(order.customerId).toBe(workflowData.customer.id);
       expect(order.customerLocationId).toBe(workflowData.customerLocation.id);
-      expect(order.biocharProductId).toBe(workflowData.biocharProduct.id);
+      const [product] = await db.select().from(schema.biocharProducts).where(eq(schema.biocharProducts.id, workflowData.biocharProduct.id));
+      expect(order.formulationId).toBe(product.formulationId);
     } finally {
       await pool.end();
     }

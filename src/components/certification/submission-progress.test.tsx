@@ -119,7 +119,7 @@ describe("SubmissionProgress", () => {
     expect(html).toContain("This step is not needed for this submission.");
   });
 
-  it("distinguishes work recovered from an earlier attempt", () => {
+  it("shows only the work needed for a Removal resubmission", () => {
     const html = renderToStaticMarkup(
       <SubmissionProgress
         kind="removal"
@@ -127,18 +127,94 @@ describe("SubmissionProgress", () => {
           { step: "removal.checking_data", state: "complete" },
           { step: "removal.preparing_evidence", state: "complete" },
           { step: "removal.sending_inputs", state: "reused" },
-          { step: "removal.sending_durability", state: "reused" },
+          { step: "removal.sending_durability", state: "skipped" },
           { step: "removal.creating", state: "reused" },
           { step: "removal.verifying_evidence", state: "active" },
         ]}
       />,
     );
 
-    expect(html.match(/Already sent/g)?.length).toBeGreaterThanOrEqual(3);
-    expect(html).toContain(
-      "This step was completed in an earlier submission attempt.",
-    );
+    expect(html).not.toContain("Sending monitored inputs");
+    expect(html).not.toContain("Sending durability measurements");
+    expect(html).not.toContain("Creating Removal in Isometric");
+    expect(html).not.toContain("Already sent");
+    expect(html).toContain("Checking evidence links");
     expect(html).not.toContain(">Not required<");
+  });
+
+  it("does not show unreported steps around reused work after a Removal completes", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionProgress
+        kind="removal"
+        updates={[
+          { step: "removal.checking_data", state: "complete" },
+          { step: "removal.creating", state: "reused" },
+          { step: "removal.complete", state: "complete" },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("Checking submission data");
+    expect(html).not.toContain("Preparing supporting evidence");
+    expect(html).not.toContain("Sending monitored inputs");
+    expect(html).not.toContain("Sending durability measurements");
+    expect(html).not.toContain("Creating Removal in Isometric");
+    expect(html).not.toContain("Checking evidence links");
+    expect(html).toContain("Submission complete");
+  });
+
+  it("shows the next real step when sparse recovery progress fails", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionProgress
+        kind="removal"
+        updates={[
+          { step: "removal.checking_data", state: "complete" },
+          { step: "removal.creating", state: "reused" },
+        ]}
+        error="Evidence reconciliation failed."
+      />,
+    );
+
+    expect(html).not.toContain("Preparing supporting evidence");
+    expect(html).not.toContain("Sending monitored inputs");
+    expect(html).not.toContain("Sending durability measurements");
+    expect(html).not.toContain("Creating Removal in Isometric");
+    expect(html).toContain("Checking evidence links failed.");
+  });
+
+  it("shows only the work needed for a GHG Statement resubmission", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionProgress
+        kind="ghg_statement"
+        isResubmission
+        updates={[
+          { step: "ghg_statement.checking", state: "complete" },
+          { step: "ghg_statement.preparing_report", state: "reused" },
+          { step: "ghg_statement.sending", state: "reused" },
+          { step: "ghg_statement.confirming", state: "active" },
+        ]}
+      />,
+    );
+
+    expect(html).toContain("Checking statement and report");
+    expect(html).not.toContain("Preparing verifier document");
+    expect(html).not.toContain("Sending to the verifier");
+    expect(html).not.toContain("Already sent");
+    expect(html).toContain("Confirming registry response");
+  });
+
+  it("does not preview unreported steps when a resubmission starts", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionProgress
+        kind="ghg_statement"
+        isResubmission
+        updates={[{ step: "ghg_statement.checking", state: "active" }]}
+      />,
+    );
+
+    expect(html).toContain("Checking statement and report");
+    expect(html).not.toContain("Preparing verifier document");
+    expect(html).not.toContain("Submission complete");
   });
 
   it("announces the terminal state when every step is complete", () => {

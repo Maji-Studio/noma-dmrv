@@ -38,6 +38,7 @@ export async function loadLinkedGhgStatementStatus(
       latest,
       latest ? isLockedInFlight(latest) : false,
       "ghgStatement",
+      "unknown",
     ),
   };
 }

@@ -1,3 +1,4 @@
+import { loadApplicationCertificationLock } from "@/fn/application-certification-lock";
 import {
   useMutation,
   useQueries,
@@ -6,14 +7,13 @@ import {
 } from "@tanstack/react-query";
 import {
   getApplicationsFn,
-  getApplicationByIdFn,
   getApplicationDeliveryOptionsFn,
   createApplicationFn,
   updateApplicationFn,
   deleteApplicationFn,
 } from "@/fn/applications";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
-import { invalidateCertificationReadiness } from "@/hooks/use-certification";
+import { certificationKeys, invalidateCertificationReadiness } from "@/hooks/use-certification";
 import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
 import type { ApplicationListOptions } from "@/data-access/applications";
 
@@ -29,6 +29,7 @@ export const applicationKeys = {
     [...applicationKeys.lists(), filters] as const,
   deliveryOptions: (facilityId?: string) =>
     [...applicationKeys.all, "deliveryOptions", facilityId] as const,
+  certificationLock: (id?: string) => [...certificationKeys.all, "application-lock", id] as const,
   details: () => [...applicationKeys.all, "detail"] as const,
   detail: (id: string) => [...applicationKeys.details(), id] as const,
 };
@@ -101,24 +102,6 @@ export function useApplicationDeliveryOptions(
 }
 
 /**
- * Query hook for fetching a single application
- */
-export function useApplication(id: string) {
-  return useQuery({
-    queryKey: applicationKeys.detail(id),
-    queryFn: async () => {
-      const result = await getApplicationByIdFn(id);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: !!id,
-    staleTime: 30000,
-  });
-}
-
-/**
  * Mutation hook for creating an application
  */
 export function useCreateApplication() {
@@ -186,6 +169,18 @@ export function useDeleteApplication() {
       // the whole credit-batch scope rather than guessing.
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
       invalidateCertificationReadiness(queryClient);
+    },
+  });
+}
+
+export function useApplicationCertificationLock(applicationId?: string) {
+  return useQuery({
+    queryKey: applicationKeys.certificationLock(applicationId),
+    enabled: !!applicationId,
+    queryFn: async () => {
+      const result = await loadApplicationCertificationLock(applicationId!);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
     },
   });
 }

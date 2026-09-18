@@ -8,7 +8,9 @@ import { optionalDistanceSource } from "./distance-source";
 import { optionalTripType } from "./trip-type";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import {
+  clearablePositiveNumber,
   emptyToNull,
+  expectedUpdatedAtSchema,
   massKgSchema,
   optionalPositiveNumber,
   positiveMassKgSchema,
@@ -158,6 +160,7 @@ export const createFeedstockSchema = feedstockFormSchema.safeExtend({
 
 export const updateFeedstockSchema = z.object({
   feedstockId: z.string().uuid("Choose a valid feedstock."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   facilityId: z.string().uuid().optional(),
   deliveryDate: z.union([
     z.date(),
@@ -172,7 +175,10 @@ export const updateFeedstockSchema = z.object({
   ]).optional(),
   supplierId: z.string().uuid().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  transportDistanceKm: optionalPositiveNumber,
+  // Clearable, not optional-null: `syncFeedstockTransportLeg` preserves the
+  // leg's stored distance only when this key is absent, so an omitted patch
+  // must stay `undefined` instead of collapsing to an explicit clear.
+  transportDistanceKm: clearablePositiveNumber,
   transportDistanceSource: optionalDistanceSource,
   transportTripType: optionalTripType,
   feedstockTypeId: z.string().uuid().optional(),
@@ -231,7 +237,6 @@ export const feedstockStatsFilterSchema = feedstockFilterSchema.pick({
 export type FeedstockFormData = z.infer<typeof feedstockFormSchema>;
 export type CreateFeedstockData = z.infer<typeof createFeedstockSchema>;
 export type UpdateFeedstockData = z.infer<typeof updateFeedstockSchema>;
-export type DeleteFeedstockData = z.infer<typeof deleteFeedstockSchema>;
 export type FeedstockFilterData = z.infer<typeof feedstockFilterSchema>;
 export type FeedstockStatsFilterData = z.infer<
   typeof feedstockStatsFilterSchema

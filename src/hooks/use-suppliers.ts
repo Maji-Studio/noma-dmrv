@@ -5,6 +5,7 @@
  */
 
 import {
+  keepPreviousData,
   type QueryClient,
   useMutation,
   useQuery,
@@ -12,9 +13,11 @@ import {
 } from "@tanstack/react-query";
 import type { Supplier, SupplierLocation } from "@/db/schema";
 import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
-import type { EntityOption } from "@/components/forms/entity-select/types";
+import type {
+  EntityOption,
+  EntityType,
+} from "@/components/forms/entity-select/types";
 
-const SUPPLIERS_STALE_TIME_MS = 60_000;
 import type {
   SupplierFilterData,
   CreateSupplierData,
@@ -30,9 +33,6 @@ import type {
 import {
   getSuppliersFn,
   getSupplierByIdFn,
-  getSupplierLocationsFn,
-  getSupplierOptionsFn,
-  checkSupplierCodeFn,
   createSupplierFn,
   createSupplierWithLocationsFn,
   updateSupplierFn,
@@ -43,26 +43,19 @@ import {
   deleteSupplierLocationFn,
 } from "@/fn/suppliers";
 
+import { throwActionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
+import { supplierKeys } from "./supplier-query-keys";
+import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
 
-// ============================================
-// Query Keys
-// ============================================
+export { supplierKeys } from "./supplier-query-keys";
 
-export const supplierKeys = {
-  all: ["suppliers"] as const,
-  lists: () => [...supplierKeys.all, "list"] as const,
-  list: (filters?: Partial<SupplierFilterData>) =>
-    [...supplierKeys.lists(), filters] as const,
-  details: () => [...supplierKeys.all, "detail"] as const,
-  detail: (id: string) => [...supplierKeys.details(), id] as const,
-  locations: () => [...supplierKeys.all, "locations"] as const,
-  supplierLocations: (supplierId: string) => [...supplierKeys.all, "supplierLocations", supplierId] as const,
-  options: () => [...supplierKeys.all, "options"] as const,
-  codeCheck: (code: string, excludeId?: string) =>
-    [...supplierKeys.all, "codeCheck", code, excludeId] as const,
-};
+const SUPPLIER_ENTITY_TYPE: EntityType = "supplier";
+
+const SUPPLIER_DETAIL_STALE_TIME_MS = 30_000;
+const SUPPLIER_LOCATIONS_STALE_TIME_MS = 60_000;
 
 function seedCreatedSupplierCaches(
   queryClient: QueryClient,
@@ -76,8 +69,9 @@ function seedCreatedSupplierCaches(
   };
 
   queryClient.setQueryData(supplierKeys.detail(supplier.id), supplier);
-  seedEntityCache(queryClient, "supplier", option);
+  seedEntityCache(queryClient, SUPPLIER_ENTITY_TYPE, option);
 }
+
 
 // ============================================
 // Supplier Query Hooks
@@ -97,6 +91,11 @@ export function useSuppliers(filters?: Partial<SupplierFilterData>) {
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    // A search or page change creates a new query key. Without this the list
+    // blanks to skeletons for the round trip, which unmounts an open row menu
+    // mid-click (issue #798). Keeping the previous page means the control the
+    // operator just used stays put until the new page is in.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -114,63 +113,7 @@ export function useSupplier(supplierId: string, enabled = true) {
       return result.data;
     },
     enabled: enabled && !!supplierId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch unique locations from all suppliers
- */
-export function useSupplierLocations() {
-  return useQuery({
-    queryKey: supplierKeys.locations(),
-    queryFn: async () => {
-      const result = await getSupplierLocationsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: SUPPLIERS_STALE_TIME_MS, // 1 minute - locations don't change often
-  });
-}
-
-/**
- * Hook to fetch supplier options for dropdowns
- */
-export function useSupplierOptions() {
-  return useQuery({
-    queryKey: supplierKeys.options(),
-    queryFn: async () => {
-      const result = await getSupplierOptionsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: SUPPLIERS_STALE_TIME_MS, // 1 minute
-  });
-}
-
-/**
- * Hook to check if a supplier code is available
- */
-export function useSupplierCodeCheck(
-  code: string,
-  excludeSupplierId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: supplierKeys.codeCheck(code, excludeSupplierId),
-    queryFn: async () => {
-      const result = await checkSupplierCodeFn(code, excludeSupplierId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
+    staleTime: SUPPLIER_DETAIL_STALE_TIME_MS,
   });
 }
 
@@ -199,15 +142,15 @@ export function useCreateSupplier(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      seedCreatedSupplierCaches(queryClient, data);
+
       // Invalidate all supplier lists
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       // Invalidate locations in case a new location was added
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
-      await invalidateOnboardingProgress(queryClient);
-
-      seedCreatedSupplierCaches(queryClient, data);
+      invalidateOnboardingProgress(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -234,12 +177,13 @@ export function useCreateSupplierWithLocations(
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      seedCreatedSupplierCaches(queryClient, data);
+
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(data.id) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
-      await invalidateOnboardingProgress(queryClient);
-      seedCreatedSupplierCaches(queryClient, data);
+      invalidateOnboardingProgress(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -266,9 +210,9 @@ export function useUpdateSupplier(
   return useMutation({
     mutationFn: async (data: UpdateSupplierData) => {
       const result = await updateSupplierFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -316,11 +260,10 @@ export function useUpdateSupplier(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.supplierId
-                ? ({
-                    ...item,
-                    ...variables,
-                    updatedAt: new Date(),
-                  } as SupplierWithRelations)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as SupplierWithRelations)
                 : item
             ),
           };
@@ -335,11 +278,18 @@ export function useUpdateSupplier(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(supplierKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<SupplierWithRelations>(
+        queryClient,
+        supplierKeys.lists(),
+        data,
+      );
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      // Feedstock and delivery pickers read the supplier through EntitySelect.
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -442,6 +392,12 @@ export function useDeleteSupplier(
       queryClient.invalidateQueries({ queryKey: supplierKeys.locations() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: supplierKeys.options() });
+      // Drop the deleted supplier from the pickers
+      queryClient.removeQueries({
+        queryKey: entityKeys.detail(SUPPLIER_ENTITY_TYPE, supplierId),
+      });
+      // Feedstock and delivery pickers read the supplier through EntitySelect.
+      invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(undefined, supplierId);
     },
@@ -482,102 +438,18 @@ export function useDeleteSupplier(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch suppliers list for faster initial load
- */
-export function usePrefetchSuppliers() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<SupplierFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: supplierKeys.list(filters),
-      queryFn: async () => {
-        const result = await getSuppliersFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single supplier
- */
-export function usePrefetchSupplier() {
-  const queryClient = useQueryClient();
-
-  return (supplierId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: supplierKeys.detail(supplierId),
-      queryFn: async () => {
-        const result = await getSupplierByIdFn(supplierId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access supplier cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useSupplierCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all supplier data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.all }),
-
-    /** Invalidate all supplier lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() }),
-
-    /** Invalidate a specific supplier detail */
-    invalidateDetail: (supplierId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: supplierKeys.detail(supplierId),
-      }),
-
-    /** Invalidate supplier locations list */
-    invalidateLocations: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.locations() }),
-
-    /** Invalidate supplier options */
-    invalidateOptions: () =>
-      queryClient.invalidateQueries({ queryKey: supplierKeys.options() }),
-
-    /** Remove a specific supplier from cache (use after deletion) */
-    removeFromCache: (supplierId: string) => {
-      queryClient.removeQueries({ queryKey: supplierKeys.detail(supplierId) });
-    },
-
-    /** Set supplier data in cache (useful for optimistic updates) */
-    setSupplierData: (supplierId: string, data: Supplier) =>
-      queryClient.setQueryData(supplierKeys.detail(supplierId), data),
-
-    /** Get cached supplier data */
-    getCachedSupplier: (supplierId: string) =>
-      queryClient.getQueryData<Supplier>(supplierKeys.detail(supplierId)),
-  };
-}
 
 // ============================================
 // Supplier Location Hooks
 // ============================================
 
-export function useSupplierLocationsBySupplier(supplierId: string, enabled = true) {
+export function useSupplierLocationsBySupplier(
+  supplierId: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: supplierKeys.supplierLocations(supplierId),
     queryFn: async () => {
@@ -586,7 +458,7 @@ export function useSupplierLocationsBySupplier(supplierId: string, enabled = tru
       return result.data;
     },
     enabled: !!supplierId && enabled,
-    staleTime: SUPPLIERS_STALE_TIME_MS,
+    staleTime: SUPPLIER_LOCATIONS_STALE_TIME_MS,
   });
 }
 
@@ -617,7 +489,9 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
   return useMutation({
     mutationFn: async (data: UpdateSupplierLocationData) => {
       const result = await updateSupplierLocationFn(data);
-      if (!result.success) throw new Error(result.error);
+      // Keeps an expected-version refusal typed so the open edit dialog can
+      // show it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {
