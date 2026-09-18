@@ -1,10 +1,16 @@
 /** Throwaway synthetic form only. Never use as an accounting or mutation schema. */
 import { z } from "zod";
-import { requiredNumber, MASS_INPUT_MAX_KG } from "./helpers";
-const PERCENT_MAX = 100;
-const mass = requiredNumber().pipe(z.number().min(0).max(MASS_INPUT_MAX_KG));
-const moisture = requiredNumber().pipe(z.number().min(0).max(PERCENT_MAX));
+import { requiredMassKgSchema, optionalPercent } from "./helpers";
+const mass = requiredMassKgSchema();
+const moisture = optionalPercent.transform((value, ctx) => {
+  if (value == null) {
+    ctx.addIssue({ code: "custom", message: "Required" });
+    return z.NEVER;
+  }
+  return value;
+});
 const commonFields = z.object({
+  placedAt: z.iso.date({ error: "Enter a valid date." }),
   sourceWet: mass,
   sourceMoisture: moisture,
   water: mass,
