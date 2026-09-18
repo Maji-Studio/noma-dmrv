@@ -1,7 +1,7 @@
 # Loading speed plan (2026-09-16)
 
 - **Owner**: Kenji Nguyen
-- **Status**: in progress. Phases 0 and 1 done 2026-09-16; Phase 3 merged and measured 2026-09-17 (#803); pool ladder settled at `DB_POOL_MAX=3` on 2026-09-17 (no checkout queueing, see below); Phases 2 and 4 deferred as sub-second wins after the Frankfurt move; Phase 5 approved 2026-09-17, implementation pending
+- **Status**: done 2026-09-18. Phases 0 and 1 done 2026-09-16; Phase 3 merged and measured 2026-09-17 (#803); pool ladder settled at `DB_POOL_MAX=3` on 2026-09-17 (#810); Phase 5 merged 2026-09-17 (#811) and measured 2026-09-18 (below); Phases 2 and 4 stay deferred as sub-second wins after the Frankfurt move. The pool telemetry flag was replaced by `LOG_LEVEL=trace` (#812).
 - **Last reviewed**: 2026-09-17
 
 Staging pages sit on a skeleton for 11 s warm and 20 s cold. The measured cause is
@@ -202,6 +202,28 @@ rollout rule ("move from 3 to 5 only when acquisition still queues at 3") stops
 the ladder at 3. `DB_POOL_MAX=3` stays
 on Preview; Production stays at 1 until it carries real traffic, at which point
 the same telemetry window decides. `DB_POOL_TELEMETRY` goes back off.
+
+## After Phase 5 (measured 2026-09-18, warm, signed in, staging at 095f098c, `DB_POOL_MAX=3`)
+
+Same protocol, four warm hard reloads of the Dashboard with a facility
+selected, RSC prefetches excluded. Facility detail, active organization,
+onboarding status and dashboard overview now fetch through `/api/reads/*` and
+run in parallel; the only Server Action left at startup is the platform-admin
+organization directory, which must answer for an admin with no active
+organization.
+
+| Phase | Run 1 | Run 2 | Run 3 | Run 4 | After Phase 3 |
+| --- | --- | --- | --- | --- | --- |
+| HTML document streamed | 0.16 s | 0.22 s | 0.18 s | 0.19 s | 0.16 to 0.78 s |
+| First startup fetch starts | 0.20 s | 0.26 s | 0.20 s | 0.22 s | 0.19 to 0.92 s |
+| Last startup fetch finishes | 0.98 s | 0.88 s | 0.90 s | 0.96 s | 1.05 to 2.14 s |
+| Longest single fetch | 0.35 s | 0.28 s | 0.31 s | 0.35 s | 0.23 to 1.36 s |
+
+Startup fetch count stayed at 9, but they now overlap: the last one finishes
+under a second on every run, and the longest is the dashboard overview at
+about 0.3 s. From the 2026-09-16 baseline (11.5 s warm) the warm startup is
+down by more than 90 percent. Nothing further is planned; Phases 2 and 4
+remain available if a later measurement shows the shell or auth cost dominating.
 
 ## Phase 2: per-request auth cost (one PR)
 
