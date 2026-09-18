@@ -13,19 +13,25 @@ pnpm prototype:stock-ui
 - http://127.0.0.1:3116/biochar-products?prototype=stock
 - http://127.0.0.1:3116/orders?prototype=stock
 
-Old `variant=A`, `B`, and `C` links all render this same inline design. There is no floating switcher, separate review rail, or reserved blank viewport band.
+Add `&variant=A` through `&variant=E` to either URL. Missing or invalid variants render A. The in-flow switcher above the form preserves entered values; reload and browser back restore the URL-selected layout. Product/Order navigation preserves the variant and starts a fresh synthetic example. Reload resets values because they live only in memory.
 
 When reusing another worktree's dependency directory, `pnpm --config.verify-deps-before-run=false run prototype:stock-ui` skips pnpm's automatic dependency reconciliation. Vite is a pinned direct development dependency; the launcher also resolves the same installed Vite through Vitest in a shared dependency directory.
 
 The preview uses the actual prototype components and app CSS in a synthetic shell. It does not start the Next.js app, read environment files, authenticate, fetch domain data, or write records. It is a loopback-only component preview, not an application authentication bypass.
 
-## Selected interaction design
+## Five inline layouts for each form
 
-The product form follows placement, source, formulation/ingredients, then product bin. Ingredient wet mass and moisture sit together at desktop width. A compact final summary distinguishes wet product, dry biochar, and ingredient dry solids. **Show composition** and **Show stock changes** expand separately beneath their triggers in the normal page flow. Their labels change to **Hide** while open.
+| Variant | Product | Order |
+| --- | --- | --- |
+| A. Compact overview | Complete inputs followed by concise mass totals and separate composition/stock disclosures. | Complete inputs followed by requested wet mass, dry availability and batch disclosure. |
+| B. At the source | Source and ingredient stock balances beneath their inputs; output at the destination. | Dry stock and batch details beside formulation, with requested wet mass in a separate section. |
+| C. Expandable sections | Four editable summary rows with a live overview below. | Three editable summary rows with a live overview below. |
+| D. Guided inline steps | Placement, source, ingredients and destination reveal in sequence, followed by review. | Customer/location, formulation and requested amount reveal in sequence, followed by review. |
+| E. Review on demand | Lean inputs; Review reveals full composition and stock detail inline. | Lean inputs; Review reveals requested wet mass and full batch stock inline. |
 
-The order form puts formulation before requested wet mass, followed by quiet availability. **Show batch stock** reveals the inline breakdown; empty batches remain optional within that detail. The rejected reservation and departure-moisture explanations are absent.
+Guided Continue validates the revealed fields and product stock limits before advancing. Completed steps remain editable inline. Errors open their section or remain clearly identified on its disclosure row. Review validates the whole form, including values in collapsed sections. An open review updates when values change; editing clears the reviewed acknowledgement. Reset example restores fixture values and the initial guided/review state. Native disclosures support keyboard operation. Inputs and action controls have mobile touch targets of at least 44px. No sticky or floating panels are used.
 
-Input errors and exceeded source/ingredient wet stock are always visible beside the affected field. Moisture basis is accessible through the canonical field hint. Destination bins use compact visible choices, avoiding a bottom-of-sheet popup. Review product/order only displays an inline acknowledgement. Reset example restores fixture values. All state stays in memory.
+Input errors and exceeded source/ingredient wet stock stay beside the affected field. Switching to unblended biochar excludes ingredient values from validation and clears ingredient errors. Requested wet order mass is never compared against dry stock availability. Destination bins use visible radio choices. All state stays in memory.
 
 The synthetic example is 250 kg wet biochar at 3% moisture + 50 kg water + 100 kg ingredient at 30% moisture: 400 kg wet product, 242.5 kg dry biochar, 70 kg ingredient dry solids. This demo does not enforce formulation ratios or reproduce FIFO/accounting logic. Its calculations are not a production contract.
 
