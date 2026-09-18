@@ -1,10 +1,8 @@
-# Throwaway product and order UI prototype
+# Inline product and order UI prototype
 
-Question: how can operators enter quantities without large stock visualizations interrupting the form?
+The user selected an **always-inline flow** for [#816](https://github.com/Maji-Studio/noma-dmrv/issues/816) and [#817](https://github.com/Maji-Studio/noma-dmrv/issues/817). This draft explores the final details of that direction. It is not a production form or accounting change.
 
-Related issues: [#816](https://github.com/Maji-Studio/noma-dmrv/issues/816), [#817](https://github.com/Maji-Studio/noma-dmrv/issues/817). No design has been selected. This branch is a draft prototype, not a production implementation or an accounting change.
-
-## Run the synthetic preview
+## Run
 
 After the repository's usual `pnpm install`, run:
 
@@ -12,33 +10,27 @@ After the repository's usual `pnpm install`, run:
 pnpm prototype:stock-ui
 ```
 
-Open:
+- http://127.0.0.1:3116/biochar-products?prototype=stock
+- http://127.0.0.1:3116/orders?prototype=stock
 
-- http://127.0.0.1:3116/biochar-products?prototype=stock&variant=A
-- http://127.0.0.1:3116/orders?prototype=stock&variant=A
+Old `variant=A`, `B`, and `C` links all render this same inline design. There is no floating switcher, separate review rail, or reserved blank viewport band.
 
-When reusing an existing worktree's dependency directory, `pnpm --config.verify-deps-before-run=false run prototype:stock-ui` skips pnpm's automatic dependency reconciliation. Vite is pinned as a direct development dependency; the launcher can also resolve the same installed Vite through Vitest in a shared dependency directory.
+When reusing another worktree's dependency directory, `pnpm --config.verify-deps-before-run=false run prototype:stock-ui` skips pnpm's automatic dependency reconciliation. Vite is a pinned direct development dependency; the launcher also resolves the same installed Vite through Vitest in a shared dependency directory.
 
-The preview renders the actual prototype components and app CSS in a synthetic shell. It does not start the Next.js app, read environment files, authenticate, fetch domain data, or write records. This is a component preview, not a bypass of application authentication. It binds to loopback only.
+The preview uses the actual prototype components and app CSS in a synthetic shell. It does not start the Next.js app, read environment files, authenticate, fetch domain data, or write records. It is a loopback-only component preview, not an application authentication bypass.
 
-## Compare variants
+## Selected interaction design
 
-Use the floating arrows, keyboard arrows outside controls, or the shareable `variant=A`, `B`, `C` query parameter:
+The product form follows placement, source, formulation/ingredients, then product bin. Ingredient wet mass and moisture sit together at desktop width. A compact final summary distinguishes wet product, dry biochar, and ingredient dry solids. **Show composition** and **Show stock changes** expand separately beneath their triggers in the normal page flow. Their labels change to **Hide** while open.
 
-- **A, bottom summary:** compact final masses below all inputs; details expand on demand.
-- **B, review rail:** input column with a separate review panel on wide screens; panel follows inputs on narrow screens.
-- **C, inline ledger:** relevant derived values accompany source and ingredient inputs; the destination carries the final summary.
+The order form puts formulation before requested wet mass, followed by quiet availability. **Show batch stock** reveals the inline breakdown; empty batches remain optional within that detail. The rejected reservation and departure-moisture explanations are absent.
 
-All three keep formulation before ingredient selection, pair ingredient wet mass and moisture at desktop width, give product bin its own fourth step, and use visible destination-bin choices instead of a bottom-of-sheet popup. Order quantity appears before optional batch details. Empty batches are opt-in. The two unwanted order explanations are absent.
+Input errors and exceeded source/ingredient wet stock are always visible beside the affected field. Moisture basis is accessible through the canonical field hint. Destination bins use compact visible choices, avoiding a bottom-of-sheet popup. Review product/order only displays an inline acknowledgement. Reset example restores fixture values. All state stays in memory.
 
-Change masses and moisture, switch formulations and bins, expand details, show empty batches, review the prototype, and reset the example. Invalid numeric inputs and exceeded synthetic source stock remain visible. State is in memory and can be inspected through “Prototype state and assumptions.”
+The synthetic example is 250 kg wet biochar at 3% moisture + 50 kg water + 100 kg ingredient at 30% moisture: 400 kg wet product, 242.5 kg dry biochar, 70 kg ingredient dry solids. This demo does not enforce formulation ratios or reproduce FIFO/accounting logic. Its calculations are not a production contract.
 
-Fixture quantities illustrate presentation only: 250 kg source wet at 3% moisture + 50 kg water + 100 kg ingredient at 30% = 400 kg final wet, including 242.5 kg dry biochar and 70 kg ingredient dry solids. The demo does not enforce formulation ratios or reproduce FIFO/accounting logic. Do not treat its calculations as a production contract.
+## Application boundaries
 
-## Existing application routes
+In a configured authenticated development app (`pnpm dev`), `?prototype=stock` on the existing `/biochar-products` and `/orders` routes renders this design under the original protected layout. Normal routes remain unchanged. Production builds disable prototype entry, including deployed PR previews.
 
-In a configured, authenticated development app (`pnpm dev`), the same query parameters on `/biochar-products` and `/orders` render these variants under the existing protected layout. Normal routes remain unchanged. All prototype routing and the switcher are disabled in production builds, including deployed PR previews. Use the local synthetic preview to review the draft without database setup.
-
-The current full-page harness demonstrates information hierarchy; final drawer geometry, viewport placement, and real-data behavior need verification after a design is selected. The visible bin choices are a design alternative, not a production dropdown fix.
-
-Keep this prototype on its throwaway branch. Implement the selected design separately and preserve existing authorization, stock conservation, validation, and order semantics.
+The full-page preview verifies information hierarchy and inline interactions. Real drawer geometry, large destination-bin sets, real-data validation, and final production behavior still need verification in the implementation phase. Keep this draft on its prototype branch; apply the selected design separately while preserving authorization, stock conservation, and order semantics.

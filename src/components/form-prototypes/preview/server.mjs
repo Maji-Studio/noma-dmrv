@@ -26,4 +26,4 @@ const server = await createServer({
   server: { host: "127.0.0.1", port: PORT, strictPort: true, fs: { allow: [root, path.dirname(require.resolve("react/package.json")), path.resolve(root, "node_modules")] } },
 });
 await server.listen();
-console.log(`Synthetic UI preview: http://127.0.0.1:${PORT}/biochar-products?prototype=stock&variant=A`);
+console.log(`Synthetic UI preview: http://127.0.0.1:${PORT}/biochar-products?prototype=stock`);
