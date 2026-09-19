@@ -26,6 +26,8 @@ import { certificationDetailField } from "@/lib/certification/certify-field-regi
 import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
+import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { FeedstockForm } from "./feedstock-form";
 import {
@@ -228,6 +230,9 @@ function buildFeedstockTransferToast(feedstocks: FeedstockWithRelations[]) {
 // Component
 // ============================================
 
+/** Leads the list of records a negative-stock refusal named as drawing on the bin. */
+const BLOCKERS_LEAD = "Drawing on this bin:";
+
 export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const { facilityId: contextFacilityId } = useFacilityContext();
   const [focusedFeedstockId, setFocusedFeedstockId] = useQueryState(
@@ -253,6 +258,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  // The records a refused save named as still drawing on the bin, so the
+  // error can show them next to the draft instead of only a sentence.
+  const [updateBlockers, setUpdateBlockers] = useState<ConflictRef[]>([]);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const { feedstockTypeId, setFeedstockTypeId } = useFeedstockTypeFilter();
@@ -324,6 +332,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
     if (!editing) return;
     setUpdateError(null);
+    setUpdateBlockers([]);
     if (createWithEvidence.guardUpdate()) return;
     try {
       await updateFeedstock.mutateAsync({
@@ -359,6 +368,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       // The side sheet stays open on every failure, so the operator's draft
       // survives an expected-version refusal untouched.
       setUpdateError(toSaveErrorMessage(error, "Feedstock was not saved. Try again."));
+      const refused = getConflict(error);
+      if (refused?.conflict.entity === STOCK_CONFLICT_ENTITY.storageLocation) {
+        setUpdateBlockers(refused.blockers ?? []);
+      }
     }
   };
 
@@ -744,6 +757,14 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           isSubmitting={createFeedstock.isPending || updateFeedstock.isPending || isFlushing}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Feedstock"}
           serverError={createError || updateError || undefined}
+          serverErrorAction={
+            updateError && updateBlockers.length > 0 ? (
+              <span>
+                {BLOCKERS_LEAD}{" "}
+                {updateBlockers.map((blocker) => blocker.code).join(", ")}
+              </span>
+            ) : undefined
+          }
           deferredAttachments={deferredAttachments}
           retryEntityIds={createdFeedstockIds}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError } from '@/lib/errors';
 
 const mocks = vi.hoisted(() => ({
@@ -41,7 +42,7 @@ beforeEach(() => {
 
 describe('locked product preview revalidation', () => {
   it('names every affected bin to the posting scope and rejects stale basis before any writes', async () => {
-    mocks.revalidate.mockRejectedValue(new ActionConflictError('Stock changed', { entity: 'storageLocation', id: 'ingredient', code: '' }));
+    mocks.revalidate.mockRejectedValue(new ActionConflictError('Stock changed', { entity: 'storageLocation', id: 'ingredient', code: conflictCode('FB-001') }));
     await expect(createBiocharProduct(ctx, data)).rejects.toMatchObject({ name: 'ActionConflictError' });
     expect(mocks.posting).toHaveBeenCalledWith(ctx, expect.objectContaining({ input: expect.objectContaining({ storageLocationId: 'source' }), additionalBinIds: ['destination', 'ingredient'] }));
     expect(mocks.revalidate).toHaveBeenCalledWith(ctx, expect.objectContaining({ massKg: 100, ingredientBins: data.composition.ingredients }), expect.anything(), 'aggregate');

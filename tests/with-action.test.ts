@@ -23,6 +23,7 @@ vi.mock("@/lib/log", () => {
 });
 
 import { withAction } from "@/fn/with-action";
+import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import { requireOrgContext } from "@/lib/auth/server";
@@ -271,7 +272,7 @@ describe("withAction", () => {
     const zodResult = await withAction(async () => {
       z.object({ name: z.string().min(1, "Name is required") }).parse({ name: "" });
     }, { mapError });
-    const conflict = { entity: "productionRun", id: "run-1", code: "PR-001" };
+    const conflict = { entity: "productionRun", id: "run-1", code: conflictCode("PR-001") };
     const conflictResult = await withAction(async () => {
       throw new ActionConflictError("Overlaps PR-001.", conflict);
     }, { mapError });

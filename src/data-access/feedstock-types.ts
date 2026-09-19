@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { isPgUniqueViolation } from "@/db/errors";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
+import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import {
   getFeedstockTypeDeleteDecision,
@@ -174,32 +175,32 @@ async function findDeleteConflict(
       .from(feedstocks)
       .where(and(eq(feedstocks.feedstockTypeId, feedstockTypeId), eq(feedstocks.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: feedstockDeliveries.id, code: feedstockDeliveries.code })
       .from(feedstockDeliveries)
       .where(and(eq(feedstockDeliveries.feedstockTypeId, feedstockTypeId), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock-delivery", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock-delivery", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: productionProcesses.id })
       .from(productionProcesses)
       .where(and(eq(productionProcesses.feedstockTypeId, feedstockTypeId), eq(productionProcesses.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "production-process", id: row.id, code: row.id }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "production-process", id: row.id, code: conflictCode(row.id) }))),
     db.select({ id: creditBatches.id, code: creditBatches.code })
       .from(creditBatches)
       .where(and(eq(creditBatches.feedstockTypeId, feedstockTypeId), eq(creditBatches.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "credit-batch", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "credit-batch", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: formulationIngredients.id })
       .from(formulationIngredients)
       .where(and(eq(formulationIngredients.feedstockTypeId, feedstockTypeId), eq(formulationIngredients.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "formulation-ingredient", id: row.id, code: row.id }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "formulation-ingredient", id: row.id, code: conflictCode(row.id) }))),
     db.select({ id: storageLocations.id, code: storageLocations.code })
       .from(storageLocations)
       .where(and(eq(storageLocations.feedstockTypeId, feedstockTypeId), eq(storageLocations.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "storage-location", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "storage-location", id: row.id, code: conflictCode(row.code) }))),
   ];
   const results = await Promise.all(queries);
   return results.flatMap((rows) => rows)[0] ?? null;

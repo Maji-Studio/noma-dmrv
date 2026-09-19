@@ -13,6 +13,7 @@
  * ratio, so the persisted delta and snapshot columns cannot disagree.
  */
 
+import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
@@ -41,7 +42,7 @@ export type RecordLossActionResult =
       success: false;
       error: string;
       field?: "lossMassKg";
-      conflict?: { entity: string; id: string; code: string };
+      conflict?: ConflictRef;
     };
 
 export type RecordStockTakeActionResult =

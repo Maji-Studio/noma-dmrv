@@ -18,6 +18,7 @@ import {
   toSaveErrorMessage,
 } from "@/lib/stale-version";
 import { toActionFailure } from "@/fn/action-errors";
+import { ConflictError, conflictCode } from "@/lib/conflict-ref";
 
 const ENTITY_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const FALLBACK = "Facility was not saved. Try again.";
@@ -27,7 +28,7 @@ const staleConflict = {
   id: ENTITY_ID,
   code: STALE_VERSION_CONFLICT_CODE,
 };
-const overlapConflict = { entity: "productionRun", id: ENTITY_ID, code: "PR-1" };
+const overlapConflict = { entity: "productionRun", id: ENTITY_ID, code: conflictCode("PR-1") };
 
 describe("stale-version transport", () => {
   it("survives the server-to-client hop an ActionConflictError takes", () => {
@@ -45,8 +46,9 @@ describe("stale-version transport", () => {
     expect(() => throwActionError(failure)).toThrow(StaleVersionError);
   });
 
-  it("leaves another conflict as a plain Error", () => {
-    const failure = { error: "Overlaps run PR-1", conflict: overlapConflict };
+  it("re-throws another conflict as a ConflictError with its blockers", () => {
+    const blocker = { entity: "binMovement", id: ENTITY_ID, code: conflictCode("Loss (2026-09-01)") };
+    const failure = { error: "Overlaps run PR-1", conflict: overlapConflict, blockers: [blocker] };
 
     expect(isStaleVersionFailure(failure)).toBe(false);
     expect(() => throwActionError(failure)).toThrow("Overlaps run PR-1");
@@ -54,7 +56,8 @@ describe("stale-version transport", () => {
       throwActionError(failure);
     } catch (error) {
       expect(error).not.toBeInstanceOf(StaleVersionError);
-      expect(getStaleVersionConflict(error)).toBeNull();
+      expect(error).toBeInstanceOf(ConflictError);
+      expect(error).toMatchObject({ conflict: overlapConflict, blockers: [blocker] });
     }
   });
 
