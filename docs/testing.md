@@ -23,9 +23,15 @@ directory.
   `src/app/api/ghg-statement-reports/[reportId]/route.test.ts`).
 - `pnpm test:integration` — `RUN_ISOMETRIC_SANDBOX_TESTS=1` plus the substring
   filter `.integration.test.ts`, which selects every `*.integration.test.ts`
-  spec wherever it lives. A spec that needs an external service (a database, a
-  sandbox credential) probes for it and self-skips when it is absent, so the
-  command stays runnable with nothing provisioned.
+  spec wherever it lives, including database suites. Provision their dependencies
+  before running it: external integration tests do not universally self-skip.
+  The Isometric suite fails closed if explicitly opted in without complete sandbox
+  configuration; telemetry writes are enabled when its facility ID is also set.
+- `pnpm test:isometric-health` — opts into only
+  `tests/isometric-sandbox.integration.test.ts` and excludes describes matching
+  `write path`, even when telemetry is configured. Requires sandbox credentials
+  (`ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`),
+  `ISOMETRIC_ENVIRONMENT=sandbox`, and `ISOMETRIC_DEMO_PROJECT_ID`. No DB required.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
 
 ## vitest specs are not all unit tests
@@ -150,3 +156,27 @@ comment-only `// @live` marker will **not** be excluded by `--grep-invert`.
 - **Convention:** whenever a live half exists, keep a hermetic UI+DB counterpart in PR CI
   (`durability-readiness.spec.ts` documents itself as deliberately not `@live`).
   Don't push all new certification coverage behind the nightly.
+
+## Isometric health workflow
+
+`isometric-health.yml` runs API read health, live template input coverage via
+`pnpm isometric:coverage-check -- --source=fixture`, and public OpenAPI drift
+independently after setup. Fixture source selects local project/template IDs and
+sandbox period-input exceptions; it still fetches live templates. It does not
+check Project Components. OpenAPI checking does not require sandbox credentials
+and still runs if credential loading or another health check fails. The coverage
+step supplies inert app-environment placeholders because the shared client/logger
+validate those settings at import time; it never connects to that database or
+starts an authentication server. Registry credentials remain mandatory.
+
+The always-run step summary reports setup and check outcomes with repair commands.
+Any required setup or check that fails or is skipped prevents a green result.
+These are sandbox/read-only signals, not production readiness or write-path coverage.
+
+Run the hermetic selection regression with
+`pnpm test run tests/isometric-health-selection.test.ts`.
+It also runs in normal Vitest CI. It collects the real sandbox suite with Vitest, enables telemetry using placeholders,
+and verifies only reads are selected and missing opted-in credentials fail closed.
+Collection uses an isolated config and a dotenv stub; no test bodies execute, no
+local env files are read, and placeholders are never sent to the API. A sentinel
+integration suite catches accidental broadening without loading database tests.
