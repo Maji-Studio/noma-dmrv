@@ -102,6 +102,7 @@ function AppliedMassSplit({
 }) {
   return (
     <ProductCompositionPreview
+      followFormDetail
       className="col-span-full"
       wetMassKg={appliedKg}
       dryBiocharKg={dryBiocharKg}
@@ -165,12 +166,12 @@ export function ApplicationForm({
       : formatLocalDate(new Date()),
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-    fieldSizeHa: application?.fieldSizeHa ?? undefined,
+    fieldSizeHa: application?.fieldSizeHa ?? "",
     fieldIdentifier: application?.fieldIdentifier ?? "",
     cropType: application?.cropType ?? "",
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
-    applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
+    applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? "",
     // The visual path remains UI-locked, but existing records keep their
     // declared evidence method when another field is edited.
     evidenceMethod: resolveApplicationEvidenceMethodDefault(
@@ -178,8 +179,8 @@ export function ApplicationForm({
       organizationDefaults.defaultEvidenceMethod,
     ),
     gisBoundary: application?.gisBoundary ?? null,
-    soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
-    soilTemperatureC: application?.soilTemperatureC ?? undefined,
+    soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? "",
+    soilTemperatureC: application?.soilTemperatureC ?? null,
   };
 
   const {

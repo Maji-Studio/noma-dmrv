@@ -7,6 +7,7 @@
  * runs, and notes. The interactive certification checklist and lab-sample
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
+import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -131,7 +132,7 @@ function CreditBatchCarbonLedger({
           </dd>
         </div>
       </dl>
-      {!isLoadingRuns && !runsError && productionRuns.length > 0 && (
+      <DetailedOnly>{!isLoadingRuns && !runsError && productionRuns.length > 0 && (
         <div className="border-t border-[var(--color-border-primary)] px-16 py-10">
           <p className="mb-6 body-caption text-[var(--color-text-tertiary)]">
             Source records
@@ -151,7 +152,7 @@ function CreditBatchCarbonLedger({
             ))}
           </div>
         </div>
-      )}
+      )}</DetailedOnly>
     </div>
   );
 }
@@ -352,6 +353,7 @@ export function creditBatchSheetSections({
           ? [
               {
                 label: "Raw durability estimate",
+                detailedOnly: true,
                 value: `${(durabilityResult.rawFDurable * 100).toFixed(1)}%`,
               },
               {
@@ -364,10 +366,12 @@ export function creditBatchSheetSections({
               },
               {
                 label: "Preview component",
+                detailedOnly: true,
                 value: preview?.componentKey ?? MISSING_VALUE.notAvailable,
               },
               {
                 label: "Preview formula",
+                detailedOnly: true,
                 value: preview?.formulaVersion ?? MISSING_VALUE.notAvailable,
               },
               {

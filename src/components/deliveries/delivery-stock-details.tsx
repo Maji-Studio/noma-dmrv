@@ -1,4 +1,5 @@
 "use client";
+import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { OutputStockAllocations } from "@/components/storage-locations/output-stock-preview";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
@@ -13,7 +14,7 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
     <div><p className="body-large">{formatMassKg(wetMassKg)} recorded wet</p><p className="body-caption">{formatMassKg(dryMassKg)} dry biochar</p></div>
     {history.isLoading && <p role="status">Loading batch breakdown...</p>}
     {history.error && <p role="alert">{history.error.message}</p>}
-    {current && <OutputStockAllocations allocations={current.allocations} />}
+    <DetailedOnly>{current && <OutputStockAllocations allocations={current.allocations} />}</DetailedOnly>
     {storageLocationId && <OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} />}
   </div>;
 }

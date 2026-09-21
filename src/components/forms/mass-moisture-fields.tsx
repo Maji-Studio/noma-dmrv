@@ -159,6 +159,7 @@ export function WetMassField({
 }
 
 interface MassMoistureFieldsProps {
+  followFormDetail?: boolean;
   wet: MassMoistureInputProps;
   moisture: MassMoistureInputProps;
   /** Watched wet-mass value driving the live split. */
@@ -186,6 +187,7 @@ interface MassMoistureFieldsProps {
  * The split panel is framed so it reads as output rather than another input.
  */
 export function MassMoistureFields({
+  followFormDetail,
   wet,
   moisture,
   wetMassKg,
@@ -212,6 +214,7 @@ export function MassMoistureFields({
         className="md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
       >
         <MoistureSplit
+          followFormDetail={followFormDetail}
           wetMassKg={parseWatchedNumber(wetMassKg)}
           moisturePercent={parseWatchedNumber(moisturePercent)}
           addedWaterKg={parseWatchedNumber(addedWaterKg)}

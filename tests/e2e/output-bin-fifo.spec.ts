@@ -97,6 +97,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.locator("#deliveredWetMassKg").fill("2500");
     await page.locator("#moistureContentPercent").fill("15");
     const preview = page.getByRole("region", { name: "Stock preview", exact: true });
+    await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     await expect(preview.getByRole("alert")).toContainText(/Insufficient/);
     await expect(page.getByRole("button", { name: "Create Delivery", exact: true })).toBeDisabled();
     expect((await readOutputStockBrowserFixture(f)).deliveries).toHaveLength(0);
@@ -104,6 +105,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.locator("#deliveredWetMassKg").fill("2000");
     await page.locator("#moistureContentPercent").fill("30");
     await expect(preview.getByText("1,150 kg dry biochar removed", { exact: true })).toBeVisible();
+    await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     await expect(preview.getByRole("meter", { name: "Before loading stock on common scale" })).toHaveAttribute("aria-valuenow", "2600");
     await expect(preview.getByRole("meter", { name: "After loading stock on common scale" })).toHaveAttribute("aria-valuenow", "600");
     await expect(preview.getByText(`${f.products[0].code}: 900 kg dry biochar`, { exact: true }).last()).toBeVisible();
@@ -142,6 +144,8 @@ test.describe("Output-bin conserved FIFO", () => {
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const [application] = (await readOutputStockBrowserFixture(f)).applications;
     await page.getByRole("table", { name: "Applications", exact: true }).getByText(application.code, { exact: true }).click();
+    await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
+    await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     const shares = page.locator('[aria-label="Applied batch and source-run shares"]');
     await expect(shares).toContainText(`${f.products[0].code}: 450 kg dry`);
     await expect(shares).toContainText(`${f.products[1].code}: 125 kg dry`);

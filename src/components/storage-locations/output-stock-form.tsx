@@ -77,7 +77,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
       <FormSection title="Stock preview">
         {preview.isFetching && <p role="status">Refreshing stock preview...</p>}
         {preview.error && <p role="alert">{preview.error.message}</p>}
-        {preview.data && <OutputStockPreview preview={preview.data} moreInfo={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
+        {preview.data && <OutputStockPreview followFormDetail preview={preview.data} moreInfo={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
       </FormSection>
       <FormSection title="Reason" fields={["reason"]}>
         <FormField id="stock-reason" label="Reason" required error={errors.reason?.message}>

@@ -28,6 +28,7 @@
  */
 "use client";
 
+import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -284,6 +285,7 @@ DetailField.displayName = "DetailField";
  * -----------------------------------------------------------------------------------------------*/
 
 export interface DetailPanelField {
+  detailedOnly?: boolean;
   label: string;
   value: React.ReactNode;
   certifyRequired?: boolean;
@@ -311,6 +313,7 @@ interface DetailSpineProps {
 
 /** Shared section renderer for read-only entity details. */
 function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
+  const detailLevel = useFormDetailLevel();
   return (
     <div className={cn("flex flex-col", !numbered && "gap-20")}>
       {sections.map((section, sectionIdx) => (
@@ -324,7 +327,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
               : undefined
           }
         >
-          {chunkFields(section.fields).map((row, rowIdx) => (
+          {chunkFields(section.fields.filter(field => !field.detailedOnly || detailLevel === "detailed")).map((row, rowIdx) => (
             <DetailRow key={rowIdx}>
               {row.map((field, fieldIdx) => (
                 <DetailField

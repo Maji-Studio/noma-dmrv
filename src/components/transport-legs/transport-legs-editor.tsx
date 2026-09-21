@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
@@ -28,6 +29,7 @@ import { TransportLegForm } from "./transport-leg-form";
 import { deriveTransportLegCertStatuses } from "./transport-leg-cert-status";
 
 interface TransportLegsEditorProps {
+  followFormDetail?: boolean;
   entityType: TransportEntityTypeValue;
   entityId: string;
   /** Override the section title. Defaults based on entityType. */
@@ -86,6 +88,7 @@ export function TransportLegsEditor({
   entityId,
   title,
   readOnly = false,
+  followFormDetail = false,
   emptyMessage,
   deferred = false,
   deferredLegs = [],
@@ -184,6 +187,8 @@ export function TransportLegsEditor({
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const detailLevel = useFormDetailLevel();
+  const showProvenance = !followFormDetail || !readOnly || detailLevel === "detailed";
   const showAddButton = !readOnly;
   const displayedLegs: EditableTransportLeg[] = deferred
     ? deferredLegs
@@ -246,6 +251,7 @@ export function TransportLegsEditor({
                     <CertificationFieldTag status={certStatuses.distance} />
                   </span>
                 </th>
+                {showProvenance && <>
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
                     Distance source
@@ -257,6 +263,7 @@ export function TransportLegsEditor({
                     )}
                   </span>
                 </th>
+                </>}
                 <th className="py-8 pr-12 font-medium">Evidence</th>
                 <th className="py-8 pr-12 font-medium">Method</th>
                 <th className="py-8 pr-12 font-medium">
@@ -282,11 +289,13 @@ export function TransportLegsEditor({
                   <td className="py-8 pr-12">
                     {leg.distanceKm} km
                   </td>
+                  {showProvenance && <>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     {leg.distanceSource
                       ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
                       : MISSING_VALUE.notRecorded}
                   </td>
+                  </>}
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     {isSavedTransportLeg(leg) &&
                     !deferred &&

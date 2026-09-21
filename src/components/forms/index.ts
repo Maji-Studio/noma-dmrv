@@ -47,3 +47,6 @@ export {
   type QuickAddDialogProps,
   type UseEntityOptionsParams,
 } from "./entity-select";
+
+export { FormDetailToggle, type FormDetailLevel } from "./form-detail-toggle";
+export { FormDetailProvider, FormDetailControl, DetailedOnly, useFormDetailLevel } from "./form-detail-context";

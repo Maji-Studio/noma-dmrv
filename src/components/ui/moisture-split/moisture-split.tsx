@@ -26,6 +26,7 @@
  */
 "use client";
 
+import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import {
   describeMassSplit,
   describeMassSplitAfterAddedWater,
@@ -43,6 +44,7 @@ import {
 export type MoistureSplitVariant = "detail" | "compact" | "inline";
 
 interface MoistureSplitProps {
+  followFormDetail?: boolean;
   /** As-received mass in kg. */
   wetMassKg: number | null | undefined;
   /** Moisture on a wet basis, 0–100. */
@@ -300,7 +302,8 @@ export function MoistureSplit({
   moisturePercent,
   dryMassKg,
   addedWaterKg,
-  variant = "detail",
+  variant: requestedVariant = "detail",
+  followFormDetail = false,
   materialLabel,
   wetLabel,
   dryLabel,
@@ -308,6 +311,8 @@ export function MoistureSplit({
   note,
   className = "",
 }: MoistureSplitProps) {
+  const level = useFormDetailLevel();
+  const variant = followFormDetail && level === "simple" ? "inline" : requestedVariant;
   const split = resolveDisplaySplit(
     wetMassKg,
     moisturePercent,

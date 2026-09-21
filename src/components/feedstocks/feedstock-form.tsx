@@ -135,8 +135,8 @@ export function FeedstockForm({
       feedstock?.transportDistanceSource ?? (null as DistanceSourceValue | null),
     transportTripType: orgDefaults.defaultTripType as TripTypeValue,
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
-    totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
-    moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+    totalWetMassKg: feedstock?.massWetKg ?? undefined as number | undefined,
+    moisturePercent: feedstock?.moistureContentPercent ?? undefined as number | undefined,
     // An allocation mass the record does not have stays blank, never 0: the
     // schema requires a positive mass, so seeding 0 would prefill a value that
     // fails submit on a `missing_data` record with no wet mass yet.
@@ -144,10 +144,10 @@ export function FeedstockForm({
       ? [
           {
             storageLocationId: feedstock.storageLocationId ?? "",
-            allocatedWetMassKg: feedstock.massWetKg ?? ("" as unknown as number),
+            allocatedWetMassKg: feedstock.massWetKg ?? undefined as number | undefined,
           },
         ]
-      : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
+      : [{ storageLocationId: "", allocatedWetMassKg: undefined as number | undefined }],
     overrideJustification: feedstock?.overrideJustification ?? "",
     notes: feedstock?.notes ?? "",
   };
@@ -657,6 +657,7 @@ export function FeedstockForm({
           </div>
 
           <MassMoistureFields
+            followFormDetail
             materialLabel="Feedstock"
             wetMassKg={watchWetMass}
             moisturePercent={watchMoisture}
@@ -697,7 +698,7 @@ export function FeedstockForm({
                   onClick={() =>
                     append({
                       storageLocationId: "",
-                      allocatedWetMassKg: "" as unknown as number,
+                      allocatedWetMassKg: undefined as number | undefined,
                     })
                   }
                   disabled={isSubmitting}

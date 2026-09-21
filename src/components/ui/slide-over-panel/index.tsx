@@ -177,6 +177,7 @@ Content.displayName = "SlideOverPanel.Content";
  * -----------------------------------------------------------------------------------------------*/
 
 interface SlideOverPanelHeaderProps {
+  actions?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   showClose?: boolean;
@@ -184,6 +185,7 @@ interface SlideOverPanelHeaderProps {
 
 function Header({
   children,
+  actions,
   className,
   showClose = true,
 }: SlideOverPanelHeaderProps) {
@@ -198,9 +200,10 @@ function Header({
         className
       )}
     >
-      <div className="flex flex-col gap-4 min-w-0">
+      <div className="flex flex-1 flex-col gap-4 min-w-0">
         {children}
       </div>
+      {actions}
       {showClose && (
         <Dialog.Close
           aria-label="Close panel"
