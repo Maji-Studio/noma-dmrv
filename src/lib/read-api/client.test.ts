@@ -385,4 +385,28 @@ describe("authenticated read client", () => {
       conflict,
     });
   });
+
+  // A blank code is the server's bug, not the operator's: the envelope falls
+  // through to the unrecognized-body answer instead of rejecting the read with
+  // the branding helper's programming-error throw.
+  it("answers with a safe message when a conflict code is whitespace", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            success: false,
+            error: "Overlaps a run.",
+            conflict: { entity: "productionRun", id: "run-1", code: "   " },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(getProductionRunsRead()).resolves.toEqual({
+      success: false,
+      error: TRANSPORT_ERROR,
+    });
+  });
 });

@@ -22,11 +22,16 @@ import type { ProductionRunFilterData } from "@/schemas/production-runs";
 import { conflictCode } from "@/lib/conflict-ref";
 import type { ActionResult } from "@/types/actions";
 
-/** Wire shape of a conflicting record; its code is never blank. */
+/**
+ * Wire shape of a conflicting record; its code is never blank. The length
+ * check runs on the trimmed value and aborts the chain, so a whitespace-only
+ * code becomes an unreadable envelope instead of letting `conflictCode()`
+ * throw out of the parse.
+ */
 const conflictRefSchema = z.object({
   entity: z.string(),
   id: z.string(),
-  code: z.string().min(1).transform(conflictCode),
+  code: z.string().trim().min(1, { abort: true }).transform(conflictCode),
 });
 
 const readResultSchema = z.union([
