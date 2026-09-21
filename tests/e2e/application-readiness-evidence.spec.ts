@@ -38,7 +38,7 @@ async function seedFormCompleteApplication(
   await page.click('button:has-text("New Order")');
   await waitForSideSheet(page);
   await page.fill('input[name="orderDate"]', today);
-  await page.selectOption('select[name="customerId"]', seededData.customer.id);
+  await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
   await page.waitForSelector('select[name="customerLocationId"]:not([disabled])', {
     timeout: 8000,
   });
@@ -48,9 +48,7 @@ async function seedFormCompleteApplication(
   );
   await selectEntity(
     page,
-    "Product bin",
-    seededData.biocharProduct.id,
-    seededData.biocharProduct.code,
+    "Formulation", seededData.formulation.id, seededData.formulation.name,
   );
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "10000");
@@ -63,8 +61,8 @@ async function seedFormCompleteApplication(
   await page.click('button:has-text("New Delivery")');
   await waitForSideSheet(page);
   await page.fill('input[name="deliveryDate"]', today);
-  await page.selectOption('select[name="status"]', "delivered");
   await selectFirstEntity(page, "Order");
+  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
   await page.fill('input[name="moistureContentPercent"]', "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();

@@ -19,7 +19,9 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 
 - `PUBLIC_ROUTES` — reachable signed out. Includes `/schema`,
   `/api/storage-local`, and `/api/ghg-statement-reports` alongside the auth
-  pages. Matching is prefix-based
+  pages, including `/accept-invitation`. The invitation page and bootstrap action
+  enforce token validity, expiry, existing-account routing, and signed-in email
+  ownership. Matching is prefix-based
   (`pathname === route || pathname.startsWith(route + "/")`), so every
   descendant is public too.
 - `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
@@ -54,9 +56,11 @@ normal organization scoping.
 
 - **Session cookie cache is on with `maxAge: 5 * 60`.** Changes to cached session fields — notably an org switch's `activeOrganizationId` — can take up to 5 minutes to show up. `getOrgContext()` re-reads membership on every call, so revocations are immediate. `getUser()` deliberately re-reads `users.role` from the DB, so `requireAdmin` is not subject to this lag.
 - **`getOrgContext()` returns `null`, it does not throw,** when an `activeOrganizationId` is set but the user is neither a member nor a Platform Admin. Do not read `null` as "signed out".
+- **`resolveOrgContext()` is the same resolution with the reason attached** — `{ ok: true, ctx }`, or `{ ok: false, denial }` where `denial` is `"unauthenticated"` (no session) or `"no-organization"` (signed in, but no active organization or not a member of it). `getOrgContext()` and `requireOrgContext()` are thin wrappers over it and discard the reason. Only an HTTP transport needs it: the private read handlers (`src/app/api/reads/read-response.ts`) answer **401** for `"unauthenticated"` and **403** for `"no-organization"`, because a signed-out caller can fix it by signing in and a wrongly-scoped one cannot. Server actions have no status code to choose and keep using `requireOrgContext()`. Both denials are authorization answers, never a 400.
 - **`OrgContext.orgRole` is `null` for a Platform Admin acting inside an org they don't belong to.** Never compare or rank `ctx.orgRole` directly — that wrongly denies Platform Admins. Use `requireOrgRole(ctx, minRole)`, which short-circuits on `isPlatformAdmin` first.
 - **How `activeOrganizationId` gets set:** every successful explicit switch persists `users.lastActiveOrganizationId`. On session creation, the hook restores that organization only after revalidating current access. If it is missing or stale, ordinary users receive their first membership ordered by membership creation time then id; Platform Admins receive the first organization ordered by organization creation time then id. Users with no accessible organizations remain without an active org. The saved id is a preference, never an authorization grant.
 - **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user the Owner, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
+- **The CLI org-context seam is `runWithCliOrgContext` (`src/lib/cli/org-context.ts`).** A CLI (today the Mafinga seed) has no session, so it runs server actions inside an org context written to an `AsyncLocalStorage` that `resolveOrgContext()` reads first. The seam accepts identity IDs only and verifies them itself: the user must hold `users.role = 'admin'` and the organization must exist, and the context it builds is always Owner plus Platform Admin. It refuses to run when `NODE_ENV=production` without `ALLOW_DEV_BOOTSTRAP=1`. The storage lives in `src/lib/auth/cli-org-context-store.ts` and only that CLI module may write to it, so `src/lib/auth/server.ts` exports the read side alone. **Request code must never import either module**: a request resolves its context from the session.
 - **`users.role` is declared `input: false`** on the Better Auth additionalField, so it can never be set through self-service signup. Role is assigned only by the admin-bootstrap CLI (`src/lib/cli/ensure-admin-core.ts`) or a Platform Admin path.
 
 ## Server actions

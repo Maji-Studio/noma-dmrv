@@ -195,9 +195,12 @@ status only and cannot be used to change supporting evidence.
 
 `src/lib/storage/types.ts` defines `StorageProvider` (`name`, `bucket`,
 `createUploadUrl`, `createDownloadUrl`, `getObject`, `headObject`,
-`deleteObject`, `putObject`). `getObject` is the bounded server-side read seam:
-it presigns a fresh URL, refuses redirects and returns the bytes plus response
-content type. A new backend (e.g. R2) means implementing it, wiring it into the
+`deleteObject`, `putObject`). `getObject` is the server-side read seam and
+returns the bytes plus a content type. The s3-compatible provider presigns a
+fresh URL and fetches it, refusing redirects, under the timeout in
+`src/lib/storage/get-object.ts`. local-fs reads straight from disk, with no
+HTTP hop and no timeout, so a server-side reader (CSV imports, report proxies,
+CLI seeds) never depends on the app's own route being reachable. A new backend (e.g. R2) means implementing it, wiring it into the
 factory in `src/lib/storage/index.ts`, **and widening the
 `StorageProviderName = "s3" | "do-spaces" | "local-fs"` union** — the name is not
 a free-form string.

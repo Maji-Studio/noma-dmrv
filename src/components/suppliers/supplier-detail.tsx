@@ -16,29 +16,55 @@ import {
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
-import type { DetailPanelField } from "@/components/ui/detail-panel";
+import {
+  resolveDetailFieldValue,
+  type DetailPanelField,
+} from "@/components/ui/detail-panel";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { SupplierLocationDialog } from "./supplier-location-dialog";
-import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
+import { cn } from "@/lib/utils";
+import {
+  buildSupplierFallbackDistanceField,
+  buildSupplierLocationField,
+} from "./supplier-detail-fields";
 
 interface SupplierDetailProps {
   supplierId: string;
 }
 
-export function SupplierFallbackDistanceSummary({
-  field,
-}: {
-  field: DetailPanelField;
-}) {
+/** Columns in the supplier locations table, so its loading skeleton matches. */
+const LOCATION_TABLE_COLUMNS = 9;
+
+/**
+ * One field of the supplier header summary.
+ *
+ * The header keeps its own `<dt>/<dd>` markup for the summary grid, but the
+ * value runs through the whole shared `DetailField` contract: a pending field
+ * shows the skeleton, and a settled empty one takes the same placeholder ink,
+ * weight, and `data-empty` hook as every other detail surface.
+ */
+export function SupplierSummaryField({ field }: { field: DetailPanelField }) {
+  const { displayValue, isEmpty, valueClassName } =
+    resolveDetailFieldValue(field);
+
   return (
     <div>
       <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
         {field.label}
-        <CertificationFieldTag status={field.certifyStatus} />
+        {field.certifyRequired && (
+          <CertificationFieldTag status={field.certifyStatus} />
+        )}
       </dt>
-      <dd className="body-medium mt-16">{field.value}</dd>
+      <dd
+        className={cn("body-medium mt-16", valueClassName)}
+        aria-busy={field.pending || undefined}
+        data-empty={isEmpty || undefined}
+        data-pending={field.pending || undefined}
+      >
+        {displayValue}
+      </dd>
     </div>
   );
 }
@@ -66,9 +92,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
     }
   };
 
-  const isLoading = supplierLoading || locationsLoading;
-
-  if (isLoading) {
+  if (supplierLoading) {
     return <div className="body-large">Loading supplier details...</div>;
   }
 
@@ -87,7 +111,12 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       locations.find((location) => location.isDefault)?.distanceFromFacilityKm ??
       null,
     legacySupplierDistanceKm: supplier.distanceToFacilityKm,
-    locationsLoaded: true,
+    locationsLoaded: !locationsLoading,
+  });
+  const locationField = buildSupplierLocationField({
+    legacySupplierLocation: supplier.location,
+    locations,
+    locationsLoaded: !locationsLoading,
   });
 
   return (
@@ -116,32 +145,14 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-32 mt-32 pt-32 border-t border-[var(--color-border-secondary)]">
-          <div>
-            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact email
-            </dt>
-            <dd className="body-medium mt-16">
-              {supplier.contactEmail || MISSING_VALUE.notRecorded}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact phone
-            </dt>
-            <dd className="body-medium mt-16">
-              {supplier.contactPhone || MISSING_VALUE.notRecorded}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Location
-            </dt>
-            <dd className="body-medium mt-16">
-              {resolveSupplierLocationDisplay(supplier.location, locations) ||
-                MISSING_VALUE.notRecorded}
-            </dd>
-          </div>
-          <SupplierFallbackDistanceSummary field={fallbackDistanceField} />
+          <SupplierSummaryField
+            field={{ label: "Contact email", value: supplier.contactEmail }}
+          />
+          <SupplierSummaryField
+            field={{ label: "Contact phone", value: supplier.contactPhone }}
+          />
+          <SupplierSummaryField field={locationField} />
+          <SupplierSummaryField field={fallbackDistanceField} />
         </div>
       </div>
 
@@ -149,7 +160,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
       <div className="flex flex-col gap-24">
         <div className="flex items-center justify-between">
           <h2 className="title-heading-3">
-            Locations ({locations.length})
+            {locationsLoading ? "Locations" : `Locations (${locations.length})`}
           </h2>
           {!isLocationDialogOpen && (
             <Button
@@ -166,7 +177,9 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         </div>
 
         {/* Locations List */}
-        {locations.length === 0 ? (
+        {locationsLoading ? (
+          <TableSkeleton columns={LOCATION_TABLE_COLUMNS} rows={3} />
+        ) : locations.length === 0 ? (
           <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] flex flex-col items-center justify-center gap-24 text-center">
             <div className="flex flex-col gap-16">
               <h3 className="title-heading-4">No locations yet</h3>

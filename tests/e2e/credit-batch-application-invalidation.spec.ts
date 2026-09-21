@@ -44,7 +44,7 @@ async function createApplicationForLineage(
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', today);
-  await page.selectOption('select[name="customerId"]', seededData.customer.id);
+  await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
   await page.waitForSelector(
     'select[name="customerLocationId"]:not([disabled])',
     { timeout: 8000 },
@@ -55,9 +55,7 @@ async function createApplicationForLineage(
   );
   await selectEntity(
     page,
-    "Product bin",
-    seededData.biocharProduct.id,
-    seededData.biocharProduct.code,
+    "Formulation", seededData.formulation.id, seededData.formulation.name,
   );
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "10000");
@@ -72,14 +70,14 @@ async function createApplicationForLineage(
   await waitForSideSheet(page);
 
   await page.fill('input[name="deliveryDate"]', today);
-  await page.selectOption('select[name="status"]', "delivered");
   await selectFirstEntity(page, "Order");
+  await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
   await page.fill('input[name="moistureContentPercent"]', "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
   await waitForSideSheetClose(page);
 
-  // Application against that delivery — 5000 tons applied initially.
+  // Application against that delivery: 5000 kg (5 tonnes) initially.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
   await waitForFacilityHydration(page, seededData.facility.name);
@@ -96,6 +94,7 @@ async function createApplicationForLineage(
     await deliverySelect.selectOption(firstDeliveryValue);
   }
   await page.fill('input[name="biocharAppliedTons"]', "5000");
+  await page.fill('input[name="fieldSizeHa"]', "2");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
   await waitForSideSheetClose(page);
 }

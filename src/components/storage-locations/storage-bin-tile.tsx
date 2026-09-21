@@ -22,11 +22,14 @@
  */
 "use client";
 
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
+import { useOutputStockPreview } from "@/hooks/use-output-stock";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatLocalDate } from "@/lib/date-utils";
 import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   BIN_TYPE_META,
   binAccentStyle,
@@ -57,8 +60,9 @@ export function StorageBinTile({
   onView,
   onReconcile,
 }: StorageBinTileProps) {
-  const massKg = binCurrentMassKg(bin);
-  const fillPercent = binCapacityPercent(bin);
+  const output = useOutputStockPreview(bin.type === "feedstock_bin" || bin.archivedAt != null ? null : { storageLocationId: bin.id, facilityId: bin.facilityId, physicalDate: formatLocalDate(new Date()), kind: "count", wetMassKg: 0 });
+  const massKg = bin.type === "feedstock_bin" ? binCurrentMassKg(bin) : bin.archivedAt != null ? (bin.type === "biochar_bin" ? bin.biocharInventory.dryMassKg : bin.productInventory.dryMassKg) ?? null : output.data?.beforeDryKg ?? null;
+  const fillPercent = bin.type === "feedstock_bin" ? binCapacityPercent(bin) : null;
   const needsReconciliation = binNeedsReconciliation(bin);
   const isEmpty = massKg === 0;
   const isArchived = bin.archivedAt != null;
@@ -152,13 +156,14 @@ export function StorageBinTile({
                   : "text-[var(--color-text-primary)]"
             }`}
           >
-            {isEmpty ? "Empty" : formatMassKg(massKg)}
+            {massKg == null ? MISSING_VALUE.notAvailable : isEmpty ? "Empty" : formatMassKg(massKg)}{massKg != null && bin.type !== "feedstock_bin" && " dry biochar"}
           </span>
           {needsReconciliation && (
             <ReconcileLink bin={bin} onReconcile={onReconcile} />
           )}
         </div>
 
+        {output.error && <p role="alert" className="body-caption">{output.error.message}</p>}
         <LastActivity bin={bin} />
       </div>
     </article>

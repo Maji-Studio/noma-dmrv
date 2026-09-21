@@ -1,12 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Controller,
-  type Control,
-  type FieldValues,
-} from "react-hook-form";
-import { FormField, FormInput, EntitySelect } from "@/components/forms";
+import { EntitySelect, FormField, FormInput } from "@/components/forms";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -18,6 +12,13 @@ import {
 import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
+import { useState } from "react";
+import {
+  Controller,
+  type Control,
+  type FieldValues,
+} from "react-hook-form";
+import { IngredientMoistureField } from "./ingredient-moisture-field";
 
 // The storage-location option subtitle for a feedstock bin starts with
 // "Feedstock bin · " (formatStorageLocationType). Strip it from the selected
@@ -224,6 +225,7 @@ export function IngredientBinField({
           </FormField>
         )}
       />
+      <IngredientMoistureField control={control} index={row.index} frozen={allocationFrozen} disabled={isSubmitting} />
     </div>
   );
 }

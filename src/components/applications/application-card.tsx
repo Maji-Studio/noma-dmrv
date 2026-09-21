@@ -1,22 +1,25 @@
 "use client";
 
-import {
-  PlantIcon,
-  PencilSimpleIcon,
-  TrashIcon,
-} from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import type { Application } from "@/db/schema/application";
+import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatDate } from "@/lib/format-utils";
+import { MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 import {
   formatApplicationMethod,
 } from "@/schemas/applications";
-import { formatDate } from "@/lib/format-utils";
-import { MISSING_VALUE } from "@/lib/copy-utils";
-import { MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
+import {
+  PencilSimpleIcon,
+  PlantIcon,
+  TrashIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { formatApplicationKgFromTons, formatFieldSizeHa } from "./mass-utils";
 
+import type { ApplicationAllocationShare } from "@/data-access/delivery-allocation-provenance";
+import { ApplicationAllocationShares } from "./application-allocation-shares";
+
 interface ApplicationCardProps {
-  application: Application;
+  application: Application & { allocationShares?: ApplicationAllocationShare[] };
   onView?: (application: Application) => void;
   onEdit?: (application: Application) => void;
   onDelete?: (applicationId: string) => void;
@@ -91,6 +94,8 @@ export function ApplicationCard({
           </div>
         </div>
       </div>
+
+      <div className="px-20 pb-16"><ApplicationAllocationShares shares={application.allocationShares ?? []} /></div>
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">

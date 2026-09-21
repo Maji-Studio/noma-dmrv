@@ -22,6 +22,9 @@ describe("mass input caps", () => {
   it("rejects a delivery mass above the shared kg cap", () => {
     const result = deliveryFormSchema.safeParse({
       orderId: UUID,
+      storageLocationId: UUID,
+      idempotencyKey: "delivery-request",
+      basisFingerprint: "delivery-preview",
       deliveryDate: new Date("2026-07-01"),
       deliveredWetMassKg: MASS_INPUT_MAX_KG * 10,
       moistureContentPercent: 10,
@@ -43,6 +46,9 @@ describe("mass input caps", () => {
   it("accepts a delivery mass exactly at the cap", () => {
     const result = deliveryFormSchema.safeParse({
       orderId: UUID,
+      storageLocationId: UUID,
+      idempotencyKey: "delivery-request",
+      basisFingerprint: "delivery-preview",
       deliveryDate: new Date("2026-07-01"),
       deliveredWetMassKg: MASS_INPUT_MAX_KG,
       moistureContentPercent: 10,
@@ -54,6 +60,9 @@ describe("mass input caps", () => {
   it("rejects negative delivery wet mass before the DB check", () => {
     const result = deliveryFormSchema.safeParse({
       orderId: UUID,
+      storageLocationId: UUID,
+      idempotencyKey: "delivery-request",
+      basisFingerprint: "delivery-preview",
       deliveryDate: new Date("2026-07-01"),
       deliveredWetMassKg: -1,
       moistureContentPercent: 10,
@@ -65,7 +74,7 @@ describe("mass input caps", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: ["deliveredWetMassKg"],
-            message: "Wet mass must be 0 or more",
+            message: "Wet mass must be at least 0.001 kg",
           }),
         ]),
       );

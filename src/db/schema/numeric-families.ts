@@ -36,3 +36,7 @@ export const fraction = (name: string) =>
  */
 export const percent = (name: string) =>
   numeric(name, { precision: 9, scale: 6, mode: 'number' });
+
+/** Gram-resolution mass returned as text for BigInt accounting without float conversion. */
+export const exactMassKg = (name: string) =>
+  numeric(name, { precision: 14, scale: 3 });

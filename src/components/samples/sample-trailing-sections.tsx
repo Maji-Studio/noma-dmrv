@@ -9,7 +9,7 @@
 "use client";
 
 import { PaperclipIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormFileUpload, FormSection } from "@/components/forms";
+import { FormField, FormFileUpload, FormSection } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { Button } from "@/components/ui/button";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
@@ -56,6 +56,10 @@ export function SampleEvidenceSection({
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >
+      <p className="body-small text-[var(--color-text-secondary)]">
+        Attach the lab report before submitting the Removal. Saved lab reports
+        are included automatically with the Sample carbon measurements.
+      </p>
       {isEditMode && sample ? (
         <div className="flex flex-col gap-12">
           {deferredAttachments && (
@@ -72,17 +76,19 @@ export function SampleEvidenceSection({
           <SampleDocumentsPanel sampleId={sample.id} />
         </div>
       ) : (
-        <FormFileUpload
-          id="sample-deferred-documents-upload"
-          accept="image/*,.pdf,.csv,.xlsx"
-          multiple
-          maxSizeMb={50}
-          disabled={isSubmitting}
-          deferred
-          deferredFiles={deferredAttachments?.attachments ?? []}
-          onDeferredAdd={(files) => deferredAttachments?.add(files, "lab_report")}
-          onDeferredRemove={(key) => deferredAttachments?.remove(key)}
-        />
+        <FormField id="sample-deferred-documents-upload" label="Lab report">
+          <FormFileUpload
+            id="sample-deferred-documents-upload"
+            accept="image/*,.pdf,.csv,.xlsx"
+            multiple
+            maxSizeMb={50}
+            disabled={isSubmitting}
+            deferred
+            deferredFiles={deferredAttachments?.attachments ?? []}
+            onDeferredAdd={(files) => deferredAttachments?.add(files, "lab_report")}
+            onDeferredRemove={(key) => deferredAttachments?.remove(key)}
+          />
+        </FormField>
       )}
     </FormSection>
   );

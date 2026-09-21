@@ -5,54 +5,53 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
-import { parseAsString, useQueryState } from "nuqs";
-import { useQueryClient } from "@tanstack/react-query";
-import type { ColumnDef } from "@tanstack/react-table";
-import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
-import { DataTable } from "@/components/ui/data-table";
-import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { StatCard } from "@/components/ui/stat-card";
-import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { ApplicationAllocationShares } from "./application-allocation-shares";
+
+import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
-import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { MISSING_VALUE } from "@/lib/copy-utils";
-import { sumNullableBy } from "@/lib/nullable-sum";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { DataTable } from "@/components/ui/data-table";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useToast } from "@/components/ui/toast";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import type { ApplicationListItem } from "@/data-access/applications";
+import {
+  applicationKeys,
+  useApplicationCertificationLock,
+  useApplicationDeliveryOptions,
+  useApplications,
+  useCreateApplication,
+  useDeleteApplication,
+  useUpdateApplication,
+} from "@/hooks/use-applications";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
-import { ApplicationForm } from "./application-form";
-import { ApplicationEvidencePanel } from "./application-evidence-panel";
-import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
-import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
-import {
-  formatApplicationKgFromTons,
-  formatFieldSizeHa,
-  type ApplicationDeliveryOption,
-} from "./mass-utils";
-import type { ApplicationListItem } from "@/data-access/applications";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
+import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { sumNullableBy } from "@/lib/nullable-sum";
 import {
-  useApplications,
-  useApplicationDeliveryOptions,
-  useCreateApplication,
-  useUpdateApplication,
-  useDeleteApplication,
-  applicationKeys,
-} from "@/hooks/use-applications";
-import { useCreditBatches } from "@/hooks/use-credit-batches";
+  isStaleVersionFailure,
+  STALE_VERSION_MESSAGE,
+  toSaveErrorMessage,
+} from "@/lib/stale-version";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
-  applicationStatuses,
   applicationEvidenceMethods,
+  applicationStatuses,
   formatApplicationEvidenceMethod,
   formatApplicationMethod,
   formatApplicationStatus,
@@ -62,10 +61,20 @@ import {
   type ApplicationStatus,
   type SoilTemperatureSource,
 } from "@/schemas/applications";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
-import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { LeafIcon, MapPinIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import { useQueryClient } from "@tanstack/react-query";
+import type { ColumnDef } from "@tanstack/react-table";
+import { parseAsString, useQueryState } from "nuqs";
+import { useEffect, useState } from "react";
+import { ApplicationEvidencePanel } from "./application-evidence-panel";
+import { ApplicationForm } from "./application-form";
+import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
+import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
+import {
+  formatApplicationKgFromTons,
+  formatFieldSizeHa,
+  type ApplicationDeliveryOption,
+} from "./mass-utils";
 
 // ============================================
 // Column Definitions
@@ -251,6 +260,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   } | null>(null);
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
 
+  const applicationLock = useApplicationCertificationLock(sideSheet?.entity?.id);
+
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
@@ -308,6 +319,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       const createdApplication: ApplicationListItem = {
         ...result.data,
         deliveryCode: "",
+        allocationShares: [],
         customerName: null,
         locationName: null,
         durabilityOption,
@@ -352,6 +364,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     try {
       const result = await updateApplication.mutateAsync({
         applicationId,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
         ...data,
       });
       if (result.success) {
@@ -360,6 +375,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             deferredAttachments.flush("application", applicationId),
           );
           if (!flushResult.ok) {
+            // The update itself committed, so the still-open sheet has to adopt
+            // the version it wrote. Leaving the opened-on snapshot in place
+            // would get the operator's next Save refused as stale against
+            // their own write (#768).
+            const saved = result.data;
+            setSideSheet((prev) =>
+              prev?.entity && prev.entity.id === applicationId
+                ? { ...prev, entity: { ...prev.entity, ...saved } }
+                : prev,
+            );
             setUpdateError(
               `Application updated, but ${flushResult.failed.length} ${
                 flushResult.failed.length === 1
@@ -377,10 +402,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setSideSheet(null);
         toast.success("Application updated.");
       } else {
-        setUpdateError(result.error || "Application was not saved. Try again.");
+        // The side sheet stays open on every failure, so the operator's draft
+        // survives an expected-version refusal untouched. This hook answers
+        // with the result instead of throwing, so the refusal is read off it.
+        setUpdateError(
+          isStaleVersionFailure(result)
+            ? STALE_VERSION_MESSAGE
+            : result.error || "Application was not saved. Try again.",
+        );
       }
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Application was not saved. Try again.");
+      setUpdateError(toSaveErrorMessage(error, "Application was not saved. Try again."));
     }
   };
 
@@ -478,7 +510,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   // Derived values for the side sheet
   const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
+  const fieldsEditable = !sideSheet?.entity || applicationLock.data === false;
+  const sideSheetMode = sideSheet?.mode === "edit" && !fieldsEditable ? "view" : sideSheet?.mode ?? "create";
   // The stored entity is a snapshot from when the sheet opened; prefer the
   // refreshed row from the list query so evidence-driven readiness changes
   // show while the sheet stays open. Fall back to the snapshot for rows the
@@ -681,6 +714,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
+        canEdit={fieldsEditable}
         editLabel="Edit Application"
         size="wide"
         sections={sideSheetEntity ? [
@@ -715,6 +749,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
+            title: "Batch shares",
+            fields: [],
+            content: <ApplicationAllocationShares shares={sideSheetEntity.allocationShares} />,
+          },
+          {
             title: "Field details",
             fields: [
               { label: "Field size", value: formatFieldSizeHa(sideSheetEntity.fieldSizeHa) },
@@ -736,7 +775,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
-            title: "Evidence",
+            title: "Evidence method",
             fields: [
               {
                 label: "Evidence method",
@@ -747,11 +786,25 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
             content: (
               <ApplicationEvidencePanel
-                applicationId={sideSheetEntity.id}
                 mode={(sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
                 boundary={sideSheetEntity.gisBoundary ?? null}
                 readOnly
               />
+            ),
+          },
+          {
+            title: "Supporting evidence",
+            fields: applicationLock.data ? [{ label: "Certification", value: "Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review." }] : applicationLock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
+            content: (
+              <>
+                {applicationLock.error && (
+                  <div className="flex flex-col gap-8">
+                    <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
+                    <Button type="button" variant="weak" disabled={applicationLock.isFetching} onClick={() => void applicationLock.refetch()}>Retry certification check</Button>
+                  </div>
+                )}
+                <ApplicationSupportingEvidencePanel applicationId={sideSheetEntity.id} />
+              </>
             ),
           },
           {

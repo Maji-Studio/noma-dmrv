@@ -6,6 +6,8 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
+  clearablePositiveNumber,
+  expectedUpdatedAtSchema,
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
@@ -95,6 +97,7 @@ export const createSupplierSchema = supplierFormSchema;
  */
 export const updateSupplierSchema = z.object({
   supplierId: z.string().uuid("Choose a valid supplier."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)
@@ -110,7 +113,7 @@ export const updateSupplierSchema = z.object({
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
   sourceRegion: z.string().max(255).optional().nullable().or(z.literal("")),
-  distanceToFacilityKm: optionalPositiveNumber,
+  distanceToFacilityKm: clearablePositiveNumber,
   distanceSource: optionalDistanceSource,
 });
 
@@ -148,16 +151,6 @@ export const supplierFilterSchema = z.object({
     .enum(["code", "name", "location", "createdAt", "updatedAt"])
     .default("name"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
-});
-
-/**
- * Schema for selecting a supplier (e.g., in dropdowns)
- */
-export const supplierSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  name: z.string(),
-  location: z.string().optional().nullable(),
 });
 
 // ============================================
@@ -212,6 +205,7 @@ export const createSupplierWithLocationsSchema = z.object({
  */
 export const updateSupplierLocationSchema = z.object({
   locationId: z.string().uuid("Choose a valid location."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   name: z.string().max(255).optional().nullable().or(z.literal("")),
   country: z.string().min(1).max(100).optional(),
   stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),
@@ -219,7 +213,7 @@ export const updateSupplierLocationSchema = z.object({
   gpsLatitude: latitudeSchema,
   gpsLongitude: longitudeSchema,
   address: z.string().max(500).optional().nullable().or(z.literal("")),
-  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceFromFacilityKm: clearablePositiveNumber,
   distanceSource: optionalDistanceSource,
   isDefault: z.boolean().optional(),
 });
@@ -238,9 +232,7 @@ export const deleteSupplierLocationSchema = z.object({
 export type SupplierFormData = z.infer<typeof supplierFormSchema>;
 export type CreateSupplierData = z.infer<typeof createSupplierSchema>;
 export type UpdateSupplierData = z.infer<typeof updateSupplierSchema>;
-export type DeleteSupplierData = z.infer<typeof deleteSupplierSchema>;
 export type SupplierFilterData = z.infer<typeof supplierFilterSchema>;
-export type SupplierSelectData = z.infer<typeof supplierSelectSchema>;
 export type SupplierLocationFormData = z.infer<typeof supplierLocationFormSchema>;
 export type SupplierQuickAddData = z.infer<typeof supplierQuickAddSchema>;
 export type SupplierQuickAddInput = z.input<typeof supplierQuickAddSchema>;
@@ -249,4 +241,3 @@ export type CreateSupplierWithLocationsData = z.infer<
   typeof createSupplierWithLocationsSchema
 >;
 export type UpdateSupplierLocationData = z.infer<typeof updateSupplierLocationSchema>;
-export type DeleteSupplierLocationData = z.infer<typeof deleteSupplierLocationSchema>;

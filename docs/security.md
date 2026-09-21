@@ -125,11 +125,26 @@ Read directly from `process.env`, **not** validated by `env.ts`:
 - `NOMA_HERMETIC_CI` — the literal `"true"` marks only the production-bundle
   builds in `ci.yml` and the hermetic PR Playwright workflow. Live sandbox
   workflows and deployments must not set it.
+- `NOMA_TURBOPACK_BUILD_CACHE` — the literal `"true"` enables Next's
+  experimental production compiler cache only for pull-request builds. It is a
+  performance switch, not a security-gate exception; base-branch, local, live,
+  and deployed builds leave it unset or false.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
+- `ALLOW_DEV_BOOTSTRAP` carries the literal `"1"` and has two separate
+  meanings, both CLI-only. In `src/lib/cli/ensure-admin-core.ts` it permits the
+  destructive development bootstrap against a non-local database. In
+  `src/lib/cli/org-context.ts` it permits the CLI org-context seam (the seed
+  calling real server actions without a session) to run under
+  `NODE_ENV=production`. Both refuse without it; the shared literals live in
+  `src/config/bootstrap.ts`. Only the manually confirmed staging reset jobs set
+  it.
 - `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
   literal string `"true"` permits a remote reset; the manually confirmed staging
   and production reset jobs load it from their matching 1Password item.
+- `VERCEL` and `VERCEL_REGION` — platform-injected, read by `src/db/index.ts`
+  only to register the pool with Fluid Compute lifecycle hooks and to tag pool
+  telemetry with the compute region. Absent locally; never set by hand.
 - `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
   `process.env.DISABLE_RATE_LIMIT !== "true"` read
   (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
@@ -249,17 +264,20 @@ exist) and fails loudly rather than exiting 0 without a credential row. The
 Platform Admin must use the organization invitation flow to add the first real
 Owner.
 
-**Staging resets deliberately do not load the Isometric trio**, so after a reset
-the org has no registry credentials and no facility→project link: Certification
-Settings shows `Credentials: Not configured` and the Removals hub fails closed by
-redirecting to Settings. Restore manually via the organization admin area
-(credentials from the staging item) and Certification Settings (project link).
+The manually confirmed `reset-seed-staging` job loads the Isometric trio from
+the staging item. The Mafinga seed stores the organization credentials and, when
+the repository variable `ISOMETRIC_DEMO_FACILITY_ID` holds the Certify `fcl_`
+ID, maps its facility to the visible project through the same server actions
+the Settings UI uses. Without that variable the mapping is finished by hand in
+Certification Settings. The seed only reads registry catalogues and templates;
+it creates no registry business records. `reset-empty-staging` continues to
+omit registry credentials.
 
 ## Operational Defaults
 
 - Better Auth rate limits are on by default, stricter for auth-sensitive
   endpoints.
-- DB pool limits are centralized in `src/db/index.ts`, configurable via env.
+- DB pool limits are centralized in `src/db/pool-config.ts` (`resolveAppPoolConfig`), applied by `src/db/index.ts`, and configurable via env.
 
 ## Dependency Supply Chain
 

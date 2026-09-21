@@ -83,6 +83,7 @@ repeats.
 | Raw preprocessor, empty → `undefined` | `toNumberOrUndefined` |
 | Integer, empty → `null` | `toIntOrNull` |
 | Soil temperature (°C) | `defaultSoilTemperatureSchema` |
+| Clearable patch field (see below) | `clearableNumber` · `clearablePositiveNumber` · `clearableDefaultSoilTemperature` · `toClearableNumber` |
 
 `requiredNumber()` already packages the Zod 4 `error: (iss) => iss.input === undefined ? … : …` callback — do not hand-write that lambda.
 
@@ -90,9 +91,49 @@ repeats.
 
 > **Gotcha — clearing a value on edit needs empty → `null`, never empty → `undefined`.** Drizzle's `.set()` drops `undefined` keys, so an update built from `undefined` leaves the old value in the database: the field appears un-clearable and the change silently reverts. `null` is an explicit value Drizzle persists. (Reference: `src/components/storage-locations/storage-location-form.tsx`.)
 
+### The partial-update contract: omitted / null / zero
+
+One meaning per value, the whole way down — form field, Zod schema, server
+action, data access:
+
+| Value | Meaning | What the writer does |
+|---|---|---|
+| `undefined` | omitted from this patch | leaves the stored value alone |
+| `null` | explicit clear | writes `NULL` |
+| `0` | the number zero | writes `0` |
+
+Three rules follow.
+
+**Clearable numeric inputs register with `nullableNumericValue`, not
+`numericValue`.** `numericValue` maps `""` to `undefined`, which the contract
+reads as "omitted", so clearing the field is a silent no-op. Use
+`numericValue` only where the schema requires the field (it can never be
+cleared) or where the schema's own preprocessor normalizes `undefined` away.
+The same trap in reverse is `value ?? undefined` in a submit handler or a
+`setValue` call: pass the `null` through instead.
+
+**Update schemas use the `clearable*` family; create and whole-form schemas
+keep `optionalNumber` / `optionalPositiveNumber`.** `toNumberOrNull` folds
+omitted into cleared, which is right when every field is present (a create, or
+a form that always submits the whole record) and wrong for an `update*Schema`,
+where an absent key must not overwrite a column. `toClearableNumber` keeps
+`undefined` as `undefined` and turns `""` / `null` into `null`.
+`updateFeedstockSchema.transportDistanceKm` is the reference case: the derived
+transport leg preserves its stored distance only while that key is absent, so
+folding to `null` wiped a manual distance on every unrelated edit.
+
+**The server derives values it owns rather than trusting the patch.** Feedstock
+dry mass is derived from the *effective* wet mass and moisture (patch value
+falling back to the stored row) inside the same locked transaction, so a
+moisture-only edit yields the right dry mass. A client-sent `massDryKg` is
+advisory and is refused when it disagrees materially with the derivation.
+Cross-field rules work the same way: `updateFeedstockType` re-validates the
+merged category/usage pair against the stored row, because a refine on the
+patch alone never fires when only one half of the pair is present.
+
 ### Mass and integer caps
 
-Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive()` lets a fat-fingered entry reach Postgres as a raw `numeric field overflow`. Use the capped family instead — `massKgSchema` · `positiveMassKgSchema` · `requiredMassKgSchema` · `requiredPositiveMassKgSchema` · `optionalMassKgSchema` · `optionalMassKgInputSchema` (the last preprocesses form strings). They enforce `MASS_INPUT_MAX_KG` (100,000,000 kg) / `MASS_INPUT_MAX_TONNES` with a friendly message.
+Masses are backed by `numeric(14,3)` columns. A hand-rolled `z.number().positive()` lets a fat-fingered entry reach Postgres as a raw `numeric field overflow`. Use the capped family instead — `massKgSchema` · `positiveMassKgSchema` · `requiredMassKgSchema` · `requiredPositiveMassKgSchema` · `optionalMassKgSchema`. They enforce `MASS_INPUT_MAX_KG` (100,000,000 kg) / `MASS_INPUT_MAX_TONNES` with a friendly message.
 
 Same reasoning for `PG_INTEGER_MAX` on integer columns, and `RATIO_INPUT_MAX` (9.999999) for ratio fields backed by `numeric(7,6)` whose domain exceeds `[0, 1]` (H:C org, O:C org). True 0–1 fractions keep their own `.max(1)`.
 
@@ -105,7 +146,7 @@ gpsLatitude: z.preprocess(toNumberOrNull, latitudeSchema),
 gpsLongitude: z.preprocess(toNumberOrNull, longitudeSchema),
 ```
 
-Range checks alone are not enough: a half-filled pair otherwise validates. Attach `.superRefine(gpsPairSuperRefine)` to any schema carrying `gpsLatitude` / `gpsLongitude` — it points the error at the coordinate still missing. `hasCompleteGpsPair()` and `GPS_PAIR_MESSAGE` are exported for non-schema call sites. Reference usage: `src/schemas/customers.ts`.
+Range checks alone are not enough: a half-filled pair otherwise validates. Attach `.superRefine(gpsPairSuperRefine)` to any schema carrying `gpsLatitude` / `gpsLongitude` — it points the error at the coordinate still missing. Reference usage: `src/schemas/customers.ts`.
 
 ### Cross-field error revalidation
 
@@ -256,7 +297,7 @@ For a cert input that is **not** a plain form value (a derived leg distance, an 
 
 `FormFileUpload` has **three modes** — check `src/components/forms/form-file-upload.tsx` before wiring one:
 
-1. **Real upload** — pass `entityType` + `entityId` + `documentType`; files go straight to storage by presigned PUT via `useFileUpload`, and `onUploaded(documentId)` / `onUploadError` fire per file. This is the mode you want for anything that must persist.
+1. **Real upload** — pass `entityType` + `entityId` and either a fixed `documentType` or `resolveDocumentType(file)` for a multi-type picker; files go straight to storage by presigned PUT via `useFileUpload`, and `onUploaded(documentId)` / `onUploadError` fire per file. This is the mode you want for anything that must persist.
 2. **Deferred** — parent holds real `File` objects until the parent entity exists (`deferred`, `deferredFiles`, `onDeferredAdd`, `onDeferredRemove`). No network calls.
 3. **Mockup** (default) — captures `{ name, size, type }` locally and emits via `onChange`. **No network calls, nothing reaches storage.** Legacy forms only; do not build new uploads on it.
 
@@ -272,7 +313,8 @@ selected delivery's customer location when available; operators can enter or
 correct that pair in Field details. Both coordinates are required when this
 method is selected. `boundary` reveals the GIS reference editor. `visual`
 remains visible but unavailable. Evidence-health gaps are informational and do
-not block certification submission.
+not block certification submission. Optional Application images and PDFs use
+the separate Supporting evidence section and do not change the selected method.
 
 ### Application GIS boundary evidence
 

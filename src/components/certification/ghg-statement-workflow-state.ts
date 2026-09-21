@@ -1,3 +1,4 @@
+import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-total";
 import type { RegistryObservationStatus } from "@/lib/certification/registry-observation";
 import type { GhgStatement } from "@/lib/isometric";
 import {
@@ -29,7 +30,6 @@ export function deriveVerifierStep(
   remote: GhgStatement | null,
   remoteUnavailable: boolean,
   hasMembership: boolean,
-  hasApprovedReport: boolean,
 ): WorkflowStepModel {
   if (!remote) {
     return remoteUnavailable
@@ -39,6 +39,9 @@ export function deriveVerifierStep(
             "Live Isometric statement data is unavailable. Refresh and try again.",
         }
       : { status: "skipped" };
+  }
+  if (chooseGhgSubmitMode(remote) === "resubmit" && remote.status !== "FAILED_VERIFICATION") {
+    return { status: "warning", detail: "This GHG Statement has pending changes. Generate and approve an updated report, then resubmit." };
   }
   switch (remote.status) {
     case "AWAITING_VERIFICATION":
@@ -65,15 +68,11 @@ export function deriveVerifierStep(
           detail: "No GHG Entries are available to submit.",
         };
       }
-      return hasApprovedReport
-        ? {
-            status: "active",
-            detail: "Submit the approved report to the verifier.",
-          }
-        : {
-            status: "active",
-            detail: "Open Submit to generate, review, and approve a report.",
-          };
+      return {
+        status: "active",
+        detail:
+          "Review the statement and submit it. noma attaches the report automatically.",
+      };
   }
 }
 
@@ -82,14 +81,12 @@ export function deriveGhgStatementWorkflowState({
   canManageReports,
   remote,
   linkedRemovalCount,
-  hasApprovedReport,
   rollup,
 }: {
   created: boolean;
   canManageReports: boolean;
   remote: GhgStatement | null;
   linkedRemovalCount: number;
-  hasApprovedReport: boolean;
   rollup: RollupQueryState;
 }): GhgStatementWorkflowState {
   const remoteUnavailable = created && remote === null;
@@ -98,9 +95,11 @@ export function deriveGhgStatementWorkflowState({
     : linkedRemovalCount > 0;
   const mode = remote ? chooseGhgSubmitMode(remote) : "submit";
   const remoteTotalReady =
-    remote?.pending_total_co2e_removed_kg != null &&
-    Number.isFinite(remote.pending_total_co2e_removed_kg);
+    hasPendingStatementTotal(remote?.pending_total_co2e_removed_kg);
   const rollupReady = rollup.status === "available" && remoteTotalReady;
+  // Report preparation independently loads and validates every remote member.
+  // Missing local provenance must not prevent a registry data summary.
+  const reportReady = created && remote !== null && hasMembership && remoteTotalReady;
 
   let generationUnavailableReason: string | null = null;
   if (remoteUnavailable) {
@@ -128,7 +127,7 @@ export function deriveGhgStatementWorkflowState({
     mode,
     hasMembership,
     rollupReady,
-    canGenerate: canManageReports && rollupReady,
+    canGenerate: canManageReports && reportReady,
     canSubmit:
       canManageReports &&
       created &&
@@ -136,13 +135,12 @@ export function deriveGhgStatementWorkflowState({
       (mode === "submit" || mode === "resubmit") &&
       hasMembership,
     generationUnavailableReason: canManageReports
-      ? generationUnavailableReason
+      ? reportReady ? null : generationUnavailableReason
       : "An Owner or Admin generates and approves reports.",
     verifierStep: deriveVerifierStep(
       remote,
       remoteUnavailable,
       hasMembership,
-      hasApprovedReport,
     ),
   };
 }

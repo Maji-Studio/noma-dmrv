@@ -1,5 +1,5 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { db, withDedicatedSessionAdvisoryLock } from "@/db";
 import { applications } from "@/db/schema/application";
 import { creditBatches } from "@/db/schema/credits";
 import {
@@ -8,7 +8,10 @@ import {
 } from "@/db/schema/certifier-biochar-applications";
 import { certifierProductionBatches } from "@/db/schema/certifier-production-batches";
 import { certifierStorageLocations } from "@/db/schema/certifier-storage-locations";
-import { certifierProjects } from "@/db/schema/certification";
+import {
+  certificationSubmissions,
+  certifierProjects,
+} from "@/db/schema/certification";
 import { deliveries, orders } from "@/db/schema/logistics";
 import { customerLocations } from "@/db/schema/parties";
 import type { OrgContext } from "@/lib/auth/server";
@@ -17,6 +20,29 @@ import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = CertifierBiocharApplication["provider"];
 const DEFAULT_PROVIDER: CertifierProvider = "isometric";
+
+const BIOCHAR_APPLICATION_LOCK_SCOPE =
+  "certifier-biochar-application:isometric";
+
+/**
+ * Serializes registry create/reconcile for one immutable application slice in
+ * one Removal submission version.
+ */
+export async function withBiocharApplicationRegistrationLock<T>(
+  ctx: OrgContext,
+  input: {
+    applicationId: string;
+    creditBatchId: string;
+    removalSubmissionId: string;
+  },
+  fn: () => Promise<T>,
+): Promise<T> {
+  requireOrgScope(ctx);
+  return withDedicatedSessionAdvisoryLock(
+    `${BIOCHAR_APPLICATION_LOCK_SCOPE}:${ctx.organizationId}:${input.applicationId}:${input.creditBatchId}:${input.removalSubmissionId}`,
+    fn,
+  );
+}
 
 export interface BiocharApplicationRegistryInput {
   applicationId: string;
@@ -27,8 +53,6 @@ export interface BiocharApplicationRegistryInput {
   deliveryId: string;
   deliveryCode: string;
   deliveredWetMassKg: number | null;
-  truckMassOnArrivalKg: number | null;
-  truckMassOnDepartureKg: number | null;
   facilityId: string;
   certifierProjectId: string | null;
   externalProjectId: string | null;
@@ -57,8 +81,6 @@ export async function getBiocharApplicationRegistryInputs(
       deliveryId: deliveries.id,
       deliveryCode: deliveries.code,
       deliveredWetMassKg: deliveries.deliveredWetMassKg,
-      truckMassOnArrivalKg: deliveries.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: deliveries.truckMassOnDepartureKg,
       facilityId: deliveries.facilityId,
       certifierProjectId: certifierProjects.id,
       externalProjectId: certifierProjects.externalProjectId,
@@ -112,6 +134,7 @@ export async function getBiocharApplicationRegistration(
   ctx: OrgContext,
   applicationId: string,
   creditBatchId: string,
+  removalSubmissionId: string,
   provider: CertifierProvider = DEFAULT_PROVIDER,
 ): Promise<CertifierBiocharApplication | null> {
   requireOrgScope(ctx);
@@ -124,6 +147,10 @@ export async function getBiocharApplicationRegistration(
         eq(certifierBiocharApplications.provider, provider),
         eq(certifierBiocharApplications.applicationId, applicationId),
         eq(certifierBiocharApplications.creditBatchId, creditBatchId),
+        eq(
+          certifierBiocharApplications.removalSubmissionId,
+          removalSubmissionId,
+        ),
       ),
     )
     .limit(1);
@@ -133,6 +160,7 @@ export async function getBiocharApplicationRegistration(
 export interface ClaimBiocharApplicationInput {
   applicationId: string;
   creditBatchId: string;
+  removalSubmissionId: string;
   productionBatchRegistrationId: string;
   storageLocationRegistrationId: string;
   externalProductionBatchId: string;
@@ -152,6 +180,7 @@ async function assertRegistryDependenciesAvailable(
     creditBatchId: string;
     productionBatchRegistrationId: string;
     storageLocationRegistrationId: string;
+    removalSubmissionId: string;
   },
   provider: CertifierProvider,
 ): Promise<void> {
@@ -189,6 +218,24 @@ async function assertRegistryDependenciesAvailable(
       "Biochar Application registration references an unavailable registry dependency",
     );
   }
+  const [submission] = await db
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.id, input.removalSubmissionId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+        eq(certificationSubmissions.provider, provider),
+        eq(certificationSubmissions.submissionType, "removal"),
+        eq(certificationSubmissions.localEntityType, "removal"),
+      ),
+    )
+    .limit(1);
+  if (!submission) {
+    throw new Error(
+      "Biochar Application registration references an unavailable Removal submission",
+    );
+  }
 }
 
 /** Inserts the durable in-flight claim before a non-idempotent remote POST. */
@@ -207,6 +254,7 @@ export async function claimBiocharApplicationRegistration(
       provider,
       applicationId: input.applicationId,
       creditBatchId: input.creditBatchId,
+      removalSubmissionId: input.removalSubmissionId,
       productionBatchRegistrationId: input.productionBatchRegistrationId,
       storageLocationRegistrationId: input.storageLocationRegistrationId,
       externalProductionBatchId: input.externalProductionBatchId,
@@ -216,15 +264,16 @@ export async function claimBiocharApplicationRegistration(
       payloadHash: input.payloadHash,
       observedGhgEntryId: input.observedGhgEntryId,
       observedRemovalId: input.observedRemovalId,
-      lifecycleStatus: "gated",
+      lifecycleStatus: "creating",
       correctionStatus: "none",
-      gateReason: "create_in_flight",
+      driftReason: null,
     })
     .onConflictDoNothing({
       target: [
         certifierBiocharApplications.provider,
         certifierBiocharApplications.applicationId,
         certifierBiocharApplications.creditBatchId,
+        certifierBiocharApplications.removalSubmissionId,
       ],
     })
     .returning();
@@ -233,118 +282,11 @@ export async function claimBiocharApplicationRegistration(
     ctx,
     input.applicationId,
     input.creditBatchId,
+    input.removalSubmissionId,
     provider,
   );
   if (!winner) throw new Error("Biochar Application claim race produced no winner");
   return winner;
-}
-
-export interface RecordGatedBiocharApplicationInput {
-  applicationId: string;
-  creditBatchId: string;
-  productionBatchRegistrationId: string;
-  storageLocationRegistrationId: string;
-  externalProductionBatchId: string;
-  externalStorageLocationId: string;
-  supplierReference: string;
-  gateReason: string;
-  provider?: CertifierProvider;
-}
-
-/**
- * Journals a Biochar Application whose registry POST is withheld (for example
- * a delivery without observed truck masses). The placeholder carries no
- * payload; a later submission with the masses upgrades it via
- * {@link activateGatedBiocharApplicationRegistration}. An existing row of any
- * lifecycle wins the conflict untouched.
- */
-export async function recordGatedBiocharApplicationRegistration(
-  ctx: OrgContext,
-  input: RecordGatedBiocharApplicationInput,
-): Promise<void> {
-  requireOrgScope(ctx);
-  const provider = input.provider ?? DEFAULT_PROVIDER;
-  await assertRegistryDependenciesAvailable(ctx, input, provider);
-  await db
-    .insert(certifierBiocharApplications)
-    .values({
-      organizationId: ctx.organizationId,
-      provider,
-      applicationId: input.applicationId,
-      creditBatchId: input.creditBatchId,
-      productionBatchRegistrationId: input.productionBatchRegistrationId,
-      storageLocationRegistrationId: input.storageLocationRegistrationId,
-      externalProductionBatchId: input.externalProductionBatchId,
-      externalStorageLocationId: input.externalStorageLocationId,
-      supplierReference: input.supplierReference,
-      submittedPayload: null,
-      payloadHash: null,
-      observedGhgEntryId: null,
-      observedRemovalId: null,
-      lifecycleStatus: "gated",
-      correctionStatus: "none",
-      gateReason: input.gateReason,
-    })
-    .onConflictDoNothing({
-      target: [
-        certifierBiocharApplications.provider,
-        certifierBiocharApplications.applicationId,
-        certifierBiocharApplications.creditBatchId,
-      ],
-    });
-}
-
-/**
- * Upgrades a payload-less gated placeholder into the in-flight claim once the
- * delivery's truck masses exist. Guarded on the null payload hash so a real
- * in-flight or confirmed registration is never overwritten; returns null when
- * the row no longer matches that placeholder state.
- */
-export async function activateGatedBiocharApplicationRegistration(
-  ctx: OrgContext,
-  input: {
-    registrationId: string;
-    applicationId: string;
-    creditBatchId: string;
-    productionBatchRegistrationId: string;
-    storageLocationRegistrationId: string;
-    externalProductionBatchId: string;
-    externalStorageLocationId: string;
-    supplierReference: string;
-    submittedPayload: CreateBiocharApplicationRequest;
-    payloadHash: string;
-    provider?: CertifierProvider;
-  },
-): Promise<CertifierBiocharApplication | null> {
-  requireOrgScope(ctx);
-  const provider = input.provider ?? DEFAULT_PROVIDER;
-  await assertRegistryDependenciesAvailable(ctx, input, provider);
-  const [row] = await db
-    .update(certifierBiocharApplications)
-    .set({
-      productionBatchRegistrationId: input.productionBatchRegistrationId,
-      storageLocationRegistrationId: input.storageLocationRegistrationId,
-      externalProductionBatchId: input.externalProductionBatchId,
-      externalStorageLocationId: input.externalStorageLocationId,
-      supplierReference: input.supplierReference,
-      submittedPayload: input.submittedPayload,
-      payloadHash: input.payloadHash,
-      gateReason: "create_in_flight",
-      updatedAt: sql`now()`,
-    })
-    .where(
-      and(
-        eq(certifierBiocharApplications.id, input.registrationId),
-        eq(certifierBiocharApplications.organizationId, ctx.organizationId),
-        eq(certifierBiocharApplications.provider, provider),
-        eq(certifierBiocharApplications.applicationId, input.applicationId),
-        eq(certifierBiocharApplications.creditBatchId, input.creditBatchId),
-        eq(certifierBiocharApplications.lifecycleStatus, "gated"),
-        isNull(certifierBiocharApplications.payloadHash),
-      ),
-    )
-    .returning();
-  return row ?? null;
 }
 
 export async function confirmBiocharApplicationRegistration(
@@ -366,7 +308,7 @@ export async function confirmBiocharApplicationRegistration(
       observedRemovalId: input.observedRemovalId,
       lifecycleStatus: "confirmed",
       correctionStatus: "none",
-      gateReason: null,
+      driftReason: null,
       updatedAt: sql`now()`,
     })
     .where(
@@ -393,7 +335,7 @@ export async function markBiocharApplicationDrift(
     .update(certifierBiocharApplications)
     .set({
       correctionStatus: "review_required",
-      gateReason: reason,
+      driftReason: reason,
       updatedAt: sql`now()`,
     })
     .where(

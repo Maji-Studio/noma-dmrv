@@ -654,6 +654,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/monitoring_submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Monitoring Submission
+         * @description Creates a monitoring submission for one or more project monitoring requirements.
+         *
+         *     The submission is associated with a previously uploaded source document (see [Post Source](/mrv/post-source)). One source may be used to create multiple submissions.
+         */
+        post: operations["post_monitoring_submission_monitoring_submissions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/monitoring_submissions/{id}/monitoring_requirements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Monitoring Submission Monitoring Requirements
+         * @description Links monitoring requirements to an existing monitoring submission.
+         */
+        post: operations["post_monitoring_submission_monitoring_requirements_monitoring_submissions__id__monitoring_requirements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organisation": {
         parameters: {
             query?: never;
@@ -940,14 +982,7 @@ export interface paths {
          */
         get: operations["get_monitoring_submissions_projects__project_id__monitoring_requirements__id__submissions_get"];
         put?: never;
-        /**
-         * Post Monitoring Submission
-         * @description Creates a monitoring submission for a project monitoring requirement.
-         *
-         *     The submission is associated with a previously uploaded source document (see [Post Source](/mrv/post-source)).
-         *     One source may be used to create multiple submissions.
-         */
-        post: operations["post_monitoring_submission_projects__project_id__monitoring_requirements__id__submissions_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1248,10 +1283,7 @@ export interface paths {
         put?: never;
         /**
          * Post Source
-         * @description Creates a source in the Isometric system. The client is provided with a presigned
-         *     upload URL which must be used to upload the document associated with this source.
-         *     Source documents are private, but other fields will be visible publicly once
-         *     credits are issued for an associated removal, moving it to the public registry.
+         * @description Creates a source in the Isometric system. The client is provided with a presigned upload URL which must be used to upload the document associated with this source. Source documents are private, but other fields will be visible publicly once credits are issued for an associated removal, moving it to the public registry.
          */
         post: operations["post_source_sources_post"];
         delete?: never;
@@ -1297,10 +1329,7 @@ export interface paths {
         };
         /**
          * Get Source Private Url
-         * @description Returns a short-lived signed URL to download a source document from. This query will fail if
-         *     the source does not have a private URL or if the authenticated user does not have
-         *     access to it. That's why you need to first check the `urlInfo` field on the source
-         *     object, to ensure that you can safely use this query.
+         * @description Returns a short-lived signed URL to download a source document from. This query will fail if the source does not have a private URL or if the authenticated user does not have access to it. That's why you need to first check the `urlInfo` field on the source object, to ensure that you can safely use this query.
          */
         get: operations["get_source_private_url_sources__id__private_url_get"];
         put?: never;
@@ -1322,9 +1351,7 @@ export interface paths {
         put?: never;
         /**
          * Post Signed Upload Url
-         * @description Recreates a presigned upload URL, which must be used to upload the documentation
-         *     associated with this source. If the document is already uploaded, this endpoint will
-         *     response with a 409 error.
+         * @description Recreates a presigned upload URL, which must be used to upload the documentation associated with this source. If the document is already uploaded, this endpoint will response with a 409 error.
          */
         post: operations["post_signed_upload_url_sources__id__signed_upload_url_post"];
         delete?: never;
@@ -1713,7 +1740,7 @@ export interface components {
          * ComponentType
          * @enum {string}
          */
-        ComponentType: "ACTIVITY" | "REMOVAL_COUNTERFACTUAL" | "SEQUESTRATION" | "LOSS" | "ADJUSTMENT" | "UNCERTAINTY_DISCOUNT";
+        ComponentType: "ACTIVITY" | "COUNTERFACTUAL" | "SEQUESTRATION" | "LOSS" | "ADJUSTMENT" | "REDUCTION" | "UNCERTAINTY_DISCOUNT";
         /** CreateBiocharApplicationRequest */
         CreateBiocharApplicationRequest: {
             /**
@@ -1869,7 +1896,10 @@ export interface components {
         };
         /** CreateDatapointRequest */
         CreateDatapointRequest: {
-            /** Description */
+            /**
+             * Description
+             * @description A free-text description of the datapoint. Must be at most 500 characters long.
+             */
             description: string;
             /** Display Name */
             display_name: string;
@@ -2077,9 +2107,19 @@ export interface components {
         };
         /** CreateMeasurementLocationRequest */
         CreateMeasurementLocationRequest: {
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
             /**
              * Project Id
@@ -2130,6 +2170,11 @@ export interface components {
         /** CreateMonitoringSubmissionRequest */
         CreateMonitoringSubmissionRequest: {
             /**
+             * Monitoring Requirement Ids
+             * @description The Isometric IDs of the monitoring requirements that the submission is for.
+             */
+            monitoring_requirement_ids: string[];
+            /**
              * Notes
              * @description Any additional notes or comments.
              * @example Pages 14-21
@@ -2156,9 +2201,10 @@ export interface components {
             valid_from: string;
             /**
              * Valid To
+             * Format: date-time
              * @description Signifies the end of the period that the submission is valid for.
              */
-            valid_to?: string | null;
+            valid_to: string;
         };
         /** CreateProductionBatchRequest */
         CreateProductionBatchRequest: {
@@ -2354,11 +2400,24 @@ export interface components {
              *     }
              */
             description: string | components["schemas"]["Undefined"];
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
-            /** Name */
+            /**
+             * Name
+             * @description The name of the storage location. Must be at most 100 characters long.
+             */
             name: string;
             /**
              * Project Id
@@ -2391,11 +2450,24 @@ export interface components {
              *     }
              */
             description: string | components["schemas"]["Undefined"];
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
-            /** Name */
+            /**
+             * Name
+             * @description The name of the storage unit. Must be at most 100 characters long.
+             */
             name: string;
             /**
              * Storage Location Id
@@ -2579,7 +2651,7 @@ export interface components {
          * Frequency
          * @enum {string}
          */
-        Frequency: "na" | "once" | "optional" | "if_needed" | "every_1_days" | "every_1_months" | "every_2_weeks" | "every_3_months" | "every_6_months" | "every_1_years" | "every_2_years" | "every_5_years";
+        Frequency: "na" | "once" | "optional" | "if_needed" | "every_1_days" | "every_1_weeks" | "every_1_months" | "every_2_weeks" | "every_3_months" | "every_6_months" | "every_1_years" | "every_2_years" | "every_5_years" | "once_per_production_batch" | "once_per_injection_batch" | "continuous";
         /** GhgEntry */
         GhgEntry: {
             /**
@@ -2862,7 +2934,6 @@ export interface components {
         IsometricIDPathParam_MonitoringRequirement_: components["schemas"]["IsometricIDRequestParam_MonitoringRequirement_"];
         IsometricIDPathParam_MonitoringSubmission_: components["schemas"]["IsometricIDRequestParam_MonitoringSubmission_"];
         IsometricIDPathParam_ProductionBatch_: components["schemas"]["IsometricIDRequestParam_ProductionBatch_"];
-        IsometricIDPathParam_ProjectRequirement_: components["schemas"]["IsometricIDRequestParam_ProjectRequirement_"];
         IsometricIDPathParam_Project_: components["schemas"]["IsometricIDRequestParam_Project_"];
         IsometricIDPathParam_Sensor_: components["schemas"]["IsometricIDRequestParam_Sensor_"];
         IsometricIDPathParam_Source_: components["schemas"]["IsometricIDRequestParam_Source_"];
@@ -2960,12 +3031,6 @@ export interface components {
          */
         IsometricIDRequestParam_ProductionBatch_: string;
         /**
-         * @example pfx_1HQTSP3RX1S0Y2RG
-         * @example pfx_1HQTSP3RX1S0Y2RG
-         * @example pfx_1FFWQZH4HSBX6F9N
-         */
-        IsometricIDRequestParam_ProjectRequirement_: string;
-        /**
          * @example prj_1CTWZQGKE1S0VAXA
          * @example prj_1CTWZQGKE1S0VAXA
          * @example prj_1E0QTWB22SBX34D1
@@ -2995,6 +3060,14 @@ export interface components {
          * @example sgu_1DTBHQEBGSBXBCZV
          */
         IsometricIDRequestParam_StorageUnit_: string;
+        /** LinkMonitoringSubmissionRequirementsRequest */
+        LinkMonitoringSubmissionRequirementsRequest: {
+            /**
+             * Monitoring Requirement Ids
+             * @description The Isometric IDs of the monitoring requirements to link to the submission.
+             */
+            monitoring_requirement_ids: string[];
+        };
         /** MeasurementLocation */
         MeasurementLocation: {
             /**
@@ -3004,9 +3077,19 @@ export interface components {
              * @example mlc_1GF73PG90SBXKEX1
              */
             id: string;
-            /** Latitude */
+            /**
+             * Latitude
+             * @description A WGS84 latitude in decimal degrees, between -90 and 90.
+             * @example 51.5072
+             * @example -33.8688
+             */
             latitude: number;
-            /** Longitude */
+            /**
+             * Longitude
+             * @description A WGS84 longitude in decimal degrees, between -180 and 180.
+             * @example -0.1276
+             * @example 151.2093
+             */
             longitude: number;
             /** Supplier Reference Id */
             supplier_reference_id: string | null;
@@ -3060,7 +3143,7 @@ export interface components {
          * MonitoringPhase
          * @enum {string}
          */
-        MonitoringPhase: "pre_op" | "operation" | "post_op" | "feedstock";
+        MonitoringPhase: "pre_op" | "operation" | "post_op";
         /** MonitoringSubmission */
         MonitoringSubmission: {
             /**
@@ -3072,8 +3155,6 @@ export interface components {
             id: string;
             /** Notes */
             notes: string | null;
-            /** Project Monitoring Requirement Id */
-            project_monitoring_requirement_id: string;
             /**
              * Source Id
              * @example src_1EBBF4M7X1S06G1Y
@@ -3085,8 +3166,11 @@ export interface components {
             supplier_reference_id: string | null;
             /** Valid From */
             valid_from: string | null;
-            /** Valid To */
-            valid_to: string | null;
+            /**
+             * Valid To
+             * Format: date-time
+             */
+            valid_to: string;
         };
         /** Organisation */
         Organisation: {
@@ -3673,7 +3757,12 @@ export interface components {
         ProductionBatchKind: "biochar";
         /** Project */
         Project: {
-            /** Country Code */
+            /**
+             * Country Code
+             * @description An ISO 3166-1 alpha-3 country code
+             * @example GBR
+             * @example USA
+             */
             country_code: string;
             /** Description */
             description: string | null;
@@ -3694,22 +3783,29 @@ export interface components {
          * ProjectComponentAmortizationStrategy
          * @description Strategies which control how Project Emissions are automatically amortized and attributed to GHG Statement and GHG entries
          *
-         *     ESTIMATED_PROJECT_TONNAGE - Automatic amortization ensuring full amortization in proportion to the project's estimated gross removal.
+         *     ESTIMATED_PROJECT_REMOVAL_TONNAGE - Automatic amortization ensuring full amortization in proportion to the project's estimated gross removal.
          *
          *     MANUAL - No automatic amortization. All GHG Statement and GHG entry attributions are performed manually.
          *
          *     CUSTOM_TIME_PERIOD - Automatic amortization ensuring full amortization by a specified target date.
          *
          *     ESTIMATED_PROJECT_LIFETIME - Automatic amortization ensuring full amortization over the project's estimated lifetime.
+         *
+         *     ESTIMATED_PROJECT_REDUCTION_TONNAGE - Automatic amortization ensuring full amortization in proportion to the project's estimated gross reduction.
          * @enum {string}
          */
-        ProjectComponentAmortizationStrategy: "ESTIMATED_PROJECT_TONNAGE" | "MANUAL" | "CUSTOM_TIME_PERIOD" | "ESTIMATED_PROJECT_LIFETIME";
+        ProjectComponentAmortizationStrategy: "ESTIMATED_PROJECT_REMOVAL_TONNAGE" | "MANUAL" | "CUSTOM_TIME_PERIOD" | "ESTIMATED_PROJECT_LIFETIME" | "ESTIMATED_PROJECT_REDUCTION_TONNAGE";
         /** ProjectMonitoringRequirement */
         ProjectMonitoringRequirement: {
             /** Display Name */
             display_name: string;
-            frequency: components["schemas"]["Frequency"];
-            /** Id */
+            frequency: components["schemas"]["Frequency"] | null;
+            /**
+             * Id
+             * @example mnr_1DJJQY5C61S0R519
+             * @example mnr_1DJJQY5C61S0R519
+             * @example mnr_1EKAZQMAZSBXDV59
+             */
             id: string;
             monitoring_phase: components["schemas"]["MonitoringPhase"];
             /** Notes */
@@ -3730,7 +3826,7 @@ export interface components {
          * QuantityKindQualifierType
          * @enum {string}
          */
-        QuantityKindQualifierType: "base_saturation_ca_2plus" | "base_saturation_k_plus" | "base_saturation_mg_2plus" | "base_saturation_na_plus" | "base_saturation_major_cations" | "max_limit" | "min_limit" | "flue_stack_emissions" | "pyrolysis_reactor_emissions" | "high_boiling_residue" | "material_condition_dry" | "material_condition_wet" | "hydrogen_to_organic_carbon_ratio" | "inertinite_fraction" | "poorly_carbonized_fraction" | "semi_inertinite_fraction" | "mass_transferred" | "aggregated_container_contents" | "approximate_quantity_recovered" | "ash_content" | "loss_on_ignition" | "nameplate_charge" | "porosity" | "volatile_matter" | "radiation_normalization_method_gamma_activity_concentration_idx" | "cation_exchange_capacity" | "potential_acidity" | "capacity" | "gross_alpha" | "gross_beta" | "radiation_normalization_method_ec_rp112_standard_room_model" | "anion_cl_1minus" | "anion_no3_1minus" | "anion_po4_3minus" | "anion_so4_2minus" | "cation_ca_2plus" | "cation_k_1plus" | "cation_mg_2plus" | "cation_na_1plus" | "heptacdd_1234678" | "heptacdf_1234678" | "heptacdf_1234789" | "hexacdd_123478" | "hexacdf_123478" | "hexacdd_123678" | "hexacdf_123678" | "hexacdd_123789" | "hexacdf_123789" | "pentacdd_12378" | "pentacdf_12378" | "hexacdf_234678" | "pentacdf_23478" | "tetracdd_2378" | "tetracdf_2378" | "compound_ch4" | "compound_co" | "compound_co2" | "compound_cao" | "compound_h2" | "compound_h2o" | "compound_h2s" | "compound_k2o" | "compound_mgo" | "compound_n2" | "compound_n2o" | "compound_na2o" | "compound_o2" | "compound_p2o5" | "compound_so4" | "acenaphthene" | "acenaphthylene" | "anthracene" | "benz_a_anthracene" | "benzo_a_pyrene" | "benzo_b_fluoranthene" | "benzo_e_pyrene" | "benzo_ghi_perylene" | "benzo_j_fluoranthene" | "benzo_k_fluoranthene" | "cfc_11" | "cfc_111" | "cfc_1112" | "cfc_1112a" | "cfc_112" | "cfc_112a" | "cfc_113" | "cfc_113a" | "cfc_114" | "cfc_114a" | "cfc_115" | "cfc_12" | "cfc_13" | "cfc_211" | "cfc_212" | "cfc_213" | "cfc_214" | "cfc_215" | "cfc_216" | "cfc_217" | "chrysene" | "dibenz_ah_anthracene" | "e_r316c" | "fluoranthene" | "fluorene" | "hcfc_121" | "hcfc_122" | "hcfc_122a" | "hcfc_123" | "hcfc_123a" | "hcfc_124" | "hcfc_124a" | "hcfc_131" | "hcfc_132" | "hcfc_132a" | "hcfc_132c" | "hcfc_133" | "hcfc_133a" | "hcfc_141" | "hcfc_141b" | "hcfc_142" | "hcfc_142b" | "hcfc_151" | "hcfc_21" | "hcfc_22" | "hcfc_221" | "hcfc_222" | "hcfc_223" | "hcfc_224" | "hcfc_225" | "hcfc_225ca" | "hcfc_225cb" | "hcfc_226" | "hcfc_231" | "hcfc_232" | "hcfc_233" | "hcfc_234" | "hcfc_235" | "hcfc_241" | "hcfc_242" | "hcfc_243" | "hcfc_244" | "hcfc_251" | "hcfc_252" | "hcfc_253" | "hcfc_261" | "hcfc_262" | "hcfc_271" | "hcfc_31" | "hcfo_1233zd_e" | "hcfo_1233zd_z" | "hfc_125" | "hfc_134" | "hfc_134a" | "hfc_143" | "hfc_143a" | "hfc_152" | "hfc_152a" | "hfc_161" | "hfc_227ca" | "hfc_227ea" | "hfc_23" | "hfc_236cb" | "hfc_236ea" | "hfc_236fa" | "hfc_245ca" | "hfc_245cb" | "hfc_245ea" | "hfc_245eb" | "hfc_245fa" | "hfc_263fb" | "hfc_272ca" | "hfc_32" | "hfc_329p" | "hfc_365mfc" | "hfc_41" | "hfc_43_10mee" | "indeno_123_cd_pyrene" | "naphthalene" | "octacdd" | "octacdf" | "pcb_101" | "pcb_105" | "pcb_114" | "pcb_118" | "pcb_123" | "pcb_126" | "pcb_138" | "pcb_153" | "pcb_156" | "pcb_157" | "pcb_167" | "pcb_169" | "pcb_180" | "pcb_189" | "pcb_28" | "pcb_52" | "pcb_77" | "pcb_81" | "phenanthrene" | "pyrene" | "z_r316c" | "cfc" | "hcfc" | "hfc" | "i_teq_nato_ccms_lower_bound" | "i_teq_nato_ccms_upper_bound" | "total_16_epa_pah_excl_loq" | "total_6_ndl_pcb_lower_bound" | "total_6_ndl_pcb_upper_bound" | "total_7_indicator_pcb_lower_bound" | "total_7_indicator_pcb_upper_bound" | "total_8_efsa_pah_excl_loq" | "who_2005_pcb_teq_lower_bound" | "who_2005_pcb_teq_upper_bound" | "who_2005_pcdd_f_pcb_teq_lower_bound" | "who_2005_pcdd_f_pcb_teq_upper_bound" | "who_2005_pcdd_f_teq_lower_bound" | "who_2005_pcdd_f_teq_upper_bound" | "element_al" | "element_as" | "element_b" | "element_ba" | "element_ca" | "element_cd" | "element_ce" | "element_co" | "element_cr" | "element_cs" | "element_cu" | "element_eu" | "element_fe" | "element_h" | "element_hf" | "element_hg" | "element_k" | "element_la" | "element_lu" | "element_mg" | "element_mn" | "element_mo" | "element_n" | "element_na" | "element_nb" | "element_nd" | "element_ni" | "element_o" | "element_p" | "element_pb" | "element_rb" | "element_s" | "element_sb" | "element_sc" | "element_se" | "element_si" | "element_sn" | "element_sr" | "element_ta" | "element_tb" | "element_th" | "element_ti" | "element_tl" | "element_u" | "element_v" | "element_w" | "element_y" | "element_yb" | "element_zn" | "element_zr" | "alkalinity" | "dissolved_inorganic_carbon" | "dissolved_organic_carbon" | "fixed_carbon" | "particulate_inorganic_carbon" | "particulate_organic_carbon" | "soil_inorganic_carbon" | "soil_organic_carbon" | "soil_organic_matter" | "total_carbon" | "total_inorganic_carbon" | "total_organic_carbon" | "ghg_aggregate_co2e" | "biochar" | "crop_yield" | "mineral_albite" | "mineral_andesine" | "mineral_augite" | "mineral_diopside" | "mineral_hematite" | "mineral_labradorite" | "mineral_maghemite" | "mineral_montmorillonite" | "mineral_orthoclase" | "mineral_pigeonite" | "mineral_quartz" | "mineral_rutile" | "mineral_category_asbestiform" | "mineral_category_asbestos" | "clay" | "sand" | "silt" | "fullness_empty" | "fullness_filled" | "genus_abarema" | "genus_acacia" | "genus_albizia" | "genus_amaioua" | "genus_ambelania" | "genus_anacardium" | "genus_andira" | "genus_aniba" | "genus_annona" | "genus_apeiba" | "genus_aspidosperma" | "genus_astrocaryum" | "genus_attalea" | "genus_bactris" | "genus_banara" | "genus_bauhinia" | "genus_bellucia" | "genus_bombax" | "genus_bowdichia" | "genus_brosimum" | "genus_brunfelsia" | "genus_buchenavia" | "genus_byrsonima" | "genus_caraipa" | "genus_cariniana" | "genus_caryocar" | "genus_casearia" | "genus_cassia" | "genus_cecropia" | "genus_cheiloclinium" | "genus_clarisia" | "genus_clitoria" | "genus_clusia" | "genus_coccoloba" | "genus_combretum" | "genus_commiphora" | "genus_copaifera" | "genus_cordia" | "genus_couepia" | "genus_couma" | "genus_couratari" | "genus_croton" | "genus_cupania" | "genus_cybianthus" | "genus_dimorphandra" | "genus_dinizia" | "genus_diospyros" | "genus_diplotropis" | "genus_duguetia" | "genus_duroia" | "genus_emmotum" | "genus_endopleura" | "genus_erisma" | "genus_erythroxylum" | "genus_eschweilera" | "genus_eugenia" | "genus_euphorbia" | "genus_faramea" | "genus_ficus" | "genus_garcinia" | "genus_gardenia" | "genus_genipa" | "genus_goupia" | "genus_guarea" | "genus_guatteria" | "genus_handroanthus" | "genus_heisteria" | "genus_himatanthus" | "genus_hirtella" | "genus_hymenaea" | "genus_inga" | "genus_iryanthera" | "genus_isertia" | "genus_jacaranda" | "genus_lacmellea" | "genus_lecythis" | "genus_licania" | "genus_licaria" | "genus_lonchocarpus" | "genus_luehea" | "genus_mabea" | "genus_machaerium" | "genus_macoubea" | "genus_macrolobium" | "genus_manilkara" | "genus_maprounea" | "genus_maquira" | "genus_margaritaria" | "genus_matayba" | "genus_miconia" | "genus_micrandra" | "genus_micropholis" | "genus_mouriri" | "genus_myrcia" | "genus_myrciaria" | "genus_naucleopsis" | "genus_nectandra" | "genus_neea" | "genus_ocotea" | "genus_ormosia" | "genus_ouratea" | "genus_pachira" | "genus_pagamea" | "genus_palicourea" | "genus_parahancornia" | "genus_parkia" | "genus_perebea" | "genus_philocosmos" | "genus_piper" | "genus_piptadenia" | "genus_platonia" | "genus_pourouma" | "genus_pouteria" | "genus_pradosia" | "genus_protium" | "genus_pseudobombax" | "genus_pseudolmedia" | "genus_pseudopiptadenia" | "genus_psychotria" | "genus_pterocarpus" | "genus_rauvolfia" | "genus_rhabdodendron" | "genus_rinorea" | "genus_rinoreocarpus" | "genus_sacoglottis" | "genus_salix" | "genus_samanea" | "genus_senegalia" | "genus_senna" | "genus_simaba" | "genus_siparuna" | "genus_sloanea" | "genus_solanum" | "genus_sorocea" | "genus_sparattosperma" | "genus_sterculia" | "genus_stryphnodendron" | "genus_swartzia" | "genus_tabebuia" | "genus_tabernaemontana" | "genus_tachigali" | "genus_talisia" | "genus_tapirira" | "genus_terminalia" | "genus_ternstroemia" | "genus_theobroma" | "genus_toulicia" | "genus_tovomita" | "genus_trattinnickia" | "genus_trichilia" | "genus_triplaris" | "genus_unonopsis" | "genus_vatairea" | "genus_vernonia" | "genus_virola" | "genus_vismia" | "genus_vitex" | "genus_vochysia" | "genus_xylopia" | "genus_zygia" | "species_abarema_cochleata" | "species_abuta_grandifolia" | "species_acacia_mangium" | "species_acacia_polyacantha" | "species_acridocarpus_katangensis" | "species_afzelia_quanzensis" | "species_albizia_antunesiana" | "species_albizia_versicolor" | "species_alchornea_glandulosa" | "species_alexa_grandiflora" | "species_alibertia_edulis" | "species_allantoma_lineata" | "species_allophylus_africanus" | "species_amaioua_guianensis" | "species_ambelania_acida" | "species_anacardium_giganteum" | "species_anacardium_parvifolium" | "species_anadenanthera_colubrina" | "species_andira_inermis" | "species_andira_surinamensis" | "species_anisophyllea_boehmii" | "species_annona_exsucca" | "species_annona_glabra" | "species_annona_senegalensis" | "species_antidesma_venosum" | "species_aparisthmium_cordatum" | "species_apeiba_echinata" | "species_apeiba_membranacea" | "species_apeiba_petoumo" | "species_apeiba_tibourbou" | "species_apuleia_leiocarpa" | "species_aspidosperma_album" | "species_aspidosperma_nitidum" | "species_aspidosperma_oblongum" | "species_astrocaryum_aculeatum" | "species_astronium_fraxinifolium" | "species_astronium_graveolens" | "species_astronium_lecointei" | "species_attalea_maripa" | "species_azanza_garckeana" | "species_bactris_major" | "species_bactris_maraja" | "species_bagassa_guianensis" | "species_balanites_aegyptiaca" | "species_banara_guianensis" | "species_bauhinia_longipedicellata" | "species_bauhinia_petersiana" | "species_bauhinia_ungulata" | "species_bertholletia_excelsa" | "species_bixa_arborea" | "species_bixa_orellana" | "species_bobgunnia_madagascariensis" | "species_boscia_angustifolia" | "species_bowdichia_nitida" | "species_brachystegia_boehmii" | "species_brachystegia_bussei" | "species_brachystegia_gossweileri" | "species_brachystegia_microphylla" | "species_brachystegia_spiciformis" | "species_brachystegia_stipulata" | "species_brachystegia_taxifolia" | "species_brachystegia_wangermeeana" | "species_bridelia_cathartica" | "species_bridelia_duvigneaudii" | "species_brosimum_guianense" | "species_brosimum_lactescens" | "species_brosimum_rubescens" | "species_buchenavia_tomentosa" | "species_byrsonima_arthropoda" | "species_byrsonima_coccolobifolia" | "species_byrsonima_crassifolia" | "species_byrsonima_crispa" | "species_byrsonima_poeppigiana" | "species_byrsonima_stipulacea" | "species_calophyllum_brasiliense" | "species_calycophyllum_spruceanum" | "species_caraipa_densifolia" | "species_caraipa_punctulata" | "species_carapa_guianensis" | "species_carapa_procera" | "species_carica_papaya" | "species_cariniana_micrantha" | "species_carya_cordiformis" | "species_caryocar_glabrum" | "species_caryocar_villosum" | "species_casearia_arborea" | "species_casearia_decandra" | "species_casearia_sylvestris" | "species_cassia_fastuosa" | "species_cassia_grandis" | "species_cassia_leiandra" | "species_cassia_lucens" | "species_cassia_spruceana" | "species_castanea_mollissima" | "species_cecropia_distachya" | "species_cecropia_obtusa" | "species_cecropia_pachystachya" | "species_cecropia_purpurascens" | "species_cecropia_sciadophylla" | "species_cedrela_fissilis" | "species_cedrela_odorata" | "species_ceiba_pentandra" | "species_ceiba_samauma" | "species_ceiba_speciosa" | "species_cenostigma_tocantinum" | "species_chloroleucon_tortum" | "species_chrysophyllum_sparsiflorum" | "species_clarisia_biflora" | "species_clarisia_racemosa" | "species_clitoria_fairchildiana" | "species_clusia_grandiflora" | "species_colubrina_glandulosa" | "species_combretum_adenogonium" | "species_combretum_collinum" | "species_combretum_molle" | "species_combretum_zeyheri" | "species_commiphora_glandulosa" | "species_connarus_perrottetii" | "species_copaifera_langsdorffii" | "species_copaifera_martii" | "species_copaifera_reticulata" | "species_cordia_alliodora" | "species_cordia_nodosa" | "species_cordia_superba" | "species_couepia_bracteosa" | "species_couepia_glabra" | "species_couma_utilis" | "species_couratari_guianensis" | "species_couratari_macrosperma" | "species_couratari_multiflora" | "species_couroupita_guianensis" | "species_couroupita_subsessilis" | "species_coussapoa_latifolia" | "species_coutarea_hexandra" | "species_craterosiphon_quarrei" | "species_croton_matourensis" | "species_croton_urucurana" | "species_cupania_latifolia" | "species_cupania_scrobiculata" | "species_dalbergia_boehmii" | "species_dalbergia_nitidula" | "species_dendrobangia_boliviana" | "species_dendropanax_cuneatus" | "species_dialium_guianense" | "species_dichrostachys_cinerea" | "species_didymopanax_morototoni" | "species_dinizia_excelsa" | "species_diospyros_bacotana" | "species_diospyros_capreifolia" | "species_diospyros_katangensis" | "species_diospyros_mespiliformis" | "species_diospyros_mweroensis" | "species_diplorhynchus_condylocarpon" | "species_dipteryx_alata" | "species_dipteryx_odorata" | "species_drypetes_variabilis" | "species_ecclinusa_guianensis" | "species_ecclinusa_ramiflora" | "species_ekebergia_benguelensis" | "species_emmotum_fagifolium" | "species_enterolobium_contortisiliquum" | "species_enterolobium_schomburgkii" | "species_enterolobium_timbouva" | "species_eriotheca_globosa" | "species_erisma_bicolor" | "species_erisma_calcaratum" | "species_erisma_uncinatum" | "species_erythrina_abyssinica" | "species_erythrina_africana" | "species_erythrina_falcata" | "species_erythrophleum_africanum" | "species_eschweilera_coriacea" | "species_eschweilera_ovata" | "species_eugenia_cupulata" | "species_eugenia_flavescens" | "species_eugenia_punicifolia" | "species_euplassa_inaequalis" | "species_euterpe_oleracea" | "species_ficus_amazonica" | "species_ficus_anthelmintica" | "species_ficus_dekdekena" | "species_ficus_insipida" | "species_ficus_mathewsii" | "species_ficus_maxima" | "species_ficus_sansibarica" | "species_ficus_stuhlmannii" | "species_ficus_sur" | "species_ficus_trigona" | "species_fusaea_longifolia" | "species_galipea_trifoliata" | "species_garcinia_huillensis" | "species_garcinia_macrophylla" | "species_garcinia_pachyclada" | "species_geissospermum_sericeum" | "species_genipa_americana" | "species_glycydendron_amazonicum" | "species_goupia_glabra" | "species_guapira_opposita" | "species_guapira_venosa" | "species_guarea_guidonia" | "species_guarea_kunthiana" | "species_guatteria_foliosa" | "species_guatteria_punctata" | "species_guatteria_schomburgkiana" | "species_guatteria_sellowiana" | "species_guazuma_ulmifolia" | "species_gustavia_augusta" | "species_handroanthus_impetiginosus" | "species_handroanthus_ochraceus" | "species_handroanthus_serratifolius" | "species_haplocoelum_foliolosum" | "species_helicostylis_tomentosa" | "species_hevea_brasiliensis" | "species_hexalobus_monopetalus" | "species_himatanthus_articulatus" | "species_hirtella_glandulosa" | "species_homalolepis_cedron" | "species_humiria_balsamifera" | "species_hydrochorea_pedicellaris" | "species_hymenaea_courbaril" | "species_hymenaea_intermedia" | "species_hymenaea_parvifolia" | "species_hymenocardia_acida" | "species_hymenolobium_petraeum" | "species_hymenopus_heteromorphus" | "species_inga_alba" | "species_inga_cayennensis" | "species_inga_disticha" | "species_inga_edulis" | "species_inga_heterophylla" | "species_inga_lateriflora" | "species_inga_laurina" | "species_inga_marginata" | "species_inga_paraensis" | "species_inga_sessilis" | "species_inga_stenoptera" | "species_inga_thibaudiana" | "species_inga_vera" | "species_iryanthera_juruensis" | "species_isoberlinia_angolensis" | "species_jacaranda_copaia" | "species_jacaratia_spinosa" | "species_juglans_nigra" | "species_julbernardia_globiflora" | "species_julbernardia_paniculata" | "species_kigelia_africana" | "species_lacistema_pubescens" | "species_lacmellea_gracilis" | "species_laetia_procera" | "species_lafoensia_pacari" | "species_lannea_discolor" | "species_lannea_versicolor" | "species_lecythis_lurida" | "species_lecythis_pisonis" | "species_lecythis_zabucajo" | "species_libidibia_ferrea" | "species_licania_apetala" | "species_licania_canescens" | "species_licania_egleri" | "species_licania_heteromorpha" | "species_licania_octandra" | "species_lindackeria_paludosa" | "species_lophanthera_lactescens" | "species_luehea_speciosa" | "species_mabea_fistulifera" | "species_mabea_nitida" | "species_mabea_speciosa" | "species_machaerium_acutifolium" | "species_macrolobium_acaciifolium" | "species_macrolobium_angustifolium" | "species_maesopsis_eminii" | "species_manilkara_bidentata" | "species_maprounea_guianensis" | "species_maquira_guianensis" | "species_margaritaria_nobilis" | "species_markhamia_obtusifolia" | "species_matayba_arborescens" | "species_matayba_guianensis" | "species_mezilaurus_itauba" | "species_miconia_cuspidata" | "species_miconia_dispar" | "species_miconia_ferruginata" | "species_miconia_minutiflora" | "species_micropholis_egensis" | "species_minquartia_guianensis" | "species_monotes_adenophyllus" | "species_monotes_glandulosus" | "species_monotes_katangensis" | "species_monteverdia_guyanensis" | "species_moquilea_minutiflora" | "species_mouriri_acutiflora" | "species_multidentia_crassa" | "species_myrcia_cuprea" | "species_myrcia_splendens" | "species_myrcia_sylvatica" | "species_myrsine_umbellata" | "species_nectandra_cuspidata" | "species_ochna_schweinfurthiana" | "species_ochroma_pyramidale" | "species_ocotea_glomerata" | "species_ocotea_guianensis" | "species_oenocarpus_bacaba" | "species_oenocarpus_distichus" | "species_olax_obtusifolia" | "species_ormosia_coccinea" | "species_ormosia_coutinhoi" | "species_ormosia_nobilis" | "species_ormosia_paraensis" | "species_ouratea_castaneifolia" | "species_ouratea_discophora" | "species_ouratea_racemiformis" | "species_pachira_aquatica" | "species_palicourea_rigida" | "species_panopsis_sessilifolia" | "species_parahancornia_fasciculata" | "species_parinari_curatellifolia" | "species_parkia_gigantocarpa" | "species_parkia_multijuga" | "species_parkia_nitida" | "species_parkia_pendula" | "species_parkia_platycephala" | "species_peltogyne_venosa" | "species_peltophorum_dubium" | "species_pericopsis_angolensis" | "species_philocosmos_mwelerianus" | "species_piliostigma_thonningii" | "species_piptadenia_gonoacantha" | "species_pithecolobium_tortum" | "species_platymiscium_trinitatis" | "species_platypodium_elegans" | "species_poeppigia_procera" | "species_populus_hybrid" | "species_pourouma_guianensis" | "species_pourouma_minor" | "species_pourouma_mollis" | "species_pouteria_caimito" | "species_pouteria_cladantha" | "species_pouteria_macrophylla" | "species_pouteria_pachyphylla" | "species_pouteria_reticulata" | "species_pouteria_venosa" | "species_protium_altissimum" | "species_protium_hebetatum" | "species_protium_heptaphyllum" | "species_protium_robustum" | "species_pseudobombax_munguba" | "species_pseudolachnostylis_maprouneifolia" | "species_pseudolmedia_macrophylla" | "species_pseudopiptadenia_contorta" | "species_psidium_guajava" | "species_psorospermum_febrifugum" | "species_pterocarpus_angolensis" | "species_pterocarpus_rohrii" | "species_pterocarpus_rotundifolius" | "species_pterocarpus_santalinoides" | "species_pterocarpus_tinctorius" | "species_qualea_paraensis" | "species_quercus_bicolor" | "species_rauvolfia_paraensis" | "species_rinoreocarpus_ulei" | "species_robinia_pseudoacacia" | "species_rothmannia_engleriana" | "species_sacoglottis_guianensis" | "species_samanea_tubulosa" | "species_sapindus_saponaria" | "species_sapium_glandulosum" | "species_sapium_marmieri" | "species_schizolobium_amazonicum" | "species_schizolobium_parahyba" | "species_sclerocarya_birrea" | "species_securidaca_longipedunculata" | "species_senegalia_polyphylla" | "species_senna_alata" | "species_senna_macrophylla" | "species_senna_multijuga" | "species_simaba_guianensis" | "species_simarouba_amara" | "species_socratea_exorrhiza" | "species_sorocea_guilleminiana" | "species_spondias_mombin" | "species_sterculia_apetala" | "species_sterculia_striata" | "species_stryphnodendron_pulcherrimum" | "species_swartzia_laurifolia" | "species_swartzia_psilonema" | "species_swietenia_macrophylla" | "species_symmeria_paniculata" | "species_symphonia_globulifera" | "species_syzygium_cumini" | "species_tabebuia_roseoalba" | "species_tachigali_alba" | "species_tachigali_aurea" | "species_tachigali_glauca" | "species_talisia_mollis" | "species_talisia_veraluciana" | "species_tapirira_guianensis" | "species_terminalia_congesta" | "species_terminalia_corrugata" | "species_terminalia_grandis" | "species_terminalia_lucida" | "species_terminalia_tetraphylla" | "species_theobroma_speciosum" | "species_thyrsodium_spruceanum" | "species_tovomita_fructipendula" | "species_trattinnickia_burserifolia" | "species_trattinnickia_rhoifolia" | "species_trema_micrantha" | "species_triplaris_americana" | "species_triplaris_weigeltiana" | "species_unknown" | "species_vatairea_erythrocarpa" | "species_vatairea_fusca" | "species_vatairea_guianensis" | "species_vatairea_macrocarpa" | "species_virola_multinervia" | "species_virola_sebifera" | "species_virola_surinamensis" | "species_vismia_guianensis" | "species_xylopia_frutescens" | "species_zanthoxylum_rhoifolium" | "percentile_10" | "percentile_50" | "percentile_80" | "percentile_90" | "percentile_97";
+        QuantityKindQualifierType: "base_saturation_ca_2plus" | "base_saturation_k_plus" | "base_saturation_mg_2plus" | "base_saturation_na_plus" | "base_saturation_major_cations" | "max_limit" | "min_limit" | "flue_stack_emissions" | "pyrolysis_reactor_emissions" | "high_boiling_residue" | "material_condition_dry" | "material_condition_wet" | "hydrogen_to_organic_carbon_ratio" | "inertinite_fraction" | "poorly_carbonized_fraction" | "semi_inertinite_fraction" | "mass_transferred" | "aggregated_container_contents" | "approximate_quantity_recovered" | "ash_content" | "loss_on_ignition" | "nameplate_charge" | "porosity" | "volatile_matter" | "radiation_normalization_method_gamma_activity_concentration_idx" | "cation_exchange_capacity" | "potential_acidity" | "capacity" | "gross_alpha" | "gross_beta" | "radiation_normalization_method_ec_rp112_standard_room_model" | "anion_cl_1minus" | "anion_no3_1minus" | "anion_po4_3minus" | "anion_so4_2minus" | "cation_ca_2plus" | "cation_k_1plus" | "cation_mg_2plus" | "cation_na_1plus" | "heptacdd_1234678" | "heptacdf_1234678" | "heptacdf_1234789" | "hexacdd_123478" | "hexacdf_123478" | "hexacdd_123678" | "hexacdf_123678" | "hexacdd_123789" | "hexacdf_123789" | "pentacdd_12378" | "pentacdf_12378" | "hexacdf_234678" | "pentacdf_23478" | "tetracdd_2378" | "tetracdf_2378" | "compound_ch4" | "compound_co" | "compound_co2" | "compound_cao" | "compound_h2" | "compound_h2o" | "compound_h2s" | "compound_k2o" | "compound_mgo" | "compound_n2" | "compound_n2o" | "compound_na2o" | "compound_o2" | "compound_p2o5" | "compound_so4" | "acenaphthene" | "acenaphthylene" | "anthracene" | "benz_a_anthracene" | "benzo_a_pyrene" | "benzo_b_fluoranthene" | "benzo_e_pyrene" | "benzo_ghi_perylene" | "benzo_j_fluoranthene" | "benzo_k_fluoranthene" | "cfc_11" | "cfc_111" | "cfc_1112" | "cfc_1112a" | "cfc_112" | "cfc_112a" | "cfc_113" | "cfc_113a" | "cfc_114" | "cfc_114a" | "cfc_115" | "cfc_12" | "cfc_13" | "cfc_211" | "cfc_212" | "cfc_213" | "cfc_214" | "cfc_215" | "cfc_216" | "cfc_217" | "chrysene" | "dibenz_ah_anthracene" | "e_r316c" | "fluoranthene" | "fluorene" | "hcfc_121" | "hcfc_122" | "hcfc_122a" | "hcfc_123" | "hcfc_123a" | "hcfc_124" | "hcfc_124a" | "hcfc_131" | "hcfc_132" | "hcfc_132a" | "hcfc_132c" | "hcfc_133" | "hcfc_133a" | "hcfc_141" | "hcfc_141b" | "hcfc_142" | "hcfc_142b" | "hcfc_151" | "hcfc_21" | "hcfc_22" | "hcfc_221" | "hcfc_222" | "hcfc_223" | "hcfc_224" | "hcfc_225" | "hcfc_225ca" | "hcfc_225cb" | "hcfc_226" | "hcfc_231" | "hcfc_232" | "hcfc_233" | "hcfc_234" | "hcfc_235" | "hcfc_241" | "hcfc_242" | "hcfc_243" | "hcfc_244" | "hcfc_251" | "hcfc_252" | "hcfc_253" | "hcfc_261" | "hcfc_262" | "hcfc_271" | "hcfc_31" | "hcfo_1233zd_e" | "hcfo_1233zd_z" | "hfc_125" | "hfc_134" | "hfc_134a" | "hfc_143" | "hfc_143a" | "hfc_152" | "hfc_152a" | "hfc_161" | "hfc_227ca" | "hfc_227ea" | "hfc_23" | "hfc_236cb" | "hfc_236ea" | "hfc_236fa" | "hfc_245ca" | "hfc_245cb" | "hfc_245ea" | "hfc_245eb" | "hfc_245fa" | "hfc_263fb" | "hfc_272ca" | "hfc_32" | "hfc_329p" | "hfc_365mfc" | "hfc_41" | "hfc_43_10mee" | "indeno_123_cd_pyrene" | "naphthalene" | "octacdd" | "octacdf" | "pcb_101" | "pcb_105" | "pcb_114" | "pcb_118" | "pcb_123" | "pcb_126" | "pcb_138" | "pcb_153" | "pcb_156" | "pcb_157" | "pcb_167" | "pcb_169" | "pcb_180" | "pcb_189" | "pcb_28" | "pcb_52" | "pcb_77" | "pcb_81" | "phenanthrene" | "pyrene" | "z_r316c" | "cfc" | "hcfc" | "hfc" | "i_teq_nato_ccms_lower_bound" | "i_teq_nato_ccms_upper_bound" | "total_16_epa_pah_excl_loq" | "total_6_ndl_pcb_lower_bound" | "total_6_ndl_pcb_upper_bound" | "total_7_indicator_pcb_lower_bound" | "total_7_indicator_pcb_upper_bound" | "total_8_efsa_pah_excl_loq" | "who_2005_pcb_teq_lower_bound" | "who_2005_pcb_teq_upper_bound" | "who_2005_pcdd_f_pcb_teq_lower_bound" | "who_2005_pcdd_f_pcb_teq_upper_bound" | "who_2005_pcdd_f_teq_lower_bound" | "who_2005_pcdd_f_teq_upper_bound" | "element_al" | "element_as" | "element_b" | "element_ba" | "element_ca" | "element_cd" | "element_ce" | "element_co" | "element_cr" | "element_cs" | "element_cu" | "element_eu" | "element_fe" | "element_h" | "element_hf" | "element_hg" | "element_k" | "element_la" | "element_lu" | "element_mg" | "element_mn" | "element_mo" | "element_n" | "element_na" | "element_nb" | "element_nd" | "element_ni" | "element_o" | "element_p" | "element_pb" | "element_rb" | "element_s" | "element_sb" | "element_sc" | "element_se" | "element_si" | "element_sn" | "element_sr" | "element_ta" | "element_tb" | "element_th" | "element_ti" | "element_tl" | "element_u" | "element_v" | "element_w" | "element_y" | "element_yb" | "element_zn" | "element_zr" | "alkalinity" | "dissolved_inorganic_carbon" | "dissolved_organic_carbon" | "fixed_carbon" | "particulate_inorganic_carbon" | "particulate_organic_carbon" | "soil_inorganic_carbon" | "soil_organic_carbon" | "soil_organic_matter" | "total_carbon" | "total_inorganic_carbon" | "total_organic_carbon" | "ghg_aggregate_co2e" | "biochar" | "crop_yield" | "mineral_albite" | "mineral_andesine" | "mineral_augite" | "mineral_diopside" | "mineral_hematite" | "mineral_labradorite" | "mineral_maghemite" | "mineral_montmorillonite" | "mineral_orthoclase" | "mineral_pigeonite" | "mineral_quartz" | "mineral_rutile" | "mineral_category_asbestiform" | "mineral_category_asbestos" | "clay" | "sand" | "silt" | "fullness_empty" | "fullness_filled" | "genus_abarema" | "genus_acacia" | "genus_albizia" | "genus_amaioua" | "genus_ambelania" | "genus_anacardium" | "genus_andira" | "genus_aniba" | "genus_annona" | "genus_apeiba" | "genus_aspidosperma" | "genus_astrocaryum" | "genus_attalea" | "genus_bactris" | "genus_banara" | "genus_bauhinia" | "genus_bellucia" | "genus_bombax" | "genus_bowdichia" | "genus_brosimum" | "genus_brunfelsia" | "genus_buchenavia" | "genus_byrsonima" | "genus_caraipa" | "genus_cariniana" | "genus_caryocar" | "genus_casearia" | "genus_cassia" | "genus_cecropia" | "genus_cheiloclinium" | "genus_clarisia" | "genus_clitoria" | "genus_clusia" | "genus_coccoloba" | "genus_combretum" | "genus_commiphora" | "genus_copaifera" | "genus_cordia" | "genus_couepia" | "genus_couma" | "genus_couratari" | "genus_croton" | "genus_cupania" | "genus_cybianthus" | "genus_dimorphandra" | "genus_dinizia" | "genus_diospyros" | "genus_diplotropis" | "genus_duguetia" | "genus_duroia" | "genus_emmotum" | "genus_endopleura" | "genus_erisma" | "genus_erythroxylum" | "genus_eschweilera" | "genus_eugenia" | "genus_euphorbia" | "genus_faramea" | "genus_ficus" | "genus_garcinia" | "genus_gardenia" | "genus_genipa" | "genus_goupia" | "genus_guarea" | "genus_guatteria" | "genus_handroanthus" | "genus_heisteria" | "genus_himatanthus" | "genus_hirtella" | "genus_hymenaea" | "genus_inga" | "genus_iryanthera" | "genus_isertia" | "genus_jacaranda" | "genus_lacmellea" | "genus_lecythis" | "genus_licania" | "genus_licaria" | "genus_lonchocarpus" | "genus_luehea" | "genus_mabea" | "genus_machaerium" | "genus_macoubea" | "genus_macrolobium" | "genus_manilkara" | "genus_maprounea" | "genus_maquira" | "genus_margaritaria" | "genus_matayba" | "genus_miconia" | "genus_micrandra" | "genus_micropholis" | "genus_mouriri" | "genus_myrcia" | "genus_myrciaria" | "genus_naucleopsis" | "genus_nectandra" | "genus_neea" | "genus_ocotea" | "genus_ormosia" | "genus_ouratea" | "genus_pachira" | "genus_pagamea" | "genus_palicourea" | "genus_parahancornia" | "genus_parkia" | "genus_perebea" | "genus_philocosmos" | "genus_piper" | "genus_piptadenia" | "genus_platonia" | "genus_pourouma" | "genus_pouteria" | "genus_pradosia" | "genus_protium" | "genus_pseudobombax" | "genus_pseudolmedia" | "genus_pseudopiptadenia" | "genus_psychotria" | "genus_pterocarpus" | "genus_rauvolfia" | "genus_rhabdodendron" | "genus_rinorea" | "genus_rinoreocarpus" | "genus_sacoglottis" | "genus_salix" | "genus_samanea" | "genus_senegalia" | "genus_senna" | "genus_simaba" | "genus_siparuna" | "genus_sloanea" | "genus_solanum" | "genus_sorocea" | "genus_sparattosperma" | "genus_sterculia" | "genus_stryphnodendron" | "genus_swartzia" | "genus_tabebuia" | "genus_tabernaemontana" | "genus_tachigali" | "genus_talisia" | "genus_tapirira" | "genus_terminalia" | "genus_ternstroemia" | "genus_theobroma" | "genus_toulicia" | "genus_tovomita" | "genus_trattinnickia" | "genus_trichilia" | "genus_triplaris" | "genus_unonopsis" | "genus_vatairea" | "genus_vernonia" | "genus_virola" | "genus_vismia" | "genus_vitex" | "genus_vochysia" | "genus_xylopia" | "genus_zygia" | "species_abarema_cochleata" | "species_abarema_jupunba" | "species_abuta_grandifolia" | "species_acacia_mangium" | "species_acacia_polyacantha" | "species_acridocarpus_katangensis" | "species_adenanthera_pavonina" | "species_aegiphila_sellowiana" | "species_afzelia_quanzensis" | "species_albizia_antunesiana" | "species_albizia_versicolor" | "species_alchornea_glandulosa" | "species_alexa_grandiflora" | "species_alibertia_edulis" | "species_allantoma_lineata" | "species_allophylus_africanus" | "species_amaioua_guianensis" | "species_ambelania_acida" | "species_amphiodon_effusus" | "species_anacardium_giganteum" | "species_anacardium_occidentale" | "species_anacardium_parvifolium" | "species_anadenanthera_colubrina" | "species_andira_inermis" | "species_andira_surinamensis" | "species_anisophyllea_boehmii" | "species_annona_exsucca" | "species_annona_glabra" | "species_annona_montana" | "species_annona_paludosa" | "species_annona_senegalensis" | "species_antidesma_venosum" | "species_aparisthmium_cordatum" | "species_apeiba_burchellii" | "species_apeiba_echinata" | "species_apeiba_membranacea" | "species_apeiba_petoumo" | "species_apeiba_tibourbou" | "species_apuleia_leiocarpa" | "species_artocarpus_heterophyllus" | "species_aspidosperma_album" | "species_aspidosperma_nitidum" | "species_aspidosperma_oblongum" | "species_astrocaryum_aculeatum" | "species_astrocaryum_gynacanthum" | "species_astronium_fraxinifolium" | "species_astronium_graveolens" | "species_astronium_lecointei" | "species_attalea_maripa" | "species_azanza_garckeana" | "species_bactris_major" | "species_bactris_maraja" | "species_bagassa_guianensis" | "species_balanites_aegyptiaca" | "species_banara_guianensis" | "species_bauhinia_longipedicellata" | "species_bauhinia_petersiana" | "species_bauhinia_ungulata" | "species_bellucia_grossularioides" | "species_bertholletia_excelsa" | "species_bixa_arborea" | "species_bixa_orellana" | "species_bobgunnia_madagascariensis" | "species_boscia_angustifolia" | "species_bowdichia_nitida" | "species_brachystegia_boehmii" | "species_brachystegia_bussei" | "species_brachystegia_gossweileri" | "species_brachystegia_microphylla" | "species_brachystegia_spiciformis" | "species_brachystegia_stipulata" | "species_brachystegia_taxifolia" | "species_brachystegia_wangermeeana" | "species_bridelia_cathartica" | "species_bridelia_duvigneaudii" | "species_brosimum_guianense" | "species_brosimum_lactescens" | "species_brosimum_potabile" | "species_brosimum_rubescens" | "species_buchenavia_congesta" | "species_buchenavia_tomentosa" | "species_byrsonima_arthropoda" | "species_byrsonima_chrysophylla" | "species_byrsonima_coccolobifolia" | "species_byrsonima_crassifolia" | "species_byrsonima_crispa" | "species_byrsonima_densa" | "species_byrsonima_poeppigiana" | "species_byrsonima_stipulacea" | "species_calophyllum_brasiliense" | "species_calycophyllum_spruceanum" | "species_caraipa_densifolia" | "species_caraipa_punctulata" | "species_carapa_guianensis" | "species_carapa_procera" | "species_carica_papaya" | "species_cariniana_micrantha" | "species_carya_cordiformis" | "species_caryocar_glabrum" | "species_caryocar_villosum" | "species_casearia_arborea" | "species_casearia_decandra" | "species_casearia_grandiflora" | "species_casearia_javitensis" | "species_casearia_sylvestris" | "species_cassia_fastuosa" | "species_cassia_grandis" | "species_cassia_leiandra" | "species_cassia_lucens" | "species_cassia_spruceana" | "species_castanea_mollissima" | "species_castilla_ulei" | "species_cecropia_distachya" | "species_cecropia_obtusa" | "species_cecropia_pachystachya" | "species_cecropia_purpurascens" | "species_cecropia_sciadophylla" | "species_cedrela_fissilis" | "species_cedrela_odorata" | "species_ceiba_pentandra" | "species_ceiba_samauma" | "species_ceiba_speciosa" | "species_cenostigma_tocantinum" | "species_chamaecrista_bahiae" | "species_chimarrhis_turbinata" | "species_chloroleucon_tortum" | "species_chrysophyllum_sparsiflorum" | "species_clarisia_biflora" | "species_clarisia_racemosa" | "species_clitoria_fairchildiana" | "species_clusia_grandiflora" | "species_colubrina_glandulosa" | "species_combretum_adenogonium" | "species_combretum_collinum" | "species_combretum_molle" | "species_combretum_zeyheri" | "species_commiphora_glandulosa" | "species_connarus_perrottetii" | "species_copaifera_langsdorffii" | "species_copaifera_martii" | "species_copaifera_reticulata" | "species_cordia_alliodora" | "species_cordia_bicolor" | "species_cordia_nodosa" | "species_cordia_scabrifolia" | "species_cordia_superba" | "species_couepia_bracteosa" | "species_couepia_glabra" | "species_couma_utilis" | "species_couratari_guianensis" | "species_couratari_macrosperma" | "species_couratari_multiflora" | "species_couroupita_guianensis" | "species_couroupita_subsessilis" | "species_coussapoa_latifolia" | "species_coutarea_hexandra" | "species_craterosiphon_quarrei" | "species_croton_matourensis" | "species_croton_urucurana" | "species_cupania_diphylla" | "species_cupania_latifolia" | "species_cupania_scrobiculata" | "species_dalbergia_boehmii" | "species_dalbergia_nitidula" | "species_dendrobangia_boliviana" | "species_dendropanax_cuneatus" | "species_dialium_guianense" | "species_dichrostachys_cinerea" | "species_didymopanax_morototoni" | "species_dinizia_excelsa" | "species_diospyros_bacotana" | "species_diospyros_capreifolia" | "species_diospyros_katangensis" | "species_diospyros_mespiliformis" | "species_diospyros_mweroensis" | "species_diplorhynchus_condylocarpon" | "species_diplotropis_purpurea" | "species_dipteryx_alata" | "species_dipteryx_odorata" | "species_drypetes_variabilis" | "species_ecclinusa_guianensis" | "species_ecclinusa_ramiflora" | "species_ekebergia_benguelensis" | "species_emmotum_fagifolium" | "species_enterolobium_contortisiliquum" | "species_enterolobium_schomburgkii" | "species_enterolobium_timbouva" | "species_ephedranthus_amazonicus" | "species_eriotheca_globosa" | "species_erisma_bicolor" | "species_erisma_calcaratum" | "species_erisma_uncinatum" | "species_erythrina_abyssinica" | "species_erythrina_africana" | "species_erythrina_falcata" | "species_erythrophleum_africanum" | "species_eschweilera_coriacea" | "species_eschweilera_ovata" | "species_eugenia_cupulata" | "species_eugenia_flavescens" | "species_eugenia_omissa" | "species_eugenia_punicifolia" | "species_eugenia_tapacumensis" | "species_euplassa_inaequalis" | "species_euterpe_oleracea" | "species_ficus_amazonica" | "species_ficus_anthelmintica" | "species_ficus_dekdekena" | "species_ficus_insipida" | "species_ficus_mathewsii" | "species_ficus_maxima" | "species_ficus_sansibarica" | "species_ficus_stuhlmannii" | "species_ficus_sur" | "species_ficus_trigona" | "species_fusaea_longifolia" | "species_galipea_trifoliata" | "species_garcinia_huillensis" | "species_garcinia_macrophylla" | "species_garcinia_pachyclada" | "species_geissospermum_sericeum" | "species_geissospermum_vellosii" | "species_genipa_americana" | "species_glycydendron_amazonicum" | "species_goupia_glabra" | "species_guapira_opposita" | "species_guapira_venosa" | "species_guarea_guidonia" | "species_guarea_kunthiana" | "species_guatteria_foliosa" | "species_guatteria_poeppigiana" | "species_guatteria_punctata" | "species_guatteria_schomburgkiana" | "species_guatteria_sellowiana" | "species_guazuma_ulmifolia" | "species_gustavia_augusta" | "species_gustavia_elliptica" | "species_handroanthus_impetiginosus" | "species_handroanthus_ochraceus" | "species_handroanthus_serratifolius" | "species_haplocoelum_foliolosum" | "species_hasseltia_floribunda" | "species_heisteria_ovata" | "species_helicostylis_tomentosa" | "species_henriettea_succosa" | "species_hevea_brasiliensis" | "species_hexalobus_monopetalus" | "species_himatanthus_articulatus" | "species_hirtella_glandulosa" | "species_homalolepis_cedron" | "species_humiria_balsamifera" | "species_hydrochorea_pedicellaris" | "species_hymenaea_courbaril" | "species_hymenaea_intermedia" | "species_hymenaea_parvifolia" | "species_hymenocardia_acida" | "species_hymenolobium_petraeum" | "species_hymenopus_heteromorphus" | "species_inga_alba" | "species_inga_brachyrhachis" | "species_inga_cayennensis" | "species_inga_disticha" | "species_inga_edulis" | "species_inga_gracilifolia" | "species_inga_heterophylla" | "species_inga_lateriflora" | "species_inga_laurina" | "species_inga_marginata" | "species_inga_paraensis" | "species_inga_rubiginosa" | "species_inga_sessilis" | "species_inga_stenoptera" | "species_inga_thibaudiana" | "species_inga_vera" | "species_iryanthera_juruensis" | "species_isoberlinia_angolensis" | "species_jacaranda_copaia" | "species_jacaratia_spinosa" | "species_juglans_nigra" | "species_julbernardia_globiflora" | "species_julbernardia_paniculata" | "species_kigelia_africana" | "species_lacistema_pubescens" | "species_lacmellea_aculeata" | "species_lacmellea_gracilis" | "species_laetia_procera" | "species_lafoensia_pacari" | "species_lannea_discolor" | "species_lannea_versicolor" | "species_lecythis_idatimon" | "species_lecythis_lurida" | "species_lecythis_pisonis" | "species_lecythis_zabucajo" | "species_libidibia_ferrea" | "species_licania_apetala" | "species_licania_canescens" | "species_licania_egleri" | "species_licania_guianensis" | "species_licania_heteromorpha" | "species_licania_kunthiana" | "species_licania_membranacea" | "species_licania_octandra" | "species_lindackeria_paludosa" | "species_lophanthera_lactescens" | "species_luehea_speciosa" | "species_mabea_fistulifera" | "species_mabea_nitida" | "species_mabea_speciosa" | "species_machaerium_acutifolium" | "species_macrolobium_acaciifolium" | "species_macrolobium_angustifolium" | "species_macrolobium_bifolium" | "species_maesopsis_eminii" | "species_mangifera_indica" | "species_manilkara_bidentata" | "species_manilkara_huberi" | "species_manilkara_subsericea" | "species_maprounea_guianensis" | "species_maquira_guianensis" | "species_margaritaria_nobilis" | "species_markhamia_obtusifolia" | "species_matayba_arborescens" | "species_matayba_guianensis" | "species_matayba_inelegans" | "species_mezilaurus_itauba" | "species_miconia_cuspidata" | "species_miconia_dispar" | "species_miconia_ferruginata" | "species_miconia_minutiflora" | "species_micropholis_egensis" | "species_micropholis_guyanensis" | "species_minquartia_guianensis" | "species_minquartia_macrophylla" | "species_monotes_adenophyllus" | "species_monotes_glandulosus" | "species_monotes_katangensis" | "species_monteverdia_guyanensis" | "species_moquilea_minutiflora" | "species_mouriri_acutiflora" | "species_multidentia_crassa" | "species_myrcia_atramentifera" | "species_myrcia_cuprea" | "species_myrcia_eximia" | "species_myrcia_splendens" | "species_myrcia_sylvatica" | "species_myrsine_umbellata" | "species_naucleopsis_ternstroemiiflora" | "species_nectandra_cuspidata" | "species_neea_floribunda" | "species_ochna_schweinfurthiana" | "species_ochroma_pyramidale" | "species_ocotea_canaliculata" | "species_ocotea_glomerata" | "species_ocotea_guianensis" | "species_oenocarpus_bacaba" | "species_oenocarpus_distichus" | "species_olax_obtusifolia" | "species_ormosia_coccinea" | "species_ormosia_coutinhoi" | "species_ormosia_nobilis" | "species_ormosia_paraensis" | "species_ouratea_castaneifolia" | "species_ouratea_discophora" | "species_ouratea_racemiformis" | "species_pachira_aquatica" | "species_palicourea_guianensis" | "species_palicourea_rigida" | "species_panopsis_sessilifolia" | "species_parahancornia_fasciculata" | "species_parinari_curatellifolia" | "species_parkia_gigantocarpa" | "species_parkia_multijuga" | "species_parkia_nitida" | "species_parkia_pendula" | "species_parkia_platycephala" | "species_peltogyne_venosa" | "species_peltophorum_dubium" | "species_pentaclethra_macroloba" | "species_pericopsis_angolensis" | "species_persea_americana" | "species_philocosmos_mwelerianus" | "species_piliostigma_thonningii" | "species_piptadenia_gonoacantha" | "species_pithecolobium_tortum" | "species_platymiscium_trinitatis" | "species_platypodium_elegans" | "species_poeppigia_procera" | "species_populus_hybrid" | "species_posoqueria_longiflora" | "species_pourouma_guianensis" | "species_pourouma_minor" | "species_pourouma_mollis" | "species_pouteria_caimito" | "species_pouteria_cladantha" | "species_pouteria_decorticans" | "species_pouteria_filipes" | "species_pouteria_macrophylla" | "species_pouteria_pachyphylla" | "species_pouteria_reticulata" | "species_pouteria_venosa" | "species_pradosia_lactescens" | "species_protium_altissimum" | "species_protium_hebetatum" | "species_protium_heptaphyllum" | "species_protium_pallidum" | "species_protium_robustum" | "species_protium_subserratum" | "species_protium_tenuifolium" | "species_pseudobombax_munguba" | "species_pseudolachnostylis_maprouneifolia" | "species_pseudolmedia_laevigata" | "species_pseudolmedia_macrophylla" | "species_pseudopiptadenia_contorta" | "species_pseudopiptadenia_suaveolens" | "species_psidium_guajava" | "species_psorospermum_febrifugum" | "species_pterocarpus_amazonum" | "species_pterocarpus_angolensis" | "species_pterocarpus_rohrii" | "species_pterocarpus_rotundifolius" | "species_pterocarpus_santalinoides" | "species_pterocarpus_tinctorius" | "species_qualea_paraensis" | "species_quercus_bicolor" | "species_rauvolfia_paraensis" | "species_rinorea_guianensis" | "species_rinorea_racemosa" | "species_rinoreocarpus_ulei" | "species_robinia_pseudoacacia" | "species_rothmannia_engleriana" | "species_sacoglottis_guianensis" | "species_sagotia_racemosa" | "species_samanea_tubulosa" | "species_sapindus_saponaria" | "species_sapium_argutum" | "species_sapium_glandulosum" | "species_sapium_marmieri" | "species_schizolobium_amazonicum" | "species_schizolobium_parahyba" | "species_sclerocarya_birrea" | "species_securidaca_longipedunculata" | "species_senegalia_polyphylla" | "species_senna_alata" | "species_senna_macrophylla" | "species_senna_multijuga" | "species_simaba_cedron" | "species_simaba_guianensis" | "species_simarouba_amara" | "species_siparuna_guianensis" | "species_sloanea_eichleri" | "species_sloanea_grandiflora" | "species_socratea_exorrhiza" | "species_sorocea_guilleminiana" | "species_spondias_mombin" | "species_sterculia_apetala" | "species_sterculia_striata" | "species_stryphnodendron_guianense" | "species_stryphnodendron_pulcherrimum" | "species_swartzia_laurifolia" | "species_swartzia_psilonema" | "species_swartzia_racemosa" | "species_swietenia_macrophylla" | "species_syagrus_cocoides" | "species_symmeria_paniculata" | "species_symphonia_globulifera" | "species_syzygium_cumini" | "species_tabebuia_roseoalba" | "species_tabernaemontana_angulata" | "species_tachigali_alba" | "species_tachigali_aurea" | "species_tachigali_glauca" | "species_tachigali_myrmecophila" | "species_tachigali_vulgaris" | "species_talisia_esculenta" | "species_talisia_longifolia" | "species_talisia_mollis" | "species_talisia_veraluciana" | "species_tapirira_guianensis" | "species_tectona_grandis" | "species_terminalia_congesta" | "species_terminalia_corrugata" | "species_terminalia_grandis" | "species_terminalia_lucida" | "species_terminalia_tetraphylla" | "species_theobroma_speciosum" | "species_thyrsodium_guianense" | "species_thyrsodium_spruceanum" | "species_tovomita_fructipendula" | "species_trattinnickia_burserifolia" | "species_trattinnickia_rhoifolia" | "species_trema_micrantha" | "species_triplaris_americana" | "species_triplaris_weigeltiana" | "species_unknown" | "species_vatairea_erythrocarpa" | "species_vatairea_fusca" | "species_vatairea_guianensis" | "species_vatairea_macrocarpa" | "species_vatairea_sericea" | "species_virola_michelii" | "species_virola_multinervia" | "species_virola_sebifera" | "species_virola_surinamensis" | "species_vismia_guianensis" | "species_vismia_sandwithii" | "species_vochysia_inundata" | "species_xylopia_aromatica" | "species_xylopia_cayennensis" | "species_xylopia_frutescens" | "species_xylopia_nitida" | "species_zanthoxylum_rhoifolium" | "species_zygia_racemosa" | "percentile_10" | "percentile_50" | "percentile_80" | "percentile_90" | "percentile_97";
         /**
          * QuantityKindType
          * @enum {string}
@@ -3901,7 +3997,7 @@ export interface components {
         ResubmitGhgStatementRequest: {
             /**
              * Ghg Statement Report Url
-             * @description The URL of the GHG statement report. This should be accessible to the verifier.
+             * @description The URL of the GHG statement report. This should be accessible to the verifier. Must be at most 2048 characters long.
              */
             ghg_statement_report_url: string;
             /**
@@ -4079,7 +4175,7 @@ export interface components {
          * StorageMethod
          * @enum {string}
          */
-        StorageMethod: "biochar_field" | "biochar_landfill" | "biomass_injection_well" | "biomass_subsurface" | "saline_aquifer" | "in_situ_mineralization";
+        StorageMethod: "biochar_field" | "biochar_landfill" | "permeable_reservoir" | "biomass_subsurface" | "salt_cavern" | "saline_aquifer" | "in_situ_mineralization" | "depleted_hydrocarbon_reservoir";
         /** StorageUnit */
         StorageUnit: {
             /**
@@ -4135,7 +4231,7 @@ export interface components {
         SubmitGhgStatementRequest: {
             /**
              * Ghg Statement Report Url
-             * @description The URL of the GHG statement report. This should be accessible to the verifier.
+             * @description The URL of the GHG statement report. This should be accessible to the verifier. Must be at most 2048 characters long.
              */
             ghg_statement_report_url: string;
         };
@@ -6023,6 +6119,80 @@ export interface operations {
             };
         };
     };
+    post_monitoring_submission_monitoring_submissions_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMonitoringSubmissionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringSubmission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_monitoring_submission_monitoring_requirements_monitoring_submissions__id__monitoring_requirements_post: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description A secret token identifying the client connecting to the API */
+                "x-client-secret": string;
+            };
+            path: {
+                id: components["schemas"]["IsometricIDPathParam_MonitoringSubmission_"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkMonitoringSubmissionRequirementsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringSubmission"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_current_organisation_organisation_get: {
         parameters: {
             query?: never;
@@ -6575,7 +6745,7 @@ export interface operations {
             };
             path: {
                 project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
+                id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
             };
             cookie?: never;
         };
@@ -6601,45 +6771,6 @@ export interface operations {
             };
         };
     };
-    post_monitoring_submission_projects__project_id__monitoring_requirements__id__submissions_post: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description A secret token identifying the client connecting to the API */
-                "x-client-secret": string;
-            };
-            path: {
-                project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateMonitoringSubmissionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MonitoringSubmission"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     delete_monitoring_submission_projects__project_id__monitoring_requirements__monitoring_requirement_id__submissions__id__delete: {
         parameters: {
             query?: never;
@@ -6649,7 +6780,7 @@ export interface operations {
             };
             path: {
                 project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                monitoring_requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
+                monitoring_requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
                 id: components["schemas"]["IsometricIDPathParam_MonitoringSubmission_"];
             };
             cookie?: never;
@@ -6683,7 +6814,7 @@ export interface operations {
             };
             path: {
                 project_id: components["schemas"]["IsometricIDPathParam_Project_"];
-                requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"] | components["schemas"]["IsometricIDPathParam_ProjectRequirement_"];
+                requirement_id: components["schemas"]["IsometricIDPathParam_MonitoringRequirement_"];
             };
             cookie?: never;
         };

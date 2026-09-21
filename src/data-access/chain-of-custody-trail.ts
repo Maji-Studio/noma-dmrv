@@ -12,13 +12,13 @@
  * Evidence is keyed by the DAG node-id convention (`kind:entityId`,
  * `use-chain-graph.ts`) so the Trail cross-links with every other reading.
  */
-import { and, desc, eq, inArray, or, type SQL } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { DocumentEntityType } from "@/schemas/documents";
-import { resolveChainSources } from "@/lib/chain-of-custody/sources";
+import { and, desc, eq, inArray, or, type SQL } from "drizzle-orm";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import { getProductionSamples } from "./production-samples";
 import { getTransportLegsForEntities } from "./transport-legs";
@@ -136,14 +136,15 @@ export async function getApplicationTrailEvidence(
   const productionRunIds = sources.map(
     (source) => source.productionRun.id,
   );
-  const biocharProductId = chain.biocharProduct?.id ?? null;
+  const products = chain.products?.map(p => p.product) ?? (chain.biocharProduct ? [chain.biocharProduct] : []);
+  const productIds = products.map(p => p.id);
 
   const [feedstockLegs, biocharLegs, sampleRowsByRun] = await Promise.all([
     getTransportLegsForEntities(ctx, "feedstock", feedstockIds),
     getTransportLegsForEntities(
       ctx,
       "biochar",
-      biocharProductId ? [biocharProductId] : [],
+      productIds,
     ),
     Promise.all(
       productionRunIds.map(async (productionRunId) => ({
@@ -168,7 +169,7 @@ export async function getApplicationTrailEvidence(
     },
     {
       entityType: "biochar_product",
-      entityIds: biocharProductId ? [biocharProductId] : [],
+      entityIds: productIds,
     },
     { entityType: "order", entityIds: chain.order ? [chain.order.id] : [] },
     { entityType: "delivery", entityIds: [chain.delivery.id] },
@@ -234,11 +235,11 @@ export async function getApplicationTrailEvidence(
     });
   }
 
-  if (chain.biocharProduct) {
-    addNode(`biochar-product:${chain.biocharProduct.id}`, {
-      documents: entityDocuments("biochar_product", chain.biocharProduct.id),
+  for (const product of products) {
+    addNode(`biochar-product:${product.id}`, {
+      documents: entityDocuments("biochar_product", product.id),
       samples: [],
-      transportLegs: biocharLegs.map(toTrailLeg),
+      transportLegs: biocharLegs.filter(leg => leg.entityId === product.id).map(toTrailLeg),
     });
   }
 

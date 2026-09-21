@@ -3,7 +3,7 @@
  * CRUD operations for formulations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -539,50 +539,3 @@ export async function deleteFormulation(
 // ============================================
 // Utility Operations
 // ============================================
-
-/**
- * Check if a formulation code is available
- */
-export async function isFormulationCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeFormulationId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [
-    eq(formulations.organizationId, ctx.organizationId),
-    eq(formulations.code, code),
-  ];
-
-  if (excludeFormulationId) {
-    conditions.push(sql`${formulations.id} != ${excludeFormulationId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: formulations.id })
-    .from(formulations)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get formulation options for dropdowns
- */
-export async function getFormulationOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string; name: string }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: formulations.id,
-      code: formulations.code,
-      name: formulations.name,
-    })
-    .from(formulations)
-    .where(eq(formulations.organizationId, ctx.organizationId))
-    .orderBy(asc(formulations.name));
-}

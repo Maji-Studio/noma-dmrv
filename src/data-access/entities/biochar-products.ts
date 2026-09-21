@@ -7,27 +7,26 @@
  * multiple batches in one bin and shows physically remaining stock.
  */
 
-import { and, desc, eq, gt, ilike, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import type { EntityOption } from "@/components/forms/entity-select/types";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { db } from "@/db";
-import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
-  deliveries,
   formulations,
-  orders,
-  storageLocations,
+  outputStockAllocations,
+  storageLocations
 } from "@/db/schema";
-import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
-import { requireOrgScope } from "../utils";
-import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { formatWetDryMass } from "@/lib/mass-moisture";
 import {
   deriveBlendEffectiveMoisturePercent,
   fromCompositionMassJsonb,
 } from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
+import { formatWetDryMass } from "@/lib/mass-moisture";
+import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
+import { requireOrgScope } from "../utils";
 import { buildSourceAllocationAggregate } from "./source-allocation-aggregate";
 
 function remainingSourceBiocharDryMassKg(
@@ -78,54 +77,14 @@ function formatStockSubtitle(
   })} ${availabilityLabel}`;
 }
 
-// Total delivered wet mass per product batch. A delivery's product is its own
-// override when set, otherwise the linked order's product. Only 'delivered' rows
-// have physically left the bin. `excludeOrderId` nets out one order's own
-// deliveries so an edit form's "remaining" means "available to other demand"
-// — without it the order being edited reads its own fulfilment as competing
-// consumption (DR-002 / OR-26-001).
-function buildDeliveredMassAggregate(
-  ctx: OrgContext,
-  opts: { excludeOrderId?: string } = {},
-) {
-  return db
-  .select({
-    biocharProductId:
-      sql<string>`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`.as(
-        "biochar_product_id"
-      ),
-    totalDeliveredKg: sumNumeric(deliveries.deliveredWetMassKg).as(
-      "total_delivered_kg",
-    ),
-    totalDeliveredDryKg: sumNumeric(deliveries.massDryKg).as(
-      "total_delivered_dry_kg",
-    ),
-    unresolvedDeliveredDryCount: countRows(
-      and(
-        sql`${deliveries.deliveredWetMassKg} > 0`,
-        isNull(deliveries.massDryKg),
-      ),
-    ).as("unresolved_delivered_dry_count"),
-  })
-  .from(deliveries)
-  .innerJoin(
-    orders,
-    and(
-      eq(deliveries.orderId, orders.id),
-      eq(orders.organizationId, ctx.organizationId),
-    ),
-  )
-  .where(
-    and(
-      eq(deliveries.status, "delivered"),
-      eq(deliveries.organizationId, ctx.organizationId),
-      ...(opts.excludeOrderId
-        ? [ne(deliveries.orderId, opts.excludeOrderId)]
-        : []),
-    ),
-  )
-  .groupBy(sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`)
-  .as("delivered_mass_agg");
+// Persisted signed allocation effects are the current physical product depletion.
+function buildDeliveredMassAggregate(ctx: OrgContext) {
+  return db.select({ biocharProductId: outputStockAllocations.biocharProductId,
+    totalDeliveredKg: sumNumeric(outputStockAllocations.wetMassKg).as('total_delivered_kg'),
+    totalDeliveredDryKg: sumNumeric(outputStockAllocations.dryMassKg).as('total_delivered_dry_kg'),
+    unresolvedDeliveredDryCount: sql<number>`0`.mapWith(Number).as('unresolved_delivered_dry_count') })
+    .from(outputStockAllocations).where(eq(outputStockAllocations.organizationId, ctx.organizationId))
+    .groupBy(outputStockAllocations.biocharProductId).as('delivered_mass_agg');
 }
 
 function buildSelection(
@@ -231,9 +190,7 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
   limit: number;
 }): Promise<EntityOption[]> {
   requireOrgScope(ctx);
-  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx, {
-    excludeOrderId: params.excludeOrderId,
-  });
+  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
   const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const { search, facilityId, limit } = params;
@@ -320,9 +277,7 @@ export async function getBiocharProductEntityById(
   opts: { excludeOrderId?: string } = {},
 ): Promise<EntityOption | null> {
   requireOrgScope(ctx);
-  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx, {
-    excludeOrderId: opts.excludeOrderId,
-  });
+  const deliveredMassAggregate = buildDeliveredMassAggregate(ctx);
   const sourceAllocationAggregate = buildSourceAllocationAggregate(ctx);
   const selection = buildSelection(deliveredMassAggregate, sourceAllocationAggregate);
   const [result] = await db

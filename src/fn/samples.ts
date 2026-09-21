@@ -18,8 +18,6 @@ import {
   getSampleById as getSampleByIdData,
   getSampleStats as getSampleStatsData,
   updateSample,
-  isSampleCodeAvailable as isSampleCodeAvailableData,
-  generateNextSampleCode as generateNextSampleCodeData,
   type PaginatedSamples,
   type SampleWithRelations,
   type SampleStats,
@@ -164,57 +162,6 @@ export async function getSampleStatsFn(
         error,
         "Failed to load sample stats",
         "sample:stats",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a sample code is available
- */
-export async function checkSampleCodeFn(
-  code: string,
-  excludeSampleId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isSampleCodeAvailableData(
-      ctx,
-      code,
-      excludeSampleId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to check sample code",
-        "sample:check-code",
-      ),
-    };
-  }
-}
-
-/**
- * Generate next sample code
- */
-export async function generateNextSampleCodeFn(): Promise<
-  ActionResult<{ code: string }>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const code = await generateNextSampleCodeData(ctx);
-    return { success: true, data: { code } };
-  } catch (error) {
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to generate sample code",
-        "sample:generate-code",
       ),
     };
   }

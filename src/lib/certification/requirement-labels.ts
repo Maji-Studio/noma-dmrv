@@ -123,8 +123,3 @@ export const CERT_REQUIREMENT_META: Record<
       "Each credit batch in the Removal needs enough qualifying lab Samples, with chemistry inside the method's limits, before its carbon can be claimed. The submit step runs the same check.",
   },
 };
-
-/** The plain requirement label for a check key. */
-export function requirementLabelFor(key: CertRequirementKey): string {
-  return CERT_REQUIREMENT_META[key].requirementLabel;
-}

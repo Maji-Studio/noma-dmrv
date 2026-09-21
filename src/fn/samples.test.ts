@@ -24,11 +24,9 @@ vi.mock("@/data-access/facilities", () => ({
 vi.mock("@/data-access/samples", () => ({
   createSample: vi.fn(),
   deleteSample: vi.fn(),
-  generateNextSampleCode: vi.fn(),
   getSampleById: mocks.getSampleById,
   getSamples: vi.fn(),
   getSampleStats: vi.fn(),
-  isSampleCodeAvailable: vi.fn(),
   updateSample: mocks.updateSample,
 }));
 

@@ -1,18 +1,18 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
 import {
   STATUS_STATE_BADGE_CLASSES,
   getStatusState,
   type SemanticEntityStatus,
 } from "@/lib/status-state"
+import { cn } from "@/lib/utils"
+import { cva, type VariantProps } from "class-variance-authority"
+import * as React from "react"
 
 /**
  * Status Badge Component
  *
  * Color-coded status badge component with variants for:
  * - Production run status: draft, running, complete, failed, cancelled
- * - Delivery status: upcoming, delivered
+ * - Delivery status: delivered
  * - Application status: delivered, applied
  * - Credit batch status: draft, pending, verified, issued, rejected
  *
@@ -52,7 +52,6 @@ const statusLabels = {
   void: "Void",
   method_a: "Method A",
   method_b: "Method B",
-  upcoming: "Upcoming",
   delivered: "Delivered",
   applied: "Applied",
   testing: "Testing",
@@ -95,7 +94,7 @@ export interface StatusBadgeProps
  *
  * @example
  * // Delivery status
- * <StatusBadge status="upcoming" />
+ * <StatusBadge status="delivered" />
  * <StatusBadge status="delivered" />
  *
  * @example

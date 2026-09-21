@@ -43,6 +43,8 @@ interface FormActionsProps<
   isSubmitting?: boolean;
   /** Submission-level error rendered with the CTA footer. */
   errorMessage?: string;
+  /** Rendered under `errorMessage`: detail about the records the refusal named. */
+  errorAction?: React.ReactNode;
   submitLabel?: string;
   submittingLabel?: string;
   defaultSubmitLabel?: string;
@@ -74,6 +76,7 @@ export function FormActions<
   control,
   isSubmitting = false,
   errorMessage,
+  errorAction,
   submitLabel,
   submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
@@ -114,7 +117,7 @@ export function FormActions<
           : "pt-20"
       )}
     >
-      <ServerError message={errorMessage} />
+      <ServerError message={errorMessage} action={errorAction} />
       <div className="flex items-center justify-start gap-16">
         <Button
           type={submitType}

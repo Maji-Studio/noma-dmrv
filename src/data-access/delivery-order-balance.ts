@@ -1,4 +1,3 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { sumNumeric } from "@/db/aggregate";
 import { deliveries, orders } from "@/db/schema";
@@ -6,6 +5,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { deliveryOrderBalanceMessage } from "@/lib/delivery-order-balance";
 import { SafeError } from "@/lib/errors";
 import { formatStockMinimumKg, isStockOverdraw } from "@/lib/stock-overdraw";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { requireOrgScope } from "./utils";
 
 type QueryExecutor = typeof db | DbTransaction;
@@ -105,6 +105,7 @@ export async function lockDeliveryOrderAndAssertBalance(
   params: {
     orderId: string;
     requestedWetKg: number | null | undefined;
+    excludeDeliveryId?: string;
   },
 ): Promise<void> {
   requireOrgScope(ctx);

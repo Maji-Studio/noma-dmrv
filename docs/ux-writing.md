@@ -60,6 +60,24 @@ available.
 Keep the message accurate. Do not claim that an event is complete when the
 system only knows that its scheduled end time has passed.
 
+## Saved, saved with warning, not saved
+
+Tell the operator what the system knows about the commit, never what it hopes.
+There are three outcomes and they never blur:
+
+- **Saved.** The write committed. Confirm it and name the record.
+- **Saved with warning.** The write committed and a follow-up did not: a
+  preference that was not stored, a detail read that failed. Lead with the
+  saved record, then say what is missing and what to do. The shared phrase for
+  a failed follow-up read is `SAVED_DETAILS_UNAVAILABLE` in
+  `src/lib/copy-utils.ts`: "The record was saved, but its details could not be
+  loaded."
+- **Not saved.** The write rolled back. Say plainly that nothing changed and
+  give the next action.
+
+Never describe a rollback with saved-with-warning copy, and never report a
+known commit as "not created" or "not found".
+
 ## Warnings
 
 State the current condition, its task impact, and the next action. Do not turn a

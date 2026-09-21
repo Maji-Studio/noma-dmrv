@@ -56,6 +56,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -97,6 +98,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -247,9 +249,22 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          # Provider CA so the pg pool verifies the managed database's TLS.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
+          CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env staging/CREDENTIALS_ENCRYPTION_KEY
+          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_CLIENT_SECRET
+          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN
+          # Match storage-health.yml so seeded evidence survives the runner.
+          STORAGE_PROVIDER: op://Environment Variables/noma-dmrv env staging/STORAGE_PROVIDER
+          STORAGE_BUCKET: op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET
+          STORAGE_REGION: op://Environment Variables/noma-dmrv env staging/STORAGE_REGION
+          STORAGE_ENDPOINT: op://Environment Variables/noma-dmrv env staging/STORAGE_ENDPOINT
+          STORAGE_PREFIX: op://Environment Variables/noma-dmrv env staging/STORAGE_PREFIX
+          STORAGE_ACCESS_KEY_ID: op://Environment Variables/noma-dmrv env staging/STORAGE_ACCESS_KEY_ID
+          STORAGE_SECRET_ACCESS_KEY: op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -272,7 +287,25 @@ jobs:
       - name: Reset and seed staging database
         env:
           ALLOW_DEV_BOOTSTRAP: "1"
-        run: pnpm db:reset && pnpm db:seed && pnpm db:verify-schema
+          # The seed's import graph reaches src/config/env.ts, which requires
+          # a URL here. The seed never serves HTTP, so a loopback placeholder
+          # is enough (same as migration-gate.yml).
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+          # Optional, non-secret registry hints for the seed. Without the
+          # facility ID the seed stores credentials but skips the facility
+          # mapping; set it in Certification Settings afterwards.
+          ISOMETRIC_DEMO_PROJECT_ID: ${{ vars.ISOMETRIC_DEMO_PROJECT_ID }}
+          ISOMETRIC_DEMO_FACILITY_ID: ${{ vars.ISOMETRIC_DEMO_FACILITY_ID }}
+        run: |
+          # Session-free server actions still initialize Better Auth, which
+          # needs a signing secret. The runner never issues a session.
+          export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+          # Validate the seed's environment before the wipe: a step that is
+          # missing a required variable must fail with staging data intact.
+          pnpm db:seed:preflight
+          pnpm db:reset
+          pnpm db:seed
+          pnpm db:verify-schema
 
   # ── Manual reset (no seed): staging — start from scratch ───────────────
   reset-empty-staging:
@@ -297,6 +330,8 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          # Provider CA so the pg pool verifies the managed database's TLS.
+          DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
           DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD

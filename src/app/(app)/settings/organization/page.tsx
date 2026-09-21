@@ -5,8 +5,8 @@
 import { redirect } from "next/navigation";
 import { OrganizationSettings } from "@/components/organizations/organization-settings";
 import { SettingsConsole } from "@/components/settings";
-import { getActiveOrganizationProfile } from "@/fn/organizations";
 import { getOrgContext } from "@/lib/auth/server";
+import { readActiveOrganization } from "@/lib/read-models";
 
 export default async function OrganizationSettingsPage() {
   const ctx = await getOrgContext();
@@ -16,7 +16,7 @@ export default async function OrganizationSettingsPage() {
     redirect("/dashboard");
   }
 
-  const org = await getActiveOrganizationProfile();
+  const org = await readActiveOrganization(ctx);
   const canManage =
     ctx.isPlatformAdmin || ctx.orgRole === "owner" || ctx.orgRole === "admin";
 

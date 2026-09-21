@@ -1,3 +1,6 @@
+import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
+import { previewOutputStock } from "@/data-access/output-stock-operations";
+import { deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues } from "./helpers/output-contract-fixtures";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -45,7 +48,7 @@ describe(
       deliveryIds: [] as string[],
     };
 
-    beforeAll(() => ensureTestOrg());
+    beforeAll(async () => { await ensureTestOrg(); await ensureOutputFixtureActor(ctx); });
 
     afterEach(async () => {
       if (created.biocharProductIds.length > 0) {
@@ -54,7 +57,7 @@ describe(
           .where(inArray(transportLegs.entityId, created.biocharProductIds));
       }
       if (created.deliveryIds.length > 0) {
-        await db.delete(deliveries).where(inArray(deliveries.id, created.deliveryIds));
+        await deleteOutputDeliveryFixtures(db, inArray(deliveries.id, created.deliveryIds));
       }
       if (created.orderIds.length > 0) {
         await db.delete(orders).where(inArray(orders.id, created.orderIds));
@@ -68,12 +71,10 @@ describe(
         await db.delete(customers).where(inArray(customers.id, created.customerIds));
       }
       if (created.biocharProductIds.length > 0) {
-        await db
-          .delete(biocharProducts)
-          .where(inArray(biocharProducts.id, created.biocharProductIds));
+        await deleteOutputProductFixtures(db, inArray(biocharProducts.id, created.biocharProductIds));
       }
       if (created.facilityIds.length > 0) {
-        await db.delete(facilities).where(inArray(facilities.id, created.facilityIds));
+        await deleteOutputFacilityFixtures(db, inArray(facilities.id, created.facilityIds));
       }
 
       for (const ids of Object.values(created)) ids.length = 0;
@@ -120,24 +121,27 @@ describe(
       const locationIds = locations.map((location) => location.id);
       created.customerLocationIds.push(...locationIds);
 
+      const recipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: facility.id, code: "unused", massKg: 1_000 });
       const products = await db
         .insert(biocharProducts)
         .values(
-          Array.from({ length: productCount }, (_, index) => ({
+          await outputProductFixtureValues(db, Array.from({ length: productCount }, (_, index) => ({
             organizationId: TEST_ORG_ID,
             facilityId: facility.id,
             code: `BP-${tag}-${index}`,
+            formulationId: recipe.formulationId,
             massKg: 1_000,
             moistureContentPercent: 0,
-          })),
+          }))),
         )
         .returning({ id: biocharProducts.id });
       const productIds = products.map((product) => product.id);
       created.biocharProductIds.push(...productIds);
+      for (const productId of productIds) await preparePureOutputProductFixture(db, productId);
 
       const [order] = await db
         .insert(orders)
-        .values({
+        .values(await outputOrderFixtureValues(db, {
           organizationId: TEST_ORG_ID,
           facilityId: facility.id,
           customerId: customer.id,
@@ -147,7 +151,7 @@ describe(
           orderDate: new Date("2026-07-18T00:00:00Z"),
           quantityKg: 500,
           packaging: "bagged",
-        })
+        }))
         .returning({ id: orders.id });
       created.orderIds.push(order.id);
 
@@ -167,12 +171,17 @@ describe(
       massKg: number,
       distanceKmOverride?: number,
     ) {
+      const source = await preparePureOutputProductFixture(db, productId);
+      const preview = await previewOutputStock(ctx, { kind: "delivery", facilityId: fixture.facilityId, storageLocationId: source.storageLocationId, physicalDate: "2026-07-19", wetMassKg: massKg, moisturePercent: 0 });
       const delivery = await createDelivery(ctx, {
         code: `DL-${codeSuffix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         orderId: fixture.orderId,
         facilityId: fixture.facilityId,
         deliveryDate: new Date("2026-07-19T00:00:00Z"),
-        biocharProductId: productId,
+        storageLocationId: source.storageLocationId,
+        idempotencyKey: crypto.randomUUID(),
+        basisFingerprint: preview.basisFingerprint,
+        moistureContentPercent: 0,
         status: "delivered",
         deliveredWetMassKg: massKg,
         distanceKmOverride,
@@ -186,7 +195,7 @@ describe(
       const fixture = await createFixture("RACE", [10], 1);
       const [secondOrder] = await db
         .insert(orders)
-        .values({
+        .values(await outputOrderFixtureValues(db, {
           organizationId: TEST_ORG_ID,
           facilityId: fixture.facilityId,
           customerId: fixture.customerId,
@@ -196,20 +205,19 @@ describe(
           orderDate: new Date("2026-07-18T00:00:00Z"),
           quantityKg: 500,
           packaging: "bagged",
-        })
+        }))
         .returning({ id: orders.id });
       created.orderIds.push(secondOrder.id);
       const secondOrderFixture = { ...fixture, orderId: secondOrder.id };
-      const [first, second] = await Promise.all([
-        createDelivered(fixture, "RACE-A", fixture.productIds[0], 100, 20),
-        createDelivered(
+      const first = await
+        createDelivered(fixture, "RACE-A", fixture.productIds[0], 100, 20);
+      const second = await createDelivered(
           secondOrderFixture,
           "RACE-B",
           fixture.productIds[0],
           100,
           40,
-        ),
-      ]);
+        );
 
       let releaseBarrier = () => {};
       let signalBarrierReady = () => {};
@@ -443,12 +451,13 @@ describe(
         .set({ biocharProductId: null })
         .where(eq(deliveries.id, inherited.id));
 
+      const otherRecipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, code: "unused" });
       await expect(
         updateOrder(ctx, fixture.orderId, {
-          biocharProductId: fixture.productIds[1],
+          formulationId: otherRecipe.formulationId,
         }),
       ).rejects.toThrow(
-        "This order already has deliveries. Create a new order instead of changing its biochar product.",
+        /Order relationship is used by delivery/,
       );
 
       const legs = await db
@@ -473,7 +482,7 @@ describe(
         .select({ biocharProductId: deliveries.biocharProductId })
         .from(deliveries)
         .where(eq(deliveries.id, explicit.id));
-      expect(explicitAfter.biocharProductId).toBe(fixture.productIds[2]);
+      expect(explicitAfter.biocharProductId).toBeNull();
     });
 
     it("updates inherited order distance without replacing a delivery location override", async () => {
@@ -498,9 +507,10 @@ describe(
         syncBiocharProductTransportLegs(ctx, tx, [fixture.productIds[0]]),
       );
 
-      await updateOrder(ctx, fixture.orderId, {
+      await expect(updateOrder(ctx, fixture.orderId, {
         customerLocationId: fixture.locationIds[1],
-      });
+      })).rejects.toThrow(/Order relationship is used by delivery/);
+      await updateCustomerLocation(ctx, fixture.locationIds[0], { distanceFromFacilityKm: 60, distanceSource: "manual" });
 
       const [derived] = await db
         .select({

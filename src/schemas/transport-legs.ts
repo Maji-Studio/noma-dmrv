@@ -140,5 +140,3 @@ export type UpdateTransportLegData = z.infer<typeof updateTransportLegSchema>;
 export const deleteTransportLegSchema = z.object({
   id: z.string().uuid("Choose a valid transport leg."),
 });
-
-export type DeleteTransportLegData = z.infer<typeof deleteTransportLegSchema>;

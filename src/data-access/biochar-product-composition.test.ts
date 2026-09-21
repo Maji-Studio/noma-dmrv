@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+vi.mock('@/db', () => ({ db: {} }));
+vi.mock('./utils', () => ({ requireOrgScope: vi.fn() }));
+vi.mock('./feedstock-wet-stock', () => ({ assertFeedstockWetDrawWithinStock: vi.fn() }));
+import { describe, expect, it, vi } from "vitest";
 import {
   compositionAllocationChanged,
   deriveCompositionSourceBiocharMassKg,

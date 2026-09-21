@@ -4,24 +4,25 @@
  * Delivery dry biochar is derived server-side from the linked product.
  */
 
+import {
+  DELIVERED_WET_MASS_RANGE_MESSAGE,
+  DELIVERED_WET_MASS_REQUIRED_MESSAGE,
+  hasStorableDeliveredWetMass,
+} from "@/lib/delivery-wet-mass";
 import { z } from "zod";
-import { deliveryDryMassSchema } from "./isometric";
 import {
   optionalDistanceSource,
   resolveDistanceSource,
   type DistanceSourceValue,
 } from "./distance-source";
-import { optionalTripType } from "./trip-type";
 import {
   emptyToNull,
-  optionalMassKgSchema,
+  positiveMassKgSchema,
   requiredNumber,
   storedPercentSchema,
 } from "./helpers";
-import {
-  optionalTruckMass,
-  validateTruckMasses,
-} from "./truck-weighing";
+import { deliveryDryMassSchema } from "./isometric";
+import { optionalTripType } from "./trip-type";
 
 // ============================================
 // Constants and Enums
@@ -30,7 +31,7 @@ import {
 /**
  * Valid delivery statuses
  */
-export const deliveryStatuses = ["upcoming", "delivered"] as const;
+export const deliveryStatuses = ["delivered"] as const;
 
 export type DeliveryStatus = (typeof deliveryStatuses)[number];
 
@@ -52,16 +53,19 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const WET_MASS_RANGE_MESSAGE = "Wet mass must be 0 or more";
 const DISTANCE_RANGE_MESSAGE = "Distance must be 0 or more";
-const optionalWetMassKg = optionalMassKgSchema(WET_MASS_RANGE_MESSAGE);
+const optionalWetMassKg = positiveMassKgSchema(
+  DELIVERED_WET_MASS_RANGE_MESSAGE,
+)
+  .optional()
+  .nullable();
 const requiredProductMoisturePercent = requiredNumber(
   "Biochar product moisture is required",
   "Enter a valid biochar product moisture percentage",
 ).pipe(
   storedPercentSchema()
     .min(0, "Moisture content must be 0% or more")
-    .max(100, "Moisture content must be 100% or less"),
+    .lt(100, "Moisture must be below 100%"),
 );
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
 
@@ -78,24 +82,20 @@ function validateDistanceOverride(
   }
 }
 
-function validateTruckMassUpdatePair(
-  value: {
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
-  },
+function validateDeliveredWetMass(
+  value: { status?: DeliveryStatus; deliveredWetMassKg?: number | null },
   ctx: z.RefinementCtx,
 ) {
-  const arrivalChanged = value.truckMassOnArrivalKg !== undefined;
-  const departureChanged = value.truckMassOnDepartureKg !== undefined;
-  if (arrivalChanged === departureChanged) return;
-
-  ctx.addIssue({
-    code: z.ZodIssueCode.custom,
-    path: [
-      arrivalChanged ? "truckMassOnDepartureKg" : "truckMassOnArrivalKg",
-    ],
-    message: "Update both truck mass observations together",
-  });
+  if (
+    value.status === "delivered" &&
+    !hasStorableDeliveredWetMass(value.deliveredWetMassKg)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["deliveredWetMassKg"],
+      message: DELIVERED_WET_MASS_REQUIRED_MESSAGE,
+    });
+  }
 }
 
 // ============================================
@@ -111,13 +111,13 @@ const deliveryFormBaseSchema = z.object({
   deliveryDate: z.coerce.date({ error: "Delivery date is required" }),
 
   // Optional fields
-  biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  storageLocationId: z.uuid(),
+  idempotencyKey: z.string().min(1),
+  basisFingerprint: z.string().min(1),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  status: z.enum(deliveryStatuses).default("upcoming"),
+  status: z.enum(deliveryStatuses).default("delivered"),
   deliveredWetMassKg: optionalWetMassKg,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   moistureContentPercent: requiredProductMoisturePercent,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
@@ -133,7 +133,7 @@ const deliveryFormBaseSchema = z.object({
  */
 export const deliveryFormSchema = deliveryFormBaseSchema.superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
-  validateTruckMasses(value, ctx);
+  validateDeliveredWetMass(value, ctx);
 });
 
 // ============================================
@@ -153,13 +153,13 @@ export const createDeliverySchema = z.object({
   orderId: z.string().min(1, "Select an order.").uuid("Choose a valid order."),
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   deliveryDate: z.coerce.date(),
-  biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  storageLocationId: z.uuid(),
+  idempotencyKey: z.string().min(1),
+  basisFingerprint: z.string().min(1),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  status: z.enum(deliveryStatuses).default("upcoming"),
+  status: z.enum(deliveryStatuses).default("delivered"),
   deliveredWetMassKg: optionalWetMassKg,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   moistureContentPercent: requiredProductMoisturePercent,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -167,7 +167,7 @@ export const createDeliverySchema = z.object({
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
-  validateTruckMasses(value, ctx);
+  validateDeliveredWetMass(value, ctx);
 });
 
 /**
@@ -185,22 +185,20 @@ export const updateDeliverySchema = z.object({
   orderId: z.string().uuid().optional(),
   facilityId: z.string().uuid().optional(),
   deliveryDate: z.coerce.date().optional(),
-  biocharProductId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  storageLocationId: z.uuid().optional(),
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).optional(),
   deliveredWetMassKg: optionalWetMassKg,
-  truckMassOnArrivalKg: optionalTruckMass,
-  truckMassOnDepartureKg: optionalTruckMass,
   moistureContentPercent: requiredProductMoisturePercent.optional(),
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
   tripType: optionalTripType,
 }).superRefine((value, ctx) => {
+  // Delivered/mass validity depends on the saved row, so updateDelivery checks
+  // it after merging the partial patch under the delivery stock lock.
   validateDistanceOverride(value, ctx);
-  validateTruckMassUpdatePair(value, ctx);
-  validateTruckMasses(value, ctx);
 });
 
 /**
@@ -260,17 +258,6 @@ export const deliveryFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
-/**
- * Schema for selecting a delivery (e.g., in dropdowns)
- */
-export const deliverySelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  deliveryDate: z.date(),
-  status: z.enum(deliveryStatuses),
-  orderCode: z.string().optional(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -278,9 +265,6 @@ export const deliverySelectSchema = z.object({
 export type DeliveryFormData = z.infer<typeof deliveryFormSchema>;
 export type CreateDeliveryData = z.infer<typeof createDeliverySchema>;
 export type UpdateDeliveryData = z.infer<typeof updateDeliverySchema>;
-export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;
 export type DeliveryFilterData = z.infer<typeof deliveryFilterSchema>;
-export type DeliverySelectData = z.infer<typeof deliverySelectSchema>;
-
 // Re-export the delivery dry mass schema for use in forms
 export { deliveryDryMassSchema };

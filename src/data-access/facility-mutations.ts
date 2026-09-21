@@ -8,11 +8,14 @@ import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
 } from "./code-generator";
+import { assertExpectedVersion } from "./expected-version";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
 
 const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
+/** Entity key on a facility's expected-version conflict. */
+const FACILITY_CONFLICT_ENTITY = "facility";
 
 interface FacilityUpdateData {
   code?: string;
@@ -26,6 +29,29 @@ interface FacilityUpdateData {
   contactEmail?: string | null;
   contactPhone?: string | null;
   durabilityOption?: "200_year" | "1000_year";
+}
+
+/** Read the facility row under a write lock so a version check cannot race. */
+async function lockFacilityRow(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  facilityId: string,
+): Promise<{ durabilityOption: string; updatedAt: Date }> {
+  const [locked] = await tx
+    .select({
+      durabilityOption: facilities.durabilityOption,
+      updatedAt: facilities.updatedAt,
+    })
+    .from(facilities)
+    .where(
+      and(
+        eq(facilities.id, facilityId),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .for("update");
+  if (!locked) throw new SafeError("Facility not found");
+  return locked;
 }
 
 export async function createFacility(
@@ -108,9 +134,10 @@ async function updateFacilityRow(
 export async function updateFacility(
   ctx: OrgContext,
   facilityId: string,
-  data: FacilityUpdateData,
+  input: FacilityUpdateData & { expectedUpdatedAt?: Date },
 ): Promise<Facility> {
   requireOrgScope(ctx);
+  const { expectedUpdatedAt, ...data } = input;
   const [existing] = await db
     .select({ durabilityOption: facilities.durabilityOption })
     .from(facilities)
@@ -127,25 +154,32 @@ export async function updateFacility(
     data.durabilityOption !== existing.durabilityOption;
   if (!tierChangeRequested) {
     // Strip a stale echoed tier so this cheap path cannot revert a concurrent
-    // real tier edit. It intentionally takes no lock and runs no ledger probe.
+    // real tier edit. It still takes no durability lock and runs no ledger
+    // probe; the transaction exists only so the facility's own row lock spans
+    // the version check and the write it guards (issue #768).
     const nonTierData = { ...data };
     delete nonTierData.durabilityOption;
-    return updateFacilityRow(ctx, db, facilityId, nonTierData);
+    return db.transaction(async (tx) => {
+      const locked = await lockFacilityRow(ctx, tx, facilityId);
+      assertExpectedVersion({
+        entity: FACILITY_CONFLICT_ENTITY,
+        id: facilityId,
+        expectedUpdatedAt,
+        actualUpdatedAt: locked.updatedAt,
+      });
+      return updateFacilityRow(ctx, tx, facilityId, nonTierData);
+    });
   }
 
   return db.transaction(async (tx) => {
     await acquireFacilityDurabilityLock(ctx, tx, facilityId);
-    const [lockedExisting] = await tx
-      .select({ durabilityOption: facilities.durabilityOption })
-      .from(facilities)
-      .where(
-        and(
-          eq(facilities.id, facilityId),
-          eq(facilities.organizationId, ctx.organizationId),
-        ),
-      )
-      .limit(1);
-    if (!lockedExisting) throw new SafeError("Facility not found");
+    const lockedExisting = await lockFacilityRow(ctx, tx, facilityId);
+    assertExpectedVersion({
+      entity: FACILITY_CONFLICT_ENTITY,
+      id: facilityId,
+      expectedUpdatedAt,
+      actualUpdatedAt: lockedExisting.updatedAt,
+    });
 
     if (data.durabilityOption === lockedExisting.durabilityOption) {
       const nonTierData = { ...data };

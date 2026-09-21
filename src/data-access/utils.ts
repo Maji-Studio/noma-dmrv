@@ -9,6 +9,18 @@ import { SafeError } from "@/lib/errors";
 import { and, eq, getTableName } from "drizzle-orm";
 import type { AnyPgColumn, AnyPgTable } from "drizzle-orm/pg-core";
 
+/**
+ * The query runner a data-access function reads through: the pool by default,
+ * or an open transaction.
+ *
+ * A writer that enriches its result with a separate read passes its `tx` so the
+ * read runs before the commit. A read that runs after the commit can fail on
+ * its own, and when it does the writer has no honest answer left: the row is
+ * saved but the function can only report "not found" (issue #769). Reading
+ * inside the transaction closes that window.
+ */
+export type Executor = Pick<typeof db, "select">;
+
 type OrgScopedTable = AnyPgTable & {
   id: AnyPgColumn;
   organizationId: AnyPgColumn;
@@ -33,7 +45,7 @@ export async function assertSameOrg(
   ctx: OrgContext,
   table: OrgScopedTable,
   id: string,
-  executor: Pick<typeof db, "select"> = db,
+  executor: Executor = db,
 ): Promise<void> {
   requireOrgScope(ctx);
   const [row] = await executor

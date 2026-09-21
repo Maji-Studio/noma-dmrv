@@ -9,7 +9,6 @@ import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
-  getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
   getCo2eStoredPreviews as getCo2eStoredPreviewsData,
   getCreditBatchProductionRunOptions,
@@ -18,6 +17,7 @@ import {
   deleteCreditBatch as deleteCreditBatchData,
   creditBatchCodeExists,
   type CreditBatchWithRelations,
+  type SavedCreditBatch,
   type CreditBatchCo2eStoredPreview,
   type CreditBatchProductionRunOption,
 } from "@/data-access/credit-batches";
@@ -27,6 +27,7 @@ import {
   deleteCreditBatchSchema,
 } from "@/schemas/credit-batches";
 import { formatZodActionError } from "./action-errors";
+import { SAVED_DETAILS_UNAVAILABLE } from "@/lib/copy-utils";
 
 const MAX_BATCH_PREVIEWS = 50;
 
@@ -38,31 +39,6 @@ function logCreditBatchError(message: string, error: unknown): void {
     },
     message,
   );
-}
-
-/**
- * Get credit batches for a facility
- */
-export async function getCreditBatchesFn(
-  facilityId: string,
-): Promise<ActionResult<CreditBatchWithRelations[]>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validatedFacilityId = z.string().uuid().parse(facilityId);
-    await requireOrgFacility(ctx, validatedFacilityId);
-    const creditBatches = await getCreditBatchesData(
-      ctx,
-      validatedFacilityId,
-    );
-    return { success: true, data: creditBatches };
-  } catch (error) {
-    logCreditBatchError("Failed to get credit batches", error);
-    return {
-      success: false,
-      error: toActionError(error, "Failed to get credit batches"),
-    };
-  }
 }
 
 /**
@@ -155,7 +131,7 @@ export async function getCreditBatchProductionRunOptionsFn(
  */
 export async function createCreditBatchFn(
   data: z.infer<typeof createCreditBatchSchema>
-): Promise<ActionResult<CreditBatchWithRelations>> {
+): Promise<ActionResult<SavedCreditBatch>> {
   try {
     const ctx = await requireOrgContext();
 
@@ -170,7 +146,13 @@ export async function createCreditBatchFn(
       (code) => createCreditBatchData(ctx, { ...validated, code })
     );
 
-    return { success: true, data: creditBatch };
+    // The batch is committed. Its accounting roll-up runs after that commit and
+    // can fail on its own; when it does the batch comes back without a preview,
+    // and the operator is told what is saved rather than that nothing is
+    // (issue #769).
+    return creditBatch.previewAvailable
+      ? { success: true, data: creditBatch }
+      : { success: true, data: creditBatch, warning: SAVED_DETAILS_UNAVAILABLE };
   } catch (error) {
     logCreditBatchError("Failed to create credit batch", error);
     if (error instanceof z.ZodError) {
@@ -188,7 +170,7 @@ export async function createCreditBatchFn(
  */
 export async function updateCreditBatchFn(
   data: z.infer<typeof updateCreditBatchSchema>
-): Promise<ActionResult<CreditBatchWithRelations>> {
+): Promise<ActionResult<SavedCreditBatch>> {
   try {
     const ctx = await requireOrgContext();
 
@@ -217,7 +199,12 @@ export async function updateCreditBatchFn(
     }
 
     const creditBatch = await updateCreditBatchData(ctx, creditBatchId, updateData);
-    return { success: true, data: creditBatch };
+    // The update is committed. As with create, its accounting roll-up runs
+    // after that commit and can fail on its own; the operator is told what is
+    // saved rather than that nothing is (issue #797).
+    return creditBatch.previewAvailable
+      ? { success: true, data: creditBatch }
+      : { success: true, data: creditBatch, warning: SAVED_DETAILS_UNAVAILABLE };
   } catch (error) {
     logCreditBatchError("Failed to update credit batch", error);
     if (error instanceof z.ZodError) {

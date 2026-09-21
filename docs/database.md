@@ -56,7 +56,103 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
   resets the database first so the full migration chain and admin bootstrap run
   before schema verification.
 - `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
-- Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
+- Connection via `DATABASE_URL`. `src/db/index.ts` builds the app pool from `getPgPoolConfig` (`src/lib/pg-pool-config.ts`, connection string and SSL) and `resolveAppPoolConfig` (`src/db/pool-config.ts`, which owns every `DEFAULT_DB_POOL_*` constant and `MAX_VERCEL_DB_POOL_MAX`). Four environment variables feed it: `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`, and `DB_POOL_LOCK_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool. The Mafinga seed (`src/lib/cli/seed/`) is the one exception: it calls the real server actions, so it uses the app pool they use.
+- The module-scope pool is registered with Vercel's [`attachDatabasePool`](https://vercel.com/docs/functions/functions-api-reference/vercel-functions-package#database-connection-pool-management), which keeps a Fluid Compute instance alive until `pg` releases its idle clients. The idle default is 5 seconds. `DB_POOL_MAX` defaults to 1, and each environment sets its own value from measurement (see [Pool sizing and compute placement](#pool-sizing-and-compute-placement)); a Vercel deployment fails closed above `MAX_VERCEL_DB_POOL_MAX` because per-instance pools multiply.
+- Pooled statements wait at most 1 second for a conflicting database lock by default, configurable with the positive `DB_POOL_LOCK_TIMEOUT_MS`. Keep it below the pool connection-acquisition timeout. PostgreSQL reports `55P03` on a lock timeout; the waiting transaction rolls back and can be retried after the conflicting operation finishes. This prevents a waiting writer from occupying the only pooled connection during registry cleanup. Dedicated certification lock connections do not inherit this setting: an active registry DELETE retains its fence until the protected callback finishes. This is a lock-acquisition timeout, not a statement or remote-request deadline.
+
+### Mafinga demo seed
+
+`pnpm db:seed` creates the September 2026 Mafinga demo through the same server
+actions and Zod schemas as the forms, so every seeded row is one the UI would
+have accepted. Run `pnpm db:ensure-admin` first if the bootstrap admin or
+organization is missing. The entry is `src/db/seed-data.ts`; the steps live in
+`src/lib/cli/seed/`, because they call server actions and `src/db/` must not
+import `src/fn/`. A repeat run matches the Mafinga facility by its code or its
+seeded name, then checks the completion marker (the delivery the seed creates
+last). A complete dataset exits without adding rows. A failed step aborts with
+its action error and leaves earlier steps in place, and a rerun refuses that
+partial dataset instead of duplicating it: run `pnpm db:reset` before
+reseeding.
+
+The demo covers infrastructure, suppliers, a customer, feedstock deliveries,
+completed production runs with imported CSV readings, a sampled credit batch
+with lab samples, BCF products, an order, and a delivery. It creates no
+application and no registry submission.
+
+Registry setup is driven by environment variables:
+
+- `ISOMETRIC_CLIENT_SECRET` + `ISOMETRIC_ACCESS_TOKEN`: stored encrypted with
+  `CREDENTIALS_ENCRYPTION_KEY` as the organization's credentials, then the
+  forestry feedstock type is imported from the registry catalogue. Absent, the
+  seed skips registry setup and creates the feedstock type locally.
+- `ISOMETRIC_DEMO_PROJECT_ID` (optional): pins the project when the credentials
+  can see more than one. With exactly one visible project the seed uses it.
+- `ISOMETRIC_DEMO_FACILITY_ID` (optional): the `fcl_` ID from Certify that the
+  mapping form requires. Absent, credentials are stored but the facility mapping
+  is skipped; finish it in Certification Settings.
+
+The seed only reads from the registry (projects, catalogue, templates). It never
+creates registry business records.
+
+The CLI uses `runWithCliOrgContext` (`src/lib/cli/org-context.ts`) to call real
+actions without a request session. The seam verifies the Platform Admin and the
+organization, is forbidden in request code, and rejects production use unless
+`ALLOW_DEV_BOOTSTRAP=1` ([auth.md](./auth.md)). The manually confirmed staging
+reset-and-seed job sets that flag, loads the registry trio and the storage
+settings from the staging 1Password item, and passes the two optional IDs from
+GitHub repository variables. The PR migration gate seeds without credentials.
+
+The seed runs real server actions, so its import graph reaches
+`src/config/env.ts`, which validates at module load and requires
+`NEXT_PUBLIC_APP_URL` alongside `DATABASE_URL`, `BETTER_AUTH_SECRET`, and
+`NODE_ENV`. The staging job sets a loopback placeholder for the app URL (the
+seed never serves HTTP) and runs `pnpm db:seed:preflight` (`src/lib/cli/seed-preflight.ts`) before
+`pnpm db:reset`, so an incomplete environment fails with staging data intact
+instead of after the wipe.
+
+### Pool sizing and compute placement
+
+`DB_POOL_MAX` is a per-environment deployment decision, never a default to
+raise on intuition. Before raising it, obtain `SHOW max_connections`,
+reserved/admin headroom, current peak connections, the provider/pooler mode,
+and the maximum number of active Vercel instances. Budget for both the shared
+pools and the dedicated certification lock connections:
+
+```text
+(active function instances × DB_POOL_MAX)
+  + simultaneous dedicated lock operations
+  + migrations, administration, and other consumers
+  < usable database connections
+```
+
+Raise the value one step at a time (1, then 3, then 5), never as an unbounded
+increase. At each step, run the same workload with `LOG_LEVEL=trace` for a
+bounded window and decide from the checkout-queue telemetry, not from page
+latency: on `database connection acquired`, the acquisition `durationMs` is the
+primary signal, and `waitingBefore > 0` shows a deeper queue behind that checkout
+(it counts only the checkouts already waiting ahead of it, so a single waiter at a
+time still reads 0). Watch the database-side active and idle connection peaks and
+SQLSTATE `53300` at every step. Take the next step only when the budget above
+supports it and checkouts still queue at the current one.
+
+Pool size and compute region are separate changes; never move both in one
+deployment. The [Vercel Function
+region](https://vercel.com/docs/functions/configuring-functions/region) is pinned
+in `vercel.json` (`regions`) and must match the database's actual region; change
+both together when the database moves.
+
+The application needs session semantics for
+`withDedicatedSessionAdvisoryLock`. A direct connection or a session-pooling
+proxy is compatible; a transaction-pooling proxy must not be assumed compatible
+with session advisory locks.
+
+Pool timing records (`mod: db-pool`) are emitted at `trace`, so `LOG_LEVEL=trace`
+is the measurement window: set it for a bounded period and put it back
+afterwards. The records are privacy-safe — duration, success, pool totals, idle
+count, and queue count, and never SQL, parameters, hostnames, database names,
+or user data. At any level, connection failures, checkout failures, and
+idle-client errors are logged at warn; query timings and query failures only
+appear at trace.
 
 ## Soft Delete — Facility and Storage-Bin Archive
 
@@ -85,11 +181,11 @@ Flow: change schema → `pnpm db:generate` → review the emitted SQL → run ta
 
 **Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that ran the original — CI reports success while the new DDL never executes, and the drift only surfaces in `db:verify-schema`. Need more changes? Generate a new migration. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it no-ops where the objects exist.
 
-### Constraint-repair pattern
+### Development reset policy
 
-Migrations adding `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows **in the same migration** before enforcing the rule. Reference: `drizzle/0079_volatile_plazm.sql` — add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`. Likewise backfill or deduplicate before adding constraints or unique indexes.
+No production database exists yet. Keep the full migration chain usable for development and tests; required columns and destructive schema changes may require resetting a development database. Do not add production-data backfills or transitional compatibility solely to preserve obsolete demo rows. Notify the user before a change requires resetting shared staging, and use the existing manual reset workflow for that environment.
 
-When a migration is destructive, document the rationale in the related feature doc or [`open-questions.md`](./open-questions.md) if the dropped surface may return.
+Document destructive changes and their reset requirement in the related feature documentation. Existing migration history remains immutable once applied in a shared environment.
 
 ### CI (`.github/workflows/migrate.yml`)
 
@@ -99,9 +195,9 @@ When a migration is destructive, document the rationale in the related feature d
 
 ### PR migration gate (`.github/workflows/migration-gate.yml`)
 
-Builds the PR base-branch schema in a throwaway database, seeds it from `src/db/seed-data.ts`, applies the merge candidate's new migrations, and verifies the result. It catches data-versus-constraint conflicts reproducible from the canonical seed; it cannot prove compatibility with every row in staging or production.
+The development gate applies the merge candidate's complete migration chain to an empty, disposable database, bootstraps its admin and organization, seeds current development data, and verifies the schema. It tests the supported reset-and-seed development path without requiring upgrades of obsolete demo rows.
 
-A `staging` → `main` PR labelled `first-production-deployment` adds a second job, `fresh-database-gate`: full chain against an empty database, production bootstrap run twice to prove idempotence, then schema verify. It is **additive to the seeded gate, never a substitute**; both are required.
+The independent `fresh-database-gate` also runs on every matching PR or manual run. It applies the full chain to another empty database, runs production-mode bootstrap twice to prove idempotence, and verifies the schema. Neither job substitutes schema push for migrations; promotion labels do not bypass either job.
 
 ## Certification Tables
 
@@ -124,11 +220,11 @@ submission and configuration boundary. Purpose per table:
 0008](./adr/0008-submission-ledger-internal-seam.md).
 
 `certifier_biochar_applications` is an organization-scoped idempotency journal,
-not a second source of application facts. Its exact payload/hash and dependency
-identities are claimed before the non-idempotent sandbox POST, then confirmed
-with the remote ID and observed GHG identity. Delivery arrival/departure truck
-observations use the shared `massKg` numeric family and remain nullable for
-existing development and staging rows.
+not a second source of application facts. Every row links its Application and
+credit-batch slice to an immutable Removal submission through same-organization
+composite foreign keys; exact payload/hash and registry identities remain on
+the journal. The versioned row grain, supersession ownership, and exact retry
+semantics are documented in [`schema-overview.md`](./schema-overview.md).
 
 `certifier_ghg_statement_reports` is the immutable-version record for the PDF
 sent with a GHG Statement verifier submission. Every preparation gets a

@@ -105,6 +105,6 @@ export function displayPractice(practice) {
 }
 
 export function displayModel(model) {
-  return model === "codex" ? "Codex (gpt-5.6-sol, high)" : "Claude Opus (high)";
+  return model === "codex" ? "Codex (gpt-6-astra, low)" : "Claude Opus (high)";
 }
 

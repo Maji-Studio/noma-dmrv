@@ -10,8 +10,6 @@ export const MOISTURE_PATHWAYS = [
 
 export type MoisturePathway = (typeof MOISTURE_PATHWAYS)[number];
 
-export const DEFAULT_MOISTURE_PATHWAY: MoisturePathway = "measured_every_batch";
-
 export const recordMethodBPrerequisitesSchema = z.object({
   processId: z.uuid(),
   agreedBaselineSize: z.preprocess(

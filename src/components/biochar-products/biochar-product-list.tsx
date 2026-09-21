@@ -4,67 +4,67 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import { ServerError } from "@/components/forms";
+import { SelectFacilityEmptyState } from "@/components/navigation";
+import { TransportLegsSummary } from "@/components/transport-legs";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
+import { DataTable } from "@/components/ui/data-table";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import { EntityDetailValue } from "@/components/ui/entity-detail-value";
+import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { MassPair } from "@/components/ui/mass-pair";
+import { StatCard } from "@/components/ui/stat-card";
+import { useToast } from "@/components/ui/toast";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import {
-  CubeIcon,
-  PlusIcon,
-  ScalesIcon,
-  XIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { parseAsString, useQueryState } from "nuqs";
+  BLEND_WET_MASS_LABEL,
+  PURE_BIOCHAR_LABEL,
+} from "@/config/product-labels";
+import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import {
   useBiocharProduct,
+  useBiocharProducts,
   useCreateBiocharProduct,
   useDeleteBiocharProduct,
-  useBiocharProducts,
   useUpdateBiocharProduct,
 } from "@/hooks/use-biochar-products";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { DataTable } from "@/components/ui/data-table";
-import { ServerError } from "@/components/forms";
-import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/ui/stat-card";
-import { MassPair } from "@/components/ui/mass-pair";
-import { MISSING_VALUE } from "@/lib/copy-utils";
-import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
-import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
-import { useToast } from "@/components/ui/toast";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { SelectFacilityEmptyState } from "@/components/navigation";
-import { TransportLegsSummary } from "@/components/transport-legs";
-import { BiocharProductForm } from "./biochar-product-form";
-import type { BiocharProductFormData } from "@/schemas/biochar-products";
-import {
-  ENTITY_DEEP_LINK_FOCUS_PARAM,
-  ENTITY_DEEP_LINK_MODE_PARAM,
-  parseEntityFocusTarget,
-} from "@/lib/entity-deep-link";
 import {
   deriveBlendEffectiveMoisturePercent,
   deriveSourceBiocharDryMassKg,
   deriveSourceBiocharMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
-import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
-  BLEND_WET_MASS_LABEL,
-  PURE_BIOCHAR_LABEL,
-} from "@/config/product-labels";
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
 } from "@/lib/mass-moisture";
-import { EntityDetailValue } from "@/components/ui/entity-detail-value";
-import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
+import type { BiocharProductFormData } from "@/schemas/biochar-products";
+import {
+  CubeIcon,
+  PlusIcon,
+  ScalesIcon,
+  XIcon,
+} from "@phosphor-icons/react/dist/ssr";
+import type { ColumnDef } from "@tanstack/react-table";
+import { parseAsString, useQueryState } from "nuqs";
+import { useEffect, useState } from "react";
+import { BiocharProductForm } from "./biochar-product-form";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 
 const WET_PRODUCT_LABEL = "Wet product";
@@ -612,6 +612,10 @@ export function BiocharProductList() {
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
         editLabel="Edit Product"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
+          {
+            title: "Placement",
+            fields: [{ label: "Mixing and placement date", value: formatDate(displaySideSheet.entity.placedAt) }],
+          },
           {
             title: "Source",
             fields: [

@@ -252,8 +252,16 @@ Three seams carry it:
   treatment (tertiary ink at regular weight, same size and slot as data, plus a
   `data-empty` hook) and reports the field as absent to certification. Passing a
   placeholder string as `value` instead is what makes a missing CERT field show
-  a green "satisfied" chip; where the value is a node the field cannot read (an
-  element, an async lookup), say so with `valuePresent`.
+  a green "satisfied" chip; where the value is a node the field cannot read but
+  has already settled (a composed element, a resolved lookup), say so with
+  `valuePresent`.
+- **Loading is not absence.** A value whose query has not settled passes
+  `pending` instead. The field renders the shared skeleton in the value slot,
+  keeps its CERT chip neutral, and counts as neither empty nor provided, so a
+  field waiting on a second query never reads as an operator omission.
+  `valuePresent` covers unreadable values that have settled, never in-flight
+  ones. A surface with its own markup (the supplier detail header) resolves
+  through `resolveDetailFieldValue` so it inherits the same treatment.
 - **`EmptyState`** is for a whole surface with nothing in it, never for one
   field.
 
@@ -328,8 +336,8 @@ import { Button, EmptyState, MassPair, Modal, PageHeader, StatCard } from "@/com
 ```
 
 The barrel is **incomplete** — `Accordion`, `CertificationFieldTag`,
-`DetailPanel`, `LoadingSkeleton`, `Toast`, `ViewRelatedLink` and
-`DeleteConfirmDialog` are not exported. Import those from their own path. A
+`DetailPanel`, `LoadingSkeleton`, `Toast` and `DeleteConfirmDialog` are not
+exported. Import those from their own path. A
 failed barrel import means the component exists elsewhere, not that it's
 missing — don't rebuild it.
 

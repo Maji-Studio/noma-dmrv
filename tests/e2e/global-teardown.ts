@@ -46,6 +46,24 @@ export default async function globalTeardown() {
     try {
       await client.query("BEGIN");
 
+      // Freeze fixture lineage before deleting parents. UI-created codes are automatic.
+      await client.query(`CREATE TEMP TABLE e2e_scope_facilities ON COMMIT DROP AS SELECT id FROM facilities WHERE code LIKE 'E2E-%' OR name LIKE 'UI %' OR name LIKE 'Chain %' OR name LIKE 'Duplicate Test %'`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_bins ON COMMIT DROP AS SELECT id FROM storage_locations WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_runs ON COMMIT DROP AS SELECT id FROM production_runs WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR feedstock_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR reactor_id IN (SELECT id FROM reactors WHERE code LIKE 'E2E-%' OR identifier LIKE 'UI %' OR identifier LIKE 'Chain %')`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_products ON COMMIT DROP AS SELECT id FROM biochar_products WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR source_biochar_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR formulation_id IN (SELECT id FROM formulations WHERE code LIKE 'E2E-%') OR id IN (SELECT biochar_product_id FROM product_ingredient_snapshots WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins)) OR linked_production_run_id IN (SELECT id FROM e2e_scope_runs) OR id IN (SELECT biochar_product_id FROM biochar_product_source_allocations WHERE production_run_id IN (SELECT id FROM e2e_scope_runs))`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_orders ON COMMIT DROP AS SELECT id FROM orders WHERE code LIKE 'E2E-%' OR formulation_id IN (SELECT id FROM formulations WHERE code LIKE 'E2E-%') OR facility_id IN (SELECT id FROM e2e_scope_facilities)`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_deliveries ON COMMIT DROP AS SELECT id FROM deliveries WHERE code LIKE 'E2E-%' OR facility_id IN (SELECT id FROM e2e_scope_facilities) OR storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR order_id IN (SELECT id FROM e2e_scope_orders) OR id IN (SELECT delivery_id FROM output_stock_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products))`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_applications ON COMMIT DROP AS SELECT id FROM applications WHERE code LIKE 'E2E-%' OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR id IN (SELECT application_id FROM application_output_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs))`);
+      await client.query(`CREATE TEMP TABLE e2e_scope_output_allocations ON COMMIT DROP AS SELECT id FROM output_stock_allocations WHERE source_storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR target_biochar_product_id IN (SELECT id FROM e2e_scope_products) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
+      await client.query(`DELETE FROM application_output_allocations WHERE application_id IN (SELECT id FROM e2e_scope_applications) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
+      await client.query(`DELETE FROM output_stock_run_allocations WHERE allocation_id IN (SELECT id FROM e2e_scope_output_allocations)`);
+      await client.query(`DELETE FROM output_stock_allocations WHERE id IN (SELECT id FROM e2e_scope_output_allocations)`);
+      await client.query(`DELETE FROM bin_movements WHERE storage_location_id IN (SELECT id FROM e2e_scope_bins)`);
+      await client.query(`DELETE FROM product_ingredient_snapshots WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products)`);
+
+      await client.query(`DELETE FROM credit_batch_production_runs WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)`);
+      await client.query(`DELETE FROM incident_reports WHERE production_run_id IN (SELECT id FROM e2e_scope_runs)`);
+
       // ─── Junction tables first (no FKs pointing to them) ───
 
       // production_run_feedstock_draws
@@ -261,71 +279,24 @@ export default async function globalTeardown() {
               )
       `);
 
-      // ─── Applications ───
-      await client.query(`
-        DELETE FROM applications
-        WHERE code LIKE 'E2E-%'
-           OR delivery_id IN (
-                SELECT id FROM deliveries
-                WHERE facility_id IN (
-                  SELECT id FROM facilities
-                  WHERE code LIKE 'E2E-%'
-                     OR name LIKE 'UI %'
-                     OR name LIKE 'Chain %'
-                     OR name LIKE 'Duplicate Test %'
-                )
-              )
-      `);
-
-      // ─── Deliveries ───
-      // Also catch UI-created deliveries (auto-generated codes) via facility or order reference
-      await client.query(`
-        DELETE FROM deliveries
-        WHERE code LIKE 'E2E-%'
-           OR facility_id IN (
-                SELECT id FROM facilities
-                WHERE code LIKE 'E2E-%'
-                   OR name LIKE 'UI %'
-                   OR name LIKE 'Chain %'
-                   OR name LIKE 'Duplicate Test %'
-              )
-           OR order_id IN (
-                SELECT id FROM orders
-                WHERE code LIKE 'E2E-%'
-                   OR facility_id IN (
-                        SELECT id FROM facilities
-                        WHERE code LIKE 'E2E-%'
-                           OR name LIKE 'UI %'
-                           OR name LIKE 'Chain %'
-                           OR name LIKE 'Duplicate Test %'
-                      )
-              )
-      `);
-
-      // ─── Orders ───
-      // Also catch UI-created orders (auto-generated codes) that reference E2E biochar products
-      await client.query(`
-        DELETE FROM orders
-        WHERE code LIKE 'E2E-%'
-           OR biochar_product_id IN (SELECT id FROM biochar_products WHERE code LIKE 'E2E-%')
-           OR facility_id IN (
-                SELECT id FROM facilities
-                WHERE code LIKE 'E2E-%'
-                   OR name LIKE 'UI %'
-                   OR name LIKE 'Chain %'
-                   OR name LIKE 'Duplicate Test %'
-              )
-      `);
+      await client.query(`DELETE FROM credit_batch_applications WHERE application_id IN (SELECT id FROM e2e_scope_applications)`);
+      await client.query(`DELETE FROM soil_temperature_measurements WHERE application_id IN (SELECT id FROM e2e_scope_applications)`);
+      await client.query(`DELETE FROM certifier_biochar_applications WHERE application_id IN (SELECT id FROM e2e_scope_applications)`);
+      // Delete the frozen descendant closure before its parent orders.
+      await client.query(`DELETE FROM applications WHERE id IN (SELECT id FROM e2e_scope_applications)`);
+      await client.query(`DELETE FROM deliveries WHERE id IN (SELECT id FROM e2e_scope_deliveries)`);
+      await client.query(`DELETE FROM orders WHERE id IN (SELECT id FROM e2e_scope_orders)`);
 
       // ─── Biochar storage inventory (FK: biochar_product_id, storage_location_id) ───
       await client.query(`
         DELETE FROM biochar_storage_inventory
-        WHERE biochar_product_id IN (SELECT id FROM biochar_products WHERE code LIKE 'E2E-%')
+        WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products)
            OR storage_location_id IN (SELECT id FROM storage_locations WHERE code LIKE 'E2E-%')
       `);
 
       // ─── Biochar products ───
-      await client.query(`DELETE FROM biochar_products WHERE code LIKE 'E2E-%'`);
+      await client.query(`DELETE FROM biochar_product_source_allocations WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products)`);
+      await client.query(`DELETE FROM biochar_products WHERE id IN (SELECT id FROM e2e_scope_products)`);
 
       // ─── Production-run readings documents and telemetry ───
       await client.query(`
@@ -497,7 +468,7 @@ export default async function globalTeardown() {
       await client.query(`DELETE FROM vehicles WHERE code LIKE 'E2E-%'`);
 
       // ─── Storage locations (references facilities) ───
-      await client.query(`DELETE FROM storage_locations WHERE code LIKE 'E2E-%'`);
+      await client.query(`DELETE FROM storage_locations WHERE id IN (SELECT id FROM e2e_scope_bins)`);
 
       // ─── Reactors (references facilities) ───
       // Delete by code prefix, identifier prefix, or facility reference
@@ -622,7 +593,8 @@ export default async function globalTeardown() {
     } catch (error) {
       await client.query("ROLLBACK");
       console.error("[global-teardown] Cleanup failed, rolled back:", error);
-      // Don't throw - teardown failure shouldn't mark tests as failed
+      // A green browser run must also leave its fixture cleanup complete.
+      throw error;
     } finally {
       client.release();
     }

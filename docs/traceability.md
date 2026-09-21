@@ -10,7 +10,9 @@ readings. Read this before touching anything under
 ## Chain and membership
 
 ```text
-Feedstock(s) + Reactor -> Production Run -> Biochar Product -> Order -> Delivery -> Application
+Feedstock(s) + Reactor -> Production Run -> Product layer(s) -> Delivery -> Application
+                                                              ^
+                                                        Formulation order
                             ^ (× N members)
                         Credit Batch
 ```
@@ -120,8 +122,10 @@ token and contrast rules are owned by [docs/design-system.md](design-system.md).
 - **Focus** is cross-surface (bar ⇄ map ⇄ DAG selection *and* DAG hover): the
   focused node's full connected lineage — ancestors + descendants via
   `reachableNodeIds` — stays full strength, everything else dims.
-- `Biochar Product` shows the unsold remainder ("N kg in storage") when its mass
-  exceeds the rollback's ordered quantity.
+- Product-to-delivery edges show the selected applications' allocated shares.
+  Orders describe requested wet mass; they do not reserve stock or identify a
+  product layer. Stock balances come from the output ledger, never from
+  subtracting order quantity from product creation mass.
 - MiniMap gotcha: nodes must carry `initialWidth`/`initialHeight` so the MiniMap
   can size them — React Flow never writes `measured` back onto user nodes.
 
@@ -172,3 +176,29 @@ See [docs/testing.md](testing.md) for fixtures and E2E conventions. Suites:
 - `src/components/chain-of-custody/use-chain-graph.test.ts`
 - `src/components/chain-of-custody/use-credit-batch-card-selection.test.ts`
 - `src/components/chain-of-custody/map/viewer-utils.test.ts`
+
+## Saved delivery and application provenance
+
+`delivery-allocation-provenance.ts` aggregates signed output-stock effects by
+truck and product before joining source runs. Original, reversal and replacement
+rows net to the saved shipment. Wet transport shares use the ledger's measured
+shipment shares; dry proportions must not replace composition-based wet shares.
+Missing or unbalanced allocations fail closed, without an order/product fallback.
+
+Applications persist their homogeneous remaining-truck shares in
+`application_output_allocations`, at application × product × production-run grain.
+Cumulative integer-gram quotas against the original truck prevent repeated
+small applications from favoring the largest layer and close each layer/run on
+final depletion. Reallocation
+changes only the edited application's shares; it never reruns bin FIFO. All
+application capacity/share writes serialize on the delivery. Removal-owned
+credit-batch slices and their application allocations cannot be rewritten.
+
+Credit-batch accounting joins these saved run shares to membership, retaining
+product identity when two products share a run. Batch-scoped reconciliation
+leaves other batch slices and Removal-owned rows intact. The application
+traceability payload carries every product branch; singular fields are populated
+only for a single product or source. DAG nodes retain physical entity IDs while
+allocated edges sum their contributing source shares. The Sankey retains full
+run quantities as context, labels selected product quantities as allocated
+biochar, and does not present the rest of a run as a current stock balance.

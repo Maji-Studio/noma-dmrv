@@ -12,7 +12,9 @@ import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
 import { isPgUniqueViolation } from "@/db/errors";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
+import { conflictCode } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
+import type { RunConflict } from "@/lib/production-runs/overlap-conflict";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
@@ -20,11 +22,7 @@ import { requireOrgScope } from "../utils";
 const REACTOR_LOCK_SCOPE = "reactor";
 
 /** A reference to the run a candidate window collides with. */
-export interface RunConflict {
-  entity: string;
-  id: string;
-  code: string;
-}
+export type { RunConflict } from "@/lib/production-runs/overlap-conflict";
 
 /**
  * Thrown when a candidate run's time window overlaps an existing run on the same
@@ -154,7 +152,7 @@ export async function assertNoReactorRunOverlap(
   throw new ProductionRunOverlapError(overlapMessage(conflict), {
     entity: "productionRun",
     id: conflict.id,
-    code: conflict.code,
+    code: conflictCode(conflict.code),
   });
 }
 

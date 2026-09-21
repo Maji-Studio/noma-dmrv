@@ -18,6 +18,7 @@ import {
 
 describe("application schemas", () => {
   const customerLocation = {
+    fieldSizeHa: 1,
     gpsLatitude: -3.3349,
     gpsLongitude: 37.3404,
   };
@@ -38,6 +39,7 @@ describe("application schemas", () => {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
+      fieldSizeHa: 1,
       evidenceMethod: "location",
     });
 
@@ -59,6 +61,7 @@ describe("application schemas", () => {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 100,
+      fieldSizeHa: 1,
     };
 
     expect(
@@ -106,6 +109,57 @@ describe("application schemas", () => {
         ...customerLocation,
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects a zero-hectare field on the client form schema", () => {
+    const result = applicationFormSchema.safeParse({
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 100,
+      ...customerLocation,
+      fieldSizeHa: 0,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(
+      result.error.issues.find((issue) => issue.path[0] === "fieldSizeHa")
+        ?.message,
+    ).toBe("Field size must be greater than 0");
+  });
+
+  it("rejects a zero-hectare field at the create server boundary", () => {
+    expect(
+      createApplicationSchema.safeParse({
+        applicationDate: new Date("2026-06-13"),
+        deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        biocharAppliedTons: 1,
+        ...customerLocation,
+        fieldSizeHa: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a field size on the client form and create server boundary", () => {
+    const input = {
+      applicationDate: new Date("2026-06-13"),
+      deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      biocharAppliedTons: 1,
+      gpsLatitude: customerLocation.gpsLatitude,
+      gpsLongitude: customerLocation.gpsLongitude,
+    };
+
+    expect(applicationFormSchema.safeParse(input).success).toBe(false);
+    expect(createApplicationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects a zero-hectare field at the update server boundary", () => {
+    expect(
+      updateApplicationSchema.safeParse({
+        applicationId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        fieldSizeHa: 0,
+      }).success,
+    ).toBe(false);
   });
 
   it.each([
@@ -176,6 +230,7 @@ describe("application schemas", () => {
       applicationDate: new Date("2026-06-13"),
       deliveryId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       biocharAppliedTons: 1,
+      fieldSizeHa: 1,
       gpsLatitude: -3.3349,
     });
 

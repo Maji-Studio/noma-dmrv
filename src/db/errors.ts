@@ -3,6 +3,9 @@
 // the thrown error, so narrowing lives here once instead of being re-derived
 // at each catch site.
 
+// SQLSTATE for foreign_key_violation.
+const PG_FOREIGN_KEY_VIOLATION = "23503";
+
 // SQLSTATE for unique_violation.
 const PG_UNIQUE_VIOLATION = "23505";
 // SQLSTATE for check_violation, including explicit RAISE ... ERRCODE calls in
@@ -131,6 +134,20 @@ export function isPgCheckViolationMessage(
     } else {
       break;
     }
+  }
+  return false;
+}
+
+/** Match a named restrictive reference, including Drizzle-wrapped errors. */
+export function isPgForeignKeyViolation(err: unknown, constraint: string): boolean {
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+    if (typeof current !== "object") break;
+    const error = current as { code?: unknown; constraint?: unknown; cause?: unknown };
+    if (error.code === PG_FOREIGN_KEY_VIOLATION && error.constraint === constraint) {
+      return true;
+    }
+    current = error.cause;
   }
   return false;
 }

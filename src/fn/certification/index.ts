@@ -1,11 +1,9 @@
 export {
   deleteFacilityCertifierMapping,
   loadFacilityCertifierMapping,
-  loadFacilityCertifierSummary,
   loadIsometricProjectTemplates,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
-  type FacilityCertifierSummary,
 } from "./facility-mapping";
 export {
   loadRegistrySourceVisibility,
@@ -47,7 +45,6 @@ export {
   type CreditBatchHealthSummary,
   type RemovalPreflightSummary,
 } from "./overview";
-export { submitRemovalAction } from "./removal-grouping";
 export {
   loadRemovalCompilation,
   type RemovalCompilationView,
@@ -77,7 +74,9 @@ export {
 // Deferred-create — the New-Removal wizard's "Confirm" step. Server re-derives
 // each selected batch's health before atomically creating the removal.
 export { createRemovalWithBatchesAction } from "./create-removal-with-batches";
-export { discardRemovalDraftAction } from "./discard-removal-draft";
+// Deletes a never-finalized Removal, removing its draft GHG Entry and Biochar
+// Applications from the registry first.
+export { deleteRemovalAction } from "./delete-removal-action";
 // GHG Statement flow — wired live by Phase 4.5. A GHG Statement is an
 // independent, period-anchored artifact that rolls up multiple Removals
 // (ADR 0003).
@@ -115,7 +114,6 @@ export {
 export {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
-  unlinkDocumentSource,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
   type CandidateLineageEntity,

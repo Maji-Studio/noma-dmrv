@@ -1,3 +1,4 @@
+import { canRefreshSubmissionEvidence } from "@/lib/certification/submission-metadata";
 /**
  * Pure submission-claim policy.
  *
@@ -11,6 +12,8 @@
 
 import {
   canReclaimInterruptedSubmission,
+  getMetadataValue,
+  SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 
 export type SubmissionClaimStatus =
@@ -45,6 +48,7 @@ export interface SubmissionClaimPolicy {
    *     (GHG-statement creation: one row per `(project, end_on)`).
    */
   onSubmittedHashChanged: "supersede" | "invalid-changed-hash";
+  allowEvidenceRefresh?: boolean;
 }
 
 /**
@@ -92,6 +96,7 @@ export type SubmissionClaim =
       nextVersion: number;
       supersedePreviousId: string | null;
       reason:
+        | "evidence-refresh"
         | "first"
         | "submitted-hash-changed"
         | "rejected-hash-changed"
@@ -151,6 +156,10 @@ export function decideSubmissionClaim(
       // and clears the marker before recovery work can start.
       if (!canReclaimInterrupted && now - lockedAtMs < lockTtlMs) {
         return { kind: "blocked-in-flight" };
+      }
+      if (policy.allowEvidenceRefresh && !latest.externalId && canRefreshSubmissionEvidence(latest.metadata) &&
+        Array.isArray(getMetadataValue(latest.metadata, SUBMISSION_METADATA_KEYS.evidenceRefreshCandidates))) {
+        return { kind: "create-new-version", nextVersion: latest.version + 1, supersedePreviousId: latest.id, reason: "evidence-refresh" };
       }
       if (dataUploadResume) {
         // The journaled remote IDs (fileUpload, dataUploadSubmission) and the

@@ -47,10 +47,6 @@ export async function createSensor(
   return client.post<IsometricSensor>("/sensors", body);
 }
 
-export async function getSensorById(client: IsometricClient, id: string): Promise<IsometricSensor> {
-  return client.get<IsometricSensor>(`/sensors/${encodeURIComponent(id)}`);
-}
-
 /**
  * Looks up a sensor by its noma-controlled `reference`. Returns the
  * full sensor on hit, `null` on miss. Uses pagination defensively

@@ -24,14 +24,12 @@ import {
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
+import { hasExactGhgEntryMembership } from "@/lib/certification/ghg-statement-breakdown";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
-import {
-  findApprovedGhgStatementReport,
-  GhgStatementWorkflow,
-} from "./ghg-statement-workflow";
+import { GhgStatementWorkflow } from "./ghg-statement-workflow";
 import { deriveGhgStatementWorkflowState } from "./ghg-statement-workflow-state";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
 import { GhgStatementTechnicalDetails } from "./ghg-statement-technical-details";
@@ -47,7 +45,8 @@ import {
 
 const ICON_SIZE = 14;
 const SHORT_ID = 8;
-
+const STALE_DETAIL_WARNING =
+  "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
 
 interface GhgStatementDetailSheetProps {
   item: GhgStatementListItem;
@@ -55,6 +54,18 @@ interface GhgStatementDetailSheetProps {
   canManageReports: boolean;
   open: boolean;
   onClose: () => void;
+}
+
+export function hasGhgStatementDetailData<T>(query: {
+  data: T | undefined;
+}): query is { data: T } {
+  return query.data !== undefined;
+}
+
+export function canUseGhgStatementRegistryActions(query: {
+  error: unknown;
+}): boolean {
+  return !query.error;
 }
 
 function statementPeriod(item: GhgStatementListItem): string {
@@ -129,7 +140,7 @@ function DetailState({
     );
   }
 
-  if (query.error || !query.data) {
+  if (!hasGhgStatementDetailData(query)) {
     return (
       <>
         <SlideOverPanel.Body>
@@ -157,17 +168,14 @@ function DetailState({
     statementSubmissionForStatus,
     locked,
     "ghgStatement",
+    "unknown",
   );
   const created = Boolean(statementSubmission?.externalId);
-  const approvedReport = findApprovedGhgStatementReport(
-    reportsQuery.data ?? [],
-  );
   const workflowState = deriveGhgStatementWorkflowState({
     created,
     canManageReports,
     remote,
     linkedRemovalCount: linkedRemovals.length,
-    hasApprovedReport: Boolean(approvedReport),
     rollup: breakdownQuery.isLoading
       ? { status: "loading" }
       : breakdownQuery.error
@@ -179,6 +187,12 @@ function DetailState({
             }
           : { status: "loading" },
   });
+  const registryActionsAvailable = canUseGhgStatementRegistryActions(query);
+  const canGenerate = workflowState.canGenerate && registryActionsAvailable;
+  const canSubmit = workflowState.canSubmit && registryActionsAvailable;
+  const generationUnavailableReason = registryActionsAvailable
+    ? workflowState.generationUnavailableReason
+    : STALE_DETAIL_WARNING;
   const { mode } = workflowState;
   const isResubmit = mode === "resubmit";
 
@@ -200,6 +214,15 @@ function DetailState({
       <SlideOverPanel.Body className="flex flex-col gap-24">
         <EnvBanner isProduction={isProduction} variant="inline" />
 
+        {!registryActionsAvailable && (
+          <p
+            className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
+            role="status"
+          >
+            {STALE_DETAIL_WARNING}
+          </p>
+        )}
+
         <section
           aria-labelledby="ghg-statement-status"
           className="border-y border-[var(--color-border-secondary)] py-12"
@@ -215,17 +238,17 @@ function DetailState({
           </div>
         </section>
 
-        <GhgStatementCarbonBreakdown query={breakdownQuery} />
+        {remote && remote.ghg_entry_ids.length > 0 && (
+          <GhgStatementCarbonBreakdown query={breakdownQuery} />
+        )}
 
         <section className="flex flex-col gap-8">
           <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
             Workflow
           </h3>
           <GhgStatementWorkflow
-            ghgStatementId={statement.id}
             reportsQuery={reportsQuery}
             created={created}
-            canManageReports={canManageReports}
             registryRecord={
               statementSubmission?.externalId ? (
                 <RegistryRecordLink
@@ -237,17 +260,23 @@ function DetailState({
                 />
               ) : undefined
             }
-            canGenerate={workflowState.canGenerate}
-            generationUnavailableReason={
-              workflowState.generationUnavailableReason
-            }
+            canGenerate={canGenerate}
+            generationUnavailableReason={generationUnavailableReason}
             verifierStep={workflowState.verifierStep}
             onSubmit={
-              workflowState.canSubmit ? () => setSubmitOpen(true) : undefined
+              canSubmit ? () => setSubmitOpen(true) : undefined
             }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
           />
         </section>
+
+        {remote && (
+          <p className="body-small text-[var(--color-text-secondary)]">
+            {remote.ghg_entry_ids.length} registry GHG {remote.ghg_entry_ids.length === 1 ? "Entry" : "Entries"}. {linkedRemovals.length} local {linkedRemovals.length === 1 ? "Removal" : "Removals"}.
+            {!hasExactGhgEntryMembership(linkedRemovals.map(({ submission }) => submission?.externalId ?? ""), remote.ghg_entry_ids) &&
+              " Registry GHG Entries differ from local Removal history. Generated reports reconcile every registry GHG Entry."}
+          </p>
+        )}
 
         <Accordion.Root className="gap-8" multiple>
           <Accordion.Item
@@ -260,7 +289,7 @@ function DetailState({
                 labelClassName={CERTIFICATION_ACCORDION_LABEL}
               >
                 <span className="flex w-full items-center justify-between gap-12">
-                  <span>Linked Removals</span>
+                  <span>Local Removals</span>
                   <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
                     {linkedRemovals.length}
                   </span>
@@ -270,7 +299,7 @@ function DetailState({
             <Accordion.Panel className="[&>div]:p-12">
               {linkedRemovals.length === 0 ? (
                 <p className="body-small text-[var(--color-text-tertiary)]">
-                  No Removals linked yet.
+                  No local Removal history is linked to this Statement.
                 </p>
               ) : (
                 <RemovalBatchesAccordion
@@ -289,6 +318,10 @@ function DetailState({
                           isLockedInFlight={
                             submission ? isLockedInFlight(submission) : false
                           }
+                          reportingWindow={{
+                            startedOn: removal.startedOn,
+                            completedOn: removal.completedOn,
+                          }}
                         />
                       ),
                     }),
@@ -356,8 +389,9 @@ function DetailState({
         onClose={() => setSubmitOpen(false)}
         isProduction={isProduction}
         isResubmit={isResubmit}
-        canGenerate={workflowState.canGenerate}
-        generationUnavailableReason={workflowState.generationUnavailableReason}
+        canGenerate={canGenerate}
+        canSubmit={canSubmit}
+        generationUnavailableReason={generationUnavailableReason}
       />
 
       <SlideOverPanel.Footer className="justify-stretch">

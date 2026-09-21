@@ -18,8 +18,6 @@ import {
   getSamplesFn,
   getSampleByIdFn,
   getSampleStatsFn,
-  checkSampleCodeFn,
-  generateNextSampleCodeFn,
   createSampleFn,
   updateSampleFn,
   deleteSampleFn,
@@ -32,7 +30,7 @@ import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 // Query Keys
 // ============================================
 
-export const sampleKeys = {
+const sampleKeys = {
   all: ["samples"] as const,
   lists: () => [...sampleKeys.all, "list"] as const,
   list: (filters?: Partial<SampleFilterData>) =>
@@ -108,46 +106,6 @@ export function useSampleStats(
     },
     enabled,
     staleTime: 30000,
-  });
-}
-
-/**
- * Hook to check if a sample code is available
- */
-export function useSampleCodeCheck(
-  code: string,
-  excludeSampleId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: sampleKeys.codeCheck(code, excludeSampleId),
-    queryFn: async () => {
-      const result = await checkSampleCodeFn(code, excludeSampleId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
-  });
-}
-
-/**
- * Hook to generate the next sample code
- */
-export function useNextSampleCode(enabled = true) {
-  return useQuery({
-    queryKey: sampleKeys.nextCode(),
-    queryFn: async () => {
-      const result = await generateNextSampleCodeFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.code;
-    },
-    enabled,
-    staleTime: 0, // Always fetch fresh
   });
 }
 
@@ -450,95 +408,6 @@ export function useDeleteSample(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch samples list for faster initial load
- */
-export function usePrefetchSamples() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<SampleFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: sampleKeys.list(filters),
-      queryFn: async () => {
-        const result = await getSamplesFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single sample
- */
-export function usePrefetchSample() {
-  const queryClient = useQueryClient();
-
-  return (sampleId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: sampleKeys.detail(sampleId),
-      queryFn: async () => {
-        const result = await getSampleByIdFn(sampleId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access sample cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useSampleCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all sample data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: sampleKeys.all }),
-
-    /** Invalidate all sample lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: sampleKeys.lists() }),
-
-    /** Invalidate a specific sample detail */
-    invalidateDetail: (sampleId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: sampleKeys.detail(sampleId),
-      }),
-
-    /** Invalidate sample stats */
-    invalidateStats: (creditBatchId?: string, facilityId?: string) =>
-      queryClient.invalidateQueries({
-        queryKey: sampleKeys.stats(creditBatchId, facilityId),
-      }),
-
-    /** Remove a specific sample from cache (use after deletion) */
-    removeFromCache: (sampleId: string) => {
-      queryClient.removeQueries({
-        queryKey: sampleKeys.detail(sampleId),
-      });
-    },
-
-    /** Set sample data in cache (useful for optimistic updates) */
-    setSampleData: (sampleId: string, data: SampleWithRelations) =>
-      queryClient.setQueryData(sampleKeys.detail(sampleId), data),
-
-    /** Get cached sample data */
-    getCachedSample: (sampleId: string) =>
-      queryClient.getQueryData<SampleWithRelations>(
-        sampleKeys.detail(sampleId)
-      ),
-  };
-}

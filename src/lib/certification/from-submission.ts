@@ -16,10 +16,11 @@ import {
 } from "@/lib/certification/submission-metadata";
 import {
   deriveRemovalStatus,
-  isRemovalSubmissionInterrupted,
+  isRemovalSubmissionInterruptedForReportingWindow,
   deriveStatementStatus,
   type DerivedStatus,
   type LocalSubmissionStatus,
+  type RemovalReportingWindowDates,
   type RemoteGhgStatus,
 } from "./status";
 
@@ -32,6 +33,53 @@ const REMOTE_GHG_STATUSES: readonly RemoteGhgStatus[] = [
   "CREDITS_ISSUED",
   "FAILED_VERIFICATION",
 ];
+
+function readSnapshotReportingWindow(
+  latest: CertificationSubmissionRow | null,
+): RemovalReportingWindowDates | "unknown" {
+  const semantic = (latest?.payloadSnapshot as {
+    semantic?: { startedOn?: unknown; completedOn?: unknown };
+  } | null)?.semantic;
+  if (
+    typeof semantic?.startedOn !== "string" ||
+    typeof semantic.completedOn !== "string"
+  ) {
+    return "unknown";
+  }
+  const startedOn = new Date(semantic.startedOn);
+  const completedOn = new Date(semantic.completedOn);
+  if (Number.isNaN(startedOn.getTime()) || Number.isNaN(completedOn.getTime())) {
+    return "unknown";
+  }
+  return {
+    startedOn: startedOn.toISOString().slice(0, 10),
+    completedOn: completedOn.toISOString().slice(0, 10),
+  };
+}
+
+export function isRemovalSubmissionInterruptedFromSubmission(
+  latest: CertificationSubmissionRow | null,
+  reportingWindow: RemovalReportingWindowDates | "unknown",
+): boolean {
+  const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
+  if (
+    isRemovalSubmissionInterruptedForReportingWindow({
+      local,
+      metadata: latest?.metadata,
+      reportingWindow,
+    })
+  ) {
+    return true;
+  }
+  const snapshotWindow = readSnapshotReportingWindow(latest);
+  return (
+    local === "submitted" &&
+    reportingWindow !== "unknown" &&
+    snapshotWindow !== "unknown" &&
+    (reportingWindow.startedOn !== snapshotWindow.startedOn ||
+      reportingWindow.completedOn !== snapshotWindow.completedOn)
+  );
+}
 
 /** The persisted verifier status off a submission row, or null when absent. */
 export function readRemoteStatus(
@@ -56,7 +104,7 @@ export function readRemoteStatus(
  */
 export function overlayLiveRemoteStatus<
   T extends CertificationSubmissionRow,
->(latest: T, liveRemoteStatus: string | null | undefined): T {
+>(latest: T, liveRemoteStatus: string | null | undefined, pendingTotalCo2eRemovedKg?: number | null): T {
   if (
     !liveRemoteStatus ||
     !REMOTE_GHG_STATUSES.includes(liveRemoteStatus as RemoteGhgStatus)
@@ -67,7 +115,8 @@ export function overlayLiveRemoteStatus<
     latest.metadata && typeof latest.metadata === "object"
       ? (latest.metadata as Record<string, unknown>)
       : {};
-  if (metadata[SUBMISSION_METADATA_KEYS.remoteStatus] === liveRemoteStatus) {
+  if (metadata[SUBMISSION_METADATA_KEYS.remoteStatus] === liveRemoteStatus &&
+    (pendingTotalCo2eRemovedKg === undefined || metadata[SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg] === pendingTotalCo2eRemovedKg)) {
     return latest;
   }
   return {
@@ -75,6 +124,7 @@ export function overlayLiveRemoteStatus<
     metadata: {
       ...metadata,
       [SUBMISSION_METADATA_KEYS.remoteStatus]: liveRemoteStatus,
+      ...(pendingTotalCo2eRemovedKg !== undefined ? { [SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg]: pendingTotalCo2eRemovedKg } : {}),
     },
   };
 }
@@ -87,6 +137,7 @@ export function deriveSubmissionStatus(
   latest: CertificationSubmissionRow | null,
   isLockedInFlight: boolean,
   artifact: CertificationArtifact,
+  reportingWindow: RemovalReportingWindowDates | "unknown",
 ): DerivedStatus {
   const local = (latest?.status ?? null) as LocalSubmissionStatus | null;
   if (artifact === "ghgStatement") {
@@ -94,11 +145,18 @@ export function deriveSubmissionStatus(
       local,
       lockInFlight: isLockedInFlight,
       remoteStatus: latest ? readRemoteStatus(latest) : null,
+      pendingTotalCo2eRemovedKg: (() => {
+        const value = getMetadataValue(latest?.metadata, SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg);
+        return typeof value === "number" ? value : null;
+      })(),
     });
   }
   return deriveRemovalStatus({
     local,
     lockInFlight: isLockedInFlight,
-    submissionInterrupted: isRemovalSubmissionInterrupted(latest?.metadata),
+    submissionInterrupted: isRemovalSubmissionInterruptedFromSubmission(
+      latest,
+      reportingWindow,
+    ),
   });
 }

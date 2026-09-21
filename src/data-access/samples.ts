@@ -119,7 +119,7 @@ export interface SampleStats {
 // Auth Guards
 // ============================================
 
-import { assertSameOrg, requireOrgScope } from "./utils";
+import { assertSameOrg, requireOrgScope, type Executor } from "./utils";
 import { SafeError } from "@/lib/errors";
 import {
   isPgCheckViolationMessage,
@@ -337,11 +337,12 @@ export async function getSamples(
  */
 export async function getSampleById(
   ctx: OrgContext,
-  sampleId: string
+  sampleId: string,
+  executor: Executor = db
 ): Promise<SampleWithRelations> {
   requireOrgScope(ctx);
 
-  const [sample] = await db
+  const [sample] = await executor
     .select({
       id: samples.id,
       sampleCode: samples.sampleCode,
@@ -656,10 +657,12 @@ export async function createSample(
         ironPercent: data.ironPercent ?? null,
       })
       .returning();
-    return created;
+    // Read the row back inside the transaction, so a failed read never reports
+    // a saved sample as "Sample not found" (issue #769).
+    return getSampleById(ctx, created.id, tx);
   });
 
-  return getSampleById(ctx, sample.id);
+  return sample;
 }
 
 /**
@@ -783,7 +786,7 @@ export async function updateSample(
   if (data.calciumPercent !== undefined) updateData.calciumPercent = data.calciumPercent;
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
-  await guardSampleMutation(() => db.transaction(async (tx) => {
+  return guardSampleMutation(() => db.transaction(async (tx) => {
     const [locked] = await tx
       .select()
       .from(samples)
@@ -853,9 +856,10 @@ export async function updateSample(
     }
 
     await tx.update(samples).set(updateData).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  }));
 
-  return getSampleById(ctx, sampleId);
+    // Read the row back inside the transaction (issue #769).
+    return getSampleById(ctx, sampleId, tx);
+  }));
 }
 
 // ============================================
@@ -903,88 +907,3 @@ export async function deleteSample(
 // ============================================
 // Utility Operations
 // ============================================
-
-/**
- * Check if a sample code is available
- */
-export async function isSampleCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeSampleId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [
-    eq(samples.organizationId, ctx.organizationId),
-    eq(samples.sampleCode, code),
-  ];
-
-  if (excludeSampleId) {
-    conditions.push(sql`${samples.id} != ${excludeSampleId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: samples.id })
-    .from(samples)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Generate next sample code
- * Returns the next available code in format S-YYYY-XXX
- */
-export async function generateNextSampleCode(ctx: OrgContext): Promise<string> {
-  requireOrgScope(ctx);
-
-  const year = new Date().getFullYear();
-  const prefix = `S-${year}-`;
-
-  const [lastSample] = await db
-    .select({ sampleCode: samples.sampleCode })
-    .from(samples)
-    .where(and(eq(samples.organizationId, ctx.organizationId), ilike(samples.sampleCode, `${prefix}%`)))
-    .orderBy(desc(samples.sampleCode))
-    .limit(1);
-
-  let nextNumber = 1;
-  if (lastSample) {
-    const match = lastSample.sampleCode.match(/S-\d{4}-(\d+)/);
-    if (match) {
-      nextNumber = parseInt(match[1], 10) + 1;
-    }
-  }
-
-  return `${prefix}${nextNumber.toString().padStart(3, "0")}`;
-}
-
-/**
- * Get sample options for dropdowns
- * Returns minimal data needed for select inputs
- */
-export async function getSampleOptions(
-  ctx: OrgContext,
-  creditBatchId?: string
-): Promise<Array<{ id: string; sampleCode: string; samplingTime: Date }>> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(samples.organizationId, ctx.organizationId)];
-  if (creditBatchId) {
-    conditions.push(eq(samples.creditBatchId, creditBatchId));
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  // org-scope-ok: whereClause includes the active organization predicate.
-  return db
-    .select({
-      id: samples.id,
-      sampleCode: samples.sampleCode,
-      samplingTime: samples.samplingTime,
-    })
-    .from(samples)
-    .where(whereClause)
-    .orderBy(desc(samples.samplingTime));
-}

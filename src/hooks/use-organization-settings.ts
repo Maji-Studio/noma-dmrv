@@ -28,7 +28,7 @@ import { unwrap } from "@/hooks/types";
 
 const ORGANIZATION_DEFAULTS_STALE_MS = 300_000;
 
-export const organizationSettingsKeys = {
+const organizationSettingsKeys = {
   all: ["organization-settings"] as const,
   defaults: (organizationId: string | null) =>
     [...organizationSettingsKeys.all, "defaults", organizationId] as const,

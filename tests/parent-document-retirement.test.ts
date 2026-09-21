@@ -1,8 +1,10 @@
+import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
+  certificationSubmissions,
   certifierDocumentUploads,
   customerLocations,
   customers,
@@ -31,11 +33,12 @@ import { syncFeedstockTransportLeg } from "@/data-access/transport-legs";
 import { retireDocumentsForEntities } from "@/data-access/documents";
 import { processPendingStorageObjectDeletions } from "@/data-access/storage-object-deletions";
 import { __setStorageProviderForTests } from "@/lib/storage";
-import type {
-  ObjectHead,
-  PresignedUpload,
-  StorageProvider,
-} from "@/lib/storage";
+import {
+  RetirementStorageProvider,
+  createReactorFixture,
+  insertManagedDocument,
+  insertRemovalSnapshot,
+} from "./helpers/document-retirement";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -45,42 +48,6 @@ import {
 const TEST_USER_ID = "parent-document-retirement-user";
 const DELETION_BATCH_SIZE = 50;
 const RETRY_BACKOFF_ELAPSED_AT = new Date("2000-01-01T00:00:00.000Z");
-
-class RetirementStorageProvider implements StorageProvider {
-  readonly name = "local-fs" as const;
-  readonly bucket = "local-fs";
-  readonly objects = new Set<string>();
-  readonly deleteCalls: string[] = [];
-  failKey: string | null = null;
-
-  async createUploadUrl(): Promise<PresignedUpload> {
-    throw new Error("Not used by retirement tests");
-  }
-
-  async createDownloadUrl(): Promise<string> {
-    throw new Error("Not used by retirement tests");
-  }
-
-  async getObject(): Promise<never> {
-    throw new Error("Not used by retirement tests");
-  }
-
-  async headObject(key: string): Promise<ObjectHead | null> {
-    return this.objects.has(key)
-      ? { size: 1, contentType: "application/pdf", etag: "test" }
-      : null;
-  }
-
-  async deleteObject(key: string): Promise<void> {
-    this.deleteCalls.push(key);
-    if (key === this.failKey) throw new Error("Injected storage failure");
-    this.objects.delete(key);
-  }
-
-  async putObject(key: string): Promise<void> {
-    this.objects.add(key);
-  }
-}
 
 let provider: RetirementStorageProvider;
 
@@ -95,54 +62,23 @@ afterEach(() => {
   __setStorageProviderForTests(null);
 });
 
-async function createReactorFixture(
+async function createOutboxOrganizationFixture(
   tag: string,
-  organizationId = TEST_ORG_ID,
+  purpose: string,
 ) {
-  return db.transaction(async (tx) => {
-    const [facility] = await tx
-      .insert(facilities)
-      .values({
-        organizationId,
-        code: `FAC-DOC-${tag}`,
-        name: `Document retirement facility ${tag}`,
-      })
-      .returning({ id: facilities.id });
-    const [reactor] = await tx
-      .insert(reactors)
-      .values({
-        organizationId,
-        facilityId: facility.id,
-        code: `RE-DOC-${tag}`,
-        identifier: `Document retirement reactor ${tag}`,
-        reactorType: "fixed-bed",
-      })
-      .returning({ id: reactors.id });
-    return { facilityId: facility.id, reactorId: reactor.id };
+  const organizationId = `org_document_outbox_${purpose}_${tag}`;
+  await db.insert(organizations).values({
+    id: organizationId,
+    name: `Document outbox ${purpose} organization ${tag}`,
+    slug: `document-outbox-${purpose}-${tag}`,
   });
-}
-
-async function insertManagedDocument(
-  entityType: string,
-  entityId: string,
-  storageKey: string,
-  organizationId = TEST_ORG_ID,
-) {
-  provider.objects.add(storageKey);
-  const [document] = await db
-    .insert(documents)
-    .values({
+  return {
+    organizationId,
+    ctx: {
+      ...makeTestOrgContext(TEST_USER_ID),
       organizationId,
-      entityType,
-      entityId,
-      documentType: "pdf",
-      storageProvider: "local-fs",
-      storageBucket: "local-fs",
-      storageKey,
-      fileName: "evidence.pdf",
-    })
-    .returning({ id: documents.id });
-  return document.id;
+    },
+  };
 }
 
 describe("parent document retirement", () => {
@@ -160,7 +96,7 @@ describe("parent document retirement", () => {
         name: `Other document organization ${tag}`,
         slug: `other-document-${tag}`,
       });
-      await insertManagedDocument("reactor", fixture.reactorId, managedKey);
+      await insertManagedDocument(provider, "reactor", fixture.reactorId, managedKey);
       await db.insert(documents).values({
         organizationId: TEST_ORG_ID,
         entityType: "reactor",
@@ -169,7 +105,7 @@ describe("parent document retirement", () => {
         fileUrl: "https://example.test/external-evidence.pdf",
         fileName: "external-evidence.pdf",
       });
-      const otherDocumentId = await insertManagedDocument(
+      const otherDocumentId = await insertManagedDocument(provider,
         "reactor",
         fixture.reactorId,
         otherOrgKey,
@@ -223,7 +159,7 @@ describe("parent document retirement", () => {
         .where(eq(storageObjectDeletions.organizationId, otherOrgId));
       await db.delete(documents).where(eq(documents.organizationId, otherOrgId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
       await db.delete(organizations).where(eq(organizations.id, otherOrgId));
     }
   });
@@ -232,7 +168,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
     const key = `reactor/${fixture.reactorId}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(
+    const documentId = await insertManagedDocument(provider,
       "reactor",
       fixture.reactorId,
       key,
@@ -264,7 +200,7 @@ describe("parent document retirement", () => {
         .where(eq(certifierDocumentUploads.documentId, documentId));
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
     }
   });
 
@@ -296,16 +232,16 @@ describe("parent document retirement", () => {
       .returning({ id: customerLocations.id });
     const [product] = await db
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         code: `BP-DEL-${tag}`,
         massKg: 1_000,
-      })
+      }))
       .returning({ id: biocharProducts.id });
     const [order] = await db
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         customerId: customer.id,
@@ -315,21 +251,18 @@ describe("parent document retirement", () => {
         orderDate: new Date("2026-07-19T00:00:00Z"),
         quantityKg: 100,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
-    const [delivery] = await db
-      .insert(deliveries)
-      .values({
+    const [delivery] = await insertOutputDeliveryFixture(db, {
         organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         orderId: order.id,
         biocharProductId: product.id,
         code: `DL-DEL-${tag}`,
         deliveryDate: new Date("2026-07-19T00:00:00Z"),
-        status: "upcoming",
+        status: "delivered",
         deliveredWetMassKg: 100,
-      })
-      .returning({ id: deliveries.id });
+      }, row => ({ id: row.id }));
     const [leg] = await db
       .insert(transportLegs)
       .values({
@@ -345,12 +278,12 @@ describe("parent document retirement", () => {
       .returning({ id: transportLegs.id });
     const deliveryKey = `delivery/${delivery.id}/pdf/${tag}.pdf`;
     const legKey = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
-    const deliveryDocumentId = await insertManagedDocument(
+    const deliveryDocumentId = await insertManagedDocument(provider,
       "delivery",
       delivery.id,
       deliveryKey,
     );
-    const legDocumentId = await insertManagedDocument(
+    const legDocumentId = await insertManagedDocument(provider,
       "transport_leg",
       leg.id,
       legKey,
@@ -366,7 +299,7 @@ describe("parent document retirement", () => {
 
       await expect(
         deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id),
-      ).rejects.toThrow(/certification provider/);
+      ).rejects.toThrow(/posted deliveries|bin history/i);
 
       expect(provider.deleteCalls).toEqual([]);
       expect(provider.objects.has(deliveryKey)).toBe(true);
@@ -390,13 +323,13 @@ describe("parent document retirement", () => {
       await db
         .delete(documents)
         .where(inArray(documents.id, [deliveryDocumentId, legDocumentId]));
-      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
+      await deleteOutputDeliveryFixtures(db, eq(deliveries.id, delivery.id));
       await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
       await db.delete(orders).where(eq(orders.id, order.id));
       await db.delete(customerLocations).where(eq(customerLocations.id, location.id));
       await db.delete(customers).where(eq(customers.id, customer.id));
-      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputProductFixtures(db, eq(biocharProducts.id, product.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 
@@ -409,7 +342,7 @@ describe("parent document retirement", () => {
     async (_label, entityType, deleteEntity) => {
       const entityId = crypto.randomUUID();
       const key = `${entityType}/${entityId}/pdf/orphan.pdf`;
-      const documentId = await insertManagedDocument(entityType, entityId, key);
+      const documentId = await insertManagedDocument(provider, entityType, entityId, key);
 
       try {
         await expect(
@@ -448,7 +381,7 @@ describe("parent document retirement", () => {
       })
       .returning({ id: productionSamples.id });
     const key = `production_run/${run.id}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument(
+    const documentId = await insertManagedDocument(provider,
       "production_run",
       run.id,
       key,
@@ -472,7 +405,7 @@ describe("parent document retirement", () => {
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
     }
   });
 
@@ -480,7 +413,7 @@ describe("parent document retirement", () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const fixture = await createReactorFixture(tag);
     const key = `reactor/${fixture.reactorId}/pdf/${tag}-rollback.pdf`;
-    const documentId = await insertManagedDocument(
+    const documentId = await insertManagedDocument(provider,
       "reactor",
       fixture.reactorId,
       key,
@@ -523,7 +456,7 @@ describe("parent document retirement", () => {
     } finally {
       await db.delete(documents).where(eq(documents.id, documentId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
-      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, fixture.facilityId));
     }
   });
 
@@ -546,13 +479,13 @@ describe("parent document retirement", () => {
         `reactor/${fixture.reactorId}/pdf/${tag}-first.pdf`,
         `reactor/${fixture.reactorId}/pdf/${tag}-second.pdf`,
       ];
-      await insertManagedDocument(
+      await insertManagedDocument(provider,
         "reactor",
         fixture.reactorId,
         keys[0],
         organizationId,
       );
-      await insertManagedDocument(
+      await insertManagedDocument(provider,
         "reactor",
         fixture.reactorId,
         keys[1],
@@ -614,15 +547,17 @@ describe("parent document retirement", () => {
       await db
         .delete(reactors)
         .where(eq(reactors.organizationId, organizationId));
-      await db
-        .delete(facilities)
-        .where(eq(facilities.organizationId, organizationId));
+      await deleteOutputFacilityFixtures(db, eq(facilities.organizationId, organizationId));
       await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
 
   it("does not let permanent configuration mismatches starve valid deletions", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
+    const { organizationId, ctx } = await createOutboxOrganizationFixture(
+      tag,
+      "mismatch",
+    );
     const validKey = `outbox/${tag}/valid.pdf`;
     const mismatchKeys = Array.from(
       { length: DELETION_BATCH_SIZE },
@@ -633,14 +568,14 @@ describe("parent document retirement", () => {
     try {
       await db.insert(storageObjectDeletions).values([
         ...mismatchKeys.map((storageKey) => ({
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: "retired-provider",
           storageBucket: "retired-bucket",
           storageKey,
           createdAt: RETRY_BACKOFF_ELAPSED_AT,
         })),
         {
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: provider.name,
           storageBucket: provider.bucket,
           storageKey: validKey,
@@ -648,9 +583,7 @@ describe("parent document retirement", () => {
       ]);
 
       await expect(
-        processPendingStorageObjectDeletions(
-          makeTestOrgContext(TEST_USER_ID),
-        ),
+        processPendingStorageObjectDeletions(ctx),
       ).resolves.toEqual({
         completed: 1,
         failed: DELETION_BATCH_SIZE,
@@ -678,15 +611,17 @@ describe("parent document retirement", () => {
     } finally {
       await db
         .delete(storageObjectDeletions)
-        .where(inArray(storageObjectDeletions.storageKey, [
-          validKey,
-          ...mismatchKeys,
-        ]));
+        .where(eq(storageObjectDeletions.organizationId, organizationId));
+      await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
 
   it("drains never-attempted rows before an older eligible retry backlog", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
+    const { organizationId, ctx } = await createOutboxOrganizationFixture(
+      tag,
+      "drain",
+    );
     const newKey = `outbox/${tag}/never-attempted.pdf`;
     const retryKeys = Array.from(
       { length: DELETION_BATCH_SIZE },
@@ -697,7 +632,7 @@ describe("parent document retirement", () => {
     try {
       await db.insert(storageObjectDeletions).values([
         ...retryKeys.map((storageKey) => ({
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: provider.name,
           storageBucket: provider.bucket,
           storageKey,
@@ -707,7 +642,7 @@ describe("parent document retirement", () => {
           createdAt: RETRY_BACKOFF_ELAPSED_AT,
         })),
         {
-          organizationId: TEST_ORG_ID,
+          organizationId,
           storageProvider: provider.name,
           storageBucket: provider.bucket,
           storageKey: newKey,
@@ -715,9 +650,7 @@ describe("parent document retirement", () => {
       ]);
 
       await expect(
-        processPendingStorageObjectDeletions(
-          makeTestOrgContext(TEST_USER_ID),
-        ),
+        processPendingStorageObjectDeletions(ctx),
       ).resolves.toEqual({ completed: DELETION_BATCH_SIZE, failed: 0 });
       expect(provider.deleteCalls[0]).toBe(newKey);
       expect(provider.objects.has(newKey)).toBe(false);
@@ -734,7 +667,8 @@ describe("parent document retirement", () => {
     } finally {
       await db
         .delete(storageObjectDeletions)
-        .where(inArray(storageObjectDeletions.storageKey, [newKey, ...retryKeys]));
+        .where(eq(storageObjectDeletions.organizationId, organizationId));
+      await db.delete(organizations).where(eq(organizations.id, organizationId));
     }
   });
 
@@ -781,14 +715,17 @@ describe("parent document retirement", () => {
       })
       .returning({ id: transportLegs.id });
     const key = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
-    const documentId = await insertManagedDocument("transport_leg", leg.id, key);
+    const documentId = await insertManagedDocument(provider, "transport_leg", leg.id, key);
+    const sourceId = `derived-source-${tag}`;
+    let submissionId: string | null = null;
     try {
       await db.insert(certifierDocumentUploads).values({
         organizationId: TEST_ORG_ID,
         documentId,
         provider: "isometric",
-        externalDocumentId: `derived-source-${tag}`,
+        externalDocumentId: sourceId,
       });
+      submissionId = await insertRemovalSnapshot({ sourceId, deleted: false });
 
       await expect(
         db.transaction((tx) =>
@@ -804,9 +741,12 @@ describe("parent document retirement", () => {
         await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id)),
       ).toHaveLength(1);
 
+      // Once no live snapshot cites the Source, the sync releases the
+      // mapping itself and retires the stale leg's evidence.
       await db
-        .delete(certifierDocumentUploads)
-        .where(eq(certifierDocumentUploads.documentId, documentId));
+        .delete(certificationSubmissions)
+        .where(eq(certificationSubmissions.id, submissionId));
+      submissionId = null;
       await db.transaction((tx) =>
         syncFeedstockTransportLeg(
           makeTestOrgContext(TEST_USER_ID),
@@ -819,9 +759,20 @@ describe("parent document retirement", () => {
       );
       expect(provider.objects.has(key)).toBe(false);
       expect(
+        await db
+          .select()
+          .from(certifierDocumentUploads)
+          .where(eq(certifierDocumentUploads.documentId, documentId)),
+      ).toHaveLength(0);
+      expect(
         await db.select().from(documents).where(eq(documents.id, documentId)),
       ).toHaveLength(0);
     } finally {
+      if (submissionId) {
+        await db
+          .delete(certificationSubmissions)
+          .where(eq(certificationSubmissions.id, submissionId));
+      }
       await db
         .delete(certifierDocumentUploads)
         .where(eq(certifierDocumentUploads.documentId, documentId));
@@ -829,7 +780,7 @@ describe("parent document retirement", () => {
       await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 
@@ -909,10 +860,10 @@ describe("parent document retirement", () => {
 
     try {
       await Promise.all([
-        insertManagedDocument("feedstock", feedstock.id, `feedstock/${feedstock.id}/pdf/${tag}.pdf`),
-        insertManagedDocument("transport_leg", leg.id, `transport_leg/${leg.id}/pdf/${tag}.pdf`),
-        insertManagedDocument("production_run", run.id, `production_run/${run.id}/pdf/${tag}.pdf`),
-        insertManagedDocument("production_incident", incident.id, `production_incident/${incident.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "feedstock", feedstock.id, `feedstock/${feedstock.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "transport_leg", leg.id, `transport_leg/${leg.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "production_run", run.id, `production_run/${run.id}/pdf/${tag}.pdf`),
+        insertManagedDocument(provider, "production_incident", incident.id, `production_incident/${incident.id}/pdf/${tag}.pdf`),
       ]);
 
       await deleteFeedstock(makeTestOrgContext(TEST_USER_ID), feedstock.id);
@@ -935,7 +886,7 @@ describe("parent document retirement", () => {
       await db.delete(reactors).where(eq(reactors.id, reactor.id));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
       await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
-      await db.delete(facilities).where(eq(facilities.id, facility.id));
+      await deleteOutputFacilityFixtures(db, eq(facilities.id, facility.id));
     }
   });
 });

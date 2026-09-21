@@ -8,7 +8,7 @@
  * no per-stage split).
  *
  * The preview is capability-agnostic by design: it renders off the DB-only
- * `loadFacilityCertifierSummary` (which deliberately never hits the Isometric
+ * `readFacilityCertifierSummary` (which deliberately never hits the Isometric
  * API) and cannot know whether the active removal template declares the
  * monitored `pyrolysis / fuel_usage_by_volume / volume_of_fuel` input that
  * carries the diesel litres. The copy below caveats this instead of asserting

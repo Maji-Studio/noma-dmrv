@@ -14,8 +14,16 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { SelectFacilityEmptyState } from "@/components/navigation";
+import { Button, EmptyState, PageHeader } from "@/components/ui";
+import {
+  useChainOfCustody,
+  useCreditBatchChain,
+} from "@/hooks/use-chain-of-custody";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
+import { cn } from "@/lib/utils";
+import { CertificateIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   Background,
   BackgroundVariant,
@@ -29,16 +37,8 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
-import { CertificateIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState, PageHeader } from "@/components/ui";
-import { cn } from "@/lib/utils";
-import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
-import {
-  useChainOfCustody,
-  useCreditBatchChain,
-} from "@/hooks/use-chain-of-custody";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { SelectFacilityEmptyState } from "@/components/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   GRAPH_CANVAS_CLASS,
   GRAPH_CONTROLS_CLASS,
@@ -52,14 +52,14 @@ import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
 import { CarbonTransitPanel } from "./map";
 import { type RunPickerOption } from "./run-picker";
 import { BatchSankey } from "./sankey";
-import { ApplicationTrail } from "./trail";
 import { TraceabilityHeader } from "./traceability-header";
-import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
+import { ApplicationTrail } from "./trail";
 import {
   reachableNodeIds,
   useBatchChainGraph,
   useChainGraph,
 } from "./use-chain-graph";
+import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
 
 const nodeTypes: NodeTypes = {
   chainNode: ChainNode,
@@ -410,9 +410,13 @@ export function TraceabilityPage() {
   const batchLineages = filteredBatchLineages?.map((lineage) => lineage.chain);
   const runOptions: RunPickerOption[] = (() => {
     const byRun = new Map<string, RunPickerOption>();
+    const countedApplications = new Set<string>();
     for (const lineage of batchData?.lineages ?? []) {
       const run = lineage.chain.productionRun;
       if (!run) continue;
+      const membershipKey = `${run.id}:${lineage.applicationId}`;
+      if (countedApplications.has(membershipKey)) continue;
+      countedApplications.add(membershipKey);
       const existing = byRun.get(run.id);
       if (existing) {
         existing.applicationCount += 1;

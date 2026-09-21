@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  addressSchema,
   createFacilitySchema,
   facilityFormSchema,
   quickAddFacilitySchema,
@@ -40,15 +39,10 @@ describe("facility schemas", () => {
   });
 
   // `facilityFormSchema` and `updateFacilitySchema` are the live request paths.
-  // `addressSchema` and `quickAddFacilitySchema` are exported but currently
-  // unwired; they are covered so the country rule cannot drift apart from the
-  // live ones before a surface adopts them.
+  // `quickAddFacilitySchema` is exported but currently unwired; it is covered
+  // so the country rule cannot drift apart from the live ones before a surface
+  // adopts it.
   const countryEntryPaths = [
-    {
-      name: "addressSchema",
-      schema: addressSchema,
-      withCountry: (country: string) => ({ country }),
-    },
     {
       name: "facilityFormSchema",
       schema: facilityFormSchema,

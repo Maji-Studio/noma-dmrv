@@ -1,3 +1,5 @@
+import { preparePureOutputProductFixture } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -145,6 +147,8 @@ describe("shared lane-stock derivation", () => {
             feedstockStorageLocationId,
             biocharStorageLocationId,
             biocharOutputKg: 80,
+            biocharDryMassKg: 80,
+            status: "complete",
             startTime: new Date("2026-07-01T08:00:00Z"),
             endTime: new Date("2026-07-01T09:00:00Z"),
           },
@@ -156,6 +160,8 @@ describe("shared lane-stock derivation", () => {
             feedstockStorageLocationId,
             biocharStorageLocationId,
             biocharOutputKg: 40,
+            biocharDryMassKg: 40,
+            status: "complete",
             startTime: new Date("2026-07-01T10:00:00Z"),
             endTime: new Date("2026-07-01T11:00:00Z"),
           },
@@ -206,7 +212,7 @@ describe("shared lane-stock derivation", () => {
 
       const products = await tx
         .insert(biocharProducts)
-        .values([
+        .values(await outputProductFixtureValues(tx, [
           {
             organizationId: TEST_ORG_ID,
             code: `BP-LANE-A-${tag}`,
@@ -214,6 +220,7 @@ describe("shared lane-stock derivation", () => {
             linkedProductionRunId: productionRunIds[0],
             formulationId,
             massKg: 20,
+            moistureContentPercent: 0,
             storageLocationId: storageLocationIds[2],
           },
           {
@@ -222,11 +229,13 @@ describe("shared lane-stock derivation", () => {
             facilityId,
             linkedProductionRunId: productionRunIds[1],
             massKg: 15,
+            moistureContentPercent: 0,
             storageLocationId: storageLocationIds[2],
           },
-        ])
+        ]))
         .returning({ id: biocharProducts.id });
       biocharProductIds.push(...products.map((product) => product.id));
+      for (const product of products) await preparePureOutputProductFixture(tx, product.id);
 
       await tx.insert(binMovements).values([
         {
@@ -270,9 +279,7 @@ describe("shared lane-stock derivation", () => {
       await tx
         .delete(binMovements)
         .where(inArray(binMovements.storageLocationId, storageLocationIds));
-      await tx
-        .delete(biocharProducts)
-        .where(inArray(biocharProducts.id, biocharProductIds));
+      await deleteOutputProductFixtures(tx, inArray(biocharProducts.id, biocharProductIds));
       await tx.delete(formulations).where(eq(formulations.id, formulationId));
       await tx
         .delete(productionRunFeedstocks)
@@ -289,7 +296,7 @@ describe("shared lane-stock derivation", () => {
         .where(inArray(storageLocations.id, storageLocationIds));
       await tx.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockTypeId));
       await tx.delete(reactors).where(eq(reactors.id, reactorId));
-      await tx.delete(facilities).where(eq(facilities.id, facilityId));
+      await deleteOutputFacilityFixtures(tx, eq(facilities.id, facilityId));
     });
   });
 
@@ -311,12 +318,12 @@ describe("shared lane-stock derivation", () => {
       biocharProducedKg: BIOCHAR_PRODUCED_KG,
       biocharAllocatedKg: BIOCHAR_ALLOCATED_KG,
       biocharMovementDeltaKg: BIOCHAR_MOVEMENT_KG,
-      biocharStockKg: 82,
+      biocharStockKg: 85,
     });
     expect(product?.productMovementDeltaKg).toBe(PRODUCT_MOVEMENT_KG);
   });
 
-  it("excludes the run or product being edited", async () => {
+  it("excludes editable feedstock draws while retaining posted output source allocations", async () => {
     const [withoutRun] = await deriveLaneStock(ctx, db, {
       storageLocationIds: [storageLocationIds[0]],
       excludeRunId: productionRunIds[0],
@@ -329,7 +336,7 @@ describe("shared lane-stock derivation", () => {
     expect(withoutRun.feedstockConsumedWetKg).toBe(20);
     expect(withoutRun.feedstockStockWetKg).toBe(3);
     expect(withoutProduct.biocharAllocatedKg).toBe(15);
-    expect(withoutProduct.biocharStockKg).toBe(102);
+    expect(withoutProduct.biocharStockKg).toBe(85);
   });
 
   it("keeps enrichment stock in parity with the shared derivation", async () => {
@@ -342,9 +349,9 @@ describe("shared lane-stock derivation", () => {
     expect(feedstock.feedstockInventory.batchCount).toBe(1);
     expect(feedstock.feedstockInventory.pendingWetMassKg).toBe(1000);
     expect(feedstock.feedstockInventory.estimatedMoisturePercent).toBeNull();
-    expect(biochar.biocharInventory.currentMassKg).toBe(82);
+    expect(biochar.biocharInventory.currentMassKg).toBe(85);
     expect(biochar.biocharInventory.allocatedToProductsKg).toBe(35);
-    expect(product.productInventory.currentMassKg).toBe(42);
+    expect(product.productInventory.currentMassKg).toBe(35);
     expect(product.productInventory.biocharEquivalentKg).toBe(35);
   });
 
@@ -394,7 +401,7 @@ describe("shared lane-stock derivation", () => {
         .returning({ id: binMovements.id });
       const [ingredientProduct] = await tx
         .insert(biocharProducts)
-        .values({
+        .values(await outputProductFixtureValues(tx, {
           organizationId: TEST_ORG_ID,
           code: `BP-LANE-REPLAY-${tag}`,
           facilityId,
@@ -411,7 +418,7 @@ describe("shared lane-stock derivation", () => {
             ],
           },
           createdAt: ingredientSnapshotAt,
-        })
+        }))
         .returning({ id: biocharProducts.id });
 
       const [afterIngredientDraw] = await deriveLaneStock(ctx, tx, {
@@ -438,7 +445,7 @@ describe("shared lane-stock derivation", () => {
       expect(afterWetLoss.feedstockStockWetKg).toBe(62);
 
       await tx.delete(binMovements).where(inArray(binMovements.id, [stockTake.id, loss.id]));
-      await tx.delete(biocharProducts).where(eq(biocharProducts.id, ingredientProduct.id));
+      await deleteOutputProductFixtures(tx, eq(biocharProducts.id, ingredientProduct.id));
     });
   });
 });

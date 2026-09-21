@@ -94,6 +94,7 @@ export interface SankeyLineage {
   sources?: {
     productionRun: NonNullable<SankeyLineage["productionRun"]>;
     feedstocks: SankeyLineage["feedstocks"];
+    allocatedDryMassKg?: number | null;
   }[];
 }
 
@@ -127,6 +128,7 @@ export function buildBatchSankey(
   // Dedupe shared entities across member applications: N applications may
   // draw from the same run / lot (plan decision 1 — run-deduped roll-up).
   const runById = new Map<string, NonNullable<SankeyLineage["productionRun"]>>();
+  const allocatedByProductId = new Map<string, number>();
   const lotById = new Map<string, NonNullable<SankeyLineage["biocharProduct"]>>();
   const feedstockIds = new Set<string>();
   const applicationIds = new Set<string>();
@@ -176,6 +178,11 @@ export function buildBatchSankey(
     }
     if (lineage.biocharProduct) {
       lotById.set(lineage.biocharProduct.id, lineage.biocharProduct);
+      if (lineage.sources?.every(source => source.allocatedDryMassKg != null)) {
+        allocatedByProductId.set(lineage.biocharProduct.id,
+          (allocatedByProductId.get(lineage.biocharProduct.id) ?? 0) +
+          lineage.sources.reduce((sum, source) => sum + (source.allocatedDryMassKg ?? 0), 0));
+      }
     }
   }
 
@@ -194,7 +201,7 @@ export function buildBatchSankey(
   // with no moisture reading counts at wet mass rather than vanishing.
   let lotMassKg = 0;
   for (const lot of lotById.values()) {
-    lotMassKg +=
+    lotMassKg += allocatedByProductId.get(lot.id) ??
       computeClampedDryMass(lot.massKg, lot.moistureContentPercent) ??
       lot.massKg ??
       0;
@@ -262,7 +269,7 @@ export function buildBatchSankey(
   if (unallocated.value > EXIT_EPSILON_KG) {
     exits.push({
       key: "unallocated_output",
-      label: "Not bagged into lots",
+      label: allocatedByProductId.size ? "Outside these applications" : "Not bagged into lots",
       fromColumn: "productionRuns",
       massKg: unallocated.value,
       tone: "loss",
@@ -294,7 +301,7 @@ export function buildBatchSankey(
       },
       {
         key: "biocharLots",
-        label: "Biochar lots",
+        label: allocatedByProductId.size ? "Allocated biochar" : "Biochar lots",
         massKg: lotMassKg,
         count: lotById.size,
       },

@@ -5,7 +5,7 @@
  * steps make NO Isometric call: the preview reads the DB-only
  * `loadOpenRemovalsForFacility`, and the route is un-gated with a throwaway
  * `certifier_projects` row (operational routes are gated on a registry link —
- * ADR 0007 — but the gate reads the DB-only `loadFacilityCertifierSummary`).
+ * ADR 0007 — but the gate reads the DB-only `readFacilityCertifierSummary`).
  *
  * The guard has three layers; this covers the client one end-to-end:
  *   - server `createGhgStatementDraft` refuses a 0-removal period,

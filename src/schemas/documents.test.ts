@@ -9,7 +9,6 @@ import {
   DOCUMENT_TYPES,
   isAllowedMime,
   maxBytesFor,
-  requestUploadSchema,
 } from "@/schemas/documents";
 import { TRANSPORT_EVIDENCE_DOCUMENT_TYPES } from "@/lib/certification/transport-evidence";
 
@@ -43,55 +42,5 @@ describe("document upload limits", () => {
 
   it("labels GIS boundary documents", () => {
     expect(DOCUMENT_TYPE_LABELS.gis_boundary).toBe("GIS boundary");
-  });
-});
-
-describe("delivery evidence role at the upload contract boundary", () => {
-  function uploadRequest(patch: Record<string, unknown>) {
-    return {
-      entityType: "delivery",
-      entityId: "00000000-0000-4000-8000-000000000001",
-      documentType: "photo",
-      fileName: "drop.jpg",
-      contentType: "image/jpeg",
-      sizeBytes: 1000,
-      ...patch,
-    };
-  }
-
-  it("accepts the proof-of-delivery role on a delivery photo", () => {
-    const parsed = requestUploadSchema.safeParse(
-      uploadRequest({ deliveryEvidenceRole: "proof_of_delivery" }),
-    );
-    expect(parsed.success).toBe(true);
-  });
-
-  it("rejects the role on a non-photo delivery document", () => {
-    const parsed = requestUploadSchema.safeParse(
-      uploadRequest({
-        documentType: "delivery_receipt",
-        fileName: "receipt.pdf",
-        contentType: "application/pdf",
-        deliveryEvidenceRole: "proof_of_delivery",
-      }),
-    );
-    expect(parsed.success).toBe(false);
-  });
-
-  it("rejects the role on a photo outside delivery lineage", () => {
-    const parsed = requestUploadSchema.safeParse(
-      uploadRequest({
-        entityType: "application",
-        deliveryEvidenceRole: "proof_of_delivery",
-      }),
-    );
-    expect(parsed.success).toBe(false);
-  });
-
-  it("rejects an unknown delivery evidence role value", () => {
-    const parsed = requestUploadSchema.safeParse(
-      uploadRequest({ deliveryEvidenceRole: "something_else" }),
-    );
-    expect(parsed.success).toBe(false);
   });
 });

@@ -2,12 +2,9 @@ import {
   and,
   desc,
   eq,
-  gte,
   inArray,
   isNotNull,
   isNull,
-  lte,
-  or,
   sql,
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
@@ -18,13 +15,8 @@ import {
   creditBatchProductionRuns,
   type CreditBatch,
 } from "@/db/schema/credits";
-import { facilities, storageLocations } from "@/db/schema/facilities";
-import {
-  productionRuns,
-  productionRunFeedstocks,
-  samples,
-} from "@/db/schema/production";
-import { feedstocks } from "@/db/schema/feedstock";
+import { facilities } from "@/db/schema/facilities";
+import { samples } from "@/db/schema/production";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { certifierRemovals } from "@/db/schema/certification";
 import {
@@ -49,10 +41,10 @@ import {
   validateProductionRunIds,
 } from "./credit-batch-membership";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
-import { productionRunDateExpr } from "./production-runs/date-expr";
 import {
   getFacilityCertifierWithExecutor,
   loadCreditBatchAccounting,
+  loadCreditBatchAccountingSafely,
   loadCreditBatchRollups,
   type CreditBatchAccounting,
   type CreditBatchCo2eStoredPreview,
@@ -61,10 +53,6 @@ import {
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
-import {
-  COMPLETED_PRODUCTION_RUN_STATUS,
-  type ProductionRunStatus,
-} from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import {
@@ -74,20 +62,17 @@ import {
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { deleteCreditBatchApplicationSlices } from "./credit-batch-delete-slices";
 
-const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
-  "draft",
-  "running",
-  COMPLETED_PRODUCTION_RUN_STATUS,
-] as const;
-
 export {
   getCo2eStoredPreviews,
-  getFacilityCertifier,
 } from "./credit-batch-accounting";
 export type {
   ApplicationCo2eStoredPreview,
   CreditBatchCo2eStoredPreview,
 } from "./credit-batch-accounting";
+export {
+  getCreditBatchProductionRunOptions,
+} from "./credit-batch-production-run-options";
+export type { CreditBatchProductionRunOption } from "./credit-batch-production-run-options";
 
 // ============================================
 // Credit Batch Data Access Layer
@@ -126,37 +111,23 @@ type CreditBatchWithOptionalPreview = Omit<
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
 };
 
-export interface CreditBatchProductionRunOption {
-  id: string;
-  code: string;
-  date: string;
-  status: ProductionRunStatus;
-  biocharStorageName: string | null;
-  biocharOutputKg: number | null;
-  biocharDryMassKg: number | null;
-  /**
-   * Run-local production-emission inputs, surfaced so the credit-batch form can
-   * show a live cohort input summary as runs are (de)selected. These are the
-   * front-loaded production-bucket quantities the batch claims (#349, ADR 0020);
-   * the registry applies the emission factors (ADR 0018) — noma never holds a
-   * CO₂e figure here, only the submitted quantities.
-   */
-  feedstockMassDryKg: number | null;
-  dieselOperationLiters: number | null;
-  dieselGensetLiters: number | null;
-  preprocessingFuelLiters: number | null;
-  electricityKwh: number | null;
-  /**
-   * The run's DISTINCT feedstock-type ids. A run can consume feedstocks of more
-   * than one type (schema 1:N), so this is a set: the form treats a run as a
-   * member of a declared-type batch iff its set is exactly `{declaredType}`
-   * (single). Empty or multi-type sets can't join a single-feedstock batch
-   * (ADR 0016) and are filtered out.
-   */
-  feedstockTypeIds: string[];
-  assignedCreditBatchId: string | null;
-  assignedCreditBatchCode: string | null;
-}
+/**
+ * A credit batch as it comes back from its own create or update. The write
+ * committed, but the accounting roll-up opens its own transaction after that
+ * commit and can fail on its own, so its fields are nullable here: `null`
+ * means the roll-up did not load, never that nothing is applied. A row
+ * answering `0 t` would describe a batch nobody read (issues #769, #797).
+ * Readers render the shared missing-value token for a null, never a zero.
+ */
+export type SavedCreditBatch = Omit<
+  CreditBatchWithRelations,
+  "appliedWeightTons" | "applicationIds" | "applicationCount"
+> & {
+  appliedWeightTons: number | null;
+  applicationIds: string[] | null;
+  applicationCount: number | null;
+};
+
 
 async function resolveCreditBatchCertifier(
   ctx: OrgContext,
@@ -370,7 +341,7 @@ export async function createCreditBatch(
     code: string;
     sampling?: CreditBatchSampling;
   }
-): Promise<CreditBatchWithRelations> {
+): Promise<SavedCreditBatch> {
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
   let resolvedProductionRunIds = productionRunIds ?? [];
@@ -380,7 +351,7 @@ export async function createCreditBatch(
       ? await hasCertifierCredentials(ctx, "isometric")
       : false;
 
-  const creditBatch = await db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
     // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
@@ -493,41 +464,94 @@ export async function createCreditBatch(
       creditBatchIds: [batch.id],
     });
 
-    return batch;
+    return readCommittedCreditBatch(ctx, tx, batch);
   });
 
-  // Fetch facility name + the facility-derived durability tier (ADR 0021).
-  const [facility] = await db
+  return describeSavedCreditBatch(ctx, {
+    ...created,
+    memberProductionRunIds: resolvedProductionRunIds,
+  });
+}
+
+/** What a create or update knows about its batch from the write itself. */
+interface CommittedCreditBatch {
+  batch: CreditBatch;
+  facility: { name: string; durabilityOption: DurabilityOption } | undefined;
+  feedstockType: { name: string } | undefined;
+  memberProductionRunIds: string[];
+}
+
+/**
+ * Read a committed batch's relations inside the writing transaction so the
+ * commit and the description of it cannot come apart (issue #769).
+ */
+async function readCommittedCreditBatch(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  batch: CreditBatch,
+): Promise<Omit<CommittedCreditBatch, "memberProductionRunIds">> {
+  const [facility] = await tx
     .select({ name: facilities.name, durabilityOption: facilities.durabilityOption })
     .from(facilities)
-    .where(and(eq(facilities.id, creditBatch.facilityId), eq(facilities.organizationId, ctx.organizationId)));
-  const [feedstockType] = await db
+    .where(and(eq(facilities.id, batch.facilityId), eq(facilities.organizationId, ctx.organizationId)));
+  const [feedstockType] = await tx
     .select({ name: feedstockTypes.name })
     .from(feedstockTypes)
-    .where(and(eq(feedstockTypes.id, creditBatch.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
+    .where(and(eq(feedstockTypes.id, batch.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
+  return { batch, facility, feedstockType };
+}
+
+/**
+ * Describe a batch whose write has committed. The accounting roll-up opens its
+ * own transaction, so it cannot join the write and necessarily runs after the
+ * commit. The batch exists either way: when the roll-up does not load, the
+ * batch comes back with `previewAvailable: false` (as list reads already do)
+ * instead of failing a save that landed. The caller turns that into a warning
+ * (issues #769, #797).
+ */
+async function describeSavedCreditBatch(
+  ctx: OrgContext,
+  committed: CommittedCreditBatch,
+): Promise<SavedCreditBatch> {
+  const { batch, facility, feedstockType } = committed;
   const durabilityOption = facility?.durabilityOption ?? DURABILITY_TIER_FALLBACK;
-  const accounting = (await loadCreditBatchAccounting(ctx, [creditBatch.id]))[
-    creditBatch.id
-  ];
-  if (!accounting) {
-    throw new SafeError("Credit batch accounting could not be loaded");
-  }
-  const memberProductionRunIds = accounting.lineageFacts.productionRunIds;
-  const applicationIds = accounting.lineageFacts.applicationIds;
+  const accounting = await loadCreditBatchAccountingSafely(ctx, batch.id);
+  // The member runs are known from the write itself, so they stay populated
+  // either way. The application slices and the applied tonnage are only known
+  // from the roll-up: without it they are unknown, not zero.
+  const memberProductionRunIds =
+    accounting?.lineageFacts.productionRunIds ?? committed.memberProductionRunIds;
+  const applicationIds = accounting?.lineageFacts.applicationIds ?? null;
 
   return {
-    ...creditBatch,
+    ...batch,
     facility: facility ? { name: facility.name } : null,
     durabilityOption,
     feedstockTypeName: feedstockType?.name ?? null,
-    applicationCount: applicationIds.length,
+    applicationCount: applicationIds?.length ?? null,
     applicationIds,
     productionRunCount: memberProductionRunIds.length,
     productionRunIds: memberProductionRunIds,
-    appliedWeightTons: accounting.appliedWeightTons,
-    co2eStoredPreview: accounting.co2ePreview,
-    previewAvailable: true,
+    appliedWeightTons: accounting?.appliedWeightTons ?? null,
+    co2eStoredPreview: accounting?.co2ePreview ?? null,
+    previewAvailable: accounting !== undefined,
   };
+}
+
+/** The batch's member production-run ids, read under the given transaction. */
+async function readMemberProductionRunIds(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  creditBatchId: string,
+): Promise<string[]> {
+  const links = await tx
+    .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+    .from(creditBatchProductionRuns)
+    .where(and(
+      eq(creditBatchProductionRuns.creditBatchId, creditBatchId),
+      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+    ));
+  return links.map((link) => link.productionRunId);
 }
 
 /**
@@ -537,7 +561,7 @@ export async function updateCreditBatch(
   ctx: OrgContext,
   id: string,
   data: Omit<UpdateCreditBatchData, "creditBatchId">
-): Promise<CreditBatchWithRelations> {
+): Promise<SavedCreditBatch> {
   requireOrgScope(ctx);
   const { productionRunIds, ...updateFields } = data;
   const cohortDefinitionUpdated =
@@ -586,20 +610,14 @@ export async function updateCreditBatch(
   if (updateFields.siteManagementNotes !== undefined)
     updateData.siteManagementNotes = updateFields.siteManagementNotes || null;
 
-  await db.transaction(async (tx) => {
+  const committed = await db.transaction(async (tx) => {
     // Discover the current membership without taking a batch/removal lock, then
     // lock old + prospective + auto-discovered members in one sorted run-row
     // batch. Every writer follows run -> process scope -> batch ->
     // removal/certification order; production-run reopen also locks the run
     // before checking membership.
-    const currentMembership = shouldRefreshMembership
-      ? await tx
-          .select({ productionRunId: creditBatchProductionRuns.productionRunId })
-          .from(creditBatchProductionRuns)
-          .where(and(
-            eq(creditBatchProductionRuns.creditBatchId, id),
-            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-          ))
+    const currentProductionRunIds = shouldRefreshMembership
+      ? await readMemberProductionRunIds(ctx, tx, id)
       : [];
     const [declarationSnapshot] = shouldRefreshMembership
       ? await tx
@@ -625,9 +643,6 @@ export async function updateCreditBatch(
       ReturnType<typeof lockCreditBatchDeclarationRuns>
     >["lockedRuns"];
     if (shouldRefreshMembership && declarationSnapshot) {
-      const currentProductionRunIds = currentMembership.map(
-        (link) => link.productionRunId,
-      );
       const declaration = await lockCreditBatchDeclarationRuns(ctx, tx, {
         facilityId:
           updateFields.facilityId ?? declarationSnapshot.facilityId,
@@ -670,9 +685,7 @@ export async function updateCreditBatch(
           eq(creditBatchProductionRuns.creditBatchId, id),
           eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
         ));
-      const discoveredIds = currentMembership
-        .map((link) => link.productionRunId)
-        .sort();
+      const discoveredIds = [...currentProductionRunIds].sort();
       const lockedIds = lockedCurrentMembership
         .map((link) => link.productionRunId)
         .sort();
@@ -746,10 +759,14 @@ export async function updateCreditBatch(
       updateData.productionProcessId = process.id;
     }
 
-    await tx
+    const [updatedBatch] = await tx
       .update(creditBatches)
       .set(updateData)
-      .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
+      .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
+      .returning();
+    if (!updatedBatch) {
+      throw new SafeError("Credit batch not found");
+    }
 
     if (shouldRefreshMembership) {
       await tx
@@ -801,16 +818,20 @@ export async function updateCreditBatch(
         creditBatchIds: [id],
       });
     }
+
+    // The member set after this write: the refreshed one when membership was
+    // touched, otherwise the untouched links read under the same transaction.
+    const memberProductionRunIds = shouldRefreshMembership
+      ? (resolvedProductionRunIds ?? [])
+      : await readMemberProductionRunIds(ctx, tx, id);
+
+    return {
+      ...(await readCommittedCreditBatch(ctx, tx, updatedBatch)),
+      memberProductionRunIds,
+    };
   });
 
-  // Fetch full details
-  const result = await getCreditBatchById(ctx, id);
-  if (!result) {
-    throw new SafeError(
-      "The updated credit batch could not be loaded. Refresh the page.",
-    );
-  }
-  return result;
+  return describeSavedCreditBatch(ctx, committed);
 }
 
 /**
@@ -866,125 +887,4 @@ export async function creditBatchCodeExists(
   if (!existing) return false;
   if (excludeId && existing.id === excludeId) return false;
   return true;
-}
-
-/**
- * Get credit batches by facility ID
- */
-export async function getCreditBatchesByFacilityId(
-  ctx: OrgContext,
-  facilityId: string
-): Promise<CreditBatch[]> {
-  requireOrgScope(ctx);
-  return db
-    .select()
-    .from(creditBatches)
-    .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)))
-    .orderBy(desc(creditBatches.createdAt));
-}
-
-export async function getCreditBatchProductionRunOptions(
-  ctx: OrgContext,
-  params: {
-    facilityId: string;
-    startDate?: string | Date | null;
-    endDate?: string | Date | null;
-    includeCreditBatchId?: string | null;
-  },
-): Promise<CreditBatchProductionRunOption[]> {
-  requireOrgScope(ctx);
-
-  const conditions = [
-    eq(productionRuns.organizationId, ctx.organizationId),
-    eq(productionRuns.facilityId, params.facilityId),
-    inArray(productionRuns.status, [
-      ...CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES,
-    ]),
-    isNull(productionRuns.archivedAt),
-  ];
-
-  if (params.startDate && params.endDate) {
-    const { startStr, endStr } = assertCreditBatchProductionWindow(
-      params.startDate,
-      params.endDate,
-    );
-    conditions.push(
-      gte(productionRunDateExpr(), startStr),
-      lte(productionRunDateExpr(), endStr),
-    );
-  }
-
-  if (params.includeCreditBatchId) {
-    const assignmentScope = or(
-      isNull(creditBatchProductionRuns.creditBatchId),
-      eq(creditBatchProductionRuns.creditBatchId, params.includeCreditBatchId),
-    );
-    if (assignmentScope) conditions.push(assignmentScope);
-  }
-
-  const rows = await db
-    .select({
-      id: productionRuns.id,
-      code: productionRuns.code,
-      date: productionRunDateExpr(),
-      status: productionRuns.status,
-      biocharStorageName: storageLocations.name,
-      biocharOutputKg: productionRuns.biocharOutputKg,
-      biocharDryMassKg: productionRuns.biocharDryMassKg,
-      feedstockMassDryKg: productionRuns.feedstockMassDryKg,
-      dieselOperationLiters: productionRuns.dieselOperationLiters,
-      dieselGensetLiters: productionRuns.dieselGensetLiters,
-      preprocessingFuelLiters: productionRuns.preprocessingFuelLiters,
-      electricityKwh: productionRuns.electricityKwh,
-      assignedCreditBatchId: creditBatchProductionRuns.creditBatchId,
-      assignedCreditBatchCode: creditBatches.code,
-    })
-    .from(productionRuns)
-    .leftJoin(
-      storageLocations,
-      and(
-        eq(productionRuns.biocharStorageLocationId, storageLocations.id),
-        eq(storageLocations.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      creditBatchProductionRuns,
-      and(eq(creditBatchProductionRuns.productionRunId, productionRuns.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),
-    )
-    .leftJoin(
-      creditBatches,
-      and(eq(creditBatches.id, creditBatchProductionRuns.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)),
-    )
-    .where(and(...conditions))
-    .orderBy(desc(productionRuns.startTime));
-
-  // Resolve each run's DISTINCT feedstock-type set in a SEPARATE query — joining
-  // productionRunFeedstocks into the select above would fan out the row set (a
-  // run has N feedstock rows). Attach as a set so the form can scope runs to a
-  // single declared feedstock type (ADR 0016).
-  const runIds = rows.map((row) => row.id);
-  const typeRows = runIds.length
-    ? await db
-        .selectDistinct({
-          productionRunId: productionRunFeedstocks.productionRunId,
-          feedstockTypeId: feedstocks.feedstockTypeId,
-        })
-        .from(productionRunFeedstocks)
-        .innerJoin(
-          feedstocks,
-          and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)),
-        )
-        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
-    : [];
-  const typesByRun = new Map<string, string[]>();
-  for (const typeRow of typeRows) {
-    const list = typesByRun.get(typeRow.productionRunId) ?? [];
-    list.push(typeRow.feedstockTypeId);
-    typesByRun.set(typeRow.productionRunId, list);
-  }
-
-  return rows.map((row) => ({
-    ...row,
-    feedstockTypeIds: typesByRun.get(row.id) ?? [],
-  }));
 }

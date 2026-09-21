@@ -17,16 +17,9 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
-import {
-  DOCUMENT_TYPE_LABELS,
-  type DocumentEntityType,
-} from "@/schemas/documents";
+import type { DocumentEntityType } from "@/schemas/documents";
 import { InfoHint } from "@/components/ui/tooltip";
-import {
-  hasProofOfDeliveryRole,
-  isAcceptedDeliveryEvidenceDocument,
-  isProofOfDeliveryDocument,
-} from "@/lib/certification/delivery-evidence";
+import { isAcceptedDeliveryEvidenceDocument } from "@/lib/certification/delivery-evidence";
 import { isAcceptedTransportEvidenceDocument } from "@/lib/certification/transport-evidence";
 import {
   ClassifiedTransportEvidenceUploader,
@@ -50,7 +43,7 @@ const PANEL_HINTS: Record<TransportEvidenceEntityType, string> = {
   transport_leg:
     "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
   delivery:
-    "Attach proof of delivery: a delivery receipt, bill of lading, or delivery photo. These become registry mass evidence. Weighbridge tickets and other transport records are kept for verification.",
+    "Optional. Attach a delivery receipt, bill of lading, photo, or other delivery record.",
 };
 
 const PANEL_EMPTY_TITLE: Record<TransportEvidenceEntityType, string> = {
@@ -68,48 +61,6 @@ function isAcceptedEvidenceDocument(
     : isAcceptedTransportEvidenceDocument(document);
 }
 
-function documentLabel(
-  entityType: TransportEvidenceEntityType,
-  document: { documentType: string; metadata: unknown },
-): string {
-  // A delivery photo without the proof-of-delivery role was not uploaded
-  // through the "Delivery photo" chip; label it by its plain type.
-  if (
-    entityType === "delivery" &&
-    document.documentType === "photo" &&
-    !hasProofOfDeliveryRole(document.metadata)
-  ) {
-    return DOCUMENT_TYPE_LABELS.photo;
-  }
-  return evidenceUploaderLabel(entityType, document.documentType);
-}
-
-/**
- * Marks which delivery documents the Removal submission binds as registry
- * mass evidence (proof of delivery) versus records retained for verification
- * sampling only. Non-delivery owners carry no badge: their documents are all
- * retention records.
- */
-function RegistryBindingBadge({
-  document,
-}: {
-  document: { documentType: string; metadata: unknown };
-}) {
-  const registryBound = isProofOfDeliveryDocument(document);
-  return (
-    <span
-      className={[
-        "body-caption inline-flex shrink-0 items-center border px-4 py-1",
-        registryBound
-          ? "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] text-[var(--st-ok)]"
-          : "border-[var(--color-border-primary)] text-[var(--color-text-secondary)]",
-      ].join(" ")}
-    >
-      {registryBound ? "Registry evidence" : "Retention record"}
-    </span>
-  );
-}
-
 interface TransportEvidenceDocumentsProps {
   entityType: TransportEvidenceEntityType;
   entityId: string;
@@ -119,8 +70,7 @@ interface TransportEvidenceDocumentsProps {
 /**
  * Evidence upload + list for a stable lineage entity or a saved manual
  * transport leg. The document layer keeps the same evidence controls across
- * all three supported owners; deliveries add the proof-of-delivery
- * classifications and the per-document registry badge.
+ * all three supported owners; deliveries add receipt and photo classifications.
  */
 export function TransportEvidenceDocuments({
   entityType,
@@ -189,13 +139,10 @@ export function TransportEvidenceDocuments({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {documentLabel(entityType, doc)} ·{" "}
+                  {evidenceUploaderLabel(entityType, doc.documentType)} ·{" "}
                   {formatFileSize(doc.fileSizeBytes)}
                 </span>
               </div>
-              {entityType === "delivery" && (
-                <RegistryBindingBadge document={doc} />
-              )}
               <a
                 href={`/api/documents/${doc.id}`}
                 target="_blank"

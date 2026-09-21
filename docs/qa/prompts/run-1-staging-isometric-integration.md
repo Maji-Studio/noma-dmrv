@@ -8,7 +8,7 @@ path works and that app state matches the sandbox registry. Run this FIRST; Run 
 
 Follow `.agents/skills/codex-computer-use/SKILL.md`: substitute the real artifact
 directory for `<ARTIFACT_DIR>`, write the prompt below to that directory, and run Codex
-with computer use from the repository root. gpt-5.6-sol drives every browser flow; opus
+with computer use from the repository root. gpt-6-astra drives every browser flow; opus
 is used only for the Isometric research step described in the prompt.
 
 ---
@@ -51,8 +51,8 @@ This is findings-only. Do not edit source code, open GitHub issues, commit, or c
 branches. Do not write report files anywhere except under docs/qa (see REPORT).
 
 MODEL / TOOL ROUTING (follow exactly)
-- Drive ALL browser flows with gpt-5.6-sol via computer use.
-- Use opus-4.8 ONLY for Isometric research/interpretation (the isometric MCP: call
+- Drive ALL browser flows with gpt-6-astra via computer use.
+- Use opus-5 ONLY for Isometric research/interpretation (the isometric MCP: call
   `how_to` FIRST; protocol/module requirements; versions.json). Do not use opus to click
   through the UI.
 - Never use Haiku. pnpm only. NEVER run any database mutation — this is staging; DB
@@ -96,7 +96,7 @@ whatever the staging app offers, document the exact choice, and list the accepte
 for every required field — durability tier, feedstock type, required sample-chemistry
 ranges, temperature, evidence/document requirements, and any registry-calculated inputs.
 Save as:  <ARTIFACT_DIR>/00-known-good-inputs.md
-Then gpt-5.6-sol drives the app using that sheet.
+Then gpt-6-astra drives the app using that sheet.
 
 STEP 2 — RECONNAISSANCE
 - From the running staging UI, inventory app routes; build a visit checklist.

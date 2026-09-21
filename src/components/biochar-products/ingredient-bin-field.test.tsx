@@ -270,3 +270,5 @@ describe("IngredientBinField feedstock-bin quick add", () => {
     expect(state.massInput?.disabled).toBe(true);
   });
 });
+
+vi.mock("./ingredient-moisture-field", () => ({ IngredientMoistureField: () => null }));

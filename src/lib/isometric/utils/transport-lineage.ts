@@ -18,8 +18,8 @@ export function collectTransportEntityIds(
   const sampleIds = new Set<string>();
 
   for (const lineage of lineages) {
-    if (lineage.biocharProduct) {
-      biocharProductIds.add(lineage.biocharProduct.id);
+    for (const product of lineage.products?.map(p => p.product) ?? (lineage.biocharProduct ? [lineage.biocharProduct] : [])) {
+      biocharProductIds.add(product.id);
     }
     for (const feedstock of lineage.feedstocks) {
       feedstockIds.add(feedstock.id);

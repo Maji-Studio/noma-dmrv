@@ -154,7 +154,7 @@ export function binAccentStyle(type: StorageLocationType): CSSProperties {
 }
 
 /** Current on-hand mass for a bin, by type. */
-export function binCurrentMassKg(s: StorageLocationWithFacility): number {
+export function binCurrentMassKg(s: StorageLocationWithFacility): number | null {
   if (s.type === "feedstock_bin") return s.feedstockInventory.currentWetMassKg;
   if (s.type === "biochar_bin") return s.biocharInventory.currentMassKg;
   return s.productInventory.currentMassKg;
@@ -165,16 +165,18 @@ export function binCurrentMassKg(s: StorageLocationWithFacility): number {
  * have outrun recorded intake, so the count needs reconciling (issue #194).
  */
 export function binNeedsReconciliation(s: StorageLocationWithFacility): boolean {
-  return binCurrentMassKg(s) < 0;
+  const massKg = binCurrentMassKg(s);
+  return massKg != null && massKg < 0;
 }
 
 /** Fill level (0–100) vs capacity, or null when no capacity is set. */
 export function binCapacityPercent(
   s: StorageLocationWithFacility
 ): number | null {
-  if (!s.capacityKg || s.capacityKg <= 0) return null;
+  const massKg = binCurrentMassKg(s);
+  if (massKg == null || !s.capacityKg || s.capacityKg <= 0) return null;
   return Math.round(
-    Math.max(0, Math.min(100, (binCurrentMassKg(s) / s.capacityKg) * 100))
+    Math.max(0, Math.min(100, (massKg / s.capacityKg) * 100))
   );
 }
 

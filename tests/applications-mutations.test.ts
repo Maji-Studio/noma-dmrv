@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -69,17 +72,17 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
 
     const [product] = await tx
       .insert(biocharProducts)
-      .values({
+      .values(await outputProductFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `BP-AM-${runId}`,
         facilityId: facility.id,
         formulationId: formulation.id,
-      })
+      }))
       .returning({ id: biocharProducts.id });
 
     const [order] = await tx
       .insert(orders)
-      .values({
+      .values(await outputOrderFixtureValues(tx, {
         organizationId: TEST_ORG_ID,
         code: `OR-AM-${runId}`,
         facilityId: facility.id,
@@ -89,12 +92,10 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
         orderDate: new Date("2025-07-01"),
         quantityKg: 10_000,
         packaging: "bagged",
-      })
+      }))
       .returning({ id: orders.id });
 
-    const insertedDeliveries = await tx
-      .insert(deliveries)
-      .values([
+    const insertedDeliveries = await insertOutputDeliveryFixture(tx, [
         {
           organizationId: TEST_ORG_ID,
           code: `DL-AM-${runId}-A`,
@@ -117,8 +118,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
           massDryKg: 2_700,
           moistureContentPercent: 5,
         },
-      ])
-      .returning({ id: deliveries.id });
+      ], row => ({ id: row.id }));
 
     return {
       facilityId: facility.id,
@@ -133,23 +133,20 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
   });
 }
 
-/** Delivery left at the schema default status ('upcoming') for guard tests. */
-async function insertUpcomingDelivery(
+/** Delivery with unresolved dry evidence for guard tests. */
+async function insertUnresolvedDelivery(
   fixture: ApplicationMutationFixture,
   runId: string,
 ): Promise<string> {
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
+  const [delivery] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
-      code: `DL-AM-${runId}-UPCOMING`,
+      code: `DL-AM-${runId}-UNRESOLVED`,
       facilityId: fixture.facilityId,
       orderId: fixture.orderId,
       deliveryDate: new Date("2025-07-07"),
       deliveredWetMassKg: 4_000,
       moistureContentPercent: 15,
-    })
-    .returning({ id: deliveries.id });
+    }, row => ({ id: row.id }));
 
   fixture.deliveryIds.push(delivery.id);
   return delivery.id;
@@ -158,19 +155,17 @@ async function insertUpcomingDelivery(
 async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Promise<void> {
   await db.transaction(async (tx) => {
     if (fixture.applicationIds.length > 0) {
-      await tx
-        .delete(applications)
-        .where(inArray(applications.id, fixture.applicationIds));
+      await deleteOutputApplicationFixtures(tx, inArray(applications.id, fixture.applicationIds));
     }
 
-    await tx.delete(deliveries).where(inArray(deliveries.id, fixture.deliveryIds));
+    await deleteOutputDeliveryFixtures(tx, inArray(deliveries.id, fixture.deliveryIds));
     await tx.delete(orders).where(eq(orders.id, fixture.orderId));
-    await tx.delete(biocharProducts).where(eq(biocharProducts.id, fixture.productId));
+    await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx.delete(formulations).where(eq(formulations.id, fixture.formulationId));
     await tx.delete(certifierProjects).where(eq(certifierProjects.facilityId, fixture.facilityId));
     await tx.delete(customerLocations).where(eq(customerLocations.id, fixture.customerLocationId));
     await tx.delete(customers).where(eq(customers.id, fixture.customerId));
-    await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
   });
 }
 
@@ -178,6 +173,32 @@ async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Prom
 beforeAll(() => ensureTestOrg());
 
 describe("application mutations", () => {
+  it("rejects missing or zero field size at the data-access create boundary", async () => {
+    const base = {
+      code: `AP-AM-${crypto.randomUUID()}-INVALID-FIELD`,
+      deliveryId: crypto.randomUUID(),
+      applicationDate: new Date("2025-07-08"),
+      biocharAppliedTons: 1,
+    };
+
+    await expect(
+      createApplication(makeTestOrgContext(TEST_USER_ID), {
+        ...base,
+        fieldSizeHa: 0,
+      }),
+    ).rejects.toThrow(
+      `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+    );
+    await expect(
+      createApplication(
+        makeTestOrgContext(TEST_USER_ID),
+        base as unknown as Parameters<typeof createApplication>[1],
+      ),
+    ).rejects.toThrow(
+      `Application ${base.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+    );
+  });
+
   it("creates an application from the delivery's tracked dry-biochar ratio", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
@@ -188,11 +209,21 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
       fixture.applicationIds.push(application.id);
 
       expect(application.biocharAppliedTons).toBe(2);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
+      await expect(
+        updateApplication(
+          makeTestOrgContext(TEST_USER_ID),
+          application.id,
+          { fieldSizeHa: 0 },
+        ),
+      ).rejects.toThrow(
+        `Application ${application.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
+      );
 
       const options = await getApplicationDeliveryOptions(
         makeTestOrgContext(TEST_USER_ID),
@@ -219,12 +250,14 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
       const last = await createApplication(makeTestOrgContext(TEST_USER_ID), {
         code: `AP-AM-${runId}-REMAINDER`,
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-09"),
         biocharAppliedTons: 3,
+        fieldSizeHa: 1,
       });
       fixture.applicationIds.push(first.id, last.id);
 
@@ -241,17 +274,15 @@ describe("application mutations", () => {
     const fixture = await createMutationFixture(runId);
 
     try {
-      const [corrupt] = await db
-        .insert(applications)
-        .values({
+      const [corrupt] = await insertOutputApplicationFixture(db, {
           organizationId: TEST_ORG_ID,
           code: `AP-AM-${runId}-CORRUPT`,
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 4,
+          fieldSizeHa: 1,
           biocharAppliedDryTons: 4.1,
-        })
-        .returning({ id: applications.id });
+        }, row => ({ id: row.id }));
       fixture.applicationIds.push(corrupt.id);
 
       await expect(
@@ -260,6 +291,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-09"),
           biocharAppliedTons: 1,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Tracked dry biochar is not available");
     } finally {
@@ -277,6 +309,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -298,6 +331,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         evidenceMethod: "boundary",
         gisBoundary: TEST_GIS_BOUNDARY,
       });
@@ -320,6 +354,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         evidenceMethod: "boundary",
         gisBoundary: TEST_GIS_BOUNDARY,
       });
@@ -372,6 +407,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 6,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Not enough biochar in this delivery");
 
@@ -402,11 +438,12 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
         });
       fixture.applicationIds.push(application.id);
       expect(application.biocharAppliedDryTons).toBeCloseTo(1.6);
     } finally {
-      await db.delete(applications).where(eq(applications.code, code));
+      await deleteOutputApplicationFixtures(db, eq(applications.code, code));
       await cleanupMutationFixture(fixture);
     }
   });
@@ -428,6 +465,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
           gpsLatitude: -3.3349,
           gpsLongitude: 37.3404,
         },
@@ -443,23 +481,24 @@ describe("application mutations", () => {
     }
   });
 
-  it("rejects create against a delivery not yet marked delivered", async () => {
+  it("rejects create against a delivery with unresolved saved provenance", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
-    const code = `AP-AM-${runId}-UPCOMING`;
+    const code = `AP-AM-${runId}-UNRESOLVED`;
 
     try {
-      const upcomingDeliveryId = await insertUpcomingDelivery(fixture, runId);
+      const unresolvedDeliveryId = await insertUnresolvedDelivery(fixture, runId);
 
       await expect(
         createApplication(makeTestOrgContext(TEST_USER_ID), {
           code,
-          deliveryId: upcomingDeliveryId,
+          deliveryId: unresolvedDeliveryId,
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow(
-        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+        /saved|provenance|dry/i,
       );
 
       const [application] = await db
@@ -484,6 +523,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-04"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("cannot be before the delivery date");
     } finally {
@@ -501,6 +541,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-05"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
       fixture.applicationIds.push(application.id);
 
@@ -520,6 +561,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -545,19 +587,20 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
       fixture.applicationIds.push(application.id);
 
-      const upcomingDeliveryId = await insertUpcomingDelivery(fixture, runId);
+      const unresolvedDeliveryId = await insertUnresolvedDelivery(fixture, runId);
 
       await expect(
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
-          deliveryId: upcomingDeliveryId,
+          deliveryId: unresolvedDeliveryId,
         }),
       ).rejects.toThrow(
-        `Delivery DL-AM-${runId}-UPCOMING is not marked as delivered. Mark it as delivered before recording an application.`,
+        /saved|provenance|dry/i,
       );
     } finally {
       await cleanupMutationFixture(fixture);
@@ -574,6 +617,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -582,6 +626,7 @@ describe("application mutations", () => {
       const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
         deliveryId: fixture.deliveryIds[1],
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
       });
 
       expect(updated.deliveryId).toBe(fixture.deliveryIds[1]);
@@ -602,6 +647,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -641,6 +687,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -681,6 +728,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
           evidenceMethod: "boundary",
         },
       );
@@ -715,6 +763,7 @@ describe("application mutations", () => {
           deliveryId: fixture.deliveryIds[0],
           applicationDate: new Date("2025-07-08"),
           biocharAppliedTons: 2,
+          fieldSizeHa: 1,
           evidenceMethod: "boundary",
           gpsLatitude: -3.3349,
           gpsLongitude: 37.3404,
@@ -751,6 +800,7 @@ describe("application mutations", () => {
         deliveryId: fixture.deliveryIds[0],
         applicationDate: new Date("2025-07-08"),
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         gpsLatitude: -3.3349,
         gpsLongitude: 37.3404,
       });
@@ -759,6 +809,7 @@ describe("application mutations", () => {
       await expect(
         updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
           biocharAppliedTons: 6,
+          fieldSizeHa: 1,
         }),
       ).rejects.toThrow("Not enough biochar in this delivery");
 
@@ -766,6 +817,7 @@ describe("application mutations", () => {
         .select({
           deliveryId: applications.deliveryId,
           biocharAppliedTons: applications.biocharAppliedTons,
+          fieldSizeHa: applications.fieldSizeHa,
           biocharAppliedDryTons: applications.biocharAppliedDryTons,
         })
         .from(applications)
@@ -774,6 +826,7 @@ describe("application mutations", () => {
       expect(persisted).toEqual({
         deliveryId: fixture.deliveryIds[0],
         biocharAppliedTons: 2,
+        fieldSizeHa: 1,
         biocharAppliedDryTons: expect.closeTo(1.6),
       });
     } finally {

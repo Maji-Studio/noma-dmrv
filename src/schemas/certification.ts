@@ -135,16 +135,16 @@ export type CreateRemovalWithBatchesInput = z.infer<
   typeof createRemovalWithBatchesSchema
 >;
 
-export const discardRemovalDraftSchema = z.object({
+// The server decides whether registry cleanup is needed from the ledger, not
+// from the caller, so the input is only the Removal identity.
+export const deleteRemovalSchema = z.object({
   facilityId: z.uuid(),
   removalId: z.uuid(),
 });
 
-export type DiscardRemovalDraftInput = z.infer<
-  typeof discardRemovalDraftSchema
->;
+export type DeleteRemovalInput = z.infer<typeof deleteRemovalSchema>;
 
-export const submitGhgStatementDialogSchema = z.object({
+const submitGhgStatementFieldsSchema = z.object({
   reportId: z.string().uuid().optional(),
   externalReportUrl: httpsUrlSchema.optional(),
   // Compatibility alias for existing callers. New UI uses externalReportUrl.
@@ -157,37 +157,57 @@ export const submitGhgStatementDialogSchema = z.object({
     )
     .optional(),
   confirmProduction: z.boolean().optional(),
-}).check((ctx) => {
-  const value = ctx.value;
-  const externalUrl = value.externalReportUrl ?? value.reportUrl;
-  if (!value.reportId && !externalUrl) {
-    ctx.issues.push({
-      code: "custom",
-      input: value,
-      path: ["reportId"],
-      message: "Approve a generated report or enter an external report URL",
-    });
-  }
-  if (value.reportId && externalUrl) {
-    ctx.issues.push({
-      code: "custom",
-      input: value,
-      path: ["reportId"],
-      message: "Choose either the generated report or the external fallback",
-    });
-  }
 });
+
+export const submitGhgStatementDialogSchema =
+  submitGhgStatementFieldsSchema.check((ctx) => {
+    const value = ctx.value;
+    const externalUrl = value.externalReportUrl ?? value.reportUrl;
+    if (!value.reportId && !externalUrl) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["reportId"],
+        message: "Approve a generated report or enter an external report URL",
+      });
+    }
+    if (value.reportId && externalUrl) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["reportId"],
+        message: "Choose either the generated report or the external fallback",
+      });
+    }
+  });
 
 export type SubmitGhgStatementDialogInput = z.infer<
   typeof submitGhgStatementDialogSchema
+>;
+
+const submitGhgStatementDialogFormFieldsSchema =
+  submitGhgStatementFieldsSchema.extend({
+    reportSource: z.enum(["generated", "external"]),
+  });
+
+export type SubmitGhgStatementDialogFormInput = z.infer<
+  typeof submitGhgStatementDialogFormFieldsSchema
 >;
 
 export function buildSubmitGhgStatementDialogSchema(args: {
   isResubmit: boolean;
   isProduction: boolean;
 }) {
-  return submitGhgStatementDialogSchema.check((ctx) => {
+  return submitGhgStatementDialogFormFieldsSchema.check((ctx) => {
     const value = ctx.value;
+    if (value.reportSource === "external" && !value.externalReportUrl) {
+      ctx.issues.push({
+        code: "custom",
+        input: value,
+        path: ["externalReportUrl"],
+        message: "Enter an external report URL",
+      });
+    }
     if (args.isResubmit && !value.summaryOfChanges?.trim()) {
       ctx.issues.push({
         code: "custom",

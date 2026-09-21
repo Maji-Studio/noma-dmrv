@@ -1,7 +1,7 @@
 "use client";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getDashboardOverviewFn } from "@/fn/dashboard-overview";
+import { getDashboardOverviewRead } from "@/lib/read-api/client";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
 
 // Dashboard aggregates are "current data" — 30s keeps the strip fresh without
@@ -25,9 +25,9 @@ export function useDashboardOverview(
 ) {
   return useQuery({
     queryKey: dashboardOverviewKeys.overview(facilityId, range),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!facilityId) throw new Error("No facility selected");
-      const result = await getDashboardOverviewFn({ facilityId, range });
+      const result = await getDashboardOverviewRead({ facilityId, range }, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }

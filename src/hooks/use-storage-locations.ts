@@ -22,10 +22,6 @@ import type {
 } from "@/data-access/storage-locations";
 import {
   getStorageLocationsFn,
-  getStorageLocationByIdFn,
-  getStorageLocationWithFacilityFn,
-  getStorageLocationsByFacilityFn,
-  checkStorageLocationCodeFn,
   createStorageLocationFn,
   archiveStorageLocationFn,
   restoreStorageLocationFn,
@@ -33,8 +29,10 @@ import {
   deleteStorageLocationFn,
 } from "@/fn/storage-locations";
 import { facilityKeys } from "@/hooks/use-facilities";
+import { throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
 // ============================================
 // Query Keys
@@ -82,92 +80,6 @@ export function useStorageLocations(
     // rail's on-hand figures to zero for the length of the round trip. Keeping
     // the previous page means the control the operator just used stays put.
     placeholderData: keepPreviousData,
-  });
-}
-
-/**
- * Hook to fetch a single storage location by ID
- */
-export function useStorageLocation(storageLocationId: string, enabled = true) {
-  return useQuery({
-    queryKey: storageLocationKeys.detail(storageLocationId),
-    queryFn: async () => {
-      const result = await getStorageLocationByIdFn(storageLocationId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!storageLocationId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch a storage location with its facility info
- */
-export function useStorageLocationWithFacility(
-  storageLocationId: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
-    queryFn: async () => {
-      const result =
-        await getStorageLocationWithFacilityFn(storageLocationId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!storageLocationId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch storage locations for a specific facility
- */
-export function useStorageLocationsByFacility(
-  facilityId: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: storageLocationKeys.byFacility(facilityId),
-    queryFn: async () => {
-      const result = await getStorageLocationsByFacilityFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!facilityId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to check if a storage location code is available
- */
-export function useStorageLocationCodeCheck(
-  code: string,
-  excludeStorageLocationId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: storageLocationKeys.codeCheck(code, excludeStorageLocationId),
-    queryFn: async () => {
-      const result = await checkStorageLocationCodeFn(
-        code,
-        excludeStorageLocationId
-      );
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -239,9 +151,9 @@ export function useUpdateStorageLocation(
   return useMutation({
     mutationFn: async (data: UpdateStorageLocationData) => {
       const result = await updateStorageLocationFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -291,11 +203,10 @@ export function useUpdateStorageLocation(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.storageLocationId
-                ? ({
-                    ...item,
-                    ...variables,
-                    updatedAt: new Date(),
-                  } as StorageLocationWithFacility)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as StorageLocationWithFacility)
                 : item
             ),
           };
@@ -310,6 +221,12 @@ export function useUpdateStorageLocation(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+
+      patchListCachesWithSavedRow<StorageLocationWithFacility>(
+        queryClient,
+        storageLocationKeys.lists(),
+        data,
+      );
 
       // Invalidate to ensure consistency
       await Promise.all([
@@ -573,110 +490,6 @@ export function useDeleteStorageLocation(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch storage locations list for faster initial load
- */
-export function usePrefetchStorageLocations() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<StorageLocationFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: storageLocationKeys.list(filters),
-      queryFn: async () => {
-        const result = await getStorageLocationsFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single storage location
- */
-export function usePrefetchStorageLocation() {
-  const queryClient = useQueryClient();
-
-  return (storageLocationId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: storageLocationKeys.detail(storageLocationId),
-      queryFn: async () => {
-        const result = await getStorageLocationByIdFn(storageLocationId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access storage location cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useStorageLocationCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all storage location data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: storageLocationKeys.all }),
-
-    /** Invalidate all storage location lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: storageLocationKeys.lists() }),
-
-    /** Invalidate a specific storage location detail */
-    invalidateDetail: (storageLocationId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.detail(storageLocationId),
-      }),
-
-    /** Invalidate a storage location with its facility */
-    invalidateDetailWithFacility: (storageLocationId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
-      }),
-
-    /** Invalidate storage locations by facility */
-    invalidateByFacility: (facilityId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.byFacility(facilityId),
-      }),
-
-    /** Remove a specific storage location from cache (use after deletion) */
-    removeFromCache: (storageLocationId: string) => {
-      queryClient.removeQueries({
-        queryKey: storageLocationKeys.detail(storageLocationId),
-      });
-      queryClient.removeQueries({
-        queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
-      });
-    },
-
-    /** Set storage location data in cache (useful for optimistic updates) */
-    setStorageLocationData: (
-      storageLocationId: string,
-      data: StorageLocation
-    ) =>
-      queryClient.setQueryData(
-        storageLocationKeys.detail(storageLocationId),
-        data
-      ),
-
-    /** Get cached storage location data */
-    getCachedStorageLocation: (storageLocationId: string) =>
-      queryClient.getQueryData<StorageLocation>(
-        storageLocationKeys.detail(storageLocationId)
-      ),
-  };
-}

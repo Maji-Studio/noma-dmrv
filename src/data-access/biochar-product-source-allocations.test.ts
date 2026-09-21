@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  InsufficientSourceDryMassError,
-  InsufficientTraceableBiocharError,
   planBiocharProductSourceAllocations,
   UnresolvedBiocharDryMassError,
   type AvailableBiocharSourceLot,
@@ -9,369 +7,100 @@ import {
 
 const EARLY_DATE = new Date("2026-05-01T08:00:00.000Z");
 const LATE_DATE = new Date("2026-05-02T08:00:00.000Z");
-
-function lot(
-  overrides: Partial<AvailableBiocharSourceLot> = {},
-): AvailableBiocharSourceLot {
-  return {
-    productionRunId: "run-a",
-    producedAt: EARLY_DATE,
-    availableWetMassKg: 50,
-    availableDryMassKg: 45,
-    ...overrides,
-  };
+const GRAMS_PER_KG = 1000;
+function lot(overrides: Partial<AvailableBiocharSourceLot> = {}): AvailableBiocharSourceLot {
+  return { productionRunId: "run-a", producedAt: EARLY_DATE, availableWetMassKg: 50, availableDryMassKg: 45, ...overrides };
 }
+const laterLot = () => lot({ productionRunId: "run-b", producedAt: LATE_DATE, availableWetMassKg: 100, availableDryMassKg: 80 });
 
-describe("planBiocharProductSourceAllocations", () => {
-  it("allocates the draw across every run by available wet mass", () => {
-    const plan = planBiocharProductSourceAllocations(
-      [
-        lot({
-          productionRunId: "run-b",
-          producedAt: LATE_DATE,
-          availableWetMassKg: 100,
-          availableDryMassKg: 80,
-        }),
-        lot(),
-      ],
-      75,
-    );
-
-    expect(plan).toEqual({
-      allocations: [
-        {
-          productionRunId: "run-a",
-          producedAt: EARLY_DATE,
-          allocatedWetMassKg: 25,
-          allocatedDryMassKg: 22.5,
-        },
-        {
-          productionRunId: "run-b",
-          producedAt: LATE_DATE,
-          allocatedWetMassKg: 50,
-          allocatedDryMassKg: 40,
-        },
-      ],
-      productionDate: EARLY_DATE,
-      availableWetMassKg: 150,
-    });
-  });
-
-  it("uses deterministic largest-remainder rounding to exact grams", () => {
-    const plan = planBiocharProductSourceAllocations(
-      [
-        lot({
-          productionRunId: "run-c",
-          availableWetMassKg: 1,
-          availableDryMassKg: 0.9,
-        }),
-        lot({
-          productionRunId: "run-a",
-          availableWetMassKg: 1,
-          availableDryMassKg: 0.9,
-        }),
-        lot({
-          productionRunId: "run-b",
-          availableWetMassKg: 1,
-          availableDryMassKg: 0.9,
-        }),
-      ],
-      1,
-    );
-
-    expect(plan.allocations.map((allocation) => ({
-      productionRunId: allocation.productionRunId,
-      allocatedWetMassKg: allocation.allocatedWetMassKg,
-    }))).toEqual([
-      { productionRunId: "run-a", allocatedWetMassKg: 0.334 },
-      { productionRunId: "run-b", allocatedWetMassKg: 0.333 },
-      { productionRunId: "run-c", allocatedWetMassKg: 0.333 },
-    ]);
-    expect(
-      plan.allocations.reduce(
-        (total, allocation) => total + allocation.allocatedWetMassKg,
-        0,
-      ),
-    ).toBe(1);
-  });
-
-  it("applies documented losses proportionally before allocating", () => {
-    const plan = planBiocharProductSourceAllocations(
-      [
-        lot(),
-        lot({
-          productionRunId: "run-b",
-          producedAt: LATE_DATE,
-          availableWetMassKg: 100,
-          availableDryMassKg: 80,
-        }),
-      ],
-      60,
-      30,
-    );
-
-    expect(plan.availableWetMassKg).toBe(120);
+describe("source allocation adapter for measured dry FIFO", () => {
+  it("consumes the physically oldest run before drawing from a later run", () => {
+    const plan = planBiocharProductSourceAllocations([laterLot(), lot()], 75, 0, 60);
     expect(plan.allocations).toEqual([
-      {
-        productionRunId: "run-a",
-        producedAt: EARLY_DATE,
-        allocatedWetMassKg: 20,
-        allocatedDryMassKg: 18,
-      },
-      {
-        productionRunId: "run-b",
-        producedAt: LATE_DATE,
-        allocatedWetMassKg: 40,
-        allocatedDryMassKg: 32,
-      },
+      { productionRunId: "run-a", producedAt: EARLY_DATE, allocatedWetMassKg: 56.25, allocatedDryMassKg: 45 },
+      { productionRunId: "run-b", producedAt: LATE_DATE, allocatedWetMassKg: 18.75, allocatedDryMassKg: 15 },
     ]);
+    expect(plan.productionDate).toEqual(EARLY_DATE);
+    expect(plan.availableWetMassKg).toBe(156.25);
   });
 
-  it("apportions a one-gram loss deterministically without losing mass", () => {
-    const plan = planBiocharProductSourceAllocations(
-      [
-        lot({
-          productionRunId: "run-b",
-          availableWetMassKg: 1,
-          availableDryMassKg: 0.8,
-        }),
-        lot({
-          productionRunId: "run-a",
-          availableWetMassKg: 1,
-          availableDryMassKg: 0.9,
-        }),
-      ],
-      1.999,
-      0.001,
-    );
-
-    expect(plan.availableWetMassKg).toBe(1.999);
-    expect(plan.allocations.map((allocation) => ({
-      productionRunId: allocation.productionRunId,
-      allocatedWetMassKg: allocation.allocatedWetMassKg,
-    }))).toEqual([
-      { productionRunId: "run-a", allocatedWetMassKg: 0.999 },
-      { productionRunId: "run-b", allocatedWetMassKg: 1 },
-    ]);
-  });
-
-  it("blocks when an allocated run has unresolved dry mass", () => {
-    const lots = [
-      lot({
-        availableWetMassKg: 10,
-        availableDryMassKg: 9,
-      }),
-      lot({
-        productionRunId: "run-b",
-        producedAt: LATE_DATE,
-        availableWetMassKg: 10,
-        availableDryMassKg: null,
-      }),
-    ];
-
-    expect(() =>
-      planBiocharProductSourceAllocations(lots, 10),
-    ).toThrowError(
-      expect.objectContaining({
-        productionRunId: "run-b",
-      }) as UnresolvedBiocharDryMassError,
-    );
-  });
-
-  it("does not block on an unresolved run that receives zero grams", () => {
-    const plan = planBiocharProductSourceAllocations(
-      [
-        lot(),
-        lot({
-          productionRunId: "run-b",
-          producedAt: LATE_DATE,
-          availableWetMassKg: 0.001,
-          availableDryMassKg: null,
-        }),
-      ],
-      0.001,
-    );
-
+  it("leaves later source runs unused when the first run has enough dry stock", () => {
+    const plan = planBiocharProductSourceAllocations([lot(), laterLot()], 10, 0, 8);
     expect(plan.allocations).toEqual([
-      {
-        productionRunId: "run-a",
-        producedAt: EARLY_DATE,
-        allocatedWetMassKg: 0.001,
-        allocatedDryMassKg: 0.001,
-      },
+      { productionRunId: "run-a", producedAt: EARLY_DATE, allocatedWetMassKg: 10, allocatedDryMassKg: 8 },
     ]);
   });
 
-  it("reports traceable stock after proportional loss when a draw is too large", () => {
-    expect(() =>
-      planBiocharProductSourceAllocations([lot()], 41, 10),
-    ).toThrowError(
-      expect.objectContaining({
-        availableWetMassKg: 40,
-        requestedWetMassKg: 41,
-      }) as InsufficientTraceableBiocharError,
-    );
+  it("preserves supplied posting order for runs on the same physical day", () => {
+    const lots = [lot({ productionRunId: "run-c" }), lot({ productionRunId: "run-a" }), lot({ productionRunId: "run-b" })];
+    const plan = planBiocharProductSourceAllocations(lots, 1, 0, 0.9);
+    expect(plan.allocations.map(row => row.productionRunId)).toEqual(["run-c"]);
+    expect(planBiocharProductSourceAllocations(lots, 1, 0, 0.9)).toEqual(plan);
   });
 
-  it("lets an over-allocated lot reduce total feasibility", () => {
-    expect(() =>
-      planBiocharProductSourceAllocations(
-        [
-          lot({
-            availableWetMassKg: 0,
-            availableDryMassKg: 0,
-            feasibilityWetMassKg: -20,
-          }),
-          lot({
-            productionRunId: "run-b",
-            producedAt: LATE_DATE,
-            availableWetMassKg: 100,
-            availableDryMassKg: 80,
-            feasibilityWetMassKg: 100,
-          }),
-        ],
-        90,
-      ),
-    ).toThrowError(
-      expect.objectContaining({
-        availableWetMassKg: 80,
-        requestedWetMassKg: 90,
-      }) as InsufficientTraceableBiocharError,
-    );
+  it("conserves every measured wet and dry gram when FIFO crosses tiny source lots", () => {
+    const lots = ["a", "b", "c"].map(id => lot({ productionRunId: id, availableWetMassKg: 0.002, availableDryMassKg: 0.001 }));
+    const plan = planBiocharProductSourceAllocations(lots, 0.004, 0, 0.003);
+    expect(plan.allocations.map(row => row.allocatedWetMassKg)).toEqual([0.001, 0.002, 0.001]);
+    expect(plan.allocations.reduce((sum, row) => sum + Math.round(row.allocatedWetMassKg * GRAMS_PER_KG), 0)).toBe(4);
+    expect(plan.allocations.reduce((sum, row) => sum + Math.round(row.allocatedDryMassKg * GRAMS_PER_KG), 0)).toBe(3);
   });
 
-  it("returns no allocations for a zero draw", () => {
-    expect(
-      planBiocharProductSourceAllocations([lot()], 0, 10),
-    ).toEqual({
-      allocations: [],
-      productionDate: null,
-      availableWetMassKg: 40,
-    });
+  it("requires a measured dry draw instead of inferring it from recorded input wet mass", () => {
+    expect(() => planBiocharProductSourceAllocations([lot()], 10)).toThrow("Measured source dry mass is required");
   });
 
-  it.each([
-    ["null", null as unknown as number],
-    ["NaN", Number.NaN],
-    ["infinity", Number.POSITIVE_INFINITY],
-    ["negative", -1],
-  ])("rejects a %s requested source mass", (_case, requestedWetMassKg) => {
-    expect(() =>
-      planBiocharProductSourceAllocations([lot()], requestedWetMassKg),
-    ).toThrow("requestedWetMassKg must be a finite number at or above 0");
+  it.each([30, 0.001])("rejects an unposted %s kg loss instead of redistributing source provenance", loss => {
+    expect(() => planBiocharProductSourceAllocations([lot()], 10, loss, 8)).toThrow("Losses require posted dry-solids provenance");
   });
 
-  it("spreads a measured dry draw across lots by wet allocation", () => {
-    const plan = planBiocharProductSourceAllocations(
-      [
-        lot({
-          productionRunId: "run-b",
-          producedAt: LATE_DATE,
-          availableWetMassKg: 100,
-          availableDryMassKg: 80,
-        }),
-        lot(),
-      ],
-      75,
-      0,
-      60,
-    );
+  it("fails closed when a source run has unresolved dry mass", () => {
+    expect(() => planBiocharProductSourceAllocations([lot({ availableDryMassKg: null })], 10, 0, 8))
+      .toThrow(UnresolvedBiocharDryMassError);
+  });
 
-    expect(plan.allocations).toEqual([
-      {
-        productionRunId: "run-a",
-        producedAt: EARLY_DATE,
-        allocatedWetMassKg: 25,
-        allocatedDryMassKg: 20,
-      },
-      {
-        productionRunId: "run-b",
-        producedAt: LATE_DATE,
-        allocatedWetMassKg: 50,
-        allocatedDryMassKg: 40,
-      },
+  it("also rejects an unresolved later run rather than treating unknown stock as zero", () => {
+    expect(() => planBiocharProductSourceAllocations([lot(), laterLot(), lot({ productionRunId: "unknown", producedAt: LATE_DATE, availableDryMassKg: null })], 0.001, 0, 0.001))
+      .toThrow("Biochar dry mass is unresolved");
+  });
+
+  it("checks the provided remaining dry balance after previously posted losses", () => {
+    const remaining = lot({ availableDryMassKg: 35 });
+    expect(() => planBiocharProductSourceAllocations([remaining], 40, 0, 36)).toThrow("Insufficient exact dry solids");
+    expect(planBiocharProductSourceAllocations([remaining], 40, 0, 35).allocations[0].allocatedDryMassKg).toBe(35);
+  });
+
+  it("uses dry capacity independently of historical wet feasibility estimates", () => {
+    const source = lot({ availableWetMassKg: 10, feasibilityWetMassKg: 5, availableDryMassKg: 45 });
+    const plan = planBiocharProductSourceAllocations([source], 90, 0, 45);
+    expect(plan.allocations[0]).toMatchObject({ allocatedWetMassKg: 90, allocatedDryMassKg: 45 });
+    expect(plan.availableWetMassKg).toBe(90);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 0])("rejects invalid measured wet mass %s", requestedWetMassKg => {
+    expect(() => planBiocharProductSourceAllocations([lot()], requestedWetMassKg, 0, 1)).toThrow();
+  });
+
+  it("continues FIFO past a source capped by its remaining dry stock", () => {
+    const plan = planBiocharProductSourceAllocations([lot({ availableDryMassKg: 10 }), laterLot()], 100, 0, 55);
+    expect(plan.allocations.map(row => [row.productionRunId, row.allocatedDryMassKg, row.allocatedWetMassKg])).toEqual([
+      ["run-a", 10, 18.182], ["run-b", 45, 81.818],
     ]);
   });
 
-  it("re-spreads dry mass past a lot capped by its remaining dry stock", () => {
-    const plan = planBiocharProductSourceAllocations(
-      [
-        lot({ availableWetMassKg: 50, availableDryMassKg: 10 }),
-        lot({
-          productionRunId: "run-b",
-          producedAt: LATE_DATE,
-          availableWetMassKg: 50,
-          availableDryMassKg: 50,
-        }),
-      ],
-      100,
-      0,
-      55,
-    );
-
-    expect(plan.allocations).toEqual([
-      {
-        productionRunId: "run-a",
-        producedAt: EARLY_DATE,
-        allocatedWetMassKg: 50,
-        allocatedDryMassKg: 10,
-      },
-      {
-        productionRunId: "run-b",
-        producedAt: LATE_DATE,
-        allocatedWetMassKg: 50,
-        allocatedDryMassKg: 45,
-      },
-    ]);
+  it("rejects a zero measured dry draw instead of posting source rows with no dry stock", () => {
+    expect(() => planBiocharProductSourceAllocations([lot()], 10, 0, 0)).toThrow("Source dry mass must be positive");
   });
 
-  it("keeps a zero measured dry draw at zero dry per lot", () => {
-    const plan = planBiocharProductSourceAllocations([lot()], 10, 0, 0);
-
-    expect(plan.allocations).toEqual([
-      {
-        productionRunId: "run-a",
-        producedAt: EARLY_DATE,
-        allocatedWetMassKg: 10,
-        allocatedDryMassKg: 0,
-      },
-    ]);
+  it("rejects measured dry mass beyond all available source lots", () => {
+    expect(() => planBiocharProductSourceAllocations([lot({ availableDryMassKg: 40 })], 50, 0, 45)).toThrow("Insufficient exact dry solids");
   });
 
-  it("rejects a measured dry draw beyond the lots' traceable dry stock", () => {
-    expect(() =>
-      planBiocharProductSourceAllocations(
-        [lot({ availableWetMassKg: 50, availableDryMassKg: 40 })],
-        50,
-        0,
-        45,
-      ),
-    ).toThrowError(
-      expect.objectContaining({
-        availableDryMassKg: 40,
-        requestedDryMassKg: 45,
-      }) as InsufficientSourceDryMassError,
-    );
+  it("rejects measured dry mass above the measured wet draw", () => {
+    expect(() => planBiocharProductSourceAllocations([lot()], 10, 0, 11)).toThrow("no greater than wet mass");
   });
 
-  it("rejects a measured dry draw above the wet draw", () => {
-    expect(() =>
-      planBiocharProductSourceAllocations([lot()], 10, 0, 11),
-    ).toThrow("requestedDryMassKg cannot exceed requestedWetMassKg");
-  });
-
-  it("blocks a measured dry draw when an allocated run has unresolved dry mass", () => {
-    expect(() =>
-      planBiocharProductSourceAllocations(
-        [lot({ availableDryMassKg: null })],
-        10,
-        0,
-        9,
-      ),
-    ).toThrowError(
-      expect.objectContaining({
-        productionRunId: "run-a",
-      }) as UnresolvedBiocharDryMassError,
-    );
+  it("rejects duplicate source run identities rather than double-counting stock", () => {
+    expect(() => planBiocharProductSourceAllocations([lot(), lot()], 10, 0, 8)).toThrow("duplicate layer identity");
   });
 });

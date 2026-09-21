@@ -3,12 +3,26 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
+import { SubmissionStreamStalledError } from "@/lib/certification/submission-progress-client";
+
+const REPORT_STEP_INDEX = 0;
 
 const state = vi.hoisted(() => ({
   create: vi.fn(),
   refresh: vi.fn(),
   submit: vi.fn(),
+  prepareReport: vi.fn(),
+  approveReport: vi.fn(),
+  breakdownStatus: "available" as "available" | "unavailable",
+  breakdownMessage: "Exact registry roll-up available.",
+  submitPending: false,
+  submitSuccess: false,
+  submitError: null as Error | null,
+  submitData: null as { remoteStatus: string } | null,
+  rootServerError: null as string | null,
   toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+  toastWarning: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -34,28 +48,49 @@ vi.mock("react-hook-form", () => ({
         ),
     watch: () => "2026-07-31",
     trigger: () => Promise.resolve(true),
+    getValues: () => undefined,
     reset: vi.fn(),
-    setError: vi.fn(),
+    setError: (_path: string, error: { message: string }) => {
+      state.rootServerError = error.message;
+    },
     setValue: vi.fn(),
     clearErrors: vi.fn(),
-    formState: { errors: {} },
+    formState: {
+      errors: state.rootServerError
+        ? { root: { serverError: { message: state.rootServerError } } }
+        : {},
+    },
   }),
 }));
 
 vi.mock("@/components/ui", () => ({
   buttonVariants: () => "button",
-  Button: ({ children, onClick, type, disabled }: {
+  Button: ({ children, onClick, type, disabled, busy }: {
     children: ReactNode;
     onClick?: () => void;
     type?: "button" | "submit";
     disabled?: boolean;
+    busy?: boolean;
   }) => (
-    <button type={type ?? "button"} onClick={onClick} disabled={disabled}>
+    <button
+      type={type ?? "button"}
+      onClick={onClick}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+    >
       {children}
     </button>
   ),
   EmptyState: () => <div>Empty</div>,
-  Modal: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  Modal: ({
+    children,
+    isOpen,
+  }: {
+    children: ReactNode;
+    isOpen: boolean;
+  }) => (
+    <div data-modal-open={String(isOpen)}>{isOpen ? children : null}</div>
+  ),
 }));
 
 vi.mock("@/components/forms", () => ({
@@ -80,14 +115,38 @@ vi.mock("@/components/ui/status-badge", () => ({
 }));
 
 vi.mock("@/components/ui/step-flow", () => ({
-  StepFlow: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  StepFlow: ({
+    children,
+    footer,
+    current,
+    onNavigate,
+  }: {
+    children: ReactNode;
+    footer?: ReactNode;
+    current: number;
+    onNavigate?: (index: number) => void;
+  }) => (
+    <div>
+      {current > REPORT_STEP_INDEX && (
+        <button
+          type="button"
+          onClick={() => onNavigate?.(REPORT_STEP_INDEX)}
+        >
+          Report step
+        </button>
+      )}
+      {children}
+      {footer}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({
     info: vi.fn(),
     success: state.toastSuccess,
-    warning: vi.fn(),
+    error: state.toastError,
+    warning: state.toastWarning,
   }),
 }));
 
@@ -101,12 +160,48 @@ vi.mock("@/hooks/use-certification", () => ({
   useOpenRemovalsForFacility: () => ({ data: [{}] }),
   useRegistryGhgStatementsForFacility: () => ({ data: [] }),
   useSubmitGhgStatementToVerifier: () => ({
-    error: null,
-    isError: false,
-    isPending: false,
-    isSuccess: false,
-    mutateAsync: state.submit,
-    reset: vi.fn(),
+    error: state.submitError,
+    isError: state.submitError !== null,
+    isPending: state.submitPending,
+    isSuccess: state.submitSuccess,
+    data: state.submitData,
+    mutateAsync: async (args: unknown) => {
+      state.submitPending = true;
+      try {
+        const onProgress = (
+          args as {
+            onProgress?: (update: {
+              step: string;
+              state: "complete";
+            }) => void;
+          }
+        ).onProgress;
+        for (const step of [
+          "ghg_statement.checking",
+          "ghg_statement.preparing_report",
+          "ghg_statement.sending",
+          "ghg_statement.confirming",
+          "ghg_statement.complete",
+        ]) {
+          onProgress?.({ step, state: "complete" });
+        }
+        const result = await state.submit(args);
+        state.submitData = result;
+        state.submitSuccess = true;
+        return result;
+      } catch (error) {
+        state.submitError =
+          error instanceof Error ? error : new Error("Submission failed.");
+        throw error;
+      } finally {
+        state.submitPending = false;
+      }
+    },
+    reset: () => {
+      state.submitError = null;
+      state.submitSuccess = false;
+      state.submitData = null;
+    },
   }),
   useGhgStatementReports: () => ({
     data: [
@@ -122,13 +217,42 @@ vi.mock("@/hooks/use-certification", () => ({
     isLoading: false,
     refetch: vi.fn(),
   }),
+  useGhgStatementBreakdown: () => ({
+    data:
+      state.breakdownStatus === "available"
+        ? {
+            status: "available",
+            value: {
+              netRemovedKg: 1000,
+              netBeforeDiscountKg: 1100,
+              standardDeviationKg: null,
+              riskOfReversalPercent: null,
+              bufferCreditsKg: null,
+              supplierCreditsKg: null,
+              registryStatementId: "statement-1",
+              registryStatementStatus: "DRAFT",
+              ghgStatementId: "statement-local-1",
+              externalId: "statement-1",
+              reportingPeriodStartOn: "2026-01-01",
+              reportingPeriodEndOn: "2026-01-31",
+              memberGhgEntryCount: 1,
+              isProduction: false,
+            },
+            message: state.breakdownMessage,
+          }
+        : {
+            status: "unavailable",
+            message: state.breakdownMessage,
+          },
+    isLoading: false,
+  }),
   usePrepareGhgStatementReport: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: state.prepareReport,
   }),
   useApproveGhgStatementReport: () => ({
     isPending: false,
-    mutateAsync: vi.fn(),
+    mutateAsync: state.approveReport,
   }),
 }));
 
@@ -154,14 +278,19 @@ vi.mock("./production-confirmation", () => ({
 vi.mock("./removal-batches-accordion", () => ({
   RemovalBatchesAccordion: () => <div>Removals</div>,
 }));
-vi.mock("./submission-progress", () => ({
-  SubmissionProgress: () => <div>Progress</div>,
-}));
-
 function findButton(renderer: ReactTestRenderer, label: string) {
   return renderer.root
     .findAllByType("button")
     .find((button) => button.props.children === label);
+}
+
+async function prepareAndReview(renderer: ReactTestRenderer) {
+  await act(async () => findButton(renderer, "Next")?.props.onClick());
+  const review = renderer.root
+    .findAllByType("a")
+    .find((link) => link.props.children === "Review report");
+  expect(review).toBeDefined();
+  await act(async () => review?.props.onClick());
 }
 
 beforeAll(() => {
@@ -180,8 +309,31 @@ beforeEach(() => {
   });
   state.refresh.mockReset();
   state.submit.mockReset();
-  state.submit.mockResolvedValue({ remoteStatus: "SUBMITTED" });
+  state.submit.mockResolvedValue({ remoteStatus: "AWAITING_VERIFICATION" });
+  state.prepareReport.mockReset();
+  state.prepareReport.mockResolvedValue({
+    id: "report-1",
+    version: 1,
+    lifecycle: "prepared",
+    reviewUrl: "/api/documents/report-1",
+  });
+  state.approveReport.mockReset();
+  state.approveReport.mockResolvedValue({
+    id: "report-1",
+    version: 1,
+    lifecycle: "approved",
+    reviewUrl: "/api/documents/report-1",
+  });
+  state.breakdownStatus = "available";
+  state.breakdownMessage = "Exact registry roll-up available.";
+  state.submitPending = false;
+  state.submitSuccess = false;
+  state.submitError = null;
+  state.submitData = null;
+  state.rootServerError = null;
   state.toastSuccess.mockReset();
+  state.toastError.mockReset();
+  state.toastWarning.mockReset();
 });
 
 describe("GHG Statement route refreshes", () => {
@@ -224,10 +376,621 @@ describe("GHG Statement route refreshes", () => {
       );
     });
 
+    expect(findButton(renderer!, "Generate report")).toBeUndefined();
+    expect(findButton(renderer!, "Approve report")).toBeUndefined();
+
+    await act(async () => findButton(renderer!, "Next")?.props.onClick());
+    expect(renderer!.root.findByProps({ id: "report-preview" })).toBeDefined();
+    expect(state.prepareReport).toHaveBeenCalledOnce();
+    const approveAndSubmit = findButton(renderer!, "Approve and submit");
+    expect(approveAndSubmit?.props.disabled).toBe(true);
+    const review = renderer!.root
+      .findAllByType("a")
+      .find((link) => link.props.children === "Review report");
+    await act(async () => review?.props.onClick());
+    expect(findButton(renderer!, "Approve and submit")?.props.disabled).toBe(
+      false,
+    );
     await act(async () => renderer?.root.findByType("form").props.onSubmit());
 
+    expect(state.approveReport).toHaveBeenCalledWith({
+      ghgStatementId: "statement-1",
+      reportId: "report-1",
+      version: 1,
+    });
     expect(state.submit).toHaveBeenCalledOnce();
+    expect(state.submit.mock.calls[0]?.[0]).toMatchObject({
+      ghgStatementId: "statement-1",
+      input: { reportId: "report-1" },
+    });
     expect(state.refresh).toHaveBeenCalledOnce();
+    await act(async () => renderer?.unmount());
+  });
+
+  it("submits an external report URL without preparing a report", async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    const sourceOptions = renderer!.root.findAllByProps({
+      name: "reportSource",
+    });
+    await act(async () => sourceOptions[1].props.onChange());
+    await act(async () => findButton(renderer!, "Next")?.props.onClick());
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+
+    expect(state.prepareReport).not.toHaveBeenCalled();
+    expect(state.approveReport).not.toHaveBeenCalled();
+    expect(state.submit.mock.calls[0]?.[0]).toMatchObject({
+      input: { externalReportUrl: "https://example.com/report.pdf" },
+    });
+    await act(async () => renderer?.unmount());
+  });
+
+  it("blocks duplicate submissions while the first request is pending", async () => {
+    let resolveSubmission: ((value: { remoteStatus: string }) => void) | null =
+      null;
+    state.submit.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubmission = resolve;
+        }),
+    );
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await prepareAndReview(renderer!);
+
+    let submission: Promise<unknown> | undefined;
+    act(() => {
+      submission = renderer?.root.findByType("form").props.onSubmit();
+      void renderer?.root.findByType("form").props.onSubmit();
+    });
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(state.submit).toHaveBeenCalledOnce();
+    expect(state.prepareReport).toHaveBeenCalledOnce();
+    expect(state.approveReport).toHaveBeenCalledOnce();
+    expect(findButton(renderer!, "Approve and submit")).toBeUndefined();
+    expect(
+      renderer!.root.findAllByType("h2").some((heading) =>
+        String(heading.props.children).includes("Submitting GHG Statement"),
+      ),
+    ).toBe(true);
+
+    await act(async () => {
+      resolveSubmission?.({ remoteStatus: "AWAITING_VERIFICATION" });
+      await submission;
+    });
+    await act(async () => renderer?.unmount());
+  });
+
+  it("reuses the reviewed report identity after a failed submission", async () => {
+    state.submit
+      .mockRejectedValueOnce(new Error("Registry request failed."))
+      .mockResolvedValue({ remoteStatus: "AWAITING_VERIFICATION" });
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await prepareAndReview(renderer!);
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await act(async () =>
+      findButton(renderer!, "Review submission")?.props.onClick(),
+    );
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+
+    expect(state.prepareReport).toHaveBeenCalledOnce();
+    expect(state.approveReport).toHaveBeenCalledOnce();
+    expect(state.submit).toHaveBeenCalledTimes(2);
+    await act(async () => renderer?.unmount());
+  });
+
+  it("reconciles an approval response loss before submitting", async () => {
+    state.prepareReport
+      .mockResolvedValueOnce({
+        id: "report-1",
+        version: 1,
+        lifecycle: "prepared",
+        reviewUrl: "/api/documents/report-1",
+      })
+      .mockResolvedValueOnce({
+        id: "report-1",
+        version: 1,
+        lifecycle: "approved",
+        reviewUrl: "/api/documents/report-1",
+      });
+    state.approveReport.mockRejectedValueOnce(
+      new Error("Approval response was lost."),
+    );
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await prepareAndReview(renderer!);
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+
+    expect(state.prepareReport).toHaveBeenCalledTimes(2);
+    expect(state.prepareReport.mock.calls[1]?.[0]).toEqual(
+      state.prepareReport.mock.calls[0]?.[0],
+    );
+    expect(state.submit.mock.calls[0]?.[0]).toMatchObject({
+      input: { reportId: "report-1" },
+    });
+    await act(async () => renderer?.unmount());
+  });
+
+  it.each(["Back", "Report step"])(
+    "uses a new preparation key after returning with %s",
+    async (returnAction) => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await prepareAndReview(renderer!);
+    await act(async () =>
+      findButton(renderer!, returnAction)?.props.onClick(),
+    );
+    await act(async () => findButton(renderer!, "Next")?.props.onClick());
+
+    expect(state.prepareReport).toHaveBeenCalledTimes(2);
+    expect(state.prepareReport.mock.calls[1]?.[0].preparationKey).not.toBe(
+      state.prepareReport.mock.calls[0]?.[0].preparationKey,
+    );
+    await act(async () => renderer?.unmount());
+    },
+  );
+
+  it("keeps the controlled modal mounted while closed", async () => {
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen={false}
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(
+      renderer!.root.findByProps({ "data-modal-open": "false" }),
+    ).toBeDefined();
+    expect(renderer!.root.findAllByType("form")).toHaveLength(0);
+    await act(async () => renderer?.unmount());
+  });
+
+  it("keeps generated submissions on the report step until generation is ready", async () => {
+    const warning = "The registry roll-up is still loading.";
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate={false}
+          generationUnavailableReason={warning}
+        />,
+      );
+    });
+
+    const next = findButton(renderer!, "Next");
+    expect(next?.props.disabled).toBe(true);
+    expect(
+      renderer!.root.findAllByType("p").some((node) =>
+        String(node.props.children).includes(warning),
+      ),
+    ).toBe(true);
+    expect(renderer!.root.findAllByProps({ id: "report-preview" })).toHaveLength(
+      0,
+    );
+    await act(async () => renderer?.unmount());
+  });
+
+  it("explains an unavailable breakdown before report review", async () => {
+    state.breakdownStatus = "unavailable";
+    state.breakdownMessage = "The registry statement total is not available yet.";
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(findButton(renderer!, "Next")?.props.disabled).toBe(true);
+    expect(
+      renderer!.root.findAllByType("p").some((node) =>
+        String(node.props.children).includes(state.breakdownMessage),
+      ),
+    ).toBe(true);
+    expect(state.prepareReport).not.toHaveBeenCalled();
+    await act(async () => renderer?.unmount());
+  });
+
+  it("shows report preparation errors on the report step", async () => {
+    state.prepareReport.mockRejectedValue(
+      new Error("The controlled report could not be prepared."),
+    );
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await act(async () => findButton(renderer!, "Next")?.props.onClick());
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(
+      renderer!.root.findAllByType("div").some((node) =>
+        String(node.props.children).includes(
+          "The controlled report could not be prepared.",
+        ),
+      ),
+    ).toBe(true);
+    expect(renderer!.root.findAllByProps({ id: "report-preview" })).toHaveLength(
+      0,
+    );
+    await act(async () => renderer?.unmount());
+  });
+
+  it("blocks registry actions until stale statement details are refreshed", async () => {
+    const warning =
+      "Statement details could not be refreshed. Showing the last loaded details. Use Refresh before generating or submitting.";
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate={false}
+          canSubmit={false}
+          generationUnavailableReason={warning}
+        />,
+      );
+    });
+
+    expect(
+      renderer!.root.findAllByType("p").some((node) =>
+        String(node.props.children).includes(warning),
+      ),
+    ).toBe(true);
+    expect(findButton(renderer!, "Generate new version")).toBeUndefined();
+    expect(findButton(renderer!, "Submit")).toBeUndefined();
+
+    const sourceOptions = renderer!.root.findAllByProps({
+      name: "reportSource",
+    });
+    await act(async () => sourceOptions[1].props.onChange());
+    expect(findButton(renderer!, "Submit")).toBeUndefined();
+    await act(async () =>
+      renderer?.root.findByType("form").props.onSubmit({
+        preventDefault: vi.fn(),
+      }),
+    );
+    expect(state.submit).not.toHaveBeenCalled();
+    await act(async () => renderer?.unmount());
+  });
+
+  it("shows the reconciled verifier status as the terminal success", async () => {
+    state.submit.mockResolvedValue({
+      remoteStatus: "AWAITING_VERIFICATION",
+    });
+    const onClose = vi.fn();
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={onClose}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await prepareAndReview(renderer!);
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={onClose}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    expect(
+      renderer!.root.findAllByType("h2").some((heading) =>
+        String(heading.props.children).includes("GHG Statement submitted"),
+      ),
+    ).toBe(true);
+    expect(
+      renderer!.root.findAllByType("span").some((span) =>
+        String(span.props.children).includes(
+          "Isometric status: In verification. The reconciled status is saved in noma.",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      renderer!.root.findAllByType("span").some((span) =>
+        String(span.props.children).includes("Submission complete"),
+      ),
+    ).toBe(true);
+    expect(state.toastSuccess).toHaveBeenCalledOnce();
+
+    await act(async () => findButton(renderer!, "Done")?.props.onClick());
+    expect(onClose).toHaveBeenCalledOnce();
+    await act(async () => renderer?.unmount());
+  });
+
+  it.each([
+    [
+      "DRAFT",
+      "GHG Statement not submitted",
+      "Isometric status: In registry. Review the submission before trying again.",
+      "Review submission",
+    ],
+    [
+      "FAILED_VERIFICATION",
+      "GHG Statement verification failed",
+      "Isometric status: Verification failed. Update the Removals, close this dialog, then use Refresh on the GHG Statement before resubmitting.",
+      "Close",
+    ],
+  ])(
+    "keeps fulfilled %s results actionable",
+    async (remoteStatus, expectedTitle, expectedGuidance, expectedAction) => {
+      state.submit.mockResolvedValue({ remoteStatus });
+      const onClose = vi.fn();
+
+      let renderer: ReactTestRenderer | undefined;
+      await act(async () => {
+        renderer = create(
+          <GhgStatementSubmitDialog
+            ghgStatementId="statement-1"
+            isOpen
+            onClose={onClose}
+            isProduction={false}
+            isResubmit={false}
+            canGenerate
+          />,
+        );
+      });
+
+      await prepareAndReview(renderer!);
+      await act(async () => renderer?.root.findByType("form").props.onSubmit());
+      await act(async () => {
+        renderer?.update(
+          <GhgStatementSubmitDialog
+            ghgStatementId="statement-1"
+            isOpen
+            onClose={onClose}
+            isProduction={false}
+            isResubmit={false}
+            canGenerate
+          />,
+        );
+      });
+
+      expect(
+        renderer!.root.findAllByType("h2").some((heading) =>
+          String(heading.props.children).includes(expectedTitle),
+        ),
+      ).toBe(true);
+      expect(
+        renderer!.root.findAllByType("span").some((span) =>
+          String(span.props.children).includes(expectedGuidance),
+        ),
+      ).toBe(true);
+      expect(findButton(renderer!, expectedAction)).toBeDefined();
+      expect(findButton(renderer!, "Done")).toBeUndefined();
+      if (remoteStatus === "FAILED_VERIFICATION") {
+        expect(findButton(renderer!, "Review submission")).toBeUndefined();
+        await act(async () =>
+          findButton(renderer!, expectedAction)?.props.onClick(),
+        );
+        expect(onClose).toHaveBeenCalledOnce();
+      }
+      expect(
+        renderer!.root.findAllByType("span").some((span) =>
+          String(span.props.children).includes("Submission complete"),
+        ),
+      ).toBe(false);
+      expect(state.toastSuccess).not.toHaveBeenCalled();
+      if (remoteStatus === "FAILED_VERIFICATION") {
+        expect(state.toastError).toHaveBeenCalledOnce();
+        expect(state.toastWarning).not.toHaveBeenCalled();
+      } else {
+        expect(state.toastWarning).toHaveBeenCalledOnce();
+        expect(state.toastError).not.toHaveBeenCalled();
+      }
+      await act(async () => renderer?.unmount());
+    },
+  );
+
+  it("shows only the statement Refresh guidance when progress stalls", async () => {
+    const stalledError = new SubmissionStreamStalledError();
+    state.submit.mockRejectedValue(stalledError);
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    await prepareAndReview(renderer!);
+    await act(async () => renderer?.root.findByType("form").props.onSubmit());
+    await act(async () => {
+      renderer?.update(
+        <GhgStatementSubmitDialog
+          ghgStatementId="statement-1"
+          isOpen
+          onClose={vi.fn()}
+          isProduction={false}
+          isResubmit={false}
+          canGenerate
+        />,
+      );
+    });
+
+    const visibleCopy = renderer!.root
+      .findAll((node) => typeof node.children[0] === "string")
+      .map((node) => String(node.children[0]));
+    expect(visibleCopy).toContain(
+      "Registry work may still be continuing. Close this dialog, then use Refresh on the GHG Statement before trying again.",
+    );
+    expect(visibleCopy).not.toContain(stalledError.message);
     await act(async () => renderer?.unmount());
   });
 });

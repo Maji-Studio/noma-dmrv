@@ -25,8 +25,13 @@
 
 import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
-import type { IsometricClient } from "./client";
+import { type IsometricClient } from "./client";
+import { isMissingIsometricResource } from "./error-utils";
 import type { components } from "./generated/certify";
+import {
+  ISOMETRIC_KILOGRAM_UNIT,
+  kilogramUnitsMatch,
+} from "./quantity-units";
 
 export type IsometricProductionBatch = components["schemas"]["ProductionBatch"];
 export type CreateProductionBatchRequest =
@@ -35,15 +40,12 @@ export type CreateProductionBatchRequest =
 const CREDIT_BATCH_REF_PREFIX_LEN = 12;
 const DISPLAY_NAME_MAX_LEN = 100;
 
-/** Unit submitted for `M_biochar (DM)` — kilograms, per the approved mapping. */
-export const PRODUCTION_BATCH_MASS_UNIT = "kg";
+export function buildLegacyProductionBatchDisplayName(code: string): string {
+  return code.trim().slice(0, DISPLAY_NAME_MAX_LEN);
+}
 
-// Verified from a live Certify production-batch response on 2026-08-10:
-// Isometric canonicalizes the submitted `kg` unit to `kilogram` on readback.
-const KILOGRAM_UNIT_ALIASES = new Set([
-  PRODUCTION_BATCH_MASS_UNIT,
-  "kilogram",
-]);
+/** Unit submitted for `M_biochar (DM)` — kilograms, per the approved mapping. */
+export const PRODUCTION_BATCH_MASS_UNIT = ISOMETRIC_KILOGRAM_UNIT;
 
 /** The only `ProductionBatchKind` the registry defines for this protocol. */
 export const PRODUCTION_BATCH_KIND = "biochar" as const;
@@ -53,11 +55,7 @@ export function productionBatchMassUnitsMatch(
   actual: string,
   expected: string,
 ): boolean {
-  return (
-    actual === expected ||
-    (KILOGRAM_UNIT_ALIASES.has(actual) &&
-      KILOGRAM_UNIT_ALIASES.has(expected))
-  );
+  return kilogramUnitsMatch(actual, expected);
 }
 
 /**
@@ -80,7 +78,7 @@ export function buildProductionBatchReference(args: {
 }
 
 export interface BuildProductionBatchRequestArgs {
-  /** Credit-batch code — becomes the registry display name. */
+  /** Credit-batch code, displayed alongside its stable registry reference. */
   creditBatchCode: string;
   /** The operator-pasted Isometric facility id (`fcl_…`). */
   externalFacilityId: string;
@@ -141,7 +139,11 @@ export function buildCreateProductionBatchRequest(
   // `display_name` is 1..100 chars when present, so a blank credit-batch code
   // omits it and lets the registry auto-generate one rather than earning a
   // generic 4xx for an empty string.
-  const displayName = args.creditBatchCode.trim().slice(0, DISPLAY_NAME_MAX_LEN);
+  const suffix = ` (${args.supplierReferenceId})`;
+  const code = args.creditBatchCode.trim();
+  const displayName = code
+    ? `${code.slice(0, DISPLAY_NAME_MAX_LEN - suffix.length)}${suffix}`
+    : "";
 
   return {
     ...(displayName ? { display_name: displayName } : {}),
@@ -165,20 +167,54 @@ export async function createProductionBatch(
   return client.post<IsometricProductionBatch>("/production_batches", body);
 }
 
+/** Read the exact journal identity; only a definitive absence permits recovery. */
+export async function getProductionBatch(
+  client: IsometricClient,
+  id: string,
+): Promise<IsometricProductionBatch | null> {
+  try {
+    const batch = await client.get<IsometricProductionBatch>(
+      `/production_batches/${encodeURIComponent(id)}`,
+    );
+    if (!batch || typeof batch.id !== "string") {
+      throw new SafeError(
+        "Isometric returned an invalid production batch response. Try again before submitting.",
+      );
+    }
+    return batch;
+  } catch (error) {
+    if (isMissingIsometricResource(error, "ProductionBatch", id)) return null;
+    throw error;
+  }
+}
+
 /**
  * Looks up a production batch by its noma-controlled supplier reference for the
  * reconcile path. `GET /production_batches` has no server-side reference filter,
  * so this paginates and filters client-side (same shape as
- * `findMeasurementSampleBySupplierRef`). Returns the match or null.
+ * `findMeasurementSampleBySupplierRef`). Returns the unique match or null;
+ * duplicate references fail closed.
  */
 export async function findProductionBatchBySupplierRef(
   client: IsometricClient,
   supplierReferenceId: string,
 ): Promise<IsometricProductionBatch | null> {
+  let match: IsometricProductionBatch | null = null;
   for await (const batch of client.paginate<IsometricProductionBatch>(
     "/production_batches",
   )) {
-    if (batch.supplier_reference_id === supplierReferenceId) return batch;
+    if (batch.supplier_reference_id !== supplierReferenceId) continue;
+    if (match && match.id !== batch.id) {
+      throw new SafeError(
+        "Multiple production batches have this supplier reference in Isometric. Resolve the duplicates before submitting again.",
+      );
+    }
+    match = batch;
   }
-  return null;
+  return match;
+}
+
+/** Deletes only the addressed registry artifact. Missing-resource handling belongs to the caller. */
+export async function deleteProductionBatch(client: IsometricClient, id: string): Promise<void> {
+  await client.delete(`/production_batches/${encodeURIComponent(id)}`);
 }

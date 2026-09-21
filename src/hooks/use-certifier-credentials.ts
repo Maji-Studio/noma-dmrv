@@ -7,7 +7,7 @@ import type { CertifierCredentialsFormInput } from "@/schemas/organizations";
 import { certificationKeys } from "@/hooks/use-certification";
 import { unwrap } from "@/hooks/types";
 
-export const certifierCredentialKeys = {
+const certifierCredentialKeys = {
   all: ["certifier-credentials"] as const,
   organization: (organizationId: string) =>
     [...certifierCredentialKeys.all, organizationId] as const,

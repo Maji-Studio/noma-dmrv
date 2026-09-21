@@ -4,7 +4,6 @@ import { env } from "@/config/env";
 import {
   deleteCertifierProject,
   getCertifierProjectByFacility,
-  listFacilitiesLinkedToExternal,
   listAllFacilitiesLinkedByProvider,
   updateFacilityEmissionConfig,
   upsertCertifierProject,
@@ -32,7 +31,6 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, safeListIfConfigured } from "./shared";
-
 export interface FacilityCertifierMapping {
   mapping: CertifierProjectRow | null;
   availableProjects: IsometricProject[];
@@ -46,49 +44,6 @@ export interface FacilityCertifierMapping {
   // "Isometric isn't configured" (availableProjects forced empty by
   // safeListIfConfigured) from a configured account with no projects.
   isConfigured: boolean;
-}
-
-// Read-only registry-link summary for non-managing viewers. DB-only — it
-// deliberately does NOT hit the Isometric API (`listProjects` /
-// `listGhgEntryTemplates`). A non-admin reading the current mapping receives
-// only the number of local facilities sharing its project, not their identities
-// or the management payload (available projects, link hints, template options).
-// The count lets create surfaces fail early when Isometric's project-wide GHG
-// Statements cannot be assigned safely to one noma facility.
-export interface FacilityCertifierSummary {
-  mapping: CertifierProjectRow | null;
-  linkedFacilityCount: number;
-  isProduction: boolean;
-  viewerCanManage: boolean;
-}
-
-export async function loadFacilityCertifierSummary(
-  facilityId: string,
-): Promise<ActionResult<FacilityCertifierSummary>> {
-  return withAction(async (orgCtx) => {
-    await requireOrgFacility(orgCtx, facilityId);
-    const mapping = await getCertifierProjectByFacility(
-      orgCtx,
-      facilityId,
-      ISOMETRIC_PROVIDER,
-    );
-    const linkedFacilities = mapping
-      ? await listFacilitiesLinkedToExternal(
-          orgCtx,
-          ISOMETRIC_PROVIDER,
-          mapping.externalProjectId,
-        )
-      : [];
-    return {
-      mapping,
-      linkedFacilityCount: linkedFacilities.length,
-      isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
-      viewerCanManage:
-        orgCtx.isPlatformAdmin ||
-        orgCtx.orgRole === "owner" ||
-        orgCtx.orgRole === "admin",
-    };
-  });
 }
 
 export async function loadFacilityCertifierMapping(

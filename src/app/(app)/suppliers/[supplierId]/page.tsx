@@ -3,8 +3,11 @@
  * Displays supplier details with nested locations management
  */
 import { SupplierDetail } from "@/components/suppliers";
-import { getSupplierById } from "@/data-access/entities/suppliers";
+import { findSupplierDetail } from "@/data-access/supplier-detail";
+import { supplierKeys } from "@/hooks/supplier-query-keys";
 import { requireOrgContext } from "@/lib/auth/server";
+import { createServerHydrationState } from "@/lib/react-query/server-hydration";
+import { HydrationBoundary } from "@tanstack/react-query";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
@@ -22,11 +25,26 @@ export default async function SupplierDetailPage({
   }
 
   const ctx = await requireOrgContext();
-  const supplier = await getSupplierById(ctx, supplierId);
+  const detail = await findSupplierDetail(ctx, supplierId);
 
-  if (!supplier) {
+  if (!detail) {
     notFound();
   }
 
-  return <SupplierDetail supplierId={supplierId} />;
+  const hydrationState = createServerHydrationState([
+    {
+      queryKey: supplierKeys.detail(supplierId),
+      data: detail.supplier,
+    },
+    {
+      queryKey: supplierKeys.supplierLocations(supplierId),
+      data: detail.locations,
+    },
+  ]);
+
+  return (
+    <HydrationBoundary state={hydrationState}>
+      <SupplierDetail supplierId={supplierId} />
+    </HydrationBoundary>
+  );
 }

@@ -24,6 +24,7 @@ import {
 } from "@/lib/isometric/transformers/sequestration-binding";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import type { Logger } from "@/lib/log";
+import { buildBiocharApplicationReference } from "@/lib/isometric/biochar-applications";
 import {
   buildVersionedMeasurementSampleSubmissions,
   normalizeMeasurementSamplesForHash,
@@ -40,15 +41,12 @@ import {
   compileBiocharApplicationIntents,
   type BiocharApplicationIntent,
 } from "./biochar-application-intents";
-import {
-  collectCandidateSourceDocumentsForRemoval,
-  resolveSourceBindingCandidates,
-  type CandidateSourceDocument,
-  type ResolvedSourceBindingCandidate,
+import type {
+  CandidateSourceDocument,
+  ResolvedSourceBindingCandidate,
 } from "./sources";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import {
-  buildRemovalSourceBindingPlan,
   sourceIdsForDatapointTarget,
   type RemovalSourceBindingPlanEntry,
 } from "@/lib/certification/removal-source-bindings";
@@ -60,13 +58,19 @@ import {
   includesProductionInputs,
   productionClaimContribution,
 } from "./production-claim-policy";
+import { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
+import { planRemovalEvidence } from "./removal-evidence-plan";
+
+export { normalizeSequestrationTemplateForHash } from "./removal-template-hash";
 
 export interface RemovalSubmissionBuild {
   agg: AggregatedProductionData;
   reportingWindow: { startedOn: Date; completedOn: Date };
   candidateDocumentIds: string[];
   candidateSourceDocuments: CandidateSourceDocument[];
+  readySourceDocumentCount: number;
   sourceIds: string[];
+  datapointSourceIds: string[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
   monitored: ResolvedMonitoredInput[];
@@ -165,6 +169,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     transport: {
       removalSupplierRef: string;
       omittedTemplateComponentIds: string[];
+      biocharApplicationIntents: BiocharApplicationIntent[];
       datapointBodies: Array<{
         rtcId: string;
         inputKey: string;
@@ -177,6 +182,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
       >;
     };
   };
+  metadata: { supersedePreviousId: string | null };
 }
 
 const DATAPOINT_POST_TARGET = "/datapoints";
@@ -294,12 +300,7 @@ export async function compileRemovalSubmission(
   }
 
   const blockers: string[] = [];
-  const readySourceDocumentCount =
-    build.sourceBindingPlan.length > 0
-      ? new Set(
-          build.sourceBindingPlan.map((entry) => entry.documentId),
-        ).size
-      : build.sourceIds.length;
+  const readySourceDocumentCount = build.readySourceDocumentCount;
   const pendingSourceCount = Math.max(
     build.candidateDocumentIds.length - readySourceDocumentCount,
     0,
@@ -490,6 +491,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
   externalProjectId: string;
   removalId: string;
   nextVersion: number;
+  supersedePreviousId: string | null;
 }): MaterializedRemovalSubmissionSnapshot {
   const {
     compiled,
@@ -497,12 +499,24 @@ export function materializeRemovalSubmissionSnapshot(args: {
     externalProjectId,
     removalId,
     nextVersion,
+    supersedePreviousId,
   } = args;
   const removalSupplierRef = buildRemovalSupplierRef({
     removalId,
     role: "removal",
     version: nextVersion,
   });
+  const biocharApplicationIntents = compiled.biocharApplicationIntents.map(
+    (intent) => ({
+      ...intent,
+      supplierReference: buildBiocharApplicationReference({
+        applicationId: intent.applicationId,
+        creditBatchId: intent.creditBatchId,
+        environment: env.ISOMETRIC_ENVIRONMENT,
+        removalSubmissionVersion: nextVersion,
+      }),
+    }),
+  );
   const finalDatapointBodies = compiled.monitored.map((input) => {
     const supplierRefId = buildRemovalSupplierRef({
       removalId,
@@ -566,6 +580,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
         removalSupplierRef,
         omittedTemplateComponentIds:
           compiled.omittedTemplateComponentIds,
+        biocharApplicationIntents,
         datapointBodies: [
           ...finalDatapointBodies,
           ...directSequestrationDatapoints,
@@ -575,37 +590,8 @@ export function materializeRemovalSubmissionSnapshot(args: {
         ? { durabilityMeasurementSamples }
         : {}),
     },
+    metadata: { supersedePreviousId },
   };
-}
-
-export function normalizeSequestrationTemplateForHash(
-  template: IsometricGhgEntryTemplate,
-) {
-  return template.groups
-    .flatMap((group) =>
-      group.components
-        .filter((component) =>
-          isSequestrationBlueprintFamily(component.blueprint_key),
-        )
-        .map((component) => ({
-          groupKey: group.key,
-          rtcId: component.id,
-          blueprintKey: component.blueprint_key,
-          inputs: component.inputs
-            .map((input) => ({
-              inputKey: input.input_key,
-              type: input.type,
-              quantityKind: input.quantity_kind,
-              datapointId: input.datapoint_id,
-            }))
-            .sort((a, b) => a.inputKey.localeCompare(b.inputKey)),
-        })),
-    )
-    .sort((a, b) =>
-      `${a.groupKey}::${a.rtcId}::${a.blueprintKey}`.localeCompare(
-        `${b.groupKey}::${b.rtcId}::${b.blueprintKey}`,
-      ),
-    );
 }
 
 export function assertEntityReadinessGapsResolved(
@@ -653,7 +639,8 @@ export async function buildRemovalSubmissionBuild(args: {
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   assertSequestrationTemplateBindings(defaultTemplate);
 
-  const biocharApplicationIntents = await compileBiocharApplicationIntents({
+  const compiledBiocharApplicationIntents =
+    await compileBiocharApplicationIntents({
     orgCtx,
     memberBatches: ctx.memberBatchClaims,
     environment: env.ISOMETRIC_ENVIRONMENT,
@@ -745,111 +732,22 @@ export async function buildRemovalSubmissionBuild(args: {
     );
   }
 
-  // A caller-supplied Source set makes this a side-effect-free preflight or a
-  // locked rebuild. Skip the document walk in that case; the caller already
-  // owns the authoritative IDs and does not consume `candidateDocumentIds`.
-  const candidateSourceDocuments =
-    args.candidateSourceDocuments ??
-    (args.sourceIds || args.sourceBindingCandidates
-      ? []
-      : await collectCandidateSourceDocumentsForRemoval(orgCtx, {
-          removalId,
-          lineages: ctx.lineages,
-          memberBatches: ctx.memberBatches,
-          memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
-            batch.samples.map((sample) => ({
-              id: sample.id,
-              code: sample.sampleCode,
-            })),
-          ),
-        }));
-  const sourceBindingCandidates =
-    args.sourceBindingCandidates ??
-    (args.sourceIds
-      ? []
-      : await resolveSourceBindingCandidates(orgCtx, {
-          candidates: candidateSourceDocuments,
-        }));
-  const candidateDocumentIds =
-    args.candidateDocumentIds ??
-    Array.from(
-      new Set(candidateSourceDocuments.map((candidate) => candidate.documentId)),
-    ).sort();
-  const sourceIds =
-    args.sourceIds ??
-    Array.from(
-      new Set(sourceBindingCandidates.map((candidate) => candidate.sourceId)),
-    ).sort();
-  const sourceIdByDocumentId = new Map(
-    sourceBindingCandidates.map((candidate) => [
-      candidate.documentId,
-      candidate.sourceId,
-    ]),
-  );
-  // Delivery-lineage mass evidence (proof of delivery, BoL) targets the
-  // sequestration datapoint, whose Sources resolve per member credit batch.
-  const deliveryIdByApplicationId = new Map(
-    ctx.lineages.map((lineage) => [
-      lineage.application.id,
-      lineage.delivery.id,
-    ]),
-  );
-  const deliveryIdsByCreditBatchId = new Map(
-    ctx.memberBatchClaims.map((batch) => [
-      batch.creditBatchId,
-      Array.from(
-        new Set(
-          batch.applicationIds.flatMap((applicationId) => {
-            const deliveryId = deliveryIdByApplicationId.get(applicationId);
-            return deliveryId ? [deliveryId] : [];
-          }),
-        ),
-      ),
-    ]),
-  );
-  const sourceBindingPlan = buildRemovalSourceBindingPlan({
-    candidates: sourceBindingCandidates,
+  const {
+    candidateSourceDocuments,
+    candidateDocumentIds,
+    readySourceDocumentCount,
+    sourceIds,
+    datapointSourceIds,
+    biocharApplicationIntents,
+    sourceBindingPlan,
+    semanticSourceBindingPlan,
+  } = await planRemovalEvidence({
+    orgCtx,
+    removalId,
+    ctx,
     template: defaultTemplate,
-    applicationIdsByCreditBatchId: new Map(
-      ctx.memberBatchClaims.map((batch) => [
-        batch.creditBatchId,
-        batch.applicationIds,
-      ]),
-    ),
-    sampleIdsByCreditBatchId: new Map(
-      ctx.batchesWithSamples.map((batch) => [
-        batch.creditBatchId,
-        batch.samples.map((sample) => sample.id),
-      ]),
-    ),
-    deliveryIdsByCreditBatchId,
-  });
-  // The operator reviews every candidate file before pending Sources receive
-  // registry IDs. Build the semantic plan from that complete candidate set,
-  // using an empty placeholder only for IDs that submission will materialize.
-  // `reviewPayloadHash` strips those IDs, so the reviewed and post-mirror plans
-  // compare identically while every role, lineage and intended target remains
-  // covered. The operational plan above stays strict and contains ready Sources
-  // only, so no empty ID can reach a wire payload.
-  const semanticSourceBindingPlan = buildRemovalSourceBindingPlan({
-    candidates: candidateSourceDocuments.map((candidate) => ({
-      ...candidate,
-      sourceId: sourceIdByDocumentId.get(candidate.documentId) ?? "",
-    })),
-    template: defaultTemplate,
-    applicationIdsByCreditBatchId: new Map(
-      ctx.memberBatchClaims.map((batch) => [
-        batch.creditBatchId,
-        batch.applicationIds,
-      ]),
-    ),
-    sampleIdsByCreditBatchId: new Map(
-      ctx.batchesWithSamples.map((batch) => [
-        batch.creditBatchId,
-        batch.samples.map((sample) => sample.id),
-      ]),
-    ),
-    deliveryIdsByCreditBatchId,
+    compiledBiocharApplicationIntents,
+    supplied: args,
   });
 
   const {
@@ -862,7 +760,7 @@ export async function buildRemovalSubmissionBuild(args: {
     blueprintsByKey,
     agg,
     externalProjectId,
-    sourceIds,
+    sourceIds: datapointSourceIds,
     sourceBindingPlan,
     allowPeriodInputStub,
     omitProductionComponents: !hasProductionContribution,
@@ -913,6 +811,7 @@ export async function buildRemovalSubmissionBuild(args: {
       .map((candidate) => ({
         documentId: candidate.documentId,
         binding: candidate.binding,
+        biocharApplicationId: candidate.biocharApplicationId,
       }))
       .sort((left, right) =>
         left.documentId.localeCompare(right.documentId),
@@ -949,7 +848,9 @@ export async function buildRemovalSubmissionBuild(args: {
     reportingWindow,
     candidateDocumentIds,
     candidateSourceDocuments,
+    readySourceDocumentCount,
     sourceIds,
+    datapointSourceIds,
     sourceBindingPlan,
     semanticPayload,
     monitored,

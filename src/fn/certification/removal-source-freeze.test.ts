@@ -1,0 +1,130 @@
+import { describe, expect, it } from "vitest";
+import type { CertificationSubmissionRow } from "@/data-access/certification";
+import { SafeError } from "@/lib/errors";
+import type { CandidateSourceDocument } from "./source-candidates";
+import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
+
+const frozenOperatorCandidate: CandidateSourceDocument = {
+  documentId: "frozen-document",
+  binding: null,
+  biocharApplicationId: "frozen-biochar-application",
+};
+const currentTransportLedgerCandidate: CandidateSourceDocument = {
+  documentId: "current-transport-ledger",
+  binding: {
+    nomaRole: "transport_evidence_ledger",
+    nomaRoleLabel: "Transport evidence ledger",
+    lineage: {
+      entityType: "credit_batch",
+      entityId: "batch-1",
+      entityLabel: "Credit batch CB-1",
+    },
+    intendedTarget: {
+      kind: "ordinary",
+      groupKey: "biochar-transport",
+      componentBlueprintKey: "mass_distance_based_ci_emissions",
+      inputKey: "mass_distance",
+      optionalInTemplate: true,
+    },
+    mappingRevision: "source-bindings-v1",
+  },
+  biocharApplicationId: null,
+};
+const currentCandidates: CandidateSourceDocument[] = [
+  {
+    documentId: "frozen-document",
+    binding: null,
+    biocharApplicationId: "reclassified-biochar-application",
+  },
+  {
+    documentId: "new-application-photo",
+    binding: null,
+    biocharApplicationId: "new-biochar-application",
+  },
+  currentTransportLedgerCandidate,
+];
+
+function submission(
+  overrides: Partial<CertificationSubmissionRow> = {},
+): CertificationSubmissionRow {
+  return {
+    status: "submitted",
+    metadata: {},
+    payloadSnapshot: {
+      semantic: { candidateSources: [frozenOperatorCandidate] },
+    },
+    ...overrides,
+  } as CertificationSubmissionRow;
+}
+
+describe("Removal Source freeze", () => {
+  it.each([null, "rejected", "superseded"] as const)(
+    "keeps the live candidate set when latest status is %s",
+    (status) => {
+      expect(
+        filterCandidateSourcesForSubmissionLifecycle(
+          currentCandidates,
+          status === null ? null : submission({ status }),
+        ),
+      ).toEqual(currentCandidates);
+    },
+  );
+
+  it.each([
+    { lockedAt: null },
+    { lockedAt: new Date() },
+  ])("reuses the exact frozen tuple for every draft retry", (draftState) => {
+    expect(
+      filterCandidateSourcesForSubmissionLifecycle(
+        currentCandidates,
+        submission({ status: "draft", ...draftState }),
+      ),
+    ).toEqual([frozenOperatorCandidate]);
+  });
+
+  it.each(["submitted", "accepted"] as const)(
+    "freezes operator evidence but admits the current generated ledger for %s",
+    (status) => {
+      expect(
+        filterCandidateSourcesForSubmissionLifecycle(
+          currentCandidates,
+          submission({ status }),
+        ),
+      ).toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate]);
+    },
+  );
+
+  it("retains frozen operator evidence when live discovery no longer returns it", () => {
+    expect(
+      filterCandidateSourcesForSubmissionLifecycle(
+        currentCandidates.slice(1),
+        submission(),
+      ),
+    ).toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate]);
+  });
+
+  it("fails closed when a frozen snapshot has no candidate evidence set", () => {
+    expect(() =>
+      filterCandidateSourcesForSubmissionLifecycle(
+        currentCandidates,
+        submission({ payloadSnapshot: {} }),
+      ),
+    ).toThrow(SafeError);
+  });
+});
+
+describe("reviewed evidence versions", () => {
+it("selects explicitly reviewed additions for a new version without changing old evidence", () => {
+  const row = submission({status: "draft", metadata: { evidenceRefreshCandidates: [frozenOperatorCandidate, currentCandidates[1]] }});
+  const before = JSON.stringify(row.payloadSnapshot);
+  expect(filterCandidateSourcesForSubmissionLifecycle(currentCandidates, row)).toEqual([frozenOperatorCandidate, currentCandidates[1], currentTransportLedgerCandidate]);
+  expect(JSON.stringify(row.payloadSnapshot)).toBe(before);
+});
+
+  it("replaces both superseded generated ledger roles in a reviewed version", () => {
+    const durability: CandidateSourceDocument = { ...currentTransportLedgerCandidate, documentId: "current-durability-ledger", binding: { ...currentTransportLedgerCandidate.binding!, nomaRole: "durability_evidence_ledger" } };
+    const previousLedger = { ...currentTransportLedgerCandidate, documentId: "superseded-ledger" };
+    const row = submission({ status: "draft", metadata: { evidenceRefreshCandidates: [frozenOperatorCandidate, previousLedger] } });
+    expect(filterCandidateSourcesForSubmissionLifecycle([...currentCandidates, durability], row)).toEqual([frozenOperatorCandidate, currentTransportLedgerCandidate, durability]);
+  });
+});

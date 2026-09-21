@@ -17,9 +17,6 @@ import {
   deleteSupplier,
   getSuppliers as getSuppliersData,
   getSupplierById as getSupplierByIdData,
-  getSupplierLocations as getSupplierLocationsData,
-  isSupplierCodeAvailable as isSupplierCodeAvailableData,
-  getSupplierOptions as getSupplierOptionsData,
   updateSupplier,
   getSupplierLocationsBySupplier as getSupplierLocationsBySupplierData,
   createSupplierLocation,
@@ -41,9 +38,27 @@ import {
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import {
+  type ActionFailure,
   formatZodActionError,
+  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
+
+/**
+ * Failure shape for the write paths. Unlike the read helper below it keeps an
+ * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
+ * refusal from an ordinary save failure and hold on to the operator's draft.
+ */
+function supplierActionFailure(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): ActionFailure {
+  return toActionFailure(error, {
+    fallbackMessage,
+    log: { message: "supplier action failed", context: { op } },
+  });
+}
 
 function supplierActionError(
   error: unknown,
@@ -111,80 +126,6 @@ export async function getSupplierByIdFn(
         error,
         "Failed to load supplier",
         "supplier:get",
-      ),
-    };
-  }
-}
-
-/**
- * Get unique locations from all suppliers
- */
-export async function getSupplierLocationsFn(): Promise<
-  ActionResult<string[]>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const locations = await getSupplierLocationsData(ctx);
-    return { success: true, data: locations };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to load locations",
-        "supplier:locations",
-      ),
-    };
-  }
-}
-
-/**
- * Get supplier options for dropdowns
- */
-export async function getSupplierOptionsFn(): Promise<
-  ActionResult<Array<{ id: string; code: string; name: string }>>
-> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const options = await getSupplierOptionsData(ctx);
-    return { success: true, data: options };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to load supplier options",
-        "supplier:options",
-      ),
-    };
-  }
-}
-
-/**
- * Check if a supplier code is available
- */
-export async function checkSupplierCodeFn(
-  code: string,
-  excludeSupplierId?: string
-): Promise<ActionResult<{ available: boolean }>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const available = await isSupplierCodeAvailableData(
-      ctx,
-      code,
-      excludeSupplierId
-    );
-    return { success: true, data: { available } };
-  } catch (error) {
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to check supplier code",
-        "supplier:check-code",
       ),
     };
   }
@@ -335,6 +276,7 @@ export async function updateSupplierFn(
     const validated = updateSupplierSchema.parse(data);
 
     const supplier = await updateSupplier(ctx, validated.supplierId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       code: validated.code,
       name: validated.name,
       location: validated.location,
@@ -354,20 +296,7 @@ export async function updateSupplierFn(
 
     return { success: true, data: supplier };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to update supplier",
-        "supplier:update",
-      ),
-    };
+    return supplierActionFailure(error, "Failed to update supplier", "supplier:update");
   }
 }
 
@@ -488,6 +417,7 @@ export async function updateSupplierLocationFn(
     const validated = updateSupplierLocationSchema.parse(data);
 
     const location = await updateSupplierLocation(ctx, validated.locationId, {
+      expectedUpdatedAt: validated.expectedUpdatedAt,
       name: validated.name || null,
       country: validated.country,
       stateRegion: validated.stateRegion || null,
@@ -505,20 +435,7 @@ export async function updateSupplierLocationFn(
 
     return { success: true, data: location };
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: supplierActionError(
-        error,
-        "Failed to update supplier location",
-        "supplier-location:update",
-      ),
-    };
+    return supplierActionFailure(error, "Failed to update supplier location", "supplier-location:update");
   }
 }
 
