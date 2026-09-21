@@ -60,7 +60,7 @@ export function ProductReadDetails({ product }: { product: BiocharProductWithRel
           {detailed && <CompositionCard title="Source composition" totalKg={composition.sourceTotalKg} components={composition.sourceComponents} details={<>
             <CalculationFacts facts={[{ label: "Source biochar (wet)", massKg: composition.sourceWetKg }, { label: "Dry biochar", massKg: composition.sourceDryKg }, { label: "Added water", massKg: product.waterAddedKg }]} />
             <p>{product.sourceAllocatedDryMassKg !== null ? "Dry biochar uses the recorded source allocation. Later moisture edits do not change it." : "Dry biochar is derived from the recorded source wet mass and moisture."}</p>
-            {sourceBinId && <div className="space-y-8"><h4 className="font-medium">{sourceBinName ?? "Source bin"}</h4><p className="body-caption">Bin history includes recorded movements. It is not a new allocation for this product.</p><OutputStockHistory storageLocationId={sourceBinId} facilityId={product.facilityId} /></div>}
+            {sourceBinId && <div className="space-y-8"><h4 className="body-small font-medium">{sourceBinName ?? "Source bin"}</h4><p className="body-caption">Bin history includes recorded movements. It is not a new allocation for this product.</p><OutputStockHistory storageLocationId={sourceBinId} facilityId={product.facilityId} /></div>}
           </>} />}
         </div>,
       },
@@ -83,7 +83,7 @@ export function ProductReadDetails({ product }: { product: BiocharProductWithRel
         content: detailed && <CompositionCard title="Product composition" totalKg={composition.productTotalKg} components={composition.productComponents} details={<>
           <CalculationFacts facts={[{ label: "Source biochar (wet)", massKg: composition.sourceWetKg }, ...composition.ingredients.map(ingredient => ({ label: `${ingredient.feedstockTypeName} (wet)`, massKg: ingredient.massKg ?? null })), { label: "Added water", massKg: product.waterAddedKg }, { label: "Wet total", massKg: composition.productTotalKg }]} />
           <p>Wet total = recorded blend mass + added water. Dry biochar excludes ingredient solids and water.</p>
-          {product.storageLocation && <div className="space-y-8"><h4 className="font-medium">{product.storageLocation.name}</h4><OutputStockHistory storageLocationId={product.storageLocation.id} facilityId={product.facilityId} /></div>}
+          {product.storageLocation && <div className="space-y-8"><h4 className="body-small font-medium">{product.storageLocation.name}</h4><OutputStockHistory storageLocationId={product.storageLocation.id} facilityId={product.facilityId} /></div>}
         </>} />,
       },
       { title: "Derived transport", fields: [], content: <TransportLegsSummary entityType="biochar" entityId={product.id} emptyMessage="Transport legs are derived from this product's deliveries. Record a delivery to a destination with a distance from the facility." /> },

@@ -255,6 +255,15 @@ test("order details show actual dry stock and saving requested wet mass does not
   await expect(stock).toContainText("90,000 kg");
   await expect(stock).toContainText(/dry biochar/);
   await expect(stock).toContainText(/do not reserve stock/);
+  const stockExplanation = stock.getByText("Wet availability depends on measured departure moisture.", { exact: true });
+  await expect(stockExplanation).toBeHidden();
+  const stockDetails = stock.getByRole("button", { name: `Show details for ${seededData.productStorageLocation.name}`, exact: true });
+  await stockDetails.focus();
+  await page.keyboard.press("Enter");
+  await expect(stockExplanation).toBeVisible();
+  await expect(stock.getByRole("button", { name: `Hide details for ${seededData.productStorageLocation.name}`, exact: true })).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Enter");
+  await expect(stockExplanation).toBeHidden();
   await capture(page, "order-detailed-desktop");
   await dialog.locator('input[name="value"]').scrollIntoViewIfNeeded();
   const valueBox = await dialog.locator('input[name="value"]').boundingBox();

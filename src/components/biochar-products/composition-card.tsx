@@ -27,7 +27,7 @@ export function CalculationFacts({ facts }: { facts: { label: string; massKg: nu
 const FILLS = {
   biochar: "bg-[var(--clr-dark-purple-80)]",
   ingredient: "bg-[var(--clr-dark-purple-40)]",
-  water: "moisture-water-hatch",
+  water: "moisture-water-hatch bg-[var(--paper)]",
   addedWater: "bg-[var(--color-moisture-added-water)]",
 };
 
@@ -58,7 +58,7 @@ export function CompositionCard({ title, totalKg, components, details }: {
   return <section aria-label={title} className="space-y-12 bg-[var(--color-surface-light)] p-16">
     <div className="flex items-center justify-between gap-12">
       <h3 className="body-small font-medium">{title}</h3>
-      {details && <Button type="button" variant="noOutline" className="min-h-44 px-8" aria-expanded={open} aria-controls={id} aria-label={`${open ? "Hide" : "Show"} details for ${title.toLowerCase()}`} onClick={() => setOpen(!open)}>{open ? "Hide details" : "Details"}</Button>}
+      {details && <Button type="button" variant="noOutline" className="min-h-44 shrink-0 px-8" aria-expanded={open} aria-controls={id} aria-label={`${open ? "Hide" : "Show"} details for ${title.toLowerCase()}`} onClick={() => setOpen(!open)}>{open ? "Hide details" : "Details"}</Button>}
     </div>
     <table className="w-full table-fixed body-caption">
       <caption className="sr-only">{title}. Bars show each component as a share of total wet mass.</caption>
@@ -68,7 +68,7 @@ export function CompositionCard({ title, totalKg, components, details }: {
         <td className="py-8 pr-8 text-right align-top tabular-nums">{formatCompositionMass(component.massKg)}</td>
         <td className="py-8 text-right align-top tabular-nums">{complete ? formatPercent(component.massKg! / totalKg! * PERCENT_SCALE) : MISSING_VALUE.notAvailable}</td>
       </tr>)}</tbody>
-      <tfoot className="border-t border-[var(--color-border-secondary)]"><tr><th scope="row" className="pt-8 text-left font-medium">Wet total</th><td className="pt-8 pr-8 text-right tabular-nums">{formatCompositionMass(totalKg)}</td><td className="pt-8 text-right">{complete ? formatPercent(PERCENT_SCALE) : MISSING_VALUE.notAvailable}</td></tr></tfoot>
+      <tfoot className="border-t border-[var(--color-border-secondary)]"><tr><th scope="row" className="pt-8 text-left font-medium">Wet total</th><td className="pt-8 pr-8 text-right tabular-nums">{formatCompositionMass(totalKg)}</td><td className="pt-8 text-right tabular-nums">{complete ? formatPercent(PERCENT_SCALE) : MISSING_VALUE.notAvailable}</td></tr></tfoot>
     </table>
     {details && <div id={id} hidden={!open} className="space-y-12 border-t border-[var(--color-border-secondary)] pt-16 body-small">{details}</div>}
   </section>;

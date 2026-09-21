@@ -1,6 +1,8 @@
 "use client";
 
+import { useId, useState } from "react";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { Button } from "@/components/ui/button";
 import { InfoHint } from "@/components/ui/tooltip";
 import { formatMassKg, formatPercent } from "@/lib/format-utils";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
@@ -36,6 +38,8 @@ function MatchingOutputBinCard({ bin, facilityId, physicalDate }: {
   facilityId: string;
   physicalDate: string | null;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
   // A zero count reads the existing balance; its proposed after state is not an order operation.
   const stock = useOutputStockPreview(physicalDate ? {
     storageLocationId: bin.id, facilityId, physicalDate, kind: "count", wetMassKg: 0, moisturePercent: null,
@@ -43,24 +47,24 @@ function MatchingOutputBinCard({ bin, facilityId, physicalDate }: {
   const preview = stock.data;
   const total = preview?.beforeDryKg ?? bin.dryMassKg;
   return <div className="space-y-12">
-    <div className="flex flex-wrap justify-between gap-8 body-small"><h3 className="font-medium">{bin.name}</h3><p>{formatMassKg(total)} dry biochar</p></div>
+    <div className="flex items-center justify-between gap-12">
+      <div className="min-w-0 space-y-4"><h3 className="body-small font-medium">{bin.name}</h3><p className="body-caption tabular-nums">{formatMassKg(total)} dry biochar</p></div>
+      <Button type="button" variant="noOutline" className="min-h-44 shrink-0 px-8" aria-expanded={detailsOpen} aria-controls={detailsId} aria-label={`${detailsOpen ? "Hide" : "Show"} details for ${bin.name}`} onClick={() => setDetailsOpen(!detailsOpen)}>{detailsOpen ? "Hide details" : "Details"}</Button>
+    </div>
     <table className="w-full table-fixed body-caption">
       <caption className="sr-only">{bin.name} available dry biochar by blend or lot</caption>
       <thead><tr className="border-b border-[var(--color-border-secondary)]"><th scope="col" className="w-1/2 pb-8 text-left font-normal">Blend / lot</th><th scope="col" className="pb-8 text-right font-normal">Dry biochar</th><th scope="col" className="pb-8 text-right font-normal">% of total</th></tr></thead>
       <tbody>{preview?.beforeAllocations?.map(lot => <tr key={lot.layerId}><th scope="row" className="space-y-4 py-8 pr-12 text-left font-normal">{lot.code}<div aria-hidden="true" className="h-8 bg-[var(--color-background-medium)]"><div className="h-full bg-[var(--clr-dark-purple-80)]" style={{ width: `${total > 0 && lot.dryMassKg !== null ? lot.dryMassKg / total * PERCENT_SCALE : 0}%` }} /></div></th><td className="py-8 text-right align-top tabular-nums">{formatMassKg(lot.dryMassKg)}</td><td className="py-8 text-right align-top tabular-nums">{total > 0 && lot.dryMassKg !== null ? formatPercent(lot.dryMassKg / total * PERCENT_SCALE) : MISSING_VALUE.notAvailable}</td></tr>)}</tbody>
     </table>
-    <details>
-      <summary className="min-h-44 cursor-pointer py-12 body-small focus-visible:outline-2 focus-visible:outline-[var(--color-interaction)]">Details for {bin.name}</summary>
-      <div className="space-y-12 body-caption">
-        <p>{bin.code}{preview?.formulationName ? ` · ${preview.formulationName}` : ""}</p>
-        <div className="flex items-center gap-8">FIFO: oldest eligible first<InfoHint label="About FIFO">At delivery, stock placed by the movement date is used oldest first, then by posting order. Creating an order does not draw from these lots.</InfoHint></div>
-        <p>Available dry biochar is the sum of the remaining source lots. It excludes ingredient solids and water.</p>
-        {preview?.beforeAllocations?.map(lot => <div key={lot.layerId} className="space-y-4 border-l-2 border-[var(--color-border-secondary)] pl-12"><p className="font-medium">{lot.code}</p>{lot.runs.map(run => <p key={run.productionRunId}>{run.code}: {formatMassKg(run.dryMassKg)} dry biochar</p>)}</div>)}
-        <OutputStockHistory storageLocationId={bin.id} facilityId={facilityId} />
-      </div>
-    </details>
+    <div id={detailsId} hidden={!detailsOpen} className="space-y-12 border-t border-[var(--color-border-secondary)] pt-16 body-caption">
+      <p>{bin.code}{preview?.formulationName ? ` · ${preview.formulationName}` : ""}</p>
+      <div className="flex items-center gap-8">FIFO: oldest eligible first<InfoHint label="About FIFO">At delivery, stock placed by the movement date is used oldest first, then by posting order. Creating an order does not draw from these lots.</InfoHint></div>
+      <p>Available dry biochar is the sum of the remaining source lots. It excludes ingredient solids and water.</p>
+      <p>Wet availability depends on measured departure moisture.</p>
+      {preview?.beforeAllocations?.map(lot => <div key={lot.layerId} className="space-y-4 border-l-2 border-[var(--color-border-secondary)] pl-12"><p className="font-medium">{lot.code}</p>{lot.runs.map(run => <p key={run.productionRunId}>{run.code}: {formatMassKg(run.dryMassKg)} dry biochar</p>)}</div>)}
+      <OutputStockHistory storageLocationId={bin.id} facilityId={facilityId} />
+    </div>
     {(stock.isLoading || !physicalDate) && <p role="status">Loading stock details...</p>}
     {stock.error && <p role="status">Stock details could not be loaded. You can still save this order.</p>}
-    <p className="body-caption">Wet availability depends on measured departure moisture.</p>
   </div>;
 }
