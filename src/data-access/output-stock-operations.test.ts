@@ -1,4 +1,6 @@
 import { expect, it, vi } from 'vitest';
+import { conflictCode } from '@/lib/conflict-ref';
+import { ActionConflictError } from '@/lib/errors';
 import { rational } from '@/lib/output-stock';
 
 const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
@@ -30,6 +32,23 @@ it('returns certification artifact identities while checking both affected sourc
   expect(result.removedDryKg).toBe(9);
 });
 
+
+it('passes the blocking movement through when a correction is refused', async () => {
+  const binId = '00000000-0000-4000-8000-000000000001';
+  const layers = [{ id: 'run', physicalDate: '2026-09-01', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
+  const bin = { id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null };
+  // The refused pass reads only the bin before the correction throws; the
+  // fallback pass then reads the bin, its events and both code lists.
+  const runCodes = [{ id: 'run', code: 'RUN-001' }];
+  mocks.reads = [[bin], [bin], [], runCodes, runCodes];
+  mocks.state.mockResolvedValue({ layers });
+  const movement = { entity: 'binMovement', id: 'later', code: conflictCode('Later loss (2026-09-12)') };
+  mocks.correction.mockRejectedValue(new ActionConflictError('Correction blocked by a later loss.', { entity: 'storageLocation', id: binId, code: conflictCode('BC-001') }, { blockers: [movement] }));
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', physicalDate: '2026-09-14', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
+  expect(result.blockingMessage).toContain('Correction blocked by a later loss.');
+  expect(result.blockers).toEqual([movement]);
+});
 
 it('matches product-bin stock using facility-local today across UTC midnight', async () => {
   vi.useFakeTimers();

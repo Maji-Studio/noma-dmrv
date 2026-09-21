@@ -12,22 +12,25 @@ const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as con
 const reader = { select: () => ({ from: () => ({ where: mocks.where }) }) } as unknown as Pick<DbTransaction, 'select'>;
 const input = { storageLocationId: 'bin', facilityId: 'facility', physicalDate: '2026-09-14', kind: 'loss' as const, wetMassKg: 10, moisturePercent: 10, correctsMovementId: 'original' };
 const original = { id: 'original', outputKind: 'loss', postingSequence: BigInt(1) };
+const bin = { code: 'BIN-01' };
+const binConflict = { entity: 'storageLocation', id: 'bin', code: 'BIN-01' };
 const allocation = { id: 'allocation', productionRunId: 'run', biocharProductId: null, deliveryId: 'delivery' };
 const layers = [{ id: 'run', physicalDate: '2026-09-01' }] as OutputStockLayer[];
 
 beforeEach(() => {
-  mocks.where.mockReset().mockResolvedValueOnce([original]).mockResolvedValueOnce([]);
+  // Reads in order: the original movement, the already-corrected probe, then the bin the conflict points at.
+  mocks.where.mockReset().mockResolvedValueOnce([original]).mockResolvedValueOnce([]).mockResolvedValueOnce([bin]);
   mocks.projection.mockReset().mockResolvedValue([{ movement: original, allocation }]);
 });
 
 describe('correction dependency identities', () => {
-  it('keeps the hard later-movement guard and includes the movement identity', async () => {
+  it('points a later-movement refusal at the bin and lists the movement as a blocker', async () => {
     mocks.projection.mockResolvedValue([{ movement: original, allocation }, { movement: { id: 'later', reason: 'Later loss', outputKind: 'loss', postingSequence: BigInt(2), physicalDate: '2026-09-12' }, allocation }]);
-    await expect(prepareOutputCorrection(ctx, input, layers, reader)).rejects.toMatchObject({ conflict: { entity: 'binMovement', id: 'later', code: 'Later loss (2026-09-12)' } });
+    await expect(prepareOutputCorrection(ctx, input, layers, reader)).rejects.toMatchObject({ conflict: binConflict, blockers: [{ entity: 'binMovement', id: 'later', code: 'Later loss (2026-09-12)' }] });
   });
   it('identifies a later balance-dependent count without draw allocations', async () => {
     mocks.where.mockResolvedValueOnce([{ id: 'count', outputKind: 'count', physicalDate: '2026-09-12' }]);
-    await expect(prepareOutputCorrection(ctx, input, layers, reader)).rejects.toMatchObject({ conflict: { entity: 'binMovement', id: 'count', code: 'Count 2026-09-12' } });
+    await expect(prepareOutputCorrection(ctx, input, layers, reader)).rejects.toMatchObject({ conflict: binConflict, blockers: [{ entity: 'binMovement', id: 'count', code: 'Count (2026-09-12)' }] });
   });
   it('keeps the application guard and returns its saved code and id', async () => {
     mocks.where.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'application', code: 'APP-001' }]);

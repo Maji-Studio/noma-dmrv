@@ -1,6 +1,8 @@
 import { db, type DbTransaction } from '@/db';
 import { storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
+import { conflictCode } from '@/lib/conflict-ref';
+import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import type { BiocharProductFormData } from '@/schemas/biochar-products';
 import type { AffectedStockPreview } from '@/types/output-stock';
@@ -11,6 +13,7 @@ import { prepareOutputStock, stockFingerprint } from './output-stock-operations'
 import { requireOrgScope } from './utils';
 
 const PERCENT_SCALE = 100;
+const STOCK_CHANGED_MESSAGE = 'Stock changed since this preview. Refresh the preview and try again.';
 export type ProductStockPreviewInput = Pick<BiocharProductFormData, 'facilityId' | 'formulationId' | 'placedAt' | 'sourceBiocharStorageLocationId' | 'storageLocationId' | 'massKg' | 'moistureContentPercent' | 'waterAddedKg'> & { ingredientBins?: Record<string, unknown>[] };
 
 /** Read-only projection. Product creation still revalidates every stock draw under locks. */
@@ -89,8 +92,8 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
 
 export function assertProductStockBasis(expected: string, prepared: Awaited<ReturnType<typeof prepareProductStock>>) {
   if (expected !== prepared.basisFingerprint) throw new ActionConflictError(
-    'Stock changed since this preview. Refresh the preview and try again.',
-    { entity: 'storageLocation', id: prepared.source.preview.storageLocationId, code: prepared.source.preview.binCode ?? '' },
+    STOCK_CHANGED_MESSAGE,
+    { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: prepared.source.bin.id, code: conflictCode(prepared.source.bin.code) },
   );
 }
 
@@ -103,7 +106,12 @@ export async function revalidateProductStock(ctx: OrgContext, input: ProductStoc
     return prepared;
   } catch (error) {
     if (!(error instanceof SafeError) || error instanceof ActionConflictError) throw error;
-    throw new ActionConflictError('Stock changed since this preview. Refresh the preview and try again.',
-      { entity: 'storageLocation', id: input.storageLocationId, code: '' });
+    // The bin is the refresh target; when it no longer exists the original
+    // refusal is the honest answer.
+    const [bin] = await tx.select({ code: storageLocations.code }).from(storageLocations)
+      .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId)));
+    if (!bin) throw error;
+    throw new ActionConflictError(STOCK_CHANGED_MESSAGE,
+      { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) });
   }
 }

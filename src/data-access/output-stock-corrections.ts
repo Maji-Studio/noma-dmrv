@@ -1,7 +1,9 @@
 import type { DbTransaction } from '@/db';
-import { applications, binMovements } from '@/db/schema';
+import { applications, binMovements, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { outputStockEventLabel } from '@/lib/output-stock/labels';
+import { conflictCode } from '@/lib/conflict-ref';
+import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, grams, kilograms, readRational, type OutputStockLayer } from '@/lib/output-stock';
 import type { OutputStockPreviewInput } from '@/types/output-stock';
@@ -28,14 +30,24 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
     (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
       affectedLayers.some(l => l.physicalDate <= r.movement.physicalDate!)));
 
-  if (later) throw new ActionConflictError(`Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${later.movement.physicalDate}).`, { entity: "binMovement", id: later.movement.id, code: `${later.movement.reason || outputStockEventLabel(later.movement.outputKind!)} (${later.movement.physicalDate})` });
+  // The bin is the record the operator opens to clear the way; the later
+  // movement rides along as a blocker under the label its history row shows.
+  const [bin] = await reader.select({ code: storageLocations.code }).from(storageLocations)
+    .where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, input.storageLocationId)));
+  if (!bin) throw new SafeError('Storage location not found');
+  const binConflict = { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(bin.code) };
+  const movementBlocker = (movement: { id: string; reason: string; outputKind: string | null; physicalDate: string | null }) => ({
+    entity: STOCK_CONFLICT_ENTITY.binMovement, id: movement.id,
+    code: conflictCode(`${movement.reason || outputStockEventLabel(movement.outputKind!)} (${movement.physicalDate})`),
+  });
+  if (later) throw new ActionConflictError(`Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${later.movement.physicalDate}).`, binConflict, { blockers: [movementBlocker(later.movement)] });
   const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
   const count = counts.find(m => (m.outputKind === 'count' || m.inputSnapshot?.kind === 'count') && layers.some(l => affected.has(l.id) && l.physicalDate <= m.physicalDate!));
-  if (count) throw new ActionConflictError("Correction blocked by a later count.", { entity: "binMovement", id: count.id, code: `Count ${count.physicalDate}` });
+  if (count) throw new ActionConflictError("Correction blocked by a later count.", binConflict, { blockers: [movementBlocker({ ...count, reason: 'Count' })] });
   const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? null;
   if (deliveryId) {
     const [application] = await reader.select({ id: applications.id, code: applications.code }).from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId)));
-    if (application) throw new ActionConflictError(`Correction blocked by application ${application.code}.`, { entity: "application", id: application.id, code: application.code });
+    if (application) throw new ActionConflictError(`Correction blocked by application ${application.code}.`, { entity: "application", id: application.id, code: conflictCode(application.code) });
   }
   const restored = layers.map(layer => {
     const effects = allocations.filter(a => (a.biocharProductId ?? a.productionRunId) === layer.id);

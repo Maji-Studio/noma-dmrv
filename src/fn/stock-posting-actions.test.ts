@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
 
@@ -32,7 +33,7 @@ for (const action of [
   { name: "delivery", call: () => createDeliveryFn(delivery), invalid: () => createDeliveryFn({ ...delivery, storageLocationId: "invalid" }), prefix: "DL", code: "DL-001", fallback: "Delivery was not created. Try again.", log: "delivery action failed", op: "delivery:create" },
 ]) describe(`${action.name} posting boundary`, () => {
   it("preserves typed stale-bin conflicts", async () => {
-    const conflict = { entity: "storageLocation", id, code: "BIN-001" };
+    const conflict = { entity: "storageLocation", id, code: conflictCode("BIN-001") };
     mocks.create.mockRejectedValue(new ActionConflictError("Stock changed. Review the refreshed preview.", conflict));
     expect(await action.call()).toEqual({ success: false, error: "Stock changed. Review the refreshed preview.", conflict });
     expect(mocks.log).not.toHaveBeenCalled();

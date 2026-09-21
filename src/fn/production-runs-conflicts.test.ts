@@ -8,6 +8,7 @@
  * against the database in tests/expected-version-blanket.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError } from "@/lib/errors";
 import {
   STALE_VERSION_CONFLICT_CODE,
@@ -113,7 +114,7 @@ describe("updateProductionRunFn", () => {
       new ProductionRunOverlapError("Overlaps PR-002.", {
         entity: "productionRun",
         id: OTHER_RUN_ID,
-        code: "PR-002",
+        code: conflictCode("PR-002"),
       }),
     );
 

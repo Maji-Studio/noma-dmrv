@@ -1,3 +1,5 @@
+import type { ConflictRef } from "@/lib/conflict-ref";
+
 /**
  * Standard result type for server actions
  * Provides type-safe success/error handling
@@ -22,7 +24,15 @@ export type ActionResult<T> =
        * Optional structured reference to a conflicting entity, so a form can
        * link the operator straight to it (e.g. the production run whose time
        * window overlaps — issue #259). Backwards-compatible: consumers that
-       * only read `error` are unaffected.
+       * only read `error` are unaffected. `code` is the operator-readable label.
+       * Its brand proves only that it is not blank, not that it is a stored
+       * record code. See docs/architecture.md for known exceptions.
        */
-      conflict?: { entity: string; id: string; code: string };
+      conflict?: ConflictRef;
+      /**
+       * Further records that also block the save, next to `conflict`, in the
+       * display order. Only present together with
+       * `conflict`.
+       */
+      blockers?: ConflictRef[];
     };

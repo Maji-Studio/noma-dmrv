@@ -1,3 +1,4 @@
+import { conflictCode } from "@/lib/conflict-ref";
 import { describe, expect, it, vi } from "vitest";
 
 // The hook module pulls in the server action barrel; the mapping under test is
@@ -17,7 +18,7 @@ import {
 const conflict = {
   entity: "storageLocation",
   id: "00000000-0000-4000-8000-000000000001",
-  code: "",
+  code: conflictCode("FB-001"),
 };
 
 describe("throwRecordLossError", () => {
