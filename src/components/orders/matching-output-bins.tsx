@@ -1,4 +1,6 @@
 "use client";
+
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { InfoHint } from "@/components/ui/tooltip";
 import { formatMassKg, formatPercent } from "@/lib/format-utils";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
@@ -45,7 +47,7 @@ function MatchingOutputBinCard({ bin, facilityId, physicalDate }: {
     <table className="w-full table-fixed body-caption">
       <caption className="sr-only">{bin.name} available dry biochar by blend or lot</caption>
       <thead><tr className="border-b border-[var(--color-border-secondary)]"><th scope="col" className="w-1/2 pb-8 text-left font-normal">Blend / lot</th><th scope="col" className="pb-8 text-right font-normal">Dry biochar</th><th scope="col" className="pb-8 text-right font-normal">% of total</th></tr></thead>
-      <tbody>{preview?.beforeAllocations?.map(lot => <tr key={lot.layerId}><th scope="row" className="space-y-4 py-8 pr-12 text-left font-normal">{lot.code}<div aria-hidden="true" className="h-8 bg-[var(--color-background-medium)]"><div className="h-full bg-[var(--clr-dark-purple-80)]" style={{ width: `${total > 0 && lot.dryMassKg !== null ? lot.dryMassKg / total * PERCENT_SCALE : 0}%` }} /></div></th><td className="py-8 text-right align-top tabular-nums">{formatMassKg(lot.dryMassKg)}</td><td className="py-8 text-right align-top tabular-nums">{total > 0 && lot.dryMassKg !== null ? formatPercent(lot.dryMassKg / total * PERCENT_SCALE) : "Not available"}</td></tr>)}</tbody>
+      <tbody>{preview?.beforeAllocations?.map(lot => <tr key={lot.layerId}><th scope="row" className="space-y-4 py-8 pr-12 text-left font-normal">{lot.code}<div aria-hidden="true" className="h-8 bg-[var(--color-background-medium)]"><div className="h-full bg-[var(--clr-dark-purple-80)]" style={{ width: `${total > 0 && lot.dryMassKg !== null ? lot.dryMassKg / total * PERCENT_SCALE : 0}%` }} /></div></th><td className="py-8 text-right align-top tabular-nums">{formatMassKg(lot.dryMassKg)}</td><td className="py-8 text-right align-top tabular-nums">{total > 0 && lot.dryMassKg !== null ? formatPercent(lot.dryMassKg / total * PERCENT_SCALE) : MISSING_VALUE.notAvailable}</td></tr>)}</tbody>
     </table>
     <details>
       <summary className="min-h-44 cursor-pointer py-12 body-small focus-visible:outline-2 focus-visible:outline-[var(--color-interaction)]">Details for {bin.name}</summary>
