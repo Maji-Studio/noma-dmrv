@@ -25,7 +25,7 @@ const FIXTURE = {
   ingredientWet: 100, ingredientMoisture: 30, requestedWet: 200,
   formulation: "blend" as const, destination: "A" as const,
 };
-const STOCK = { sourceWet: 500, sourceDry: 485, ingredientWet: 400, ingredientDry: 280, orderDry: 332.5 };
+const STOCK = { sourceWet: 500, sourceDry: 485, ingredientWet: 400, orderDry: 332.5 };
 const BATCHES = [{ code: "DEMO-01", dry: 0 }, { code: "DEMO-02", dry: 90 }, { code: "DEMO-03", dry: 242.5 }];
 const MASS_SCHEMA = requiredMassKgSchema();
 const GRID = "grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2";
@@ -84,8 +84,7 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
   const sourceExceeded = sourceWet !== null && sourceWet > STOCK.sourceWet;
   const sourceDryExceeded = dryBiochar !== null && dryBiochar > STOCK.sourceDry;
   const ingredientExceeded = isBlend && ingredientWet !== null && ingredientWet > STOCK.ingredientWet;
-  const ingredientDryExceeded = isBlend && dryIngredient !== null && dryIngredient > STOCK.ingredientDry;
-  const stockExceeded = isProduct && (sourceExceeded || sourceDryExceeded || ingredientExceeded || ingredientDryExceeded);
+  const stockExceeded = isProduct && (sourceExceeded || sourceDryExceeded || ingredientExceeded);
   const [reviewed, setReviewed] = useState(false);
 
   function numberField(name: NumberField, label: string) {
@@ -94,9 +93,7 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
       ? `Available: ${formatMassKg(STOCK.sourceWet)} wet. Enter this amount or less.`
       : name === "ingredientWet" && ingredientExceeded
         ? `Available: ${formatMassKg(STOCK.ingredientWet)} wet. Enter this amount or less.` : name === "sourceMoisture" && sourceDryExceeded
-          ? `Dry biochar exceeds ${formatMassKg(STOCK.sourceDry)} available. Reduce wet mass or correct moisture.`
-          : name === "ingredientMoisture" && ingredientDryExceeded
-            ? `Ingredient dry solids exceed ${formatMassKg(STOCK.ingredientDry)} available. Reduce wet mass or correct moisture.` : undefined;
+          ? `Dry biochar exceeds ${formatMassKg(STOCK.sourceDry)} available. Reduce wet mass or correct moisture.` : undefined;
     return <FormField id={`prototype-${name}`} label={label} required hint={moisture ? MOISTURE_BASIS_HINT : undefined} error={stockError ?? form.formState.errors[name]?.message}>
       <FormInput className="min-h-44" aria-invalid={Boolean(stockError ?? form.formState.errors[name])} id={`prototype-${name}`} type="number" step={moisture ? "any" : MASS_KG_INPUT_STEP} min={0} {...form.register(name)} />
     </FormField>;
@@ -127,7 +124,7 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
         <tbody>
           <StockRow label="Source wet" before={STOCK.sourceWet} after={remaining(STOCK.sourceWet, sourceWet)} />
           <StockRow label="Source dry biochar" before={STOCK.sourceDry} after={remaining(STOCK.sourceDry, dryBiochar)} />
-          {isBlend && <><StockRow label="Ingredient wet" before={STOCK.ingredientWet} after={remaining(STOCK.ingredientWet, ingredientWet)} /><StockRow label="Ingredient dry solids" before={STOCK.ingredientDry} after={remaining(STOCK.ingredientDry, dryIngredient)} /></>}
+          {isBlend && <><StockRow label="Ingredient wet" before={STOCK.ingredientWet} after={remaining(STOCK.ingredientWet, ingredientWet)} /></>}
           <StockRow label={`Product bin ${values.destination} wet`} before={0} after={stockExceeded ? null : finalWet} />
           <StockRow label="Product dry biochar" before={0} after={stockExceeded ? null : dryBiochar} />
         </tbody>
