@@ -1,5 +1,6 @@
 "use client";
 
+import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
@@ -121,7 +122,9 @@ export function OutputStockBalanceCard({ preview, balance, scale, wetBasis = fal
   );
 }
 
-export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlocker }: { preview: Preview; moreInfo?: ReactNode; commonScale?: number; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode }) {
+export function OutputStockPreview({ followFormDetail = false, preview, moreInfo, commonScale, renderBlocker }: { followFormDetail?: boolean; preview: Preview; moreInfo?: ReactNode; commonScale?: number; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode }) {
+  const level = useFormDetailLevel();
+  const detailed = !followFormDetail || level === "detailed";
   const wetBasis = preview.beforeEstimatedWetKg !== null && preview.afterEstimatedWetKg !== null;
   const dryLabel = preview.dryLabel ?? "dry biochar";
   const scale = commonScale ?? Math.max(
@@ -144,6 +147,7 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
           {formatMassKg(preview.removedDryKg === null ? null : Math.abs(preview.removedDryKg))} {dryLabel} {preview.removedDryKg !== null && preview.removedDryKg < 0 ? "added" : "removed"}
         </p>
       </div>
+      {detailed ? <>
       <p className="body-caption">
         {preview.wetLabel ? "Recorded wet stock. " : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture. ` : "No moisture measurement was entered. "}
         Both bars use the same {formatMassKg(scale)} {preview.wetLabel ?? (wetBasis ? "wet estimate" : dryLabel)} scale.
@@ -151,16 +155,22 @@ export function OutputStockPreview({ preview, moreInfo, commonScale, renderBlock
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         {balances.map((balance) => (
-          <OutputStockBalanceCard key={balance.label} preview={preview} balance={balance} scale={scale} wetBasis={wetBasis} colors={colors} moreInfo={moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)} />
+          <OutputStockBalanceCard key={balance.label} preview={preview} balance={balance} scale={scale} wetBasis={wetBasis} colors={colors} moreInfo={(followFormDetail ? null : moreInfo) ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)} />
         ))}
       </div>
+      </> : <div className="space-y-4">
+        <p className="body-small">{preview.binName}</p>
+        {balances.map(balance => <p key={balance.label} className="body-caption">{balance.label}: {formatMassKg(balance.dry)} {dryLabel}{wetBasis ? ` · ${formatMassKg(balance.wet)} ${preview.wetLabel ?? "wet estimate"}` : ""}</p>)}
+        <p className="body-caption">{preview.wetLabel ? "Dry solids use the recorded intake basis." : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture do not replace recorded pile measurements.` : "Wet estimates need a moisture measurement."}</p>
+      </div>}
+      {followFormDetail && moreInfo}
       {preview.discrepancySolidsKg > 0 && <p role="status" className="body-small">Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</p>}
       {preview.blockingMessage && <p role="alert" className="body-small text-[var(--st-bad)]">{preview.blockingMessage}</p>}
       {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? (blocker.entity === "binMovement" ? <span key={blocker.id}>{blocker.code}</span> : <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?ids=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>))}
-      <div className="space-y-8">
+      {detailed && <div className="space-y-8">
         <h3 className="body-small font-semibold">{preview.binName}{preview.binCode ? ` (${preview.binCode})` : ""}</h3>
         {preview.lane !== "ingredient" && <OutputStockAllocations allocations={preview.allocations} />}
-      </div>
+      </div>}
     </section>
   );
 }

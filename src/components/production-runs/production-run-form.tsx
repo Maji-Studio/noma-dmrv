@@ -5,6 +5,8 @@
  */
 "use client";
 
+import { MoistureSplit } from "@/components/ui/moisture-split";
+import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { nullableNumericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
 import {
@@ -141,15 +143,15 @@ export function ProductionRunForm({
               },
             ]
           : [{ ...EMPTY_FEEDSTOCK_DRAW }],
-    feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? undefined,
-    feedingRateKgHr: productionRun?.feedingRateKgHr ?? undefined,
+    feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? null,
+    feedingRateKgHr: productionRun?.feedingRateKgHr ?? null,
     residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
-    dieselOperationLiters: productionRun?.dieselOperationLiters ?? undefined,
-    dieselGensetLiters: productionRun?.dieselGensetLiters ?? undefined,
-    preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? undefined,
-    electricityKwh: productionRun?.electricityKwh ?? undefined,
-    biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
-    biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
+    dieselOperationLiters: productionRun?.dieselOperationLiters ?? null,
+    dieselGensetLiters: productionRun?.dieselGensetLiters ?? null,
+    preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? null,
+    electricityKwh: productionRun?.electricityKwh ?? null,
+    biocharOutputKg: productionRun?.biocharOutputKg ?? null,
+    biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? null,
     biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
   };
   type ProductionRunFormValues = typeof defaultValues;
@@ -633,6 +635,7 @@ export function ProductionRunForm({
             })}
           />
         </div>
+        <MoistureSplit variant="inline" wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
@@ -699,6 +702,7 @@ export function ProductionRunForm({
         </FormField>
 
         <MassMoistureFields
+            followFormDetail
           materialLabel="Biochar"
           wetMassKg={watchedBiocharKg}
           moisturePercent={watchedBiocharMoisture}
@@ -833,7 +837,7 @@ export function ProductionRunForm({
       {/* Process Flow — a derived recap of the run, not a data-entry step, so
           it lives outside the numbered spine and only appears once there's
           something to show. */}
-      {(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
+      <DetailedOnly>{(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
         <div className="space-y-12 border-t border-[var(--color-border-tertiary)] pt-20">
           <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
             Process Flow
@@ -848,7 +852,7 @@ export function ProductionRunForm({
             destinationBinName={selectedDestBin?.name ?? null}
           />
         </div>
-      )}
+      )}</DetailedOnly>
       </form>
 
       {watchedFacilityId && (

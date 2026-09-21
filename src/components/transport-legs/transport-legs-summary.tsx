@@ -28,6 +28,7 @@ export function TransportLegsSummary({
       entityId={entityId}
       title={title}
       emptyMessage={emptyMessage}
+      followFormDetail={entityType === "sample"}
       readOnly
     />
   );

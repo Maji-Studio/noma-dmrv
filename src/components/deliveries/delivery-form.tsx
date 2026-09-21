@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { nullableNumericValue } from "@/lib/form-utils";
@@ -98,8 +99,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     orderId: delivery?.orderId ?? "",
     deliveryDate: toDateInputValue(delivery?.deliveryDate),
     status: "delivered" as const,
-    deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
-    moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
+    // Match the registered empty values so focusing the header is not an edit.
+    deliveredWetMassKg: delivery?.deliveredWetMassKg ?? null,
+    moistureContentPercent: delivery?.moistureContentPercent ?? "",
     storageLocationId: delivery?.storageLocationId ?? "",
     driverId: delivery?.driverId ?? undefined,
     vehicleId: delivery?.vehicleId ?? undefined,
@@ -358,9 +360,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             registration={register("moistureContentPercent")}
           />
         </div>
+        {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
         {stockPreview.isFetching && <p role="status">Refreshing stock preview...</p>}
         {stockPreview.error && <p role="alert">{stockPreview.error.message}</p>}
-        {stockPreview.data && <OutputStockPreview preview={stockPreview.data} moreInfo={<OutputStockHistory storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
+        {stockPreview.data && <OutputStockPreview followFormDetail preview={stockPreview.data} moreInfo={<OutputStockHistory storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
       </FormSection>
 
       {/* Transport Section */}

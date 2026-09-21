@@ -1,5 +1,6 @@
 "use client";
 
+import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import {
   FormField,
   FormInput,
@@ -248,15 +249,16 @@ export function BinReconcileSheet({
   };
 
   return (
+    <FormDetailProvider scope={`${open}:${storageLocation?.id}:${outputKind}`} enabled={!!storageLocation && storageLocation.type !== "feedstock_bin"}>
     <SlideOverPanel.Root open={open} onOpenChange={onOpenChange}>
       <SlideOverPanel.Content size="default">
-        <SlideOverPanel.Header showClose>
+        <SlideOverPanel.Header showClose actions={<FormDetailControl />}>
           <div className="flex flex-col gap-4 min-w-0">
             <SlideOverPanel.Title>
               {storageLocation ? `Reconcile ${storageLocation.code}` : "Reconcile"}
             </SlideOverPanel.Title>
             {storageLocation && (
-              <SlideOverPanel.Description>
+              <SlideOverPanel.Description className="truncate">
                 {storageLocation.name}
               </SlideOverPanel.Description>
             )}
@@ -289,5 +291,6 @@ export function BinReconcileSheet({
         </SlideOverPanel.Body>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
+    </FormDetailProvider>
   );
 }

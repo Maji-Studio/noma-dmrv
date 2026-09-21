@@ -706,6 +706,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        detailToggle
+        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}

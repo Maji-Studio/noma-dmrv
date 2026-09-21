@@ -646,6 +646,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Side Sheet */}
       <EntitySideSheet
+        detailToggle
+        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
@@ -711,6 +713,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             ],
             content: (
               <MoistureSplit
+                followFormDetail
                 wetMassKg={sideSheetEntity.massWetKg}
                 moisturePercent={sideSheetEntity.moistureContentPercent}
                 dryMassKg={sideSheetEntity.massDryKg}

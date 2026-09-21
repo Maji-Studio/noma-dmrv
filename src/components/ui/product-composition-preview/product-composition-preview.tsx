@@ -1,3 +1,6 @@
+"use client";
+
+import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
@@ -6,6 +9,7 @@ import {
 } from "@/lib/mass-moisture";
 
 interface ProductCompositionPreviewProps {
+  followFormDetail?: boolean;
   wetMassKg: number | null | undefined;
   dryBiocharKg: number | null | undefined;
   moisturePercent?: number | null;
@@ -21,6 +25,7 @@ interface ProductCompositionPreviewProps {
 
 /** Two-part mass preview for blended biochar products. */
 export function ProductCompositionPreview({
+  followFormDetail = false,
   wetMassKg,
   dryBiocharKg,
   moisturePercent,
@@ -33,6 +38,8 @@ export function ProductCompositionPreview({
   framed = true,
   testId = "product-composition-preview",
 }: ProductCompositionPreviewProps) {
+  const level = useFormDetailLevel();
+  const showGraphic = !followFormDetail || level === "detailed";
   const remainderKg =
     wetMassKg != null && dryBiocharKg != null
       ? Math.max(0, wetMassKg - dryBiocharKg)
@@ -68,7 +75,7 @@ export function ProductCompositionPreview({
         {wetLabel}: <span className="font-mono">{formatMassKg(wetMassKg)}</span>
         {estimate ? " (planning estimate)" : ""}
       </p>
-      {hasComposition ? (
+      {showGraphic && (hasComposition ? (
         <div
           role="img"
           aria-label={`${formatMassKg(dryBiocharKg)} dry biochar and ${formatMassKg(remainderKg)} ingredients plus water`}
@@ -94,7 +101,7 @@ export function ProductCompositionPreview({
           aria-hidden="true"
           className="moisture-water-hatch mt-8 h-12 w-full border border-dashed border-[var(--color-border-secondary)]"
         />
-      )}
+      ))}
       <div className="mt-8 grid grid-cols-1 gap-8 sm:grid-cols-2">
         <div>
           <p className="body-caption text-[var(--color-text-tertiary)]">{dryLabel}</p>

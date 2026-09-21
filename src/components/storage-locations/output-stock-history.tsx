@@ -1,5 +1,6 @@
 "use client";
 
+import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import { Button } from "@/components/ui";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
@@ -23,8 +24,9 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   return <>
     <Button variant="default" onClick={() => setOpen(true)}>{triggerLabel}</Button>
     <Modal isOpen={open} onClose={() => { setOpen(false); setOriginal(undefined); }} ariaLabel="Stock history" width="lg">
+      <FormDetailProvider scope={`${open}:${original?.id}`} enabled={!!original}>
       <div className="space-y-20">
-        <h3 className="title-heading-3">Stock history</h3>
+        <div className="flex items-center justify-between gap-12 pr-24"><h3 className="title-heading-3 min-w-0 truncate">Stock history</h3><FormDetailControl /></div>
         <p className="body-small">Recorded wet masses and moisture describe individual measurements. Current wet stock is an estimate conditional on moisture. Delivery moisture does not update a pile measurement.</p>
         {original ? <OutputStockForm storageLocationId={storageLocationId} facilityId={facilityId} kind={originalKind(original) === "count" ? "count" : originalKind(original) === "delivery" ? "delivery" : "loss"} original={original} onCancel={() => setOriginal(undefined)} onRecorded={() => setOriginal(undefined)} /> : <>
           {history.isLoading && <p role="status">Loading stock history...</p>}
@@ -41,6 +43,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
           </article>)}
         </>}
       </div>
+      </FormDetailProvider>
     </Modal>
   </>;
 }

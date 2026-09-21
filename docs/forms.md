@@ -358,3 +358,31 @@ storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
 ```
 
 The underlying `useClearOnDependencyChange` (`@/hooks/use-clear-on-dependency-change`) is standalone — use it directly in custom form components that are not `FormEntitySelect`.
+
+## Simple and Detailed presentation
+
+Use `FormDetailToggle` for the shared compact radio control. Opt useful entity
+sheets into `detailToggle` and pass the record ID as `detailScope`;
+`detailToggle="view"` limits the control to saved read mode. The switch lives in
+`SlideOverPanel.Header`'s `actions` slot beside the title, not in an extra row
+above the form. Other sheet owners can use `FormDetailProvider` and
+`FormDetailControl` with a scope containing open state, mode and record ID.
+
+The provider resets to Simple when that scope changes without remounting input
+fields. Presentation state is separate from RHF and payloads. The shared sheet
+excludes `data-presentation-control` events from its unsaved-change heuristic.
+A real input change must still trigger the discard guard.
+
+Keep every editable field, critical result, unresolved value, error, blocker,
+lock and evidence action visible. Use `DetailedOnly` only for optional,
+stateless context. For mass and stock previews, opt into `followFormDetail` to
+retain compact values in Simple while revealing graphics and provenance in
+Detailed. Unmanaged surfaces keep their existing expanded presentation.
+Read fields may use `detailedOnly` for optional technical metadata; never apply
+it to required values or warnings. Saved allocations remain saved facts, and
+current stock must be identified as current.
+
+Do not add a switch to a short form or a surface already served by an effective
+accordion or history dialog. Verify narrow header layout, radio keyboard
+operation, scope resets, field preservation, and clean-versus-dirty closing
+when adopting this pattern.

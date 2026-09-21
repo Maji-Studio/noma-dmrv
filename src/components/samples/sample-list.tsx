@@ -4,6 +4,7 @@
  */
 "use client";
 
+import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
@@ -529,6 +530,7 @@ export function SampleList({
   const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(null); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || creditBatchFilter;
 
+  const sampleTransport = useTransportLegsForEntity("sample", displaySideSheet?.entity?.id ?? "", { enabled: displaySideSheet?.mode === "view" });
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const preselectedCreditBatchId = resolveSampleCreateCreditBatchId(
@@ -676,6 +678,8 @@ export function SampleList({
       />
 
       <EntitySideSheet
+        detailToggle={sampleTransport.data?.length ? "view" : false}
+        detailScope={displaySideSheet?.entity?.id ?? "create"}
         numberedSections
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
