@@ -24,7 +24,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
   orderFulfillmentStatuses,
@@ -34,6 +34,7 @@ import type { OrderFilterData, OrderFormData } from "@/schemas/orders";
 import { PackageIcon, PlusIcon, TruckIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
+import { OrderReadDetails } from "./order-read-details";
 import { OrderForm } from "./order-form";
 
 // ============================================
@@ -388,55 +389,7 @@ export function OrderList() {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Order"
-        sections={
-          sideSheetEntity
-            ? [
-                {
-                  title: "Order information",
-                  fields: [
-                    { label: "Order date", value: formatDate(sideSheetEntity.orderDate) },
-                  ],
-                },
-                {
-                  title: "Customer details",
-                  fields: [
-                    { label: "Customer", value: sideSheetEntity.customerName },
-                    { label: "Customer location", value: sideSheetEntity.customerLocationName },
-                  ],
-                },
-                {
-                  title: "Product details",
-                  fields: [
-                    { label: "Formulation", value: sideSheetEntity.formulationName },
-                    { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
-                    { label: "Requested wet mass (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
-                    { label: "Value", value: sideSheetEntity.value },
-                    { label: "Currency", value: sideSheetEntity.currency },
-                  ],
-                },
-                {
-                  title: "Fulfillment",
-                  fields: [
-                    {
-                      label: "Fulfillment",
-                      value: (
-                        <StatusBadge
-                          status={ORDER_FULFILLMENT_DISPLAY[sideSheetEntity.fulfillmentStatus].badgeStatus}
-                          label={ORDER_FULFILLMENT_DISPLAY[sideSheetEntity.fulfillmentStatus].label}
-                        />
-                      ),
-                    },
-                    {
-                      label: "Delivered",
-                      value: sideSheetEntity.deliveryCount > 0
-                        ? `${sideSheetEntity.deliveredCount} of ${sideSheetEntity.deliveryCount}`
-                        : "No deliveries scheduled",
-                    },
-                  ],
-                },
-              ]
-            : undefined
-        }
+        viewModeChildren={sideSheetEntity ? <OrderReadDetails key={sideSheetEntity.id} order={sideSheetEntity} /> : undefined}
       >
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
