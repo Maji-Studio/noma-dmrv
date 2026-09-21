@@ -12,7 +12,7 @@ import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
 import { isPgUniqueViolation } from "@/db/errors";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
-import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
+import { conflictCode } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
 import type { RunConflict } from "@/lib/production-runs/overlap-conflict";
 import type { DbTransaction } from "@/db";
