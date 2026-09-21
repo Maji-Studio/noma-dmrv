@@ -19,7 +19,7 @@ const preview: OutputStockPreview = { storageLocationId: 'source', binName: 'Sou
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.prepare.mockReset().mockResolvedValueOnce({ preview, lane: 'biochar' }).mockResolvedValueOnce({ preview: { ...preview, storageLocationId: 'destination', lane: 'product', basisFingerprint: 'destination-basis', beforeDryKg: 50, beforeSolidsKg: 60, beforeEstimatedWetKg: 60, beforeAllocations: [{ layerId: 'existing', code: 'Existing', dryMassKg: 50, wetMassKg: 60, runs: [] }] }, lane: 'product', bin: { formulationId: 'recipe' } });
+  mocks.prepare.mockReset().mockResolvedValueOnce({ preview, lane: 'biochar', bin: { id: 'source', code: 'BC-1' } }).mockResolvedValueOnce({ preview: { ...preview, storageLocationId: 'destination', lane: 'product', basisFingerprint: 'destination-basis', beforeDryKg: 50, beforeSolidsKg: 60, beforeEstimatedWetKg: 60, beforeAllocations: [{ layerId: 'existing', code: 'Existing', dryMassKg: 50, wetMassKg: 60, runs: [] }] }, lane: 'product', bin: { formulationId: 'recipe' } });
   mocks.composition.mockResolvedValue({ ingredients: [{ storageLocationId: 'ingredient', massKg: 30, massDryKg: 24 }, { storageLocationId: 'ingredient', massKg: 15, massDryKg: 12 }, { storageLocationId: null, massKg: 10, massDryKg: 8 }] });
   mocks.where.mockResolvedValue([{ id: 'ingredient', code: 'ING-1', name: 'Compost' }]);
   mocks.stock.mockResolvedValue({ wetMassKg: 150, dryMassKg: 140 });

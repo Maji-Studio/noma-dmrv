@@ -19,7 +19,20 @@ import type { FacilityCertifierSummary } from "@/lib/read-models";
 import { facilityIdSchema } from "@/lib/read-models/facility-id";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
+import { conflictCode } from "@/lib/conflict-ref";
 import type { ActionResult } from "@/types/actions";
+
+/**
+ * Wire shape of a conflicting record; its code is never blank. The length
+ * check runs on the trimmed value and aborts the chain, so a whitespace-only
+ * code becomes an unreadable envelope instead of letting `conflictCode()`
+ * throw out of the parse.
+ */
+const conflictRefSchema = z.object({
+  entity: z.string(),
+  id: z.string(),
+  code: z.string().trim().min(1, { abort: true }).transform(conflictCode),
+});
 
 const readResultSchema = z.union([
   z.discriminatedUnion("success", [
@@ -29,9 +42,8 @@ const readResultSchema = z.union([
       error: z.string(),
       // Kept so an HTTP read answers with the same envelope a Server Action
       // does and a form can still deep-link to the blocking record.
-      conflict: z
-        .object({ entity: z.string(), id: z.string(), code: z.string() })
-        .optional(),
+      conflict: conflictRefSchema.optional(),
+      blockers: z.array(conflictRefSchema).optional(),
     }),
   ]),
   // The authenticated API proxy rejects signed-out/unverified requests before

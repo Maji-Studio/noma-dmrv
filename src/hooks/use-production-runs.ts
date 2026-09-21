@@ -4,6 +4,7 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
+import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   useMutation,
   useQueries,
@@ -50,7 +51,8 @@ const EXACT_ID_CHUNK_SIZE = 100;
  */
 function throwProductionRunActionError(result: {
   error: string;
-  conflict?: { entity: string; id: string; code: string };
+  conflict?: ConflictRef;
+  blockers?: ConflictRef[];
 }): never {
   // A stale-version refusal is not an overlap: it belongs in the form's error
   // banner, not on the start-time field, so it keeps its own error type.

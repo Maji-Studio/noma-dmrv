@@ -7,6 +7,7 @@ import { outputStockKeys } from "./use-output-stock";
  * (and the negative-stock badge) refresh immediately.
  */
 
+import type { ConflictRef } from "@/lib/conflict-ref";
 import {
   getBinMovementsFn,
   recordLossFn,
@@ -32,11 +33,7 @@ export class RecordLossFieldError extends Error {
 }
 
 /** The blocking record a conflicting loss request points back at. */
-export interface RecordLossConflict {
-  entity: string;
-  id: string;
-  code: string;
-}
+export type RecordLossConflict = ConflictRef;
 
 /**
  * Client-side carrier for a loss request-key conflict (issue #773).

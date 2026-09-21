@@ -1,8 +1,6 @@
-export interface FeedstockTypeDeleteConflict {
-  entity: string;
-  id: string;
-  code: string;
-}
+import type { ConflictRef } from "@/lib/conflict-ref";
+
+export type FeedstockTypeDeleteConflict = ConflictRef;
 
 export function getFeedstockTypeDeleteDecision(
   conflicts: FeedstockTypeDeleteConflict[],

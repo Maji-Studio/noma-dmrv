@@ -111,6 +111,7 @@ export function toActionFailure(
       success: false,
       error: error.message,
       conflict: error.conflict,
+      ...(error.blockers ? { blockers: error.blockers } : {}),
     };
   }
   logActionError(error, log);
