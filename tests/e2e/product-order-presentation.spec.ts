@@ -110,13 +110,12 @@ test("product inline presentation preserves measured inputs and guards actual st
     await capture(page, "product-simple-desktop");
 
     await showDetailsWithKeyboard(dialog);
-    const source = dialog.getByRole("region", { name: "Source composition", exact: true });
+    const source = dialog.getByRole("region", { name: "Source stock", exact: true });
     const product = dialog.getByRole("region", { name: "Product composition", exact: true });
     await expect(source).toBeVisible();
     await expect(product.getByRole("row", { name: /Biochar \(dry\)/ })).toContainText("200 kg");
     await expect(product.getByRole("row", { name: new RegExp(`${scenario.ingredientName}.*dry`) })).toContainText("80 kg");
     await expect(product.getByRole("row", { name: "Wet total", exact: false })).toContainText("400 kg");
-    await source.getByRole("button", { name: "Show details for source composition" }).press("Enter");
     await expect(source.getByText(`${scenario.firstCode}: 80 kg dry biochar`, { exact: true }).first()).toBeVisible();
     await expect(source.getByText(`${scenario.secondCode}: 120 kg dry biochar`, { exact: true }).first()).toBeVisible();
     await capture(page, "product-detailed-desktop");
@@ -264,6 +263,7 @@ test("order details show actual dry stock and saving requested wet mass does not
   await expect(stock.getByRole("button", { name: `Hide details for ${seededData.productStorageLocation.name}`, exact: true })).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Enter");
   await expect(stockExplanation).toBeHidden();
+  await expect(stock.getByText("Loading stock details...", { exact: true })).toBeHidden();
   await capture(page, "order-detailed-desktop");
   await dialog.locator('input[name="value"]').scrollIntoViewIfNeeded();
   const valueBox = await dialog.locator('input[name="value"]').boundingBox();

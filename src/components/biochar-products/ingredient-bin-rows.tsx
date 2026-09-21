@@ -8,7 +8,6 @@ interface IngredientBinRowsProps {
   composition: UseBiocharCompositionResult;
   isSubmitting: boolean;
   allocationFrozen?: boolean;
-  detailed?: boolean;
   previews?: AffectedStockPreview[];
   previewsAvailable?: boolean;
 }
@@ -17,7 +16,6 @@ export function IngredientBinRows({
   composition,
   isSubmitting,
   allocationFrozen = false,
-  detailed = false,
   previews,
   previewsAvailable = false,
 }: IngredientBinRowsProps) {
@@ -37,7 +35,6 @@ export function IngredientBinRows({
           isSubmitting={isSubmitting}
           facilityId={composition.facilityId}
           allocationFrozen={allocationFrozen}
-          detailed={detailed}
           previews={previews}
           previewsAvailable={previewsAvailable}
         />

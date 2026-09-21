@@ -20,9 +20,6 @@ export function formatCompositionMass(mass: number | null | undefined) {
   return mass > 0 && mass < MIN_DISPLAY_MASS_KG ? `<${formatMassKg(MIN_DISPLAY_MASS_KG)}` : formatMassKg(mass);
 }
 
-export function CalculationFacts({ facts }: { facts: { label: string; massKg: number | null }[] }) {
-  return <dl className="space-y-8">{facts.map(fact => <div key={fact.label} className="flex flex-wrap justify-between gap-8"><dt className="text-[var(--color-text-secondary)]">{fact.label}</dt><dd className="tabular-nums">{formatCompositionMass(fact.massKg)}</dd></div>)}</dl>;
-}
 
 const FILLS = {
   biochar: "bg-[var(--clr-dark-purple-80)]",
