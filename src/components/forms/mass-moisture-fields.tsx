@@ -179,6 +179,8 @@ interface MassMoistureFieldsProps {
   finalMoistureLabel?: string;
   /** Extra content rendered inside the split panel, below the bar. */
   splitFooter?: ReactNode;
+  /** Optional presentation override; inputs and errors always stay mounted. */
+  splitPreview?: ReactNode;
 }
 
 /**
@@ -197,6 +199,7 @@ export function MassMoistureFields({
   drySplitLabel,
   finalMoistureLabel,
   splitFooter,
+  splitPreview,
 }: MassMoistureFieldsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -207,7 +210,7 @@ export function MassMoistureFields({
           {addedWaterField}
         </div>
       )}
-      <div
+      {splitPreview !== undefined ? <div className="md:col-span-2">{splitPreview}{splitFooter}</div> : <div
         data-testid="mass-moisture-split"
         className="md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
       >
@@ -221,7 +224,7 @@ export function MassMoistureFields({
           finalMoistureLabel={finalMoistureLabel}
         />
         {splitFooter}
-      </div>
+      </div>}
     </div>
   );
 }

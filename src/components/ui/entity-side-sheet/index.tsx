@@ -192,6 +192,8 @@ function EntitySideSheet({
   // trigger a spurious discard prompt on a clean sheet.
   const markDirtyFromBody = (event: React.SyntheticEvent) => {
     if (!bodyRef.current?.contains(event.target as Node)) return;
+    // Display preferences never change the saved record or require discarding.
+    if (event.target instanceof Element && event.target.closest("[data-presentation-control]")) return;
     dirtyRef.current = true;
   };
 

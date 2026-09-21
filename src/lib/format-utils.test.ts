@@ -111,3 +111,11 @@ describe("formatPercent", () => {
     expect(formatPercent(1.96, { digits: 2 })).toBe("1.96%");
   });
 });
+
+describe("formatMassKg explicit storage precision", () => {
+  it("retains gram precision without changing the default display", () => {
+    expect(formatMassKg(125.125, { digits: 3 })).toBe("125.125 kg");
+    expect(formatMassKg(125.125)).toBe("125.1 kg");
+    expect(formatMassKg(0.001, { digits: 3 })).toBe("0.001 kg");
+  });
+});

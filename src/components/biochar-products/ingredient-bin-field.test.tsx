@@ -43,6 +43,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("react-hook-form", () => ({
+  useWatch: () => undefined,
   Controller: ({
     name,
     render,
