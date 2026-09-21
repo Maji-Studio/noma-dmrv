@@ -5,7 +5,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { VariantSections, VariantSwitcher, readVariant, type PrototypeSection } from "./variant-layout";
-import { ADDED_WATER_FILL, BIOCHAR_FILL, INGREDIENT_FILL, WATER_FILL, Calculation, Composition, Disclosure, Facts, Ledger, MaterialReadout, derivedMass } from "./mass-readouts";
+import { Calculation, CalculationDisclosure, Disclosure, Facts, MaterialReadout } from "./mass-readouts";
+import { derivedMass } from "./mass-format";
+import { Composition, type MassSegment } from "./composition-visuals";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PageHeader } from "@/components/ui";
@@ -100,30 +102,24 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
     </FormField>;
   }
 
-  const productFacts = [
-    { label: "Wet product", mass: finalWet },
-    { label: "Dry biochar", mass: dryBiochar },
-    ...(isBlend ? [{ label: "Ingredient dry solids", mass: dryIngredient }] : []),
+  const productSegments: MassSegment[] = [
+    { label: "Dry biochar", mass: dryBiochar, category: "dry-biochar" },
+    ...(isBlend ? [{ label: "Ingredient dry solids", mass: dryIngredient, category: "ingredient-solids" as const }] : []),
+    { label: "Existing water", mass: existingWater, category: "existing-water" },
+    { label: "Added water", mass: water, category: "added-water" },
   ];
   const productSummary = <section aria-label="Product mass" className="space-y-12">
-    {variant === "E" ? <Ledger rows={[
-      { label: "Biochar", wet: sourceWet, dry: dryBiochar },
-      ...(isBlend ? [{ label: "Ingredient", wet: ingredientWet, dry: dryIngredient }] : []),
-      { label: "Added water", wet: water, dry: water === null ? null : 0 },
-      { label: "Whole product", wet: finalWet, dry: totalDry },
-    ]} /> : <Facts facts={productFacts} paired={variant === "B"} quiet={variant === "A"} />}
-    {variant === "C" && <Composition label="Wet product composition" segments={[
-      { label: "Dry biochar", mass: dryBiochar, className: BIOCHAR_FILL },
-      ...(isBlend ? [{ label: "Ingredient dry solids", mass: dryIngredient, className: INGREDIENT_FILL }] : []),
-      { label: "Existing water", mass: existingWater, className: WATER_FILL },
-      { label: "Added water", mass: water, className: ADDED_WATER_FILL },
-    ]} />}
-    {variant === "D" && <Disclosure label="How this is calculated">
-      <Calculation split={sourceSplit} label="Dry biochar" />
-      {isBlend && <Calculation split={ingredientSplit} label="Ingredient dry solids" />}
-      <p>Wet product: {derivedMass(sourceWet)} + {derivedMass(ingredientWet)} + {derivedMass(water)} = {derivedMass(finalWet)}</p>
-      <p>Total dry solids: {derivedMass(dryBiochar)} + {derivedMass(dryIngredient)} = {derivedMass(totalDry)}</p>
-    </Disclosure>}
+    <div>
+      <Composition variant={variant} label="Wet product composition" totalLabel="Wet product" total={finalWet} segments={productSegments} />
+      <CalculationDisclosure context="product">
+        <Calculation split={sourceSplit} label="Dry biochar" />
+        {isBlend && <Calculation split={ingredientSplit} label="Ingredient dry solids" />}
+        <p>Wet product: {derivedMass(sourceWet)} + {derivedMass(ingredientWet)} + {derivedMass(water)} ≈ {derivedMass(finalWet)}</p>
+        <p>Total dry solids: {derivedMass(dryBiochar)} + {derivedMass(dryIngredient)} ≈ {derivedMass(totalDry)}</p>
+        <p>Existing water: {derivedMass(sourceSplit?.waterKg ?? null)} + {derivedMass(ingredientSplit?.waterKg ?? null)} ≈ {derivedMass(existingWater)}</p>
+        <p>Composition sum: {productSegments.map((segment) => derivedMass(segment.mass)).join(" + ")} ≈ {derivedMass(finalWet)}</p>
+      </CalculationDisclosure>
+    </div>
     <Disclosure label="Stock before and after">
       <table className="w-full body-small">
         <caption className="sr-only">Synthetic stock before and after mixing</caption>
@@ -138,14 +134,15 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
       </table>
     </Disclosure>
   </section>;
-  const orderFacts = [{ label: "Requested wet", mass: massValue(values.requestedWet) }, { label: "Available dry biochar", mass: STOCK.orderDry }];
   const orderSummary = <section aria-label="Order mass" className="space-y-12">
-    {variant === "E" ? <table className="w-full body-small"><caption className="sr-only">Order mass bases</caption><tbody>{orderFacts.map((fact) => <tr key={fact.label} className="border-b border-[var(--hair-3)]"><th scope="row" className="py-8 text-left font-normal">{fact.label}</th><td className="py-8 text-right tabular-nums">{derivedMass(fact.mass)}</td></tr>)}</tbody></table> : <Facts facts={orderFacts} paired={variant === "B"} quiet={variant === "A"} />}
-    {variant === "C" && <Composition label="Available dry biochar by batch" segments={BATCHES.filter((batch) => batch.dry > 0).map((batch) => ({ label: `${batch.code} dry biochar`, mass: batch.dry, className: `${BIOCHAR_FILL} border-r border-[var(--paper)] last:border-r-0` }))} />}
-    {variant === "D" && <Disclosure label="How this is calculated">
-      <p>Available dry biochar: {BATCHES.map((batch) => formatMassKg(batch.dry)).join(" + ")} = {formatMassKg(STOCK.orderDry)}</p>
-      <p>Requested wet is entered directly. No moisture is recorded for conversion to dry mass.</p>
-    </Disclosure>}
+    <Facts facts={[{ label: "Requested wet", mass: massValue(values.requestedWet) }]} />
+    <div>
+      <Composition variant={variant} label="Available dry biochar by batch" totalLabel="Available dry biochar" total={STOCK.orderDry} dryOnly segments={BATCHES.map((batch) => ({ label: batch.code, mass: batch.dry, category: "dry-batch" }))} />
+      <CalculationDisclosure context="order">
+        <p>Available dry biochar: {BATCHES.map((batch) => `${batch.code} (${formatMassKg(batch.dry)})`).join(" + ")} ≈ {formatMassKg(STOCK.orderDry)}</p>
+        <p>Requested wet is entered directly. No moisture is recorded for conversion to dry mass.</p>
+      </CalculationDisclosure>
+    </div>
     <OrderStockDetails />
   </section>;
   const placement = isProduct
@@ -157,7 +154,7 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
   const source = <>
     <FormField id="prototype-source" label="Source biochar"><FormSelect id="prototype-source" options={[{ value: "source", label: "Demo biochar bin · Maize cobs" }]} /></FormField>
     <div className={GRID}>{numberField("sourceWet", "Wet biochar mass (kg)")}{numberField("sourceMoisture", "Biochar moisture (%)")}</div>
-    <MaterialReadout variant={variant} wet={sourceWet} split={sourceSplit} dryLabel="Dry biochar" />
+    <MaterialReadout variant={variant} wet={sourceWet} split={sourceSplit} dryLabel="Dry biochar" category="dry-biochar" context="Source" />
     {numberField("water", "Water added (kg)")}
   </>;
   const ingredients = <>
@@ -167,7 +164,7 @@ function PrototypeForm({ mode, standalone = false }: { mode: Mode; standalone?: 
     {isBlend && <>
       <FormField id="prototype-ingredient" label="Ingredient bin"><FormSelect id="prototype-ingredient" options={[{ value: "manure", label: "Demo chicken manure bin" }]} /></FormField>
       <div className={GRID}>{numberField("ingredientWet", "Ingredient wet mass (kg)")}{numberField("ingredientMoisture", "Ingredient moisture (%)")}</div>
-      <MaterialReadout variant={variant} wet={ingredientWet} split={ingredientSplit} dryLabel="Ingredient dry solids" />
+      <MaterialReadout variant={variant} wet={ingredientWet} split={ingredientSplit} dryLabel="Ingredient dry solids" category="ingredient-solids" context="Ingredient" />
     </>}
   </>;
   const destination = <fieldset className="space-y-8">
