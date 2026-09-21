@@ -42,7 +42,7 @@ import {
 } from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FactoryIcon, PackageIcon } from "@phosphor-icons/react/dist/ssr";
+import { CalendarIcon, CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { FormDetailToggle, type FormDetailLevel } from "@/components/forms/form-detail-toggle";
@@ -381,7 +381,7 @@ export function BiocharProductForm({
       {productStockPreview.isFetching && <p role="status">Refreshing affected bins...</p>}
       {sourcePreview.isFetching && <p role="status">Refreshing source stock preview...</p>}
       <FormSpine control={control}>
-      <FormSection title="Placement" fields={["placedAt"]}>
+      <FormSection title="Placement" icon={<CalendarIcon size={14} weight="bold" />} fields={["placedAt"]}>
         <FormField id="placedAt" label="Mixing and placement date" required error={errors.placedAt?.message} helperText="The date this product was physically mixed and placed in its bin.">
           <FormInput id="placedAt" type="date" disabled={isSubmitting || isEditMode} {...register("placedAt")} />
         </FormField>
@@ -514,7 +514,7 @@ export function BiocharProductForm({
       {/* Destination + Product Details */}
       <FormSection
         title="Formulation & ingredients"
-        icon={<PackageIcon size={14} weight="bold" />}
+        icon={<ListChecksIcon size={14} weight="bold" />}
         fields={["formulationId", "ingredientBins"]}
       >
 
@@ -550,7 +550,7 @@ export function BiocharProductForm({
           previewsAvailable={!affectedBinsUnavailable}
         />
       </FormSection>
-      <FormSection title="Product" icon={<PackageIcon size={14} weight="bold" />} fields={["storageLocationId"]}>
+      <FormSection title="Product" icon={<CubeIcon size={14} weight="bold" />} fields={["storageLocationId"]}>
 
         <FormField
           id="storageLocationId"
