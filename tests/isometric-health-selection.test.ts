@@ -4,6 +4,7 @@ import { realpathSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync, syml
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { test } from "vitest";
+import { load } from "js-yaml";
 
 const root = resolve(import.meta.dirname, "..");
 const sandboxSuite = "tests/isometric-sandbox.integration.test.ts";
@@ -59,12 +60,9 @@ test("health command collects only sandbox reads even with telemetry enabled", (
   }
 }, collectionTimeoutMs);
 
-// Reuse ESLint's installed YAML parser; no new dependency is needed.
 const { createRequire } = await import("node:module");
 const { runInNewContext } = await import("node:vm");
 const require = createRequire(import.meta.url);
-const { load } = createRequire(require.resolve("eslint"))("js-yaml");
-const workflow = load(readFileSync(join(root, ".github/workflows/isometric-health.yml"), "utf8"));
 type WorkflowStep = {
   id?: string;
   if?: string;
@@ -72,7 +70,11 @@ type WorkflowStep = {
   uses?: string;
   env?: Record<string, string>;
 };
-const steps = workflow.jobs.ping.steps as WorkflowStep[];
+type HealthWorkflow = { jobs: { ping: { steps: WorkflowStep[] } } };
+const workflow = load(
+  readFileSync(join(root, ".github/workflows/isometric-health.yml"), "utf8"),
+) as HealthWorkflow;
+const steps = workflow.jobs.ping.steps;
 const prerequisites = ["checkout", "pnpm", "node", "install", "credentials"];
 const checks = ["api", "coverage", "openapi"];
 const required = [...prerequisites, ...checks];
