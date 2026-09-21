@@ -1,5 +1,7 @@
 "use client";
 
+import { MISSING_VALUE } from "@/lib/copy-utils";
+
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { formatMassKg, formatPercent } from "@/lib/format-utils";
@@ -14,7 +16,7 @@ export interface CompositionComponent {
 }
 const MIN_DISPLAY_MASS_KG = 0.1;
 export function formatCompositionMass(mass: number | null | undefined) {
-  if (mass == null || !Number.isFinite(mass) || mass < 0) return "Not available";
+  if (mass == null || !Number.isFinite(mass) || mass < 0) return MISSING_VALUE.notAvailable;
   return mass > 0 && mass < MIN_DISPLAY_MASS_KG ? `<${formatMassKg(MIN_DISPLAY_MASS_KG)}` : formatMassKg(mass);
 }
 
@@ -64,9 +66,9 @@ export function CompositionCard({ title, totalKg, components, details }: {
       <tbody>{components.map((component, index) => <tr key={`${component.label}-${index}`}>
         <th scope="row" className="space-y-4 py-8 pr-12 text-left font-normal"><span>{component.label}</span><div aria-hidden="true" className="h-8 bg-[var(--color-background-medium)]">{complete && <div className={`h-full ${FILLS[component.kind]}`} style={{ width: `${component.massKg! / totalKg! * PERCENT_SCALE}%` }} />}</div></th>
         <td className="py-8 pr-8 text-right align-top tabular-nums">{formatCompositionMass(component.massKg)}</td>
-        <td className="py-8 text-right align-top tabular-nums">{complete ? formatPercent(component.massKg! / totalKg! * PERCENT_SCALE) : "Not available"}</td>
+        <td className="py-8 text-right align-top tabular-nums">{complete ? formatPercent(component.massKg! / totalKg! * PERCENT_SCALE) : MISSING_VALUE.notAvailable}</td>
       </tr>)}</tbody>
-      <tfoot className="border-t border-[var(--color-border-secondary)]"><tr><th scope="row" className="pt-8 text-left font-medium">Wet total</th><td className="pt-8 pr-8 text-right tabular-nums">{formatCompositionMass(totalKg)}</td><td className="pt-8 text-right">{complete ? formatPercent(PERCENT_SCALE) : "Not available"}</td></tr></tfoot>
+      <tfoot className="border-t border-[var(--color-border-secondary)]"><tr><th scope="row" className="pt-8 text-left font-medium">Wet total</th><td className="pt-8 pr-8 text-right tabular-nums">{formatCompositionMass(totalKg)}</td><td className="pt-8 text-right">{complete ? formatPercent(PERCENT_SCALE) : MISSING_VALUE.notAvailable}</td></tr></tfoot>
     </table>
     {details && <div id={id} hidden={!open} className="space-y-12 border-t border-[var(--color-border-secondary)] pt-16 body-small">{details}</div>}
   </section>;
