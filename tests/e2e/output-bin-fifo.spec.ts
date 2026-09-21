@@ -73,7 +73,11 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.locator("#orderDate").fill(FIFO_BROWSER_DATE);
     await page.locator("#packaging").selectOption("loose");
     const matching = page.getByRole("region", { name: "Matching storage bins" });
-    await expect(matching.getByRole("article")).toHaveCount(FIFO_MATCHING_BIN_COUNT);
+    await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
+    await expect(matching).toHaveCount(0);
+    await page.getByText("Detailed", { exact: true }).click();
+    await expect(page.getByRole("radio", { name: "Detailed", exact: true })).toBeChecked();
+    await expect(matching.getByRole("table")).toHaveCount(FIFO_MATCHING_BIN_COUNT);
     await expect(matching.getByText(f.emptyBins.at(-1)!.name, { exact: true })).toBeVisible();
     await expect(page.locator("#biocharProductId")).toHaveCount(0);
     await expect(page.locator("#storageLocationId")).toHaveCount(0);

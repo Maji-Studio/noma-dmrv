@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
 import type { Locator, Page } from "@playwright/test";
 import { eq } from "drizzle-orm";
 import { test, expect, type SeededChainData } from "./fixtures";
@@ -9,7 +8,6 @@ import { deleteOutputProductFixtures } from "../helpers/output-contract-fixtures
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import { biocharProducts, biocharProductSourceAllocations, productIngredientSnapshots, feedstocks, binMovements, feedstockTypes, formulationIngredients, formulations, orders, productionRuns, storageLocations } from "@/db/schema";
 
-const EVIDENCE_DIRECTORY = "/private/tmp/product-order-evidence";
 const NARROW_VIEWPORT = { width: 390, height: 844 };
 const DESKTOP_VIEWPORT = { width: 1440, height: 1100 };
 const SOURCE_MOISTURE = 20;
@@ -43,8 +41,10 @@ async function showDetailsWithKeyboard(dialog: Locator) {
 }
 
 async function capture(page: Page, name: string) {
-  await mkdir(EVIDENCE_DIRECTORY, { recursive: true });
-  await page.screenshot({ path: `${EVIDENCE_DIRECTORY}/${name}.png`, fullPage: true });
+  const info = test.info();
+  const path = info.outputPath(`${name}.png`);
+  await page.screenshot({ path, fullPage: true });
+  await info.attach(name, { path, contentType: "image/png" });
 }
 
 async function assertNoHorizontalOverflow(dialog: Locator) {
