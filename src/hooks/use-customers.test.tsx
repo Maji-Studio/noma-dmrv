@@ -3,17 +3,21 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useEffect, type ReactNode } from "react";
 import { entityKeys } from "./entity-query-keys";
-import type { CreateCustomerData, UpdateCustomerData } from "@/schemas/customers";
+import { customerKeys } from "./customer-query-keys";
+import type {
+  CreateCustomerWithLocationsData,
+  UpdateCustomerData,
+} from "@/schemas/customers";
 import type { Customer } from "@/db/schema";
 
 const mocks = vi.hoisted(() => ({
-  createCustomerFn: vi.fn(),
+  createCustomerWithLocationsFn: vi.fn(),
   updateCustomerFn: vi.fn(),
   deleteCustomerFn: vi.fn(),
 }));
 
 vi.mock("@/fn/customers", () => ({
-  createCustomerFn: mocks.createCustomerFn,
+  createCustomerWithLocationsFn: mocks.createCustomerWithLocationsFn,
   updateCustomerFn: mocks.updateCustomerFn,
   deleteCustomerFn: mocks.deleteCustomerFn,
   getCustomersFn: vi.fn(),
@@ -25,7 +29,7 @@ vi.mock("@/fn/customers", () => ({
 }));
 
 import {
-  useCreateCustomer,
+  useCreateCustomerWithLocations,
   useDeleteCustomer,
   useUpdateCustomer,
 } from "./use-customers";
@@ -37,7 +41,7 @@ const customer = {
   cropType: "Maize",
 } as Customer;
 
-type CreateMutation = ReturnType<typeof useCreateCustomer>;
+type CreateMutation = ReturnType<typeof useCreateCustomerWithLocations>;
 type UpdateMutation = ReturnType<typeof useUpdateCustomer>;
 type DeleteMutation = ReturnType<typeof useDeleteCustomer>;
 type AnyMutation = CreateMutation | UpdateMutation | DeleteMutation;
@@ -102,31 +106,38 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  mocks.createCustomerFn.mockReset();
+  mocks.createCustomerWithLocationsFn.mockReset();
   mocks.updateCustomerFn.mockReset();
   mocks.deleteCustomerFn.mockReset();
-  mocks.createCustomerFn.mockResolvedValue({ success: true, data: customer });
+  mocks.createCustomerWithLocationsFn.mockResolvedValue({
+    success: true,
+    data: { customer, locations: [] },
+  });
   mocks.updateCustomerFn.mockResolvedValue({ success: true, data: customer });
   mocks.deleteCustomerFn.mockResolvedValue({ success: true, data: undefined });
 });
 
 describe("customer mutations keep the EntitySelect caches fresh", () => {
-  it("seeds the entity caches after creation", async () => {
+  it("seeds the customer detail and entity caches after creation with locations", async () => {
     const queryClient = newQueryClient();
     const listKey = entityKeys.list("customer");
     queryClient.setQueryData(listKey, []);
 
     const { mutation, renderer } = await renderMutation(
       queryClient,
-      useCreateCustomer,
+      useCreateCustomerWithLocations,
     );
 
     await act(async () => {
       await (mutation as CreateMutation).mutateAsync({
-        name: "New Customer",
-      } as CreateCustomerData);
+        customer: { name: "New Customer" },
+        locations: [],
+      } as CreateCustomerWithLocationsData);
     });
 
+    expect(queryClient.getQueryData(customerKeys.detail(customer.id))).toEqual(
+      customer,
+    );
     expect(
       queryClient.getQueryData(entityKeys.detail("customer", customer.id)),
     ).toEqual({

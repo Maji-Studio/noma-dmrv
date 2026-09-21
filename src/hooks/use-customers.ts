@@ -166,8 +166,6 @@ export function useCreateCustomer(
     onSuccess: async (data, variables) => {
       // Invalidate all customer lists
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
-      // Invalidate crop types in case a new crop type was added
-      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
 
       // Pre-populate the detail cache and the customer pickers
       seedCreatedCustomerCaches(queryClient, data);
@@ -209,7 +207,6 @@ export function useCreateCustomerWithLocations(
     },
     onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
       queryClient.invalidateQueries({
         queryKey: customerKeys.locations(data.customer.id),
       });
@@ -217,10 +214,7 @@ export function useCreateCustomerWithLocations(
         queryKey: customerKeys.detailWithRelations(data.customer.id),
       });
 
-      queryClient.setQueryData(
-        customerKeys.detail(data.customer.id),
-        data.customer,
-      );
+      seedCreatedCustomerCaches(queryClient, data.customer);
       for (const location of data.locations) {
         queryClient.setQueryData(
           customerLocationKeys.detail(location.id),
@@ -332,7 +326,6 @@ export function useUpdateCustomer(
         data,
       );
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
       invalidateEntityTypeQueries(queryClient, CUSTOMER_ENTITY_TYPE);
 
       await callbacks?.onSuccess?.(data, variables);
@@ -439,8 +432,6 @@ export function useDeleteCustomer(
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
-      // Invalidate crop types in case the deleted customer was the only one with its crop type
-      queryClient.invalidateQueries({ queryKey: customerKeys.cropTypes() });
       // Drop the deleted customer from the pickers
       queryClient.removeQueries({
         queryKey: entityKeys.detail(CUSTOMER_ENTITY_TYPE, customerId),
