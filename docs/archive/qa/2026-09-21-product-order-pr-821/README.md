@@ -2,7 +2,7 @@
 
 Visual evidence for [PR #821](https://github.com/Maji-Studio/noma-dmrv/pull/821), captured from the real application after the declutter pass (one composition table per surface, stock context as its own panel, calculation lists and repeated headers removed). Use this gallery to review the Product and Order create, read, and edit surfaces on desktop and narrow screens.
 
-Application commit: `4b695612a3e113ec55fbbf5e5e6c4ea376217eae`.
+Application commit: `7925b4b26e4e5b340f814dba68b97981fded6416`.
 
 These screenshots use synthetic local E2E records. Desktop viewport: 1440 × 1100; narrow viewport: 390 × 844. Images are unmodified full-page browser captures, so some include success toasts, the local development badge, or page content below the sheet viewport. The browser flow scrolls to the relevant fields before each capture; individual images are views of the sheet rather than stitched captures of all its content.
 
