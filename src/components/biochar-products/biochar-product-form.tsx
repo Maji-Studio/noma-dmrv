@@ -46,7 +46,7 @@ import { CalendarIcon, CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-i
 import Link from "next/link";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { FormDetailToggle, type FormDetailLevel } from "@/components/forms/form-detail-toggle";
-import { CalculationFacts, CompositionCard, ingredientComponents, type CompositionComponent } from "./composition-card";
+import { CompositionCard, ingredientComponents, type CompositionComponent } from "./composition-card";
 import { StockChangeLabel, StockContext } from "./stock-context";
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
@@ -435,7 +435,7 @@ export function BiocharProductForm({
         </FormField>
 
         <BiocharSourceMassFields
-          splitPreview={detailed ? <CompositionCard title="Source composition" totalKg={waterAddedKgNum !== null ? finalMassSplit?.wetKg ?? null : null} components={sourceComponents} details={<><CalculationFacts facts={[{ label: "Biochar wet mass", massKg: massKgNum }, { label: "Dry biochar", massKg: sourceDryKg }, { label: "Added water", massKg: waterAddedKgNum }]} /><p>{hasFrozenSourceAllocation ? "Dry biochar is fixed by the recorded source allocation. Updating moisture does not change that allocation." : "Dry biochar comes from the source allocation at the measured moisture."} Added water leaves dry biochar unchanged.</p><StockContext preview={validSourcePreview} facilityId={selectedFacilityId} /></>} /> : null}
+          splitPreview={detailed ? <StockContext title="Source stock" preview={validSourcePreview} facilityId={selectedFacilityId} /> : null}
           materialLabel="Biochar"
           wetMassKg={watchedMassKg}
           moisturePercent={watchedMoisture}
@@ -545,7 +545,6 @@ export function BiocharProductForm({
           composition={composition}
           isSubmitting={isSubmitting}
           allocationFrozen={hasFrozenSourceAllocation}
-          detailed={detailed}
           previews={productStockPreview.data}
           previewsAvailable={!affectedBinsUnavailable}
         />
@@ -586,7 +585,7 @@ export function BiocharProductForm({
             )}
           />
         </FormField>
-        {detailed && <CompositionCard title="Product composition" totalKg={destinationWetProductKg} components={productComponents} details={<><CalculationFacts facts={[{ label: "Source biochar (wet)", massKg: massKgNum }, ...(watchedIngredientBins ?? []).map(ingredient => ({ label: `${ingredient.feedstockTypeName} (wet)`, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : null })), { label: "Added water", massKg: waterAddedKgNum }, { label: "Wet total", massKg: destinationWetProductKg }]} /><p>Wet total = source biochar + ingredients + added water. Dry biochar excludes ingredient solids and water.</p><StockContext preview={destinationPreview} facilityId={selectedFacilityId} /></>} />}
+        {detailed && <CompositionCard title="Product composition" totalKg={destinationWetProductKg} components={productComponents} details={<><p>{hasFrozenSourceAllocation ? "Dry biochar is fixed by the recorded source allocation." : "Dry biochar comes from the source lots at the measured moisture."} Added water and ingredient solids leave it unchanged.</p><StockContext preview={destinationPreview} facilityId={selectedFacilityId} /></>} />}
       </FormSection>
       </FormSpine>
 

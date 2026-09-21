@@ -12,6 +12,7 @@ import { MatchingOutputBins } from "./matching-output-bins";
 
 export function OrderReadDetails({ order }: { order: OrderWithRelations }) {
   const [detailLevel, setDetailLevel] = useState<FormDetailLevel>("simple");
+  const fulfillment = ORDER_FULFILLMENT_DISPLAY[order.fulfillmentStatus];
   return <div className="space-y-20">
     <div className="flex justify-end"><FormDetailToggle value={detailLevel} onChange={setDetailLevel} /></div>
     <DetailSpine numbered sections={[
@@ -25,14 +26,14 @@ export function OrderReadDetails({ order }: { order: OrderWithRelations }) {
           <DetailRow><DetailField label="Requested wet mass (kg)" value={formatMassKg(order.quantityKg, { digits: MASS_KG_STORAGE_DECIMALS })} /></DetailRow>
           <DetailRow><DetailField label="Packaging" value={<span className="capitalize">{order.packaging}</span>} /></DetailRow>
           <DetailRow><DetailField label="Order value" value={order.value} /><DetailField label="Currency" value={order.currency} /></DetailRow>
-          {detailLevel === "detailed" && <div className="space-y-12"><h3 className="body-small font-medium">Current stock</h3><p className="body-caption text-[var(--color-text-secondary)]">Current availability, not a stock snapshot from the order date.</p><MatchingOutputBins facilityId={order.facilityId} formulationId={order.formulationId ?? ""} /></div>}
+          {detailLevel === "detailed" && <div className="space-y-12"><div><h3 className="body-small font-medium">Current stock</h3><p className="body-caption text-[var(--color-text-secondary)]">Current availability, not a stock snapshot from the order date.</p></div><MatchingOutputBins facilityId={order.facilityId} formulationId={order.formulationId ?? ""} /></div>}
         </>,
       },
       {
         title: "Fulfillment",
         fields: [
-          { label: "Fulfillment", value: <StatusBadge status={ORDER_FULFILLMENT_DISPLAY[order.fulfillmentStatus].badgeStatus} label={ORDER_FULFILLMENT_DISPLAY[order.fulfillmentStatus].label} /> },
-          { label: "Delivered", value: order.deliveryCount > 0 ? `${order.deliveredCount} of ${order.deliveryCount}` : "No deliveries scheduled" },
+          { label: "Fulfillment", value: <StatusBadge status={fulfillment.badgeStatus} label={fulfillment.label} /> },
+          ...(order.deliveryCount > 0 ? [{ label: "Delivered", value: `${order.deliveredCount} of ${order.deliveryCount}` }] : []),
         ],
       },
     ]} />

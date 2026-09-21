@@ -127,12 +127,9 @@ export function CustomerLocationDetails({
       className="border-[1.5px] border-[var(--clr-dark-purple)]"
       data-testid="order-location-details"
     >
-      <div className="flex items-baseline justify-between border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
+      <div className="border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
         <span className="label-button uppercase text-[var(--color-text-primary)]">
           Delivery location
-        </span>
-        <span className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          {location.name ?? "Unnamed location"}
         </span>
       </div>
 
@@ -162,7 +159,7 @@ export function CustomerLocationDetails({
             </p>
           )}
           <p
-            className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]"
+            className="body-caption text-[var(--color-text-tertiary)]"
             data-testid="order-location-distance"
           >
             {location.distanceFromFacilityKm != null
@@ -170,7 +167,7 @@ export function CustomerLocationDetails({
               : "Distance from facility not recorded"}
             {location.distanceFromFacilityKm != null &&
               location.distanceSource != null &&
-              ` · ${DISTANCE_SOURCE_LABELS[location.distanceSource]}`}
+              ` (${DISTANCE_SOURCE_LABELS[location.distanceSource].toLowerCase()})`}
           </p>
         </div>
 
