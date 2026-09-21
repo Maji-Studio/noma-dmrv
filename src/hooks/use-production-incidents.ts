@@ -18,7 +18,7 @@ import {
 import { productionRunKeys } from "@/hooks/use-production-runs";
 import type { MutationCallbacks } from "./types";
 
-export const productionIncidentKeys = {
+const productionIncidentKeys = {
   all: ["productionIncidents"] as const,
   lists: () => [...productionIncidentKeys.all, "list"] as const,
   list: (productionRunId: string) =>

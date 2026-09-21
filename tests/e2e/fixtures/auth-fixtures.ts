@@ -418,59 +418,6 @@ export async function createAuthenticatedContext(
   return context;
 }
 
-/**
- * Create a session directly in the database for faster auth
- * This bypasses UI login for performance
- */
-export async function createDirectSession(
-  userId: string
-): Promise<{ token: string; sessionId: string }> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    const sessionId = `e2e-session-${crypto.randomUUID()}`;
-    const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-    await db.insert(schema.sessions).values({
-      id: sessionId,
-      userId: userId,
-      token: token,
-      expiresAt: expiresAt,
-      ipAddress: "127.0.0.1",
-      userAgent: "Playwright E2E Tests",
-    });
-
-    return { token, sessionId };
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Set auth cookies on a browser context for direct session authentication
- */
-export async function setAuthCookies(
-  context: BrowserContext,
-  token: string,
-  baseURL: string
-): Promise<void> {
-  const url = new URL(baseURL);
-
-  // Better Auth uses specific cookie naming conventions
-  await context.addCookies([
-    {
-      name: "better-auth.session_token",
-      value: token,
-      domain: url.hostname,
-      path: "/",
-      httpOnly: true,
-      secure: url.protocol === "https:",
-      sameSite: "Lax",
-    },
-  ]);
-}
-
 // Extended test fixture with auth helpers
 export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }>({
   workerAuthData: [

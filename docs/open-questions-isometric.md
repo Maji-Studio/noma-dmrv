@@ -8,6 +8,84 @@ Current interpretation pin: Biochar Protocol v1.1 with the five module versions
 in [`docs/isometric/versions.json`](./isometric/versions.json). Resolved or
 retired questions do not belong in this file.
 
+### Biochar Application claims retain a replaced Storage Location (`isometric/biochar-application-storage-location-replaced`, opened 2026-09-08, `needs-registry-check`)
+
+- **Observed** — `src/data-access/certifier-storage-locations.ts:replaceMissingStorageLocationRegistration`
+  preserves dependent Biochar Application payloads and external IDs and marks
+  them `review_required` with reason `storage_location_replaced`.
+  `src/fn/certification/biochar-applications.ts:ensureBiocharApplication`
+  blocks reuse of those claims, including ambiguous in-flight creates.
+- **Current handling** — support must inspect the saved claim and registry
+  records before choosing a correction. The recovery path does not repoint
+  existing claims automatically; unclaimed Applications use the replacement.
+- **To resolve** — verify the registry's correction or supersession contract
+  and provide an explicit recovery path that preserves the original journal
+  and prevents duplicate Biochar Applications after an ambiguous POST.
+
+### Biochar Application Source attachment is never read back (`isometric/biochar-application-source-readback`, opened 2026-09-08, `needs-registry-check`)
+
+- **Observed** — `CreateBiocharApplicationRequest` accepts `source_ids`, but
+  the `BiocharApplication` response (POST and GET) and `GET /sources` expose
+  no Application-to-Source link (public Certify OpenAPI, checked 2026-09-08).
+  Only the GraphQL `BiocharSpreadEvent.biocharSpreadEventSources` field does.
+- **Decision** — the accepted create request is the attachment contract:
+  `src/lib/isometric/biochar-applications.ts:sourceSetMismatchMessage`
+  compares the reviewed set only when a readback carries `source_ids`, treats
+  an omitted or null field as nothing to verify, and reports any other shape
+  as drift. The immutable submission snapshot keeps the IDs sent. A strict
+  readback guard had blocked every evidence-bearing Removal on staging.
+- **To resolve** — read the attachment back through GraphQL (issue #737) and
+  make the exact-set comparison unconditional again.
+
+### Removal deletion leaves Datapoints behind (`isometric/removal-deletion-orphans`, opened 2026-09-08)
+
+- **Observed** — deleting a never-finalized Removal
+  (`src/fn/certification/delete-removal.ts:deleteRemoval`) removes the draft
+  GHG Entry, its Biochar Applications, its exclusively owned Production
+  Batches and Measurement Samples, and (since 2026-09-10) the Sources whose
+  local mapping the deletion released. The Datapoints the same submission
+  created stay. Storage Locations are shared across Removals and must stay.
+  GHG Entry and Biochar Application orphans are keyed by version-specific
+  supplier references, so a later Removal never collides with them.
+- **Sources are settled (2026-09-10)** — verified through the `how_to` MCP
+  tool and the public Certify OpenAPI: `DELETE /sources/{id}` exists (204,
+  irreversible), deleting a draft GHG Entry does not cascade to Sources, and
+  the registry refuses a Source that locked Datapoints, validated assets, or a
+  verified statement still use. The deletion now sends that DELETE after the
+  finalize transaction committed, fenced by each document's mirror lock
+  (`withReleasedDocumentMirrorLock`, bounded lock wait); a refusal is audited as a failed
+  `removal:delete:source` event and leaves the Source in place without
+  failing the deletion. Whether the orphaned draft Datapoints count as
+  locked, and so refuse the Source delete, is unknown until a sandbox run
+  (`needs-registry-check`).
+- **Why it matters** — sandbox and production projects accumulate unused
+  Datapoints after each abandoned submission. Nothing reads them, but a
+  reviewer opening the project in Certify sees records with no GHG Entry.
+- **To resolve** — decide whether cleanup should extend to
+  `DELETE /datapoints/{id}` (refused while a Component still uses it). The
+  single-document and parent-record delete paths also release mappings
+  inside their transactions and leave the remote Source in place; covering
+  them needs a durable outbox and is not asked for.
+
+### Partial registry cleanup leaves a Removal that submits badly before it deletes cleanly (`isometric/removal-deletion-partial-cleanup`, opened 2026-09-08)
+
+- **Observed** — `src/fn/certification/delete-removal.ts:deleteRegistryRecords`
+  deletes the GHG Entry before the Biochar Applications. If a later DELETE is
+  refused, the claim is released and the ledger row keeps the now-deleted GHG
+  Entry ID. A second Delete Removal converges (every DELETE tolerates a 404,
+  and the operator message says to run it again). An ordinary submit retry
+  instead reuses `row.externalId`
+  (`src/fn/certification/submit-removal.ts`) and fails on the readback as
+  registry drift before the operator is pointed back at deletion.
+- **Why it matters** — the interrupted state is recoverable but the wrong
+  button gives a confusing detour.
+- **To resolve** — decide whether a partial deletion should persist a
+  deletion-only recovery state on the ledger row (blocking submit until the
+  deletion completes) or whether submit should treat a 404 on a recorded GHG
+  Entry as "recreate". Either way the ledger `deletion` metadata written by
+  `src/data-access/certifier-removal-deletion.ts:finalizeRemovalDeletion` is
+  the natural carrier.
+
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
 
 - **Decision needed** — where should the "this template component carries this
@@ -121,6 +199,39 @@ uses it.
   sync event (operation `ghg_statement:create`, errorMessage = the ambiguity
   wording, no response body). One-line change in `reconcileToResult` plus the
   pinned assertion; no migration.
+
+### Supplier-reference reconciliation is a bounded full-list scan (`isometric/reconciliation-lookup-bound`, opened 2026-08-24)
+
+- Neither endpoint exposes a supplier-reference filter, so each
+  reconcile-before-POST lookup performs a bounded paginated scan. Storage
+  Location lookup is scoped to one Isometric project by
+  `GET /projects/{project_id}/storage_locations`; its independent 1,000-record
+  bound (50 x 20 pages) therefore applies per project, and exceeding it blocks
+  new site registration for that project. Biochar Application lookup uses the
+  unscoped `GET /biochar_applications`; it scans every application visible to
+  the credential/account, with its own independent 1,000-record bound, and
+  exceeding that account-visible bound blocks new application registration.
+  Both paths fail loudly instead of risking a duplicate POST
+  (`src/lib/isometric/storage-locations.ts`,
+  `src/lib/isometric/biochar-applications.ts`).
+- **Resolve via:** ask Isometric for a supplier-reference filter (report via
+  MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a project or
+  credential/account approaches its respective bound.
+
+### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
+
+- **Observed — needs-registry-check:** sandbox Biochar Application
+  `bse_1M11R23Y2SBXKCE9` was fully persisted with both provider-managed
+  `ghg_entry_id` and `removal_id` null. The create request exposes no GHG Entry
+  field, so `assertRemoteClaimableForCurrentRemoval`
+  (`src/fn/certification/biochar-applications.ts`) accepts both-null readback,
+  records the null observations, and still rejects any present association to a
+  different GHG Entry.
+- **Still open — needs-registry-check:** confirm whether and when Isometric sets
+  either association, and whether inclusion in a GHG Entry is instead derived
+  from project and reporting-window facts. Close this only after `how_to` plus
+  the relevant OpenAPI/protocol check or a sandbox probe documents the
+  provider-owned lifecycle in [`docs/isometric/changes.md`](./isometric/changes.md).
 
 ### GHG Entry deprecated-alias cleanup after the September 2026 sunset (`isometric/ghg-entry-migration`, opened 2026-06-10)
 
@@ -270,20 +381,6 @@ Scoped out of the Phase 5 Slice A design (biochar reactor time-series via
 Parquet — [ADR 0006](./adr/0006-data-upload-submission-idempotency.md)). The
 Slice A server pipeline exists but its UI is dark. Each item below is
 independently shippable when its upstream primitives and operator demand exist.
-
-- **Slice B — `POST /biochar_applications`** (`isometric/phase-5-slice-b`).
-  Per-spread-event JSON submission (`application_date`,
-  `truck_mass_on_arrival/departure`, `average_application_rate`) that verifiers
-  use to inspect individual delivery records. The upstream Production Batch and
-  Storage Location create/reconcile paths are now implemented, including stable
-  supplier references and local identity journals. POST remains disabled
-  because noma has net delivered/applied mass, while the request requires two
-  separate observed truck masses and offers no net-mass alternative. Isometric
-  must confirm the exact mass encoding or another route, the average-rate unit
-  and wet/dry basis, multi-batch allocation, correction behavior, and
-  `ghg_entry_id` lifecycle. No implementation may encode net mass as arrival
-  and zero as departure. The gated journal keeps one local identity per
-  Application and credit-batch allocation slice until that contract is fixed.
 
 - **Deleted Storage Location recovery** (`isometric/storage-location-recovery`).
   If an already-journaled remote Storage Location returns 404, noma marks its
@@ -443,7 +540,7 @@ threshold for the same PR; revisit next time the area is touched.
 ### Phase 3.5 Sources panel test-pass follow-ups (opened 2026-05-27)
 
 Surfaced while exercising the Sources panel against the sandbox (Cases A–H).
-A–E and the precondition guards (G/H) passed; the three below were band-aided or
+A–E and the precondition guards (G/H) passed; the two below were band-aided or
 are clean deferrals.
 
 - **`storage/sources-storage-loopback` — replace the HTTP loopback in
@@ -457,27 +554,6 @@ are clean deferrals.
   Browser→storage signed URLs stay for genuine browser use. Removes one HTTP hop
   per mirror, shrinks the loopback-host allowlist surface, and kills the dev-only
   `STORAGE_SIGNING_SECRET` dependency on this path.
-
-- **`storage/sources-sync-events-tx` — move `certifier_sync_events` writes out
-  of the mirror business transaction. ⚠️ NOT MITIGATED — live at the default
-  pool size.** `appendSyncEventBestEffort` (`src/fn/certification/shared.ts`)
-  runs on the root `db` while being called from inside the transaction opened in
-  `mirrorDocumentToSource` (`src/fn/certification/sources.ts`). With a
-  single-connection pool the audit write deadlocks waiting for a connection held
-  by the open business transaction — **the same pool-starvation failure the
-  `assertSameOrg` `executor` parameter exists to prevent** (see the invariants
-  section).
-  A previous version of this entry claimed the risk was band-aided with
-  `DB_POOL_MAX=10`. **That is false.** `src/db/index.ts` runs
-  `max: env.DB_POOL_MAX ?? 1` and `.env.local` records `DB_POOL_MAX skipped — no
-  "DB_POOL_MAX" field in the 1Password item`, so the effective pool size is
-  **1** and the starvation path is fully live. Treat this as unmitigated until
-  fixed.
-  **Resolve via:** accumulate event payloads in a closure and flush after the
-  transaction settles (success or rollback). Touch points:
-  `src/fn/certification/sources.ts` (`withSourceSyncEventOnFailure`, the
-  `appendSyncEventBestEffort` calls inside the mirror transaction),
-  `src/data-access/certification.ts` (`appendSyncEvent`).
 
 - **`ux/sources-panel-row-layout` — Mirror clips on narrow viewports.** The
   Mirror action in `src/components/certification/sources-panel.tsx` can clip

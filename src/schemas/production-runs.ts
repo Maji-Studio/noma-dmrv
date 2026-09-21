@@ -9,6 +9,7 @@ import {
   emptyToNull,
   MASS_INPUT_MAX_KG,
   massKgSchema,
+  expectedUpdatedAtSchema,
   optionalDateOnly,
   optionalStoredPercent,
   PG_INTEGER_MAX,
@@ -495,7 +496,7 @@ export const updateProductionRunSchema = z.object({
   facilityId: z.string().uuid().optional(),
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
-  expectedUpdatedAt: z.coerce.date().optional(),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
   startTime: z.union([
     z.date(),
@@ -598,16 +599,6 @@ export const productionRunFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
-/**
- * Schema for selecting a production run (e.g., in dropdowns)
- */
-export const productionRunSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  date: z.date(),
-  status: z.enum(productionRunStatuses),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -615,10 +606,7 @@ export const productionRunSelectSchema = z.object({
 export type ProductionRunFormData = z.infer<typeof productionRunFormSchema>;
 export type CreateProductionRunData = z.infer<typeof createProductionRunSchema>;
 export type UpdateProductionRunData = z.infer<typeof updateProductionRunSchema>;
-export type DeleteProductionRunData = z.infer<typeof deleteProductionRunSchema>;
 export type ProductionRunFilterData = z.infer<typeof productionRunFilterSchema>;
-export type ProductionRunSelectData = z.infer<typeof productionRunSelectSchema>;
-
 // ============================================
 // Helper Functions
 // ============================================

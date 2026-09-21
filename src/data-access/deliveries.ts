@@ -3,33 +3,26 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
-import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
-  deliveries,
-  orders,
-  facilities,
-  customers,
-  customerLocations,
-  applications,
   biocharProducts,
+  customerLocations,
+  customers,
+  deliveries,
   drivers,
+  facilities,
+  orders,
   vehicles,
-  type Delivery,
+  type Delivery
 } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
+import { and, asc, count, desc, eq, gte, ilike, isNull, lte, sql, SQL } from "drizzle-orm";
 import {
   effectiveDeliveryDistanceKm,
   effectiveDeliveryDistanceSource,
 } from "./delivery-distance-projections";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
-import {
-  isDeliveryTruckMassCompletion,
-  type DeliveryUpdateData,
-} from "./delivery-mass-gated-correction";
-import { completeMassGatedDeliveryTruckMasses } from "./delivery-mass-gated-completion";
-
 export interface DeliveryWithRelations extends Delivery {
   status: DeliveryStatus;
   orderCode: string | null;
@@ -83,31 +76,9 @@ export interface DeliveryDetail extends Delivery {
 }
 
 // Auth guards
-import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import {
-  retireDocumentsForEntities,
-  type DocumentEntityRef,
-} from "./documents";
-import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
-import {
-  deliveryDrawsStock,
-  lockCreateDeliveryStock,
-  lockDeleteDeliveryStock,
-  lockDeliveryUpdateStock,
-} from "./delivery-stock-locks";
-import {
-  assertDeliveryWithinOrderBalance,
-  lockDeliveryOrderAndAssertBalance,
-} from "./delivery-order-balance";
-import {
-  lockBiocharTransportRouteTopology,
-  syncBiocharProductTransportLegs,
-} from "./transport-legs";
-import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
-import { isStockOverdraw } from "@/lib/stock-overdraw";
-import { deriveDeliveryDryBiocharKg } from "./delivery-dry-biochar";
+import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
+import { requireOrgScope } from "./utils";
 
 // ============================================
 // Read Operations
@@ -170,8 +141,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     status: deliveries.status,
     deliveredWetMassKg: deliveries.deliveredWetMassKg,
     massDryKg: deliveries.massDryKg,
-    truckMassOnArrivalKg: deliveries.truckMassOnArrivalKg,
-    truckMassOnDepartureKg: deliveries.truckMassOnDepartureKg,
     moistureContentPercent: deliveries.moistureContentPercent,
     distanceKmOverride: columns.distanceKmOverride
       ? deliveries.distanceKmOverride
@@ -247,10 +216,10 @@ export async function getDeliveries(
 
   if (creditBatchId) {
     conditions.push(
-      inCreditBatchLineage(
+      inDeliveryCreditBatchLineage(
         ctx,
         creditBatchId,
-        sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+        deliveries.id,
       ),
     );
   }
@@ -344,28 +313,6 @@ export async function getDeliveries(
 }
 
 /**
- * Get a single delivery by ID
- */
-export async function getDeliveryById(
-  ctx: OrgContext,
-  deliveryId: string
-): Promise<Delivery> {
-  requireOrgScope(ctx);
-  const deliveryColumns = await getDeliveryColumnAvailability();
-
-  const [delivery] = await db
-    .select(getDeliveryBaseSelection(deliveryColumns))
-    .from(deliveries)
-    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (!delivery) {
-    throw new SafeError("Delivery not found");
-  }
-
-  return delivery;
-}
-
-/**
  * Get a single delivery with all its relationships
  */
 export async function getDeliveryWithRelations(
@@ -434,8 +381,6 @@ export async function getDeliveryWithRelations(
     status: deliveryRow.status,
     deliveredWetMassKg: deliveryRow.deliveredWetMassKg,
     massDryKg: deliveryRow.massDryKg,
-    truckMassOnArrivalKg: deliveryRow.truckMassOnArrivalKg,
-    truckMassOnDepartureKg: deliveryRow.truckMassOnDepartureKg,
     moistureContentPercent: deliveryRow.moistureContentPercent,
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
@@ -488,37 +433,6 @@ export async function getDeliveryWithRelations(
   };
 }
 
-/**
- * Get deliveries for dropdown selection
- */
-export async function getDeliveriesForSelect(
-  ctx: OrgContext,
-  orderId?: string
-): Promise<Array<{ id: string; code: string; deliveryDate: Date; status: string; orderCode: string | null }>> {
-  requireOrgScope(ctx);
-  const deliveryColumns = await getDeliveryColumnAvailability();
-
-  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), ...activeDeliveriesCondition(deliveryColumns)];
-  if (orderId) {
-    conditions.push(eq(deliveries.orderId, orderId));
-  }
-
-  const whereClause = and(...conditions);
-
-  return db
-    .select({
-      id: deliveries.id,
-      code: deliveries.code,
-      deliveryDate: deliveries.deliveryDate,
-      status: deliveries.status,
-      orderCode: orders.code,
-    })
-    .from(deliveries)
-    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
-    .where(whereClause)
-    .orderBy(desc(deliveries.deliveryDate));
-}
-
 // ============================================
 // Create Operations
 // ============================================
@@ -526,475 +440,4 @@ export async function getDeliveriesForSelect(
 /**
  * Create a new delivery
  */
-export async function createDelivery(
-  ctx: OrgContext,
-  data: {
-    code: string;
-    orderId: string;
-    facilityId: string;
-    deliveryDate: Date;
-    biocharProductId?: string | null;
-    driverId?: string | null;
-    vehicleId?: string | null;
-    status?: "upcoming" | "delivered";
-    deliveredWetMassKg?: number | null;
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
-    moistureContentPercent?: number | null;
-    distanceKmOverride?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    distanceNote?: string | null;
-    tripType?: "return" | "one_way" | null;
-  }
-): Promise<Delivery> {
-  requireOrgScope(ctx);
-  const deliveryColumns = await getDeliveryColumnAvailability();
-
-  const effectiveStatus = data.status ?? "upcoming";
-  if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
-  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
-
-  const delivery = await db.transaction(async (tx) => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-
-    const [order] = await tx
-      .select({
-        facilityId: orders.facilityId,
-        biocharProductId: orders.biocharProductId,
-      })
-      .from(orders)
-      .where(and(
-        eq(orders.id, data.orderId),
-        eq(orders.organizationId, ctx.organizationId),
-      ));
-    if (!order) {
-      throw new SafeError("Order not found");
-    }
-    if (order.facilityId !== data.facilityId) {
-      throw new SafeError("Order belongs to a different facility");
-    }
-
-    const effectiveBiocharProductId =
-      data.biocharProductId ?? order.biocharProductId;
-    const [product] = await tx
-      .select({ facilityId: biocharProducts.facilityId })
-      .from(biocharProducts)
-      .where(and(
-        eq(biocharProducts.id, effectiveBiocharProductId),
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ));
-    if (!product) {
-      throw new SafeError("Biochar product not found");
-    }
-    if (product.facilityId !== data.facilityId) {
-      throw new SafeError("Biochar product belongs to a different facility");
-    }
-
-    // Hard-block shipping more than the product batch physically holds (#116).
-    if (deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)) {
-      await lockCreateDeliveryStock(ctx, tx, {
-        biocharProductId: effectiveBiocharProductId,
-        requestedWetKg: data.deliveredWetMassKg,
-      });
-    }
-
-    // Upcoming rows allocate order quantity too. Lock the order after the
-    // physical-stock tier, then derive the remaining balance transactionally.
-    await lockDeliveryOrderAndAssertBalance(ctx, tx, {
-      orderId: data.orderId,
-      requestedWetKg: data.deliveredWetMassKg,
-    });
-
-    const massDryKg = await deriveDeliveryDryBiocharKg(ctx, tx, {
-      biocharProductId: effectiveBiocharProductId,
-      deliveredWetMassKg: data.deliveredWetMassKg,
-    });
-
-    const [row] = await tx
-      .insert(deliveries)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        orderId: data.orderId,
-        facilityId: data.facilityId,
-        deliveryDate: data.deliveryDate,
-        biocharProductId: effectiveBiocharProductId,
-        driverId: data.driverId ?? null,
-        vehicleId: data.vehicleId ?? null,
-        status: effectiveStatus,
-        deliveredWetMassKg: data.deliveredWetMassKg ?? null,
-        massDryKg,
-        truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
-        truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
-        moistureContentPercent: data.moistureContentPercent ?? null,
-        ...(deliveryColumns.distanceKmOverride
-          ? { distanceKmOverride: data.distanceKmOverride ?? null }
-          : {}),
-        ...(deliveryColumns.distanceSource
-          ? { distanceSource: data.distanceSource ?? null }
-          : {}),
-        ...(deliveryColumns.distanceNote
-          ? { distanceNote: data.distanceNote ?? null }
-          : {}),
-        ...(deliveryColumns.tripType && data.tripType != null
-          ? { tripType: data.tripType }
-          : {}),
-      })
-      .returning(getDeliveryBaseSelection(deliveryColumns));
-
-    await syncBiocharProductTransportLegs(ctx, tx, [
-      effectiveBiocharProductId,
-    ]);
-
-    return row;
-  });
-  await processPendingStorageObjectDeletions(ctx);
-
-  return delivery;
-}
-
-// ============================================
-// Update Operations
-// ============================================
-
-/**
- * Update an existing delivery
- */
-export async function updateDelivery(
-  ctx: OrgContext,
-  deliveryId: string,
-  data: DeliveryUpdateData,
-): Promise<Delivery> {
-  requireOrgScope(ctx);
-  const deliveryColumns = await getDeliveryColumnAvailability();
-
-  // Verify delivery exists
-  const [existing] = await db
-    .select(getDeliveryBaseSelection(deliveryColumns))
-    .from(deliveries)
-    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Delivery not found");
-  }
-
-  if (isDeliveryTruckMassCompletion(existing, data)) {
-    const corrected = await completeMassGatedDeliveryTruckMasses(
-      ctx,
-      deliveryId,
-      {
-        currentArrivalKg: existing.truckMassOnArrivalKg,
-        currentDepartureKg: existing.truckMassOnDepartureKg,
-        arrivalKg: data.truckMassOnArrivalKg!,
-        departureKg: data.truckMassOnDepartureKg!,
-      },
-    );
-    if (corrected) return getDeliveryById(ctx, deliveryId);
-  }
-
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: deliveries.id })
-      .from(deliveries)
-      .where(and(eq(deliveries.code, data.code), eq(deliveries.organizationId, ctx.organizationId)));
-
-    if (duplicate) {
-      throw new SafeError("A delivery with this code already exists");
-    }
-  }
-
-  const effectiveFacilityId = data.facilityId ?? existing.facilityId;
-  const effectiveOrderId = data.orderId ?? existing.orderId;
-  const orderIds = [...new Set([existing.orderId, effectiveOrderId])];
-  const orderRows = await db
-    .select({
-      id: orders.id,
-      facilityId: orders.facilityId,
-      biocharProductId: orders.biocharProductId,
-    })
-    .from(orders)
-    .where(and(
-      inArray(orders.id, orderIds),
-      eq(orders.organizationId, ctx.organizationId),
-    ));
-  const effectiveOrder = orderRows.find((order) => order.id === effectiveOrderId);
-
-  if (!effectiveOrder) {
-    throw new SafeError("Order not found");
-  }
-
-  if (data.facilityId !== undefined || data.orderId !== undefined) {
-    if (effectiveOrder.facilityId !== effectiveFacilityId) {
-      throw new SafeError("Order belongs to a different facility");
-    }
-  }
-
-  const effectiveBiocharProductId = data.biocharProductId !== undefined
-    ? data.biocharProductId ?? effectiveOrder.biocharProductId
-    : existing.biocharProductId ?? effectiveOrder.biocharProductId;
-  if (
-    effectiveBiocharProductId &&
-    (data.facilityId !== undefined ||
-      data.biocharProductId !== undefined ||
-      data.orderId !== undefined)
-  ) {
-    const [product] = await db
-      .select({ facilityId: biocharProducts.facilityId })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.id, effectiveBiocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-    if (!product) {
-      throw new SafeError("Biochar product not found");
-    }
-
-    if (product.facilityId !== effectiveFacilityId) {
-      throw new SafeError("Biochar product belongs to a different facility");
-    }
-  }
-
-  if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
-  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
-
-  const updated = await db.transaction(async (tx) => {
-    const routeMembershipCanChange =
-      data.orderId !== undefined || data.biocharProductId !== undefined;
-    if (routeMembershipCanChange) {
-      await lockBiocharTransportRouteTopology(ctx, tx);
-    }
-
-    // Certified-lineage precedence: a verifier-bound delivery may not be edited
-    // at all, so that refusal has to reach the operator ahead of any stock
-    // complaint about an edit they were never allowed to make.
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "delivery", entityId: deliveryId },
-      "update",
-    );
-
-    const lockedDelivery = await lockDeliveryUpdateStock(
-      ctx,
-      tx,
-      deliveryId,
-      data,
-    );
-    const lockedEffectiveOrderId = data.orderId ?? lockedDelivery.orderId;
-    const lockedOrderIds = [...new Set([
-      lockedDelivery.orderId,
-      lockedEffectiveOrderId,
-    ])];
-    const lockedOrders = await tx
-      .select({
-        id: orders.id,
-        biocharProductId: orders.biocharProductId,
-        quantityKg: orders.quantityKg,
-      })
-      .from(orders)
-      .where(and(
-        inArray(orders.id, lockedOrderIds),
-        eq(orders.organizationId, ctx.organizationId),
-      ))
-      .orderBy(orders.id)
-      .for("update");
-    const lockedExistingOrder = lockedOrders.find(
-      (order) => order.id === lockedDelivery.orderId,
-    );
-    const lockedEffectiveOrder = lockedOrders.find(
-      (order) => order.id === lockedEffectiveOrderId,
-    );
-    if (!lockedEffectiveOrder) {
-      throw new SafeError("Order not found");
-    }
-    const lockedEffectiveWetMass =
-      data.deliveredWetMassKg !== undefined
-        ? data.deliveredWetMassKg
-        : lockedDelivery.deliveredWetMassKg;
-    if (data.truckMassOnArrivalKg !== undefined || data.truckMassOnDepartureKg !== undefined) {
-      if (data.truckMassOnArrivalKg === undefined) data.truckMassOnArrivalKg = lockedDelivery.truckMassOnArrivalKg;
-      if (data.truckMassOnDepartureKg === undefined) data.truckMassOnDepartureKg = lockedDelivery.truckMassOnDepartureKg;
-    }
-    const orderChanged = lockedEffectiveOrderId !== lockedDelivery.orderId;
-    const wetMassIncreased =
-      lockedEffectiveWetMass != null &&
-      isStockOverdraw(
-        lockedEffectiveWetMass,
-        lockedDelivery.deliveredWetMassKg ?? 0,
-      );
-    if (
-      orderChanged ||
-      wetMassIncreased
-    ) {
-      await assertDeliveryWithinOrderBalance(ctx, tx, {
-        orderId: lockedEffectiveOrderId,
-        orderQuantityKg: lockedEffectiveOrder.quantityKg,
-        requestedWetKg: lockedEffectiveWetMass,
-        excludeDeliveryId: deliveryId,
-      });
-    }
-    const lockedExistingBiocharProductId =
-      lockedDelivery.biocharProductId ??
-      lockedExistingOrder?.biocharProductId ??
-      null;
-    const lockedEffectiveBiocharProductId =
-      data.biocharProductId !== undefined
-        ? data.biocharProductId ?? lockedEffectiveOrder.biocharProductId
-        : lockedDelivery.biocharProductId ??
-          lockedEffectiveOrder.biocharProductId;
-    const dryAllocationLineageChanged =
-      lockedEffectiveOrderId !== lockedDelivery.orderId ||
-      lockedEffectiveBiocharProductId !== lockedExistingBiocharProductId ||
-      lockedEffectiveWetMass !== lockedDelivery.deliveredWetMassKg;
-    const needsDryAllocationBackfill =
-      lockedDelivery.massDryKg == null && lockedEffectiveWetMass != null;
-    if (dryAllocationLineageChanged) {
-      const [existingApplication] = await tx
-        .select({ id: applications.id })
-        .from(applications)
-        .where(and(
-          eq(applications.deliveryId, deliveryId),
-          eq(applications.organizationId, ctx.organizationId),
-        ))
-        .limit(1);
-      if (existingApplication) {
-        throw new SafeError(
-          "This delivery already has applications. Delete them before changing its order, product, or wet mass.",
-        );
-      }
-    }
-    const massDryKg =
-      (dryAllocationLineageChanged || needsDryAllocationBackfill) &&
-      lockedEffectiveBiocharProductId
-      ? await deriveDeliveryDryBiocharKg(ctx, tx, {
-          biocharProductId: lockedEffectiveBiocharProductId,
-          deliveredWetMassKg: lockedEffectiveWetMass,
-          excludeDeliveryId: deliveryId,
-        })
-      : undefined;
-
-    const [row] = await tx
-      .update(deliveries)
-      .set({
-        ...data,
-        // Dry mass remains server-derived. An unrelated save may repair a
-        // missing snapshot without treating it as a lineage mutation.
-        massDryKg,
-        ...(deliveryColumns.distanceKmOverride
-          ? {}
-          : { distanceKmOverride: undefined }),
-        ...(deliveryColumns.distanceSource
-          ? {}
-          : { distanceSource: undefined }),
-        ...(deliveryColumns.distanceNote
-          ? {}
-          : { distanceNote: undefined }),
-        // Null/absent tripType leaves the stored value untouched (Drizzle drops
-        // undefined keys); strip entirely when the column is not yet migrated.
-        ...(deliveryColumns.tripType && data.tripType != null
-          ? { tripType: data.tripType }
-          : { tripType: undefined }),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
-      .returning(getDeliveryBaseSelection(deliveryColumns));
-
-    await syncBiocharProductTransportLegs(ctx, tx, [
-      lockedExistingBiocharProductId,
-      lockedEffectiveBiocharProductId,
-    ]);
-
-    return row;
-  });
-  await processPendingStorageObjectDeletions(ctx);
-
-  return updated;
-}
-
-// ============================================
-// Delete Operations
-// ============================================
-
-/**
- * Delete a delivery
- */
-export async function deleteDelivery(
-  ctx: OrgContext,
-  deliveryId: string
-): Promise<void> {
-  requireOrgScope(ctx);
-
-  await db.transaction(async (tx) => {
-    await lockBiocharTransportRouteTopology(ctx, tx);
-
-    // Same precedence as updateDelivery: refuse the locked-lineage delete before
-    // taking stock locks or complaining about stock.
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "delivery", entityId: deliveryId },
-      "delete",
-    );
-
-    const locked = await lockDeleteDeliveryStock(ctx, tx, deliveryId);
-    const [lockedOrder] = await tx
-      .select({ biocharProductId: orders.biocharProductId })
-      .from(orders)
-      .where(and(
-        eq(orders.id, locked.orderId),
-        eq(orders.organizationId, ctx.organizationId),
-      ));
-    const affectedBiocharProductId =
-      locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
-    const deferredRetirements: DocumentEntityRef[] = [];
-
-    const [{ value: applicationCount }] = await tx
-      .select({ value: count() })
-      .from(applications)
-      .where(and(eq(applications.deliveryId, deliveryId), eq(applications.organizationId, ctx.organizationId)));
-
-    if (Number(applicationCount) > 0) {
-      throw new SafeError(
-        "Cannot delete delivery with applications. Remove the applications first."
-      );
-    }
-
-    await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-    await syncBiocharProductTransportLegs(ctx, tx, [
-      affectedBiocharProductId,
-    ], deferredRetirements);
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "delivery", entityId: deliveryId },
-      ...deferredRetirements,
-    ]);
-  });
-  await processPendingStorageObjectDeletions(ctx);
-}
-
-// ============================================
-// Utility Operations
-// ============================================
-
-/**
- * Check if a delivery code is available
- */
-export async function isDeliveryCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeDeliveryId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.code, code)];
-
-  if (excludeDeliveryId) {
-    conditions.push(sql`${deliveries.id} != ${excludeDeliveryId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(and(...conditions));
-
-  return !existing;
-}
+export { createDelivery, deleteDelivery, updateDelivery } from './delivery-output-writes';

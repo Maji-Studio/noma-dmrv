@@ -92,6 +92,10 @@ const envSchema = z.object({
     emptyToUndefined,
     z.coerce.number().int().positive().optional()
   ),
+  DB_POOL_LOCK_TIMEOUT_MS: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().positive().optional()
+  ),
 
   // Isometric Certify API (optional — boot must stay clean without these)
   ISOMETRIC_CLIENT_SECRET: z.preprocess(

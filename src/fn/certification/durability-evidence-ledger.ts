@@ -32,7 +32,6 @@ import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/trans
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 import { logger } from "@/lib/log";
 import {
-  loadRemovalSubmissionContext,
   type RemovalSubmissionContext,
 } from "./certify-context-core";
 import {
@@ -41,21 +40,6 @@ import {
   stableLedgerContentHash,
   type EnsureLedgerResult,
 } from "./evidence-ledger-core";
-
-/**
- * Generate (or reuse) the durability evidence ledger for a removal, store it, and
- * mirror it to an Isometric Source. Loads the submission context, then delegates
- * to the from-context variant. The submit pipeline already holds a context and
- * should call `ensureDurabilityEvidenceLedgerSourceFromContext` to avoid a second
- * load.
- */
-export async function ensureDurabilityEvidenceLedgerSource(
-  orgCtx: OrgContext,
-  removalId: string,
-): Promise<EnsureLedgerResult> {
-  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
-  return ensureDurabilityEvidenceLedgerSourceFromContext(orgCtx, removalId, ctx);
-}
 
 /**
  * As above, but against an already-loaded submission context. Idempotent on

@@ -4,29 +4,29 @@
  */
 "use client";
 
-import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { nullableNumericValue, numericValue } from "@/lib/form-utils";
 
-import { useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon, StorefrontIcon, PackageIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormEntitySelect, FormActions, FormSection, FormSpine } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
+import type { Order } from "@/db/schema";
+import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { useCustomerLocations } from "@/hooks/use-customers";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import {
   orderFormSchema,
   packagingTypes,
   type OrderFormData,
   type PackagingType,
 } from "@/schemas/orders";
-import type { Order } from "@/db/schema";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
-import { useCustomers, useCustomerLocations } from "@/hooks/use-customers";
-import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
-import { useEntityById } from "@/hooks/use-entities";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { CalendarIcon, PackageIcon, StorefrontIcon } from "@phosphor-icons/react/dist/ssr";
+import { useForm, useWatch } from "react-hook-form";
+
 import { CustomerLocationDetails } from "./customer-location-details";
-import { OrderMassPreview } from "./order-mass-preview";
-import { orderAvailabilityWarning } from "./order-availability";
+import { MatchingOutputBins } from "./matching-output-bins";
+
 import { useEffect } from "react";
 
 // ============================================
@@ -101,7 +101,7 @@ export function OrderForm({
       facilityId: order?.facilityId ?? contextFacilityId ?? "",
       customerId: order?.customerId ?? "",
       customerLocationId: order?.customerLocationId ?? "",
-      biocharProductId: order?.biocharProductId ?? "",
+      formulationId: order?.formulationId ?? "",
       orderDate: order?.orderDate
         ? formatLocalDate(new Date(order.orderDate))
         : formatLocalDate(new Date()),
@@ -117,42 +117,20 @@ export function OrderForm({
   const selectedCustomerId = watchedCustomerId || undefined;
   const watchedLocationId = useWatch({ control, name: "customerLocationId" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
-  const watchedBiocharProductId = useWatch({
+  const watchedFormulationId = useWatch({
     control,
-    name: "biocharProductId",
+    name: "formulationId",
   });
-  const watchedQuantityKg = useWatch({ control, name: "quantityKg" });
-  // In edit mode the product's "remaining" excludes this order's own
-  // deliveries (server-side excludeOrderId), so it means "available to other
-  // demand" and comparing the full quantity is valid — no edit-mode
-  // suppression needed (DR-002 / OR-26-001).
-  const productFilterBy = order ? { excludeOrderId: order.id } : undefined;
-  const { data: selectedBiocharProduct } = useEntityById(
-    "biocharProduct",
-    watchedBiocharProductId || undefined,
-    productFilterBy,
-  );
-  const availabilityWarning = orderAvailabilityWarning(
-    watchedQuantityKg,
-    selectedBiocharProduct?.remainingMass?.wetKg,
-  );
 
-  // Fetch related data for dropdowns
-  const { data: customersData } = useCustomers({ pageSize: 100 });
+  // Fetch related data for dropdowns. The customer picker fetches its own
+  // searchable options through FormEntitySelect, so only locations load here.
   const { data: customerLocationsData } = useCustomerLocations(
     selectedCustomerId ?? "",
     !!selectedCustomerId
   );
 
-  const customers = customersData?.items ?? [];
-
   // Get customer locations for selected customer
   const customerLocations = customerLocationsData ?? [];
-
-  const customerOptions = customers.map((c) => ({
-    value: c.id,
-    label: c.name,
-  }));
 
   const locationOptions = customerLocations.map((l: { id: string; name: string | null }) => ({
     value: l.id,
@@ -231,21 +209,19 @@ export function OrderForm({
         fields={["customerId", "customerLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="customerId"
+          <FormEntitySelect
+            control={control}
+            name="customerId"
             label="Customer"
-            error={errors.customerId?.message}
+            entityType="customer"
+            placeholder="Select customer..."
+            disabled={isSubmitting}
             required
-          >
-            <FormSelect
-              id="customerId"
-              placeholder="Select customer..."
-              disabled={isSubmitting}
-              error={!!errors.customerId}
-              options={customerOptions}
-              {...register("customerId")}
-            />
-          </FormField>
+            // Customers are org-shared, so a lone one is not "the" customer for
+            // this order. Require an explicit pick, matching the feedstock
+            // supplier field (#379).
+            autoSelectSingle={false}
+          />
 
           <FormField
             id="customerLocationId"
@@ -279,42 +255,16 @@ export function OrderForm({
       <FormSection
         title="Product details"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={["biocharProductId", "packaging", "quantityKg", "value", "currency"]}
+        fields={["formulationId", "packaging", "quantityKg", "value", "currency"]}
       >
-        <FormEntitySelect
-          control={control}
-          name="biocharProductId"
-          label="Product bin"
-          entityType="biocharProduct"
-          placeholder="Select product bin..."
-          required
-          disabled={isSubmitting}
-          filterBy={
-            contextFacilityId || productFilterBy
-              ? {
-                  ...(contextFacilityId
-                    ? { facilityId: contextFacilityId }
-                    : {}),
-                  ...productFilterBy,
-                }
-              : undefined
-          }
-          emptyHint={{
-            message:
-              "No product bin contains a biochar product. Create one from a biochar bin first.",
-            href: contextFacilityId
-              ? `/biochar-products?facility=${encodeURIComponent(contextFacilityId)}`
-              : "/biochar-products",
-            linkLabel: "Open biochar products",
-          }}
-        />
+        <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
+        <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="quantityKg"
-            label="Quantity (kg)"
+            label="Requested wet mass (kg)"
             error={errors.quantityKg?.message}
-            warning={availabilityWarning}
             required
           >
             <FormInput
@@ -331,11 +281,6 @@ export function OrderForm({
           </FormField>
         </div>
 
-        <OrderMassPreview
-          quantityKg={watchedQuantityKg}
-          productWetBasisKg={selectedBiocharProduct?.remainingMass?.wetKg ?? null}
-          productDryBiocharKg={selectedBiocharProduct?.remainingMass?.dryKg ?? null}
-        />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
           <FormField
@@ -366,7 +311,7 @@ export function OrderForm({
               disabled={isSubmitting}
               error={!!errors.value}
               {...register("value", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>

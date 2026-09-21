@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSupplierFallbackDistanceField,
+  buildSupplierLocationField,
   resolveSupplierEffectiveDistanceKm,
 } from "./supplier-detail-fields";
 
@@ -99,6 +100,7 @@ describe("buildSupplierFallbackDistanceField", () => {
       value: null,
       certifyRequired: true,
       certifyStatus: "neutral",
+      pending: true,
     });
   });
 
@@ -111,6 +113,60 @@ describe("buildSupplierFallbackDistanceField", () => {
       value: "Not set",
       certifyRequired: true,
       certifyStatus: "missing",
+    });
+  });
+});
+
+
+describe("buildSupplierLocationField", () => {
+  const structuredLocation = {
+    name: "Sawmill yard",
+    city: "Kaunas",
+    stateRegion: null,
+    country: "Lithuania",
+    isDefault: true,
+  };
+
+  it("stays pending while the locations query is unresolved", () => {
+    expect(
+      buildSupplierLocationField({
+        legacySupplierLocation: null,
+        locations: [],
+        locationsLoaded: false,
+      }),
+    ).toMatchObject({ label: "Location", value: null, pending: true });
+  });
+
+  it("shows the legacy supplier column without waiting for the query", () => {
+    expect(
+      buildSupplierLocationField({
+        legacySupplierLocation: "Kaunas, Lithuania",
+        locations: [],
+        locationsLoaded: false,
+      }),
+    ).toMatchObject({ value: "Kaunas, Lithuania", pending: false });
+  });
+
+  it("reports the omission once the query settles with no locations", () => {
+    expect(
+      buildSupplierLocationField({
+        legacySupplierLocation: null,
+        locations: [],
+        locationsLoaded: true,
+      }),
+    ).toMatchObject({ value: null, pending: false });
+  });
+
+  it("labels the default structured location", () => {
+    expect(
+      buildSupplierLocationField({
+        legacySupplierLocation: null,
+        locations: [structuredLocation],
+        locationsLoaded: true,
+      }),
+    ).toMatchObject({
+      value: "Sawmill yard, Kaunas, Lithuania",
+      pending: false,
     });
   });
 });

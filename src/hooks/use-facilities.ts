@@ -9,22 +9,19 @@ import type { Facility } from "@/db/schema";
 import type { FacilityFilterData, CreateFacilityData, UpdateFacilityData } from "@/schemas/facilities";
 import type { PaginatedFacilities, FacilityWithRelations } from "@/data-access/facilities";
 import {
-  getFacilitiesFn,
-  getFacilityByIdFn,
-  getFacilityWithRelationsFn,
-  getFacilityReactorsFn,
-  getFacilityStorageLocationsFn,
   getFacilityCountriesFn,
   getFacilityArchiveImpactFn,
-  checkFacilityCodeFn,
   createFacilityFn,
   updateFacilityFn,
   archiveFacilityFn,
   restoreFacilityFn,
 } from "@/fn/facilities";
+import { getFacilitiesRead, getFacilityRead } from "@/lib/read-api/client";
 import { missingRecordMessage } from "@/lib/errors";
+import { throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 
 // ============================================
@@ -74,8 +71,8 @@ export function useFacilities(
       organizationId === undefined
         ? facilityKeys.list(filters)
         : [...facilityKeys.list(filters), { organizationId }],
-    queryFn: async () => {
-      const result = await getFacilitiesFn(filters);
+    queryFn: async ({ signal }) => {
+      const result = await getFacilitiesRead(filters, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -99,8 +96,8 @@ export function useFacility(
       organizationId === undefined
         ? facilityKeys.detail(facilityId)
         : [...facilityKeys.detail(facilityId), { organizationId }],
-    queryFn: async () => {
-      const result = await getFacilityByIdFn(facilityId);
+    queryFn: async ({ signal }) => {
+      const result = await getFacilityRead(facilityId, { signal });
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -113,63 +110,6 @@ export function useFacility(
     retry: (failureCount, error) =>
       !(error instanceof Error && error.message === FACILITY_NOT_FOUND_MESSAGE) &&
       failureCount < FACILITY_LOOKUP_MAX_RETRIES,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch a facility with all its relations
- */
-export function useFacilityWithRelations(facilityId: string, enabled = true) {
-  return useQuery({
-    queryKey: facilityKeys.detailWithRelations(facilityId),
-    queryFn: async () => {
-      const result = await getFacilityWithRelationsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!facilityId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch reactors for a specific facility
- */
-export function useFacilityReactors(facilityId: string, enabled = true) {
-  return useQuery({
-    queryKey: facilityKeys.reactors(facilityId),
-    queryFn: async () => {
-      const result = await getFacilityReactorsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!facilityId,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch storage locations for a specific facility
- */
-export function useFacilityStorageLocations(
-  facilityId: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: facilityKeys.storageLocations(facilityId),
-    queryFn: async () => {
-      const result = await getFacilityStorageLocationsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!facilityId,
     staleTime: 30000,
   });
 }
@@ -189,28 +129,6 @@ export function useFacilityCountries(archived = false) {
       return result.data;
     },
     staleTime: 60000, // 1 minute - countries don't change often
-  });
-}
-
-/**
- * Hook to check if a facility code is available
- */
-export function useFacilityCodeCheck(
-  code: string,
-  excludeFacilityId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: facilityKeys.codeCheck(code, excludeFacilityId),
-    queryFn: async () => {
-      const result = await checkFacilityCodeFn(code, excludeFacilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
   });
 }
 
@@ -239,15 +157,20 @@ export function useCreateFacility(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
-      // Invalidate all facility lists
-      await queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
-      // Invalidate countries in case a new country was added
-      await queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
-      await invalidateOnboardingProgress(queryClient);
-
       // Pre-populate the detail cache with the new facility
       queryClient.setQueryData(facilityKeys.detail(data.id), data);
 
+      // Keep the create surface pending until the active lists show the saved
+      // facility. Country and onboarding reads can finish in the background.
+      const listRefresh = queryClient.invalidateQueries({
+        queryKey: facilityKeys.lists(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: facilityKeys.countriesPrefix(),
+      });
+      invalidateOnboardingProgress(queryClient);
+
+      await listRefresh;
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
@@ -276,9 +199,9 @@ export function useUpdateFacility(
   return useMutation({
     mutationFn: async (data: UpdateFacilityData) => {
       const result = await updateFacilityFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
+      // Keeps an expected-version refusal typed so the open edit form can show
+      // it and hold on to the operator's draft (issue #768).
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onMutate: async (variables) => {
@@ -326,7 +249,10 @@ export function useUpdateFacility(
             ...old,
             items: old.items.map((item) =>
               item.id === variables.facilityId
-                ? ({ ...item, ...variables, updatedAt: new Date() } as FacilityWithRelations)
+                ? // No client-invented `updatedAt`: the row keeps the version it
+                  // was read on, so an edit sheet opened off this cache saves
+                  // against a version the server really wrote (#768).
+                  ({ ...item, ...variables } as FacilityWithRelations)
                 : item
             ),
           };
@@ -346,6 +272,11 @@ export function useUpdateFacility(
       queryClient.invalidateQueries({
         queryKey: facilityKeys.detailWithRelations(data.id),
       });
+      patchListCachesWithSavedRow<FacilityWithRelations>(
+        queryClient,
+        facilityKeys.lists(),
+        data,
+      );
       queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
       queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
 
@@ -479,116 +410,6 @@ export function useRestoreFacility(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch facilities list for faster initial load
- */
-export function usePrefetchFacilities() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<FacilityFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: facilityKeys.list(filters),
-      queryFn: async () => {
-        const result = await getFacilitiesFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single facility
- */
-export function usePrefetchFacility() {
-  const queryClient = useQueryClient();
-
-  return (facilityId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: facilityKeys.detail(facilityId),
-      queryFn: async () => {
-        const result = await getFacilityByIdFn(facilityId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access facility cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useFacilityCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all facility data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: facilityKeys.all }),
-
-    /** Invalidate all facility lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: facilityKeys.lists() }),
-
-    /** Invalidate a specific facility detail */
-    invalidateDetail: (facilityId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: facilityKeys.detail(facilityId),
-      }),
-
-    /** Invalidate a facility with its relations */
-    invalidateDetailWithRelations: (facilityId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: facilityKeys.detailWithRelations(facilityId),
-      }),
-
-    /** Invalidate facility reactors */
-    invalidateReactors: (facilityId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: facilityKeys.reactors(facilityId),
-      }),
-
-    /** Invalidate facility storage locations */
-    invalidateStorageLocations: (facilityId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: facilityKeys.storageLocations(facilityId),
-      }),
-
-    /** Invalidate countries list */
-    invalidateCountries: () =>
-      queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() }),
-
-    /** Remove a specific facility from cache (use after deletion) */
-    removeFromCache: (facilityId: string) => {
-      queryClient.removeQueries({ queryKey: facilityKeys.detail(facilityId) });
-      queryClient.removeQueries({
-        queryKey: facilityKeys.detailWithRelations(facilityId),
-      });
-      queryClient.removeQueries({
-        queryKey: facilityKeys.reactors(facilityId),
-      });
-      queryClient.removeQueries({
-        queryKey: facilityKeys.storageLocations(facilityId),
-      });
-    },
-
-    /** Set facility data in cache (useful for optimistic updates) */
-    setFacilityData: (facilityId: string, data: Facility) =>
-      queryClient.setQueryData(facilityKeys.detail(facilityId), data),
-
-    /** Get cached facility data */
-    getCachedFacility: (facilityId: string) =>
-      queryClient.getQueryData<Facility>(facilityKeys.detail(facilityId)),
-  };
-}

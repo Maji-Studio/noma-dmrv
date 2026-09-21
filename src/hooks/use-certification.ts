@@ -15,7 +15,7 @@ import {
   createGhgStatementDraft,
   approveGhgStatementReport,
   createRemovalWithBatchesAction,
-  discardRemovalDraftAction,
+  deleteRemovalAction,
   deleteFacilityCertifierMapping,
   loadBatchHealth,
   loadCreditBatchDurabilitySummary,
@@ -24,7 +24,6 @@ import {
   loadCreditBatchHealthSummaries,
   loadCertifyContextForCreditBatch,
   loadFacilityCertifierMapping,
-  loadFacilityCertifierSummary,
   loadGhgStatementBreakdown,
   loadGhgStatementReports,
   loadGhgStatementsForFacility,
@@ -50,6 +49,7 @@ import {
   saveRegistrySourceVisibility,
   type CreditBatchHealthSummary,
 } from "@/fn/certification";
+import { getFacilityCertifierSummaryRead } from "@/lib/read-api/client";
 import type { RemovalSubmissionResult } from "@/fn/certification/submit-removal";
 import type { SubmitGhgStatementResult } from "@/fn/certification/submit-ghg-statement";
 import {
@@ -61,7 +61,7 @@ import { invalidateOnboardingProgress } from "./use-onboarding";
 import type {
   CreateGhgStatementInput,
   CreateRemovalWithBatchesInput,
-  DiscardRemovalDraftInput,
+  DeleteRemovalInput,
   FacilityEmissionConfigFormData,
   RegistrySourceVisibilityInput,
   SaveMappingInput,
@@ -380,8 +380,10 @@ export function useFacilityCertifierSummary(
 ) {
   return useQuery({
     queryKey: certificationKeys.facilitySummary(facilityId),
-    queryFn: async () => {
-      const result = await loadFacilityCertifierSummary(facilityId);
+    queryFn: async ({ signal }) => {
+      const result = await getFacilityCertifierSummaryRead(facilityId, {
+        signal,
+      });
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
@@ -429,12 +431,12 @@ export function useSaveFacilityCertifierMapping() {
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: async (_data, variables) => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: certificationKeys.facilityMapping(variables.facilityId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-      await invalidateOnboardingProgress(queryClient);
+      invalidateOnboardingProgress(queryClient, variables.facilityId);
     },
   });
 }
@@ -700,11 +702,11 @@ export function useCreateRemovalWithBatches() {
   });
 }
 
-export function useDiscardRemovalDraft() {
+export function useDeleteRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: DiscardRemovalDraftInput) => {
-      const result = await discardRemovalDraftAction(input);
+    mutationFn: async (input: DeleteRemovalInput) => {
+      const result = await deleteRemovalAction(input);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

@@ -57,6 +57,7 @@ import {
 } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
@@ -340,7 +341,9 @@ export function ProductionRunList() {
       toast.success("Production run updated.");
     } catch (error) {
       if (getRunConflict(error)) throw error;
-      setUpdateError(error instanceof Error ? error.message : "Production run was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setUpdateError(toSaveErrorMessage(error, "Production run was not saved. Try again."));
     }
   };
 

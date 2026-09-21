@@ -1,3 +1,6 @@
+import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
+import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
+import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -101,18 +104,18 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
 
   const [product] = await db
     .insert(biocharProducts)
-    .values({
+    .values(await outputProductFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `BP-DEL-${runId}`,
       facilityId: facility.id,
       formulationId: formulation.id,
       linkedProductionRunId: productionRun.id,
-    })
+    }))
     .returning({ id: biocharProducts.id });
 
   const [order] = await db
     .insert(orders)
-    .values({
+    .values(await outputOrderFixtureValues(db, {
       organizationId: TEST_ORG_ID,
       code: `OR-DEL-${runId}`,
       facilityId: facility.id,
@@ -121,20 +124,18 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
       orderDate: new Date("2025-06-01"),
       quantityKg: 1000,
       packaging: "bagged",
-    })
+    }))
     .returning({ id: orders.id });
 
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
+  const [delivery] = await insertOutputDeliveryFixture(db, {
       organizationId: TEST_ORG_ID,
       code: `DL-DEL-${runId}`,
       facilityId: facility.id,
       orderId: order.id,
       deliveryDate: new Date("2025-06-10"),
       deliveredWetMassKg: 10_000,
-    })
-    .returning({ id: deliveries.id });
+      massDryKg: 9_000,
+    }, row => ({ id: row.id }));
 
   return {
     facilityId: facility.id,
@@ -174,14 +175,12 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
     }
 
     if (fixture.applicationIds.length > 0) {
-      await tx
-        .delete(applications)
-        .where(inArray(applications.id, fixture.applicationIds));
+      await deleteOutputApplicationFixtures(tx, inArray(applications.id, fixture.applicationIds));
     }
 
-    await tx.delete(deliveries).where(eq(deliveries.id, fixture.deliveryId));
+    await deleteOutputDeliveryFixtures(tx, eq(deliveries.id, fixture.deliveryId));
     await tx.delete(orders).where(eq(orders.id, fixture.orderId));
-    await tx.delete(biocharProducts).where(eq(biocharProducts.id, fixture.productId));
+    await deleteOutputProductFixtures(tx, eq(biocharProducts.id, fixture.productId));
     await tx
       .delete(productionRuns)
       .where(eq(productionRuns.id, fixture.productionRunId));
@@ -191,7 +190,7 @@ async function cleanupDeleteFixture(fixture: DeleteFixture): Promise<void> {
     await tx
       .delete(productionProcesses)
       .where(eq(productionProcesses.id, fixture.productionProcessId));
-    await tx.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await deleteOutputFacilityFixtures(tx, eq(facilities.id, fixture.facilityId));
     await tx
       .delete(feedstockTypes)
       .where(eq(feedstockTypes.id, fixture.feedstockTypeId));
@@ -207,9 +206,7 @@ async function createApplicationRecord(
     co2eStoredTonnes: number | null;
   },
 ): Promise<string> {
-  const [application] = await db
-    .insert(applications)
-    .values({
+  const [application] = await insertOutputApplicationFixture(db, {
       organizationId: TEST_ORG_ID,
       code: `AP-DEL-${suffix}`,
       deliveryId: fixture.deliveryId,
@@ -217,8 +214,7 @@ async function createApplicationRecord(
       biocharAppliedTons: values.biocharAppliedTons,
       biocharAppliedDryTons: values.biocharAppliedDryTons,
       co2eStoredTonnes: values.co2eStoredTonnes,
-    })
-    .returning({ id: applications.id });
+    }, row => ({ id: row.id }));
 
   fixture.applicationIds.push(application.id);
   return application.id;

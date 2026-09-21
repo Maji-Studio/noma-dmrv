@@ -67,39 +67,49 @@ no current call site. noma calls only the `ghg_entries` route family.
 | `GET /sources` | Supplier-reference reconciliation | `src/lib/isometric/sources.ts` → `findSourceBySupplierRef`; consumer in `src/fn/certification/sources.ts` |
 | `POST /sources` | Create a mirrored document Source | `src/lib/isometric/sources.ts` → `createSource`; consumer in `src/fn/certification/sources.ts` |
 | `POST /sources/{id}/signed_upload_url` | Resume an interrupted Source upload or recognize an already-uploaded Source | `src/lib/isometric/sources.ts` → `requestSignedUploadUrl`; consumer in `src/fn/certification/sources.ts` |
+| `DELETE /sources/{id}` | Remove the Sources whose local mapping a Removal deletion released; 204, irreversible, refused while locked Datapoints or a verified statement use the Source (verified 2026-09-10) | `src/lib/isometric/sources.ts` → `deleteSource`; consumer in `src/fn/certification/delete-removal.ts` |
 
 `PATCH /sources/{id}` is not wired. Source visibility is now an
 organization-wide policy applied when a Source is created; noma does not
-rewrite existing remote Sources when the policy changes. `DELETE /sources/{id}`
-is deliberately not wired because immutable submission snapshots retain Source
-IDs.
+rewrite existing remote Sources when the policy changes. Source deletion is
+limited to Removal deletion: a Source that any live submission snapshot still
+cites keeps its local mapping and is never deleted, so immutable snapshots
+keep resolving their Source IDs.
 
 ## Durability measurement operations
 
 | Method and path | Status | Use | Current call site |
 |---|---|---|---|
-| `GET /measurement_samples` | sandbox | Client-side supplier-reference reconciliation because the API has no reference filter | `src/lib/isometric/measurement-samples.ts` → `findMeasurementSampleBySupplierRef`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
+| `GET /measurement_samples` | wired | Client-side supplier-reference reconciliation and exact journal identity lookup during deletion; Certify has no reference filter or single-measurement GET | `src/lib/isometric/measurement-samples.ts` → `findMeasurementSampleBySupplierRef`, `getMeasurementSample`; consumers in `src/fn/certification/durability-measurement-samples.ts` and `src/fn/certification/delete-removal.ts` |
+| `DELETE /measurement_samples/{id}` | wired | Delete only exact version-owned measurements during Removal deletion | `src/lib/isometric/measurement-samples.ts` → `deleteMeasurementSample`; consumer in `src/fn/certification/delete-removal.ts` |
 | `POST /measurement_samples` | sandbox | Create sampled 1,000-year durability values and returned Datapoints | `src/lib/isometric/measurement-samples.ts` → `createMeasurementSample`; consumer in `src/fn/certification/durability-measurement-samples.ts` |
 
-These operations are used by the sampled 1,000-year sandbox path. Their
-presence is not evidence of a live 200-year or production path.
+Creation and submission reconciliation are used by the sampled 1,000-year
+sandbox path. Lookup and deletion also support Removal cleanup. Their presence
+is not evidence of a live 200-year durability measurement submission path.
 
 ## Production and storage traceability operations
 
 | Method and path | Status | Use | Current call site |
 |---|---|---|---|
 | `GET /production_batches` | wired | Supplier-reference reconciliation through client-side pagination | `src/lib/isometric/production-batches.ts` → `findProductionBatchBySupplierRef`; consumer in `src/fn/certification/production-batches.ts` |
+| `DELETE /production_batches/{id}` | wired | Remove unshared registry batches during Removal deletion, retaining local credit batches | `src/lib/isometric/production-batches.ts` → `deleteProductionBatch`; consumer in `src/fn/certification/delete-removal.ts` |
 | `POST /production_batches` | wired | Register one Isometric Production Batch per noma credit batch | `src/lib/isometric/production-batches.ts` → `createProductionBatch`; consumer in `src/fn/certification/production-batches.ts` |
-| `GET /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Bounded supplier-reference reconciliation before an explicit sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
-| `POST /projects/{project_id}/storage_locations` | wired, sandbox verification pending | Explicitly register a customer location as a reusable `biochar_field` site | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
-| `GET /projects/{project_id}/storage_locations/{id}` | wired, sandbox verification pending | Explicit drift check against the immutable submitted snapshot | `src/lib/isometric/storage-locations.ts` → `getStorageLocation`; consumer in `src/fn/certification/storage-locations.ts` |
-| `GET /biochar_applications` | wired for sandbox Removal submission | Bounded client-side pagination and exact supplier-reference reconciliation because the API exposes no supplier-reference filter | `src/lib/isometric/biochar-applications.ts` → `findBiocharApplicationBySupplierReference`; consumer in `src/fn/certification/biochar-applications.ts` |
-| `POST /biochar_applications` | wired for sandbox Removal submission | Register one application only after its Production Batch and Storage Location are confirmed; a delivery without observed truck masses journals a gated registration and skips the POST instead of blocking the Removal ([archived implementation note](../archive/2026-08-21-delivery-proof-of-delivery-evidence.md)) | `src/lib/isometric/biochar-applications.ts` → `createBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
+| `GET /production_batches/{id}` | wired | Verify the saved Production Batch identity before reuse or recover a confirmed missing record | `src/lib/isometric/production-batches.ts` → `getProductionBatch`; consumer in `src/fn/certification/production-batches.ts` |
+| `GET /projects/{project_id}/storage_locations` | wired | Bounded supplier-reference reconciliation before an explicit or Removal-submission sync | `src/lib/isometric/storage-locations.ts` → `findStorageLocationBySupplierReference`; consumer in `src/fn/certification/storage-locations.ts` |
+| `POST /projects/{project_id}/storage_locations` | wired | Register a customer location as a reusable `biochar_field` site in the configured environment | `src/lib/isometric/storage-locations.ts` → `createStorageLocation`; consumers in `src/fn/certification/storage-locations.ts` and `storage-location-actions.ts` |
+| `GET /projects/{project_id}/storage_locations/{id}` | wired | Drift check against the submitted snapshot; confirmed 404 recovery through stable-reference reconciliation | `src/lib/isometric/storage-locations.ts` → `getStorageLocation`; consumer in `src/fn/certification/storage-locations.ts` |
+| `GET /biochar_applications` | wired | Bounded client-side pagination and exact supplier-reference reconciliation because the API exposes no supplier-reference filter | `src/lib/isometric/biochar-applications.ts` → `findBiocharApplicationBySupplierReference`; consumer in `src/fn/certification/biochar-applications.ts` |
+| `GET /biochar_applications/{id}` | wired | Exact confirmed-identity readback without an account-wide supplier-reference scan | `src/lib/isometric/biochar-applications.ts` → `getBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
+| `POST /biochar_applications` | wired | After Production Batch and Storage Location confirmation, register one record per immutable Application by credit-batch slice. Arrival is the slice's allocated wet kg and departure is zero. | `src/lib/isometric/biochar-applications.ts` → `createBiocharApplication`; consumer in `src/fn/certification/biochar-applications.ts` |
+| `DELETE /biochar_applications/{id}` | wired | Only while deleting a never-finalized Removal, after its draft GHG Entry is gone; a 404 counts as already deleted | `src/lib/isometric/biochar-applications.ts` → `deleteBiocharApplication`; consumer in `src/fn/certification/delete-removal.ts` |
+| `DELETE /ghg_entries/{id}` | wired | First step of deleting a never-finalized Removal; the registry refuses it unless the GHG Entry is still `DRAFT`, and that refusal stops the deletion | `src/lib/isometric/submissions.ts` → `deleteGhgEntry`; consumer in `src/fn/certification/delete-removal.ts` |
 
-Storage Location PATCH and Biochar Application correction/delete operations
-remain intentionally unwired. Drift is surfaced for operator review. Both
-Storage Location and Biochar Application synchronization remain blocked in
-production until their sandbox behavior is explicitly promoted.
+Storage Location PATCH and Biochar Application correction operations remain
+intentionally unwired; the DELETE operations above are wired only
+inside Removal deletion. Drift is surfaced for operator review. Both
+Storage Location and Biochar Application synchronization follow the configured
+Isometric environment.
 
 ## Telemetry operations
 
@@ -126,8 +136,8 @@ The following operation families have no current application call site:
 - measurement locations;
 - standalone project/GHG-statement Components and attribution mutations;
 - Datapoint deletion and reverse-lookup endpoints;
-- Source private URL, update, and deletion;
-- resource DELETE operations generally;
+- Source private URL and update;
+- resource DELETE operations other than GHG Entry, Biochar Application, MeasurementSample, ProductionBatch and Source;
 - deprecated Removal/template aliases.
 
 `POST /components` has a typed wrapper in

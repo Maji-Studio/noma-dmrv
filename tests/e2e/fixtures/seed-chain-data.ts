@@ -1,3 +1,6 @@
+import "../../setup";
+import { deleteOutputApplicationFixtures } from "../../helpers/output-contract-fixtures";
+import { preparePureOutputProductFixture, outputProductFixtureValues, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "../../helpers/output-contract-fixtures";
 /**
  * Seed Chain Data
  *
@@ -139,7 +142,7 @@ export async function seedChainData(
         id: formulationId,
         code: `E2E-FORM-${testRunId}`,
         name: `E2E Seed Formulation ${testRunId}`,
-        biocharRatio: 0.7,
+        biocharRatio: 1,
       });
 
       // 7. Storage Locations (need facility)
@@ -173,10 +176,10 @@ export async function seedChainData(
       });
 
       // 8. Biochar Product (needs facility + formulation)
-      const productionDate = new Date();
-      const expiresAt = new Date(productionDate);
+      const productionDate = new Date("2025-01-01T00:00:00Z");
+      const expiresAt = new Date();
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-      await tx.insert(schema.biocharProducts).values({
+      await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
         id: biocharProductId,
         code: `E2E-BP-${testRunId}`,
@@ -192,7 +195,9 @@ export async function seedChainData(
         moistureContentPercent: 10,
         productionDate,
         expiresAt,
-      });
+      }));
+
+      await preparePureOutputProductFixture(tx, biocharProductId);
 
       // 9. Vehicle
       await tx.insert(schema.vehicles).values({
@@ -337,7 +342,6 @@ export async function seedCreditBatchProductionLineage(
   try {
     const creditBatchId = crypto.randomUUID();
     const productionProcessId = crypto.randomUUID();
-    const productionRunId = crypto.randomUUID();
     const code = `${SEEDED_INVALIDATION_BATCH_CODE_PREFIX}-${testRunId}`;
     const now = new Date();
     const start = now.toISOString().slice(0, 10);
@@ -348,21 +352,9 @@ export async function seedCreditBatchProductionLineage(
       .slice(0, 10);
 
     await db.transaction(async (tx) => {
-      await tx.insert(schema.productionRuns).values({
-        organizationId: DEC_ORG_ID,
-        id: productionRunId,
-        code: `${code}-PR1`,
-        facilityId: data.facility.id,
-        reactorId: data.reactor.id,
-        status: "complete",
-        startTime: now,
-        endTime: new Date(now.getTime() + 6 * MS_PER_HOUR),
-        biocharDryMassKg: 10000,
-      });
-      await tx
-        .update(schema.biocharProducts)
-        .set({ linkedProductionRunId: productionRunId })
-        .where(eq(schema.biocharProducts.id, data.biocharProduct.id));
+      const [source] = await tx.select().from(schema.biocharProductSourceAllocations)
+        .where(eq(schema.biocharProductSourceAllocations.biocharProductId, data.biocharProduct.id));
+      if (!source) throw new Error("Shared product requires a saved source allocation");
       await tx.insert(schema.productionProcesses).values({
         organizationId: DEC_ORG_ID,
         id: productionProcessId,
@@ -383,7 +375,7 @@ export async function seedCreditBatchProductionLineage(
       await tx.insert(schema.creditBatchProductionRuns).values({
         organizationId: DEC_ORG_ID,
         creditBatchId,
-        productionRunId,
+        productionRunId: source.productionRunId,
       });
     });
 
@@ -617,17 +609,11 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
               )
             );
         }
-        await tx
-          .delete(schema.applications)
-          .where(
-            inArray(
+        await deleteOutputApplicationFixtures(tx, inArray(
               schema.applications.deliveryId,
               facilityDeliveries.map((delivery) => delivery.id)
-            )
-          );
-        await tx
-          .delete(schema.deliveries)
-          .where(eq(schema.deliveries.facilityId, data.facility.id));
+            ));
+        await deleteOutputDeliveryFixtures(tx, eq(schema.deliveries.facilityId, data.facility.id));
       }
 
       const facilityOrders = await tx
@@ -672,9 +658,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .update(schema.biocharProducts)
         .set({ linkedProductionRunId: null })
         .where(eq(schema.biocharProducts.facilityId, data.facility.id));
-      await tx
-        .delete(schema.biocharProducts)
-        .where(eq(schema.biocharProducts.facilityId, data.facility.id));
+      await deleteOutputProductFixtures(tx, eq(schema.biocharProducts.facilityId, data.facility.id));
 
       // Clean up UI-created production run feedstocks and production runs
       const facilityReactors = await tx
@@ -828,9 +812,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .where(eq(schema.certifierProjects.facilityId, data.facility.id));
 
       // Facility (must be last — everything references it)
-      await tx
-        .delete(schema.facilities)
-        .where(eq(schema.facilities.id, data.facility.id));
+      await deleteOutputFacilityFixtures(tx, eq(schema.facilities.id, data.facility.id));
     });
   } finally {
     await pool.end();

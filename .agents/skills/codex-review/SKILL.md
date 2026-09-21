@@ -1,10 +1,9 @@
 ---
 name: codex-review
-description: Ask Codex CLI (gpt-5.6-sol at high reasoning effort — the flat-rate OpenAI model slot, formerly gpt-5.5) for an independent code review of uncommitted changes, a branch diff, a commit, or a specific implementation. This is how the Codex model is invoked for review work. Use when the user asks for a Codex/gpt-5.5/gpt-5.6 review or second opinion, or when the model-selection rubric calls for an extra independent review perspective. For a review by Claude itself, use the normal review process instead.
+description: Ask Codex CLI (gpt-6-astra at low reasoning effort) for an independent code review of uncommitted changes, a branch diff, a commit, or a specific implementation. This is how the Codex model is invoked for review work. Use when the user asks for a Codex/gpt-6-astra review or second opinion, or when the model-selection rubric calls for an extra independent review perspective. For a review by Claude itself, use the normal review process instead.
 ---
 
-Delegate a code review to the Codex CLI (gpt-5.6-sol, high reasoning — set as the default in
-`~/.codex/config.toml`) and bring the findings back for Claude to
+Delegate a code review to the Codex CLI (gpt-6-astra, low reasoning, explicitly selected below) and bring the findings back for Claude to
 verify before presenting them. Claude stays responsible for judging the findings — Codex's
 output is **evidence, not authority**.
 
@@ -16,9 +15,8 @@ output is **evidence, not authority**.
   ```
   Last resort: the ChatGPT.app bundle at `/Applications/ChatGPT.app/Contents/Resources/codex`.
   (The old `/Applications/Codex.app/Contents/Resources/codex` path no longer exists.)
-- **gpt-5.6-sol requires codex-cli ≥ 0.144** — older CLIs fail with a 400
-  `"requires a newer version of Codex"`. If that error appears, upgrade with
-  `pnpm add -g @openai/codex@latest` (verified working on 0.144.1, 2026-07-10).
+- If the CLI reports `"requires a newer version of Codex"`, upgrade with
+  `pnpm add -g @openai/codex@latest` and retry.
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
   `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
 - If `codex` is not installed or the command fails, report the error and offer to do the
@@ -27,7 +25,7 @@ output is **evidence, not authority**.
 
 ## Overproduction review lens
 
-5.6-sol implementations can overproduce: when requirements or access are missing, the model
+Codex implementations can overproduce: when requirements or access are missing, the model
 may force progress by inventing behavior or coding around the gap; it may also overengineer a
 small change or create more tests than the risk warrants. Every custom review prompt must ask
 the reviewer to inspect the target code for these failure modes:
@@ -76,15 +74,15 @@ The target flags are **mutually exclusive with a custom prompt** (re-verified on
 
 ```bash
 # Mode A — default review instructions, structured target flag:
-"$CODEX" -C "$PWD" review --uncommitted > "$REPORT"    # staged + unstaged + untracked
-"$CODEX" -C "$PWD" review --base staging > "$REPORT"   # branch vs base (this repo: staging)
-"$CODEX" -C "$PWD" review --commit <sha> > "$REPORT"   # a single commit
+"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review --uncommitted > "$REPORT"    # staged + unstaged + untracked
+"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review --base staging > "$REPORT"   # branch vs base (this repo: staging)
+"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review --commit <sha> > "$REPORT"   # a single commit
 ```
 
 ```bash
 # Mode B — custom instructions via stdin; NO target flag allowed. Name the review
 # target in the prompt's first line — codex resolves the diff itself with git:
-"$CODEX" -C "$PWD" review - < "$PROMPT" > "$REPORT"
+"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review - < "$PROMPT" > "$REPORT"
 ```
 
 Prefer Mode B whenever task-specific context matters (it usually does); use Mode A for a

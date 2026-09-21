@@ -40,15 +40,17 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 const SOURCE_ID_KEY = "sourceIds";
 const SOURCE_BINDING_PLAN_KEY = "sourceBindingPlan";
 const CANDIDATE_SOURCES_KEY = "candidateSources";
+const BIOCHAR_APPLICATION_INTENTS_KEY = "biocharApplicationIntents";
+const TRANSPORT_KEY = "transport";
 const GENERATED_LEDGER_ROLES = new Set([
   "transport_evidence_ledger",
   "durability_evidence_ledger",
 ]);
 
 /**
- * Hash a compiled semantic payload with every registry-assigned Source ID
- * removed. Unknown payload shapes pass through untouched, so a future field is
- * hashed by default rather than silently dropped from the operator's review.
+ * Hash a compiled semantic payload with the known registry-assigned Source ID
+ * fields removed. Unknown payload shapes pass through untouched, so a future
+ * field is hashed by default rather than silently dropped from the review.
  */
 export function reviewPayloadHash(
   semanticPayload: Record<string, unknown>,
@@ -74,9 +76,40 @@ function stripSourceIds(
       );
       continue;
     }
+    if (key === BIOCHAR_APPLICATION_INTENTS_KEY && Array.isArray(value)) {
+      out[key] = value.map(stripApplicationIntentSourceIds);
+      continue;
+    }
+    if (key === TRANSPORT_KEY) {
+      out[key] = stripTransportApplicationIntentSourceIds(value);
+      continue;
+    }
     out[key] = value;
   }
   return out;
+}
+
+function stripTransportApplicationIntentSourceIds(value: unknown): unknown {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const copy = { ...(value as Record<string, unknown>) };
+  const intents = copy[BIOCHAR_APPLICATION_INTENTS_KEY];
+  if (Array.isArray(intents)) {
+    copy[BIOCHAR_APPLICATION_INTENTS_KEY] = intents.map(
+      stripApplicationIntentSourceIds,
+    );
+  }
+  return copy;
+}
+
+function stripApplicationIntentSourceIds(value: unknown): unknown {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const copy = { ...(value as Record<string, unknown>) };
+  delete copy[SOURCE_ID_KEY];
+  return copy;
 }
 
 function isGeneratedLedgerBinding(value: unknown): boolean {

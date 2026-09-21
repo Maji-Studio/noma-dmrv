@@ -1,32 +1,31 @@
+import { outputStockKeys } from "./use-output-stock";
 /**
  * Biochar Products React Query Hooks
  * Client-side state management for biochar product operations
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  BiocharProductWithRelations,
+  PaginatedBiocharProducts,
+} from "@/data-access/biochar-products";
 import type { BiocharProduct } from "@/db/schema";
+import {
+  createBiocharProductFn,
+  deleteBiocharProductFn,
+  getBiocharProductByIdFn,
+  getBiocharProductsFn,
+  updateBiocharProductFn,
+} from "@/fn/biochar-products";
 import type {
   BiocharProductFilterData,
   CreateBiocharProductData,
   UpdateBiocharProductData,
 } from "@/schemas/biochar-products";
-import type {
-  PaginatedBiocharProducts,
-  BiocharProductWithRelations,
-} from "@/data-access/biochar-products";
-import {
-  getBiocharProductsFn,
-  getBiocharProductByIdFn,
-  getBiocharProductOptionsFn,
-  checkBiocharProductCodeFn,
-  createBiocharProductFn,
-  updateBiocharProductFn,
-  deleteBiocharProductFn,
-} from "@/fn/biochar-products";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 
 // ============================================
 // Query Keys
@@ -87,45 +86,6 @@ export function useBiocharProduct(productId: string, enabled = true) {
   });
 }
 
-/**
- * Hook to fetch biochar product options for dropdowns
- */
-export function useBiocharProductOptions() {
-  return useQuery({
-    queryKey: biocharProductKeys.options(),
-    queryFn: async () => {
-      const result = await getBiocharProductOptionsFn();
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 60000, // 1 minute
-  });
-}
-
-/**
- * Hook to check if a biochar product code is available
- */
-export function useBiocharProductCodeCheck(
-  code: string,
-  excludeProductId?: string,
-  enabled = true
-) {
-  return useQuery({
-    queryKey: biocharProductKeys.codeCheck(code, excludeProductId),
-    queryFn: async () => {
-      const result = await checkBiocharProductCodeFn(code, excludeProductId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data.available;
-    },
-    enabled: enabled && code.length > 0,
-    staleTime: 5000, // 5 seconds - code availability can change quickly
-  });
-}
-
 // ============================================
 // Biochar Product Mutation Hooks
 // ============================================
@@ -155,11 +115,13 @@ export function useCreateBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -255,11 +217,13 @@ export function useUpdateBiocharProduct(
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousProduct, previousLists } = context as {
@@ -356,11 +320,13 @@ export function useDeleteBiocharProduct(
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() });
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
 
       await callbacks?.onSuccess?.(undefined, productId);
     },
     onError: async (error, productId, context) => {
+      void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousProduct, previousLists } = context as {
@@ -397,89 +363,6 @@ export function useDeleteBiocharProduct(
 // Prefetch Utilities
 // ============================================
 
-/**
- * Prefetch biochar products list for faster initial load
- */
-export function usePrefetchBiocharProducts() {
-  const queryClient = useQueryClient();
-
-  return (filters?: Partial<BiocharProductFilterData>) => {
-    queryClient.prefetchQuery({
-      queryKey: biocharProductKeys.list(filters),
-      queryFn: async () => {
-        const result = await getBiocharProductsFn(filters);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
-/**
- * Prefetch a single biochar product
- */
-export function usePrefetchBiocharProduct() {
-  const queryClient = useQueryClient();
-
-  return (productId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: biocharProductKeys.detail(productId),
-      queryFn: async () => {
-        const result = await getBiocharProductByIdFn(productId);
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-        return result.data;
-      },
-      staleTime: 30000,
-    });
-  };
-}
-
 // ============================================
 // Cache Invalidation Utilities
 // ============================================
-
-/**
- * Hook to access biochar product cache invalidation functions
- * Useful for manual cache control from components
- */
-export function useBiocharProductCacheInvalidation() {
-  const queryClient = useQueryClient();
-
-  return {
-    /** Invalidate all biochar product data */
-    invalidateAll: () =>
-      queryClient.invalidateQueries({ queryKey: biocharProductKeys.all }),
-
-    /** Invalidate all biochar product lists */
-    invalidateLists: () =>
-      queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() }),
-
-    /** Invalidate a specific biochar product detail */
-    invalidateDetail: (productId: string) =>
-      queryClient.invalidateQueries({
-        queryKey: biocharProductKeys.detail(productId),
-      }),
-
-    /** Invalidate biochar product options */
-    invalidateOptions: () =>
-      queryClient.invalidateQueries({ queryKey: biocharProductKeys.options() }),
-
-    /** Remove a specific biochar product from cache (use after deletion) */
-    removeFromCache: (productId: string) => {
-      queryClient.removeQueries({ queryKey: biocharProductKeys.detail(productId) });
-    },
-
-    /** Set biochar product data in cache (useful for optimistic updates) */
-    setBiocharProductData: (productId: string, data: BiocharProductWithRelations) =>
-      queryClient.setQueryData(biocharProductKeys.detail(productId), data),
-
-    /** Get cached biochar product data */
-    getCachedBiocharProduct: (productId: string) =>
-      queryClient.getQueryData<BiocharProductWithRelations>(biocharProductKeys.detail(productId)),
-  };
-}

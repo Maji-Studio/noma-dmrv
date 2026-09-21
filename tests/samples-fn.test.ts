@@ -19,11 +19,9 @@ vi.mock("@/lib/auth/server", () => ({
 vi.mock("@/data-access/samples", () => ({
   createSample: (...args: unknown[]) => mockCreateSample(...args),
   deleteSample: vi.fn(),
-  generateNextSampleCode: vi.fn(),
   getSampleById: (...args: unknown[]) => mockGetSampleById(...args),
   getSampleStats: vi.fn(),
   getSamples: vi.fn(),
-  isSampleCodeAvailable: vi.fn(),
   updateSample: (...args: unknown[]) => mockUpdateSample(...args),
 }));
 

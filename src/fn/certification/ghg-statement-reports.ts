@@ -256,10 +256,6 @@ async function loadLiveReportFacts(
       entry.co2e_net_removed_without_discount_kg,
     netRemovedStandardDeviationKg:
       entry.co2e_net_removed_standard_deviation_kg,
-    supplierCreditKg:
-      entry.credit_allocation?.supplier_allocation_kg ?? null,
-    bufferPoolKg:
-      entry.credit_allocation?.buffer_pool_contribution_kg ?? null,
     ghgStatementId: entry.ghg_statement_id,
   }));
   const input: BuildGhgStatementReportModelInput = {
@@ -270,6 +266,14 @@ async function loadLiveReportFacts(
       externalEntryIds: remoteStatement.ghg_entry_ids,
       pendingTotalCo2eRemovedKg:
         remoteStatement.pending_total_co2e_removed_kg,
+      creditAllocation: remoteStatement.credit_allocation
+        ? {
+            supplierCreditKg:
+              remoteStatement.credit_allocation.supplier_allocation_kg,
+            bufferPoolKg:
+              remoteStatement.credit_allocation.buffer_pool_contribution_kg,
+          }
+        : null,
     },
     remoteEntries: normalizedEntries,
   };
@@ -283,6 +287,7 @@ async function loadLiveReportFacts(
         ghgEntryIds: [...remoteStatement.ghg_entry_ids],
         pendingTotalCo2eRemovedKg:
           remoteStatement.pending_total_co2e_removed_kg,
+        creditAllocation: remoteStatement.credit_allocation,
         reportingPeriodStartOn:
           remoteStatement.reporting_period_start_at,
         reportingPeriodEndOn: remoteStatement.reporting_period_end_at,

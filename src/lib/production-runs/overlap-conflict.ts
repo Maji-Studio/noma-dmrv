@@ -8,11 +8,9 @@
  * is safe to use in client components.
  */
 
-export interface RunConflict {
-  entity: string;
-  id: string;
-  code: string;
-}
+import type { ConflictRef } from "@/lib/conflict-ref";
+
+export type RunConflict = ConflictRef;
 
 export class ProductionRunConflictError extends Error {
   readonly conflict: RunConflict;

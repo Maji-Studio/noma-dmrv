@@ -1,23 +1,25 @@
+import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import {
+  bigserial,
   check,
+  date,
   foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   unique,
   uuid,
-  real,
 } from 'drizzle-orm/pg-core';
-import { relations, sql, type InferSelectModel } from 'drizzle-orm';
+import { organizations } from './auth';
 import { biocharProductStatus } from './common';
-import { fraction, massKg, percent } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
 import { feedstockTypes } from './feedstock';
+import { fraction, massKg, percent } from './numeric-families';
 import { productionRuns } from './production';
-import { organizations } from './auth';
 
 // ============================================
 // Formulations - Product recipes
@@ -69,6 +71,7 @@ export const formulationIngredients = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('formulation_ingredients_id_org_unique').on(table.id, table.organizationId),
     index('formulation_ingredients_organization_id_idx').on(table.organizationId),
     // One line per blend material: duplicate feedstockTypeId lines made the
     // updateFormulation reconciliation (match-by-feedstockTypeId) non-deterministic
@@ -97,11 +100,14 @@ export const biocharProducts = pgTable('biochar_products', {
   facilityId: uuid('facility_id')
     .notNull(),
   productionDate: timestamp('production_date').defaultNow().notNull(),
+  // Actual mixing/placement day; source productionDate is not a substitute.
+  placedAt: date('placed_at').notNull(),
+  stockPostingSequence: bigserial('stock_posting_sequence', { mode: 'bigint' }).notNull(),
   status: biocharProductStatus('status').default('testing').notNull(),
 
   // --- Composition ---
   // Nullable: a NULL formulation means a pure-biochar product (no amendment blend).
-  formulationId: uuid('formulation_id').references(() => formulations.id),
+  formulationId: uuid('formulation_id').notNull().references(() => formulations.id),
   // Snapshot of the formulation's biocharRatio taken when the product is
   // created (or its formulation reassigned). Stock math and roll-ups read this
   // snapshot, not the live formulation, so later recipe edits never rewrite an

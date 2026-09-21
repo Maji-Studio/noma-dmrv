@@ -8,8 +8,8 @@
  *   - **Mockup** (default, backward-compatible): captures FileEntry[] locally
  *     and emits via onChange. No network calls. Used in legacy forms that
  *     haven't migrated to the documents storage layer yet.
- *   - **Real upload**: when `entityType`, `entityId`, and `documentType` are
- *     provided, files are PUT directly to storage via the useFileUpload hook
+ *   - **Real upload**: when entity identity and either `documentType` or
+ *     `resolveDocumentType` are provided, files are PUT directly to storage
  *     and onUploaded is invoked with each documentId.
  */
 "use client";
@@ -28,7 +28,6 @@ import type {
   ApplicationBoundaryLogbookEvidenceType,
   ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
-import type { DeliveryEvidenceRole } from "@/lib/certification/delivery-evidence";
 import type { DocumentType } from "@/schemas/documents";
 
 export type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
@@ -60,9 +59,9 @@ interface FormFileUploadProps {
   entityType?: string;
   entityId?: string;
   documentType?: DocumentType;
+  resolveDocumentType?: (file: File) => DocumentType;
   applicationEvidenceRole?: ApplicationVisualEvidenceRole;
   applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
-  deliveryEvidenceRole?: DeliveryEvidenceRole;
   onUploaded?: (documentId: string) => void;
   onUploadError?: (error: string) => void;
   deferred?: boolean;
@@ -116,9 +115,9 @@ export function FormFileUpload({
   entityType,
   entityId,
   documentType,
+  resolveDocumentType,
   applicationEvidenceRole,
   applicationLogbookEvidenceType,
-  deliveryEvidenceRole,
   onUploaded,
   onUploadError,
   deferred = false,
@@ -135,7 +134,9 @@ export function FormFileUpload({
   const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
   const effectiveMaxSizeMb = clampDocumentUploadMaxMb(maxSizeMb);
 
-  const isRealMode = !deferred && !!(entityType && entityId && documentType);
+  const isRealMode =
+    !deferred &&
+    !!(entityType && entityId && (documentType || resolveDocumentType));
 
   function getMissingExif(metadata: Record<string, unknown>): string[] {
     const missingExif = metadata.missingExif;
@@ -145,6 +146,7 @@ export function FormFileUpload({
   }
 
   async function startUpload(file: File) {
+    const resolvedDocumentType = resolveDocumentType?.(file) ?? documentType!;
     const tempKey = crypto.randomUUID();
     setUploads((prev) => [
       ...prev,
@@ -162,11 +164,10 @@ export function FormFileUpload({
       const { documentId, metadata } = await upload({
         entityType: entityType!,
         entityId: entityId!,
-        documentType: documentType!,
+        documentType: resolvedDocumentType,
         file,
         applicationEvidenceRole,
         applicationLogbookEvidenceType,
-        deliveryEvidenceRole,
         onProgress: (p) => {
           setUploads((prev) =>
             prev.map((u) =>

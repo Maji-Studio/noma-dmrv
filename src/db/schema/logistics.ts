@@ -27,7 +27,7 @@ import {
 import { facilities, storageLocations } from './facilities';
 import { massKg, percent } from './numeric-families';
 import { customerLocations, customers, drivers } from './parties';
-import { biocharProducts } from './products';
+import { biocharProducts, formulations } from './products';
 import { biocharStorageInventory } from './storage-inventory';
 
 // ============================================
@@ -79,9 +79,7 @@ export const orders = pgTable('orders', {
   customerLocationId: uuid('customer_location_id')
     .references(() => customerLocations.id),
   // --- Order Details ---
-  biocharProductId: uuid('biochar_product_id')
-    .notNull()
-    .references(() => biocharProducts.id),
+  formulationId: uuid('formulation_id').notNull().references(() => formulations.id),
   quantityKg: real('quantity_kg').notNull(),
   packaging: packagingType('packaging').notNull(),
   value: real('value'),
@@ -117,7 +115,7 @@ export const deliveries = pgTable(
     facilityId: uuid('facility_id')
       .notNull(),
     deliveryDate: timestamp('delivery_date').notNull(),
-    status: deliveryStatus('status').default('upcoming').notNull(),
+    status: deliveryStatus('status').default('delivered').notNull(),
 
     // --- Linked Order ---
     orderId: uuid('order_id')
@@ -147,7 +145,7 @@ export const deliveries = pgTable(
     biocharProductId: uuid('biochar_product_id').references(
       () => biocharProducts.id
     ),
-    storageLocationId: uuid('storage_location_id').references(
+    storageLocationId: uuid('storage_location_id').notNull().references(
       () => storageLocations.id
     ),
     // Specific product-in-bin record this delivery draws from.
@@ -159,12 +157,6 @@ export const deliveries = pgTable(
     deliveredWetMassKg: massKg('delivered_wet_mass_kg'),
     // Server-authoritative dry biochar allocated from the linked product.
     massDryKg: massKg('mass_dry_kg'),
-
-    // Independent delivery-site observations required by Isometric's
-    // Biochar Application API. Their difference is evidence, not a substitute
-    // for the separately recorded delivered wet mass.
-    truckMassOnArrivalKg: massKg('truck_mass_on_arrival_kg'),
-    truckMassOnDepartureKg: massKg('truck_mass_on_departure_kg'),
 
     // --- Operational transport (emissions canonical in transport_legs) ---
     driverId: uuid('driver_id').references(() => drivers.id),
@@ -203,18 +195,6 @@ export const deliveries = pgTable(
     check(
       'deliveries_mass_dry_lte_wet_mass',
       sql`${table.massDryKg} is null or ${table.deliveredWetMassKg} is null or ${table.massDryKg} <= ${table.deliveredWetMassKg}`
-    ),
-    check(
-      'deliveries_truck_mass_on_arrival_non_negative',
-      sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnArrivalKg} >= 0`
-    ),
-    check(
-      'deliveries_truck_mass_on_departure_non_negative',
-      sql`${table.truckMassOnDepartureKg} is null or ${table.truckMassOnDepartureKg} >= 0`
-    ),
-    check(
-      'deliveries_truck_mass_arrival_gte_departure',
-      sql`${table.truckMassOnArrivalKg} is null or ${table.truckMassOnDepartureKg} is null or ${table.truckMassOnArrivalKg} >= ${table.truckMassOnDepartureKg}`
     ),
     check(
       'deliveries_distance_km_override_non_negative',
@@ -335,9 +315,9 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
     fields: [orders.customerLocationId],
     references: [customerLocations.id],
   }),
-  biocharProduct: one(biocharProducts, {
-    fields: [orders.biocharProductId],
-    references: [biocharProducts.id],
+  formulation: one(formulations, {
+    fields: [orders.formulationId],
+    references: [formulations.id],
   }),
   deliveries: many(deliveries),
 }));

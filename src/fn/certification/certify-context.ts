@@ -3,23 +3,21 @@
 import {
   loadCertifyContextForCreditBatch as loadCertifyContextForCreditBatchCore,
   loadRemovalCertifyContext as loadRemovalCertifyContextCore,
-  loadRemovalsForFacility as loadRemovalsForFacilityCore,
   loadSelectableBatchesForFacility as loadSelectableBatchesForFacilityCore,
 } from "./certify-context-core";
+import { loadRemovalsForFacility as loadRemovalsForFacilityCore } from "./removals-hub";
 import type { ActionResult } from "@/types/actions";
 import type {
   RemovalCertifyContext,
-  RemovalsHubData,
   SelectableBatchesData,
 } from "./certify-context-core";
+import type { RemovalsHubData } from "./removals-hub";
 
 export type {
   FacilityCertifierFacts,
   LinkedGhgStatementStatus,
   MemberCreditBatch,
   RemovalCertifyContext,
-  RemovalHubEntry,
-  RemovalsHubData,
   RemovalSubmissionContext,
   SelectableBatch,
   SelectableBatchesData,
@@ -27,6 +25,7 @@ export type {
   TransportCoverage,
   TransportCoverageBucket,
 } from "./certify-context-core";
+export type { RemovalHubEntry, RemovalsHubData } from "./removals-hub";
 
 export async function loadCertifyContextForCreditBatch(
   creditBatchId: string,

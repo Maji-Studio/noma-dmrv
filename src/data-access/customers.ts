@@ -15,6 +15,11 @@ import {
 } from "@/db/schema";
 import type { CustomerFilterData } from "@/schemas/customers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { assertExpectedVersion } from "./expected-version";
+
+/** Entity keys on a customer's and a customer location's version conflicts. */
+const CUSTOMER_CONFLICT_ENTITY = "customer";
+const CUSTOMER_LOCATION_CONFLICT_ENTITY = "customerLocation";
 
 // ============================================
 // Types
@@ -30,25 +35,6 @@ export interface PaginatedCustomers {
   page: number;
   pageSize: number;
   totalPages: number;
-}
-
-export interface CustomerDetail extends Customer {
-  locations: Array<{
-    id: string;
-    name: string | null;
-    country: string;
-    stateRegion: string | null;
-    city: string | null;
-    gpsLatitude: number | null;
-    gpsLongitude: number | null;
-    address: string | null;
-    distanceFromFacilityKm: number | null;
-    distanceSource: DistanceSourceValue | null;
-    defaultSoilTemperatureC: number | null;
-    isDefault: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  }>;
 }
 
 export interface CustomerLocationDetail extends CustomerLocation {
@@ -71,6 +57,25 @@ import {
   syncBiocharLegsForCustomerLocation,
 } from "./transport-legs";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
+import {
+  findCustomerWithRelations,
+  type CustomerDetail,
+} from "./customer-detail";
+import {
+  createCustomerLocationInTransaction,
+  insertCustomer,
+  type CustomerInsertInput,
+  type CustomerLocationInsertInput,
+} from "./customer-create";
+
+export type { CustomerDetail } from "./customer-detail";
+export {
+  createCustomerWithLocations,
+  type CreateCustomerWithLocationsInput,
+  type CreatedCustomerWithLocations,
+  type CustomerInsertInput,
+  type CustomerLocationInsertInput,
+} from "./customer-create";
 
 // ============================================
 // Customer Read Operations
@@ -222,44 +227,13 @@ export async function getCustomerWithRelations(
   ctx: OrgContext,
   customerId: string
 ): Promise<CustomerDetail> {
-  requireOrgScope(ctx);
-
-  // Get customer
-  const [customer] = await db
-    .select()
-    .from(customers)
-    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
+  const customer = await findCustomerWithRelations(ctx, customerId);
 
   if (!customer) {
     throw new SafeError("Customer not found");
   }
 
-  // Get associated locations
-  const locations = await db
-    .select({
-      id: customerLocations.id,
-      name: customerLocations.name,
-      country: customerLocations.country,
-      stateRegion: customerLocations.stateRegion,
-      city: customerLocations.city,
-      gpsLatitude: customerLocations.gpsLatitude,
-      gpsLongitude: customerLocations.gpsLongitude,
-      address: customerLocations.address,
-      distanceFromFacilityKm: customerLocations.distanceFromFacilityKm,
-      distanceSource: customerLocations.distanceSource,
-      defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
-      isDefault: customerLocations.isDefault,
-      createdAt: customerLocations.createdAt,
-      updatedAt: customerLocations.updatedAt,
-    })
-    .from(customerLocations)
-    .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))
-    .orderBy(sql`${customerLocations.name} asc nulls last`);
-
-  return {
-    ...customer,
-    locations,
-  };
+  return customer;
 }
 
 /**
@@ -325,37 +299,14 @@ export async function getCustomerLocations(
 // ============================================
 
 /**
- * Create a new customer
+ * Create a new customer on its own. Customers created together with their
+ * locations go through `createCustomerWithLocations` instead.
  */
 export async function createCustomer(
   ctx: OrgContext,
-  data: {
-    code: string;
-    name: string;
-    cropType?: string | null;
-    address?: string | null;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-  }
+  data: CustomerInsertInput
 ): Promise<Customer> {
-  requireOrgScope(ctx);
-
-  const [customer] = await guardCustomerName(ctx, data.name, () =>
-    db
-      .insert(customers)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        cropType: data.cropType ?? null,
-        address: data.address ?? null,
-        contactEmail: data.contactEmail ?? null,
-        contactPhone: data.contactPhone ?? null,
-      })
-      .returning()
-  );
-
-  return customer;
+  return insertCustomer(ctx, db, data);
 }
 
 // ============================================
@@ -375,47 +326,60 @@ export async function updateCustomer(
     address?: string | null;
     contactEmail?: string | null;
     contactPhone?: string | null;
+    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
+    expectedUpdatedAt?: Date;
   }
 ): Promise<Customer> {
   requireOrgScope(ctx);
+  const { expectedUpdatedAt, ...customerData } = data;
 
-  // Verify customer exists
-  const [existing] = await db
-    .select()
-    .from(customers)
-    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Customer not found");
-  }
-
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: customers.id })
+  // One transaction so the row lock below spans the version check, the code
+  // duplicate probe and the write they guard.
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
       .from(customers)
-      .where(and(eq(customers.code, data.code), eq(customers.organizationId, ctx.organizationId)));
+      .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
+      .for("update");
 
-    if (duplicate) {
-      throw new SafeError("A customer with this code already exists");
+    if (!existing) {
+      throw new SafeError("Customer not found");
     }
-  }
+    assertExpectedVersion({
+      entity: CUSTOMER_CONFLICT_ENTITY,
+      id: customerId,
+      expectedUpdatedAt,
+      actualUpdatedAt: existing.updatedAt,
+    });
 
-  const [updated] = await guardCustomerName(
-    ctx,
-    data.name ?? existing.name,
-    () =>
-      db
-        .update(customers)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
-        .returning()
-  );
+    // If code is being changed, check for duplicates
+    if (customerData.code && customerData.code !== existing.code) {
+      const [duplicate] = await tx
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.code, customerData.code), eq(customers.organizationId, ctx.organizationId)));
 
-  return updated;
+      if (duplicate) {
+        throw new SafeError("A customer with this code already exists");
+      }
+    }
+
+    const [updated] = await guardCustomerName(
+      ctx,
+      customerData.name ?? existing.name,
+      () =>
+        tx
+          .update(customers)
+          .set({
+            ...customerData,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
+          .returning()
+    );
+
+    return updated;
+  });
 }
 
 // ============================================
@@ -455,14 +419,16 @@ export async function deleteCustomer(
     ]);
 
   if (Number(orderCount) > 0) {
+    // Orders have no cancellation state, so the copy can only offer the two
+    // actions that exist: reassign the order, or keep the customer (#774).
     throw new SafeError(
-      "Cannot delete customer with orders. Cancel or reassign those orders first."
+      "Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer."
     );
   }
 
   if (Number(locationCount) > 0) {
     throw new SafeError(
-      "Cannot delete customer with associated locations. Remove locations first."
+      "Customer was not deleted because it still has locations. Edit the customer and remove its locations first."
     );
   }
 
@@ -474,101 +440,18 @@ export async function deleteCustomer(
 // ============================================
 
 /**
- * Get a single customer location by ID
- */
-export async function getCustomerLocationById(
-  ctx: OrgContext,
-  locationId: string
-): Promise<CustomerLocation> {
-  requireOrgScope(ctx);
-
-  const [location] = await db
-    .select()
-    .from(customerLocations)
-    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-
-  if (!location) {
-    throw new SafeError("Customer location not found");
-  }
-
-  return location;
-}
-
-/**
- * Create a new customer location
+ * Create a new customer location on an existing customer.
  */
 export async function createCustomerLocation(
   ctx: OrgContext,
-  data: {
-    customerId: string;
-    name: string;
-    country?: string;
-    stateRegion?: string | null;
-    city?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    address?: string | null;
-    distanceFromFacilityKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    defaultSoilTemperatureC?: number | null;
-    isDefault?: boolean;
-  }
+  data: CustomerLocationInsertInput & { customerId: string }
 ): Promise<CustomerLocation> {
   requireOrgScope(ctx);
 
-  // Verify customer exists
-  const [customer] = await db
-    .select({ id: customers.id })
-    .from(customers)
-    .where(and(eq(customers.id, data.customerId), eq(customers.organizationId, ctx.organizationId)));
-
-  if (!customer) {
-    throw new SafeError("Customer not found");
-  }
-
-  return db.transaction(async (tx) => {
-    // The customer's first location is always its default.
-    const [{ value: existingCount }] = await tx
-      .select({ value: count() })
-      .from(customerLocations)
-      .where(and(eq(customerLocations.customerId, data.customerId), eq(customerLocations.organizationId, ctx.organizationId)));
-    const makeDefault = data.isDefault === true || existingCount === 0;
-
-    // Clear the prior default first so the partial unique index never sees two.
-    if (makeDefault) {
-      await tx
-        .update(customerLocations)
-        .set({ isDefault: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(customerLocations.customerId, data.customerId),
-            eq(customerLocations.organizationId, ctx.organizationId),
-            eq(customerLocations.isDefault, true)
-          )
-        );
-    }
-
-    const [location] = await tx
-      .insert(customerLocations)
-      .values({
-        organizationId: ctx.organizationId,
-        customerId: data.customerId,
-        name: data.name,
-        country: data.country ?? 'UNKNOWN',
-        stateRegion: data.stateRegion ?? null,
-        city: data.city ?? null,
-        gpsLatitude: data.gpsLatitude ?? null,
-        gpsLongitude: data.gpsLongitude ?? null,
-        address: data.address ?? null,
-        distanceFromFacilityKm: data.distanceFromFacilityKm ?? null,
-        distanceSource: data.distanceSource ?? null,
-        defaultSoilTemperatureC: data.defaultSoilTemperatureC ?? null,
-        isDefault: makeDefault,
-      })
-      .returning();
-
-    return location;
-  });
+  const { customerId, ...location } = data;
+  return db.transaction((tx) =>
+    createCustomerLocationInTransaction(ctx, tx, customerId, location)
+  );
 }
 
 /**
@@ -589,19 +472,11 @@ export async function updateCustomerLocation(
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     defaultSoilTemperatureC?: number | null;
     isDefault?: boolean;
+    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
+    expectedUpdatedAt?: Date;
   }
 ): Promise<CustomerLocation> {
   requireOrgScope(ctx);
-
-  // Verify location exists
-  const [existing] = await db
-    .select({ id: customerLocations.id, customerId: customerLocations.customerId })
-    .from(customerLocations)
-    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Customer location not found");
-  }
 
   const updateData: {
     name?: string;
@@ -642,6 +517,28 @@ export async function updateCustomerLocation(
     if (routeAnchorCanChange) {
       await lockBiocharTransportRouteTopology(ctx, tx);
     }
+
+    // Locked read after the topology lock, so the version check and the write
+    // it guards see the same row.
+    const [existing] = await tx
+      .select({
+        id: customerLocations.id,
+        customerId: customerLocations.customerId,
+        updatedAt: customerLocations.updatedAt,
+      })
+      .from(customerLocations)
+      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
+      .for("update");
+
+    if (!existing) {
+      throw new SafeError("Customer location not found");
+    }
+    assertExpectedVersion({
+      entity: CUSTOMER_LOCATION_CONFLICT_ENTITY,
+      id: locationId,
+      expectedUpdatedAt: data.expectedUpdatedAt,
+      actualUpdatedAt: existing.updatedAt,
+    });
 
     // Promoting this location to default demotes the customer's current default.
     if (data.isDefault === true) {
@@ -695,44 +592,3 @@ export async function deleteCustomerLocation(
 // ============================================
 // Utility Operations
 // ============================================
-
-/**
- * Check if a customer code is available
- */
-export async function isCustomerCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeCustomerId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(customers.code, code), eq(customers.organizationId, ctx.organizationId)];
-
-  if (excludeCustomerId) {
-    conditions.push(sql`${customers.id} != ${excludeCustomerId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: customers.id })
-    .from(customers)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get unique crop types from all customers
- * Useful for filter dropdowns
- */
-export async function getCustomerCropTypes(ctx: OrgContext): Promise<string[]> {
-  requireOrgScope(ctx);
-
-  const results = await db
-    .selectDistinct({ cropType: customers.cropType })
-    .from(customers)
-    .where(and(eq(customers.organizationId, ctx.organizationId), sql`${customers.cropType} IS NOT NULL AND ${customers.cropType} != ''`))
-    .orderBy(asc(customers.cropType));
-
-  return results.map((r) => r.cropType!).filter(Boolean);
-}

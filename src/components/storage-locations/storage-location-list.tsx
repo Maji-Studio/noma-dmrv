@@ -8,9 +8,24 @@
  */
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowsClockwiseIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { ServerError } from "@/components/forms";
+import { SelectFacilityEmptyState } from "@/components/navigation";
+import { Button, PageHeader } from "@/components/ui";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+import {
+  EntitySideSheet,
+  type SideSheetMode,
+} from "@/components/ui/entity-side-sheet";
+import { useToast } from "@/components/ui/toast";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import type { StorageLocation } from "@/db/schema";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import {
   useArchiveStorageLocation,
   useCreateStorageLocation,
@@ -19,39 +34,27 @@ import {
   useStorageLocations,
   useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
-import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDebounce } from "@/hooks/use-debounce";
-import {
-  useListPagination,
-  useReconcileListPage,
-} from "@/hooks/use-list-pagination";
-import { SelectFacilityEmptyState } from "@/components/navigation";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { ServerError } from "@/components/forms";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import {
-  EntitySideSheet,
-  type SideSheetMode,
-} from "@/components/ui/entity-side-sheet";
-import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { Button, PageHeader } from "@/components/ui";
-import { useToast } from "@/components/ui/toast";
-import { StorageLocationForm } from "./storage-location-form";
-import { StorageBinBoard } from "./storage-bin-board";
-import { BinReconcileSheet } from "./bin-reconcile-sheet";
-import { BinMovementHistory } from "./bin-movement-history";
+  formatStorageLocationType,
+  type StorageLocationFilterData,
+  type StorageLocationFormData,
+} from "@/schemas/storage-locations";
+import { ArrowsClockwiseIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { useState } from "react";
 import {
   DEFAULT_BIN_SORT,
   parseBinSortValue,
   type StorageBinTypeFilter,
 } from "./bin-display";
-import {
-  formatStorageLocationType,
-  type StorageLocationFormData,
-  type StorageLocationFilterData,
-} from "@/schemas/storage-locations";
-import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { BinMovementHistoryModal } from "./bin-movement-history-modal";
+import { BinReconcileSheet } from "./bin-reconcile-sheet";
+import { OutputBinBalance } from "./output-bin-balance";
+import { OutputStockHistory } from "./output-stock-history";
+import { StorageBinBoard } from "./storage-bin-board";
+import { StorageLocationForm } from "./storage-location-form";
 
 type SideSheetState =
   | { mode: "create"; entity: null }
@@ -109,10 +112,6 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
   if (storageLocation.type === "biochar_bin") {
     return [
       {
-        label: "Available biochar",
-        value: formatMassKg(storageLocation.biocharInventory.currentMassKg),
-      },
-      {
         // Lifetime running total, never decremented — qualified so it cannot
         // be read as stock still on hand next to "Available biochar"
         // (DR-002 / BB-26-001).
@@ -133,10 +132,6 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
   }
 
   return [
-    {
-      label: "Current product mass",
-      value: formatMassKg(storageLocation.productInventory.currentMassKg),
-    },
     {
       // Lifetime running total of source biochar across every product ever
       // stored here, never decremented on delivery — qualified so it cannot
@@ -189,6 +184,7 @@ export function StorageLocationList() {
   );
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
+  const [reconcileKind, setReconcileKind] = useState<"loss" | "count">("count");
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
   const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<string | null>(null);
@@ -196,28 +192,16 @@ export function StorageLocationList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const sort = parseBinSortValue(sortValue);
-  const filters: Partial<StorageLocationFilterData> = useMemo(
-    () => ({
-      search: debouncedSearch || undefined,
-      facilityId: facilityId || undefined,
-      type: typeFilter !== "all" ? typeFilter : undefined,
-      archived: showArchived,
-      page: currentPage,
-      pageSize,
-      sortBy: sort.sortBy,
-      sortOrder: sort.sortOrder,
-    }),
-    [
-      debouncedSearch,
-      facilityId,
-      typeFilter,
-      showArchived,
-      currentPage,
-      pageSize,
-      sort.sortBy,
-      sort.sortOrder,
-    ]
-  );
+  const filters: Partial<StorageLocationFilterData> = {
+    search: debouncedSearch || undefined,
+    facilityId: facilityId || undefined,
+    type: typeFilter !== "all" ? typeFilter : undefined,
+    archived: showArchived,
+    page: currentPage,
+    pageSize,
+    sortBy: sort.sortBy,
+    sortOrder: sort.sortOrder,
+  };
 
   const {
     data: storageLocationsData,
@@ -261,12 +245,17 @@ export function StorageLocationList() {
     try {
       await updateStorageLocation.mutateAsync({
         storageLocationId: sideSheet.entity.id,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
         ...data,
       });
       setSideSheet(null);
       toast.success("Storage bin updated.");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Storage bin was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setFormError(toSaveErrorMessage(error, "Storage bin was not saved. Try again."));
     }
   };
 
@@ -331,7 +320,8 @@ export function StorageLocationList() {
 
   // Reconcile lives in its own side sheet — close the detail sheet first so the
   // two panels never stack.
-  const openReconcile = (storageLocation: StorageLocationWithFacility) => {
+  const openReconcile = (storageLocation: StorageLocationWithFacility, kind: "loss" | "count" = "count") => {
+    setReconcileKind(kind);
     setSideSheet(null);
     setReconcilingBin(storageLocation);
   };
@@ -435,6 +425,7 @@ export function StorageLocationList() {
         onRestore={handleRestore}
         onDelete={handleDelete}
         onReconcile={openReconcile}
+        onRecordLoss={(bin) => openReconcile(bin, "loss")}
       />
 
       {deleteError && !deletingStorageLocationId && (
@@ -509,6 +500,7 @@ export function StorageLocationList() {
                   fields: buildStorageDetailFields(sideSheet.entity),
                   content: (
                     <div className="flex flex-col gap-16">
+                      {sideSheet.entity.type !== "feedstock_bin" && <Button variant="default" onClick={() => openReconcile(sideSheet.entity, "loss")}>Record loss</Button>}
                       <Button
                         variant="default"
                         onClick={() => openReconcile(sideSheet.entity)}
@@ -516,7 +508,7 @@ export function StorageLocationList() {
                         <ArrowsClockwiseIcon size={18} weight="bold" />
                         Reconcile stock
                       </Button>
-                      <BinMovementHistory storageLocationId={sideSheet.entity.id} />
+                      {sideSheet.entity.type === "feedstock_bin" ? <BinMovementHistoryModal storageLocationId={sideSheet.entity.id} /> : <><OutputBinBalance storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /><OutputStockHistory storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /></>}
                     </div>
                   ),
                 },
@@ -536,6 +528,8 @@ export function StorageLocationList() {
       </EntitySideSheet>
 
       <BinReconcileSheet
+        key={`${reconcilingBin?.id}-${reconcileKind}`}
+        initialKind={reconcileKind}
         open={!!reconcilingBin}
         onOpenChange={(open) => {
           if (!open) setReconcilingBin(null);

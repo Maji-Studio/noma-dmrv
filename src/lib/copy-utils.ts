@@ -27,6 +27,15 @@
  * seventh phrasing, and never use an en dash or em dash as a placeholder.
  */
 
+/**
+ * The outcome copy for a write that committed but whose follow-up read did
+ * not. It says what the operator can rely on (the record is saved) and what
+ * they cannot (what it now looks like). Never use it for a rollback: a write
+ * that did not commit says so plainly instead (issue #769).
+ */
+export const SAVED_DETAILS_UNAVAILABLE =
+  "The record was saved, but its details could not be loaded.";
+
 /** The situations a missing value can name. One situation, one token. */
 export type MissingValueSituation =
   | "notRecorded"

@@ -1,3 +1,4 @@
+import { deleteOutputFacilityFixtures, outputProductFixtureValues, deleteOutputProductFixtures } from "../../helpers/output-contract-fixtures";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 /**
  * Test Data Helpers
@@ -7,7 +8,7 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
  */
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 
@@ -56,16 +57,6 @@ export interface TestBiocharProduct {
   status: "draft" | "testing" | "ready" | "sold";
   massKg: number | null;
   moistureContentPercent: number | null;
-}
-
-export interface TestApplication {
-  id: string;
-  code: string;
-  deliveryId: string;
-  applicationDate: Date;
-  biocharAppliedTons: number;
-  biocharAppliedDryTons: number;
-  status: "delivered" | "applied";
 }
 
 // Database connection helper
@@ -145,7 +136,7 @@ export async function deleteTestFacility(facilityId: string): Promise<void> {
     await db
       .delete(schema.certifierProjects)
       .where(eq(schema.certifierProjects.facilityId, facilityId));
-    await db.delete(schema.facilities).where(eq(schema.facilities.id, facilityId));
+    await deleteOutputFacilityFixtures(db, eq(schema.facilities.id, facilityId));
   } finally {
     await pool.end();
   }
@@ -322,7 +313,7 @@ export async function createTestBiocharProduct(
       moistureContentPercent: overrides.moistureContentPercent ?? 10,
     };
 
-    await db.insert(schema.biocharProducts).values({
+    await db.insert(schema.biocharProducts).values(await outputProductFixtureValues(db, {
       organizationId: DEC_ORG_ID,
       id: product.id,
       code: product.code,
@@ -332,7 +323,7 @@ export async function createTestBiocharProduct(
       status: product.status,
       massKg: product.massKg,
       moistureContentPercent: product.moistureContentPercent,
-    });
+    }));
 
     return product;
   } finally {
@@ -347,223 +338,8 @@ export async function deleteTestBiocharProduct(productId: string): Promise<void>
   const { db, pool } = createDbConnection();
 
   try {
-    await db.delete(schema.biocharProducts).where(eq(schema.biocharProducts.id, productId));
+    await deleteOutputProductFixtures(db, eq(schema.biocharProducts.id, productId));
   } finally {
     await pool.end();
-  }
-}
-
-/**
- * Create a test application
- */
-export async function createTestApplication(
-  deliveryId: string,
-  overrides: Partial<Omit<TestApplication, "id" | "deliveryId">> = {}
-): Promise<TestApplication> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    const testId = generateTestId();
-    const application: TestApplication = {
-      id: crypto.randomUUID(),
-      code: overrides.code || `E2E-AP-${testId.toUpperCase()}`,
-      deliveryId,
-      applicationDate: overrides.applicationDate ?? new Date(),
-      biocharAppliedTons: overrides.biocharAppliedTons ?? 10.5,
-      biocharAppliedDryTons: overrides.biocharAppliedDryTons ?? 8.5,
-      status: overrides.status ?? "delivered",
-    };
-
-    await db.insert(schema.applications).values({
-      organizationId: DEC_ORG_ID,
-      id: application.id,
-      code: application.code,
-      deliveryId: application.deliveryId,
-      applicationDate: application.applicationDate,
-      biocharAppliedTons: application.biocharAppliedTons,
-      biocharAppliedDryTons: application.biocharAppliedDryTons,
-      status: application.status,
-    });
-
-    return application;
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Delete a test application
- */
-export async function deleteTestApplication(applicationId: string): Promise<void> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    await db.delete(schema.applications).where(eq(schema.applications.id, applicationId));
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Bulk cleanup helper - cleans up multiple entity types
- */
-export async function bulkCleanup(entities: {
-  facilityIds?: string[];
-  storageLocationIds?: string[];
-  supplierIds?: string[];
-  formulationIds?: string[];
-  biocharProductIds?: string[];
-  userIds?: string[];
-}): Promise<void> {
-  const { db, pool } = createDbConnection();
-
-  try {
-    await db.transaction(async (tx) => {
-      // Clean up in order respecting FK constraints
-
-      // Delete biochar products (before formulations due to FK)
-      if (entities.biocharProductIds && entities.biocharProductIds.length > 0) {
-        await tx
-          .delete(schema.biocharProducts)
-          .where(inArray(schema.biocharProducts.id, entities.biocharProductIds));
-      }
-
-      // Delete storage locations before facilities.
-      if (entities.storageLocationIds && entities.storageLocationIds.length > 0) {
-        await tx
-          .delete(schema.storageLocations)
-          .where(inArray(schema.storageLocations.id, entities.storageLocationIds));
-      }
-
-      // Delete formulations
-      if (entities.formulationIds && entities.formulationIds.length > 0) {
-        await tx
-          .delete(schema.formulations)
-          .where(inArray(schema.formulations.id, entities.formulationIds));
-      }
-
-      // Delete facilities after dependent storage locations and products.
-      if (entities.facilityIds && entities.facilityIds.length > 0) {
-        // Reverse FK order: certifier rows FK the facility. Removals must go
-        // before ghg_statements (removal.ghg_statement_id FKs it), and
-        // certifier_projects also FKs the facility — all must clear before
-        // the facility itself.
-        await tx
-          .delete(schema.certifierRemovals)
-          .where(inArray(schema.certifierRemovals.facilityId, entities.facilityIds));
-        await tx
-          .delete(schema.certifierGhgStatements)
-          .where(
-            inArray(schema.certifierGhgStatements.facilityId, entities.facilityIds)
-          );
-        await tx
-          .delete(schema.certifierProjects)
-          .where(inArray(schema.certifierProjects.facilityId, entities.facilityIds));
-        await tx
-          .delete(schema.facilities)
-          .where(inArray(schema.facilities.id, entities.facilityIds));
-      }
-
-      // Delete suppliers
-      if (entities.supplierIds && entities.supplierIds.length > 0) {
-        await tx
-          .delete(schema.suppliers)
-          .where(inArray(schema.suppliers.id, entities.supplierIds));
-      }
-
-      // Delete users (and cascade to sessions, accounts)
-      if (entities.userIds && entities.userIds.length > 0) {
-        // Delete sessions first
-        await tx
-          .delete(schema.sessions)
-          .where(inArray(schema.sessions.userId, entities.userIds));
-
-        // Delete accounts
-        await tx
-          .delete(schema.accounts)
-          .where(inArray(schema.accounts.userId, entities.userIds));
-
-        // Delete users
-        await tx
-          .delete(schema.users)
-          .where(inArray(schema.users.id, entities.userIds));
-      }
-    });
-  } finally {
-    await pool.end();
-  }
-}
-
-/**
- * Test data builder - creates a complete set of related test entities
- */
-export class TestDataBuilder {
-  private ownerId: string;
-  private testId: string;
-  private createdEntities: {
-    facilityIds: string[];
-    storageLocationIds: string[];
-  };
-
-  constructor(ownerId: string) {
-    this.ownerId = ownerId;
-    this.testId = generateTestId();
-    this.createdEntities = {
-      facilityIds: [],
-      storageLocationIds: [],
-    };
-  }
-
-  /**
-   * Create a facility
-   */
-  async createFacility(name?: string): Promise<TestFacility> {
-    const facility = await createTestFacility({
-      name: name || `Builder Facility ${this.testId}`,
-    });
-    this.createdEntities.facilityIds.push(facility.id);
-    return facility;
-  }
-
-  /**
-   * Create a storage location
-   */
-  async createStorageLocation(
-    facilityId: string,
-    overrides: Partial<Omit<TestStorageLocation, "id" | "facilityId">> = {}
-  ): Promise<TestStorageLocation> {
-    const storageLocation = await createTestStorageLocation(facilityId, overrides);
-    this.createdEntities.storageLocationIds.push(storageLocation.id);
-    return storageLocation;
-  }
-
-  /**
-   * Clean up all entities created by this builder
-   */
-  async cleanup(): Promise<void> {
-    await bulkCleanup({
-      facilityIds: this.createdEntities.facilityIds,
-      storageLocationIds: this.createdEntities.storageLocationIds,
-    });
-
-    // Reset tracking
-    this.createdEntities = {
-      facilityIds: [],
-      storageLocationIds: [],
-    };
-  }
-
-  /**
-   * Get the test ID for this builder instance
-   */
-  getTestId(): string {
-    return this.testId;
-  }
-
-  /**
-   * Get all created entity IDs
-   */
-  getCreatedEntities() {
-    return { ...this.createdEntities };
   }
 }

@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { numericValue } from "@/lib/form-utils";
+import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useEffect } from "react";
@@ -109,7 +109,7 @@ export function ReactorForm({
     const { capacityTph, ...rest } = data as ReactorFormData;
     onSubmit({
       ...rest,
-      nominalThroughputTph: capacityTph ?? undefined,
+      nominalThroughputTph: capacityTph ?? null,
     });
   });
 
@@ -170,7 +170,7 @@ export function ReactorForm({
               disabled={isSubmitting}
               error={!!errors.capacityTph}
               {...register("capacityTph", {
-                setValueAs: numericValue,
+                setValueAs: nullableNumericValue,
               })}
             />
           </FormField>

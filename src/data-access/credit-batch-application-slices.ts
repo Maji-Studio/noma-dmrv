@@ -1,17 +1,10 @@
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { type DbTransaction } from "@/db";
-import {
-  applications,
-  biocharProductSourceAllocations,
-  biocharProducts,
-  creditBatchApplications,
-  creditBatchProductionRuns,
-  deliveries,
-  orders,
-} from "@/db/schema";
+import type { DbTransaction } from "@/db";
+import { applicationOutputAllocations, applications, creditBatchApplications, creditBatchProductionRuns } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { SafeError } from "@/lib/errors";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { massGrams } from "./delivery-allocation-math";
 import { requireOrgScope } from "./utils";
 
 export interface CreditBatchApplicationSlice {
@@ -21,297 +14,55 @@ export interface CreditBatchApplicationSlice {
   allocatedDryMassKg: number;
   removalId: string | null;
 }
-
 interface ReconcileSliceScope {
   applicationIds?: string[];
   creditBatchIds?: string[];
   biocharProductIds?: string[];
 }
-
-/**
- * Refreshes only unassigned application x credit-batch slices. Once a slice
- * has a Removal owner it is immutable and is never updated or deleted here.
- *
- * Product source allocations remain the physical provenance authority. This
- * seam projects them once onto the credit-batch grain and persists both wet
- * and dry applied mass, so Removal accounting never re-splits a captured
- * Application from mutable live totals.
- */
-export async function reconcileUnassignedCreditBatchApplicationSlices(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  scope: ReconcileSliceScope,
-): Promise<void> {
+/** Refresh only unowned slices from frozen application product/run shares. */
+export async function reconcileUnassignedCreditBatchApplicationSlices(ctx: OrgContext, tx: DbTransaction, scope: ReconcileSliceScope): Promise<void> {
   requireOrgScope(ctx);
-  const requestedApplicationIds = [...new Set(scope.applicationIds ?? [])];
   const requestedBatchIds = [...new Set(scope.creditBatchIds ?? [])];
+  const requestedApplicationIds = [...new Set(scope.applicationIds ?? [])];
   const requestedProductIds = [...new Set(scope.biocharProductIds ?? [])];
-  if (
-    requestedApplicationIds.length === 0 &&
-    requestedBatchIds.length === 0 &&
-    requestedProductIds.length === 0
-  ) {
-    return;
-  }
-
-  const scopedRunRows = requestedBatchIds.length
-    ? await tx
-        .select({
-          creditBatchId: creditBatchProductionRuns.creditBatchId,
-          productionRunId: creditBatchProductionRuns.productionRunId,
-        })
-        .from(creditBatchProductionRuns)
-        .where(
-          and(
-            inArray(creditBatchProductionRuns.creditBatchId, requestedBatchIds),
-            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-          ),
-        )
-    : [];
-  const scopedRunIds = [...new Set(scopedRunRows.map((row) => row.productionRunId))];
-
-  const scopedProductRows = scopedRunIds.length
-    ? await tx
-        .selectDistinct({ id: biocharProducts.id })
-        .from(biocharProducts)
-        .leftJoin(
-          biocharProductSourceAllocations,
-          and(
-            eq(
-              biocharProductSourceAllocations.biocharProductId,
-              biocharProducts.id,
-            ),
-            eq(
-              biocharProductSourceAllocations.organizationId,
-              ctx.organizationId,
-            ),
-          ),
-        )
-        .where(
-          and(
-            or(
-              inArray(
-                biocharProductSourceAllocations.productionRunId,
-                scopedRunIds,
-              ),
-              inArray(biocharProducts.linkedProductionRunId, scopedRunIds),
-            ),
-            eq(biocharProducts.organizationId, ctx.organizationId),
-          ),
-        )
-    : [];
-  const scopedProductIds = [
-    ...new Set([
-      ...requestedProductIds,
-      ...scopedProductRows.map((row) => row.id),
-    ]),
-  ];
-
-  const derivedApplicationRows = scopedProductIds.length
-    ? await tx
-        .select({ id: applications.id })
-        .from(applications)
-        .innerJoin(
-          deliveries,
-          and(
-            eq(applications.deliveryId, deliveries.id),
-            eq(deliveries.organizationId, ctx.organizationId),
-          ),
-        )
-        .leftJoin(
-          orders,
-          and(
-            eq(deliveries.orderId, orders.id),
-            eq(orders.organizationId, ctx.organizationId),
-          ),
-        )
-        .where(
-          and(
-            inArray(
-              sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-              scopedProductIds,
-            ),
-            eq(applications.organizationId, ctx.organizationId),
-          ),
-        )
-    : [];
-  const applicationIds = [
-    ...new Set([
-      ...requestedApplicationIds,
-      ...derivedApplicationRows.map((row) => row.id),
-    ]),
-  ];
-  if (applicationIds.length === 0) {
-    if (requestedBatchIds.length > 0) {
-      await tx.delete(creditBatchApplications).where(
-        and(
-          inArray(creditBatchApplications.creditBatchId, requestedBatchIds),
-          isNull(creditBatchApplications.removalId),
-          eq(creditBatchApplications.organizationId, ctx.organizationId),
-        ),
-      );
-    }
-    return;
-  }
-
-  const applicationRows = await tx
-    .select({
-      applicationId: applications.id,
-      appliedWetTons: applications.biocharAppliedTons,
-      appliedDryTons: applications.biocharAppliedDryTons,
-      productId: biocharProducts.id,
-      legacyProductionRunId: biocharProducts.linkedProductionRunId,
-    })
-    .from(applications)
-    .innerJoin(
-      deliveries,
-      and(
-        eq(applications.deliveryId, deliveries.id),
-        eq(deliveries.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      orders,
-      and(
-        eq(deliveries.orderId, orders.id),
-        eq(orders.organizationId, ctx.organizationId),
-      ),
-    )
-    .innerJoin(
-      biocharProducts,
-      and(
-        eq(
-          biocharProducts.id,
-          sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-        ),
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ),
-    )
-    .where(
-      and(
-        inArray(applications.id, applicationIds),
-        eq(applications.organizationId, ctx.organizationId),
-      ),
-    );
-
-  const productIds = [...new Set(applicationRows.map((row) => row.productId))];
-  const allocationRows = productIds.length
-    ? await tx
-        .select({
-          productId: biocharProductSourceAllocations.biocharProductId,
-          productionRunId: biocharProductSourceAllocations.productionRunId,
-          allocatedWetMassKg:
-            biocharProductSourceAllocations.allocatedWetMassKg,
-          allocatedDryMassKg:
-            biocharProductSourceAllocations.allocatedDryMassKg,
-        })
-        .from(biocharProductSourceAllocations)
-        .where(
-          and(
-            inArray(biocharProductSourceAllocations.biocharProductId, productIds),
-            eq(
-              biocharProductSourceAllocations.organizationId,
-              ctx.organizationId,
-            ),
-          ),
-        )
-    : [];
-  const sourceRunIds = [
-    ...new Set([
-      ...allocationRows.map((row) => row.productionRunId),
-      ...applicationRows.map((row) => row.legacyProductionRunId),
-    ].filter((runId): runId is string => runId != null)),
-  ];
-  const membershipRows = sourceRunIds.length
-    ? await tx
-        .select({
-          creditBatchId: creditBatchProductionRuns.creditBatchId,
-          productionRunId: creditBatchProductionRuns.productionRunId,
-        })
-        .from(creditBatchProductionRuns)
-        .where(
-          and(
-            inArray(creditBatchProductionRuns.productionRunId, sourceRunIds),
-            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-          ),
-        )
-    : [];
-  const batchIdByRunId = new Map(
-    membershipRows.map((row) => [row.productionRunId, row.creditBatchId]),
-  );
-  const allocationsByProductId = new Map<
-    string,
-    typeof allocationRows
-  >();
-  for (const row of allocationRows) {
-    const rows = allocationsByProductId.get(row.productId) ?? [];
-    rows.push(row);
-    allocationsByProductId.set(row.productId, rows);
-  }
-
-  const desired = new Map<string, CreditBatchApplicationSlice>();
-  for (const application of applicationRows) {
-    const allocations = allocationsByProductId.get(application.productId) ?? [];
-    const totalWetWeight = allocations.reduce(
-      (sum, row) => sum + row.allocatedWetMassKg,
-      0,
-    );
-    const totalDryWeight = allocations.reduce(
-      (sum, row) => sum + row.allocatedDryMassKg,
-      0,
-    );
-    if (application.appliedDryTons == null) {
-      throw new SafeError(
-        "An Application has no allocated dry biochar mass. Recalculate its applied mass before creating a Removal.",
-      );
-    }
-    if (
-      allocations.length > 0 &&
-      (totalWetWeight <= 0 || totalDryWeight <= 0)
-    ) {
-      throw new SafeError(
-        "A biochar product has invalid source allocation mass. Correct its provenance before creating a Removal.",
-      );
-    }
-    // Legacy single-run products have no allocation rows. These placeholder
-    // weights are not read because the factor below is fixed to 1.
-    const sources = allocations.length > 0
-      ? allocations
-      : [{
-          productId: application.productId,
-          productionRunId: application.legacyProductionRunId,
-          allocatedWetMassKg: 0,
-          allocatedDryMassKg: 0,
-        }];
-    for (const source of sources) {
-      if (!source.productionRunId) continue;
-      const creditBatchId = batchIdByRunId.get(source.productionRunId);
-      if (!creditBatchId) continue;
-      if (requestedBatchIds.length > 0 && !requestedBatchIds.includes(creditBatchId)) {
-        continue;
+  if (!requestedBatchIds.length && !requestedApplicationIds.length && !requestedProductIds.length) return;
+  const rows = await tx.select({
+    applicationId: applicationOutputAllocations.applicationId,
+    productId: applicationOutputAllocations.biocharProductId,
+    creditBatchId: creditBatchProductionRuns.creditBatchId,
+    wetMassKg: applicationOutputAllocations.wetMassKg,
+    dryMassKg: applicationOutputAllocations.dryMassKg,
+  }).from(applicationOutputAllocations)
+    .innerJoin(creditBatchProductionRuns, and(eq(creditBatchProductionRuns.productionRunId, applicationOutputAllocations.productionRunId), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)))
+    .where(eq(applicationOutputAllocations.organizationId, ctx.organizationId));
+  // Discover products independently of current membership so removing a run's
+  // last batch link can retire its stale unowned slice as well.
+  const productApplications = requestedProductIds.length ? await tx.select({ applicationId: applicationOutputAllocations.applicationId }).from(applicationOutputAllocations)
+    .where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), inArray(applicationOutputAllocations.biocharProductId, requestedProductIds))) : [];
+  const applicationIds = [...new Set([...requestedApplicationIds, ...productApplications.map(row => row.applicationId), ...rows.filter(row => requestedBatchIds.includes(row.creditBatchId) || requestedProductIds.includes(row.productId)).map(row => row.applicationId)])];
+  if (applicationIds.length) {
+    const apps = await tx.select().from(applications).where(and(eq(applications.organizationId, ctx.organizationId), inArray(applications.id, applicationIds)));
+    const shares = await tx.select().from(applicationOutputAllocations).where(and(eq(applicationOutputAllocations.organizationId, ctx.organizationId), inArray(applicationOutputAllocations.applicationId, applicationIds)));
+    for (const app of apps) {
+      const allocated = shares.filter(share => share.applicationId === app.id);
+      if (!allocated.length || app.biocharAppliedDryTons == null ||
+        allocated.reduce((sum, share) => sum + massGrams(Number(share.wetMassKg)), 0) !== massGrams(app.biocharAppliedTons * KG_PER_TONNE) ||
+        allocated.reduce((sum, share) => sum + massGrams(Number(share.dryMassKg)), 0) !== massGrams(app.biocharAppliedDryTons * KG_PER_TONNE)) {
+        throw new SafeError("Application has missing or unbalanced saved source allocations.");
       }
-      const key = `${creditBatchId}:${application.applicationId}`;
-      const slice = desired.get(key) ?? {
-        creditBatchId,
-        applicationId: application.applicationId,
-        allocatedWetMassKg: 0,
-        allocatedDryMassKg: 0,
-        removalId: null,
-      };
-      slice.allocatedWetMassKg +=
-        tonnesToKg(application.appliedWetTons) *
-        (allocations.length === 0
-          ? 1
-          : source.allocatedWetMassKg / totalWetWeight);
-      slice.allocatedDryMassKg +=
-        tonnesToKg(application.appliedDryTons) *
-        (allocations.length === 0
-          ? 1
-          : source.allocatedDryMassKg / totalDryWeight);
-      desired.set(key, slice);
     }
   }
-
+  const desired = new Map<string, CreditBatchApplicationSlice>();
+  for (const row of rows) {
+    if (!applicationIds.includes(row.applicationId)) continue;
+    if (requestedBatchIds.length && !requestedBatchIds.includes(row.creditBatchId)) continue;
+    const key = `${row.creditBatchId}:${row.applicationId}`;
+    const slice = desired.get(key) ?? { creditBatchId: row.creditBatchId, applicationId: row.applicationId, allocatedWetMassKg: 0, allocatedDryMassKg: 0, removalId: null };
+    slice.allocatedWetMassKg += Number(row.wetMassKg);
+    slice.allocatedDryMassKg += Number(row.dryMassKg);
+    desired.set(key, slice);
+  }
+  if (!applicationIds.length && !requestedBatchIds.length) return;
   const existing = await tx
     .select({
       creditBatchId: creditBatchApplications.creditBatchId,

@@ -55,6 +55,3 @@ export type UpdateProductionSampleData = z.infer<
 export const deleteProductionSampleSchema = z.object({
   productionSampleId: z.string().uuid("Choose a valid in-process measurement."),
 });
-export type DeleteProductionSampleData = z.infer<
-  typeof deleteProductionSampleSchema
->;

@@ -4,14 +4,13 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { UsersIcon, PlusIcon, MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Customer } from "@/db/schema";
 import {
-  useCreateCustomer,
-  useCreateCustomerLocation,
+  useCreateCustomerWithLocations,
   useDeleteCustomer,
   useCustomerLocations,
   useCustomers,
@@ -36,6 +35,7 @@ import type { CustomerWithRelations } from "@/data-access/customers";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 
 // ============================================
 // Column Definitions
@@ -133,8 +133,7 @@ export function CustomerList() {
     sideSheet?.entity?.id ?? "",
     !!sideSheet?.entity,
   );
-  const createCustomer = useCreateCustomer();
-  const createLocation = useCreateCustomerLocation();
+  const createCustomer = useCreateCustomerWithLocations();
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
   const toast = useToast();
@@ -183,19 +182,20 @@ export function CustomerList() {
   const handleCreate = async (data: CustomerFormData, pendingLocations?: PendingLocation[]) => {
     setCreateError(null);
     try {
-      const customer = await createCustomer.mutateAsync(data);
-      if (pendingLocations?.length) {
-        for (const loc of pendingLocations) {
-          await createLocation.mutateAsync({
-            customerId: customer.id,
-            ...loc,
-          });
-        }
-      }
+      // One transaction on the server: a location that fails takes the customer
+      // with it, so the operator never keeps a half-saved customer.
+      await createCustomer.mutateAsync({
+        customer: data,
+        locations: pendingLocations ?? [],
+      });
       setSideSheet(null);
       toast.success("Customer created.");
     } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Customer was not created. Check the form.");
+      setCreateError(
+        error instanceof Error
+          ? error.message
+          : "The customer and its locations were not created. Check the form and save again.",
+      );
     }
   };
 
@@ -203,11 +203,19 @@ export function CustomerList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateCustomer.mutateAsync({ customerId: sideSheet.entity.id, ...data });
+      await updateCustomer.mutateAsync({
+        customerId: sideSheet.entity.id,
+        // The version the side sheet opened on, never a refetched one, so a
+        // concurrent edit is refused instead of silently overwritten (#768).
+        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        ...data,
+      });
       setSideSheet(null);
       toast.success("Customer updated.");
     } catch (error) {
-      setUpdateError(error instanceof Error ? error.message : "Customer was not saved. Try again.");
+      // The side sheet stays open on every failure, so the operator's draft
+      // survives an expected-version refusal untouched.
+      setUpdateError(toSaveErrorMessage(error, "Customer was not saved. Try again."));
     }
   };
 
@@ -225,7 +233,7 @@ export function CustomerList() {
     }
   };
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (fetchError) {
     return (
@@ -397,7 +405,7 @@ export function CustomerList() {
           customerId={sideSheetEntity && sideSheetMode === "edit" ? sideSheetEntity.id : undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
-          isSubmitting={createCustomer.isPending || createLocation.isPending || updateCustomer.isPending}
+          isSubmitting={createCustomer.isPending || updateCustomer.isPending}
           errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Customer"}
         />

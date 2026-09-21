@@ -4,27 +4,20 @@
  * certification surfaces read identically:
  *
  *   1. Created in registry   — registry record link when present
- *   2. Report generated      — Generate/regenerate inside the submit dialog
- *   3. Report approved       — Review + Approve inside the submit dialog
+ *   2. Report generated      — generated automatically during submission
+ *   3. Report approved       — approved automatically during submission
  *   4. Submitted to verifier — status detail + inline Submit/Resubmit action
  *                              (opens the sheet's submit dialog)
  *
  * The detail sheet renders this as a passive status ladder with one Submit
- * entry point. The submit dialog renders it interactively so every report
- * action stays in one guided flow. Older versions collapse behind a disclosure.
+ * entry point. Older versions collapse behind a disclosure.
  */
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
-import { Button, buttonVariants } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ServerError } from "@/components/forms";
-import {
-  useApproveGhgStatementReport,
-  usePrepareGhgStatementReport,
-  useGhgStatementReports,
-} from "@/hooks/use-certification";
+import { useGhgStatementReports } from "@/hooks/use-certification";
 import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-reports";
 import { CheckRow } from "./check-row";
 import { DisclosureSummary } from "./disclosure-summary";
@@ -32,18 +25,13 @@ import type { WorkflowStepModel } from "./ghg-statement-workflow-state";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
 interface GhgStatementWorkflowProps {
-  ghgStatementId: string;
   reportsQuery: ReportsQuery;
   /** The statement exists in Isometric (has a registry submission). */
   created: boolean;
   /** Registry record link node, shown as the created step's detail. */
   registryRecord?: ReactNode;
-  /** Server-computed Owner/Admin capability for report mutations. */
-  canManageReports: boolean;
   canGenerate?: boolean;
   generationUnavailableReason?: string | null;
-  /** Enables Generate, Review, and Approve inside the submit dialog. */
-  interactive?: boolean;
   /** Computed by the sheet from the remote statement + submit mode. */
   verifierStep: WorkflowStepModel;
   /**
@@ -80,26 +68,15 @@ function reportBadge(lifecycle: string): {
 }
 
 export function GhgStatementWorkflow({
-  ghgStatementId,
   reportsQuery,
   created,
   registryRecord,
-  canManageReports,
   canGenerate = true,
   generationUnavailableReason,
-  interactive = false,
   verifierStep,
   onSubmit,
   submitLabel = "Submit",
 }: GhgStatementWorkflowProps) {
-  const prepare = usePrepareGhgStatementReport();
-  const approve = useApproveGhgStatementReport();
-  const [preparationKey, setPreparationKey] = useState(() =>
-    crypto.randomUUID(),
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [reviewedReportId, setReviewedReportId] = useState<string | null>(null);
-
   const reports = reportsQuery.data ?? [];
   const latest: GhgStatementReportView | undefined = reports[0];
   const generated = reports.length > 0;
@@ -108,24 +85,6 @@ export function GhgStatementWorkflow({
   const approvedReport = findApprovedGhgStatementReport(reports);
   const latestPrepared = latest?.lifecycle === "prepared";
 
-  const runGenerate = async () => {
-    try {
-      await prepare.mutateAsync({ ghgStatementId, preparationKey });
-      setPreparationKey(crypto.randomUUID());
-    } catch (prepareError) {
-      setError(
-        prepareError instanceof Error
-          ? prepareError.message
-          : "The report was not generated. Try again.",
-      );
-    }
-  };
-
-  const generateReport = () => {
-    setError(null);
-    void runGenerate();
-  };
-
   if (reportsQuery.isLoading) {
     return (
       <p aria-busy="true" className="body-small text-[var(--color-text-tertiary)]">
@@ -133,24 +92,6 @@ export function GhgStatementWorkflow({
       </p>
     );
   }
-  const approveLatest = async () => {
-    if (!latest) return;
-    setError(null);
-    try {
-      await approve.mutateAsync({
-        ghgStatementId,
-        reportId: latest.id,
-        version: latest.version,
-      });
-    } catch (approveError) {
-      setError(
-        approveError instanceof Error
-          ? approveError.message
-          : "The report was not approved. Try again.",
-      );
-    }
-  };
-
   const generatedStep: WorkflowStepModel = !created
     ? { status: "skipped" }
     : reportsUnavailable
@@ -163,9 +104,7 @@ export function GhgStatementWorkflow({
       : canGenerate
         ? {
             status: "active",
-            detail: prepare.isPending
-              ? "Generating a report from current Isometric data."
-              : "Generate a report from current Isometric data.",
+            detail: "The report is generated automatically when you submit.",
           }
         : {
             status: "warning",
@@ -180,9 +119,17 @@ export function GhgStatementWorkflow({
         detail: "Load the reports before reviewing or approving one.",
       }
     : !generated
-    ? { status: "skipped", detail: created ? "Review the report, then approve it." : undefined }
+    ? {
+        status: "skipped",
+        detail: created
+          ? "The report is approved automatically when you submit."
+          : undefined,
+      }
     : latestPrepared
-      ? { status: "active", detail: `Review version ${latest?.version}, then approve it.` }
+      ? {
+          status: "active",
+          detail: `Version ${latest?.version} will be approved automatically when you submit.`,
+        }
       : approvedReport
         ? { status: "met", detail: `Version ${approvedReport.version} approved.` }
         : { status: "skipped" };
@@ -205,23 +152,7 @@ export function GhgStatementWorkflow({
           status={generatedStep.status}
           label="Report generated"
           detail={generatedStep.detail}
-        >
-          {interactive &&
-            created &&
-            !reportsUnavailable &&
-            canGenerate &&
-            canManageReports && (
-            <Button
-              size="small"
-              variant={generated ? "default" : "primary"}
-              className="shrink-0 self-center"
-              busy={prepare.isPending}
-              onClick={generateReport}
-            >
-              {generated ? "Generate new version" : "Generate report"}
-            </Button>
-          )}
-        </CheckRow>
+        />
         <CheckRow
           isFirst={false}
           status={approvedStep.status}
@@ -234,26 +165,10 @@ export function GhgStatementWorkflow({
                 href={latest.reviewUrl}
                 target="_blank"
                 rel="noreferrer"
-                className={
-                  interactive
-                    ? buttonVariants({ variant: "default", size: "small" })
-                    : "body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
-                }
-                onClick={() => setReviewedReportId(latest.id)}
+                className="body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
               >
-                {interactive ? "Review report" : "Review"}
+                Review
               </a>
-              {interactive && latestPrepared && canManageReports && (
-                <Button
-                  size="small"
-                  variant="primary"
-                  busy={approve.isPending}
-                  disabled={reviewedReportId !== latest.id}
-                  onClick={() => void approveLatest()}
-                >
-                  Approve report
-                </Button>
-              )}
             </span>
           )}
         </CheckRow>
@@ -296,8 +211,6 @@ export function GhgStatementWorkflow({
           </Button>
         </div>
       )}
-
-      {error && <ServerError message={error} />}
 
       {reports.length > 1 && (
         <details className="group">

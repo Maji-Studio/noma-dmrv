@@ -71,6 +71,13 @@ function statementLifecycle(
         currentStepIndex: 1,
         stepStates: buildStepStates(1),
       };
+    case "pending-changes":
+      return {
+        badgeStatus: "pending",
+        label: "Statement pending changes",
+        currentStepIndex: 1,
+        stepStates: buildStepStates(1),
+      };
     case "in-verification":
       return {
         badgeStatus: "pending",

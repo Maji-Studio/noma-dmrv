@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
-  getActiveOrganizationProfile,
   inviteMemberAction,
   listInvitationsFn,
   listMembersFn,
@@ -15,10 +14,18 @@ import {
   revokeInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
+import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
+import { NO_ORGANIZATION_MESSAGE } from "@/lib/errors";
+import { stashPendingWarning } from "@/lib/pending-warning";
 
-export const organizationKeys = {
+// How many times the active-organization read is re-attempted after a
+// transport or server fault before the sidebar settles on an error. A
+// no-organization answer never spends one; it is refused outright below.
+const ACTIVE_ORGANIZATION_MAX_RETRIES = 3;
+
+const organizationKeys = {
   all: ["organizations"] as const,
   members: () => [...organizationKeys.all, "members"] as const,
   invitations: () => [...organizationKeys.all, "invitations"] as const,
@@ -34,15 +41,26 @@ export const organizationKeys = {
 export function useActiveOrganizationProfile() {
   return useQuery({
     queryKey: organizationKeys.activeProfile(),
-    queryFn: () => getActiveOrganizationProfile(),
+    queryFn: async ({ signal }) => unwrap(await getActiveOrganizationRead({ signal })),
+    // A denied context answers the same on every attempt; transient transport
+    // and server faults still retry so one blip does not settle the sidebar.
+    retry: (failureCount, error) =>
+      !(error instanceof Error && error.message === NO_ORGANIZATION_MESSAGE) &&
+      failureCount < ACTIVE_ORGANIZATION_MAX_RETRIES,
   });
 }
 
 export function useResetAfterOrgSwitch() {
-  return function resetAfterOrgSwitch() {
+  /**
+   * `warning` is a non-fatal outcome of the switch itself (the "remember my
+   * organization" preference was not saved). The reload below discards any
+   * toast raised here, so it is handed to the page the operator lands on.
+   */
+  return function resetAfterOrgSwitch(warning?: string) {
     if (typeof window === "undefined") {
       return;
     }
+    stashPendingWarning(warning);
     try {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
     } finally {
@@ -60,8 +78,13 @@ export function useEnterOrganization() {
 
   return async function enterOrganization(organizationId: string) {
     const result = await setActiveOrganizationAction({ organizationId });
+    // Success means the server session moved, whether or not the "remember my
+    // organization" preference was saved with it. Always reset, or the client
+    // sits in the old organization while the session is in the new one
+    // (issue #769). A `warning` on the result is the preference, not the
+    // switch.
     if (result.success) {
-      resetAfterOrgSwitch();
+      resetAfterOrgSwitch(result.warning);
     }
     return result;
   };

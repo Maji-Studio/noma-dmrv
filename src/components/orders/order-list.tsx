@@ -4,39 +4,37 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
-import type { Order } from "@/db/schema";
-import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
-import { useCustomers } from "@/hooks/use-customers";
-import { useDebounce } from "@/hooks/use-debounce";
-import {
-  useListPagination,
-  useReconcileListPage,
-} from "@/hooks/use-list-pagination";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { EntitySelect, ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
-import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
-import { pluralize } from "@/lib/copy-utils";
-import { OrderForm } from "./order-form";
-import type { OrderFormData, OrderFilterData } from "@/schemas/orders";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type { OrderWithRelations } from "@/data-access/orders";
+import type { Order } from "@/db/schema";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useFacilityContext } from "@/hooks/use-facility-context";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
+import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
+import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
   orderFulfillmentStatuses,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-import { MISSING_VALUE } from "@/lib/copy-utils";
+import type { OrderFilterData, OrderFormData } from "@/schemas/orders";
+import { PackageIcon, PlusIcon, TruckIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useState } from "react";
+import { OrderForm } from "./order-form";
 
 // ============================================
 // Column Definitions
@@ -77,7 +75,7 @@ function createColumns(
     },
     {
       accessorKey: "quantityKg",
-      header: "Quantity (kg)",
+      header: "Requested wet mass (kg)",
       cell: ({ row }) => row.original.quantityKg.toLocaleString(),
     },
     {
@@ -159,7 +157,7 @@ export function OrderList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filters: Partial<OrderFilterData> = useMemo(() => ({
+  const filters: Partial<OrderFilterData> = {
     search: debouncedSearch || undefined,
     facilityId: facilityId || undefined,
     status: statusFilter || undefined,
@@ -168,16 +166,12 @@ export function OrderList() {
     pageSize,
     sortBy: "orderDate",
     sortOrder: "desc",
-  }), [debouncedSearch, facilityId, statusFilter, customerFilter, currentPage, pageSize]);
+  };
 
   const { data: ordersData, isLoading, error: fetchError } = useOrders(
     filters,
     { enabled: !!facilityId },
   );
-
-  // Customer options for the filter dropdown
-  const { data: customersData } = useCustomers({ pageSize: 100 });
-  const customerOptions = customersData?.items ?? [];
 
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
@@ -263,7 +257,7 @@ export function OrderList() {
   };
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (!facilityId) {
     return (
@@ -357,17 +351,21 @@ export function OrderList() {
                 <option key={s} value={s}>{ORDER_FULFILLMENT_DISPLAY[s].label}</option>
               ))}
             </DataTable.FilterSelect>
-            <DataTable.FilterSelect
-              value={customerFilter}
-              onChange={(e) => { setCustomerFilter(e.target.value); setCurrentPage(1); }}
-              className="sm:max-w-[200px]"
-              aria-label="Filter by customer"
-            >
-              <option value="">All customers</option>
-              {customerOptions.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </DataTable.FilterSelect>
+            {/*
+              Searchable rather than a native select: an organization can hold
+              more customers than any fixed page would list, and a truncated
+              filter silently hides orders (#774). The "All customers" row is
+              the unfiltered state, so it reads as a choice, not a blank.
+            */}
+            <EntitySelect
+              entityType="customer"
+              value={customerFilter || undefined}
+              onChange={(value) => { setCustomerFilter(value ?? ""); setCurrentPage(1); }}
+              placeholder="Filter by customer"
+              noneOption={{ label: "All customers" }}
+              alwaysShowSearch
+              className="w-full sm:w-[200px]"
+            />
             {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><XIcon size={16} weight="bold" />Clear</Button>}
             <DataTable.ColumnVisibility />
           </DataTable.Controls>
@@ -409,9 +407,9 @@ export function OrderList() {
                 {
                   title: "Product details",
                   fields: [
-                    { label: "Product bin", value: sideSheetEntity.productBinName },
+                    { label: "Formulation", value: sideSheetEntity.formulationName },
                     { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
-                    { label: "Quantity (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
+                    { label: "Requested wet mass (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
                     { label: "Value", value: sideSheetEntity.value },
                     { label: "Currency", value: sideSheetEntity.currency },
                   ],

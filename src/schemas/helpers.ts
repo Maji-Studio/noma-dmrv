@@ -3,6 +3,7 @@
  */
 
 import { z } from "zod";
+import { MASS_KG_STORAGE_INCREMENT } from "@/config/numeric-storage";
 
 /**
  * Zod literal that matches "" and transforms it to null.
@@ -56,18 +57,6 @@ export const gpsCoordinatesSchema = z.object({
 });
 
 export type GpsCoordinates = z.infer<typeof gpsCoordinatesSchema>;
-
-export const GPS_PAIR_MESSAGE =
-  "Both latitude and longitude must be provided together";
-
-export function hasCompleteGpsPair(data: {
-  gpsLatitude?: number | null;
-  gpsLongitude?: number | null;
-}): boolean {
-  const hasLat = data.gpsLatitude != null;
-  const hasLng = data.gpsLongitude != null;
-  return hasLat === hasLng;
-}
 
 /**
  * Both-or-neither GPS validation that points the error at the coordinate the
@@ -155,6 +144,46 @@ export function requiredNumber(
   );
 }
 
+// ============================================
+// Clearable (patch) numeric fields
+// ============================================
+
+/**
+ * Preprocess a **patch** field to number | null | undefined.
+ *
+ * This is `toNumberOrNull`'s partial-update sibling and the only preprocessor
+ * that keeps the three states of the partial-update contract apart:
+ * `undefined` = omitted (leave the stored value alone), `null`/`""` = explicit
+ * clear, `0` = zero. `toNumberOrNull` folds omitted into cleared, which is
+ * right for a create or a whole-form submit — every field is present there —
+ * and wrong for an update schema, where an omitted key must not overwrite a
+ * column. Use this family on `update*Schema` fields whose server-side writer
+ * distinguishes "not supplied" from "cleared".
+ */
+export const toClearableNumber = (v: unknown): unknown => {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (trimmed === "") return null;
+    return Number(trimmed);
+  }
+  return v;
+};
+
+/** Clearable numeric patch field: omitted stays omitted, empty clears. */
+export const clearableNumber = z.preprocess(
+  toClearableNumber,
+  z.number().finite().nullable().optional(),
+);
+
+/** Clearable non-negative numeric patch field: omitted stays omitted, empty clears. */
+export const clearablePositiveNumber = z.preprocess(
+  toClearableNumber,
+  z.number().finite().min(0, "Must be a non-negative number").nullable().optional(),
+);
+
 /** Optional percent field: preprocess form string → number | null, then validate 0–100 range. */
 export const optionalPercent = z.preprocess(
   toNumberOrNull,
@@ -171,7 +200,7 @@ export const optionalPercent = z.preprocess(
 // ============================================
 
 /** HTML/Zod increment for values stored through the `numeric(14,3)` family. */
-export const MASS_KG_INPUT_STEP = 0.001;
+export const MASS_KG_INPUT_STEP = MASS_KG_STORAGE_INCREMENT;
 /** HTML/Zod increment for values stored through the `numeric(14,6)` tonnes family. */
 export const MASS_TONNES_INPUT_STEP = 0.000001;
 /** HTML/Zod increment for values stored through the `numeric(9,6)` family. */
@@ -192,17 +221,6 @@ export function storedPercentSchema() {
 export const optionalStoredPercent = optionalPercent.pipe(
   storedPercentSchema().nullable().optional(),
 );
-
-/**
- * Bounded stored percent for callers that already coerce form input before
- * schema validation (for example React Hook Form's `setValueAs`).
- */
-export const optionalStoredPercentValue = storedPercentSchema()
-  .finite()
-  .min(0, "Moisture content must be 0% or more")
-  .max(100, "Moisture content must be 100% or less")
-  .optional()
-  .nullable();
 
 // ============================================
 // Mass Input Caps
@@ -280,10 +298,6 @@ export function optionalMassKgSchema(message = "Must be 0 or greater") {
   return massKgSchema(message).optional().nullable();
 }
 
-export function optionalMassKgInputSchema(message = "Must be 0 or greater") {
-  return z.preprocess(toNumberOrNull, optionalMassKgSchema(message));
-}
-
 /**
  * Accepts a higher-precision wet-mass snapshot that an authoritative boundary
  * canonicalizes to the persisted mass scale before writing.
@@ -326,6 +340,16 @@ const SOIL_TEMPERATURE_RANGE_MESSAGE = `Soil temperature must be between ${SOIL_
  * identically (to null) on both surfaces.
  */
 export const defaultSoilTemperatureSchema = optionalNumber.pipe(
+  z
+    .number()
+    .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
+    .max(SOIL_TEMPERATURE_MAX_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
+    .nullable()
+    .optional(),
+);
+
+/** The same field on an update schema, where omitted must stay omitted. */
+export const clearableDefaultSoilTemperature = clearableNumber.pipe(
   z
     .number()
     .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
@@ -390,6 +414,20 @@ export const optionalDateOnly = z
     }),
   ])
   .optional();
+
+// ============================================
+// Expected-version (optimistic concurrency)
+// ============================================
+
+/**
+ * The `updatedAt` an edit form loaded, echoed back so the updater can refuse a
+ * save built on a stale read (issue #768). Optional on purpose: payloads that
+ * never carried a version — quick-add, imports, older clients — still save.
+ *
+ * `z.coerce.date()` because the value crosses the server-action boundary and
+ * may arrive as an ISO string.
+ */
+export const expectedUpdatedAtSchema = z.coerce.date().optional();
 
 /** Preprocess form string values to int | null. Empty/whitespace strings become null. Rejects partial parses like "12abc". */
 export const toIntOrNull = (v: unknown): unknown => {

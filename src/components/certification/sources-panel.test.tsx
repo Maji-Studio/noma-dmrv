@@ -2,6 +2,8 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
+
 const rowMutationState = vi.hoisted(() => ({
   confirmed: false,
 }));
@@ -10,6 +12,7 @@ const queryState = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/use-certification-sources", () => ({
+  useRefreshInterruptedRemovalEvidence: () => ({ isPending: false, mutate: vi.fn(), error: null }),
   useCandidateDocumentsForRemoval: () => ({
     data: {
       hasMapping: true,
@@ -175,13 +178,13 @@ describe("SourcesPanel supporting document affordances", () => {
     expect(html).not.toContain("<button");
   });
 
-  it("shows persisted mappings as ready", () => {
+  it("shows persisted mappings as copied", () => {
     rowMutationState.confirmed = true;
     const html = renderToStaticMarkup(
       <SourcesPanel removalId="removal-id" isEditable />,
     );
 
-    expect(html.match(/>Ready<\/span>/g)).toHaveLength(3);
+    expect(html.match(/>Copied<\/span>/g)).toHaveLength(3);
     expect(html).not.toContain("On submit");
   });
 

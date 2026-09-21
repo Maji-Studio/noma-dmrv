@@ -204,6 +204,7 @@ beforeEach(() => {
     makeMapping(),
   );
   vi.mocked(ledger.getSubmissionByExternalId).mockResolvedValue(null);
+  vi.mocked(ghgDA.listFinalizingRemovalsForFacility).mockResolvedValue([]);
   vi.mocked(reportDA.getApprovedGhgStatementReport).mockResolvedValue(null);
   vi.mocked(reportDA.promotePendingVerifierReportToken).mockResolvedValue(true);
   vi.mocked(reportDA.clearPendingVerifierReportToken).mockResolvedValue(true);

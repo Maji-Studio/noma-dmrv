@@ -4,13 +4,16 @@
  * Bin Movement Server Actions (issue #194)
  *
  * On-demand bin reconciliation: stock-take adjustments and documented losses.
- * The ledger is append-only — there are no update/delete actions. Stock-take
+ * The ledger is append-only, so there are no update/delete actions and a loss
+ * carries a request key: a resubmitted form replays the saved movement, and a
+ * key reused with different values answers with a conflict (issue #773). Stock-take
  * deltas are computed server-side against fresh (movement-inclusive) derived
  * stock so the client can't submit a stale delta. For feedstock wet counts, the
  * data-access boundary also recomputes dry mass from the wet count and moisture
  * ratio, so the persisted delta and snapshot columns cannot disagree.
  */
 
+import type { ConflictRef } from "@/lib/conflict-ref";
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
@@ -26,6 +29,7 @@ import {
   recordStockTakeSchema,
 } from "@/schemas/bin-movements";
 import type { ActionResult } from "@/types/actions";
+import { ActionConflictError } from "@/lib/errors";
 import { StockOverdrawError } from "@/data-access/bin-stock-guards";
 import {
   formatZodActionError,
@@ -34,7 +38,12 @@ import {
 
 export type RecordLossActionResult =
   | { success: true; data: BinMovement }
-  | { success: false; error: string; field?: "lossMassKg" };
+  | {
+      success: false;
+      error: string;
+      field?: "lossMassKg";
+      conflict?: ConflictRef;
+    };
 
 export type RecordStockTakeActionResult =
   | { success: true; data: BinMovement }
@@ -136,6 +145,8 @@ export async function recordLossFn(
       // Losses are stored as a negative delta.
       massDeltaKg: -validated.lossMassKg,
       reason: validated.reason,
+      // Replays the saved movement when the operator submits twice.
+      idempotencyKey: validated.idempotencyKey,
     });
 
     return { success: true, data: movement };
@@ -148,6 +159,13 @@ export async function recordLossFn(
     }
     if (error instanceof StockOverdrawError) {
       return { success: false, error: error.message, field: "lossMassKg" };
+    }
+    if (error instanceof ActionConflictError) {
+      return {
+        success: false,
+        error: error.message,
+        conflict: error.conflict,
+      };
     }
     return {
       success: false,

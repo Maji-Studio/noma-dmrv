@@ -3,7 +3,7 @@
  * CRUD operations for reactors with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -223,33 +223,6 @@ export async function getReactorById(
   };
 }
 
-/**
- * Get reactors by facility ID
- * Returns reactors for a specific facility
- */
-export async function getReactorsByFacility(
-  ctx: OrgContext,
-  facilityId: string
-): Promise<Reactor[]> {
-  requireOrgScope(ctx);
-
-  // Verify facility exists
-  const [facility] = await db
-    .select({ id: facilities.id })
-    .from(facilities)
-    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
-
-  if (!facility) {
-    throw new SafeError("Facility not found");
-  }
-
-  return db
-    .select()
-    .from(reactors)
-    .where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)))
-    .orderBy(asc(reactors.code));
-}
-
 // ============================================
 // Create Operations
 // ============================================
@@ -427,44 +400,3 @@ export async function deleteReactor(
 // ============================================
 // Utility Operations
 // ============================================
-
-/**
- * Check if a reactor code is available
- */
-export async function isReactorCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeReactorId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(reactors.code, code), eq(reactors.organizationId, ctx.organizationId)];
-
-  if (excludeReactorId) {
-    conditions.push(sql`${reactors.id} != ${excludeReactorId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: reactors.id })
-    .from(reactors)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get unique reactor types from all reactors
- * Useful for filter dropdowns
- */
-export async function getReactorTypes(ctx: OrgContext): Promise<string[]> {
-  requireOrgScope(ctx);
-
-  const results = await db
-    .selectDistinct({ reactorType: reactors.reactorType })
-    .from(reactors)
-    .where(and(eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)))
-    .orderBy(asc(reactors.reactorType));
-
-  return results.map((r) => r.reactorType);
-}

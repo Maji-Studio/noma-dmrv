@@ -24,14 +24,18 @@ describe("resolveDeliveryDistanceSource", () => {
 describe("delivery range validation copy", () => {
   const baseDelivery = {
     orderId: ORDER_ID,
+    storageLocationId: ORDER_ID,
+    idempotencyKey: "delivery-request",
+    basisFingerprint: "delivery-preview",
+    deliveredWetMassKg: 1,
     deliveryDate: new Date("2026-07-31"),
     moistureContentPercent: 20,
   };
 
   it("requires the independently measured product moisture", () => {
     const result = deliveryFormSchema.safeParse({
-      orderId: ORDER_ID,
-      deliveryDate: new Date("2026-07-31"),
+      ...baseDelivery,
+      moistureContentPercent: undefined,
     });
 
     expect(result.success).toBe(false);
@@ -44,7 +48,7 @@ describe("delivery range validation copy", () => {
   });
 
   it.each([
-    ["deliveredWetMassKg", -1, "Wet mass must be 0 or more"],
+    ["deliveredWetMassKg", -1, "Wet mass must be at least 0.001 kg"],
     ["distanceKmOverride", -1, "Distance must be 0 or more"],
     [
       "moistureContentPercent",
@@ -54,7 +58,7 @@ describe("delivery range validation copy", () => {
     [
       "moistureContentPercent",
       101,
-      "Moisture content must be 100% or less",
+      "Moisture must be below 100%",
     ],
   ] as const)("describes the %s range naturally", (field, value, message) => {
     const result = deliveryFormSchema.safeParse({
@@ -69,41 +73,66 @@ describe("delivery range validation copy", () => {
     ).toBe(message);
   });
 
-  it("keeps truck observations optional for operations", () => {
-    expect(deliveryFormSchema.safeParse(baseDelivery).success).toBe(true);
+  it("accepts a completed truck observation and defaults its status to delivered", () => {
+    const result = deliveryFormSchema.parse(baseDelivery);
+    expect(result.status).toBe("delivered");
   });
 
-  it.each([
-    ["truckMassOnArrivalKg", -1, "Observed truck mass must be 0 kg or more"],
-    ["truckMassOnDepartureKg", -1, "Observed truck mass must be 0 kg or more"],
-    ["truckMassOnArrivalKg", Number.NaN, "Enter a valid observed truck mass"],
-  ] as const)("validates %s", (field, value, message) => {
+  it("rejects an upcoming delivery even with complete truck observations", () => {
+    const result = deliveryFormSchema.safeParse({ ...baseDelivery, status: "upcoming" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ["status"] }),
+        ]),
+      );
+    }
+  });
+
+  it("rejects 100% moisture because positive dry stock cannot be allocated", () => {
+    const result = deliveryFormSchema.safeParse({ ...baseDelivery, moistureContentPercent: 100 });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ["moistureContentPercent"], message: "Moisture must be below 100%" }),
+        ]),
+      );
+    }
+  });
+
+  it("rejects zero delivered wet mass and an omitted observation", () => {
     const result = deliveryFormSchema.safeParse({
       ...baseDelivery,
-      [field]: value,
+      deliveredWetMassKg: 0,
     });
+
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(
-      result.error.issues.find((issue) => issue.path[0] === field)?.message,
-    ).toBe(message);
+      result.error.issues.find(
+        (issue) => issue.path[0] === "deliveredWetMassKg",
+      )?.message,
+    ).toBe("Wet mass must be at least 0.001 kg");
+    expect(deliveryFormSchema.safeParse({ ...baseDelivery, deliveredWetMassKg: undefined }).success).toBe(false);
   });
 
-  it("requires the arrival observation to be at least the departure observation", () => {
+  it("requires a positive wet mass when the form status is delivered", () => {
     const result = deliveryFormSchema.safeParse({
       ...baseDelivery,
-      truckMassOnArrivalKg: 1_000,
-      truckMassOnDepartureKg: 1_001,
+      status: "delivered",
+      deliveredWetMassKg: undefined,
     });
+
     expect(result.success).toBe(false);
     if (result.success) return;
-    expect(result.error.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          path: ["truckMassOnDepartureKg"],
-          message: expect.stringMatching(/cannot exceed/i),
-        }),
-      ]),
+    expect(
+      result.error.issues.find(
+        (issue) => issue.path[0] === "deliveredWetMassKg",
+      )?.message,
+    ).toBe(
+      "Enter a wet mass of at least 0.001 kg before marking this delivery as delivered",
     );
   });
 });

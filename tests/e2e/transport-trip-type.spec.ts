@@ -34,7 +34,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', "2026-03-02");
-  await page.selectOption('select[name="customerId"]', seededData.customer.id);
+  await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
   await page.waitForSelector(
     'select[name="customerLocationId"]:not([disabled])',
     { timeout: 8000 }
@@ -45,7 +45,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   );
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "50");
-  await selectEntity(page, "Product bin", seededData.biocharProduct.id);
+  await selectEntity(page, "Formulation", seededData.formulation.id, seededData.formulation.name);
   await page.click('button[type="submit"]:has-text("Create Order")');
   await waitForSideSheetClose(page);
 }
@@ -142,8 +142,8 @@ test.describe("Transport trip type (#316)", () => {
     await expect(tripType).toHaveValue("return");
 
     await page.fill('input[name="deliveryDate"]', FUTURE_DATE);
-    await page.selectOption('select[name="status"]', "upcoming");
     await selectEntityByText(page, "Order", seededData.customer.name);
+    await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
     await page.fill('input[name="moistureContentPercent"]', "10");
     await tripType.selectOption("one_way");

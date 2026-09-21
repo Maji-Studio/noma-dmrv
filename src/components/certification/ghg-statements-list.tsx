@@ -232,7 +232,12 @@ function RegistryRecordCell({ item }: { item: GhgStatementListItem }) {
 function StatusCell({ item }: { item: GhgStatementListItem }) {
   const { latestSubmission } = item;
   const locked = latestSubmission ? isLockedInFlight(latestSubmission) : false;
-  const derived = deriveSubmissionStatus(latestSubmission, locked, "ghgStatement");
+  const derived = deriveSubmissionStatus(
+    latestSubmission,
+    locked,
+    "ghgStatement",
+    "unknown",
+  );
   return <StatusBadge status={derived.value} label={derived.label} />;
 }
 
@@ -245,7 +250,7 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
   },
   {
     id: "linkedRemovals",
-    header: "Linked Removals",
+    header: "Local Removals",
     accessorFn: (item) => String(item.linkedRemovalCount),
     cell: ({ row }) => <LinkedRemovalsCell item={row.original} />,
   },
@@ -264,6 +269,7 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
         submission,
         submission ? isLockedInFlight(submission) : false,
         "ghgStatement",
+        "unknown",
       ).label;
     },
     cell: ({ row }) => <StatusCell item={row.original} />,
@@ -321,7 +327,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
     }
   };
 
-  if (query.error) {
+  if (query.error && query.data === undefined) {
     return (
       <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <p className="body-medium text-[var(--clr-red)]" role="alert">
@@ -372,6 +378,25 @@ function ListBody({ facilityId }: { facilityId: string }) {
           facilityId={facilityId}
           linkedFacilityCount={summaryQuery.data?.linkedFacilityCount}
         />
+
+        {query.error && (
+          <p
+            className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
+            role="status"
+          >
+            GHG Statements could not be refreshed. Showing the last loaded
+            statements.{" "}
+            <Button
+              variant="noOutline"
+              size="small"
+              className="min-h-44"
+              onClick={() => void query.refetch()}
+              busy={query.isFetching}
+            >
+              Retry
+            </Button>
+          </p>
+        )}
 
         <DataTable
           columns={columns}

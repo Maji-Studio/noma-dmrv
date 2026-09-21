@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
 import path from "path";
+import { BINARY_CONTENT_TYPE } from "./get-object";
 import { isSafeStorageKey } from "./keys";
 import type {
   StorageProvider,
@@ -13,7 +14,6 @@ import type {
   StoredObject,
 } from "./types";
 import { StorageError } from "./types";
-import { fetchStoredObject } from "./get-object";
 
 const DEFAULT_UPLOAD_TTL_SECONDS = 60 * 5;
 const DEFAULT_DOWNLOAD_TTL_SECONDS = 60 * 5;
@@ -141,8 +141,22 @@ export class LocalFsProvider implements StorageProvider {
   }
 
   async getObject(args: GetObjectArgs): Promise<StoredObject> {
-    const url = await this.createDownloadUrl(args);
-    return fetchStoredObject(url);
+    // Read straight from disk. Server-side readers (CSV imports, report
+    // proxies, CLI seeds) must not depend on the app's own HTTP route being
+    // reachable from the process that holds the files.
+    const abs = resolveLocalFsPath(this.root, args.key);
+    if (!abs) {
+      throw new StorageError("Invalid storage key", "get_object_failed");
+    }
+    try {
+      const [bytes, meta] = await Promise.all([readFile(abs), this.readMeta(abs)]);
+      return { bytes, contentType: meta?.contentType ?? BINARY_CONTENT_TYPE };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        throw new StorageError("Stored object not found", "get_object_failed");
+      }
+      throw err;
+    }
   }
 
   async headObject(key: string): Promise<ObjectHead | null> {
@@ -153,7 +167,7 @@ export class LocalFsProvider implements StorageProvider {
       if (!s.isFile()) return null;
       return {
         size: s.size,
-        contentType: meta?.contentType ?? "application/octet-stream",
+        contentType: meta?.contentType ?? BINARY_CONTENT_TYPE,
         etag: `${s.mtimeMs.toString(16)}-${s.size.toString(16)}`,
       };
     } catch (err) {

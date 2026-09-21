@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   creditBatches,
@@ -12,16 +12,19 @@ import {
 } from "@/db/schema";
 import { isPgUniqueViolation } from "@/db/errors";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
+import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import {
   getFeedstockTypeDeleteDecision,
   type FeedstockTypeDeleteConflict,
 } from "@/lib/feedstock-type-deletion";
 import type { IsometricFeedstockType } from "@/lib/isometric";
-import type {
-  CreateFeedstockTypeData,
-  FeedstockCategory,
-  UpdateFeedstockTypeData,
+import {
+  categoryMatchesUsage,
+  FEEDSTOCK_TYPE_CATEGORY_USAGE_CONFLICT_MESSAGE,
+  type CreateFeedstockTypeData,
+  type FeedstockCategory,
+  type UpdateFeedstockTypeData,
 } from "@/schemas/feedstock-types";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { hasCertifierCredentials } from "./certifier-credentials";
@@ -70,31 +73,57 @@ export async function updateFeedstockType(
 ): Promise<FeedstockType> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
-  await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
   const { feedstockTypeId, ...changes } = data;
-  const [updated] = await db
-    .update(feedstockTypes)
-    .set({
-      ...changes,
-      name: changes.name?.trim(),
-      description:
-        changes.description === undefined ? undefined : changes.description || null,
-      registryUrl:
-        changes.registryUrl === undefined ? undefined : changes.registryUrl || null,
-      isometricFeedstockTypeId:
-        changes.isometricFeedstockTypeId === undefined
-          ? undefined
-          : changes.isometricFeedstockTypeId || null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(feedstockTypes.id, feedstockTypeId),
-        eq(feedstockTypes.organizationId, ctx.organizationId),
-      ),
-    )
-    .returning();
-  return updated;
+  return db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({
+        category: feedstockTypes.category,
+        usage: feedstockTypes.usage,
+      })
+      .from(feedstockTypes)
+      .where(
+        and(
+          eq(feedstockTypes.id, feedstockTypeId),
+          eq(feedstockTypes.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update");
+
+    if (!locked) throw new SafeError("Feedstock type not found.");
+
+    // The form refine only fires when a payload carries both halves of the
+    // pair. A patch naming one of them has to be judged against the stored
+    // row, or "usage only" quietly lands a blend category on a pyrolysis type.
+    const effectiveCategory = changes.category ?? locked.category;
+    const effectiveUsage = changes.usage ?? locked.usage;
+    if (!categoryMatchesUsage(effectiveCategory, effectiveUsage)) {
+      throw new SafeError(FEEDSTOCK_TYPE_CATEGORY_USAGE_CONFLICT_MESSAGE);
+    }
+
+    const [updated] = await tx
+      .update(feedstockTypes)
+      .set({
+        ...changes,
+        name: changes.name?.trim(),
+        description:
+          changes.description === undefined ? undefined : changes.description || null,
+        registryUrl:
+          changes.registryUrl === undefined ? undefined : changes.registryUrl || null,
+        isometricFeedstockTypeId:
+          changes.isometricFeedstockTypeId === undefined
+            ? undefined
+            : changes.isometricFeedstockTypeId || null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(feedstockTypes.id, feedstockTypeId),
+          eq(feedstockTypes.organizationId, ctx.organizationId),
+        ),
+      )
+      .returning();
+    return updated;
+  });
 }
 
 export async function archiveFeedstockType(
@@ -146,32 +175,32 @@ async function findDeleteConflict(
       .from(feedstocks)
       .where(and(eq(feedstocks.feedstockTypeId, feedstockTypeId), eq(feedstocks.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: feedstockDeliveries.id, code: feedstockDeliveries.code })
       .from(feedstockDeliveries)
       .where(and(eq(feedstockDeliveries.feedstockTypeId, feedstockTypeId), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock-delivery", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock-delivery", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: productionProcesses.id })
       .from(productionProcesses)
       .where(and(eq(productionProcesses.feedstockTypeId, feedstockTypeId), eq(productionProcesses.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "production-process", id: row.id, code: row.id }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "production-process", id: row.id, code: conflictCode(row.id) }))),
     db.select({ id: creditBatches.id, code: creditBatches.code })
       .from(creditBatches)
       .where(and(eq(creditBatches.feedstockTypeId, feedstockTypeId), eq(creditBatches.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "credit-batch", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "credit-batch", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: formulationIngredients.id })
       .from(formulationIngredients)
       .where(and(eq(formulationIngredients.feedstockTypeId, feedstockTypeId), eq(formulationIngredients.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "formulation-ingredient", id: row.id, code: row.id }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "formulation-ingredient", id: row.id, code: conflictCode(row.id) }))),
     db.select({ id: storageLocations.id, code: storageLocations.code })
       .from(storageLocations)
       .where(and(eq(storageLocations.feedstockTypeId, feedstockTypeId), eq(storageLocations.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "storage-location", id: row.id, code: row.code }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "storage-location", id: row.id, code: conflictCode(row.code) }))),
   ];
   const results = await Promise.all(queries);
   return results.flatMap((rows) => rows)[0] ?? null;
@@ -259,19 +288,4 @@ export async function importIsometricFeedstockType(
     }
     throw error;
   }
-}
-
-export async function listActiveFeedstockTypes(
-  ctx: OrgContext,
-): Promise<FeedstockType[]> {
-  requireOrgScope(ctx);
-  return db
-    .select()
-    .from(feedstockTypes)
-    .where(
-      and(
-        eq(feedstockTypes.organizationId, ctx.organizationId),
-        isNull(feedstockTypes.archivedAt),
-      ),
-    );
 }

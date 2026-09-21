@@ -77,15 +77,15 @@ Each model report stays separate beneath its practice:
 
 ```text
 ## Standards
-### Codex (gpt-5.6-sol)
+### Codex (gpt-6-astra)
 ### Opus
 
 ## Spec
-### Codex (gpt-5.6-sol)
+### Codex (gpt-6-astra)
 ### Opus
 
 ## Deep Correctness
-### Codex (gpt-5.6-sol)
+### Codex (gpt-6-astra)
 ### Opus
 ```
 

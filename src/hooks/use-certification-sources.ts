@@ -1,3 +1,4 @@
+import { refreshInterruptedRemovalEvidence } from "@/fn/certification/removal-evidence-refresh";
 /**
  * Phase 3.5 — Isometric Sources hooks.
  *
@@ -11,19 +12,17 @@ import type { QueryClient } from "@tanstack/react-query";
 import {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
-  unlinkDocumentSource,
   type CandidateDocumentsForRemoval,
   type MirrorResult,
 } from "@/fn/certification";
 import type {
   MirrorDocumentToSourceInput,
-  UnlinkDocumentSourceInput,
 } from "@/schemas/certification-sources";
 import { certificationKeys } from "./use-certification";
 
 const SOURCES_STALE_MS = 30_000;
 
-export const certificationSourcesKeys = {
+const certificationSourcesKeys = {
   candidatesForRemoval: (removalId: string) =>
     [...certificationKeys.all, "sources", "candidates", removalId] as const,
 };
@@ -86,19 +85,14 @@ export function useCandidateDocumentsForRemoval(
   });
 }
 
-export function useUnlinkDocumentSource(removalId: string) {
+export function useRefreshInterruptedRemovalEvidence(removalId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: Omit<UnlinkDocumentSourceInput, "removalId">) => {
-      const result = await unlinkDocumentSource({ ...input, removalId });
+    mutationFn: async (submissionId: string) => {
+      const result = await refreshInterruptedRemovalEvidence({ removalId, submissionId });
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: certificationSourcesKeys.candidatesForRemoval(removalId),
-      });
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
   });
 }

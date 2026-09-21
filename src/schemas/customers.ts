@@ -6,7 +6,10 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
+  clearableDefaultSoilTemperature,
+  clearablePositiveNumber,
   defaultSoilTemperatureSchema,
+  expectedUpdatedAtSchema,
   optionalPositiveNumber,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
@@ -127,6 +130,7 @@ export const createCustomerSchema = customerFormSchema;
  */
 export const updateCustomerSchema = z.object({
   customerId: z.string().uuid("Choose a valid customer."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)
@@ -174,10 +178,40 @@ export const createCustomerLocationSchema = z.object({
 });
 
 /**
+ * Locations captured on the customer create form, before the customer exists.
+ * Same fields as `createCustomerLocationSchema` minus the customer it belongs
+ * to, which the compound writer fills in from the row it just inserted.
+ */
+export const pendingCustomerLocationSchema =
+  createCustomerLocationSchema.omit({ customerId: true });
+
+/**
+ * One create form cannot reasonably capture more sites than this, so the cap
+ * bounds the payload and the transaction without constraining real operators.
+ */
+export const MAX_PENDING_CUSTOMER_LOCATIONS = 50;
+
+/**
+ * Schema for creating a customer together with its locations in one
+ * transaction (server action).
+ */
+export const createCustomerWithLocationsSchema = z.object({
+  customer: createCustomerSchema,
+  locations: z
+    .array(pendingCustomerLocationSchema)
+    .max(
+      MAX_PENDING_CUSTOMER_LOCATIONS,
+      `Add at most ${MAX_PENDING_CUSTOMER_LOCATIONS} locations at a time. Create the customer, then add the rest from its detail page.`,
+    )
+    .default([]),
+});
+
+/**
  * Schema for updating a customer location (server action)
  */
 export const updateCustomerLocationSchema = z.object({
   locationId: z.string().uuid("Choose a valid location."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   name: z.string().trim().min(1).max(255).optional(),
   country: z.string().min(1).max(LOCATION_PART_MAX).optional(),
   stateRegion: locationPartSchema,
@@ -185,9 +219,9 @@ export const updateCustomerLocationSchema = z.object({
   gpsLatitude: optionalLatitudeSchema,
   gpsLongitude: optionalLongitudeSchema,
   address: customerLocationDescriptionSchema,
-  distanceFromFacilityKm: optionalPositiveNumber,
+  distanceFromFacilityKm: clearablePositiveNumber,
   distanceSource: optionalDistanceSource,
-  defaultSoilTemperatureC: defaultSoilTemperatureSchema,
+  defaultSoilTemperatureC: clearableDefaultSoilTemperature,
   isDefault: z.boolean().optional(),
 });
 
@@ -227,16 +261,6 @@ export const customerFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
-/**
- * Schema for selecting a customer (e.g., in dropdowns)
- */
-export const customerSelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  name: z.string(),
-  cropType: z.string().optional().nullable(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
@@ -246,9 +270,9 @@ export type CustomerLocationFormInput = z.input<typeof customerLocationFormSchem
 export type CustomerLocationFormData = z.infer<typeof customerLocationFormSchema>;
 export type CreateCustomerData = z.infer<typeof createCustomerSchema>;
 export type UpdateCustomerData = z.infer<typeof updateCustomerSchema>;
-export type DeleteCustomerData = z.infer<typeof deleteCustomerSchema>;
 export type CreateCustomerLocationData = z.infer<typeof createCustomerLocationSchema>;
+export type CreateCustomerWithLocationsData = z.infer<
+  typeof createCustomerWithLocationsSchema
+>;
 export type UpdateCustomerLocationData = z.infer<typeof updateCustomerLocationSchema>;
-export type DeleteCustomerLocationData = z.infer<typeof deleteCustomerLocationSchema>;
 export type CustomerFilterData = z.infer<typeof customerFilterSchema>;
-export type CustomerSelectData = z.infer<typeof customerSelectSchema>;

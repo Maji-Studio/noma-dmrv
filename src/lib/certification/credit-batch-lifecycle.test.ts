@@ -53,6 +53,10 @@ describe("deriveCreditBatchLifecycle", () => {
     });
   });
 
+  it("surfaces pending Statement changes on the batch", () => {
+    expect(deriveCreditBatchLifecycle(summary({ ghgStatementStatus: { kind: "pending-changes", value: "pending", label: "Pending changes", isActionable: true, isTerminal: false } }))).toMatchObject({ label: "Statement pending changes", currentStepIndex: 1, badgeStatus: "pending" });
+  });
+
   it("reports the removal state after grouping", () => {
     const lifecycle = deriveCreditBatchLifecycle(
       summary({

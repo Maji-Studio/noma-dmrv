@@ -1,3 +1,4 @@
+import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-total";
 /**
  * Certification status model — the single source of truth every surface
  * (badge, work queue, side-sheet, DataTable column) derives an operator-facing
@@ -29,7 +30,6 @@ import type { StatusValue } from "@/components/ui/status-badge";
 import type { components } from "@/lib/isometric/generated/certify";
 import {
   isSubmissionAttemptInterrupted,
-  SUBMISSION_ATTEMPT_OUTCOMES,
 } from "@/lib/certification/submission-metadata";
 import type { RemovalReadiness } from "./readiness";
 
@@ -53,8 +53,9 @@ export type LocalSubmissionStatus =
  * excluded — they have no live remote resource a change could orphan.
  *
  * The single client-safe source for this list: the server guards in
- * `data-access/certification.ts` (`hasBlockingFacilitySubmission`,
- * `removalHasBlockingSubmission`) and the client gate in
+ * `data-access/certification.ts` (`hasBlockingFacilitySubmission`) and
+ * `data-access/credit-batch-certification-lock.ts`
+ * (`assertRemovalAllowsCreditBatchMutation`) and the client gate in
  * `lib/certification/readiness.ts` (`canRegroupRemoval`) both import it from
  * here, so the UI never offers a control the server will refuse.
  */
@@ -75,6 +76,7 @@ export type DerivedStatusKind =
   | "draft"
   | "in-registry"
   | "in-verification"
+  | "pending-changes"
   | "verified"
   | "issued"
   | "rejected"
@@ -126,6 +128,7 @@ const REMOVAL_LOCK_BY_KIND: Record<DerivedStatusKind, boolean> = {
   draft: false,
   "in-registry": true,
   "in-verification": true,
+  "pending-changes": true,
   verified: true,
   issued: true,
   rejected: false,
@@ -163,13 +166,26 @@ export type RemovalWorkflowStatusKind =
   | "submitted"
   | "superseded";
 
-export const REMOVAL_SUBMISSION_INTERRUPTED_OUTCOME =
-  SUBMISSION_ATTEMPT_OUTCOMES.interrupted;
 export const REMOVAL_SUBMISSION_INTERRUPTED_LABEL =
   "Submission interrupted";
 
-export function isRemovalSubmissionInterrupted(metadata: unknown): boolean {
-  return isSubmissionAttemptInterrupted(metadata);
+export interface RemovalReportingWindowDates {
+  startedOn: string | null;
+  completedOn: string | null;
+}
+
+export function isRemovalSubmissionInterruptedForReportingWindow(args: {
+  local: LocalSubmissionStatus | null;
+  metadata: unknown;
+  reportingWindow: RemovalReportingWindowDates | "unknown";
+}): boolean {
+  return (
+    isSubmissionAttemptInterrupted(args.metadata) ||
+    (args.reportingWindow !== "unknown" &&
+      args.local === "submitted" &&
+      (!args.reportingWindow.startedOn ||
+        !args.reportingWindow.completedOn))
+  );
 }
 
 export interface RemovalWorkflowStatus {
@@ -212,7 +228,10 @@ export function deriveRemovalStatus({
   lockInFlight,
   submissionInterrupted = false,
 }: RemovalStatusInput): DerivedStatus {
-  if (local === "draft" && submissionInterrupted) {
+  if (
+    (local === "draft" || local === "submitted") &&
+    submissionInterrupted
+  ) {
     return {
       kind: "interrupted",
       value: "failed",
@@ -434,6 +453,7 @@ export interface StatementStatusInput {
   lockInFlight: boolean;
   /** Persisted `metadata.remoteStatus`, or `null` before the first sync. */
   remoteStatus: RemoteGhgStatus | null;
+  pendingTotalCo2eRemovedKg?: number | null;
 }
 
 /**
@@ -445,6 +465,7 @@ export function deriveStatementStatus({
   local,
   lockInFlight,
   remoteStatus,
+  pendingTotalCo2eRemovedKg,
 }: StatementStatusInput): DerivedStatus {
   if (lockInFlight) return IN_PROGRESS;
   if (local === null) {
@@ -455,6 +476,10 @@ export function deriveStatementStatus({
       isActionable: true,
       isTerminal: false,
     };
+  }
+
+  if (remoteStatus && remoteStatus !== "DRAFT" && remoteStatus !== "FAILED_VERIFICATION" && hasPendingStatementTotal(pendingTotalCo2eRemovedKg)) {
+    return { kind: "pending-changes", value: "pending", label: "Pending changes", isActionable: true, isTerminal: false };
   }
 
   // Remote overlay — the verifier lifecycle, the part operators care about.

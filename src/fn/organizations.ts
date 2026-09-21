@@ -14,7 +14,6 @@ import { db } from "@/db";
 import { organizations, sessions } from "@/db/schema";
 import { auth } from "@/lib/auth/better-auth";
 import {
-  getOrgContext,
   requireOrgContext,
   requireOrgRole,
   requirePlatformAdmin,
@@ -24,7 +23,10 @@ import { SafeError, toActionError } from "@/lib/errors";
 import {
   formatZodActionError,
   logActionError,
+  toWarnableSuccess,
+  type ResultWithWarning,
 } from "@/fn/action-errors";
+import { saveOrgPreference } from "@/fn/org-preference";
 import { env } from "@/config/env";
 import {
   cancelInvitationAsPlatformAdmin,
@@ -32,11 +34,9 @@ import {
   createOrganizationWithOwner,
   findMembershipRole,
   findUserIdByEmail,
-  getActiveOrganization,
   listAllOrganizations,
   listOrgInvitations,
   listOrgMembers,
-  persistLastActiveOrganization,
   removeMemberAsPlatformAdmin,
   updateMemberRoleAsPlatformAdmin,
   type OrganizationSummary,
@@ -59,8 +59,19 @@ async function toResult<T>(
   fn: () => Promise<T>,
   fallback: string
 ): Promise<ActionResult<T>> {
+  return toWarnableResult(async () => ({ data: await fn() }), fallback);
+}
+
+/**
+ * As `toResult`, for bodies whose work has a committed part and a non-fatal
+ * follow-up. A returned `warning` keeps the result a success (issue #769).
+ */
+async function toWarnableResult<T>(
+  fn: () => Promise<ResultWithWarning<T>>,
+  fallback: string
+): Promise<ActionResult<T>> {
   try {
-    return { success: true, data: await fn() };
+    return toWarnableSuccess(await fn());
   } catch (error) {
     if (error instanceof z.ZodError) {
       return {
@@ -226,7 +237,7 @@ export async function removeMemberAction(
 export async function setActiveOrganizationAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {
-  return toResult(async () => {
+  return toWarnableResult(async () => {
     const { organizationId } = z
       .object({ organizationId: z.string().min(1) })
       .parse(input);
@@ -243,14 +254,15 @@ export async function setActiveOrganizationAction(
         body: { organizationId },
         headers: await headers(),
       });
-      await persistLastActiveOrganization(session.user.id, organizationId);
-      return { organizationId };
+    } else {
+      await requirePlatformAdmin();
+      await setActiveOrgForPlatformAdmin(sessionId, organizationId);
     }
 
-    await requirePlatformAdmin();
-    await setActiveOrgForPlatformAdmin(sessionId, organizationId);
-    await persistLastActiveOrganization(session.user.id, organizationId);
-    return { organizationId };
+    // The session has moved. Saving the preference is a separate outcome: a
+    // failure here is a warning, never a failed switch (issue #769).
+    const warning = await saveOrgPreference(session.user.id, organizationId);
+    return { data: { organizationId }, warning };
   }, "Failed to switch organization.");
 }
 
@@ -314,7 +326,7 @@ export async function createOrganizationAction(
 export async function acceptInvitationAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {
-  return toResult(async () => {
+  return toWarnableResult(async () => {
     const { invitationId } = z
       .object({ invitationId: z.string().min(1) })
       .parse(input);
@@ -336,14 +348,7 @@ export async function acceptInvitationAction(
       body: { organizationId },
       headers: await headers(),
     });
-    await persistLastActiveOrganization(session.user.id, organizationId);
-    return { organizationId };
+    const warning = await saveOrgPreference(session.user.id, organizationId);
+    return { data: { organizationId }, warning };
   }, "Failed to accept invitation.");
-}
-
-/** Server-component helper: the active org profile for identity chrome. */
-export async function getActiveOrganizationProfile() {
-  const ctx = await getOrgContext();
-  if (!ctx) return null;
-  return getActiveOrganization(ctx);
 }

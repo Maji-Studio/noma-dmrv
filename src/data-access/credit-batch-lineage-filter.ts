@@ -1,3 +1,10 @@
+import { db } from "@/db";
+import {
+  biocharProductSourceAllocations,
+  biocharProducts,
+  creditBatchProductionRuns,
+} from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   and,
   eq,
@@ -8,17 +15,10 @@ import {
   type SQL,
   type SQLWrapper,
 } from "drizzle-orm";
-import { db } from "@/db";
-import {
-  biocharProductSourceAllocations,
-  biocharProducts,
-  creditBatchProductionRuns,
-} from "@/db/schema";
-import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 
 /**
- * Correlates a delivery/application biochar product with a credit batch through
+ * Correlates a product-list row with a credit batch through
  * the batch's production-run membership. This is the same lineage used by
  * credit-batch accounting, so operational list filters cannot drift from the
  * certification checklist.
@@ -102,4 +102,24 @@ export function inCreditBatchProductionRuns(
         ),
       ),
   );
+}
+
+/** Delivery membership comes exclusively from net posted source-run effects. */
+export function inDeliveryCreditBatchLineage(ctx: OrgContext, creditBatchId: string, deliveryId: SQLWrapper): SQL {
+  requireOrgScope(ctx);
+  return sql`exists (
+    select 1 from output_stock_allocations osa
+    join output_stock_run_allocations osra on osra.allocation_id = osa.id and osra.organization_id = ${ctx.organizationId}
+    join credit_batch_production_runs cbpr on cbpr.production_run_id = osra.production_run_id and cbpr.organization_id = ${ctx.organizationId}
+    join deliveries source_delivery on source_delivery.id = osa.delivery_id and source_delivery.organization_id = ${ctx.organizationId}
+      and source_delivery.storage_location_id = osa.source_storage_location_id
+    join production_runs source_run on source_run.id = osra.production_run_id and source_run.organization_id = ${ctx.organizationId}
+      and source_run.facility_id = source_delivery.facility_id
+    join biochar_products source_product on source_product.id = osa.biochar_product_id and source_product.organization_id = ${ctx.organizationId}
+      and source_product.facility_id = source_delivery.facility_id
+    where osa.organization_id = ${ctx.organizationId} and osa.delivery_id = ${deliveryId}
+      and cbpr.credit_batch_id = ${creditBatchId}
+    group by osa.biochar_product_id, osra.production_run_id
+    having sum(osra.dry_mass_kg) > 0
+  )`;
 }

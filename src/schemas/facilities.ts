@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  expectedUpdatedAtSchema,
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
@@ -73,34 +74,6 @@ const countrySchema = z
   .trim()
   .min(1, "Country is required")
   .max(100, "Country must be less than 100 characters");
-
-/**
- * Schema for address fields with validation
- * Supports structured address data with country validation
- */
-export const addressSchema = z.object({
-  streetAddress: z
-    .string()
-    .max(255, "Street address must be less than 255 characters")
-    .optional()
-    .or(z.literal("")),
-  city: z
-    .string()
-    .max(100, "City must be less than 100 characters")
-    .optional()
-    .or(z.literal("")),
-  state: z
-    .string()
-    .max(100, "State/Province must be less than 100 characters")
-    .optional()
-    .or(z.literal("")),
-  postalCode: z
-    .string()
-    .max(20, "Postal code must be less than 20 characters")
-    .optional()
-    .or(z.literal("")),
-  country: countrySchema,
-});
 
 /**
  * Simplified address schema for facilities table
@@ -202,6 +175,7 @@ export const createFacilitySchema = facilityFormSchema;
  */
 export const updateFacilitySchema = z.object({
   facilityId: z.string().uuid("Choose a valid facility."),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   code: z
     .string()
     .min(1)
@@ -280,30 +254,16 @@ export const facilityFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 
-/**
- * Schema for selecting a facility (e.g., in dropdowns)
- */
-export const facilitySelectSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string(),
-  name: z.string(),
-  location: z.string().optional().nullable(),
-  country: z.string(),
-});
-
 // ============================================
 // Type Inference
 // ============================================
 
-export type AddressData = z.infer<typeof addressSchema>;
 export type { GpsCoordinates } from "./helpers";
 export type FacilityFormData = z.infer<typeof facilityFormSchema>;
 export type CreateFacilityData = z.infer<typeof createFacilitySchema>;
 export type UpdateFacilityData = z.infer<typeof updateFacilitySchema>;
 export type ArchiveFacilityData = z.infer<typeof archiveFacilitySchema>;
 export type FacilityFilterData = z.infer<typeof facilityFilterSchema>;
-export type FacilitySelectData = z.infer<typeof facilitySelectSchema>;
-
 /**
  * Quick-add facility schema for inline facility creation
  * Minimal required fields for rapid data entry
