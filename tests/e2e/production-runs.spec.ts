@@ -174,8 +174,9 @@ test.describe("Production Run + Sample UI CRUD", () => {
         page.getByRole("table", { name: /^Feedstock composition/ })
           .getByRole("row").filter({ hasText: "Wet total" }),
       ).toContainText("120 kg");
+      // The hidden calculation repeats the bin name, so match only the visible copy.
       await expect(
-        page.getByText(`${seededData.feedstockStorageLocation.name} + 1 more`, { exact: true }),
+        page.getByText(`${seededData.feedstockStorageLocation.name} + 1 more`, { exact: true }).locator("visible=true"),
       ).toBeVisible();
       await submitCreate(page);
       await waitForSideSheetClose(page);
