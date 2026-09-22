@@ -1,3 +1,7 @@
+import type { ReactNode } from "react";
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
+import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -5,6 +9,8 @@ import type {
   CreditBatchWithRelations,
 } from "@/data-access/credit-batches";
 import { creditBatchSheetSections } from "./credit-batch-view";
+
+vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
 
 function makeRun(
   status: CreditBatchProductionRunOption["status"],
@@ -208,4 +214,30 @@ describe("credit batch production-run preview", () => {
     expect(html).toContain("Running");
     expect(html).not.toContain('data-status="complete"');
   });
+});
+
+function visibleText(node: ReactTestInstance | string): string {
+  return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visibleText).join(" ");
+}
+it("keeps saved fields and cap warnings in Simple while carbon and calculation sections are Detailed only", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  const preview = makePreview(12.5, []);
+  preview.applicationResults = [{ applicationId: "app", applicationCode: "APP-001", co2eStoredTonnes: 12.5, rawFDurable: 0.97, fDurable: 0.95, durabilityCapped: true, organicCarbonPercent: 79, effectiveSoilTemperatureC: null, missingInputs: [], warnings: [] }];
+  const sections = creditBatchSheetSections({ ...baseOptions, creditBatch: makeBatch({ co2eStoredPreview: preview, productionEmissionsClaimedByRemovalId: "removal-1" }) });
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<FormDetailProvider scope="batch"><FormDetailControl /><EntitySideSheetSections sections={sections} /></FormDetailProvider>); });
+  const simple = visibleText(renderer.root);
+  for (const label of ["Carbon ledger", "Carbon estimate", "12.50", "Applied biochar", "Capped durability estimate", "Raw durability estimate", "Preview authority", "Preview formula"]) expect(simple).not.toContain(label);
+  expect(simple).toContain("Wood chips");
+  expect(simple).toContain("The durability cap applies");
+  expect(simple).toContain("Production emissions included in Removal");
+  await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
+  expect(visibleText(renderer.root)).toContain("12.50");
+  expect(visibleText(renderer.root)).not.toContain("Source records");
+  expect(visibleText(renderer.root)).not.toContain("Capped durability estimate");
+  await act(async () => renderer.root.findAllByType("button").filter(node => node.props["aria-controls"]).forEach(node => node.props.onClick()));
+  expect(visibleText(renderer.root)).toContain("Capped durability estimate");
+  expect(visibleText(renderer.root)).toContain("Preview authority");
+  expect(visibleText(renderer.root)).toContain("Applied biochar");
+  await act(async () => renderer.unmount());
 });

@@ -50,3 +50,6 @@ export {
 
 export { FormDetailToggle, type FormDetailLevel } from "./form-detail-toggle";
 export { FormDetailProvider, FormDetailControl, DetailedOnly, useFormDetailLevel } from "./form-detail-context";
+
+export { CompositionCard } from "./composition-card";
+export { CompositionLedger } from "./composition-ledger";

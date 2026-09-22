@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { useFormDetailLevel, CompositionCard, CompositionLedger } from "@/components/forms";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
@@ -65,6 +65,21 @@ export function ProductCompositionPreview({
       ? MIN_VISIBLE_SEGMENT_PERCENT
       : rawRemainderPercent;
   const visibleTotal = dryPercent + remainderPercent;
+
+  if (followFormDetail && level === "simple") return null;
+  if (followFormDetail) return <div data-testid={testId} className={className} aria-live="polite">
+    <CompositionCard title="Product composition" details={<>
+      {moisturePercent !== undefined && <p className="body-caption">Measured product moisture: {formatMoisturePercent(moisturePercent)}. This measurement does not change dry biochar.</p>}
+      <p className="body-caption">{remainderLabel} = {wetLabel.toLowerCase()} − {dryLabel.toLowerCase()}.</p>
+      {note && <p className="body-caption">{note}</p>}
+    </>}>
+      {estimate && <p className="body-caption">Planning estimate</p>}
+      <CompositionLedger label="Product composition" totalLabel={wetLabel} total={wetMassKg ?? null} segments={[
+        { label: dryLabel, mass: dryBiocharKg ?? null, category: "dry-biochar" },
+        { label: remainderLabel, mass: hasComposition || wetMassKg === 0 && dryBiocharKg === 0 ? remainderKg : null, category: "ingredient-solids" },
+      ]} />
+    </CompositionCard>
+  </div>;
 
   return (
     <div

@@ -1,5 +1,7 @@
 # Simple | Detailed adoption plan
 
+> **Superseded presentation boundary (2026-09-22):** the user clarified that Simple shows inputs or corresponding saved field values only. Derived mass summaries, composition, stock before/after, calculations, provenance and their navigation actions belong in Detailed. Actual errors, shortage blockers, required evidence/actions and approved bin-selector deductions/additions remain visible. Earlier recommendations below to retain computed totals in Simple are historical and no longer apply. Detailed follows the approved E inline card/ledger with calculations and provenance behind Details.
+
 - **Owner:** Kenji Nguyen
 - **Status:** Implemented locally and verified on 2026-09-21; archived adoption inventory. Product/Order PR #821 remains a separate integration.
 - **Last reviewed:** 2026-09-21

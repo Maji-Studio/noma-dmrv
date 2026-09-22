@@ -6,6 +6,7 @@
 "use client";
 
 import { MoistureSplit } from "@/components/ui/moisture-split";
+import { CompositionCard } from "@/components/forms";
 import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { nullableNumericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
@@ -22,10 +23,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { ProductionReadingsField } from "./production-readings-field";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -597,30 +597,7 @@ export function ProductionRunForm({
           />
         ))}
 
-        {feedstockWetInput.visible && (
-          <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
-            <p className="body-caption text-[var(--color-text-secondary)] flex items-center gap-6">
-              Total wet input
-              {isProductionRunCertifyField("feedstockWetMassKg") && (
-                <CertificationFieldTag status={certStatus("feedstockWetMassKg")} />
-              )}
-            </p>
-            <p
-              className={`body-small mt-2 ${
-                feedstockWetInput.hintText
-                  ? "font-normal text-[var(--color-text-tertiary)]"
-                  : "font-medium text-[var(--color-text-primary)]"
-              }`}
-            >
-              {feedstockWetInput.valueText}
-            </p>
-            {feedstockWetInput.hintText && (
-              <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
-                {feedstockWetInput.hintText}
-              </p>
-            )}
-          </div>
-        )}
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField
@@ -635,7 +612,7 @@ export function ProductionRunForm({
             })}
           />
         </div>
-        <MoistureSplit variant="inline" wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
+        <MoistureSplit followFormDetail wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
@@ -838,11 +815,7 @@ export function ProductionRunForm({
           it lives outside the numbered spine and only appears once there's
           something to show. */}
       <DetailedOnly>{(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
-        <div className="space-y-12 border-t border-[var(--color-border-tertiary)] pt-20">
-          <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
-            Process Flow
-          </SectionLabel>
-          <ProcessFlowPreview
+        <CompositionCard title="Process flow" details={<ProcessFlowPreview
             sourceBinName={sourceBinPreviewName}
             feedstockKg={watchWetMass}
             feedstockDryKg={previewDryMass}
@@ -850,8 +823,9 @@ export function ProductionRunForm({
             biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
             biocharDryKg={previewBiocharDryMass}
             destinationBinName={selectedDestBin?.name ?? null}
-          />
-        </div>
+          />}>
+          <p className="body-small">{sourceBinPreviewName ?? "Select source bin"} → {selectedReactor?.name ?? "Select reactor"} → {selectedDestBin?.name ?? "Select destination bin"}</p>
+        </CompositionCard>
       )}</DetailedOnly>
       </form>
 

@@ -28,6 +28,8 @@
  */
 "use client";
 
+import { CompositionCard } from "@/components/forms/composition-card";
+
 import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import * as React from "react";
 import { cn } from "@/lib/utils";
@@ -299,6 +301,8 @@ export interface DetailPanelField {
 }
 
 export interface DetailPanelSection {
+  /** Optional derived section, excluded from Simple and its numbering. */
+  detailedOnly?: boolean;
   title: string;
   fields: DetailPanelField[];
   /** Optional extension content that belongs inside this mirrored section. */
@@ -314,20 +318,21 @@ interface DetailSpineProps {
 /** Shared section renderer for read-only entity details. */
 function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
   const detailLevel = useFormDetailLevel();
+  const visibleSections = sections.filter(section => !section.detailedOnly || detailLevel === "detailed");
   return (
     <div className={cn("flex flex-col", !numbered && "gap-20")}>
-      {sections.map((section, sectionIdx) => (
+      {visibleSections.map((section, sectionIdx) => (
         <DetailSection
           key={section.title}
           title={section.title}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered
-              ? createSpineMeta(sectionIdx, sections.length)
+              ? createSpineMeta(sectionIdx, visibleSections.length)
               : undefined
           }
         >
-          {chunkFields(section.fields.filter(field => !field.detailedOnly || detailLevel === "detailed")).map((row, rowIdx) => (
+          {chunkFields(section.fields.filter(field => !field.detailedOnly)).map((row, rowIdx) => (
             <DetailRow key={rowIdx}>
               {row.map((field, fieldIdx) => (
                 <DetailField
@@ -343,6 +348,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
               ))}
             </DetailRow>
           ))}
+          {detailLevel === "detailed" && section.fields.some(field => field.detailedOnly) && <CompositionCard title={`${section.title} details`} details={<dl className="space-y-8">{section.fields.filter(field => field.detailedOnly).map(field => <DetailField key={field.label} {...field} />)}</dl>}><p className="body-caption">Technical records</p></CompositionCard>}
           {section.content}
         </DetailSection>
       ))}

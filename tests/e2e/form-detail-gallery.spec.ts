@@ -11,12 +11,12 @@ import { createApplication } from "../../src/data-access/applications";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 
-const OUTPUT = path.resolve("docs/archive/qa/2026-09-21-form-detail-rollout");
+const OUTPUT = path.resolve("docs/archive/qa/2026-09-22-form-detail-e");
 const VIEWPORTS = [{ width: 1440, height: 1100 }, { width: 390, height: 844 }];
 const CAPTURE_TIMEOUT = 600_000;
 const ACTION_TIMEOUT = 25_000;
 const DATE = "2026-09-14";
-const MODES = ["Simple", "Detailed"] as const;
+
 if (process.env.CAPTURE_FORM_DETAIL_GALLERY === "1" && process.env.NEXT_PUBLIC_APP_URL !== "http://localhost:3102") {
   throw new Error("Gallery capture requires the isolated local server on port 3102.");
 }
@@ -67,56 +67,84 @@ async function focusSection(target: Locator) {
 }
 async function pairs(page: Page, name: string, sectionNames: string[], dialogName?: string) {
   const sheet = dialogName ? page.getByRole("dialog", { name: dialogName, exact: true }) : page.getByRole("dialog").last();
+  const values = () => sheet.locator("input:not([type=radio]), textarea, select").evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value));
+  await page.waitForTimeout(500); // Allow debounced preview requests to start before recording button state.
+  await settled(page);
+  const initialValues = await values();
+  const save = sheet.getByRole("button", { name: /^(Save changes|Save correction|Create Delivery|Create Application)$/ }).last();
+  const initialDisabled = await save.count() ? await save.isDisabled() : null;
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
-    for (const mode of MODES) {
-      await sheet.getByRole("radio", { name: mode, exact: true }).locator("..").click();
-      await expect(sheet.getByRole("radio", { name: mode, exact: true })).toBeChecked();
-      await scrollTop(sheet);
-      await capture(page, `${name}-${mode.toLowerCase()}-${viewport.width}-header`);
-      for (const section of sectionNames) {
-        const heading = sheet.getByRole("heading", { name: section, exact: true }).first();
-        await expect(heading).toBeVisible();
-        await focusSection(heading);
-        const sectionStem = `${name}-${mode.toLowerCase()}-${viewport.width}-${section.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-        await capture(page, sectionStem);
-        // Tall mobile sections need real scrolled continuations, never stitched images.
-        for (let part = 2; part <= 4; part++) {
-          const advanced = await heading.evaluate(el => {
-            const section = el.closest("section") ?? el.parentElement;
-            let scroller = el.parentElement;
-            while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
-            if (!section || !scroller || section.getBoundingClientRect().bottom <= scroller.getBoundingClientRect().bottom + 16) return false;
-            const before = scroller.scrollTop;
-            scroller.scrollTop += scroller.clientHeight * 0.72;
-            return scroller.scrollTop > before;
-          });
-          if (!advanced) break;
-          await capture(page, `${sectionStem}-part-${part}`);
-        }
-        if (name === "sample-read" && section === "Transport" && mode === "Detailed" && viewport.width === 390) {
-          const table = sheet.locator("table").last();
-          await table.evaluate(el => {
-            let parent = el.parentElement;
-            while (parent && !(parent.scrollWidth > parent.clientWidth && /auto|scroll/.test(getComputedStyle(parent).overflowX))) parent = parent.parentElement;
-            if (parent) parent.scrollLeft = parent.scrollWidth;
-          });
-          await capture(page, `${sectionStem}-right`);
-        }
-      }
-      if (name === "production-run-create" || name === "production-run-edit") {
-        await sheet.locator("form").first().evaluate(el => {
-          let parent = el.parentElement;
-          while (parent && !(parent.scrollHeight > parent.clientHeight && /auto|scroll/.test(getComputedStyle(parent).overflowY))) parent = parent.parentElement;
-          if (parent) parent.scrollTop = parent.scrollHeight;
-        });
-        if (mode === "Detailed") {
-          await focusSection(sheet.getByRole("heading", { name: "Process Flow", exact: true }));
-          await expect(sheet.getByRole("group", { name: "Process output", exact: true })).toBeVisible();
-        }
-        await capture(page, `${name}-${mode.toLowerCase()}-${viewport.width}-process-flow`);
-      }
+    await sheet.getByRole("radio", { name: "Simple", exact: true }).locator("..").click();
+    await expect(sheet.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
+    // Correction history is saved audit data; only the replacement form follows the switch.
+    const simpleScope = name === "output-stock-correction" ? sheet.locator("form").last() : sheet;
+    await expect(simpleScope.getByText(/^(Wet feedstock|Dry feedstock)(:|$)/).filter({ visible: true })).toHaveCount(0);
+    await expect(simpleScope.getByText(/^(Before loading|After loading|Recorded wet stock|Recorded wet mass.*dry|Wet:.*Dry:|Total wet input|Remaining wet mass)/).filter({ visible: true })).toHaveCount(0);
+    await expect(simpleScope.getByRole("button", { name: "More info", exact: true })).toHaveCount(0);
+    await expect(simpleScope.getByRole("button", { name: /^Show details for/ })).toHaveCount(0);
+    await scrollTop(sheet);
+    const heading = sheet.getByRole("heading", { name: sectionNames[0], exact: true }).first();
+    if (await heading.isVisible()) await focusSection(heading);
+    await capture(page, `${name}-${viewport.width}-simple`);
+    await sheet.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
+    await settled(page);
+    const disclosures = sheet.getByRole("button", { name: /^(Show|Hide) details for/ });
+    // Close cards left open by the preceding viewport before documenting the default state.
+    for (const button of await disclosures.all()) {
+      if (await button.getAttribute("aria-expanded") === "true") await button.click();
+      await expect(button).toHaveAttribute("aria-expanded", "false");
     }
+    const first = disclosures.first();
+    if (await first.count()) {
+      await focusSection(first.locator("xpath=ancestor::section[1]"));
+      const ledger = first.locator("xpath=ancestor::section[1]").getByRole("columnheader", { name: "Component", exact: true });
+      // Transport and application context cards deliberately have no invented mass split.
+      if (await ledger.count()) {
+        await expect(ledger).toBeVisible();
+        const card = first.locator("xpath=ancestor::section[1]");
+        await expect(card.getByRole("columnheader", { name: "% of total", exact: true })).toBeVisible();
+        const bars = card.locator('table tbody [aria-hidden="true"]');
+        for (const bar of await bars.all()) expect(await bar.evaluate(el => el.getBoundingClientRect().height)).toBe(8);
+      }
+    } else if (await heading.isVisible()) await focusSection(heading);
+    await capture(page, `${name}-${viewport.width}-detailed`);
+    if (await first.count()) {
+      await first.focus();
+      await page.keyboard.press("Enter");
+      await expect(first).toHaveAttribute("aria-expanded", "true");
+      const controlled = await first.getAttribute("aria-controls");
+      await expect(page.locator(`[id="${controlled}"]`)).toBeVisible();
+      await focusSection(first.locator("xpath=ancestor::section[1]"));
+      await capture(page, `${name}-${viewport.width}-details`);
+      await first.focus();
+      await page.keyboard.press("Space");
+      await expect(first).toHaveAttribute("aria-expanded", "false");
+    }
+    if (name === "production-run-create" || name === "output-stock-correction") {
+      const extra = name === "production-run-create"
+        ? sheet.getByRole("button", { name: /^(Show|Hide) details for process flow$/ })
+        : disclosures.last();
+      await extra.click();
+      await expect(extra).toHaveAttribute("aria-expanded", "true");
+      await focusSection(extra.locator("xpath=ancestor::section[1]"));
+      await capture(page, `${name}-${viewport.width}-additional-details`);
+      await extra.click();
+    }
+    if (name === "sample-read" && viewport.width === 390) {
+      const table = sheet.locator("table").first();
+      await table.evaluate(el => {
+        let parent = el.parentElement;
+        while (parent && !(parent.scrollWidth > parent.clientWidth && /auto|scroll/.test(getComputedStyle(parent).overflowX))) parent = parent.parentElement;
+        if (parent) parent.scrollLeft = parent.scrollWidth;
+      });
+      await focusSection(table);
+      await capture(page, `${name}-${viewport.width}-transport-right`);
+    }
+    expect(await values()).toEqual(initialValues);
+    if (initialDisabled !== null) expect(await save.isDisabled()).toBe(initialDisabled);
+    expect(await sheet.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
   await page.setViewportSize(VIEWPORTS[0]);
 }
@@ -152,12 +180,20 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await page.locator("#deliveryDate").fill(DATE);
   await selectEntity(page, "Order", f.order.id, f.order.code);
   await page.locator("#storageLocationId").selectOption(f.bin.id);
+  await page.locator("#deliveredWetMassKg").fill("2500");
+  await page.locator("#moistureContentPercent").fill("15");
+  await expect(page.getByRole("region", { name: "Stock preview", exact: true }).getByRole("alert")).toContainText(/Insufficient/);
+  await expect(page.getByRole("button", { name: "Create Delivery", exact: true })).toBeDisabled();
+  await capture(page, "delivery-create-1440-simple-blocker");
   await page.locator("#deliveredWetMassKg").fill("2000");
   await page.locator("#moistureContentPercent").fill("30");
   await page.locator("#distanceKmOverride").fill("25");
   await page.locator("#distanceKmOverride").blur();
-  await expect(page.getByText("1,150 kg dry biochar removed", { exact: true })).toBeVisible();
   await pairs(page, "delivery-create", ["Mass and moisture", "Transport"]);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Discard unsaved changes?", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+  await expect(page.locator("#deliveredWetMassKg")).toHaveValue("2000");
   await page.getByRole("button", { name: "Create Delivery", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const delivery = (await readOutputStockBrowserFixture(f)).deliveries[0];
@@ -165,6 +201,8 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await pairs(page, "delivery-read", ["Mass and moisture"]);
   await edit(page, "Delivery");
   await pairs(page, "delivery-edit", ["Mass and moisture"]);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Discard unsaved changes?", exact: true })).toHaveCount(0);
   await navigate(page, "applications", f.facility);
   await page.getByRole("button", { name: "New Application", exact: true }).click();
   await page.locator("#applicationDate").fill(DATE);
@@ -230,7 +268,7 @@ test("gallery production run create read edit credit batch and sample read", asy
   await page.locator("#startTime").fill("08:00");
   await page.locator("#endDate").fill(DATE);
   await page.locator("#endTime").fill("14:00");
-  await page.getByRole("button", { name: "Add source", exact: true }).click();
+  if (await page.locator('input[name="feedstockDraws.0.wetMassKg"]').count() === 0) await page.getByRole("button", { name: "Add source", exact: true }).click();
   await selectEntity(page, "Source bin", d.feedstockStorageLocation.id, d.feedstockStorageLocation.name);
   await page.locator('input[name="feedstockDraws.0.wetMassKg"]').fill("100");
   await page.locator("#feedstockMoisturePercent").fill("20");
@@ -261,14 +299,12 @@ test("gallery output bin reconciliation loss and correction", async ({ adminPage
   await bin(page, f);
   await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
   await fillStock(page, "600", "E2E stock count: drying only, no dry biochar loss.");
-  await expect(page.getByText("0 kg dry biochar removed", { exact: true })).toBeVisible();
   await pairs(page, "output-bin-reconciliation", ["Stock preview", "Reason"]);
   await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await bin(page, f);
   await page.getByRole("button", { name: "Record loss", exact: true }).click();
   await fillStock(page, "120", "E2E spill during loading.");
-  await expect(page.getByText("70 kg dry biochar removed", { exact: true })).toBeVisible();
   await pairs(page, "output-bin-loss", ["Stock preview", "Reason"]);
   await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -277,7 +313,6 @@ test("gallery output bin reconciliation loss and correction", async ({ adminPage
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
   await history.locator("article").filter({ hasText: "E2E spill during loading." }).getByRole("button", { name: "Correct entry" }).click();
   await fillStock(page, "12", "E2E corrected spill after scale ticket review.");
-  await expect(history.getByText("7 kg dry biochar removed", { exact: true })).toBeVisible();
   await pairs(page, "output-stock-correction", ["Proposed replacement", "Stock preview"], "Stock history");
   await history.getByRole("button", { name: "Save correction", exact: true }).click();
   await expect(history.getByText("E2E corrected spill after scale ticket review.", { exact: true }).first()).toBeVisible();
@@ -305,6 +340,5 @@ test("gallery credit batch applied mass context", async ({ adminPage: page, test
   await navigate(page, "credit-batches", f.facility);
   await page.getByText(batch.code, { exact: true }).first().click();
   await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-  await expect(page.getByRole("dialog").getByText("1.00 t", { exact: true })).toBeVisible();
   await pairs(page, "credit-batch-applied-read", ["Carbon ledger", "Batch definition", "Production runs"]);
 });

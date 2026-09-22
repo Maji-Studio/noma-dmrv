@@ -20,6 +20,7 @@
  */
 "use client";
 
+import { useFormDetailLevel } from "./form-detail-context";
 import type { ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "./form-field";
@@ -200,6 +201,7 @@ export function MassMoistureFields({
   finalMoistureLabel,
   splitFooter,
 }: MassMoistureFieldsProps) {
+  const level = useFormDetailLevel();
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
@@ -211,7 +213,8 @@ export function MassMoistureFields({
       )}
       <div
         data-testid="mass-moisture-split"
-        className="md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
+        hidden={followFormDetail && level === "simple"}
+        className={followFormDetail ? "md:col-span-2" : "md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"}
       >
         <MoistureSplit
           followFormDetail={followFormDetail}
