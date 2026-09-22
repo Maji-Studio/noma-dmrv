@@ -36,17 +36,6 @@ export function formatWetAtMoisture(
     : `${wet} at ${formatMoisturePercent(moisturePercent)} moisture`;
 }
 
-/** The same figure inside a sentence, where "wet" has to be said out loud. */
-export function formatWetMeasurement(
-  wetMassKg: number | null | undefined,
-  moisturePercent: number | null | undefined,
-): string {
-  const wet = `${formatMassKg(wetMassKg)} wet`;
-  return moisturePercent == null
-    ? wet
-    : `${wet} at ${formatMoisturePercent(moisturePercent)} moisture`;
-}
-
 export interface StockRow {
   label: string;
   value: ReactNode;
@@ -99,6 +88,10 @@ export function InlineMassChange({
  *
  * An unchanged balance is the answer to a question the operator asked, not a
  * missing result, so it is labelled rather than left to look like a bug.
+ *
+ * The label is a sentence-case caption, not the uppercase mono eyebrow: a split
+ * bar now sits above this pair on the stock surfaces, and two competing small
+ * labels in two different type styles read as two unrelated sections.
  */
 export function StockBalanceChange({
   label,
@@ -116,7 +109,7 @@ export function StockBalanceChange({
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-8">
-        <span className="label-micro text-[var(--color-text-secondary)]">
+        <span className="body-caption text-[var(--color-text-secondary)]">
           {label}
         </span>
         {unchanged && <StockChip>Unchanged</StockChip>}

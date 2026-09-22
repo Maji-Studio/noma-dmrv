@@ -56,9 +56,9 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
     await fillStock(page, "100", "0", "E2E drying without dry loss");
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    await expect(page.getByText(/no dry biochar removed/)).toBeHidden();
+    await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(page.getByText(/no dry biochar removed/)).toBeVisible();
+    await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeVisible();
     await expect(page.getByRole("group", { name: "Dry biochar in bin: 100 kg before, 100 kg after" })).toBeVisible();
     await evidence(page, info, "pure-product-drying-no-loss");
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
@@ -109,10 +109,13 @@ test.describe("Output-bin conserved FIFO", () => {
 
     await page.locator("#deliveredWetMassKg").fill("2000");
     await page.locator("#moistureContentPercent").fill("30");
-    await expect(preview.getByText(/Removes 1,150 kg dry biochar \(2,000 kg wet/)).toBeHidden();
+    await expect(preview.getByText("What you entered", { exact: true })).toBeHidden();
     await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toHaveCount(0);
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(preview.getByText(/Removes 1,150 kg dry biochar \(2,000 kg wet/)).toBeVisible();
+    // 2,000 kg wet at 30% moisture is 1,400 kg of dry solids, of which 1,150 kg
+    // is the dry biochar the bin tracks; the bar names solids for that reason.
+    await expect(preview.getByText("What you entered", { exact: true })).toBeVisible();
+    await expect(preview.getByText(/Dry solids\s+1,400 kg/)).toBeVisible();
     await expect(preview.getByRole("group", { name: "Dry biochar in bin: 1,500 kg before, 350 kg after" })).toBeVisible();
     const draw = preview.getByRole("table", { name: /^Batches this movement draws from/ });
     await expect(draw).toBeHidden();
@@ -188,9 +191,9 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
     await fillStock(page, "600", "30", "E2E unchanged measured stock");
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    await expect(page.getByText(/no dry biochar removed/)).toBeHidden();
+    await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(page.getByText(/no dry biochar removed/)).toBeVisible();
+    await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeVisible();
     await expect(page.getByRole("group", { name: "Dry biochar in bin: 350 kg before, 350 kg after" })).toBeVisible();
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -200,9 +203,10 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "Record loss", exact: true }).click();
     await fillStock(page, "120", "30", "E2E FIFO spill");
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    await expect(page.getByText(/Removes 70 kg dry biochar \(120 kg wet/)).toBeHidden();
+    await expect(page.getByText("What you entered", { exact: true })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(page.getByText(/Removes 70 kg dry biochar \(120 kg wet/)).toBeVisible();
+    await expect(page.getByText("What you entered", { exact: true })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Dry biochar in bin: 350 kg before, 280 kg after" })).toBeVisible();
     await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect((await readOutputStockBrowserFixture(f)).balance.beforeDryKg).toBe(280);
@@ -212,9 +216,10 @@ test.describe("Output-bin conserved FIFO", () => {
     const history = page.getByRole("dialog", { name: "Stock history", exact: true });
     await history.locator("article").filter({ hasText: "E2E FIFO spill" }).getByRole("button", { name: "Correct entry" }).click();
     await fillStock(page, "12", "30", "E2E corrected spill");
-    await expect(history.getByText(/Removes 7 kg dry biochar \(12 kg wet/)).toBeHidden();
+    await expect(history.getByText("What you entered", { exact: true })).toBeHidden();
     await history.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(history.getByText(/Removes 7 kg dry biochar \(12 kg wet/)).toBeVisible();
+    await expect(history.getByText("What you entered", { exact: true })).toBeVisible();
+    await expect(history.getByRole("group", { name: "Dry biochar in bin: 350 kg before, 343 kg after" })).toBeVisible();
     await history.getByRole("button", { name: "Save correction", exact: true }).click();
     await expect(history.getByText("E2E corrected spill", { exact: true }).first()).toBeVisible();
     await expect(history.getByText("E2E FIFO spill", { exact: true })).toBeVisible();
@@ -234,9 +239,12 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
     await fillStock(page, "0", "", "E2E empty bin count");
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    await expect(page.getByText(/Removes 343 kg dry biochar/)).toBeHidden();
+    // A zero count without moisture has no split to draw, so the balance pair
+    // carries the movement on its own.
+    await expect(page.getByRole("group", { name: "Dry biochar in bin: 343 kg before, 0 kg after" })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(page.getByText(/Removes 343 kg dry biochar/)).toBeVisible();
+    await expect(page.getByRole("group", { name: "Dry biochar in bin: 343 kg before, 0 kg after" })).toBeVisible();
+    await expect(page.getByText("What you entered", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect((await readOutputStockBrowserFixture(f)).balance.beforeDryKg).toBe(0);
