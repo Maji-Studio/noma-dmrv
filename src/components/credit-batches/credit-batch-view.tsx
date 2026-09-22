@@ -19,6 +19,7 @@ import type {
   CreditBatchProductionRunOption,
   CreditBatchWithRelations,
 } from "@/data-access/credit-batches";
+import { StockRows } from "@/components/storage-locations/stock-figures";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
@@ -32,12 +33,29 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 
+/** Who turns the input quantities into a deduction. One sentence, not a rule. */
+const CARBON_ESTIMATE_BASIS =
+  "Isometric applies the emission factors to these quantities at submission. noma submits the quantities only.";
+
 function formatInput(value: number | null, unit: string): string {
   return value == null
     ? MISSING_VALUE.notRecorded
     : `${Math.round(value).toLocaleString()} ${unit}`;
 }
 
+/**
+ * Carbon estimate — one headline figure with the inputs behind it.
+ *
+ * The estimate is the only thing an operator reads off this block, so it is the
+ * only thing with size. The physical inputs the registry turns into deductions
+ * are the arithmetic behind it, not a competing list, so they sit under `Show
+ * calculation` as label and figure rows.
+ *
+ * There is no gross-to-net chain to draw here: noma submits input quantities
+ * and Isometric applies the emission factors (ADR 0018, ADR 0020), so no local
+ * emission figure exists to subtract. The caption says whose number is missing
+ * rather than inventing one.
+ */
 function CreditBatchCarbonLedger({
   creditBatch,
   productionRuns,
@@ -51,7 +69,7 @@ function CreditBatchCarbonLedger({
 }) {
   const totals = computeCohortInputTotals(productionRuns);
   const estimate = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
-  const rows = [
+  const inputRows = [
     {
       label: "Feedstock, dry mass",
       value:
@@ -65,36 +83,37 @@ function CreditBatchCarbonLedger({
       value: formatInput(totals.electricityKwh, "kWh"),
     },
   ];
+  const runsPending = Boolean(runsError) || isLoadingRuns;
 
   return (
-    <DetailedOnly>
-      <CompositionCard
-        title="Carbon estimate"
-        hint="A local estimate of stored CO₂e before project emissions. The registry result is authoritative."
-      >
-        <dl className="body-small tabular-nums">
-          {runsError || isLoadingRuns ? (
-            <div className="flex items-baseline justify-between gap-12 py-8">
-              <dt>Production inputs</dt>
-              <dd aria-busy={isLoadingRuns || undefined} className="text-right text-[var(--color-text-tertiary)]">
-                {runsError ? "Unavailable. Reload the production runs." : "Loading…"}
-              </dd>
-            </div>
+    <CompositionCard
+      title="Carbon estimate"
+      hint="A local estimate of stored CO₂e before project emissions. The registry result is authoritative."
+      calculation={
+        <div className="space-y-8">
+          {runsPending ? (
+            <StockRows
+              label="Production inputs"
+              rows={[{
+                label: "Production inputs",
+                value: (
+                  <span aria-busy={isLoadingRuns || undefined} className="text-[var(--color-text-tertiary)]">
+                    {runsError ? `${MISSING_VALUE.notAvailable}. Reload the production runs.` : "Loading…"}
+                  </span>
+                ),
+              }]}
+            />
           ) : (
-            rows.map(row => (
-              <div key={row.label} className="flex items-baseline justify-between gap-12 border-b border-[var(--color-border-secondary)] py-8">
-                <dt className="text-[var(--color-text-secondary)]">{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))
+            <StockRows label="Production inputs claimed by this batch" rows={inputRows} />
           )}
-          <div className="flex items-baseline justify-between gap-12 py-8 font-medium">
-            <dt>Estimated CO₂e stored</dt>
-            <dd>{estimate == null ? MISSING_VALUE.notAvailable : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}</dd>
-          </div>
-        </dl>
-        {!isLoadingRuns && !runsError && productionRuns.length > 0 && (
-          <div className="flex flex-wrap items-baseline gap-x-12 gap-y-4 body-caption">
+          <p className="body-caption text-[var(--color-text-tertiary)]">
+            {CARBON_ESTIMATE_BASIS}
+          </p>
+        </div>
+      }
+      actions={
+        !runsPending && productionRuns.length > 0 ? (
+          <span className="flex flex-wrap items-baseline gap-x-12 gap-y-4 body-caption">
             <span className="text-[var(--color-text-tertiary)]">Source runs</span>
             {productionRuns.map(run => (
               <Link
@@ -105,10 +124,21 @@ function CreditBatchCarbonLedger({
                 {formatDate(run.date)}
               </Link>
             ))}
-          </div>
-        )}
-      </CompositionCard>
-    </DetailedOnly>
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="space-y-4">
+        <p className="body-lead tabular-nums">
+          {estimate == null
+            ? MISSING_VALUE.notAvailable
+            : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
+        </p>
+        <p className="body-caption text-[var(--color-text-secondary)]">
+          Estimated CO₂e stored, before project emissions
+        </p>
+      </div>
+    </CompositionCard>
   );
 }
 

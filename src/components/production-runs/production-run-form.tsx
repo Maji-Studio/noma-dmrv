@@ -6,8 +6,6 @@
 "use client";
 
 import { MoistureSplit } from "@/components/ui/moisture-split";
-import { CompositionCard } from "@/components/forms";
-import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { nullableNumericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
 import {
@@ -23,7 +21,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { ArrowRightIcon, FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
@@ -42,20 +40,6 @@ import {
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
 
-/**
- * One hop in the process-flow route line. The arrow is an icon rather than a
- * "→" in the string so screen readers hear "to" and the glyph never breaks a
- * line on its own at sheet width.
- */
-function ProcessFlowStep({ name }: { name: string }) {
-  return (
-    <>
-      <ArrowRightIcon size={14} weight="bold" className="shrink-0 text-[var(--color-icon-secondary)]" aria-hidden />
-      <span className="sr-only">to</span>
-      <span>{name}</span>
-    </>
-  );
-}
 import {
   productionRunMassBalanceFeedback,
 } from "./production-run-mass-balance";
@@ -718,6 +702,23 @@ export function ProductionRunForm({
             registration: register("biocharMoisturePercent", { setValueAs: nullableNumericValue }),
           }}
         />
+
+        {/* The rail spans three sections' fields, and the biochar output is the
+            last of them, so it sits here: every input it draws on is above it,
+            and it is still inside the section whose numbers complete it. */}
+        {(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
+          <ProcessFlowPreview
+            sourceBinName={sourceBinPreviewName}
+            feedstockKg={watchWetMass}
+            feedstockMoisturePercent={typeof watchMoisture === "number" ? watchMoisture : null}
+            feedstockDryKg={previewDryMass}
+            reactorName={selectedReactor?.name ?? null}
+            biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
+            biocharMoisturePercent={typeof watchedBiocharMoisture === "number" ? watchedBiocharMoisture : null}
+            biocharDryKg={previewBiocharDryMass}
+            destinationBinName={selectedDestBin?.name ?? null}
+          />
+        )}
       </FormSection>
 
       {/* ── Energy ── */}
@@ -826,26 +827,6 @@ export function ProductionRunForm({
       />
       </FormSpine>
 
-      {/* Process Flow — a derived recap of the run, not a data-entry step, so
-          it lives outside the numbered spine and only appears once there's
-          something to show. */}
-      <DetailedOnly>{(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
-        <CompositionCard title="Process flow" hint="A recap of the bins and reactor this run moves material through." calculation={<ProcessFlowPreview
-            sourceBinName={sourceBinPreviewName}
-            feedstockKg={watchWetMass}
-            feedstockDryKg={previewDryMass}
-            reactorName={selectedReactor?.name ?? null}
-            biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
-            biocharDryKg={previewBiocharDryMass}
-            destinationBinName={selectedDestBin?.name ?? null}
-          />}>
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 body-small">
-            <span>{sourceBinPreviewName ?? "Select source bin"}</span>
-            <ProcessFlowStep name={selectedReactor?.name ?? "Select reactor"} />
-            <ProcessFlowStep name={selectedDestBin?.name ?? "Select destination bin"} />
-          </div>
-        </CompositionCard>
-      )}</DetailedOnly>
       </form>
 
       {watchedFacilityId && (

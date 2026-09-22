@@ -159,8 +159,14 @@ test.describe("Output-bin conserved FIFO", () => {
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     await expect(page.getByText("Batch shares", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("dialog").getByText("Dry biochar applied (kg)", { exact: true })).toHaveCount(0);
+    // Simple carries the bar and its key line: which batches were applied and
+    // how much dry biochar each gave. The ledger's shares are Detailed only.
+    const appliedBar = page.getByRole("dialog").getByRole("img", { name: /^Applied dry biochar/ });
+    await expect(appliedBar).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("table", { name: /^Applied batches/ })).toHaveCount(0);
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     await expect(page.getByRole("dialog").getByText("Dry biochar applied (kg)", { exact: true })).toBeHidden();
+    await expect(appliedBar).toBeVisible();
     // The ledger carries the per-batch totals and shares; the disclosure adds
     // only the production runs behind each batch.
     const appliedLedger = page.getByRole("table", { name: /^Applied batches/ });

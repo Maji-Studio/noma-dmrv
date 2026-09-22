@@ -1,49 +1,54 @@
+/**
+ * Applied batches — which product batches this application's dry biochar came
+ * from, and which production runs are behind each batch.
+ *
+ * The bar is the answer: one proportional block per batch, with a key line
+ * naming each batch and its dry mass. Simple stops there, because the bar and
+ * the key are what the saved shares mean. Detailed adds the ledger with each
+ * batch's percentage of the total, and the action row's `Show calculation`
+ * holds the run-level split the ledger cannot show.
+ */
 "use client";
 
 import { useFormDetailLevel, CompositionCard, CompositionLedger } from "@/components/forms";
+import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-run-groups";
+import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
+import type { MassSegment } from "@/components/forms/composition-ledger";
 import type { ApplicationAllocationShare } from "@/data-access/delivery-allocation-provenance";
 
-const MASS_DECIMALS = 3;
-
-/** Dry kilograms, one precision for the ledger and the per-run breakdown alike. */
-function formatDryMass(kg: number): string {
-  return `${kg.toLocaleString(undefined, { maximumFractionDigits: MASS_DECIMALS })} kg`;
-}
-
-/**
- * Which production runs the applied batches came from.
- *
- * The ledger above already totals each batch, so the disclosure carries the one
- * thing it cannot: the run-level split inside each batch. Rows, not prose.
- */
-function SourceRunBreakdown({ shares, products }: { shares: ApplicationAllocationShare[]; products: string[] }) {
-  return <div className="space-y-12" aria-label="Source production runs per applied batch">
-    {products.map(productId => {
-      const runs = shares.filter(share => share.biocharProductId === productId);
-      return <div key={productId} className="space-y-4">
-        <p className="body-caption text-[var(--color-text-tertiary)]">{runs[0].productCode}</p>
-        <dl className="body-caption tabular-nums">
-          {runs.map(run => <div key={run.productionRunId} className="flex items-baseline justify-between gap-12 border-b border-[var(--color-border-secondary)] py-8 last:border-b-0">
-            <dt>{run.productionRunCode}</dt>
-            <dd>{formatDryMass(run.dryMassKg)}</dd>
-          </div>)}
-        </dl>
-      </div>;
-    })}
-  </div>;
-}
+const APPLIED_BATCHES_HINT =
+  "Dry biochar is traced back to the product batches this application drew from.";
+/** Names the whole in the bar's accessible name and in the ledger's total row. */
+const TOTAL_LABEL = "Applied dry biochar";
 
 export function ApplicationAllocationShares({ shares }: { shares: ApplicationAllocationShare[] }) {
   const level = useFormDetailLevel();
-  const total = shares.reduce((sum, share) => sum + share.dryMassKg, 0);
+  const detailed = level === "detailed";
   const products = [...new Set(shares.map(share => share.biocharProductId))];
   if (!products.length) return null;
-  if (level === "simple") return null;
+  const total = shares.reduce((sum, share) => sum + share.dryMassKg, 0);
+  const segments: MassSegment[] = products.map((productId, index) => ({
+    label: shares.find(share => share.biocharProductId === productId)!.productCode,
+    mass: shares.filter(share => share.biocharProductId === productId).reduce((sum, share) => sum + share.dryMassKg, 0),
+    category: "dry-batch",
+    fill: batchAccentFill(index),
+  }));
+  const groups: SourceRunGroup[] = products.map(productId => {
+    const runs = shares.filter(share => share.biocharProductId === productId);
+    return {
+      label: runs[0].productCode,
+      runs: runs.map(run => ({ id: run.productionRunId, code: run.productionRunCode, dryMassKg: run.dryMassKg })),
+    };
+  });
   return <CompositionCard
     title="Applied batches"
-    hint="Dry biochar is traced back to the product batches this application drew from."
-    calculation={<SourceRunBreakdown shares={shares} products={products} />}
+    hint={APPLIED_BATCHES_HINT}
+    calculation={detailed ? <SourceRunGroups label="Source production runs per applied batch" groups={groups} /> : undefined}
   >
-    <CompositionLedger label="Applied batches" totalLabel="Applied dry biochar" total={total} segments={products.map(productId => ({ label: shares.find(share => share.biocharProductId === productId)!.productCode, mass: shares.filter(share => share.biocharProductId === productId).reduce((sum, share) => sum + share.dryMassKg, 0), category: "dry-batch" }))} />
+    <div className="space-y-8">
+      <SegmentBar label={TOTAL_LABEL} segments={segments} />
+      <SegmentKey segments={segments} />
+    </div>
+    {detailed && <CompositionLedger label="Applied batches" totalLabel={TOTAL_LABEL} total={total} segments={segments} />}
   </CompositionCard>;
 }

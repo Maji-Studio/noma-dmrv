@@ -3,11 +3,11 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from "rea
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OutputStockPreview as Preview } from "@/types/output-stock";
 
-// The card title's InfoHint is a Base UI tooltip, which needs a DOM this node
+// The block title's InfoHint is a Base UI tooltip, which needs a DOM this node
 // environment does not have; the hint's copy is not what these tests assert.
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
-import { OutputStockPreview } from "./output-stock-preview";
+import { OutputStockAvailability, OutputStockPreview } from "./output-stock-preview";
 
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
@@ -22,7 +22,37 @@ const rain: Preview = {
   ],
 };
 
+/**
+ * The block every multi-bin surface renders: the product form shows one per
+ * affected bin. It is the movement block's shape with the batch bar in place of
+ * the moisture split, so the assertions here are about that bar, the headline
+ * pair and what stays behind the disclosure.
+ */
 describe("OutputStockPreview", () => {
+  it("draws the drawn batches as one bar, each batch in its own accent", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview preview={rain} />);
+    expect(html).toContain("1,150 kg dry biochar removed");
+    expect(html).toContain("background:var(--acc-prod)");
+    expect(html).toContain("background:var(--acc-infra)");
+    // The key line names each batch and its dry mass, in bar order.
+    expect(html.indexOf("Batch A 900 kg")).toBeLessThan(html.indexOf("Batch B 250 kg"));
+    // The tracked quantity is the headline, before and after.
+    expect(html).toContain("Dry biochar in bin");
+    expect(html).toContain("1,500 kg");
+    expect(html).toContain("350 kg");
+  });
+
+  it("holds the entered figures and the source runs behind Show calculation", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview preview={rain} />);
+    expect(html).toContain("Show calculation for product bin");
+    expect(html).toContain("Wet removed");
+    expect(html).toContain("2,000 kg");
+    expect(html).toContain("Wet estimate in bin");
+    expect(html).toContain("Batch breakdown");
+    expect(html).toContain("Source run Run A");
+    expect(html).toContain("Source run Run B");
+  });
+
   it("links application and certification blockers to their records", () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, blockingMessage: "Correction blocked", blockers: [
       { entity: "application", id: "app-id", code: "APP-001" },
@@ -33,79 +63,68 @@ describe("OutputStockPreview", () => {
     expect(html).toContain('/certification/removals?removal=removal-id');
     expect(html).toContain('/certification/ghg-statements?statement=statement-id');
   });
+
   it("shows an unavailable ingredient dry estimate without claiming zero dry solids", () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, lane: "ingredient", dryLabel: "dry solids", wetLabel: "wet stock", beforeDryKg: null, afterDryKg: null, removedDryKg: null, beforeSolidsKg: null, afterSolidsKg: null, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 120, beforeAllocations: [], afterAllocations: [], allocations: [] }} />);
+    expect(html).toContain("Wet stock in bin");
     expect(html).toContain("150 kg");
     expect(html).toContain("120 kg");
     expect(html).not.toContain("0 kg dry solids");
     expect(html).not.toContain("NaN");
   });
-  it("shows ingredient dry solids and retains the emptied bin on the shared scale", () => {
-    const html = renderToStaticMarkup(<OutputStockPreview commonScale={2600} preview={{ ...rain, lane: "ingredient", dryLabel: "dry solids", wetLabel: "wet stock", beforeDryKg: 140, afterDryKg: 0, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 0, removedDryKg: 140, removedWetKg: 150, allocations: [], beforeAllocations: [{ layerId: "ingredient", code: "Compost", wetMassKg: 150, dryMassKg: 140, runs: [] }], afterAllocations: [{ layerId: "ingredient", code: "Compost", wetMassKg: 0, dryMassKg: 0, runs: [] }] }} />);
-    expect(html).toContain('140 kg dry solids');
-    expect(html).toContain('0 kg wet stock');
-    expect(html).not.toContain('dry biochar');
-    expect(html.match(/aria-valuemax="2600"/g)).toHaveLength(2);
+
+  it("keeps the ingredient wet stock pair as the headline and its modal in the action row", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, lane: "ingredient", dryLabel: "dry solids", wetLabel: "wet stock", beforeDryKg: 140, afterDryKg: 0, beforeEstimatedWetKg: 150, afterEstimatedWetKg: 0, removedDryKg: 140, removedWetKg: 150, allocations: [], beforeAllocations: [], afterAllocations: [] }} />);
+    expect(html).toContain("Wet stock in bin");
+    expect(html).toContain("More info");
+    // Dry solids stay in the disclosure; the ingredient lane is tracked wet.
+    expect(html).toContain("Dry solids removed");
+    expect(html).not.toContain("dry biochar");
   });
-  it("gives the newly received product a visible batch segment", () => {
-    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, removedDryKg: -90, removedWetKg: -100, beforeAllocations: [], afterAllocations: [{ layerId: "new", code: "New product", wetMassKg: 100, dryMassKg: 90, runs: [] }] }} />);
-    expect(html).toContain('100 kg wet added');
-    expect(html).toContain('90 kg dry biochar added');
-    expect(html).toContain('data-stock-batch="new"');
-    expect(html).toContain('background-color:var(--acc-prod)');
+
+  it("captions an addition as added and splits the wet mass it received", () => {
+    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, removedDryKg: -70, removedWetKg: -100, allocations: [], beforeAllocations: [], afterAllocations: [{ layerId: "new", code: "New product", wetMassKg: 100, dryMassKg: 70, runs: [] }] }} />);
+    expect(html).toContain("100 kg wet added");
+    expect(html).toContain("Dry solids 70 kg");
+    expect(html).toContain("Dry biochar added");
   });
-  it("renders the rain example with wet first, conserved dry values and a common scale", () => {
-    const html = renderToStaticMarkup(<OutputStockPreview preview={rain} />);
-    expect(html.indexOf("2,000 kg wet removed")).toBeLessThan(html.indexOf("1,150 kg dry biochar removed"));
-    expect(html).toContain("2,600 kg wet estimate");
-    expect(html).toContain("600 kg wet estimate");
-    expect(html).toContain("350 kg");
-    expect(html.match(/aria-valuemax="2600"/g)).toHaveLength(2);
-    expect(html).toContain("height:100%");
-    expect(html).toContain("height:23.076923076923077%");
-    expect(html).toContain("Source run Run A");
-    expect(html).toContain("Source run Run B");
-    expect(html).toContain("900 kg");
-    expect(html).toContain("250 kg");
-    expect(html).toContain("do not replace recorded pile measurements");
-  });
-  it("renders saved layer balances and keeps the depleted batch after loading", () => {
-    const beforeAllocations = [
-      { ...rain.allocations[0], wetMassKg: 1100 / 0.7 },
-      { ...rain.allocations[1], wetMassKg: 720 / 0.7, dryMassKg: 600 },
-    ];
-    const afterAllocations = [
-      { ...rain.allocations[0], wetMassKg: 0, dryMassKg: 0 },
-      { ...rain.allocations[1], wetMassKg: 600, dryMassKg: 350 },
-    ];
-    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, beforeAllocations, afterAllocations }} moreInfo={<button>More info</button>} />);
-    expect(html.match(/data-stock-batch="a"/g)).toHaveLength(2);
-    expect(html).toContain("Batch A: 0 kg dry biochar");
-    expect(html).toContain("Batch B: 350 kg dry biochar");
-    expect(html.match(/PB-001/g)).toHaveLength(3);
-    expect(html.match(/More info/g)).toHaveLength(2);
-    expect(html).toContain('width:0%;background-color:var(--acc-prod)');
-    expect(html).toContain('width:23.076923076923077%;background-color:var(--acc-infra)');
-  });
-  it("uses an explicit dry scale when a zero count has no moisture", () => {
-    const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, removedWetKg: null, estimateMoisturePercent: null, beforeEstimatedWetKg: null, afterEstimatedWetKg: null }} />);
-    expect(html).toContain("dry biochar scale");
-    expect(html).toContain("No moisture measurement was entered");
-    expect(html).not.toContain("Not recorded wet removed");
-    expect(html).not.toContain("At Not recorded");
-  });
-  it("keeps blockers and source breakdown visible", () => {
+
+  it("keeps a blocker and its source breakdown visible", () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, blockingMessage: "Insufficient dry stock" }} />);
     expect(html).toContain('role="alert"');
     expect(html).toContain("Insufficient dry stock");
     expect(html).toContain("Batch breakdown");
   });
+
   it("explains excess counts without claiming new stock", () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, discrepancySolidsKg: 80, removedDryKg: 0, allocations: [] }} />);
     expect(html).toContain("This discrepancy adds no stock.");
     // An empty draw drops the heading instead of printing "no dry biochar
-    // removed" under it: the zero is already on the card.
+    // removed" under it: the zero is already on the block.
     expect(html).not.toContain("Batch breakdown");
+  });
+});
+
+describe("OutputStockAvailability", () => {
+  it("names the batches on hand and the tracked total, with no before and after", () => {
+    const html = renderToStaticMarkup(<OutputStockAvailability
+      binName="Product bin" binCode="PB-001" subtitle="Mix" label="Available dry stock" dryKg={1150}
+      allocations={rain.allocations} actions={<button>Stock history</button>}
+    />);
+    expect(html).toContain("PB-001 · Mix");
+    expect(html).toContain("Batch A 900 kg");
+    expect(html).toContain("Available dry stock");
+    expect(html).toContain("1,150 kg dry biochar");
+    expect(html).toContain("Stock history");
+    expect(html).toContain("Source run Run A");
+    expect(html).not.toMatch(/before|after/i);
+  });
+
+  it("states an empty bin as a figure rather than a bar", () => {
+    const html = renderToStaticMarkup(<OutputStockAvailability binName="Empty bin" label="Available dry stock" dryKg={0} />);
+    expect(html).toContain("0 kg dry biochar");
+    expect(html).not.toContain("Batch breakdown");
+    expect(html).not.toContain("Show calculation");
   });
 });
 

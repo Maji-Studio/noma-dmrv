@@ -247,3 +247,29 @@ it("keeps saved fields and cap warnings in Simple while carbon and calculation s
   expect(detailed).not.toContain("Preview authority");
   await act(async () => renderer.unmount());
 });
+
+it("leads the carbon estimate with the figure and keeps the input quantities behind the calculation", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  const content = creditBatchSheetSections({
+    ...baseOptions,
+    creditBatch: makeBatch({ co2eStoredPreview: makePreview(12.5, []) }),
+    productionRuns: [makeRun("complete", 1)],
+  }).find((section) => section.title === "Carbon ledger")?.content;
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<>{content}</>); });
+  const shown = visibleText(renderer.root);
+  // One headline figure, then the caption naming what the figure excludes.
+  expect(shown).toContain("≈ 12.50 t CO₂e");
+  expect(shown).toContain("Estimated CO₂e stored, before project emissions");
+  expect(shown).toContain("Source runs");
+  // The per-input quantities are the arithmetic behind the figure, not a
+  // second list competing with it.
+  expect(shown).not.toContain("Feedstock, dry mass");
+  const disclosure = renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!;
+  await act(async () => disclosure.props.onClick());
+  const disclosed = visibleText(renderer.root);
+  expect(disclosed).toContain("Feedstock, dry mass");
+  expect(disclosed).toContain("Grid electricity");
+  expect(disclosed).toContain("Isometric applies the emission factors");
+  await act(async () => renderer.unmount());
+});

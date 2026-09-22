@@ -4,7 +4,13 @@ import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatMassKg } from "@/lib/format-utils";
 
 export type MassCategory = "dry-biochar" | "ingredient-solids" | "existing-water" | "added-water" | "dry-batch";
-export type MassSegment = { label: string; mass: number | null; category: MassCategory };
+/**
+ * `fill` overrides the category fill for one segment. Peer parts of the same
+ * substance (batches in a delivery, batches in an application) all carry one
+ * category, so without it a bar of four batches draws as one undivided block;
+ * see `BATCH_ACCENT_FILLS` in the segment bar.
+ */
+export type MassSegment = { label: string; mass: number | null; category: MassCategory; fill?: string };
 /** Fill per mass category, shared by the ledger mini bars and the segment bar. */
 export const MASS_CATEGORY_FILLS: Record<MassCategory, string> = {
   "dry-biochar": "bg-[var(--clr-dark-purple-80)]",
@@ -33,7 +39,7 @@ function share(mass: number | null, total: number | null) {
 
 function MiniBar({ segment, total }: { segment: MassSegment; total: number | null }) {
   return <div aria-hidden="true" className="mt-4 h-4 w-full bg-[var(--color-border-secondary)]">
-    {total !== null && total > 0 && segment.mass !== null && <div className={`h-full ${MASS_CATEGORY_FILLS[segment.category]}`} style={{ width: `${segment.mass / total * PERCENT_SCALE}%` }} />}
+    {total !== null && total > 0 && segment.mass !== null && <div className={`h-full ${segment.fill ? "" : MASS_CATEGORY_FILLS[segment.category]}`} style={{ width: `${segment.mass / total * PERCENT_SCALE}%`, background: segment.fill }} />}
   </div>;
 }
 

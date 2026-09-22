@@ -82,13 +82,19 @@ describe("optional detail boundaries", () => {
     expect(simple).not.toContain("Dry = wet");
     // A missing moisture reading still names the field it is waiting on.
     expect(simple).toContain("not recorded.");
+    // The product bar follows the same rule: its parts are what the mass and
+    // ingredient fields mean, and only its ledger waits for Detailed.
+    expect(simple).toContain("Product composition");
+    expect(simple).toContain("Dry biochar");
+    expect(simple).toContain("60 kg");
+    expect(simple).not.toContain("Show calculation");
     // Other derived readouts stay hidden.
-    expect(simple).not.toContain("60 kg");
     expect(simple).toContain("exceeds the biochar eligibility ceiling");
     expect(simple).toContain("Durability");
     expect(simple).toContain("Sampling date");
     expect(simple).not.toContain("formula-v1");
-    expect(renderer.root.findAllByProps({ role: "img" })).toHaveLength(1);
+    // The resolved moisture split and the product composition, one bar each.
+    expect(renderer.root.findAllByProps({ role: "img" })).toHaveLength(2);
     await act(async () => renderer.unmount());
   });
 });
