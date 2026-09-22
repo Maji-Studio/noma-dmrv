@@ -1,6 +1,8 @@
 "use client";
 
-import { useFormDetailLevel, CompositionCard, CompositionLedger } from "@/components/forms";
+import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { CompositionCard } from "@/components/forms/composition-card";
+import { CompositionLedger } from "@/components/forms/composition-ledger";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
