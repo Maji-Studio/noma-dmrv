@@ -14,7 +14,7 @@ interface TransportLegsSummaryProps {
 
 /**
  * Read-only transport-leg list for the side-sheet view mode. Renders the same
- * stacked leg blocks as the editor (via `readOnly`) so view and edit stay
+ * journey timeline as the editor (via `readOnly`) so view and edit stay
  * visually identical, minus the add/edit/delete controls.
  */
 export function TransportLegsSummary({
@@ -29,7 +29,6 @@ export function TransportLegsSummary({
       entityId={entityId}
       title={title}
       emptyMessage={emptyMessage}
-      followFormDetail={entityType === "sample"}
       readOnly
     />
   );
