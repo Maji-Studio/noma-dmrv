@@ -1,123 +1,91 @@
-# Product and Order screenshot review
+# Product and Order: approved E correction
 
-Visual evidence for [PR #821](https://github.com/Maji-Studio/noma-dmrv/pull/821), captured from the real application after the declutter pass (one composition table per surface, stock context as its own panel, calculation lists and repeated headers removed). Use this gallery to review the Product and Order create, read, and edit surfaces on desktop and narrow screens.
+Visual evidence for [PR #821](https://github.com/Maji-Studio/noma-dmrv/pull/821), refreshed on 2026-09-22 after restoring the approved E presentation. These images replace the earlier declutter screenshots. Application code commit: `6db75935986c1c423af456d347e773da3607fd6b`.
 
-Application commit: `7925b4b26e4e5b340f814dba68b97981fded6416`.
+The authoritative reference is the preserved, uncommitted E prototype in `/private/tmp/noma-product-order-ui-prototype`, previewed at localhost:3116. The real application retains its authenticated forms and canonical calculations; reference mock data was not copied into production logic.
 
-These screenshots use synthetic local E2E records. Desktop viewport: 1440 × 1100; narrow viewport: 390 × 844. Images are unmodified full-page browser captures, so some include success toasts, the local development badge, or page content below the sheet viewport. The browser flow scrolls to the relevant fields before each capture; individual images are views of the sheet rather than stitched captures of all its content.
+Simple shows inputs or recorded fields only, plus required errors and valid selector stock changes. Detailed adds source, named ingredient, and final Product composition tables. Calculation and source-lot context is behind Details. Order stock follows all form fields, grouped by bin then blend/lot.
 
-Validation at capture: the Product/Order presentation, FIFO, and distribution browser specs passed (16 tests), including keyboard Details controls, value preservation, actual saves, and narrow-layout overflow checks.
+Images are unmodified browser viewport captures: desktop 1440 × 1100, narrow 390 × 844. Each view scrolls the sheet to the relevant content. Some captures include local development indicators or success toasts. Synthetic E2E records deliberately exercise long labels; their measured masses differ from the prototype fixture.
 
-## Quick comparison
+Validation: both full presentation/FIFO specs passed (6 tests); after the final shared Details control sizing change, both presentation flows passed again (2 tests, 25.4 seconds). The complete Product flow passed again after correcting destination-addition context (1 test, 22.3 seconds). Coverage includes create/read/edit, keyboard controls, disclosure visibility, preserved values/errors, invalid and alternate bins, exact FIFO allocations, actual saves, no order stock reservation, precise read values, field alignment, and narrow overflow. Targeted ESLint and diff checks passed.
 
-| Product | Order |
-| --- | --- |
-| [Create: Simple](product-simple-desktop.png) | [Create: Detailed](order-detailed-desktop.png) |
-| [Create: Detailed](product-detailed-desktop.png) | [Field layout](order-fields-desktop.png) |
-| [Read](product-read-detailed.png) | [Read](order-read-detailed.png) |
-| [Edit](product-edit-detailed.png) | [Edit](order-edit-detailed.png) |
-| [Narrow create](product-detailed-narrow.png) | [Narrow create](order-detailed-narrow.png) |
-| [Narrow read](product-read-narrow.png) | [Narrow read](order-read-narrow.png) |
-| [Narrow edit](product-edit-narrow.png) | [Narrow edit](order-edit-narrow.png) |
+## Simple in every mode
 
-## Product
+| Surface | Desktop | Narrow |
+| --- | --- | --- |
+| Product create | [Fields only](product-simple-desktop.png) | [Fields only](product-simple-narrow.png) |
+| Product read | [Fields only](product-read-simple-desktop.png) | [Fields only](product-read-simple-narrow.png) |
+| Product edit | [Fields only](product-edit-simple-desktop.png) | [Fields only](product-edit-simple-narrow.png) |
+| Order create | [Fields only](order-simple-desktop.png) | [Fields only](order-simple-narrow.png) |
+| Order read | [Fields only](order-read-simple-desktop.png) | [Fields only](order-read-simple-narrow.png) |
+| Order edit | [Fields only](order-edit-simple-desktop.png) | [Fields only](order-edit-simple-narrow.png) |
+
+## Detailed in every mode
+
+| Surface | Desktop | Narrow |
+| --- | --- | --- |
+| Product create | [Detailed](product-detailed-desktop.png) | [Detailed](product-detailed-narrow.png) |
+| Product read | [Detailed](product-read-detailed.png) | [Detailed](product-read-narrow.png) |
+| Product edit | [Detailed](product-edit-detailed.png) | [Detailed](product-edit-narrow.png) |
+| Order create | [Detailed](order-detailed-desktop.png) | [Detailed](order-detailed-narrow.png) |
+| Order read | [Detailed](order-read-detailed.png) | [Detailed](order-read-narrow.png) |
+| Order edit | [Detailed](order-edit-detailed.png) | [Detailed](order-edit-narrow.png) |
+
+## Composition and progressive details
 
 <details>
-<summary>Create: Simple</summary>
+<summary>Source composition below water and density</summary>
 
-![Product: Create: Simple](product-simple-desktop.png)
+![Source composition below water and density](product-source-composition.png)
 
 </details>
 
 <details>
-<summary>Create: Detailed with calculation context</summary>
+<summary>Named ingredient composition below its inputs</summary>
 
-![Product: Create: Detailed with calculation context](product-detailed-desktop.png)
-
-</details>
-
-<details>
-<summary>Create: Detailed, narrow</summary>
-
-![Product: Create: Detailed, narrow](product-detailed-narrow.png)
+![Named ingredient composition below its inputs](product-ingredient-composition.png)
 
 </details>
 
 <details>
-<summary>Read: saved composition</summary>
+<summary>Source calculation and stock context</summary>
 
-![Product: Read: saved composition](product-read-detailed.png)
-
-</details>
-
-<details>
-<summary>Read: narrow</summary>
-
-![Product: Read: narrow](product-read-narrow.png)
+![Source calculation and stock context](product-source-details.png)
 
 </details>
 
 <details>
-<summary>Edit: Detailed</summary>
+<summary>Actual FIFO source shares</summary>
 
-![Product: Edit: Detailed](product-edit-detailed.png)
-
-</details>
-
-<details>
-<summary>Edit: narrow</summary>
-
-![Product: Edit: narrow](product-edit-narrow.png)
-
-</details>
-
-## Order
-
-<details>
-<summary>Create: Detailed stock</summary>
-
-![Order: Create: Detailed stock](order-detailed-desktop.png)
+![Actual FIFO source shares](product-source-fifo.png)
 
 </details>
 
 <details>
-<summary>Create: field layout</summary>
+<summary>Source-lot history dialog</summary>
 
-![Order: Create: field layout](order-fields-desktop.png)
-
-</details>
-
-<details>
-<summary>Create: Detailed, narrow</summary>
-
-![Order: Create: Detailed, narrow](order-detailed-narrow.png)
+![Source-lot history dialog](product-source-lots.png)
 
 </details>
 
 <details>
-<summary>Read: current stock</summary>
+<summary>Final product Details disclosure</summary>
 
-![Order: Read: current stock](order-read-detailed.png)
-
-</details>
-
-<details>
-<summary>Read: narrow</summary>
-
-![Order: Read: narrow](order-read-narrow.png)
+![Final product Details disclosure](product-final-details.png)
 
 </details>
 
 <details>
-<summary>Edit: Detailed</summary>
+<summary>Order fields followed by stock</summary>
 
-![Order: Edit: Detailed](order-edit-detailed.png)
+![Order fields followed by stock](order-fields-desktop.png)
 
 </details>
 
 <details>
-<summary>Edit: narrow</summary>
+<summary>Order stock calculation and provenance</summary>
 
-![Order: Edit: narrow](order-edit-narrow.png)
+![Order stock calculation and provenance](order-stock-details.png)
 
 </details>
