@@ -267,6 +267,8 @@ interface JourneyTotals {
    * varying one as the range the legs cover.
    */
   load: string;
+  /** True when legs carry different loads, so each leg box names its own. */
+  loadsVary: boolean;
 }
 
 function summarizeJourney(
@@ -298,7 +300,12 @@ function summarizeJourney(
         ? formatMass(minLoad)
         : `${formatMass(minLoad)} to ${formatMass(maxLoad)}`;
 
-  return { distance: totalDistance, distanceCaption, load };
+  return {
+    distance: totalDistance,
+    distanceCaption,
+    load,
+    loadsVary: minLoad != null && maxLoad != null && minLoad !== maxLoad,
+  };
 }
 
 /**
@@ -311,6 +318,7 @@ function JourneyLeg({
   leg,
   arrivalStopName,
   evidenceAttached,
+  showLoad,
   onEdit,
   onDelete,
   controlsDisabled,
@@ -319,6 +327,8 @@ function JourneyLeg({
   leg: EditableTransportLeg;
   arrivalStopName: string;
   evidenceAttached: boolean;
+  /** Set when the journey's loads differ, so the range in the footer is not the only record. */
+  showLoad: boolean;
   onEdit: () => void;
   onDelete: () => void;
   controlsDisabled: boolean;
@@ -347,7 +357,10 @@ function JourneyLeg({
         </span>
       </div>
       <div className="flex items-center justify-between gap-8">
-        <dl className="body-caption">
+        <dl className="flex flex-wrap gap-x-16 gap-y-4 body-caption">
+          {showLoad && (
+            <LegFact label="Load" numeric value={formatMass(leg.loadMassKg)} />
+          )}
           <LegFact
             label="Evidence"
             value={evidenceAttached ? "Attached" : MISSING_VALUE.none}
@@ -601,6 +614,7 @@ export function TransportLegsEditor({
                       leg={leg}
                       arrivalStopName={arrivalStopName}
                       evidenceAttached={evidenceAttached}
+                      showLoad={totals.loadsVary}
                       showControls={!readOnly}
                       controlsDisabled={controlsDisabled}
                       onEdit={() =>
