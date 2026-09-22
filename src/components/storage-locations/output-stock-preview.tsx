@@ -246,7 +246,7 @@ function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?:
             contributes the bar and its key line and no second ledger. */}
         <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.estimateMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
       </div>}
-      {notice && <p className="body-caption text-[var(--color-text-secondary)]">{notice}</p>}
+      {notice && <StockNotice>{notice}</StockNotice>}
       <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} />
       {moreInfo}
     </CompositionCard>

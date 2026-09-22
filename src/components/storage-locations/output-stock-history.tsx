@@ -56,7 +56,7 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
     <li className="flex gap-12">
       <div className="flex flex-col items-center" aria-hidden="true">
         <span className={`mt-6 size-8 shrink-0 rounded-full ${reversed ? "border border-[var(--color-border-primary)]" : "bg-[var(--color-text-primary)]"}`} />
-        {!last && <span className="w-1 flex-1 bg-[var(--color-border-tertiary)]" />}
+        {!last && <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />}
       </div>
       <article id={`output-movement-${entry.id}`} className="min-w-0 flex-1 space-y-8 pb-24">
         <div className="flex items-center justify-between gap-12">
