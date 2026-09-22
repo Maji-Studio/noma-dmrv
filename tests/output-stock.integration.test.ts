@@ -92,8 +92,8 @@ describe('output FIFO transactions', () => {
   });
   it('rejects shortages, physically future sources, organization and formulation forgery; orders need no stock and bins are unpaginated', async () => {
     const f = await fixture();
-    expect((await previewOutputStock(f.ctx, { ...f.input, wetMassKg: 2500, moisturePercent: 15 })).blockingMessage).toMatch(/Insufficient/);
-    expect((await previewOutputStock(f.ctx, { ...f.input, physicalDate: '2026-09-10', wetMassKg: 1500, moisturePercent: 15 })).blockingMessage).toMatch(/Insufficient/);
+    expect((await previewOutputStock(f.ctx, { ...f.input, wetMassKg: 2500, moisturePercent: 15 })).blockingMessage).toMatch(/Not enough dry biochar/);
+    expect((await previewOutputStock(f.ctx, { ...f.input, physicalDate: '2026-09-10', wetMassKg: 1500, moisturePercent: 15 })).blockingMessage).toMatch(/Not enough dry biochar/);
     await expect(previewOutputStock({ ...f.ctx, organizationId: 'other-org' }, f.input)).rejects.toThrow('not found');
     const bins = await db.insert(storageLocations).values(Array.from({ length: 24 }, (_, i) => ({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FIFO-E${i}-${f.tag}`, name: `E2E Empty ${i} ${f.tag}`, type: 'product_bin' as const, formulationId: f.pure.id }))).returning();
     const emptyOrder = await createOrder(f.ctx, { code: `E2E-FIFO-EMPTY-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date('2026-09-14'), quantityKg: 100, packaging: 'loose' });

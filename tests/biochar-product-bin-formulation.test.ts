@@ -140,7 +140,7 @@ describe("posted product bin and formulation contract", () => {
     await updateFormulation(f.ctx, f.recipe.id, { biocharRatio: 0.7 });
     await expect(updateBiocharProduct(f.ctx, product.id, { composition: composition(f, 105, null, { moistureContentPercent: 0 }) })).rejects.toThrow("immutable");
     expect(await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id))).toEqual(shares);
-    await expect(blend(f, { massKg: 1 })).rejects.toThrow(/Insufficient/);
+    await expect(blend(f, { massKg: 1 })).rejects.toThrow(/Not enough dry biochar/);
   });
   it("rejects an all-ingredient product with zero source biochar", async () => {
     const f = await fixture();
