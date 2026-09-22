@@ -58,7 +58,7 @@ describe("optional detail boundaries", () => {
     await act(async () => renderer.unmount());
   });
 
-  it("hides derived mass readouts while retaining eligibility warnings and saved fields", async () => {
+  it("keeps the moisture bar and key in Simple while hiding its calculation table", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<FormDetailProvider scope="read">
       <MoistureSplit followFormDetail wetMassKg={100} moisturePercent={20} />
@@ -72,14 +72,23 @@ describe("optional detail boundaries", () => {
       ] }]} />
     </FormDetailProvider>); });
     const simple = visibleText(renderer.root);
-    expect(simple).not.toContain("80kg");
+    // The bar and its key are what the wet mass and moisture inputs mean, so
+    // they stay in Simple. Only the calculation table below them is optional.
+    expect(simple).toContain("Dry");
+    expect(simple).toContain("80 kg");
+    expect(simple).toContain("Water");
+    expect(simple).toContain("20 kg");
+    expect(simple).not.toContain("% of total");
+    expect(simple).not.toContain("Dry = wet");
+    // A missing moisture reading still names the field it is waiting on.
+    expect(simple).toContain("not recorded.");
+    // Other derived readouts stay hidden.
     expect(simple).not.toContain("60 kg");
-    expect(simple).not.toContain("Moisture");
     expect(simple).toContain("exceeds the biochar eligibility ceiling");
     expect(simple).toContain("Durability");
     expect(simple).toContain("Sampling date");
     expect(simple).not.toContain("formula-v1");
-    expect(renderer.root.findAllByProps({ role: "img" })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ role: "img" })).toHaveLength(1);
     await act(async () => renderer.unmount());
   });
 });

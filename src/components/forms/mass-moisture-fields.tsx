@@ -6,7 +6,8 @@
  * range helper, and a grey "Dry: 237.5 kg" caption tucked under one of the two
  * inputs. The three quantities are one measurement, so they render as one
  * block: two inputs and, spanning both, the live `MoistureSplit` bar showing
- * what the entered numbers actually mean.
+ * what the entered numbers actually mean. The bar carries no frame of its own;
+ * it belongs to the inputs above it.
  *
  * `MassMoistureFields` is the pairing. `MoistureField` is for the forms that
  * capture a moisture reading with no wet mass beside it (lab samples), and
@@ -20,7 +21,6 @@
  */
 "use client";
 
-import { useFormDetailLevel } from "./form-detail-context";
 import type { ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "./form-field";
@@ -185,7 +185,11 @@ interface MassMoistureFieldsProps {
 
 /**
  * Wet mass and moisture side by side, with the derived split spanning both.
- * The split panel is framed so it reads as output rather than another input.
+ *
+ * The split is unframed on purpose: it is not a separate panel of output, it is
+ * what the two inputs above it mean, so the bar and its key sit directly under
+ * them and move as they change. `MoistureSplit` decides how much of the
+ * calculation to show from the form detail level; nothing here is hidden.
  */
 export function MassMoistureFields({
   followFormDetail,
@@ -201,7 +205,6 @@ export function MassMoistureFields({
   finalMoistureLabel,
   splitFooter,
 }: MassMoistureFieldsProps) {
-  const level = useFormDetailLevel();
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
@@ -211,11 +214,7 @@ export function MassMoistureFields({
           {addedWaterField}
         </div>
       )}
-      <div
-        data-testid="mass-moisture-split"
-        hidden={followFormDetail && level === "simple"}
-        className={followFormDetail ? "md:col-span-2" : "md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"}
-      >
+      <div data-testid="mass-moisture-split" className="md:col-span-2">
         <MoistureSplit
           followFormDetail={followFormDetail}
           wetMassKg={parseWatchedNumber(wetMassKg)}
