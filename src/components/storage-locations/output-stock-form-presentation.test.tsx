@@ -39,13 +39,19 @@ it("shows correction inputs and blockers without optional headings or allocation
   expect(visible(renderer.root)).toContain(state.blocker);
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   const detailed = visible(renderer.root);
-  // Detailed adds the original entry's own figures and the movement card, both
-  // as aligned rows; nothing hides behind a control that has no calculation.
+  // Detailed adds the original entry's own figures and the movement card: the
+  // split bar and the balance pair are visible, and the figures behind them sit
+  // in the card's single collapsed disclosure.
   expect(detailed).toContain("Dry biochar");
   expect(detailed).toContain("80 kg");
   expect(detailed).toContain("Source bin");
   expect(detailed).toContain("Stock history");
   expect(detailed).not.toContain("Batch breakdown");
-  expect(renderer.root.findAllByType("button").filter(node => node.props["aria-controls"])).toHaveLength(0);
+  expect(detailed).not.toContain("Wet removed");
+  const disclosures = renderer.root.findAllByType("button").filter(node => node.props["aria-controls"]);
+  expect(disclosures).toHaveLength(1);
+  expect(disclosures[0].props["aria-expanded"]).toBe(false);
+  await act(async () => disclosures[0].props.onClick());
+  expect(visible(renderer.root)).toContain("Wet removed");
   await act(async () => renderer.unmount());
 });

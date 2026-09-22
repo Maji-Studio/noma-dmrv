@@ -22,6 +22,9 @@
  * - `variant="compact"` — figures plus bar plus one line. Nested panels, cards.
  * - `variant="inline"` — text only, no bar. Table cells and option labels.
  *
+ * `calculation={false}` drops that table where the host surface already owns a
+ * disclosure for the arithmetic.
+ *
  * `followFormDetail` ties the calculation table to the surrounding form detail
  * level: Simple keeps the bar and key line, because those are what the two
  * inputs mean, and Detailed adds the table. Without a form detail scope (read
@@ -64,6 +67,14 @@ const SWATCH = "inline-block h-12 w-12 shrink-0";
 
 interface MoistureSplitProps {
   followFormDetail?: boolean;
+  /**
+   * `detail` only. Set false where the surrounding surface already discloses the
+   * arithmetic, so the split contributes the bar and its key line and nothing
+   * else. The stock movement card is the case: its own "Show calculation" holds
+   * the FIFO draw, and a second ledger of the same movement's dry and water
+   * masses beside it reads as two competing breakdowns.
+   */
+  calculation?: boolean;
   /** As-received mass in kg. */
   wetMassKg: number | null | undefined;
   /** Moisture on a wet basis, 0–100. */
@@ -391,6 +402,7 @@ export function MoistureSplit({
   addedWaterKg,
   variant = "detail",
   followFormDetail = false,
+  calculation = true,
   materialLabel,
   wetLabel,
   dryLabel,
@@ -483,7 +495,8 @@ export function MoistureSplit({
 
   // The bar and its key are what the two inputs mean, so they stay in Simple.
   // The table is the arithmetic behind them, which is what Detailed adds.
-  const showCalculation = !followFormDetail || level === "detailed";
+  const showCalculation =
+    calculation && (!followFormDetail || level === "detailed");
 
   return (
     <div className={`flex flex-col gap-12 ${className}`}>

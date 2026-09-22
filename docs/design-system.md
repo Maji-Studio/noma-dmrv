@@ -470,7 +470,12 @@ delivery evidence; never use it to recalculate either composition mass.
   the two inputs mean, not a detail — and **Detailed** adds the calculation
   table below them: the `CompositionLedger` plus the wet-basis arithmetic in
   words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
-  is no "Show calculation" disclosure on this surface. Missing moisture renders
+  is no "Show calculation" disclosure on this surface, and `calculation={false}`
+  drops the table where the host surface owns one (the stock movement card: its
+  disclosure holds the FIFO draw, so the split contributes bar and key line
+  only). The bar names **dry solids**, not the tracked quantity: a blended
+  product bin holding 84 kg of dry solids holds 70 kg of dry biochar, and both
+  masses appear on the same card. Missing moisture renders
   an explicit *unresolved* state (hatched dashed bar, "Moisture not recorded"),
   never nothing — dry mass drives certification readiness, so its absence has
   to be visible.

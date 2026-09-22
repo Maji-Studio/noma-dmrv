@@ -29,9 +29,11 @@ export function CompositionCard({ title, hint, children, calculation }: {
   const revealed = calculation;
   const CaretIcon = open ? CaretUpIcon : CaretDownIcon;
   return <section aria-label={title} className="space-y-12 bg-[var(--color-surface-light)] p-16">
-    <div className="flex items-center justify-between gap-12">
-      <h3 className="flex min-w-0 items-center gap-4 body-small font-medium">
-        <span>{title}</span>
+    {/* A long bin name wraps rather than squeezing the control: the title takes
+        the row and the disclosure drops to its own line only when it has to. */}
+    <div className="flex flex-wrap items-center justify-between gap-x-12 gap-y-8">
+      <h3 className="flex min-w-0 flex-1 items-center gap-4 body-small font-medium">
+        <span className="min-w-0">{title}</span>
         {hint && <InfoHint label={`About ${title.toLowerCase()}`}>{hint}</InfoHint>}
       </h3>
       {revealed && <Button data-presentation-control type="button" variant="noOutline" className="min-h-44 shrink-0 gap-6 px-8 normal-case" aria-expanded={open} aria-controls={id} aria-label={`${open ? "Hide" : "Show"} calculation for ${title.toLowerCase()}`} onClick={() => setOpen(!open)}>

@@ -12,12 +12,21 @@ import type {
   AffectedStockPreview as Preview,
   OutputStockBalanceView,
 } from "@/types/output-stock";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { useState, type ReactNode } from "react";
-import { formatWetMeasurement, StockBalanceChange, StockNotice } from "./stock-figures";
+import { InlineMassChange, StockBalanceChange, StockNotice, StockRows, type StockRow } from "./stock-figures";
 
 const PERCENT_SCALE = 100;
 const EMPTY_SCALE_KG = 1;
 const BATCH_COLORS = ["var(--acc-prod)", "var(--acc-infra)", "var(--acc-dist)"];
+/**
+ * The split bar divides a wet mass into dry solids and water, and dry solids are
+ * not the tracked quantity: a blended product bin holding 84 kg of dry solids
+ * holds 70 kg of dry biochar. Naming the segment "dry biochar" would put two
+ * different masses under one label on the same card, so the bar says solids and
+ * the balance pair keeps the tracked quantity.
+ */
+const SPLIT_MATERIAL_LABEL = "Solids";
 
 /**
  * Which batches a draw touched, and which run produced each one.
@@ -202,10 +211,15 @@ export function OutputStockPreview({ followFormDetail = false, preview, moreInfo
 /**
  * What this movement does to the bin, in one card.
  *
- * The headline is the consequence (the balance before and after), the caption
- * is the movement that produced it, and the FIFO layers are the only content
- * worth a disclosure. Definitions live in the title's hint, because an operator
- * confirming a correction needs the numbers, not the vocabulary.
+ * Top to bottom it answers three questions in the order an operator asks them.
+ * What did I enter: the wet mass drawn as a moisture split, so the dry share
+ * that stock is kept in is visible instead of arithmetic. What does the bin hold
+ * now: the balance before and after. How was that reached: the entered figures
+ * and the FIFO draw, behind "Show calculation" because they restate the two
+ * blocks above rather than adding to them.
+ *
+ * Definitions live in the title's hint; an operator confirming a correction
+ * needs the numbers, not the vocabulary.
  */
 function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?: ReactNode }) {
   const dryLabel = preview.dryLabel ?? "dry biochar";
@@ -213,25 +227,98 @@ function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?:
   const headline = ingredient
     ? { label: binLabel(preview.wetLabel ?? "wet stock"), before: preview.beforeEstimatedWetKg, after: preview.afterEstimatedWetKg }
     : { label: binLabel(dryLabel), before: preview.beforeDryKg, after: preview.afterDryKg };
-  const drawn = preview.allocations.map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
-  const remaining = (preview.afterAllocations ?? []).map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
-  // The FIFO draw is the calculation; when a movement draws nothing, the layers
-  // it leaves behind are, and an empty bin has neither.
-  const calculation = drawn.length > 0
-    ? <CompositionLedger hideZero label="Batches this movement draws from" totalLabel={capitalize(`${dryLabel} in this movement`)} total={Math.abs(preview.removedDryKg ?? 0)} segments={drawn} />
-    : remaining.length > 0
-      ? <CompositionLedger hideZero label="Batch layers left in the bin" totalLabel={`Remaining ${dryLabel}`} total={preview.afterDryKg} segments={remaining} />
-      : undefined;
+  const enteredWetKg = splitWetMassKg(preview);
+  const notice = dryingNotice(preview, enteredWetKg);
+  const rows = movementRows(preview);
+  const ledger = movementLedger(preview);
   return (
     <CompositionCard
       title={preview.binName}
       hint={stockCardHint(preview)}
-      calculation={calculation}
+      calculation={rows.length > 0 || ledger ? <>
+        {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
+        {ledger}
+      </> : undefined}
     >
-      <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} supportingLine={movementCaption(preview)} />
+      {enteredWetKg !== null && <div className="space-y-6">
+        <p className="body-caption text-[var(--color-text-secondary)]">What you entered</p>
+        {/* The card's own disclosure holds the arithmetic, so the split
+            contributes the bar and its key line and no second ledger. */}
+        <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.estimateMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
+      </div>}
+      {notice && <p className="body-caption text-[var(--color-text-secondary)]">{notice}</p>}
+      <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} />
       {moreInfo}
     </CompositionCard>
   );
+}
+
+/**
+ * The wet mass the split bar draws, or null when there is no split to draw.
+ *
+ * A removal carries the entered wet mass directly. A count does not: the planner
+ * nulls `removedWetKg` for it and the counted mass reaches the preview as the
+ * after wet estimate, which is the counted figure at the entered moisture. That
+ * substitution only holds while the count is accepted in full, so a count that
+ * exceeds tracked solids, or a preview whose balances were refused, keeps the
+ * bar off rather than captioning a stale figure as an entry.
+ *
+ * A wet mass without moisture has no split either: the form's own moisture field
+ * already carries that error, so an unresolved bar here would be a second copy.
+ */
+function splitWetMassKg(preview: Preview): number | null {
+  if (preview.estimateMoisturePercent === null) return null;
+  const counted = preview.blockingMessage === null && preview.discrepancySolidsKg <= 0
+    ? preview.afterEstimatedWetKg
+    : null;
+  const entered = preview.removedWetKg === null ? counted : Math.abs(preview.removedWetKg);
+  return entered !== null && entered > 0 ? entered : null;
+}
+
+/** Added or removed, from the sign the planner returns. */
+function movementDirection(massKg: number): string {
+  return massKg < 0 ? "added" : "removed";
+}
+
+/**
+ * The entered figures and the estimate the headline leaves out. These are the
+ * inputs, not the consequence, so they sit behind the disclosure.
+ */
+function movementRows(preview: Preview): StockRow[] {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const rows: StockRow[] = [];
+  if (preview.removedWetKg !== null) {
+    rows.push({ label: capitalize(`wet ${movementDirection(preview.removedWetKg)}`), value: formatMassKg(Math.abs(preview.removedWetKg)) });
+  }
+  if (preview.removedDryKg !== null) {
+    rows.push({ label: capitalize(`${dryLabel} ${movementDirection(preview.removedDryKg)}`), value: formatMassKg(Math.abs(preview.removedDryKg)) });
+  }
+  if (preview.estimateMoisturePercent !== null) {
+    rows.push({ label: "Moisture", value: formatMoisturePercent(preview.estimateMoisturePercent) });
+  }
+  const estimate = preview.lane === "ingredient"
+    ? { label: binLabel(dryLabel), before: preview.beforeDryKg, after: preview.afterDryKg }
+    : { label: binLabel(preview.wetLabel ?? "wet estimate"), before: preview.beforeEstimatedWetKg, after: preview.afterEstimatedWetKg };
+  if (estimate.before !== null && estimate.after !== null) {
+    rows.push({ label: estimate.label, value: <InlineMassChange beforeKg={estimate.before} afterKg={estimate.after} /> });
+  }
+  return rows;
+}
+
+/**
+ * The FIFO draw is the calculation; when a movement draws nothing, the layers it
+ * leaves behind are, and an empty bin has neither.
+ */
+function movementLedger(preview: Preview): ReactNode {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const drawn = preview.allocations.map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
+  if (drawn.length > 0) {
+    return <CompositionLedger hideZero label="Batches this movement draws from" totalLabel={capitalize(`${dryLabel} in this movement`)} total={Math.abs(preview.removedDryKg ?? 0)} segments={drawn} />;
+  }
+  const remaining = (preview.afterAllocations ?? []).map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
+  return remaining.length > 0
+    ? <CompositionLedger hideZero label="Batch layers left in the bin" totalLabel={`Remaining ${dryLabel}`} total={preview.afterDryKg} segments={remaining} />
+    : undefined;
 }
 
 /** Sentence case: the quantity labels are stored lowercase for prose. */
@@ -243,22 +330,16 @@ function binLabel(quantity: string): string {
   return capitalize(`${quantity} in bin`);
 }
 
-/** One sentence naming what the movement does, never a restatement of a row. */
-function movementCaption(preview: Preview): string {
+/**
+ * A count that only changes moisture looks like a bug next to an unchanged
+ * balance, so the one case that needs a sentence gets one, above the figures it
+ * explains.
+ */
+function dryingNotice(preview: Preview, enteredWetKg: number | null): string | null {
   const dryLabel = preview.dryLabel ?? "dry biochar";
-  const dry = preview.removedDryKg;
-  const wet = preview.removedWetKg;
-  if (dry === null || dry === 0) {
-    const counted = preview.afterEstimatedWetKg;
-    return counted === null
-      ? `No ${dryLabel} removed.`
-      : `Counted ${formatWetMeasurement(counted, preview.estimateMoisturePercent)}, no ${dryLabel} removed.`;
-  }
-  const verb = dry < 0 ? "Adds" : "Removes";
-  const mass = formatMassKg(Math.abs(dry));
-  return wet === null
-    ? `${verb} ${mass} ${dryLabel}.`
-    : `${verb} ${mass} ${dryLabel} (${formatWetMeasurement(Math.abs(wet), preview.estimateMoisturePercent)}).`;
+  return preview.removedDryKg === 0 && enteredWetKg !== null
+    ? `Drying alone does not remove ${dryLabel}.`
+    : null;
 }
 
 /** The definition the card cannot show as a number. Kept to one hint. */
