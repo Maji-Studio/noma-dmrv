@@ -26,7 +26,7 @@ export function StockContext({ preview, facilityId }: { preview?: AffectedStockP
       <div><dt className="text-[var(--color-text-secondary)]">Remaining after this entry</dt><dd className="tabular-nums">{formatMassKg(preview.afterDryKg)}</dd></div>
     </dl>
     {preview.allocations.length > 0 && <div className="space-y-8 body-caption">
-      <div className="flex items-center gap-8 text-[var(--color-text-secondary)]">Drawn from the oldest lot first<InfoHint label="About FIFO">Available lots placed by the movement date are used oldest first, then by posting order.</InfoHint></div>
+      {preview.removedWetKg != null && preview.removedWetKg > 0 && <div className="flex items-center gap-8 text-[var(--color-text-secondary)]">Drawn from the oldest lot first<InfoHint label="About FIFO">Available lots placed by the movement date are used oldest first, then by posting order.</InfoHint></div>}
       {preview.allocations.map(lot => <div key={lot.layerId} className="space-y-4 border-l-2 border-[var(--color-border-secondary)] pl-12">
         <div>{lot.code}: {formatMassKg(lot.dryMassKg)} dry biochar</div>
         {lot.runs.filter(run => lot.runs.length > 1 || run.code !== lot.code).map(run => <div key={run.productionRunId} className="text-[var(--color-text-secondary)]">{run.code}: {formatMassKg(run.dryMassKg)} dry biochar</div>)}
