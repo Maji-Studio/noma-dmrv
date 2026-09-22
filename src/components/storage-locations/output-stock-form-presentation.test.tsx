@@ -29,7 +29,7 @@ it("shows correction inputs and blockers without optional headings or allocation
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(form()); });
   const simple = visible(renderer.root);
-  for (const label of ["Stock preview", "Stock history", "Before loading", "Batch breakdown", "Original stock", "80 kg"]) expect(simple).not.toContain(label);
+  for (const label of ["Stock history", "Source bin", "Dry biochar", "80 kg"]) expect(simple).not.toContain(label);
   expect(simple).toContain("Original entry");
   expect(simple).toContain("Physical date");
   expect(simple).toContain("Counted wet mass");
@@ -38,11 +38,14 @@ it("shows correction inputs and blockers without optional headings or allocation
   await act(async () => renderer.update(form()));
   expect(visible(renderer.root)).toContain(state.blocker);
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
-  expect(visible(renderer.root)).toContain("Original stock");
-  expect(visible(renderer.root)).not.toContain("Batch breakdown");
-  await act(async () => renderer.root.findAllByType("button").filter(node => node.props["aria-controls"]).forEach(node => node.props.onClick()));
-  expect(visible(renderer.root)).toContain("Batch breakdown");
-  expect(visible(renderer.root)).toContain("Before loading");
-  expect(visible(renderer.root)).toContain("Stock history");
+  const detailed = visible(renderer.root);
+  // Detailed adds the original entry's own figures and the movement card, both
+  // as aligned rows; nothing hides behind a control that has no calculation.
+  expect(detailed).toContain("Dry biochar");
+  expect(detailed).toContain("80 kg");
+  expect(detailed).toContain("Source bin");
+  expect(detailed).toContain("Stock history");
+  expect(detailed).not.toContain("Batch breakdown");
+  expect(renderer.root.findAllByType("button").filter(node => node.props["aria-controls"])).toHaveLength(0);
   await act(async () => renderer.unmount());
 });

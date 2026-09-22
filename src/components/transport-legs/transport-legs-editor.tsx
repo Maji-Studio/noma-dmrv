@@ -1,18 +1,23 @@
 "use client";
 
-import { CompositionCard } from "@/components/forms";
 import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { useState } from "react";
-import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowRightIcon,
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { TableSkeleton } from "@/components/ui/loading-skeleton";
-import { formatMass } from "@/lib/format-utils";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { cn } from "@/lib/utils";
 import {
   useCreateTransportLeg,
   useDeleteTransportLeg,
@@ -27,7 +32,10 @@ import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
-import { deriveTransportLegCertStatuses } from "./transport-leg-cert-status";
+import {
+  deriveTransportLegCertStatuses,
+  summarizeTransportLegCertStatuses,
+} from "./transport-leg-cert-status";
 
 interface TransportLegsEditorProps {
   followFormDetail?: boolean;
@@ -67,11 +75,41 @@ function isSavedTransportLeg(
 
 // Feedstock and biochar legs are auto-derived (supplier distance / delivery
 // aggregation) and only ever rendered read-only; sample → lab stays manual.
-const DEFAULT_TITLES: Record<TransportEntityTypeValue, string> = {
-  feedstock: "Transport: feedstock to processing",
-  biochar: "Transport: biochar distribution",
-  sample: "Transport: Sample to lab",
+// Every mount already sits under a section header that says "Transport", so
+// this names only the route category and renders as a caption, never a heading.
+const DEFAULT_CATEGORY_LABELS: Record<TransportEntityTypeValue, string> = {
+  feedstock: "Feedstock to processing",
+  biochar: "Biochar distribution",
+  sample: "Sample to lab",
 };
+
+/**
+ * One label/value pair in a leg's caption row. Wrapping happens between pairs,
+ * never inside one, so no fact ever breaks to one word per line.
+ */
+function LegFact({
+  label,
+  value,
+  numeric = false,
+}: {
+  label: string;
+  value: string;
+  numeric?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline gap-4">
+      <dt className="text-[var(--color-text-tertiary)]">{label}</dt>
+      <dd
+        className={cn(
+          "text-[var(--color-text-secondary)]",
+          numeric && "tabular-nums",
+        )}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
 
 function formatMethod(method: string): string {
   const cleaned = method.replace(/_/g, " ");
@@ -79,10 +117,14 @@ function formatMethod(method: string): string {
 }
 
 /**
- * Transport-leg management for the entity side sheet. Matches the production-run
- * child-entity pattern: a `border-t` section with an uppercase header + add
- * button, a compact table, and a centered add/edit dialog. Pass `readOnly` for
- * the view-mode summary.
+ * Transport-leg management for the entity side sheet: a `border-t` section with
+ * a caption + add button, one stacked block per leg, and a centered add/edit
+ * dialog. Pass `readOnly` for the view-mode summary.
+ *
+ * The legs are stacked rather than tabulated because every mount is a 390px
+ * side sheet. A five-column table there collapsed the route column to one word
+ * per line; a block whose first line is the route and whose second is a wrapping
+ * caption of label/value pairs reads at any width.
  */
 export function TransportLegsEditor({
   entityType,
@@ -189,25 +231,37 @@ export function TransportLegsEditor({
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
   const detailLevel = useFormDetailLevel();
-  const showProvenance = !followFormDetail || !readOnly;
+  // The detail toggle only exists where the surface opts into it; everywhere
+  // else (edit mode, the derived feedstock/biochar lists) provenance is part of
+  // the record the operator came to read.
+  const showDistanceSource = !followFormDetail || detailLevel === "detailed";
   const showAddButton = !readOnly;
   const displayedLegs: EditableTransportLeg[] = deferred
     ? deferredLegs
     : (legs ?? []);
   const hasLegs = displayedLegs.length > 0;
-  const certStatuses = deriveTransportLegCertStatuses(
-    deferred ? deferredLegs : legs,
-    !deferred,
-    entityType,
+  const certSummary = summarizeTransportLegCertStatuses(
+    deriveTransportLegCertStatuses(
+      deferred ? deferredLegs : legs,
+      !deferred,
+      entityType,
+    ),
   );
 
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className={followFormDetail ? "body-small font-medium" : "body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]"}>
-          {title ?? DEFAULT_TITLES[entityType]}
-        </h3>
+      {/* Header: a caption, not a heading. The surrounding section already
+          carries the "Transport" title on the page's heading ladder. */}
+      <div className="flex flex-wrap items-center justify-between gap-8">
+        <div className="flex flex-wrap items-center gap-8">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {title ?? DEFAULT_CATEGORY_LABELS[entityType]}
+          </span>
+          <CertificationFieldTag
+            status={certSummary.status}
+            description={certSummary.description}
+          />
+        </div>
         {showAddButton && (
           <Button
             type="button"
@@ -230,129 +284,119 @@ export function TransportLegsEditor({
         />
       )}
 
-      {/* Table */}
       {!deferred && isLoading ? (
-        <TableSkeleton columns={readOnly ? 6 : 7} rows={2} />
+        <div className="space-y-12" aria-label="Loading transport legs">
+          <Skeleton className="h-16 w-2/3" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-16 w-1/2" />
+          <Skeleton className="h-12 w-full" />
+        </div>
       ) : !hasLegs ? (
-        <p className="body-small text-[var(--color-text-tertiary)] py-16">
+        <p className="body-small text-[var(--color-text-tertiary)]">
           {emptyMessage ??
             (readOnly
               ? "No transport legs recorded yet."
               : 'No transport legs recorded yet. Click "Add leg" to record one.')}
         </p>
-      ) : hasLegs ? (
-        <div className="overflow-x-auto">
-          <table className="w-full body-small">
-            <thead>
-              <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
-                <th className="py-8 pr-12 font-medium">Route</th>
-                <th className="py-8 pr-12 font-medium">
-                  <span className="flex items-center gap-6">
-                    Distance
-                    <CertificationFieldTag status={certStatuses.distance} />
-                  </span>
-                </th>
-                {showProvenance && <>
-                <th className="py-8 pr-12 font-medium">
-                  <span className="flex items-center gap-6">
-                    Distance source
-                    {certStatuses.provenance && (
-                      <CertificationFieldTag
-                        status={certStatuses.provenance.status}
-                        description={`Satisfied when the saved leg records ${certStatuses.provenance.label.toLowerCase()}`}
+      ) : (
+        <ul className="border-t border-[var(--color-border-tertiary)]">
+          {displayedLegs.map((leg, index) => {
+            const evidenceAttached =
+              isSavedTransportLeg(leg) &&
+              !deferred &&
+              hasAcceptedTransportEvidence(
+                (leg as { transportEvidenceDocumentCount?: number })
+                  .transportEvidenceDocumentCount,
+              );
+            return (
+              <li
+                key={isSavedTransportLeg(leg) ? leg.id : `deferred-${index}`}
+                className="flex items-start justify-between gap-12 border-b border-[var(--color-border-tertiary)] py-12"
+              >
+                <div className="min-w-0 flex-1 space-y-6">
+                  <div className="flex flex-wrap items-center gap-x-8 gap-y-2 body-small font-medium text-[var(--color-text-primary)]">
+                    <span>
+                      {leg.originName?.trim() || MISSING_VALUE.notRecorded}
+                    </span>
+                    <ArrowRightIcon
+                      size={14}
+                      weight="bold"
+                      className="shrink-0 text-[var(--color-icon-secondary)]"
+                      aria-hidden
+                    />
+                    <span className="sr-only">to</span>
+                    <span>
+                      {leg.destinationName?.trim() || MISSING_VALUE.notRecorded}
+                    </span>
+                  </div>
+                  <dl className="flex flex-wrap gap-x-16 gap-y-4 body-caption">
+                    <LegFact
+                      label="Distance"
+                      numeric
+                      value={formatDistanceKm(leg.distanceKm)}
+                    />
+                    {showDistanceSource && (
+                      <LegFact
+                        label="Distance source"
+                        value={
+                          leg.distanceSource
+                            ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                            : MISSING_VALUE.notRecorded
+                        }
                       />
                     )}
-                  </span>
-                </th>
-                </>}
-                <th className="py-8 pr-12 font-medium">Evidence</th>
-                <th className="py-8 pr-12 font-medium">Method</th>
-                <th className="py-8 pr-12 font-medium">
-                  <span className="flex items-center gap-6">
-                    Load
-                    <CertificationFieldTag status={certStatuses.load} />
-                  </span>
-                </th>
-                {!readOnly && <th className="py-8 font-medium text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {displayedLegs.map((leg, index) => (
-                <tr
-                  key={isSavedTransportLeg(leg) ? leg.id : `deferred-${index}`}
-                  className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
-                >
-                  <td className="py-8 pr-12 text-[var(--color-text-primary)]">
-                    {(leg.originName?.trim() || MISSING_VALUE.notRecorded) +
-                      " → " +
-                      (leg.destinationName?.trim() || MISSING_VALUE.notRecorded)}
-                  </td>
-                  <td className="py-8 pr-12">
-                    {leg.distanceKm} km
-                  </td>
-                  {showProvenance && <>
-                  <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
-                    {leg.distanceSource
-                      ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
-                      : MISSING_VALUE.notRecorded}
-                  </td>
-                  </>}
-                  <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
-                    {isSavedTransportLeg(leg) &&
-                    !deferred &&
-                    hasAcceptedTransportEvidence(
-                      (leg as { transportEvidenceDocumentCount?: number })
-                        .transportEvidenceDocumentCount,
-                    )
-                      ? "Attached"
-                      : MISSING_VALUE.none}
-                  </td>
-                  <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
-                  <td className="py-8 pr-12">
-                    {formatMass(leg.loadMassKg)}
-                  </td>
-                  {!readOnly && (
-                    <td className="py-8 text-right">
-                      <div className="flex items-center justify-end gap-4">
-                        <Button
-                          type="button"
-                          variant="noOutline"
-                          size="icon"
-                          onClick={() =>
-                            openEdit(leg, deferred ? index : undefined)
-                          }
-                          aria-label="Edit transport leg"
-                          disabled={dialog.open || disabled}
-                        >
-                          <PencilIcon size={16} />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          onClick={() =>
-                            setDeleteTarget(
-                              isSavedTransportLeg(leg)
-                                ? { savedId: leg.id }
-                                : { deferredIndex: index },
-                            )
-                          }
-                          aria-label="Delete transport leg"
-                          disabled={dialog.open || disabled}
-                        >
-                          <TrashIcon size={16} />
-                        </Button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-
-      {followFormDetail && readOnly && detailLevel === "detailed" && hasLegs && <CompositionCard title="Transport provenance" details={<dl className="space-y-8 body-small">{displayedLegs.map((leg, index) => <div key={isSavedTransportLeg(leg) ? leg.id : index}><dt>Leg {index + 1} distance source</dt><dd>{leg.distanceSource ? DISTANCE_SOURCE_LABELS[leg.distanceSource] : MISSING_VALUE.notRecorded}</dd></div>)}</dl>}><p className="body-caption">{displayedLegs.length} recorded transport {displayedLegs.length === 1 ? "leg" : "legs"}</p></CompositionCard>}
+                    <LegFact
+                      label="Method"
+                      value={formatMethod(leg.transportMethodType)}
+                    />
+                    <LegFact
+                      label="Load"
+                      numeric
+                      value={formatMass(leg.loadMassKg)}
+                    />
+                    <LegFact
+                      label="Evidence"
+                      value={
+                        evidenceAttached ? "Attached" : MISSING_VALUE.none
+                      }
+                    />
+                  </dl>
+                </div>
+                {!readOnly && (
+                  <div className="flex shrink-0 items-center gap-4">
+                    <Button
+                      type="button"
+                      variant="noOutline"
+                      size="icon"
+                      onClick={() => openEdit(leg, deferred ? index : undefined)}
+                      aria-label="Edit transport leg"
+                      disabled={dialog.open || disabled}
+                    >
+                      <PencilIcon size={16} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      onClick={() =>
+                        setDeleteTarget(
+                          isSavedTransportLeg(leg)
+                            ? { savedId: leg.id }
+                            : { deferredIndex: index },
+                        )
+                      }
+                      aria-label="Delete transport leg"
+                      disabled={dialog.open || disabled}
+                    >
+                      <TrashIcon size={16} />
+                    </Button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       {!readOnly && (
         <QuickAddDialogShell

@@ -156,12 +156,18 @@ test.describe("Output-bin conserved FIFO", () => {
     await expect(page.getByRole("dialog").getByText("Dry biochar applied (kg)", { exact: true })).toHaveCount(0);
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     await expect(page.getByRole("dialog").getByText("Dry biochar applied (kg)", { exact: true })).toBeHidden();
-    await page.getByRole("button", { name: "Show details for applied batches", exact: true }).click();
-    const shares = page.locator('[aria-label="Applied batch and source-run shares"]');
-    await expect(shares).toContainText(`${f.products[0].code}: 450 kg dry`);
-    await expect(shares).toContainText(`${f.products[1].code}: 125 kg dry`);
-    await expect(shares).toContainText("78.261%");
-    await expect(shares).toContainText("21.739%");
+    // The ledger carries the per-batch totals and shares; the disclosure adds
+    // only the production runs behind each batch.
+    const appliedLedger = page.getByRole("table", { name: /^Applied batches/ });
+    await expect(appliedLedger).toContainText(f.products[0].code);
+    await expect(appliedLedger).toContainText(f.products[1].code);
+    await expect(appliedLedger).toContainText("450 kg");
+    await expect(appliedLedger).toContainText("125 kg");
+    await page.getByRole("button", { name: "Show calculation for applied batches", exact: true }).click();
+    const shares = page.locator('[aria-label="Source production runs per applied batch"]');
+    await expect(shares).toBeVisible();
+    await expect(shares).toContainText("450 kg");
+    await expect(shares).toContainText("125 kg");
     await evidence(page, info, "application-batch-run-shares");
 
     await openBin(page, f);

@@ -358,11 +358,16 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             placeholder="e.g. 20"
             registration={register("moistureContentPercent")}
           />
+          {/* The composition cards belong to the same grid as the two inputs
+              above them, so they align to the field columns and inherit the
+              row rhythm instead of stacking on a second spacing scale. */}
+          <div className="md:col-span-2 space-y-16">
+            {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
+            {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
+            {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
+            {stockPreview.data && <OutputStockPreview followFormDetail hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
+          </div>
         </div>
-        {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
-        {stockPreview.isFetching && <p role="status">Refreshing stock preview...</p>}
-        {stockPreview.error && <p role="alert">{stockPreview.error.message}</p>}
-        {stockPreview.data && <OutputStockPreview followFormDetail preview={stockPreview.data} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
       </FormSection>
 
       {/* Transport Section */}

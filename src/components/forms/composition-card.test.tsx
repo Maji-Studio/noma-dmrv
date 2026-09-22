@@ -11,12 +11,13 @@ function History() {
 }
 function Form() {
   const { formState } = useForm({ defaultValues: { mass: 100 } });
-  return <form><output>{formState.isDirty ? "dirty" : "clean"}</output><CompositionCard title="Bin composition" details={<History />}><p>100 kg</p></CompositionCard></form>;
+  return <form><output>{formState.isDirty ? "dirty" : "clean"}</output><CompositionCard title="Bin composition" calculation={<History />}><p>100 kg</p></CompositionCard></form>;
 }
 it("starts collapsed, keeps correction drafts mounted, and never submits or dirties the form", async () => {
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<Form />); });
   const button = () => renderer.root.findByType("button");
+  expect(button().props["aria-label"]).toBe("Show calculation for bin composition");
   const panel = () => renderer.root.findByProps({ id: button().props["aria-controls"] });
   expect(button().props.type).toBe("button");
   expect(button().props["data-presentation-control"]).toBe(true);

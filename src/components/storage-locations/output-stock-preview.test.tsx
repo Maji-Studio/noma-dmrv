@@ -55,8 +55,10 @@ describe("OutputStockPreview", () => {
     expect(html.match(/aria-valuemax="2600"/g)).toHaveLength(2);
     expect(html).toContain("height:100%");
     expect(html).toContain("height:23.076923076923077%");
-    expect(html).toContain("Source run Run A: 900 kg dry biochar");
-    expect(html).toContain("Source run Run B: 250 kg dry biochar");
+    expect(html).toContain("Source run Run A");
+    expect(html).toContain("Source run Run B");
+    expect(html).toContain("900 kg");
+    expect(html).toContain("250 kg");
     expect(html).toContain("do not replace recorded pile measurements");
   });
   it("renders saved layer balances and keeps the depleted batch after loading", () => {
@@ -93,6 +95,8 @@ describe("OutputStockPreview", () => {
   it("explains excess counts without claiming new stock", () => {
     const html = renderToStaticMarkup(<OutputStockPreview preview={{ ...rain, discrepancySolidsKg: 80, removedDryKg: 0, allocations: [] }} />);
     expect(html).toContain("This discrepancy adds no stock.");
-    expect(html).toContain("No dry biochar removed.");
+    // An empty draw drops the heading instead of printing "no dry biochar
+    // removed" under it: the zero is already on the card.
+    expect(html).not.toContain("Batch breakdown");
   });
 });

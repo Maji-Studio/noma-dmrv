@@ -5,7 +5,20 @@ import { CompositionLedger } from "./composition-ledger";
 function ledger(total: number | null, dry: number | null, water: number | null) {
   return renderToStaticMarkup(<CompositionLedger label="Composition" totalLabel="Wet total" total={total} segments={[{ label: "Dry", mass: dry, category: "dry-biochar" }, { label: "Water", mass: water, category: "existing-water" }]} />);
 }
+function hideZeroLedger(segments: { label: string; mass: number | null }[]) {
+  return renderToStaticMarkup(<CompositionLedger hideZero label="Composition" totalLabel="Dry biochar" total={segments.reduce((sum, segment) => sum + (segment.mass ?? 0), 0)} segments={segments.map(segment => ({ ...segment, category: "dry-batch" }))} />);
+}
+
 describe("composition ledger", () => {
+  it("drops zero-mass segments but keeps them when nothing carries mass", () => {
+    const mixed = hideZeroLedger([{ label: "Batch A", mass: 40 }, { label: "Batch B", mass: 0 }]);
+    expect(mixed).toContain("Batch A");
+    expect(mixed).not.toContain("Batch B");
+    const empty = hideZeroLedger([{ label: "Batch A", mass: 0 }, { label: "Batch B", mass: 0 }]);
+    expect(empty).toContain("Batch A");
+    expect(empty).toContain("Batch B");
+  });
+
   it("uses the same total for each quiet mass/share row", () => {
     const html = ledger(100, 80, 20);
     expect(html).toContain('scope="col"');

@@ -68,17 +68,45 @@ function CreditBatchCarbonLedger({
 
   return (
     <DetailedOnly>
-      <CompositionCard title="Carbon estimate" details={<>
-        <p className="body-caption">Estimated CO₂e stored before project emissions and registry verification.</p>
-        <dl className="space-y-8 body-small">
-          {runsError || isLoadingRuns ? <div><dt>Production inputs</dt><dd aria-busy={isLoadingRuns || undefined}>{runsError ? `${MISSING_VALUE.notAvailable}. Reload the production runs to calculate these inputs.` : "Loading production inputs…"}</dd></div> : rows.map(row => <div key={row.label} className="flex justify-between gap-12"><dt>{row.label}</dt><dd className="tabular-nums">{row.value}</dd></div>)}
+      <CompositionCard
+        title="Carbon estimate"
+        hint="A local estimate of stored CO₂e before project emissions. The registry result is authoritative."
+      >
+        <dl className="body-small tabular-nums">
+          {runsError || isLoadingRuns ? (
+            <div className="flex items-baseline justify-between gap-12 py-8">
+              <dt>Production inputs</dt>
+              <dd aria-busy={isLoadingRuns || undefined} className="text-right text-[var(--color-text-tertiary)]">
+                {runsError ? "Unavailable. Reload the production runs." : "Loading…"}
+              </dd>
+            </div>
+          ) : (
+            rows.map(row => (
+              <div key={row.label} className="flex items-baseline justify-between gap-12 border-b border-[var(--color-border-secondary)] py-8">
+                <dt className="text-[var(--color-text-secondary)]">{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))
+          )}
+          <div className="flex items-baseline justify-between gap-12 py-8 font-medium">
+            <dt>Estimated CO₂e stored</dt>
+            <dd>{estimate == null ? MISSING_VALUE.notAvailable : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}</dd>
+          </div>
         </dl>
-        {!isLoadingRuns && !runsError && productionRuns.length > 0 && <div className="space-y-8">
-          <p className="body-small">Source records</p>
-          <div className="flex flex-wrap gap-x-12 gap-y-4 body-small">{productionRuns.map(run => <Link key={run.id} href={productionRunDeepLinkHref(run.id, creditBatch.facilityId)} className="underline-offset-4 hover:underline">{formatDate(run.date)}</Link>)}</div>
-        </div>}
-      </>}>
-        <dl className="body-small"><div className="flex justify-between gap-12"><dt>Estimated CO₂e stored</dt><dd className="tabular-nums">{estimate == null ? MISSING_VALUE.notAvailable : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}</dd></div></dl>
+        {!isLoadingRuns && !runsError && productionRuns.length > 0 && (
+          <div className="flex flex-wrap items-baseline gap-x-12 gap-y-4 body-caption">
+            <span className="text-[var(--color-text-tertiary)]">Source runs</span>
+            {productionRuns.map(run => (
+              <Link
+                key={run.id}
+                href={productionRunDeepLinkHref(run.id, creditBatch.facilityId)}
+                className="underline-offset-4 hover:underline"
+              >
+                {formatDate(run.date)}
+              </Link>
+            ))}
+          </div>
+        )}
       </CompositionCard>
     </DetailedOnly>
   );
@@ -189,7 +217,7 @@ function CreditBatchRunsContent({
       <span className="body-caption text-[var(--color-text-tertiary)]">
         {creditBatch.productionRunCount} completed
         {previewCount > 0
-          ? ` · ${previewCount} ${previewCount === 1 ? "preview" : "previews"}`
+          ? `, ${previewCount} ${previewCount === 1 ? "preview" : "previews"}`
           : ""}
       </span>
       <SheetLinkRows>
@@ -268,7 +296,6 @@ export function creditBatchSheetSections({
     {
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
-      content: durabilityResult?.durabilityCapped ? <p role="status" className="body-caption">The durability cap applies to this estimate. The registry result remains authoritative.</p> : undefined,
       fields: [
         { label: "Feedstock type", value: creditBatch.feedstockTypeName },
         { label: "Durability", value: durabilityLabel(creditBatch.durabilityOption) },
@@ -306,11 +333,6 @@ export function creditBatchSheetSections({
                 label: "Preview formula",
                 detailedOnly: true,
                 value: preview?.formulaVersion ?? MISSING_VALUE.notAvailable,
-              },
-              {
-                label: "Preview authority",
-                detailedOnly: true,
-                value: "Local estimate. The registry result remains authoritative.",
               },
             ]
           : []),

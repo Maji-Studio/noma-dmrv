@@ -568,7 +568,7 @@ export function FeedstockForm({
                 certifyStatus={transportDistanceCertStatus}
                 helperText={
                   storedDistanceKm != null
-                    ? "Supplier › facility distance, autofilled from the supplier. Override if the route differs."
+                    ? "Autofilled from the supplier. Override if this delivery took a different route."
                     : "Set a one-way distance on the supplier (or its default location) to autofill this."
                 }
               >

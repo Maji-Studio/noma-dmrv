@@ -1,116 +1,97 @@
-{"name": "delivery-create-1440-simple-blocker", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-create-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-create-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-create-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-create-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-create-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-create-390-details", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-read-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-read-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-read-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-read-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-read-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-read-390-details", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-edit-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-edit-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-edit-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/deliveries"}
-{"name": "delivery-edit-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-edit-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "delivery-edit-390-details", "viewport": {"width": 390, "height": 844}, "url": "/deliveries"}
-{"name": "application-create-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-create-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-create-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-create-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-create-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-create-390-details", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-read-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-read-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-read-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-read-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-read-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-read-390-details", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-edit-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-edit-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-edit-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/applications"}
-{"name": "application-edit-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-edit-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "application-edit-390-details", "viewport": {"width": 390, "height": 844}, "url": "/applications"}
-{"name": "feedstock-create-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-create-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-create-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-create-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-create-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-create-390-details", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-read-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-read-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-read-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-read-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-read-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-read-390-details", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-edit-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-edit-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-edit-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/feedstocks"}
-{"name": "feedstock-edit-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-edit-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "feedstock-edit-390-details", "viewport": {"width": 390, "height": 844}, "url": "/feedstocks"}
-{"name": "production-run-create-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-create-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-create-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-create-1440-additional-details", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-create-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-create-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-create-390-details", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-create-390-additional-details", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-read-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-read-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-read-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-read-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-read-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-read-390-details", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-edit-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-edit-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-edit-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/production-runs"}
-{"name": "production-run-edit-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-edit-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "production-run-edit-390-details", "viewport": {"width": 390, "height": 844}, "url": "/production-runs"}
-{"name": "credit-batch-read-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/credit-batches"}
-{"name": "credit-batch-read-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/credit-batches"}
-{"name": "credit-batch-read-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/credit-batches"}
-{"name": "credit-batch-read-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/credit-batches"}
-{"name": "credit-batch-read-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/credit-batches"}
-{"name": "credit-batch-read-390-details", "viewport": {"width": 390, "height": 844}, "url": "/credit-batches"}
-{"name": "sample-read-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/samples"}
-{"name": "sample-read-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/samples"}
-{"name": "sample-read-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/samples"}
-{"name": "sample-read-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/samples"}
-{"name": "sample-read-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/samples"}
-{"name": "sample-read-390-details", "viewport": {"width": 390, "height": 844}, "url": "/samples"}
-{"name": "sample-read-390-transport-right", "viewport": {"width": 390, "height": 844}, "url": "/samples"}
-{"name": "output-bin-reconciliation-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-bin-reconciliation-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-bin-reconciliation-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-bin-reconciliation-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-bin-reconciliation-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-bin-reconciliation-390-details", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-bin-loss-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-bin-loss-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-bin-loss-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-bin-loss-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-bin-loss-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-bin-loss-390-details", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-stock-correction-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-stock-correction-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-stock-correction-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-stock-correction-1440-additional-details", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-stock-correction-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-stock-correction-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-stock-correction-390-details", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-stock-correction-390-additional-details", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "output-stock-correction-saved-1440-history", "viewport": {"width": 1440, "height": 1100}, "url": "/storage-locations"}
-{"name": "output-stock-correction-saved-390-history", "viewport": {"width": 390, "height": 844}, "url": "/storage-locations"}
-{"name": "credit-batch-applied-read-1440-simple", "viewport": {"width": 1440, "height": 1100}, "url": "/credit-batches"}
-{"name": "credit-batch-applied-read-1440-detailed", "viewport": {"width": 1440, "height": 1100}, "url": "/credit-batches"}
-{"name": "credit-batch-applied-read-1440-details", "viewport": {"width": 1440, "height": 1100}, "url": "/credit-batches"}
-{"name": "credit-batch-applied-read-390-simple", "viewport": {"width": 390, "height": 844}, "url": "/credit-batches"}
-{"name": "credit-batch-applied-read-390-detailed", "viewport": {"width": 390, "height": 844}, "url": "/credit-batches"}
-{"name": "credit-batch-applied-read-390-details", "viewport": {"width": 390, "height": 844}, "url": "/credit-batches"}
+{"name":"feedstock-create-1440-simple","viewport":{"width":1440,"height":1100},"url":"/feedstocks"}
+{"name":"feedstock-create-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/feedstocks"}
+{"name":"feedstock-create-390-simple","viewport":{"width":390,"height":844},"url":"/feedstocks"}
+{"name":"feedstock-create-390-detailed","viewport":{"width":390,"height":844},"url":"/feedstocks"}
+{"name":"feedstock-read-1440-simple","viewport":{"width":1440,"height":1100},"url":"/feedstocks"}
+{"name":"feedstock-read-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/feedstocks"}
+{"name":"feedstock-read-390-simple","viewport":{"width":390,"height":844},"url":"/feedstocks"}
+{"name":"feedstock-read-390-detailed","viewport":{"width":390,"height":844},"url":"/feedstocks"}
+{"name":"feedstock-edit-1440-simple","viewport":{"width":1440,"height":1100},"url":"/feedstocks"}
+{"name":"feedstock-edit-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/feedstocks"}
+{"name":"feedstock-edit-390-simple","viewport":{"width":390,"height":844},"url":"/feedstocks"}
+{"name":"feedstock-edit-390-detailed","viewport":{"width":390,"height":844},"url":"/feedstocks"}
+{"name":"production-run-create-1440-simple","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-create-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-create-1440-details","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-create-1440-additional-details","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-create-390-simple","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-create-390-detailed","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-create-390-details","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-create-390-additional-details","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-read-1440-simple","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-read-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-read-390-simple","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-read-390-detailed","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-edit-1440-simple","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-edit-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-edit-1440-details","viewport":{"width":1440,"height":1100},"url":"/production-runs"}
+{"name":"production-run-edit-390-simple","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-edit-390-detailed","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"production-run-edit-390-details","viewport":{"width":390,"height":844},"url":"/production-runs"}
+{"name":"credit-batch-read-1440-simple","viewport":{"width":1440,"height":1100},"url":"/credit-batches"}
+{"name":"credit-batch-read-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/credit-batches"}
+{"name":"credit-batch-read-390-simple","viewport":{"width":390,"height":844},"url":"/credit-batches"}
+{"name":"credit-batch-read-390-detailed","viewport":{"width":390,"height":844},"url":"/credit-batches"}
+{"name":"sample-read-1440-simple","viewport":{"width":1440,"height":1100},"url":"/samples"}
+{"name":"sample-read-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/samples"}
+{"name":"sample-read-390-simple","viewport":{"width":390,"height":844},"url":"/samples"}
+{"name":"sample-read-390-detailed","viewport":{"width":390,"height":844},"url":"/samples"}
+{"name":"output-bin-reconciliation-1440-simple","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-bin-reconciliation-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-bin-reconciliation-1440-details","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-bin-reconciliation-390-simple","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-bin-reconciliation-390-detailed","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-bin-reconciliation-390-details","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-bin-loss-1440-simple","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-bin-loss-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-bin-loss-1440-details","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-bin-loss-390-simple","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-bin-loss-390-detailed","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-bin-loss-390-details","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-stock-correction-1440-simple","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-stock-correction-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-stock-correction-1440-details","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-stock-correction-1440-additional-details","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-stock-correction-390-simple","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-stock-correction-390-detailed","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-stock-correction-390-details","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-stock-correction-390-additional-details","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"output-stock-correction-saved-1440-history","viewport":{"width":1440,"height":1100},"url":"/storage-locations"}
+{"name":"output-stock-correction-saved-390-history","viewport":{"width":390,"height":844},"url":"/storage-locations"}
+{"name":"credit-batch-applied-read-1440-simple","viewport":{"width":1440,"height":1100},"url":"/credit-batches"}
+{"name":"credit-batch-applied-read-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/credit-batches"}
+{"name":"credit-batch-applied-read-390-simple","viewport":{"width":390,"height":844},"url":"/credit-batches"}
+{"name":"credit-batch-applied-read-390-detailed","viewport":{"width":390,"height":844},"url":"/credit-batches"}
+{"name":"delivery-create-1440-simple-blocker","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-create-1440-simple","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-create-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-create-1440-details","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-create-390-simple","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-create-390-detailed","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-create-390-details","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-read-1440-simple","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-read-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-read-1440-details","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-read-390-simple","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-read-390-detailed","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-read-390-details","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-edit-1440-simple","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-edit-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-edit-1440-details","viewport":{"width":1440,"height":1100},"url":"/deliveries"}
+{"name":"delivery-edit-390-simple","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-edit-390-detailed","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"delivery-edit-390-details","viewport":{"width":390,"height":844},"url":"/deliveries"}
+{"name":"application-create-1440-simple","viewport":{"width":1440,"height":1100},"url":"/applications"}
+{"name":"application-create-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/applications"}
+{"name":"application-create-390-simple","viewport":{"width":390,"height":844},"url":"/applications"}
+{"name":"application-create-390-detailed","viewport":{"width":390,"height":844},"url":"/applications"}
+{"name":"application-read-1440-simple","viewport":{"width":1440,"height":1100},"url":"/applications"}
+{"name":"application-read-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/applications"}
+{"name":"application-read-1440-details","viewport":{"width":1440,"height":1100},"url":"/applications"}
+{"name":"application-read-390-simple","viewport":{"width":390,"height":844},"url":"/applications"}
+{"name":"application-read-390-detailed","viewport":{"width":390,"height":844},"url":"/applications"}
+{"name":"application-read-390-details","viewport":{"width":390,"height":844},"url":"/applications"}
+{"name":"application-edit-1440-simple","viewport":{"width":1440,"height":1100},"url":"/applications"}
+{"name":"application-edit-1440-detailed","viewport":{"width":1440,"height":1100},"url":"/applications"}
+{"name":"application-edit-390-simple","viewport":{"width":390,"height":844},"url":"/applications"}
+{"name":"application-edit-390-detailed","viewport":{"width":390,"height":844},"url":"/applications"}

@@ -23,7 +23,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
@@ -41,6 +41,21 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
+
+/**
+ * One hop in the process-flow route line. The arrow is an icon rather than a
+ * "→" in the string so screen readers hear "to" and the glyph never breaks a
+ * line on its own at sheet width.
+ */
+function ProcessFlowStep({ name }: { name: string }) {
+  return (
+    <>
+      <ArrowRightIcon size={14} weight="bold" className="shrink-0 text-[var(--color-icon-secondary)]" aria-hidden />
+      <span className="sr-only">to</span>
+      <span>{name}</span>
+    </>
+  );
+}
 import {
   productionRunMassBalanceFeedback,
 } from "./production-run-mass-balance";
@@ -611,8 +626,8 @@ export function ProductionRunForm({
               setValueAs: nullableNumericValue,
             })}
           />
+          <MoistureSplit className="md:col-span-2" followFormDetail wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
         </div>
-        <MoistureSplit followFormDetail wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
@@ -815,7 +830,7 @@ export function ProductionRunForm({
           it lives outside the numbered spine and only appears once there's
           something to show. */}
       <DetailedOnly>{(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
-        <CompositionCard title="Process flow" details={<ProcessFlowPreview
+        <CompositionCard title="Process flow" hint="A recap of the bins and reactor this run moves material through." calculation={<ProcessFlowPreview
             sourceBinName={sourceBinPreviewName}
             feedstockKg={watchWetMass}
             feedstockDryKg={previewDryMass}
@@ -824,7 +839,11 @@ export function ProductionRunForm({
             biocharDryKg={previewBiocharDryMass}
             destinationBinName={selectedDestBin?.name ?? null}
           />}>
-          <p className="body-small">{sourceBinPreviewName ?? "Select source bin"} → {selectedReactor?.name ?? "Select reactor"} → {selectedDestBin?.name ?? "Select destination bin"}</p>
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-2 body-small">
+            <span>{sourceBinPreviewName ?? "Select source bin"}</span>
+            <ProcessFlowStep name={selectedReactor?.name ?? "Select reactor"} />
+            <ProcessFlowStep name={selectedDestBin?.name ?? "Select destination bin"} />
+          </div>
         </CompositionCard>
       )}</DetailedOnly>
       </form>

@@ -28,7 +28,6 @@
  */
 "use client";
 
-import { CompositionCard } from "@/components/forms/composition-card";
 
 import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import * as React from "react";
@@ -332,7 +331,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
               : undefined
           }
         >
-          {chunkFields(section.fields.filter(field => !field.detailedOnly)).map((row, rowIdx) => (
+          {chunkFields(section.fields.filter(field => !field.detailedOnly || detailLevel === "detailed")).map((row, rowIdx) => (
             <DetailRow key={rowIdx}>
               {row.map((field, fieldIdx) => (
                 <DetailField
@@ -348,7 +347,6 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
               ))}
             </DetailRow>
           ))}
-          {detailLevel === "detailed" && section.fields.some(field => field.detailedOnly) && <CompositionCard title={`${section.title} details`} details={<dl className="space-y-8">{section.fields.filter(field => field.detailedOnly).map(field => <DetailField key={field.label} {...field} />)}</dl>}><p className="body-caption">Technical records</p></CompositionCard>}
           {section.content}
         </DetailSection>
       ))}

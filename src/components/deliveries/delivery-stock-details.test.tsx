@@ -4,6 +4,10 @@ import { beforeAll, expect, it, vi } from "vitest";
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 
+// The title's InfoHint is a Base UI tooltip, which needs a DOM this node
+// environment does not have; the hint's copy is not what this test asserts.
+vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
+
 const history = vi.hoisted(() => ({ data: [] as OutputStockHistoryEntry[] }));
 vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: history.data }) }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: function History() {
@@ -29,8 +33,9 @@ it("hides the readout and single history affordance in Simple, preserves its dra
   expect(visible(renderer.root)).toContain("90 kg");
   expect(visible(renderer.root)).toContain("72 kg");
   expect(visible(renderer.root)).not.toContain("100 kg");
-  expect(visible(renderer.root)).not.toContain("Stock history");
-  await act(async () => renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!.props.onClick());
+  // This entry names no source run, so the card offers no calculation to
+  // disclose and the history affordance sits in the body as a quiet action.
+  expect(renderer.root.findAllByType("button").filter(node => node.props["aria-controls"])).toHaveLength(0);
   const historyButtons = renderer.root.findAllByType("button").filter(node => node.children.includes("Stock history"));
   expect(historyButtons).toHaveLength(1);
   await act(async () => historyButtons[0].props.onClick());

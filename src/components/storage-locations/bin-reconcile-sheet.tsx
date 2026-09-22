@@ -280,9 +280,11 @@ export function BinReconcileSheet({
                 onRecorded={handleRecorded}
               />
               </> : <>
-                <div className="flex gap-12">
-                  <Button variant="default" onClick={() => setOutputKind("loss")}>Record loss</Button>
-                  <Button variant="default" onClick={() => setOutputKind("count")}>Reconcile stock</Button>
+                {/* Which mode the sheet is in has to be readable at a glance:
+                    the two forms differ only in their labels otherwise. */}
+                <div className="flex gap-12" role="group" aria-label="Movement to record">
+                  <Button variant={outputKind === "loss" ? "default" : "weak"} aria-pressed={outputKind === "loss"} onClick={() => setOutputKind("loss")}>Record loss</Button>
+                  <Button variant={outputKind === "count" ? "default" : "weak"} aria-pressed={outputKind === "count"} onClick={() => setOutputKind("count")}>Reconcile stock</Button>
                 </div>
                 <OutputStockForm key={`${storageLocation.id}-${outputKind}`} storageLocationId={storageLocation.id} facilityId={storageLocation.facilityId} kind={outputKind} onCancel={close} onRecorded={handleRecorded} />
               </> }
