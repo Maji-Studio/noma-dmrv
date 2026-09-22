@@ -584,7 +584,7 @@ export function TransportLegsEditor({
                 >
                   <span className="mt-6 size-8 shrink-0 rounded-full bg-[var(--color-text-primary)]" />
                   {!isFinalStop && (
-                    <span className="w-1 flex-1 bg-[var(--color-border-tertiary)]" />
+                    <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />
                   )}
                 </div>
                 <div
