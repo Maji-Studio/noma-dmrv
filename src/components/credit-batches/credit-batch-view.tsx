@@ -7,6 +7,7 @@
  * runs, and notes. The interactive certification checklist and lab-sample
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
+import { CompositionCard } from "@/components/forms";
 import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
@@ -42,20 +43,14 @@ function CreditBatchCarbonLedger({
   productionRuns,
   isLoadingRuns,
   runsError,
-  healthSummary,
 }: {
   creditBatch: CreditBatchWithRelations;
   productionRuns: CreditBatchProductionRunOption[];
   isLoadingRuns: boolean;
   runsError: Error | null;
-  healthSummary?: CreditBatchHealthSummary;
 }) {
   const totals = computeCohortInputTotals(productionRuns);
   const estimate = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
-  const removalId =
-    creditBatch.productionEmissionsClaimedByRemovalId ??
-    healthSummary?.removalId ??
-    null;
   const rows = [
     {
       label: "Feedstock, dry mass",
@@ -72,88 +67,20 @@ function CreditBatchCarbonLedger({
   ];
 
   return (
-    <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-      <div className="flex flex-col gap-4 px-16 py-[14px]">
-        <span className="title-heading-3 tabular-nums text-[var(--color-text-primary)]">
-          {estimate == null
-            ? MISSING_VALUE.notAvailable
-            : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
-        </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          Estimated CO₂e stored before project emissions and registry verification.
-        </span>
-      </div>
-      <dl>
-        {runsError || isLoadingRuns ? (
-          <div className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-8">
-            <dt className="body-small text-[var(--color-text-secondary)]">
-              Production inputs
-            </dt>
-            <dd
-              className="body-small text-right text-[var(--color-text-tertiary)]"
-              aria-busy={isLoadingRuns || undefined}
-            >
-              {runsError
-                ? `${MISSING_VALUE.notAvailable}. Reload the production runs to calculate these inputs.`
-                : "Loading production inputs…"}
-            </dd>
-          </div>
-        ) : rows.map((row) => (
-          <div
-            key={row.label}
-            className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-8"
-          >
-            <dt className="body-small text-[var(--color-text-secondary)]">
-              {row.label}
-            </dt>
-            <dd className="body-small font-mono tabular-nums text-[var(--color-text-primary)]">
-              {row.value}
-            </dd>
-          </div>
-        ))}
-        <div className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-16 py-8">
-          <dt className="body-small text-[var(--color-text-secondary)]">
-            Production emissions
-          </dt>
-          <dd className="body-small text-right text-[var(--color-text-primary)]">
-            {removalId ? (
-              <Link
-                href={certificationRemovalsHref({
-                  facility: creditBatch.facilityId,
-                  removal: removalId,
-                })}
-                className="underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
-              >
-                Included in Removal {removalId.slice(0, 8)}…
-              </Link>
-            ) : (
-              "Included with the first Removal"
-            )}
-          </dd>
-        </div>
-      </dl>
-      <DetailedOnly>{!isLoadingRuns && !runsError && productionRuns.length > 0 && (
-        <div className="border-t border-[var(--color-border-primary)] px-16 py-10">
-          <p className="mb-6 body-caption text-[var(--color-text-tertiary)]">
-            Source records
-          </p>
-          <div className="flex flex-wrap gap-x-12 gap-y-4 body-small">
-            {productionRuns.map((run) => (
-              <Link
-                key={run.id}
-                href={productionRunDeepLinkHref(
-                  run.id,
-                  creditBatch.facilityId,
-                )}
-                className="underline-offset-4 hover:text-[var(--color-interaction)] hover:underline"
-              >
-                {formatDate(run.date)}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}</DetailedOnly>
-    </div>
+    <DetailedOnly>
+      <CompositionCard title="Carbon estimate" details={<>
+        <p className="body-caption">Estimated CO₂e stored before project emissions and registry verification.</p>
+        <dl className="space-y-8 body-small">
+          {runsError || isLoadingRuns ? <div><dt>Production inputs</dt><dd aria-busy={isLoadingRuns || undefined}>{runsError ? `${MISSING_VALUE.notAvailable}. Reload the production runs to calculate these inputs.` : "Loading production inputs…"}</dd></div> : rows.map(row => <div key={row.label} className="flex justify-between gap-12"><dt>{row.label}</dt><dd className="tabular-nums">{row.value}</dd></div>)}
+        </dl>
+        {!isLoadingRuns && !runsError && productionRuns.length > 0 && <div className="space-y-8">
+          <p className="body-small">Source records</p>
+          <div className="flex flex-wrap gap-x-12 gap-y-4 body-small">{productionRuns.map(run => <Link key={run.id} href={productionRunDeepLinkHref(run.id, creditBatch.facilityId)} className="underline-offset-4 hover:underline">{formatDate(run.date)}</Link>)}</div>
+        </div>}
+      </>}>
+        <dl className="body-small"><div className="flex justify-between gap-12"><dt>Estimated CO₂e stored</dt><dd className="tabular-nums">{estimate == null ? MISSING_VALUE.notAvailable : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}</dd></div></dl>
+      </CompositionCard>
+    </DetailedOnly>
   );
 }
 
@@ -181,12 +108,12 @@ function ProductionRunLink({
           {run.status !== COMPLETED_PRODUCTION_RUN_STATUS && (
             <StatusBadge status={run.status} size="small" />
           )}
-          <span className="body-caption tabular-nums text-[var(--color-text-tertiary)]">
+          <DetailedOnly><span className="body-caption tabular-nums text-[var(--color-text-tertiary)]">
             {formatWetDryMass({
               wetKg: run.biocharOutputKg,
               dryKg: run.biocharDryMassKg,
             })}
-          </span>
+          </span></DetailedOnly>
         </>
       }
     />
@@ -294,6 +221,7 @@ export function creditBatchSheetSections({
   healthSummary,
   isHealthLoading,
 }: CreditBatchSheetSectionsOptions): DetailPanelSection[] {
+  const removalId = creditBatch.productionEmissionsClaimedByRemovalId ?? healthSummary?.removalId ?? null;
   const preview = creditBatch.co2eStoredPreview;
   const durabilityResult = preview?.applicationResults.find(
     (result) => result.fDurable != null,
@@ -316,6 +244,7 @@ export function creditBatchSheetSections({
                 : "Certification progress unavailable"}
             </span>
           )}
+          {removalId && <Link href={certificationRemovalsHref({ facility: creditBatch.facilityId, removal: removalId })} className="body-small underline">Production emissions included in Removal {removalId.slice(0, 8)}…</Link>}
           {/* Anchor for the checklist's `#batch-details` fix link — sits just
               above the Batch definition section so the jump lands on top of
               those fields rather than past them. */}
@@ -325,6 +254,7 @@ export function creditBatchSheetSections({
     },
     {
       title: "Carbon ledger",
+      detailedOnly: true,
       fields: [],
       content: (
         <CreditBatchCarbonLedger
@@ -332,13 +262,13 @@ export function creditBatchSheetSections({
           productionRuns={productionRuns}
           isLoadingRuns={isLoadingRuns}
           runsError={runsError}
-          healthSummary={healthSummary}
         />
       ),
     },
     {
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
+      content: durabilityResult?.durabilityCapped ? <p role="status" className="body-caption">The durability cap applies to this estimate. The registry result remains authoritative.</p> : undefined,
       fields: [
         { label: "Feedstock type", value: creditBatch.feedstockTypeName },
         { label: "Durability", value: durabilityLabel(creditBatch.durabilityOption) },
@@ -346,6 +276,7 @@ export function creditBatchSheetSections({
         { label: "End date", value: formatDate(creditBatch.endDate) },
         {
           label: "Applied biochar",
+          detailedOnly: true,
           value: formatTonnes(creditBatch.appliedWeightTons),
         },
         ...(durabilityResult?.rawFDurable != null &&
@@ -358,10 +289,12 @@ export function creditBatchSheetSections({
               },
               {
                 label: "Capped durability estimate",
+                detailedOnly: true,
                 value: `${(durabilityResult.fDurable * 100).toFixed(1)}%`,
               },
               {
                 label: "Durability cap applied",
+                detailedOnly: true,
                 value: durabilityResult.durabilityCapped ? "Yes" : "No",
               },
               {
@@ -376,6 +309,7 @@ export function creditBatchSheetSections({
               },
               {
                 label: "Preview authority",
+                detailedOnly: true,
                 value: "Local estimate. The registry result remains authoritative.",
               },
             ]

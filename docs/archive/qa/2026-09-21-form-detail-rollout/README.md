@@ -1,5 +1,7 @@
 # Simple / Detailed rollout gallery
 
+> **Superseded:** these screenshots record the initial presentation rejected by the user. See the [2026-09-22 E-aligned revision](../2026-09-22-form-detail-e/README.md) for current Simple and Detailed behavior.
+
 Captured on 2026-09-21 from the running local application at `http://localhost:3102`, using authenticated synthetic E2E fixtures and the isolated local database. These are direct browser viewport screenshots, with no image editing, stitching, masking or compositing.
 
 **231 screenshots** cover all requested create/read/edit surfaces and stock operations in both **Simple** and **Detailed**, at **1440 × 1100 desktop** and **390 × 844 mobile**. Header captures show the toggle; section captures and numbered continuations show long-form content.

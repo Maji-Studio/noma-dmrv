@@ -1,6 +1,6 @@
 "use client";
 
-import { FormActions, FormField, FormInput, FormSection, FormSpine, FormTextarea, ResolvedErrorRevalidator } from "@/components/forms";
+import { CompositionCard, DetailedOnly, FormActions, FormField, FormInput, FormSection, FormSpine, FormTextarea, ResolvedErrorRevalidator } from "@/components/forms";
 import { MoistureField, WetMassField } from "@/components/forms/mass-moisture-fields";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import { useOutputStockPreview, usePostOutputStock } from "@/hooks/use-output-stock";
@@ -61,8 +61,10 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     <ResolvedErrorRevalidator control={control} trigger={trigger} />
     <FormSpine control={control}>
       {original && <FormSection title="Original entry">
-        <p className="body-small">{outputStockEventLabel(original.kind)} on {formatDate(original.physicalDate)}. {formatMassKg(original.beforeDryKg)} before, {formatMassKg(original.afterDryKg)} after, dry biochar.</p>
-        <OutputStockAllocations allocations={original.allocations} />
+        <p className="body-small">{outputStockEventLabel(original.kind)} on {formatDate(original.physicalDate)}.</p>
+        <DetailedOnly><CompositionCard title="Original stock" details={<><p className="body-caption">{formatMassKg(original.beforeDryKg)} before, {formatMassKg(original.afterDryKg)} after, dry biochar.</p><OutputStockAllocations allocations={original.allocations} /></>}>
+          <p className="body-caption">{formatMassKg(original.wetMassKg)} recorded wet mass</p>
+        </CompositionCard></DetailedOnly>
       </FormSection>}
       <FormSection title={original ? "Proposed replacement" : kind === "count" ? "Reconcile stock" : "Record loss"} fields={["physicalDate", "wetMassKg", "moisturePercent"]}>
         <FormField id="physicalDate" label="Physical date" required error={errors.physicalDate?.message}>
@@ -72,12 +74,9 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
           <WetMassField id="stock-wet" label={kind === "count" ? "Counted wet mass (kg)" : "Wet mass removed (kg)"} required disabled={mutation.isPending} error={errors.wetMassKg?.message} registration={register("wetMassKg", { setValueAs: toNumberOrNull })} />
           <MoistureField id="stock-moisture" required={!(kind === "count" && wetMassKg === 0)} disabled={mutation.isPending} error={errors.moisturePercent?.message} helperText="Enter less than 100%. A zero count does not need moisture." registration={register("moisturePercent", { setValueAs: toNumberOrNull })} />
         </div>
-        <p className="body-caption">Drying alone does not remove dry biochar. A count above tracked solids records a discrepancy without adding stock.</p>
-      </FormSection>
-      <FormSection title="Stock preview">
         {preview.isFetching && <p role="status">Refreshing stock preview...</p>}
         {preview.error && <p role="alert">{preview.error.message}</p>}
-        {preview.data && <OutputStockPreview followFormDetail preview={preview.data} moreInfo={<OutputStockHistory storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
+        {preview.data && <OutputStockPreview followFormDetail preview={preview.data} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
       </FormSection>
       <FormSection title="Reason" fields={["reason"]}>
         <FormField id="stock-reason" label="Reason" required error={errors.reason?.message}>

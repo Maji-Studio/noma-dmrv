@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { CompositionCard, CompositionLedger } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
@@ -140,7 +141,20 @@ export function OutputStockPreview({ followFormDetail = false, preview, moreInfo
   ];
 
   return (
-    <section className="space-y-16" aria-label="Stock preview" aria-live="polite">
+    <section hidden={followFormDetail && !detailed && !preview.blockingMessage && !preview.blockers?.length && preview.discrepancySolidsKg <= 0} className="space-y-16" aria-label="Stock preview" aria-live="polite">
+      {followFormDetail ? <div hidden={!detailed}>
+        <CompositionCard title={preview.binName} details={<>
+          <dl className="space-y-8 body-small">
+            {balances.map(balance => <div key={balance.label} className="flex justify-between gap-12"><dt>{balance.label}</dt><dd>{formatMassKg(balance.dry)} {dryLabel}{wetBasis ? ` · ${formatMassKg(balance.wet)} ${preview.wetLabel ?? "wet estimate"}` : ""}</dd></div>)}
+          </dl>
+          <p className="body-caption">{preview.wetLabel ? "Dry solids use the recorded intake basis." : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture do not replace recorded pile measurements.` : "Wet estimates need a moisture measurement."}</p>
+          {preview.lane !== "ingredient" && <><p className="body-caption">Drying alone does not remove dry biochar. A count above tracked solids records a discrepancy without adding stock.</p><OutputStockAllocations allocations={preview.allocations} /></>}
+          {moreInfo}
+        </>}>
+          <p className="body-small">{preview.removedWetKg !== null && `${formatMassKg(Math.abs(preview.removedWetKg))} wet ${preview.removedWetKg < 0 ? "added" : "removed"} · `}{formatMassKg(preview.removedDryKg === null ? null : Math.abs(preview.removedDryKg))} {dryLabel} {preview.removedDryKg !== null && preview.removedDryKg < 0 ? "added" : "removed"}</p>
+          <CompositionLedger label="Bin composition after loading" totalLabel={`Remaining ${dryLabel}`} total={preview.afterDryKg} segments={(preview.afterAllocations ?? []).map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" }))} />
+        </CompositionCard>
+      </div> : <>
       <div>
         {preview.removedWetKg !== null && <p className="body-large font-semibold">{formatMassKg(Math.abs(preview.removedWetKg))} wet {preview.removedWetKg < 0 ? "added" : "removed"}</p>}
         <p className={preview.removedWetKg === null ? "body-large font-semibold" : "body-caption text-[var(--color-text-secondary)]"}>
@@ -164,10 +178,11 @@ export function OutputStockPreview({ followFormDetail = false, preview, moreInfo
         <p className="body-caption">{preview.wetLabel ? "Dry solids use the recorded intake basis." : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture do not replace recorded pile measurements.` : "Wet estimates need a moisture measurement."}</p>
       </div>}
       {followFormDetail && moreInfo}
+      </>}
       {preview.discrepancySolidsKg > 0 && <p role="status" className="body-small">Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</p>}
       {preview.blockingMessage && <p role="alert" className="body-small text-[var(--st-bad)]">{preview.blockingMessage}</p>}
       {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? (blocker.entity === "binMovement" ? <span key={blocker.id}>{blocker.code}</span> : <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?ids=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>))}
-      {detailed && <div className="space-y-8">
+      {!followFormDetail && detailed && <div className="space-y-8">
         <h3 className="body-small font-semibold">{preview.binName}{preview.binCode ? ` (${preview.binCode})` : ""}</h3>
         {preview.lane !== "ingredient" && <OutputStockAllocations allocations={preview.allocations} />}
       </div>}

@@ -743,6 +743,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               },
               {
                 label: "Dry biochar applied (kg)",
+                detailedOnly: true,
                 ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
@@ -750,11 +751,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               },
             ],
           },
-          {
+          ...(sideSheetEntity.allocationShares.length > 0 ? [{
             title: "Batch shares",
+            detailedOnly: true,
             fields: [],
             content: <ApplicationAllocationShares shares={sideSheetEntity.allocationShares} />,
-          },
+          }] : []),
           {
             title: "Field details",
             fields: [

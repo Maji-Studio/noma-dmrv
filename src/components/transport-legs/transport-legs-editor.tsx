@@ -1,5 +1,6 @@
 "use client";
 
+import { CompositionCard } from "@/components/forms";
 import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -188,7 +189,7 @@ export function TransportLegsEditor({
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
   const detailLevel = useFormDetailLevel();
-  const showProvenance = !followFormDetail || !readOnly || detailLevel === "detailed";
+  const showProvenance = !followFormDetail || !readOnly;
   const showAddButton = !readOnly;
   const displayedLegs: EditableTransportLeg[] = deferred
     ? deferredLegs
@@ -204,7 +205,7 @@ export function TransportLegsEditor({
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+        <h3 className={followFormDetail ? "body-small font-medium" : "body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]"}>
           {title ?? DEFAULT_TITLES[entityType]}
         </h3>
         {showAddButton && (
@@ -350,6 +351,8 @@ export function TransportLegsEditor({
           </table>
         </div>
       ) : null}
+
+      {followFormDetail && readOnly && detailLevel === "detailed" && hasLegs && <CompositionCard title="Transport provenance" details={<dl className="space-y-8 body-small">{displayedLegs.map((leg, index) => <div key={isSavedTransportLeg(leg) ? leg.id : index}><dt>Leg {index + 1} distance source</dt><dd>{leg.distanceSource ? DISTANCE_SOURCE_LABELS[leg.distanceSource] : MISSING_VALUE.notRecorded}</dd></div>)}</dl>}><p className="body-caption">{displayedLegs.length} recorded transport {displayedLegs.length === 1 ? "leg" : "legs"}</p></CompositionCard>}
 
       {!readOnly && (
         <QuickAddDialogShell

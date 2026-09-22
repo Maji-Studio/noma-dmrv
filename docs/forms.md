@@ -373,13 +373,28 @@ fields. Presentation state is separate from RHF and payloads. The shared sheet
 excludes `data-presentation-control` events from its unsaved-change heuristic.
 A real input change must still trigger the discard guard.
 
-Keep every editable field, critical result, unresolved value, error, blocker,
-lock and evidence action visible. Use `DetailedOnly` only for optional,
-stateless context. For mass and stock previews, opt into `followFormDetail` to
-retain compact values in Simple while revealing graphics and provenance in
-Detailed. Unmanaged surfaces keep their existing expanded presentation.
-Read fields may use `detailedOnly` for optional technical metadata; never apply
-it to required values or warnings. Saved allocations remain saved facts, and
+Simple shows inputs only, or the corresponding saved field values in read mode.
+Keep validation errors, shortage blockers, required controls, evidence and save
+actions visible. Keep compact source deductions and destination additions inside
+selectors. Optional derived totals, composition, stock reconciliation, provenance
+and buttons that open those blocks belong only to Detailed.
+
+Detailed still starts with a compact, lightly tinted inline ledger below the
+related inputs. Use `CompositionCard` and `CompositionLedger` for quiet component,
+mass and share rows. Calculations, before/after reconciliation, source records and
+long explanations start collapsed behind the sentence-case Details action or an
+existing source dialog. Do not draw proportions from an incomplete or zero basis.
+Opt mass and stock previews into this contract with `followFormDetail`; unmanaged
+consumers retain their existing presentation.
+
+Disclosure state is separate from form state and must never submit or dirty the
+form. Keep stateful history/correction controls mounted while hiding their
+presentation, so switching modes does not reset an active correction. Use
+`DetailedOnly` only for optional stateless context. Read fields may use
+`detailedOnly` for optional technical metadata; never apply it to required values,
+validation messages or evidence. Optional read sections can also use `detailedOnly`;
+filter them before numbering so Simple has no empty headings or gaps in the rail.
+Saved allocations remain saved facts, and
 current stock must be identified as current.
 
 Do not add a switch to a short form or a surface already served by an effective

@@ -326,7 +326,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           <FormSelect id="storageLocationId" placeholder="Select matching source bin..." disabled={isSubmitting || isEditMode} options={(matchingBins.data ?? []).map(bin => ({ value: bin.id, label: bin.name }))} {...register("storageLocationId")} />
         </FormField>
         {matchingBins.error && <p role="alert">{matchingBins.error.message}</p>}
-        {isEditMode && delivery?.storageLocationId && <div className="space-y-8"><p className="body-small">To change stock measurements, open More info and correct the original delivery entry. Saved stock history is preserved.</p><OutputStockHistory storageLocationId={delivery.storageLocationId} facilityId={formFacilityId ?? ""} /></div>}
       </FormSection>
 
       {/* Mass & Moisture Section */}
@@ -363,7 +362,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
         {stockPreview.isFetching && <p role="status">Refreshing stock preview...</p>}
         {stockPreview.error && <p role="alert">{stockPreview.error.message}</p>}
-        {stockPreview.data && <OutputStockPreview followFormDetail preview={stockPreview.data} moreInfo={<OutputStockHistory storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
+        {stockPreview.data && <OutputStockPreview followFormDetail preview={stockPreview.data} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
       </FormSection>
 
       {/* Transport Section */}

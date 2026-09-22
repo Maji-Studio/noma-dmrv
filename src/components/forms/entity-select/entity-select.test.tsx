@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { FormDetailProvider } from "../form-detail-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const entityState = vi.hoisted(() => ({
@@ -149,6 +150,23 @@ describe("EntitySelect selected-value display", () => {
     );
     expect(html).toContain('aria-describedby="field-helper ');
     expect(html).toContain('aria-invalid="true"');
+  });
+
+  it("keeps the selected input and helper but omits derived stock captions in Simple", () => {
+    entityState.selected = {
+      id: "bin-1", code: "BIN-01", name: "North product bin",
+      remainingMass: { wetKg: 3000, dryKg: 2900 },
+    };
+    entityState.selectedPending = false;
+    const html = renderToStaticMarkup(
+      <FormDetailProvider scope="simple-selector">
+        <EntitySelect entityType="storageLocation" value="bin-1" onChange={() => undefined} aria-describedby="field-helper" />
+      </FormDetailProvider>,
+    );
+    expect(html).toContain("North product bin");
+    expect(html).toContain('aria-describedby="field-helper"');
+    expect(html).not.toContain("Remaining wet mass");
+    expect(html).not.toContain("remaining-mass");
   });
 
   it("qualifies a selected stock figure that excludes the edited order", () => {

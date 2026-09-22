@@ -15,14 +15,14 @@ import { useState } from "react";
 import { OutputStockForm } from "./output-stock-form";
 import { OutputStockAllocations } from "./output-stock-preview";
 
-export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info" }: { storageLocationId: string; facilityId: string; movementId?: string; triggerLabel?: string }) {
+export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false }: { storageLocationId: string; facilityId: string; movementId?: string; triggerLabel?: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [original, setOriginal] = useState<OutputStockHistoryEntry>();
   const history = useOutputStockHistory(storageLocationId, open);
   const correctedIds = new Set(history.data?.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
   const originalKind = (entry: OutputStockHistoryEntry): string => entry.eventKind ?? (entry.correctsMovementId ? originalKind(history.data?.find(item => item.id === entry.correctsMovementId) ?? { ...entry, correctsMovementId: null }) : entry.kind);
   return <>
-    <Button variant="default" onClick={() => setOpen(true)}>{triggerLabel}</Button>
+    <Button type="button" variant={compact ? "noOutline" : "default"} className={compact ? "min-h-44 gap-8 px-8 normal-case" : undefined} onClick={() => setOpen(true)}>{compact && <ClockCounterClockwiseIcon size={18} aria-hidden="true" />}<span className={compact ? "body-caption normal-case" : undefined}>{triggerLabel}</span></Button>
     <Modal isOpen={open} onClose={() => { setOpen(false); setOriginal(undefined); }} ariaLabel="Stock history" width="lg">
       <FormDetailProvider scope={`${open}:${original?.id}`} enabled={!!original}>
       <div className="space-y-20">

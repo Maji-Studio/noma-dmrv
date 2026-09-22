@@ -26,7 +26,7 @@
  */
 "use client";
 
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { useFormDetailLevel, CompositionCard, CompositionLedger } from "@/components/forms";
 import {
   describeMassSplit,
   describeMassSplitAfterAddedWater,
@@ -312,7 +312,8 @@ export function MoistureSplit({
   className = "",
 }: MoistureSplitProps) {
   const level = useFormDetailLevel();
-  const variant = followFormDetail && level === "simple" ? "inline" : requestedVariant;
+  const variant = requestedVariant;
+  if (followFormDetail && level === "simple") return null;
   const split = resolveDisplaySplit(
     wetMassKg,
     moisturePercent,
@@ -321,6 +322,26 @@ export function MoistureSplit({
   const unresolvedDryLabel =
     dryLabel ??
     (materialLabel ? `${materialLabel} dry mass` : "Dry mass");
+
+  if (followFormDetail) {
+    const added = split ? resolveAddedWaterState(split, addedWaterKg) : null;
+    const final = added?.finalSplit ?? split;
+    return <div className={className} aria-live="polite" aria-atomic="true">
+      {!split && <p className="body-caption">{missingSplitInput(wetMassKg)} not recorded. {unresolvedDryLabel} cannot be calculated.</p>}
+      <CompositionCard title={`${materialLabel ?? "Material"} composition`} details={<>
+        <p className="body-small">Composition moisture: {formatMoisturePercent(split?.moisturePercent ?? moisturePercent)}</p>
+        <p className="body-caption">{dryMassKg != null && split?.dryKg === dryMassKg ? "Dry mass uses the saved record." : "Dry mass = wet mass × (1 − moisture ÷ 100)."} Water = wet mass − dry mass.</p>
+        {added && split && <AddedWaterSummary split={split} addedWaterState={added} finalMoistureLabel={finalMoistureLabel} />}
+        {note && <p className="body-caption">{note}</p>}
+      </>}>
+        <CompositionLedger label={`${materialLabel ?? "Material"} composition`} totalLabel={wetLabel ?? "Wet total"} total={final?.wetKg ?? wetMassKg ?? null} segments={[
+          { label: unresolvedDryLabel, mass: split?.dryKg ?? null, category: "dry-biochar" },
+          { label: "Water", mass: split?.waterKg ?? null, category: "existing-water" },
+          ...(added ? [{ label: "Added water", mass: addedWaterKg ?? null, category: "added-water" as const }] : []),
+        ]} />
+      </CompositionCard>
+    </div>;
+  }
 
   if (!split) {
     // The split needs BOTH inputs, so name the one actually missing — telling an
