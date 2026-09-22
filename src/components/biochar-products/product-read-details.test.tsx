@@ -25,7 +25,7 @@ describe("Saved product composition", () => {
     expect(composition.sourceDryKg).toBe(200);
     expect(composition.sourceTotalKg).toBe(300);
     expect(composition.productTotalKg).toBe(400);
-    expect(composition.productComponents.map(component => component.massKg)).toEqual([200, 50, 50, 80, 20]);
+    expect(composition.productComponents.map(component => component.massKg)).toEqual([200, 80, 70, 50]);
     expect(savedProductComposition({ ...product, moistureContentPercent: 60 }).sourceDryKg).toBe(200);
   });
   it("uses the canonical legacy source derivation only when no allocation was recorded", () => {
@@ -33,7 +33,7 @@ describe("Saved product composition", () => {
   });
   it("does not reconstruct missing saved ingredient dry snapshots from current moisture", () => {
     const missing = { ...product, composition: { ingredients: [{ ...(product.composition as { ingredients: Record<string, unknown>[] }).ingredients[0], massDryKg: null }] } };
-    expect(savedProductComposition(missing).productComponents.slice(-2).map(component => component.massKg)).toEqual([null, null]);
+    expect(savedProductComposition(missing).productComponents.filter(component => component.kind === "ingredient" || component.kind === "water").map(component => component.massKg)).toEqual([null, null]);
   });
 });
 
@@ -43,10 +43,16 @@ describe("Product read detail level", () => {
     await act(async () => { renderer = create(<ProductReadDetails key={product.id} product={product} />); });
     expect(renderer.root.findAllByProps({ "aria-label": "Product composition" })).toHaveLength(0);
     expect(JSON.stringify(renderer.toJSON())).toContain("Product store");
-    expect(JSON.stringify(renderer.toJSON())).toContain("400 kg");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("400 kg");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Wet product");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Dry biochar");
+    expect(JSON.stringify(renderer.toJSON())).not.toContain("Derived transport");
     await act(async () => { renderer.root.findByProps({ type: "radio", value: "detailed" }).props.onChange(); });
     expect(renderer.root.findAllByProps({ "aria-label": "Product composition" })).toHaveLength(1);
     expect(JSON.stringify(renderer.toJSON())).toContain("Chicken manure (dry)");
+    expect(renderer.root.findAllByProps({ "aria-label": "Source composition" })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ "aria-label": "Chicken manure composition" })).toHaveLength(1);
+    expect(JSON.stringify(renderer.toJSON())).toContain("400 kg");
     await act(async () => { renderer.update(<ProductReadDetails key="another" product={{ ...product, id: "another" }} />); });
     expect(renderer.root.findByProps({ type: "radio", value: "simple" }).props.checked).toBe(true);
     expect(renderer.root.findAllByProps({ "aria-label": "Product composition" })).toHaveLength(0);

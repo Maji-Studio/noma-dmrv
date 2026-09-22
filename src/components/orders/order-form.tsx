@@ -246,7 +246,7 @@ export function OrderForm({
           </FormField>
         </div>
 
-        {selectedLocation && (
+        {detailLevel === "detailed" && selectedLocation && (
           <CustomerLocationDetails
             location={selectedLocation}
             facility={formFacility}
@@ -261,7 +261,6 @@ export function OrderForm({
         fields={["formulationId", "packaging", "quantityKg", "value", "currency"]}
       >
         <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
-        {detailLevel === "detailed" && <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -334,6 +333,7 @@ export function OrderForm({
             />
           </FormField>
         </div>
+        {detailLevel === "detailed" && <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />}
       </FormSection>
       </FormSpine>
 

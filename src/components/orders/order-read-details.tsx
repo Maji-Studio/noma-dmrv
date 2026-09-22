@@ -2,17 +2,16 @@
 
 import { useState } from "react";
 import { FormDetailToggle, type FormDetailLevel } from "@/components/forms/form-detail-toggle";
-import { DetailField, DetailRow, DetailSpine } from "@/components/ui/detail-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { ORDER_FULFILLMENT_DISPLAY } from "@/lib/orders/fulfillment";
+import { DetailField, DetailRow, DetailSpine } from "@/components/ui/detail-panel";
 import type { OrderWithRelations } from "@/data-access/orders";
 import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { ORDER_FULFILLMENT_DISPLAY } from "@/lib/orders/fulfillment";
 import { MatchingOutputBins } from "./matching-output-bins";
 
 export function OrderReadDetails({ order }: { order: OrderWithRelations }) {
   const [detailLevel, setDetailLevel] = useState<FormDetailLevel>("simple");
-  const fulfillment = ORDER_FULFILLMENT_DISPLAY[order.fulfillmentStatus];
   return <div className="space-y-20">
     <div className="flex justify-end"><FormDetailToggle value={detailLevel} onChange={setDetailLevel} /></div>
     <DetailSpine numbered sections={[
@@ -29,13 +28,14 @@ export function OrderReadDetails({ order }: { order: OrderWithRelations }) {
           {detailLevel === "detailed" && <div className="space-y-12"><div><h3 className="body-small font-medium">Current stock</h3><p className="body-caption text-[var(--color-text-secondary)]">Current availability, not a stock snapshot from the order date.</p></div><MatchingOutputBins facilityId={order.facilityId} formulationId={order.formulationId ?? ""} /></div>}
         </>,
       },
-      {
+
+      ...(detailLevel === "detailed" ? [{
         title: "Fulfillment",
         fields: [
-          { label: "Fulfillment", value: <StatusBadge status={fulfillment.badgeStatus} label={fulfillment.label} /> },
+          { label: "Fulfillment", value: <StatusBadge status={ORDER_FULFILLMENT_DISPLAY[order.fulfillmentStatus].badgeStatus} label={ORDER_FULFILLMENT_DISPLAY[order.fulfillmentStatus].label} /> },
           ...(order.deliveryCount > 0 ? [{ label: "Delivered", value: `${order.deliveredCount} of ${order.deliveryCount}` }] : []),
         ],
-      },
+      }] : []),
     ]} />
   </div>;
 }
