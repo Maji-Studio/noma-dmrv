@@ -100,7 +100,10 @@ describe("TransferFlowPreview", () => {
     expect(text).toContain("Source · Biochar July");
     expect(text).toContain("Dry biochar available: 400 kg (−90 kg)");
     expect(text).toContain("Remaining: 310 kg");
-    expect(text).toContain("Dry biochar90 kg");
+    // The destination cannot draw a product yet, but the dry biochar it will
+    // carry is the certification figure, so it stays visible.
+    expect(text).toContain("Dry biochar 90 kg");
+    expect(text).toContain("Record the masses above to see the product composition.");
   });
 
   it("lists ingredient and water additions on the transfer arrow", () => {
@@ -124,8 +127,8 @@ describe("TransferFlowPreview", () => {
     expect(text).toContain("+550 kg Chicken Manure");
     expect(text).toContain("+50 kg Water");
     expect(text).toContain("Final wet biochar product: 1,100 kg");
-    expect(text).toContain("Dry biochar450 kg");
-    expect(text).toContain("Ingredients + water650 kg");
+    expect(text).toContain("Dry biochar 450 kg");
+    expect(text).toContain("Ingredients + water 650 kg");
   });
 
   it("omits the wet product line while the total is unknown", () => {

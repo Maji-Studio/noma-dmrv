@@ -40,7 +40,10 @@ describe("MatchingOutputBins", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150 }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(state.inputs).toEqual([{ storageLocationId: "bin", facilityId: "facility", physicalDate: "2026-09-16", kind: "count", wetMassKg: 0, moisturePercent: null }]);
-    expect(html).toContain('data-stock-batch="batch"');
+    // The bar names the batch on hand and its dry mass, in its own accent.
+    expect(html).toContain('aria-label="Batches in Bin: BP-001 100 kg"');
+    expect(html).toContain("BP-001 100 kg");
+    expect(html).toContain("background:var(--acc-prod)");
     expect(html).toContain('data-history-bin="bin" data-facility="facility"');
     expect(html).toContain("More info");
     expect(html).toContain("Pure biochar");

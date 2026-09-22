@@ -1,5 +1,5 @@
 "use client";
-import { OutputStockBalanceCard } from "@/components/storage-locations/output-stock-preview";
+import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatFacilityDate } from "@/lib/date-utils";
@@ -7,8 +7,6 @@ import type { MatchingOutputBin } from "@/types/output-stock";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
 import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
-
-const EMPTY_SCALE_KG = 1;
 
 export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: string; formulationId: string }) {
   const bins = useMatchingOutputBins(facilityId, formulationId);
@@ -21,7 +19,7 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
     {bins.isLoading && <p role="status">Loading matching bins...</p>}
     {bins.error && <p role="alert">{bins.error.message}</p>}
     {bins.data?.length === 0 && <EmptyState icon={<PackageIcon size={32} />} title="No matching stock" description="You can save this order now and record its delivery when stock is available." padding="sm" />}
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-12">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-24 gap-y-16">
       {bins.data?.map(bin => <MatchingOutputBinCard key={bin.id} bin={bin} facilityId={facilityId} physicalDate={physicalDate} />)}
     </div>
   </section>;
@@ -38,12 +36,17 @@ function MatchingOutputBinCard({ bin, facilityId, physicalDate }: {
     storageLocationId: bin.id, facilityId, physicalDate, kind: "count", wetMassKg: 0, moisturePercent: null,
   } : null);
   const preview = stock.data;
-  return <div className="space-y-8">
-    <OutputStockBalanceCard
-      preview={preview ?? { binName: bin.name, binCode: bin.code, lane: "product", estimateMoisturePercent: null }}
-      balance={{ label: "Available dry stock", wet: null, dry: preview?.beforeDryKg ?? bin.dryMassKg, allocations: preview?.beforeAllocations }}
-      scale={Math.max(preview?.beforeDryKg ?? bin.dryMassKg, EMPTY_SCALE_KG)}
-      moreInfo={<OutputStockHistory storageLocationId={bin.id} facilityId={facilityId} />}
+  // The hairline is the only frame: flat blocks in a two-column grid need one
+  // structural line to read as separate bins.
+  return <div role="article" className="space-y-8 border-t border-[var(--color-border-tertiary)] pt-12">
+    <OutputStockAvailability
+      binName={preview?.binName ?? bin.name}
+      binCode={preview?.binCode ?? bin.code}
+      subtitle={preview?.formulationName ?? "Product bin"}
+      label="Available dry stock"
+      dryKg={preview?.beforeDryKg ?? bin.dryMassKg}
+      allocations={preview?.beforeAllocations}
+      actions={<OutputStockHistory storageLocationId={bin.id} facilityId={facilityId} />}
     />
     {(stock.isLoading || !physicalDate) && <p role="status">Loading stock details...</p>}
     {stock.error && <p role="status">Stock details could not be loaded. You can still save this order.</p>}

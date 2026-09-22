@@ -54,7 +54,6 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 
-const EMPTY_PREVIEW_SCALE_KG = 1;
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
@@ -302,10 +301,10 @@ export function TransferFlowPreview({
             </p>
             {(destinationDryMassKg !== null || destinationWetProductKg !== null) && (
               <ProductCompositionPreview
+                variant="compact"
                 wetMassKg={destinationWetProductKg}
                 dryBiocharKg={destinationDryMassKg}
                 wetLabel="Final wet biochar product"
-                framed={false}
                 className="mt-6"
               />
             )}
@@ -493,7 +492,6 @@ export function BiocharProductForm({
     waterAddedKg: Number(watchedWaterAddedKg), ingredientBins: watchedIngredientBins?.map(ingredient => ({ ...ingredient, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : Number.NaN })),
   } : null);
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
-  const productPreviewScale = Math.max(EMPTY_PREVIEW_SCALE_KG, ...(productStockPreview.data ?? []).flatMap(bin => [bin.beforeEstimatedWetKg ?? bin.beforeDryKg ?? 0, bin.afterEstimatedWetKg ?? bin.afterDryKg ?? 0]));
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
   const refreshStockPreview = sourcePreview.refetch;
   useEffect(() => {
@@ -554,6 +552,12 @@ export function BiocharProductForm({
       ? [{ label: ingredient.feedstockTypeName, massKg: ingredient.massKg }]
       : [],
   );
+  // Every ingredient row, mass or not: a blank row has to read as a gap in the
+  // product composition rather than disappear from it.
+  const ingredientSegments = (watchedIngredientBins ?? []).map((ingredient) => ({
+    label: ingredient.feedstockTypeName,
+    massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : null,
+  }));
   const transferAdditions =
     waterAddedKgNum !== null && waterAddedKgNum > 0
       ? [...ingredientAdditions, { label: "Water", massKg: waterAddedKgNum }]
@@ -635,7 +639,10 @@ export function BiocharProductForm({
         </div>
       )}
 
-      {productStockPreview.data?.map(bin => <OutputStockPreview key={bin.storageLocationId} preview={bin} commonScale={productPreviewScale} moreInfo={bin.lane === "ingredient" ? <BinMovementHistoryModal storageLocationId={bin.storageLocationId} /> : <OutputStockHistory storageLocationId={bin.storageLocationId} facilityId={selectedFacilityId} />} />)}
+      {/* One flat block per affected bin; the hairline is what separates them. */}
+      {productStockPreview.data?.map(bin => <div key={bin.storageLocationId} className="border-t border-[var(--color-border-tertiary)] pt-12">
+        <OutputStockPreview preview={bin} moreInfo={bin.lane === "ingredient" ? <BinMovementHistoryModal storageLocationId={bin.storageLocationId} /> : <OutputStockHistory storageLocationId={bin.storageLocationId} facilityId={selectedFacilityId} />} />
+      </div>)}
       {productStockPreview.error && <p role="alert">{productStockPreview.error.message}</p>}
       {productStockPreview.isFetching && <p role="status">Refreshing affected bins...</p>}
       {sourcePreview.isFetching && <p role="status">Refreshing source stock preview...</p>}
@@ -803,6 +810,20 @@ export function BiocharProductForm({
           isSubmitting={isSubmitting}
           allocationFrozen={hasFrozenSourceAllocation}
         />
+
+        {/* What the entered masses make. A pure-biochar product needs no bar of
+            its own: the source moisture split already shows that composition,
+            so this appears only once ingredients join the blend. */}
+        {ingredientSegments.length > 0 && (
+          <ProductCompositionPreview
+            followFormDetail
+            wetMassKg={destinationWetProductKg}
+            dryBiocharKg={destinationDryBiocharKg}
+            ingredients={ingredientSegments}
+            addedWaterKg={waterAddedKgNum}
+            note="Blend ingredients and added water raise the wet product. Dry biochar stays the biochar draw."
+          />
+        )}
 
         <FormField
           id="storageLocationId"

@@ -2,9 +2,9 @@
 
 import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { CompositionCard, CompositionLedger } from "@/components/forms";
+import type { MassSegment } from "@/components/forms/composition-ledger";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { Card } from "@/components/ui/card";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import type {
@@ -13,26 +13,28 @@ import type {
   OutputStockBalanceView,
 } from "@/types/output-stock";
 import { MoistureSplit } from "@/components/ui/moisture-split";
+import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import { useState, type ReactNode } from "react";
 import { InlineMassChange, StockBalanceChange, StockNotice, StockRows, type StockRow } from "./stock-figures";
 
-const PERCENT_SCALE = 100;
-const EMPTY_SCALE_KG = 1;
-const BATCH_COLORS = ["var(--acc-prod)", "var(--acc-infra)", "var(--acc-dist)"];
 /**
  * The split bar divides a wet mass into dry solids and water, and dry solids are
  * not the tracked quantity: a blended product bin holding 84 kg of dry solids
  * holds 70 kg of dry biochar. Naming the segment "dry biochar" would put two
- * different masses under one label on the same card, so the bar says solids and
+ * different masses under one label on the same block, so the bar says solids and
  * the balance pair keeps the tracked quantity.
  */
 const SPLIT_MATERIAL_LABEL = "Solids";
+
+/** The one definition the availability block cannot show as a number. */
+const AVAILABILITY_HINT =
+  "Dry biochar is the tracked quantity. Stock stays available to every order until a delivery records the bin it left.";
 
 /**
  * Which batches a draw touched, and which run produced each one.
  *
  * Nothing renders when the draw touched no batch: a heading over the words "no
- * dry biochar removed" is a second copy of a number the card already shows.
+ * dry biochar removed" is a second copy of a number the block already shows.
  */
 export function OutputStockAllocations({ allocations }: { allocations: OutputStockAllocationView[] }) {
   if (allocations.length === 0) return null;
@@ -59,89 +61,66 @@ export function OutputStockAllocations({ allocations }: { allocations: OutputSto
   );
 }
 
-function BatchBalanceBar({
-  allocations,
-  scale,
-  wetBasis,
-  colors,
-  stage,
-  dryLabel,
-}: {
-  allocations: OutputStockBalanceView[];
-  scale: number;
-  wetBasis: boolean;
-  colors: Map<string, string>;
-  stage: string;
-  dryLabel: string;
-}) {
-  return (
-    <div className="space-y-8" aria-label={`${stage} batch balances`}>
-      <div className="flex h-10 w-full overflow-hidden bg-[var(--color-background-medium)]" aria-hidden="true">
-        {allocations.map((allocation) => {
-          const mass = wetBasis ? allocation.wetMassKg : allocation.dryMassKg;
-          return (
-            <span
-              key={allocation.layerId}
-              data-stock-batch={allocation.layerId}
-              style={{
-                width: `${Math.max(0, (mass ?? 0) / scale * PERCENT_SCALE)}%`,
-                backgroundColor: colors.get(allocation.layerId),
-              }}
-            />
-          );
-        })}
-      </div>
-      <ul className="space-y-4">
-        {allocations.map((allocation) => (
-          <li key={allocation.layerId} className="flex items-start gap-6 body-caption">
-            <span className="size-8 mt-4 shrink-0" aria-hidden="true" style={{ backgroundColor: colors.get(allocation.layerId) }} />
-            <span>{allocation.code}: {formatMassKg(allocation.dryMassKg)} {dryLabel}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+/**
+ * Batch layers as bar segments, each in its own accent.
+ *
+ * Every layer holds the same substance, so the `dry-batch` category cannot tell
+ * two of them apart; the accent is what ties a segment to its key entry. Order
+ * is the order the ledger returns, which is the order the draw consumed them.
+ */
+function batchSegments(allocations: readonly OutputStockBalanceView[]): MassSegment[] {
+  return allocations.map((allocation, index) => ({
+    label: allocation.code,
+    mass: allocation.dryMassKg,
+    category: "dry-batch",
+    fill: batchAccentFill(index),
+  }));
 }
 
-/** Read-only balance shared by posting previews and order availability. */
-export function OutputStockBalanceCard({ preview, balance, scale, wetBasis = false, colors, moreInfo }: {
-  preview: Pick<Preview, "binName" | "binCode" | "formulationName" | "lane" | "dryLabel" | "wetLabel" | "estimateMoisturePercent">;
-  balance: { label: string; wet: number | null; dry: number | null; allocations?: OutputStockBalanceView[] };
-  scale: number;
-  wetBasis?: boolean;
-  colors?: Map<string, string>;
-  moreInfo?: ReactNode;
+/**
+ * A bin's current stock, for surfaces that pick a bin rather than move material.
+ *
+ * Same shape as the movement blocks: caption, the batches it holds as one bar,
+ * the tracked quantity as the single headline figure, one action row. There is
+ * no before and after because nothing is moving yet, and no wet figure because
+ * wet availability depends on a departure moisture nobody has measured.
+ */
+export function OutputStockAvailability({ binName, binCode, subtitle, label, dryKg, dryLabel = "dry biochar", allocations = [], actions }: {
+  binName: string;
+  binCode?: string;
+  /** What kind of bin this is, or the formulation it holds. */
+  subtitle?: string | null;
+  /** Names the headline figure, such as "Available dry stock". */
+  label: string;
+  dryKg: number | null;
+  dryLabel?: string;
+  allocations?: OutputStockAllocationView[];
+  actions?: ReactNode;
 }) {
-  const dryLabel = preview.dryLabel ?? "dry biochar";
-  const binType = preview.lane === "product" ? "Product bin" : preview.lane === "ingredient" ? "Ingredient bin" : "Biochar bin";
-  const batchColors = colors ?? new Map((balance.allocations ?? []).map((layer, index) => [layer.layerId, BATCH_COLORS[index % BATCH_COLORS.length]]));
+  const segments = batchSegments(allocations);
   return (
-    <Card.Root role="article" className="flex-row min-w-0">
-      <div
-        className="relative w-10 shrink-0 bg-[var(--color-background-medium)]"
-        role="meter"
-        aria-label={`${balance.label} stock on common scale`}
-        aria-valuemin={0}
-        aria-valuemax={scale}
-        aria-valuenow={wetBasis ? balance.wet! : balance.dry ?? 0}
-      >
-        <div className="absolute inset-x-0 bottom-0 bg-[var(--acc-prod)]" style={{ height: `${Math.max(0, (wetBasis ? balance.wet! : balance.dry ?? 0) / scale * PERCENT_SCALE)}%` }} />
+    <CompositionCard
+      title={binName}
+      hint={AVAILABILITY_HINT}
+      actions={actions}
+      calculation={allocations.length > 0 ? <OutputStockAllocations allocations={allocations} /> : undefined}
+    >
+      {(binCode || subtitle) && (
+        <p className="body-caption text-[var(--color-text-secondary)]">
+          {binCode ? `${binCode}${subtitle ? " · " : ""}` : ""}{subtitle}
+        </p>
+      )}
+      {segments.length > 0 && <div className="space-y-6">
+        <SegmentBar label={`Batches in ${binName}`} segments={segments} />
+        <SegmentKey segments={segments} />
+      </div>}
+      {/* Same treatment as the balance pair's headline, so one figure and a
+          pair of them read as the same kind of answer. */}
+      <div className="space-y-6">
+        <span className="block body-caption text-[var(--color-text-secondary)]">{label}</span>
+        <span className="block body-large font-medium tabular-nums">{formatMassKg(dryKg)} {dryLabel}</span>
       </div>
-      <div className="min-w-0 flex-1 p-12 space-y-8">
-        <div className="space-y-4">
-          <p className="label-micro">{balance.label}</p>
-          <h4 className="body-small font-semibold">{preview.binName}</h4>
-          <p className="body-caption">{preview.binCode ? `${preview.binCode} · ` : ""}{preview.formulationName ?? binType}</p>
-        </div>
-        <div className="space-y-4">
-          {wetBasis && <p className="body-medium">{formatMassKg(balance.wet)} {preview.wetLabel ?? "wet estimate"}</p>}
-          <p className={wetBasis ? "body-caption" : "body-medium"}>{formatMassKg(balance.dry)} {dryLabel}</p>
-          {wetBasis && !preview.wetLabel && <p className="body-caption">At {formatMoisturePercent(preview.estimateMoisturePercent)} moisture</p>}
-        </div>
-        {balance.allocations && <BatchBalanceBar allocations={balance.allocations} scale={scale} wetBasis={wetBasis} colors={batchColors} stage={balance.label} dryLabel={dryLabel} />}
-        {moreInfo}
-      </div>
-    </Card.Root>
+    </CompositionCard>
   );
 }
 
@@ -151,65 +130,30 @@ export function OutputStockBalanceCard({ preview, balance, scale, wetBasis = fal
  * places reads as two separate problems, so the copy closest to the field wins
  * and the preview drops its own alert.
  */
-export function OutputStockPreview({ followFormDetail = false, preview, moreInfo, commonScale, renderBlocker, hideBlockingMessage = false }: { followFormDetail?: boolean; preview: Preview; moreInfo?: ReactNode; commonScale?: number; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
+export function OutputStockPreview({ followFormDetail = false, preview, moreInfo, renderBlocker, hideBlockingMessage = false }: { followFormDetail?: boolean; preview: Preview; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const level = useFormDetailLevel();
   const detailed = !followFormDetail || level === "detailed";
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
-  const wetBasis = preview.beforeEstimatedWetKg !== null && preview.afterEstimatedWetKg !== null;
-  const dryLabel = preview.dryLabel ?? "dry biochar";
-  const scale = commonScale ?? Math.max(
-    wetBasis ? preview.beforeEstimatedWetKg! : preview.beforeDryKg ?? 0,
-    wetBasis ? preview.afterEstimatedWetKg! : preview.afterDryKg ?? 0,
-    EMPTY_SCALE_KG,
-  );
-  const layers = [...new Map([...(preview.beforeAllocations ?? []), ...(preview.afterAllocations ?? [])].map(layer => [layer.layerId, layer])).values()];
-  const colors = new Map(layers.map((layer, index) => [layer.layerId, BATCH_COLORS[index % BATCH_COLORS.length]]));
-  const balances = [
-    { label: "Before loading", wet: preview.beforeEstimatedWetKg, dry: preview.beforeDryKg, allocations: preview.beforeAllocations },
-    { label: "After loading", wet: preview.afterEstimatedWetKg, dry: preview.afterDryKg, allocations: preview.afterAllocations },
-  ];
 
   return (
     <section hidden={followFormDetail && !detailed && !blockingMessage && !preview.blockers?.length && preview.discrepancySolidsKg <= 0} className="space-y-16" aria-label="Stock preview" aria-live="polite">
       {followFormDetail ? <div hidden={!detailed}>
         <StockMovementCard preview={preview} moreInfo={moreInfo} />
-      </div> : <>
-      <div>
-        {preview.removedWetKg !== null && <p className="body-large font-semibold">{formatMassKg(Math.abs(preview.removedWetKg))} wet {preview.removedWetKg < 0 ? "added" : "removed"}</p>}
-        <p className={preview.removedWetKg === null ? "body-large font-semibold" : "body-caption text-[var(--color-text-secondary)]"}>
-          {formatMassKg(preview.removedDryKg === null ? null : Math.abs(preview.removedDryKg))} {dryLabel} {preview.removedDryKg !== null && preview.removedDryKg < 0 ? "added" : "removed"}
-        </p>
-      </div>
-      {detailed ? <>
-      <p className="body-caption">
-        {preview.wetLabel ? "Recorded wet stock. " : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture. ` : "No moisture measurement was entered. "}
-        Both bars use the same {formatMassKg(scale)} {preview.wetLabel ?? (wetBasis ? "wet estimate" : dryLabel)} scale.
-        {preview.wetLabel ? " Dry solids use the recorded intake basis." : wetBasis ? " These estimates do not replace recorded pile measurements." : " Wet estimates need a moisture measurement."}
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-        {balances.map((balance) => (
-          <OutputStockBalanceCard key={balance.label} preview={preview} balance={balance} scale={scale} wetBasis={wetBasis} colors={colors} moreInfo={(followFormDetail ? null : moreInfo) ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)} />
-        ))}
-      </div>
-      </> : <div className="space-y-4">
-        <p className="body-small">{preview.binName}</p>
-        {balances.map(balance => <p key={balance.label} className="body-caption">{balance.label}: {formatMassKg(balance.dry)} {dryLabel}{wetBasis ? ` · ${formatMassKg(balance.wet)} ${preview.wetLabel ?? "wet estimate"}` : ""}</p>)}
-        <p className="body-caption">{preview.wetLabel ? "Dry solids use the recorded intake basis." : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture do not replace recorded pile measurements.` : "Wet estimates need a moisture measurement."}</p>
-      </div>}
-      </>}
+      </div> : (
+        <StockLoadCard
+          preview={preview}
+          actions={moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)}
+        />
+      )}
       {preview.discrepancySolidsKg > 0 && <StockNotice>Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</StockNotice>}
       {blockingMessage && <StockNotice tone="error" role="alert">{blockingMessage}</StockNotice>}
       {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? (blocker.entity === "binMovement" ? <span key={blocker.id}>{blocker.code}</span> : <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?ids=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>))}
-      {!followFormDetail && detailed && preview.lane !== "ingredient" && preview.allocations.length > 0 && <div className="space-y-8">
-        <h3 className="body-small font-medium">{preview.binName}{preview.binCode ? ` (${preview.binCode})` : ""}</h3>
-        <OutputStockAllocations allocations={preview.allocations} />
-      </div>}
     </section>
   );
 }
 
 /**
- * What this movement does to the bin, in one card.
+ * What this movement does to the bin, in one block.
  *
  * Top to bottom it answers three questions in the order an operator asks them.
  * What did I enter: the wet mass drawn as a moisture split, so the dry share
@@ -222,11 +166,7 @@ export function OutputStockPreview({ followFormDetail = false, preview, moreInfo
  * needs the numbers, not the vocabulary.
  */
 function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?: ReactNode }) {
-  const dryLabel = preview.dryLabel ?? "dry biochar";
-  const ingredient = preview.lane === "ingredient";
-  const headline = ingredient
-    ? { label: binLabel(preview.wetLabel ?? "wet stock"), before: preview.beforeEstimatedWetKg, after: preview.afterEstimatedWetKg }
-    : { label: binLabel(dryLabel), before: preview.beforeDryKg, after: preview.afterDryKg };
+  const headline = headlineBalance(preview);
   const enteredWetKg = splitWetMassKg(preview);
   const notice = dryingNotice(preview, enteredWetKg);
   const rows = movementRows(preview);
@@ -243,7 +183,7 @@ function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?:
     >
       {enteredWetKg !== null && <div className="space-y-6">
         <p className="body-caption text-[var(--color-text-secondary)]">What you entered</p>
-        {/* The card's own disclosure holds the arithmetic, so the split
+        {/* The block's own disclosure holds the arithmetic, so the split
             contributes the bar and its key line and no second ledger. */}
         <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.estimateMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
       </div>}
@@ -251,6 +191,75 @@ function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?:
       <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} />
     </CompositionCard>
   );
+}
+
+/**
+ * What this movement does to one bin, on the surfaces that show several bins at
+ * once: a product draws from a biochar bin and its ingredient bins and fills a
+ * product bin, and each of the three gets one of these.
+ *
+ * The shape is the movement block's, so a bin reads the same wherever it
+ * appears. What differs is the bar. Here the operator did not enter this bin's
+ * mass field by field; what the bin contributes is a share of specific batches,
+ * so the bar is one segment per batch in its own accent and the caption carries
+ * the total the bar stands for. A movement with no batch to name (an ingredient
+ * withdrawal, a bin receiving new material) falls back to the moisture split of
+ * what was entered, which is the same bar the movement block draws.
+ */
+function StockLoadCard({ preview, actions }: { preview: Preview; actions?: ReactNode }) {
+  const headline = headlineBalance(preview);
+  const drawn = batchSegments(preview.allocations);
+  const enteredWetKg = splitWetMassKg(preview);
+  const notice = dryingNotice(preview, enteredWetKg);
+  const rows = movementRows(preview);
+  return (
+    <CompositionCard
+      title={preview.binName}
+      hint={stockCardHint(preview)}
+      actions={actions}
+      calculation={rows.length > 0 || preview.allocations.length > 0 ? <>
+        {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
+        <OutputStockAllocations allocations={preview.allocations} />
+      </> : undefined}
+    >
+      {drawn.length > 0 ? <div className="space-y-6">
+        <p className="body-caption text-[var(--color-text-secondary)]">{drawnCaption(preview)}</p>
+        <SegmentBar label={`Batches ${preview.binName} contributes`} segments={drawn} />
+        <SegmentKey segments={drawn} />
+      </div> : enteredWetKg !== null && <div className="space-y-6">
+        <p className="body-caption text-[var(--color-text-secondary)]">{enteredCaption(preview)}</p>
+        <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.estimateMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
+      </div>}
+      {notice && <StockNotice>{notice}</StockNotice>}
+      <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} />
+    </CompositionCard>
+  );
+}
+
+/** The tracked quantity of the lane, before and after: the block's headline. */
+function headlineBalance(preview: Preview): { label: string; before: number | null; after: number | null } {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  return preview.lane === "ingredient"
+    ? { label: binLabel(preview.wetLabel ?? "wet stock"), before: preview.beforeEstimatedWetKg, after: preview.afterEstimatedWetKg }
+    : { label: binLabel(dryLabel), before: preview.beforeDryKg, after: preview.afterDryKg };
+}
+
+/**
+ * The dry total the batch bar stands for, and which way it moved. The layers
+ * carry the figure when the planner reports no dry movement of its own, so the
+ * caption never reads "Not recorded" over a bar that clearly shows a mass.
+ */
+function drawnCaption(preview: Preview): string {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const dry = preview.removedDryKg ?? preview.allocations.reduce((total, allocation) => total + allocation.dryMassKg, 0);
+  return `${formatMassKg(Math.abs(dry))} ${dryLabel} ${movementDirection(dry)}`;
+}
+
+/** The wet total the split bar stands for. A count entered no movement to name. */
+function enteredCaption(preview: Preview): string {
+  return preview.removedWetKg === null
+    ? "What you entered"
+    : `${formatMassKg(Math.abs(preview.removedWetKg))} wet ${movementDirection(preview.removedWetKg)}`;
 }
 
 /**
@@ -311,11 +320,14 @@ function movementRows(preview: Preview): StockRow[] {
  */
 function movementLedger(preview: Preview): ReactNode {
   const dryLabel = preview.dryLabel ?? "dry biochar";
-  const drawn = preview.allocations.map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
+  // Plain category fills here: the ledger is a table of figures, and it is the
+  // one place in the movement block with no bar beside it to match a colour to.
+  const layer = (allocation: OutputStockBalanceView): MassSegment => ({ label: allocation.code, mass: allocation.dryMassKg, category: "dry-batch" });
+  const drawn = preview.allocations.map(layer);
   if (drawn.length > 0) {
     return <CompositionLedger hideZero label="Batches this movement draws from" totalLabel={capitalize(`${dryLabel} in this movement`)} total={Math.abs(preview.removedDryKg ?? 0)} segments={drawn} />;
   }
-  const remaining = (preview.afterAllocations ?? []).map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
+  const remaining = (preview.afterAllocations ?? []).map(layer);
   return remaining.length > 0
     ? <CompositionLedger hideZero label="Batch layers left in the bin" totalLabel={`Remaining ${dryLabel}`} total={preview.afterDryKg} segments={remaining} />
     : undefined;
@@ -344,7 +356,7 @@ function dryingNotice(preview: Preview, enteredWetKg: number | null): string | n
     : null;
 }
 
-/** The definition the card cannot show as a number. Kept to one hint. */
+/** The definition the block cannot show as a number. Kept to one hint. */
 function stockCardHint(preview: Preview): string {
   if (preview.lane === "ingredient") {
     return "Wet stock is the recorded intake less tracked withdrawals. The moisture entered here describes this withdrawal only.";

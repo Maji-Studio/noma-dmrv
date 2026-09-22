@@ -20,6 +20,28 @@ import { MIN_VISIBLE_SEGMENT_PERCENT, PERCENT_SCALE } from "@/lib/mass-moisture"
 const BAR_HEIGHT = "h-10";
 const SWATCH = "inline-block h-12 w-12 shrink-0 border border-[var(--color-border-secondary)]";
 
+/**
+ * How one part's quantity reads, in the key and in the bar's accessible name.
+ * Masses are the default; a blend of volume shares passes its own percent
+ * formatter so the spoken bar says "60%" rather than "60 kg".
+ */
+export type SegmentFormat = (mass: number | null) => string;
+
+/**
+ * Fills for a partition whose parts are peer batches rather than different
+ * substances. Every batch carries the one `dry-batch` category, so a bar of
+ * four batches would draw as one undivided block; these are the three entity
+ * accents already used across the app, cycled so adjacent segments stay
+ * distinguishable. Pass them through `MassSegment.fill` so the bar, its key
+ * line and the ledger's mini bars all colour the same batch the same way.
+ */
+export const BATCH_ACCENT_FILLS = ["var(--acc-prod)", "var(--acc-infra)", "var(--acc-dist)"] as const;
+
+/** The accent for the nth batch in a partition, cycling past the third. */
+export function batchAccentFill(index: number): string {
+  return BATCH_ACCENT_FILLS[index % BATCH_ACCENT_FILLS.length];
+}
+
 /** Widths that keep every non-zero part visible and still sum to the bar. */
 export function segmentWidths(segments: readonly MassSegment[]): number[] {
   const masses = segments.map((segment) => Math.max(0, segment.mass ?? 0));
@@ -36,17 +58,19 @@ export function segmentWidths(segments: readonly MassSegment[]): number[] {
   });
 }
 
-function describe(segments: readonly MassSegment[]): string {
+function describe(segments: readonly MassSegment[], format: SegmentFormat): string {
   return segments
     .filter((segment) => (segment.mass ?? 0) > 0)
-    .map((segment) => `${segment.label} ${formatCompositionMass(segment.mass)}`)
+    .map((segment) => `${segment.label} ${format(segment.mass)}`)
     .join(", ");
 }
 
-export function SegmentBar({ segments, label, className = "" }: {
+export function SegmentBar({ segments, label, format = formatCompositionMass, className = "" }: {
   segments: readonly MassSegment[];
   /** Names the whole the bar partitions, for the image's accessible name. */
   label: string;
+  /** Quantity formatter for the accessible name. Defaults to kilograms. */
+  format?: SegmentFormat;
   className?: string;
 }) {
   const widths = segmentWidths(segments);
@@ -54,7 +78,7 @@ export function SegmentBar({ segments, label, className = "" }: {
   return (
     <div
       role="img"
-      aria-label={`${label}: ${describe(segments) || "nothing recorded"}`}
+      aria-label={`${label}: ${describe(segments, format) || "nothing recorded"}`}
       className={`flex w-full overflow-hidden border border-[var(--color-border-secondary)] ${BAR_HEIGHT} ${className}`}
     >
       {drawn.map(({ segment, width }, index) => (
@@ -62,8 +86,8 @@ export function SegmentBar({ segments, label, className = "" }: {
           key={segment.label}
           aria-hidden="true"
           data-segment={segment.category}
-          className={`${MASS_CATEGORY_FILLS[segment.category]} ${index > 0 ? "border-l border-[var(--color-border-secondary)]" : ""}`}
-          style={{ width: `${width}%` }}
+          className={`${segment.fill ? "" : MASS_CATEGORY_FILLS[segment.category]} ${index > 0 ? "border-l border-[var(--color-border-secondary)]" : ""}`}
+          style={{ width: `${width}%`, background: segment.fill }}
         />
       ))}
     </div>
@@ -71,13 +95,18 @@ export function SegmentBar({ segments, label, className = "" }: {
 }
 
 /** The line under the bar: a swatch and "Label N kg" per segment, in bar order. Zero parts stay listed so an empty part is a fact, not an omission. */
-export function SegmentKey({ segments, className = "" }: { segments: readonly MassSegment[]; className?: string }) {
+export function SegmentKey({ segments, format = formatCompositionMass, className = "" }: {
+  segments: readonly MassSegment[];
+  /** Quantity formatter per part. Defaults to kilograms. */
+  format?: SegmentFormat;
+  className?: string;
+}) {
   return (
     <p className={`flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-secondary)] ${className}`}>
       {segments.map((segment) => (
         <span key={segment.label} className="inline-flex items-center gap-6">
-          <span aria-hidden="true" className={`${SWATCH} ${MASS_CATEGORY_FILLS[segment.category]}`} />
-          {segment.label} {formatCompositionMass(segment.mass)}
+          <span aria-hidden="true" className={`${SWATCH} ${segment.fill ? "" : MASS_CATEGORY_FILLS[segment.category]}`} style={segment.fill ? { background: segment.fill } : undefined} />
+          {segment.label} {format(segment.mass)}
         </span>
       ))}
     </p>
