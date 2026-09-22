@@ -164,6 +164,9 @@ describe("TransportLegsEditor journey timeline", () => {
     const rendered = text(renderEditor({ readOnly: true }));
 
     expect(rendered).toContain("Load carried 2 kg to 5 kg");
+    // The range alone loses which leg carried what, so each box names its load.
+    expect(rendered).toContain("Load 2 kg");
+    expect(rendered).toContain("Load 5 kg");
   });
 
   it("says how many legs the total distance could not include", () => {

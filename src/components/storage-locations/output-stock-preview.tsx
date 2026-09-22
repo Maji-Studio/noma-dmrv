@@ -333,11 +333,13 @@ function binLabel(quantity: string): string {
 /**
  * A count that only changes moisture looks like a bug next to an unchanged
  * balance, so the one case that needs a sentence gets one, above the figures it
- * explains.
+ * explains. Only an accepted count qualifies: a refused loss also arrives with
+ * nothing removed, and its blocking message is the sentence that applies.
  */
 function dryingNotice(preview: Preview, enteredWetKg: number | null): string | null {
   const dryLabel = preview.dryLabel ?? "dry biochar";
-  return preview.removedDryKg === 0 && enteredWetKg !== null
+  const acceptedCount = preview.removedWetKg === null && preview.blockingMessage === null;
+  return acceptedCount && preview.removedDryKg === 0 && enteredWetKg !== null
     ? `Drying alone does not remove ${dryLabel}.`
     : null;
 }

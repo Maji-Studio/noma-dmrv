@@ -211,6 +211,16 @@ describe("StockMovementCard", () => {
     await act(async () => card.renderer.unmount());
   });
 
+  it("does not call a refused loss a drying only count", async () => {
+    // The planner returns nothing removed for a loss it refuses, with the
+    // entered wet mass still attached; the blocking message is the sentence.
+    const card = await render({ ...loss, removedDryKg: 0, afterDryKg: 350, afterEstimatedWetKg: 500, allocations: [],
+      blockingMessage: "Loss exceeds the dry biochar in this bin." });
+    expect(card.text()).not.toContain("Drying alone");
+    expect(card.text()).toContain("Loss exceeds the dry biochar in this bin.");
+    await act(async () => card.renderer.unmount());
+  });
+
   it("keeps the bar off a count that exceeds tracked solids", async () => {
     const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, discrepancySolidsKg: 80, allocations: [] });
     expect(card.text()).not.toContain("What you entered");
