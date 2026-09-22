@@ -43,8 +43,27 @@ async function showDetailsWithKeyboard(dialog: Locator) {
 async function capture(page: Page, name: string) {
   const info = test.info();
   const path = info.outputPath(`${name}.png`);
-  await page.screenshot({ path, fullPage: true });
+  await page.screenshot({ path, fullPage: false });
   await info.attach(name, { path, contentType: "image/png" });
+}
+
+async function assertSimplePresentation(dialog: Locator) {
+  await expect(dialog.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
+  await expect(dialog.getByRole("region", { name: /composition|stock/i })).toHaveCount(0);
+  await expect(dialog.getByRole("table")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: /More info|View source lots|Show details for/i })).toHaveCount(0);
+  await expect(dialog.getByText(/^(Dry biochar|Wet total|Final moisture|Current stock|Derived transport)$/i)).toHaveCount(0);
+}
+
+async function captureSimple(page: Page, dialog: Locator, name: string) {
+  await assertSimplePresentation(dialog);
+  await page.setViewportSize(DESKTOP_VIEWPORT);
+  await dialog.getByText("Simple", { exact: true }).scrollIntoViewIfNeeded();
+  await capture(page, `${name}-simple-desktop`);
+  await page.setViewportSize(NARROW_VIEWPORT);
+  await assertNoHorizontalOverflow(dialog);
+  await capture(page, `${name}-simple-narrow`);
+  await page.setViewportSize(DESKTOP_VIEWPORT);
 }
 
 async function assertNoHorizontalOverflow(dialog: Locator) {
@@ -107,18 +126,45 @@ test("product inline presentation preserves measured inputs and guards actual st
     await expect(entityTrigger(dialog, scenario.ingredientName)).toContainText("−100 kg wet");
     await expect(destinationTrigger).toContainText(`+${PRODUCT_TOTAL_KG} kg wet`);
     await expect(dialog.getByRole("region", { name: /composition/ })).toHaveCount(0);
-    await capture(page, "product-simple-desktop");
+    await captureSimple(page, dialog, "product");
 
     await showDetailsWithKeyboard(dialog);
-    const source = dialog.getByRole("region", { name: "Source stock", exact: true });
+    const source = dialog.getByRole("region", { name: "Source composition", exact: true });
     const product = dialog.getByRole("region", { name: "Product composition", exact: true });
     await expect(source).toBeVisible();
-    await expect(product.getByRole("row", { name: /Biochar \(dry\)/ })).toContainText("200 kg");
+    await expect(source.getByRole("button", { name: "Show details for source composition", exact: true }).locator("span")).toHaveCSS("text-transform", "none");
+    await expect(product.getByRole("row", { name: /Dry biochar/ })).toContainText("200 kg");
     await expect(product.getByRole("row", { name: new RegExp(`${scenario.ingredientName}.*dry`) })).toContainText("80 kg");
     await expect(product.getByRole("row", { name: "Wet total", exact: false })).toContainText("400 kg");
+    await expect(source.getByText(scenario.firstCode, { exact: false })).toBeHidden();
+    await source.scrollIntoViewIfNeeded();
+    await capture(page, "product-source-composition");
+    const ingredient = dialog.getByRole("region", { name: `${scenario.ingredientName} composition`, exact: true });
+    await expect(ingredient.getByRole("row", { name: new RegExp(`${scenario.ingredientName}.*dry`) })).toContainText("80 kg");
+    await ingredient.scrollIntoViewIfNeeded();
+    await capture(page, "product-ingredient-composition");
+    await source.getByRole("button", { name: "Show details for source composition", exact: true }).click();
+    await source.scrollIntoViewIfNeeded();
+    await capture(page, "product-source-details");
     await expect(source.getByText(`${scenario.firstCode}: 80 kg dry biochar`, { exact: true }).first()).toBeVisible();
     await expect(source.getByText(`${scenario.secondCode}: 120 kg dry biochar`, { exact: true }).first()).toBeVisible();
+    await capture(page, "product-source-fifo");
+    await source.getByRole("button", { name: "View source lots", exact: true }).click();
+    const sourceHistory = page.getByRole("dialog", { name: "Stock history", exact: true });
+    await expect(sourceHistory).toBeVisible();
+    await capture(page, "product-source-lots");
+    await page.keyboard.press("Escape");
+    await expect(sourceHistory).toBeHidden();
+    await source.getByRole("button", { name: "Hide details for source composition", exact: true }).click();
+    await product.scrollIntoViewIfNeeded();
     await capture(page, "product-detailed-desktop");
+    await product.getByRole("button", { name: "Show details for product composition", exact: true }).click();
+    const productDetailsId = await product.getByRole("button", { name: "Hide details for product composition", exact: true }).getAttribute("aria-controls");
+    if (!productDetailsId) throw new Error("Product details require an associated disclosure");
+    await dialog.locator(`[id="${productDetailsId}"]`).scrollIntoViewIfNeeded();
+    await expect(product.getByText("Drawn from the oldest lot first", { exact: true })).toHaveCount(0);
+    await capture(page, "product-final-details");
+    await product.getByRole("button", { name: "Hide details for product composition", exact: true }).click();
 
     await dialog.getByText("Simple", { exact: true }).click();
     await expect(dialog.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
@@ -180,9 +226,10 @@ test("product inline presentation preserves measured inputs and guards actual st
       await page.locator("tbody").getByText(saved[0].code, { exact: true }).click();
       await expect(dialog.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
       await expect(dialog.getByRole("region", { name: /composition/ })).toHaveCount(0);
+      await captureSimple(page, dialog, "product-read");
       await showDetailsWithKeyboard(dialog);
       const savedComposition = dialog.getByRole("region", { name: "Product composition", exact: true });
-      await expect(savedComposition.getByRole("row", { name: /Biochar \(dry\)/ })).toContainText("200 kg");
+      await expect(savedComposition.getByRole("row", { name: /Dry biochar/ })).toContainText("200 kg");
       await expect(savedComposition.getByRole("row", { name: new RegExp(`${scenario.ingredientName}.*dry`) })).toContainText("80 kg");
       await expect(savedComposition.getByRole("row", { name: "Wet total", exact: false })).toContainText("400 kg");
       await savedComposition.scrollIntoViewIfNeeded();
@@ -197,6 +244,7 @@ test("product inline presentation preserves measured inputs and guards actual st
       await expect(dialog.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
       await expect(dialog.locator('input[name="massKg"]')).toHaveValue("250");
       await expect(dialog.locator('input[name="massKg"]')).toBeDisabled();
+      await captureSimple(page, dialog, "product-edit");
       await showDetailsWithKeyboard(dialog);
       await expect(dialog.getByRole("region", { name: "Product composition", exact: true })).toContainText("400 kg");
       await dialog.getByRole("region", { name: "Product composition", exact: true }).scrollIntoViewIfNeeded();
@@ -248,19 +296,26 @@ test("order details show actual dry stock and saving requested wet mass does not
   await dialog.locator('input[name="value"]').fill("230");
   await expect(dialog.getByRole("region", { name: "Matching storage bins" })).toHaveCount(0);
   await expect(entityTrigger(dialog, "Formulation")).not.toContainText("125");
+  await captureSimple(page, dialog, "order");
   await showDetailsWithKeyboard(dialog);
   const stock = dialog.getByRole("region", { name: "Matching storage bins" });
   await expect(stock).toContainText(seededData.productStorageLocation.name);
+  expect(await dialog.locator('input[name="currency"]').evaluate((field) => {
+    const stock = document.querySelector('[aria-label="Matching storage bins"]');
+    return stock !== null && Boolean(field.compareDocumentPosition(stock) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
   await expect(stock).toContainText("90,000 kg");
   await expect(stock).toContainText(/dry biochar/);
   await expect(stock).toContainText(/do not reserve stock/);
-  const stockExplanation = stock.getByText("Wet availability depends on measured departure moisture.", { exact: true });
+  const stockExplanation = stock.getByText(/Wet availability depends on measured departure moisture\./);
   await expect(stockExplanation).toBeHidden();
-  const stockDetails = stock.getByRole("button", { name: `Show details for ${seededData.productStorageLocation.name}`, exact: true });
+  const stockDetails = stock.getByRole("button", { name: `Show details for ${seededData.productStorageLocation.name.toLowerCase()}`, exact: true });
   await stockDetails.focus();
   await page.keyboard.press("Enter");
   await expect(stockExplanation).toBeVisible();
-  await expect(stock.getByRole("button", { name: `Hide details for ${seededData.productStorageLocation.name}`, exact: true })).toHaveAttribute("aria-expanded", "true");
+  await stock.scrollIntoViewIfNeeded();
+  await capture(page, "order-stock-details");
+  await expect(stock.getByRole("button", { name: `Hide details for ${seededData.productStorageLocation.name.toLowerCase()}`, exact: true })).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("Enter");
   await expect(stockExplanation).toBeHidden();
   await expect(stock.getByText("Loading stock details...", { exact: true })).toBeHidden();
@@ -301,6 +356,7 @@ test("order details show actual dry stock and saving requested wet mass does not
     await expect(dialog.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     await expect(dialog.getByRole("region", { name: "Matching storage bins" })).toHaveCount(0);
     await expect(dialog.getByText("125.125 kg", { exact: true })).toBeVisible();
+    await captureSimple(page, dialog, "order-read");
     const readValueBox = await dialog.getByText("Order value", { exact: true }).boundingBox();
     const readCurrencyBox = await dialog.getByText("Currency", { exact: true }).boundingBox();
     const readPackagingBox = await dialog.getByText("Packaging", { exact: true }).boundingBox();
@@ -322,6 +378,7 @@ test("order details show actual dry stock and saving requested wet mass does not
     await dialog.getByRole("button", { name: "Edit Order", exact: true }).click();
     await expect(dialog.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     await expect(dialog.locator('input[name="quantityKg"]')).toHaveValue("125.125");
+    await captureSimple(page, dialog, "order-edit");
     await showDetailsWithKeyboard(dialog);
     await stock.scrollIntoViewIfNeeded();
     await capture(page, "order-edit-detailed");
