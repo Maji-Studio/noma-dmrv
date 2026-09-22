@@ -14,7 +14,8 @@ interface TransportLegsSummaryProps {
 
 /**
  * Read-only transport-leg list for the side-sheet view mode. Renders the same
- * table as the editor (via `readOnly`) so view and edit stay visually identical.
+ * stacked leg blocks as the editor (via `readOnly`) so view and edit stay
+ * visually identical, minus the add/edit/delete controls.
  */
 export function TransportLegsSummary({
   entityType,

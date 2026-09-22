@@ -42,8 +42,8 @@ const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
 const feedstockOverdrawText =
   /^Only .+ of wet feedstock is available\. Reduce the wet mass\.$/;
-const biocharOverdrawText = /Insufficient exact dry solids/;
-const deliveryOverdrawText = /Insufficient exact dry solids/;
+const biocharOverdrawText = /Not enough dry biochar in the selected bin/;
+const deliveryOverdrawText = /Not enough dry biochar in the selected bin/;
 
 /** Open the existing draft run form against the seeded 120 kg-wet source bin. */
 async function openRunFormWithSource(

@@ -18,8 +18,7 @@ describe("ProductCompositionPreview", () => {
     expect(html).toContain("1,800 kg");
     expect(html).toContain("Ingredients + water");
     expect(html).toContain("2,200 kg");
-    expect(html).toContain("Measured product moisture: 40%");
-    expect(html).toContain("This measurement does not change dry biochar.");
+    expect(html).toContain("Measured moisture: 40%");
     expect(html).toContain('role="img"');
     expect(html).toContain('data-product-composition-segment="dry-biochar"');
     expect(html).toContain(

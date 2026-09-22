@@ -1,5 +1,14 @@
 import { act, create, type ReactTestRenderer, type ReactTestInstance } from "react-test-renderer";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+
+// The real InfoHint mounts a floating-ui tooltip, which reads `window` on
+// mount, and these suites run in the node environment. The hint's own
+// behaviour is covered by the tooltip tests; here it is inert.
+vi.mock("@/components/ui/tooltip", () => ({
+  InfoHint: ({ label }: { children: ReactNode; label: string }) => <span aria-label={label} />,
+  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
 import { SpineSectionStatic } from "./form-spine";
 import { FormDetailControl, FormDetailProvider } from "./form-detail-context";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
@@ -32,21 +41,19 @@ describe("optional detail boundaries", () => {
     const simple = visibleText(renderer.root);
     expect(simple).toContain("Correction blocked");
     expect(simple).toContain("Count exceeds tracked solids");
-    expect(simple).not.toContain("Before loading");
-    expect(simple).not.toContain("After loading");
+    expect(simple).not.toContain("Product bin");
     expect(simple).not.toContain("1,150 kg");
     expect(simple).not.toContain("Details");
     expect(simple).not.toContain("More info");
-    expect(simple).not.toContain("Batch breakdown");
+    expect(simple).not.toContain("Batch A");
     expect(renderer.root.findByType("a").props.href).toBe("/applications?ids=app-id");
     await act(async () => renderer.root.findAllByType("input")[1].props.onChange());
-    expect(visibleText(renderer.root)).not.toContain("Batch breakdown");
+    expect(visibleText(renderer.root)).not.toContain("Batch A");
     const disclosure = renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!;
     expect(disclosure.props["aria-expanded"]).toBe(false);
     await act(async () => disclosure.props.onClick());
-    expect(visibleText(renderer.root)).toContain("Batch breakdown");
-    expect(visibleText(renderer.root)).toContain("Before loading");
-    expect(visibleText(renderer.root)).toContain("After loading");
+    expect(visibleText(renderer.root)).toContain("Batch A");
+    expect(visibleText(renderer.root)).toContain("1,150 kg");
     expect(JSON.stringify(renderer.toJSON())).toContain("Correction blocked");
     await act(async () => renderer.unmount());
   });
@@ -93,7 +100,9 @@ it("omits optional read-section headings in Simple and numbers visible sections 
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   expect(visibleText(renderer.root)).toContain("Batch shares");
   expect(renderer.root.findAllByType(SpineSectionStatic).map(node => node.props.meta.index)).toEqual([0, 1, 2]);
-  await act(async () => renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!.props.onClick());
+  // Detailed shows the optional rows in place. They are recorded fields, not a
+  // calculation, so no disclosure stands between the operator and the number.
   expect(visibleText(renderer.root)).toContain("80 kg");
+  expect(renderer.root.findAllByType("button").filter(node => node.props["aria-controls"])).toHaveLength(0);
   await act(async () => renderer.unmount());
 });

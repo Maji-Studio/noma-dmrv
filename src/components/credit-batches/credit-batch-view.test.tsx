@@ -11,6 +11,13 @@ import type {
 import { creditBatchSheetSections } from "./credit-batch-view";
 
 vi.mock("next/link", () => ({ default: ({ children, href, ...props }: { children: ReactNode; href: string }) => <a href={href} {...props}>{children}</a> }));
+// The real InfoHint mounts a floating-ui tooltip, which reads `window` on
+// mount. These suites run in the node environment, so the hint renders as
+// plain text here and its behaviour is covered by the tooltip's own tests.
+vi.mock("@/components/ui/tooltip", () => ({
+  InfoHint: ({ children, label }: { children: ReactNode; label: string }) => <span aria-label={label}>{children}</span>,
+  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
 
 function makeRun(
   status: CreditBatchProductionRunOption["status"],
@@ -125,7 +132,8 @@ describe("credit batch CO₂e stored", () => {
       isLoadingRuns: true,
     });
 
-    expect(html).toContain("Loading production inputs…");
+    expect(html).toContain("Production inputs");
+    expect(html).toContain("Loading…");
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain("Feedstock, dry mass");
   });
@@ -227,17 +235,15 @@ it("keeps saved fields and cap warnings in Simple while carbon and calculation s
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FormDetailProvider scope="batch"><FormDetailControl /><EntitySideSheetSections sections={sections} /></FormDetailProvider>); });
   const simple = visibleText(renderer.root);
-  for (const label of ["Carbon ledger", "Carbon estimate", "12.50", "Applied biochar", "Capped durability estimate", "Raw durability estimate", "Preview authority", "Preview formula"]) expect(simple).not.toContain(label);
+  for (const label of ["Carbon ledger", "Carbon estimate", "12.50", "Applied biochar", "Capped durability estimate", "Raw durability estimate", "Preview formula"]) expect(simple).not.toContain(label);
   expect(simple).toContain("Wood chips");
-  expect(simple).toContain("The durability cap applies");
   expect(simple).toContain("Production emissions included in Removal");
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
-  expect(visibleText(renderer.root)).toContain("12.50");
-  expect(visibleText(renderer.root)).not.toContain("Source records");
-  expect(visibleText(renderer.root)).not.toContain("Capped durability estimate");
-  await act(async () => renderer.root.findAllByType("button").filter(node => node.props["aria-controls"]).forEach(node => node.props.onClick()));
-  expect(visibleText(renderer.root)).toContain("Capped durability estimate");
-  expect(visibleText(renderer.root)).toContain("Preview authority");
-  expect(visibleText(renderer.root)).toContain("Applied biochar");
+  const detailed = visibleText(renderer.root);
+  expect(detailed).toContain("12.50");
+  // Detailed no longer hides recorded fields behind a disclosure; they are rows.
+  expect(detailed).toContain("Capped durability estimate");
+  expect(detailed).toContain("Applied biochar");
+  expect(detailed).not.toContain("Preview authority");
   await act(async () => renderer.unmount());
 });

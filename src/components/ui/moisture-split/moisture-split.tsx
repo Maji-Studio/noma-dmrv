@@ -326,14 +326,26 @@ export function MoistureSplit({
   if (followFormDetail) {
     const added = split ? resolveAddedWaterState(split, addedWaterKg) : null;
     const final = added?.finalSplit ?? split;
+    // The ledger already states dry, water and total, so the disclosure only
+    // earns its place when there is arithmetic the ledger cannot show: water
+    // added after the measurement, or where the moisture reading came from.
+    const calculation = added && split
+      ? <>
+          <AddedWaterSummary split={split} addedWaterState={added} finalMoistureLabel={finalMoistureLabel} />
+          {note && <p className="body-caption">{note}</p>}
+        </>
+      : note
+        ? <p className="body-caption">{note}</p>
+        : undefined;
     return <div className={className} aria-live="polite" aria-atomic="true">
-      {!split && <p className="body-caption">{missingSplitInput(wetMassKg)} not recorded. {unresolvedDryLabel} cannot be calculated.</p>}
-      <CompositionCard title={`${materialLabel ?? "Material"} composition`} details={<>
-        <p className="body-small">Composition moisture: {formatMoisturePercent(split?.moisturePercent ?? moisturePercent)}</p>
-        <p className="body-caption">{dryMassKg != null && split?.dryKg === dryMassKg ? "Dry mass uses the saved record." : "Dry mass = wet mass × (1 − moisture ÷ 100)."} Water = wet mass − dry mass.</p>
-        {added && split && <AddedWaterSummary split={split} addedWaterState={added} finalMoistureLabel={finalMoistureLabel} />}
-        {note && <p className="body-caption">{note}</p>}
-      </>}>
+      <CompositionCard
+        title={`${materialLabel ?? "Material"} composition`}
+        hint={dryMassKg != null && split?.dryKg === dryMassKg
+          ? "Dry mass comes from the saved record."
+          : "Dry mass is the wet mass minus its water at the recorded moisture."}
+        calculation={calculation}
+      >
+        {!split && <p className="body-caption text-[var(--color-text-tertiary)]">{missingSplitInput(wetMassKg)} not recorded. {unresolvedDryLabel} cannot be calculated.</p>}
         <CompositionLedger label={`${materialLabel ?? "Material"} composition`} totalLabel={wetLabel ?? "Wet total"} total={final?.wetKg ?? wetMassKg ?? null} segments={[
           { label: unresolvedDryLabel, mass: split?.dryKg ?? null, category: "dry-biochar" },
           { label: "Water", mass: split?.waterKg ?? null, category: "existing-water" },

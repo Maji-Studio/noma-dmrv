@@ -8,6 +8,13 @@ import {
   PERCENT_SCALE,
 } from "@/lib/mass-moisture";
 
+/**
+ * What the two segments mean. A definition, not arithmetic, so it rides on the
+ * card title as an InfoHint instead of taking a line of its own.
+ */
+const COMPOSITION_HINT =
+  "Dry biochar comes from the tracked source record. The remainder is ingredients and water.";
+
 interface ProductCompositionPreviewProps {
   followFormDetail?: boolean;
   wetMassKg: number | null | undefined;
@@ -68,16 +75,16 @@ export function ProductCompositionPreview({
 
   if (followFormDetail && level === "simple") return null;
   if (followFormDetail) return <div data-testid={testId} className={className} aria-live="polite">
-    <CompositionCard title="Product composition" details={<>
-      {moisturePercent !== undefined && <p className="body-caption">Measured product moisture: {formatMoisturePercent(moisturePercent)}. This measurement does not change dry biochar.</p>}
-      <p className="body-caption">{remainderLabel} = {wetLabel.toLowerCase()} − {dryLabel.toLowerCase()}.</p>
-      {note && <p className="body-caption">{note}</p>}
-    </>}>
-      {estimate && <p className="body-caption">Planning estimate</p>}
+    <CompositionCard title="Product composition" hint={note ?? COMPOSITION_HINT}>
+      {estimate && <p className="body-caption text-[var(--color-text-tertiary)]">Planning estimate</p>}
       <CompositionLedger label="Product composition" totalLabel={wetLabel} total={wetMassKg ?? null} segments={[
         { label: dryLabel, mass: dryBiocharKg ?? null, category: "dry-biochar" },
         { label: remainderLabel, mass: hasComposition || wetMassKg === 0 && dryBiocharKg === 0 ? remainderKg : null, category: "ingredient-solids" },
       ]} />
+      {moisturePercent !== undefined && <div className="flex items-baseline justify-between gap-12 body-caption">
+        <span className="text-[var(--color-text-tertiary)]">Measured moisture</span>
+        <span className="tabular-nums">{formatMoisturePercent(moisturePercent)}</span>
+      </div>}
     </CompositionCard>
   </div>;
 
@@ -133,7 +140,7 @@ export function ProductCompositionPreview({
       </div>
       {moisturePercent !== undefined && (
         <p className="body-caption mt-8 text-[var(--color-text-tertiary)]">
-          Measured product moisture: {formatMoisturePercent(moisturePercent)}. This measurement does not change dry biochar.
+          Measured moisture: {formatMoisturePercent(moisturePercent)}
         </p>
       )}
       {note && (

@@ -13,26 +13,39 @@ import type {
   OutputStockBalanceView,
 } from "@/types/output-stock";
 import { useState, type ReactNode } from "react";
+import { formatWetMeasurement, StockBalanceChange, StockNotice } from "./stock-figures";
 
 const PERCENT_SCALE = 100;
 const EMPTY_SCALE_KG = 1;
 const BATCH_COLORS = ["var(--acc-prod)", "var(--acc-infra)", "var(--acc-dist)"];
 
+/**
+ * Which batches a draw touched, and which run produced each one.
+ *
+ * Nothing renders when the draw touched no batch: a heading over the words "no
+ * dry biochar removed" is a second copy of a number the card already shows.
+ */
 export function OutputStockAllocations({ allocations }: { allocations: OutputStockAllocationView[] }) {
+  if (allocations.length === 0) return null;
   return (
     <div className="space-y-8" aria-label="Batch breakdown">
-      <h4 className="body-small font-semibold">Batch breakdown</h4>
-      {allocations.length === 0 && <p className="body-caption">No dry biochar removed.</p>}
-      {allocations.map((allocation) => (
-        <div key={allocation.layerId} className="border border-[var(--color-border-tertiary)] p-12 space-y-4">
-          <p className="body-small">{allocation.code}: {formatMassKg(allocation.dryMassKg)} dry biochar</p>
-          {allocation.runs.map((run) => (
-            <p key={run.productionRunId} className="body-caption text-[var(--color-text-secondary)]">
-              Source run {run.code}: {formatMassKg(run.dryMassKg)} dry biochar
-            </p>
-          ))}
-        </div>
-      ))}
+      <h4 className="body-small font-medium">Batch breakdown</h4>
+      <dl className="space-y-8">
+        {allocations.map((allocation) => (
+          <div key={allocation.layerId} className="space-y-2">
+            <div className="flex items-baseline justify-between gap-12">
+              <dt className="body-caption">{allocation.code}</dt>
+              <dd className="body-small tabular-nums text-right">{formatMassKg(allocation.dryMassKg)}</dd>
+            </div>
+            {allocation.runs.map((run) => (
+              <div key={run.productionRunId} className="flex items-baseline justify-between gap-12 pl-12">
+                <dt className="body-caption text-[var(--color-text-secondary)]">Source run {run.code}</dt>
+                <dd className="body-caption tabular-nums text-right text-[var(--color-text-secondary)]">{formatMassKg(run.dryMassKg)}</dd>
+              </div>
+            ))}
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
@@ -123,9 +136,16 @@ export function OutputStockBalanceCard({ preview, balance, scale, wetBasis = fal
   );
 }
 
-export function OutputStockPreview({ followFormDetail = false, preview, moreInfo, commonScale, renderBlocker }: { followFormDetail?: boolean; preview: Preview; moreInfo?: ReactNode; commonScale?: number; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode }) {
+/**
+ * `hideBlockingMessage` is for forms that already render `preview.blockingMessage`
+ * as the error on the field the operator must change. The same sentence in two
+ * places reads as two separate problems, so the copy closest to the field wins
+ * and the preview drops its own alert.
+ */
+export function OutputStockPreview({ followFormDetail = false, preview, moreInfo, commonScale, renderBlocker, hideBlockingMessage = false }: { followFormDetail?: boolean; preview: Preview; moreInfo?: ReactNode; commonScale?: number; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const level = useFormDetailLevel();
   const detailed = !followFormDetail || level === "detailed";
+  const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
   const wetBasis = preview.beforeEstimatedWetKg !== null && preview.afterEstimatedWetKg !== null;
   const dryLabel = preview.dryLabel ?? "dry biochar";
   const scale = commonScale ?? Math.max(
@@ -141,19 +161,9 @@ export function OutputStockPreview({ followFormDetail = false, preview, moreInfo
   ];
 
   return (
-    <section hidden={followFormDetail && !detailed && !preview.blockingMessage && !preview.blockers?.length && preview.discrepancySolidsKg <= 0} className="space-y-16" aria-label="Stock preview" aria-live="polite">
+    <section hidden={followFormDetail && !detailed && !blockingMessage && !preview.blockers?.length && preview.discrepancySolidsKg <= 0} className="space-y-16" aria-label="Stock preview" aria-live="polite">
       {followFormDetail ? <div hidden={!detailed}>
-        <CompositionCard title={preview.binName} details={<>
-          <dl className="space-y-8 body-small">
-            {balances.map(balance => <div key={balance.label} className="flex justify-between gap-12"><dt>{balance.label}</dt><dd>{formatMassKg(balance.dry)} {dryLabel}{wetBasis ? ` · ${formatMassKg(balance.wet)} ${preview.wetLabel ?? "wet estimate"}` : ""}</dd></div>)}
-          </dl>
-          <p className="body-caption">{preview.wetLabel ? "Dry solids use the recorded intake basis." : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture do not replace recorded pile measurements.` : "Wet estimates need a moisture measurement."}</p>
-          {preview.lane !== "ingredient" && <><p className="body-caption">Drying alone does not remove dry biochar. A count above tracked solids records a discrepancy without adding stock.</p><OutputStockAllocations allocations={preview.allocations} /></>}
-          {moreInfo}
-        </>}>
-          <p className="body-small">{preview.removedWetKg !== null && `${formatMassKg(Math.abs(preview.removedWetKg))} wet ${preview.removedWetKg < 0 ? "added" : "removed"} · `}{formatMassKg(preview.removedDryKg === null ? null : Math.abs(preview.removedDryKg))} {dryLabel} {preview.removedDryKg !== null && preview.removedDryKg < 0 ? "added" : "removed"}</p>
-          <CompositionLedger label="Bin composition after loading" totalLabel={`Remaining ${dryLabel}`} total={preview.afterDryKg} segments={(preview.afterAllocations ?? []).map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" }))} />
-        </CompositionCard>
+        <StockMovementCard preview={preview} moreInfo={moreInfo} />
       </div> : <>
       <div>
         {preview.removedWetKg !== null && <p className="body-large font-semibold">{formatMassKg(Math.abs(preview.removedWetKg))} wet {preview.removedWetKg < 0 ? "added" : "removed"}</p>}
@@ -177,17 +187,88 @@ export function OutputStockPreview({ followFormDetail = false, preview, moreInfo
         {balances.map(balance => <p key={balance.label} className="body-caption">{balance.label}: {formatMassKg(balance.dry)} {dryLabel}{wetBasis ? ` · ${formatMassKg(balance.wet)} ${preview.wetLabel ?? "wet estimate"}` : ""}</p>)}
         <p className="body-caption">{preview.wetLabel ? "Dry solids use the recorded intake basis." : wetBasis ? `Wet estimates at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture do not replace recorded pile measurements.` : "Wet estimates need a moisture measurement."}</p>
       </div>}
-      {followFormDetail && moreInfo}
       </>}
-      {preview.discrepancySolidsKg > 0 && <p role="status" className="body-small">Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</p>}
-      {preview.blockingMessage && <p role="alert" className="body-small text-[var(--st-bad)]">{preview.blockingMessage}</p>}
+      {preview.discrepancySolidsKg > 0 && <StockNotice>Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</StockNotice>}
+      {blockingMessage && <StockNotice tone="error" role="alert">{blockingMessage}</StockNotice>}
       {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? (blocker.entity === "binMovement" ? <span key={blocker.id}>{blocker.code}</span> : <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?ids=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>))}
-      {!followFormDetail && detailed && <div className="space-y-8">
-        <h3 className="body-small font-semibold">{preview.binName}{preview.binCode ? ` (${preview.binCode})` : ""}</h3>
-        {preview.lane !== "ingredient" && <OutputStockAllocations allocations={preview.allocations} />}
+      {!followFormDetail && detailed && preview.lane !== "ingredient" && preview.allocations.length > 0 && <div className="space-y-8">
+        <h3 className="body-small font-medium">{preview.binName}{preview.binCode ? ` (${preview.binCode})` : ""}</h3>
+        <OutputStockAllocations allocations={preview.allocations} />
       </div>}
     </section>
   );
+}
+
+/**
+ * What this movement does to the bin, in one card.
+ *
+ * The headline is the consequence (the balance before and after), the caption
+ * is the movement that produced it, and the FIFO layers are the only content
+ * worth a disclosure. Definitions live in the title's hint, because an operator
+ * confirming a correction needs the numbers, not the vocabulary.
+ */
+function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?: ReactNode }) {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const ingredient = preview.lane === "ingredient";
+  const headline = ingredient
+    ? { label: binLabel(preview.wetLabel ?? "wet stock"), before: preview.beforeEstimatedWetKg, after: preview.afterEstimatedWetKg }
+    : { label: binLabel(dryLabel), before: preview.beforeDryKg, after: preview.afterDryKg };
+  const drawn = preview.allocations.map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
+  const remaining = (preview.afterAllocations ?? []).map(layer => ({ label: layer.code, mass: layer.dryMassKg, category: "dry-batch" as const }));
+  // The FIFO draw is the calculation; when a movement draws nothing, the layers
+  // it leaves behind are, and an empty bin has neither.
+  const calculation = drawn.length > 0
+    ? <CompositionLedger hideZero label="Batches this movement draws from" totalLabel={capitalize(`${dryLabel} in this movement`)} total={Math.abs(preview.removedDryKg ?? 0)} segments={drawn} />
+    : remaining.length > 0
+      ? <CompositionLedger hideZero label="Batch layers left in the bin" totalLabel={`Remaining ${dryLabel}`} total={preview.afterDryKg} segments={remaining} />
+      : undefined;
+  return (
+    <CompositionCard
+      title={preview.binName}
+      hint={stockCardHint(preview)}
+      calculation={calculation}
+    >
+      <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} supportingLine={movementCaption(preview)} />
+      {moreInfo}
+    </CompositionCard>
+  );
+}
+
+/** Sentence case: the quantity labels are stored lowercase for prose. */
+function capitalize(text: string): string {
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+}
+
+function binLabel(quantity: string): string {
+  return capitalize(`${quantity} in bin`);
+}
+
+/** One sentence naming what the movement does, never a restatement of a row. */
+function movementCaption(preview: Preview): string {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const dry = preview.removedDryKg;
+  const wet = preview.removedWetKg;
+  if (dry === null || dry === 0) {
+    const counted = preview.afterEstimatedWetKg;
+    return counted === null
+      ? `No ${dryLabel} removed.`
+      : `Counted ${formatWetMeasurement(counted, preview.estimateMoisturePercent)}, no ${dryLabel} removed.`;
+  }
+  const verb = dry < 0 ? "Adds" : "Removes";
+  const mass = formatMassKg(Math.abs(dry));
+  return wet === null
+    ? `${verb} ${mass} ${dryLabel}.`
+    : `${verb} ${mass} ${dryLabel} (${formatWetMeasurement(Math.abs(wet), preview.estimateMoisturePercent)}).`;
+}
+
+/** The definition the card cannot show as a number. Kept to one hint. */
+function stockCardHint(preview: Preview): string {
+  if (preview.lane === "ingredient") {
+    return "Wet stock is the recorded intake less tracked withdrawals. The moisture entered here describes this withdrawal only.";
+  }
+  return preview.removedDryKg === 0
+    ? "Dry biochar is the tracked quantity, and drying alone does not change it. Wet stock is an estimate at the moisture you enter."
+    : "Dry biochar is the tracked quantity. Wet stock is an estimate at the moisture you enter and does not replace a recorded pile measurement.";
 }
 
 function IngredientStockInfo({ preview }: { preview: Preview }) {

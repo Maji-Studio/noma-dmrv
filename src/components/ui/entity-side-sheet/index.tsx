@@ -209,7 +209,7 @@ function EntitySideSheet({
       <SlideOverPanel.Content size={size}>
         {/* Header */}
         <SlideOverPanel.Header showClose actions={showDetailToggle ? <FormDetailControl /> : undefined}>
-          <div className="flex items-center gap-12">
+          <div className="flex min-w-0 items-center gap-12">
             {/* Back arrow: only in edit mode when coming from view (not create) */}
             {mode === "edit" && (
               <Button

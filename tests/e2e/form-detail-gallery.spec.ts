@@ -82,14 +82,14 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
     await expect(simpleScope.getByText(/^(Wet feedstock|Dry feedstock)(:|$)/).filter({ visible: true })).toHaveCount(0);
     await expect(simpleScope.getByText(/^(Before loading|After loading|Recorded wet stock|Recorded wet mass.*dry|Wet:.*Dry:|Total wet input|Remaining wet mass)/).filter({ visible: true })).toHaveCount(0);
     await expect(simpleScope.getByRole("button", { name: "More info", exact: true })).toHaveCount(0);
-    await expect(simpleScope.getByRole("button", { name: /^Show details for/ })).toHaveCount(0);
+    await expect(simpleScope.getByRole("button", { name: /^Show calculation for/ })).toHaveCount(0);
     await scrollTop(sheet);
     const heading = sheet.getByRole("heading", { name: sectionNames[0], exact: true }).first();
     if (await heading.isVisible()) await focusSection(heading);
     await capture(page, `${name}-${viewport.width}-simple`);
     await sheet.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     await settled(page);
-    const disclosures = sheet.getByRole("button", { name: /^(Show|Hide) details for/ });
+    const disclosures = sheet.getByRole("button", { name: /^(Show|Hide) calculation for/ });
     // Close cards left open by the preceding viewport before documenting the default state.
     for (const button of await disclosures.all()) {
       if (await button.getAttribute("aria-expanded") === "true") await button.click();
@@ -105,7 +105,7 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
         const card = first.locator("xpath=ancestor::section[1]");
         await expect(card.getByRole("columnheader", { name: "% of total", exact: true })).toBeVisible();
         const bars = card.locator('table tbody [aria-hidden="true"]');
-        for (const bar of await bars.all()) expect(await bar.evaluate(el => el.getBoundingClientRect().height)).toBe(8);
+        for (const bar of await bars.all()) expect(await bar.evaluate(el => el.getBoundingClientRect().height)).toBe(4);
       }
     } else if (await heading.isVisible()) await focusSection(heading);
     await capture(page, `${name}-${viewport.width}-detailed`);
@@ -123,23 +123,13 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
     }
     if (name === "production-run-create" || name === "output-stock-correction") {
       const extra = name === "production-run-create"
-        ? sheet.getByRole("button", { name: /^(Show|Hide) details for process flow$/ })
+        ? sheet.getByRole("button", { name: /^(Show|Hide) calculation for process flow$/ })
         : disclosures.last();
       await extra.click();
       await expect(extra).toHaveAttribute("aria-expanded", "true");
       await focusSection(extra.locator("xpath=ancestor::section[1]"));
       await capture(page, `${name}-${viewport.width}-additional-details`);
       await extra.click();
-    }
-    if (name === "sample-read" && viewport.width === 390) {
-      const table = sheet.locator("table").first();
-      await table.evaluate(el => {
-        let parent = el.parentElement;
-        while (parent && !(parent.scrollWidth > parent.clientWidth && /auto|scroll/.test(getComputedStyle(parent).overflowX))) parent = parent.parentElement;
-        if (parent) parent.scrollLeft = parent.scrollWidth;
-      });
-      await focusSection(table);
-      await capture(page, `${name}-${viewport.width}-transport-right`);
     }
     expect(await values()).toEqual(initialValues);
     if (initialDisabled !== null) expect(await save.isDisabled()).toBe(initialDisabled);
@@ -182,7 +172,8 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await page.locator("#storageLocationId").selectOption(f.bin.id);
   await page.locator("#deliveredWetMassKg").fill("2500");
   await page.locator("#moistureContentPercent").fill("15");
-  await expect(page.getByRole("region", { name: "Stock preview", exact: true }).getByRole("alert")).toContainText(/Insufficient/);
+  // The blocker renders once, under the wet-mass field, never a second time inside the preview.
+  await expect(page.getByText(/Not enough dry biochar/)).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Create Delivery", exact: true })).toBeDisabled();
   await capture(page, "delivery-create-1440-simple-blocker");
   await page.locator("#deliveredWetMassKg").fill("2000");

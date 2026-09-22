@@ -2,7 +2,7 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
-import { add, compare, decimal, divide, grams, kilograms, multiply, planOutputStock, rational, readRational, subtract, type OutputStockLayer, type Rational } from '@/lib/output-stock';
+import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, subtract, type OutputStockLayer, type Rational } from '@/lib/output-stock';
 import { outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
@@ -57,7 +57,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
       : { kind: 'wet', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent! });
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
-    blockingMessage = error.message;
+    blockingMessage = operatorStockMessage(error.message);
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
   const beforeDryKg = Number(kilograms(layers.filter(l => l.physicalDate <= input.physicalDate).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
