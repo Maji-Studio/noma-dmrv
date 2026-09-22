@@ -235,6 +235,7 @@ function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?:
     <CompositionCard
       title={preview.binName}
       hint={stockCardHint(preview)}
+      actions={moreInfo}
       calculation={rows.length > 0 || ledger ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
         {ledger}
@@ -248,7 +249,6 @@ function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?:
       </div>}
       {notice && <StockNotice>{notice}</StockNotice>}
       <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} />
-      {moreInfo}
     </CompositionCard>
   );
 }
