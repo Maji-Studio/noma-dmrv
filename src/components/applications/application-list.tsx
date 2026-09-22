@@ -752,8 +752,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           ...(sideSheetEntity.allocationShares.length > 0 ? [{
+            // The bar and key line are Simple content; the block itself
+            // holds back its ledger and source runs until Detailed.
             title: "Batch shares",
-            detailedOnly: true,
             fields: [],
             content: <ApplicationAllocationShares shares={sideSheetEntity.allocationShares} />,
           }] : []),

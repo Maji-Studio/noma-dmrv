@@ -157,7 +157,6 @@ test.describe("Output-bin conserved FIFO", () => {
     const [application] = (await readOutputStockBrowserFixture(f)).applications;
     await page.getByRole("table", { name: "Applications", exact: true }).getByText(application.code, { exact: true }).click();
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    await expect(page.getByText("Batch shares", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("dialog").getByText("Dry biochar applied (kg)", { exact: true })).toHaveCount(0);
     // Simple carries the bar and its key line: which batches were applied and
     // how much dry biochar each gave. The ledger's shares are Detailed only.
