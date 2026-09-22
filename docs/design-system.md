@@ -460,17 +460,26 @@ delivery evidence; never use it to recalculate either composition mass.
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
   `MoistureField` attaches to every moisture input.
-- **`MoistureSplit` variants:** `detail` (figures + bar + footnote — forms and
-  read side sheets) · `compact` (bar + one line) · `inline` (text only — table
-  cells, option labels). Missing moisture renders an explicit *unresolved*
-  state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
-  drives certification readiness, so its absence has to be visible.
+- **`MoistureSplit` variants:** `detail` (bar + key line + calculation table —
+  forms and read side sheets) · `compact` (figures + bar + one line) · `inline`
+  (text only — table cells, option labels). The `detail` surface carries **no
+  card, no frame and no tinted panel**: the bar sits directly under the wet-mass
+  and moisture inputs it describes and moves as they change, with one key line
+  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). Under
+  `followFormDetail` that bar and key line stay in **Simple** — they are what
+  the two inputs mean, not a detail — and **Detailed** adds the calculation
+  table below them: the `CompositionLedger` plus the wet-basis arithmetic in
+  words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
+  is no "Show calculation" disclosure on this surface. Missing moisture renders
+  an explicit *unresolved* state (hatched dashed bar, "Moisture not recorded"),
+  never nothing — dry mass drives certification readiness, so its absence has
+  to be visible.
 - **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter and
   the `.moisture-water-hatch` void for water already present. When an operator
   records a positive amount of added water, a third segment uses solid
-  `--color-moisture-added-water`. The headline and moisture value then use the
-  final wet mass, while the bar still distinguishes the original water from the
-  added water. It does **not** take the production/infrastructure/distribution
+  `--color-moisture-added-water`, and the key line gains that swatch plus the
+  final moisture, while the bar still distinguishes the original water from the
+  added water. The ledger total is the final wet mass. It does **not** take the production/infrastructure/distribution
   accent, so the same moisture concept reads consistently across every area.
 - **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
   auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
