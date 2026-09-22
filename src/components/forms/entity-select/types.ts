@@ -83,8 +83,10 @@ export interface EntitySelectProps {
   hideSearch?: boolean;
   /** Whether the selected option's remaining-mass caption includes dry mass. */
   showRemainingDryMass?: boolean;
+  /** Hide optional stock captions when the parent provides progressive details. */
+  showRemainingMass?: boolean;
   /** Custom formatter for the selected value display */
-  formatSelectedLabel?: (entity: EntityOption) => string;
+  formatSelectedLabel?: (entity: EntityOption) => React.ReactNode;
   /**
    * Rendered when the (unsearched) option list is empty: names the upstream
    * prerequisite that produces options and links straight to it, so an empty

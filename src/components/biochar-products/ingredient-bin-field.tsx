@@ -15,9 +15,13 @@ import { formatStorageLocationType } from "@/schemas/storage-locations";
 import { useState } from "react";
 import {
   Controller,
+  useWatch,
   type Control,
   type FieldValues,
 } from "react-hook-form";
+import { CompositionCard, CalculationFacts, ingredientComponents } from "./composition-card";
+import { StockChangeLabel, StockContext } from "./stock-context";
+import type { AffectedStockPreview } from "@/types/output-stock";
 import { IngredientMoistureField } from "./ingredient-moisture-field";
 
 // The storage-location option subtitle for a feedstock bin starts with
@@ -130,6 +134,9 @@ interface IngredientBinFieldProps {
   isSubmitting: boolean;
   facilityId: string;
   allocationFrozen?: boolean;
+  detailed?: boolean;
+  previews?: AffectedStockPreview[];
+  previewsAvailable?: boolean;
 }
 
 export function IngredientBinField({
@@ -138,11 +145,16 @@ export function IngredientBinField({
   isSubmitting,
   facilityId,
   allocationFrozen = false,
+  detailed = false,
+  previews,
+  previewsAvailable = false,
 }: IngredientBinFieldProps) {
   const feedstockBinDialog = useQuickAddDialog();
+  const ingredient = useWatch({ control, name: `ingredientBins.${row.index}` });
+  const preview = previewsAvailable ? previews?.find(bin => bin.storageLocationId === ingredient?.storageLocationId) : undefined;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <div className="md:col-span-2">
         <Controller
           name={row.storageLocationFieldName}
@@ -152,11 +164,11 @@ export function IngredientBinField({
               <FormField
                 id={row.storageLocationFieldName}
                 label={row.feedstockTypeName}
-                helperText={row.feedstockTypeCategory}
                 error={fieldState.error?.message}
               >
                 <EntitySelect
                   entityType="storageLocation"
+                  showRemainingMass={false}
                   value={field.value || ""}
                   onChange={field.onChange}
                   placeholder="Select a feedstock bin..."
@@ -168,7 +180,7 @@ export function IngredientBinField({
                     feedstockTypeId: row.feedstockTypeId,
                     feedstockTypeUsage: "blend",
                   }}
-                  formatSelectedLabel={formatIngredientBinLabel}
+                  formatSelectedLabel={entity => <StockChangeLabel name={formatIngredientBinLabel(entity)} preview={preview} available={previewsAvailable} />}
                   allowCreate={!allocationFrozen}
                   emptyHint={{
                     message: `No ${row.feedstockTypeName} feedstock bins. Create a bin here, then record a feedstock intake to add stock.`,
@@ -226,6 +238,11 @@ export function IngredientBinField({
         )}
       />
       <IngredientMoistureField control={control} index={row.index} frozen={allocationFrozen} disabled={isSubmitting} />
+      {detailed && ingredient && <div className="md:col-span-2"><CompositionCard title={`${row.feedstockTypeName} composition`} totalKg={typeof ingredient.massKg === "number" && ingredient.massKg >= 0 ? ingredient.massKg : null} components={ingredientComponents(ingredient, allocationFrozen, preview)} details={<>
+        <CalculationFacts facts={ingredientComponents(ingredient, allocationFrozen, preview).map(component => ({ label: component.label, massKg: component.massKg }))} />
+        <p className="body-small">{allocationFrozen ? "Dry solids use the recorded ingredient snapshot." : ingredient.moistureSource === "operator_override" ? "Dry solids = ingredient wet mass × (1 − measured moisture ÷ 100)." : "Dry solids use the unrounded ratio of dry solids to wet stock in the selected bin."}</p>
+        <StockContext preview={preview} facilityId={facilityId} />
+      </>} /></div>}
     </div>
   );
 }

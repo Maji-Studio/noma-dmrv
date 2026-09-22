@@ -27,7 +27,8 @@ import { useForm, useWatch } from "react-hook-form";
 import { CustomerLocationDetails } from "./customer-location-details";
 import { MatchingOutputBins } from "./matching-output-bins";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { FormDetailToggle, type FormDetailLevel } from "@/components/forms/form-detail-toggle";
 
 // ============================================
 // Constants for select options
@@ -79,6 +80,7 @@ export function OrderForm({
   submitLabel,
 }: OrderFormProps) {
   const isEditMode = !!order;
+  const [detailLevel, setDetailLevel] = useState<FormDetailLevel>("simple");
   const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
@@ -176,6 +178,7 @@ export function OrderForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <div className="flex justify-end"><FormDetailToggle value={detailLevel} onChange={setDetailLevel} /></div>
       <FormSpine control={control}>
       {/* Order Information */}
       <FormSection
@@ -243,7 +246,7 @@ export function OrderForm({
           </FormField>
         </div>
 
-        {selectedLocation && (
+        {detailLevel === "detailed" && selectedLocation && (
           <CustomerLocationDetails
             location={selectedLocation}
             facility={formFacility}
@@ -258,7 +261,6 @@ export function OrderForm({
         fields={["formulationId", "packaging", "quantityKg", "value", "currency"]}
       >
         <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
-        <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -282,8 +284,8 @@ export function OrderForm({
         </div>
 
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-          <FormField
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <div className="md:col-span-2"><FormField
             id="packaging"
             label="Packaging"
             error={errors.packaging?.message}
@@ -296,11 +298,11 @@ export function OrderForm({
               options={packagingOptions}
               {...register("packaging")}
             />
-          </FormField>
+          </FormField></div>
 
           <FormField
             id="value"
-            label="Value"
+            label="Order value"
             error={errors.value?.message}
           >
             <FormInput
@@ -331,6 +333,7 @@ export function OrderForm({
             />
           </FormField>
         </div>
+        {detailLevel === "detailed" && <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />}
       </FormSection>
       </FormSpine>
 

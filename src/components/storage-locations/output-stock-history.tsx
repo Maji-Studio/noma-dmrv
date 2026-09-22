@@ -14,14 +14,14 @@ import { useState } from "react";
 import { OutputStockForm } from "./output-stock-form";
 import { OutputStockAllocations } from "./output-stock-preview";
 
-export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info" }: { storageLocationId: string; facilityId: string; movementId?: string; triggerLabel?: string }) {
+export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", quietTrigger = false }: { storageLocationId: string; facilityId: string; movementId?: string; triggerLabel?: string; quietTrigger?: boolean }) {
   const [open, setOpen] = useState(false);
   const [original, setOriginal] = useState<OutputStockHistoryEntry>();
   const history = useOutputStockHistory(storageLocationId, open);
   const correctedIds = new Set(history.data?.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
   const originalKind = (entry: OutputStockHistoryEntry): string => entry.eventKind ?? (entry.correctsMovementId ? originalKind(history.data?.find(item => item.id === entry.correctsMovementId) ?? { ...entry, correctsMovementId: null }) : entry.kind);
   return <>
-    <Button variant="default" onClick={() => setOpen(true)}>{triggerLabel}</Button>
+    <Button variant={quietTrigger ? "noOutline" : "default"} onClick={() => setOpen(true)}>{quietTrigger ? <span className="body-caption normal-case">{triggerLabel}</span> : triggerLabel}</Button>
     <Modal isOpen={open} onClose={() => { setOpen(false); setOriginal(undefined); }} ariaLabel="Stock history" width="lg">
       <div className="space-y-20">
         <h3 className="title-heading-3">Stock history</h3>

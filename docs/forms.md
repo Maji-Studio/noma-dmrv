@@ -222,7 +222,9 @@ The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divid
 - **`space-y-24`** — full-page and auth forms only.
 - Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
 - Controls in a field-grid row top-align independently; a wrapped label shifts
-  only its own control down. Do not "fix" this with per-field label heights,
+  only its own control down. The shared label row has a 24px minimum to match
+  the accessible info target; it still grows naturally for wrapped labels.
+  Do not "fix" wrapping with per-field label heights,
   spacer elements, or a shared subgrid — a `.grid > .form-field` subgrid was
   tried and reverted (it staggered grids containing any non-`FormField` child
   and opened voids under neighbors of fields with always-visible helper text).
@@ -246,6 +248,16 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.
 - `submitDisabled` gates on an unmet precondition (e.g. an unchecked acknowledgement).
+
+### Optional detail level
+
+Product and Order use `FormDetailToggle` in create, edit, and read views. Each
+view starts in Simple. Detailed reveals inline composition or stock context;
+ordinary fields, saved values, and validation remain visible in both modes.
+The toggle is a presentation preference and does not mark an edit form dirty.
+Saved Product composition uses recorded source allocations and ingredient dry
+snapshots. Order stock context shows current availability, not an order-date
+snapshot or reservation.
 
 ### FormSpine
 

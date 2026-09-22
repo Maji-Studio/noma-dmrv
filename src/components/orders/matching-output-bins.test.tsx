@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MatchingOutputBin, OutputStockPreviewInput } from "@/types/output-stock";
 const state = vi.hoisted(() => ({ bins: [] as MatchingOutputBin[], loading: false, error: false, timezone: "Pacific/Kiritimati" as string | undefined, inputs: [] as (OutputStockPreviewInput | null)[] }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilities: [{ id: "facility", timezone: state.timezone }] }) }));
-vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ storageLocationId, facilityId }: { storageLocationId: string; facilityId: string }) => <button data-history-bin={storageLocationId} data-facility={facilityId}>More info</button> }));
+vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ storageLocationId, facilityId, triggerLabel }: { storageLocationId: string; facilityId: string; triggerLabel: string }) => <button data-history-bin={storageLocationId} data-facility={facilityId}>{triggerLabel}</button> }));
 vi.mock("@/hooks/use-output-stock", () => ({
   useMatchingOutputBins: () => ({ data: state.bins, isLoading: false, error: null }),
   useOutputStockPreview: (input: OutputStockPreviewInput | null) => {
@@ -23,9 +23,10 @@ describe("MatchingOutputBins", () => {
   it("renders every bin beyond the first page without selecting or reserving stock", () => {
     state.bins = Array.from({ length: 25 }, (_, i) => ({ id: String(i), code: `B${i}`, name: `Bin ${i + 1}`, dryMassKg: 100, recordedWetMassKg: 150 }));
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
-    expect(html.match(/role="article"/g)).toHaveLength(25);
+    expect(html.match(/<table /g)).toHaveLength(25);
     expect(html).toContain("Bin 25");
-    expect(html).toContain("100 kg dry biochar");
+    expect(html).toContain("100 kg");
+    expect(html).toContain("Dry biochar in this bin");
     expect(html).toContain("Orders do not reserve stock.");
     expect(html).not.toContain("150 kg");
   });
@@ -40,9 +41,11 @@ describe("MatchingOutputBins", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150 }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(state.inputs).toEqual([{ storageLocationId: "bin", facilityId: "facility", physicalDate: "2026-09-16", kind: "count", wetMassKg: 0, moisturePercent: null }]);
-    expect(html).toContain('data-stock-batch="batch"');
+    expect(html).toContain("BP-001");
+    expect(html).toContain("width:100%");
     expect(html).toContain('data-history-bin="bin" data-facility="facility"');
-    expect(html).toContain("More info");
+    expect(html).toContain("View source lots");
+    expect(html).not.toContain("More info");
     expect(html).toContain("Pure biochar");
     expect(html).toContain("B1");
     expect(html).not.toMatch(/Before loading|After loading|removed|>0 kg dry biochar|150 kg/);
@@ -53,8 +56,10 @@ describe("MatchingOutputBins", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150 }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(html).toContain('role="status"');
-    expect(html).toContain("100 kg dry biochar");
-    expect(html).toContain("More info");
+    expect(html).toContain("100 kg");
+    expect(html).toContain("Dry biochar in this bin");
+    expect(html).toContain("View source lots");
+    expect(html).not.toContain("More info");
     expect(html).not.toContain("150 kg");
   });
   it("waits for facility timezone before requesting a dated preview", () => {
