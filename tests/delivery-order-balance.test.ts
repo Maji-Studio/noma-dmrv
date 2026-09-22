@@ -77,7 +77,7 @@ describe("completed delivery order balance", () => {
     const other = await createOrder(f.ctx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" });
     expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(1000);
     await postDelivery(f, 800);
-    await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Insufficient/);
+    await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Not enough dry biochar/);
   });
   it("locks the order formulation once a completed delivery uses it", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);

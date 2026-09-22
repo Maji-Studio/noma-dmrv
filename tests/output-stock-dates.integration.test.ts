@@ -44,7 +44,7 @@ describe('output stock facility dates in PostgreSQL', () => {
       });
     }
     const input = { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: '2026-09-15', kind: 'production_draw' as const, wetMassKg: 100, moisturePercent: 0 };
-    expect((await previewOutputStock(f.ctx, input)).blockingMessage).toMatch(/Insufficient/);
+    expect((await previewOutputStock(f.ctx, input)).blockingMessage).toMatch(/Not enough dry biochar/);
     const nextDay = await previewOutputStock(f.ctx, { ...input, physicalDate: '2026-09-16' });
     expect(nextDay.blockingMessage).toBeFalsy();
     expect(nextDay.removedDryKg).toBe(100);
