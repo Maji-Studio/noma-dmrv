@@ -224,6 +224,7 @@ export function EntitySelect({
   alwaysShowSearch = false,
   hideSearch = false,
   showRemainingDryMass = true,
+  showRemainingMass = true,
   formatSelectedLabel,
   emptyHint,
   noneOption,
@@ -304,7 +305,7 @@ export function EntitySelect({
   });
   const triggerDescribedBy = [
     ariaDescribedBy,
-    remainingMass ? remainingMassId : undefined,
+    showRemainingMass && remainingMass ? remainingMassId : undefined,
   ]
     .filter(Boolean)
     .join(" ") || undefined;
@@ -574,7 +575,7 @@ export function EntitySelect({
         )}
       </div>
 
-      {remainingMass && (
+      {showRemainingMass && remainingMass && (
         <p
           id={remainingMassId}
           className="body-caption text-[var(--color-text-tertiary)] mt-4"

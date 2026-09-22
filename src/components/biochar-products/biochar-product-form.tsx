@@ -46,7 +46,7 @@ import { CalendarIcon, CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-i
 import Link from "next/link";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { FormDetailToggle, type FormDetailLevel } from "@/components/forms/form-detail-toggle";
-import { CompositionCard, ingredientComponents, type CompositionComponent } from "./composition-card";
+import { CalculationFacts, CompositionCard, productCompositionComponents, ingredientComponents, type CompositionComponent } from "./composition-card";
 import { StockChangeLabel, StockContext } from "./stock-context";
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
@@ -340,11 +340,11 @@ export function BiocharProductForm({
   // Server FIFO allocation is authoritative for new products; frozen allocation wins on edit.
   const sourceDryKg = isEditMode ? destinationDryBiocharKg : validSourcePreview?.removedDryKg ?? null;
   const sourceComponents: CompositionComponent[] = [
-    { label: "Biochar (dry)", massKg: sourceDryKg, kind: "biochar" },
+    { label: "Dry biochar", massKg: sourceDryKg, kind: "biochar" },
     { label: "Water in biochar", massKg: sourceDryKg !== null && massKgNum !== null && sourceDryKg <= massKgNum ? massKgNum - sourceDryKg : null, kind: "water" },
     { label: "Added water", massKg: waterAddedKgNum !== null && waterAddedKgNum >= 0 ? waterAddedKgNum : null, kind: "addedWater" },
   ];
-  const productComponents = [...sourceComponents, ...(watchedIngredientBins ?? []).flatMap(ingredient => ingredientComponents(ingredient, hasFrozenSourceAllocation, !affectedBinsUnavailable ? productStockPreview.data?.find(bin => bin.storageLocationId === ingredient.storageLocationId) : undefined))];
+  const productComponents = productCompositionComponents(sourceComponents, (watchedIngredientBins ?? []).flatMap(ingredient => ingredientComponents(ingredient, hasFrozenSourceAllocation, !affectedBinsUnavailable ? productStockPreview.data?.find(bin => bin.storageLocationId === ingredient.storageLocationId) : undefined)));
 
   return (
     <div className="space-y-20">
@@ -409,6 +409,7 @@ export function BiocharProductForm({
             render={({ field, fieldState }) => (
               <EntitySelect
                 entityType="storageLocation"
+                showRemainingMass={false}
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder="Select a biochar bin..."
@@ -435,7 +436,11 @@ export function BiocharProductForm({
         </FormField>
 
         <BiocharSourceMassFields
-          splitPreview={detailed ? <StockContext title="Source stock" preview={validSourcePreview} facilityId={selectedFacilityId} /> : null}
+          splitPreview={detailed ? <CompositionCard title="Source composition" totalKg={waterAddedKgNum !== null ? finalMassSplit?.wetKg ?? null : null} components={sourceComponents} details={<>
+            <CalculationFacts facts={[{ label: "Biochar (wet)", massKg: massKgNum }, { label: "Dry biochar", massKg: sourceDryKg }, { label: "Added water", massKg: waterAddedKgNum }]} />
+            <p className="body-small">{hasFrozenSourceAllocation ? "Dry biochar uses the recorded source allocation." : "Dry biochar comes from the source lots at the measured moisture."} Added water leaves it unchanged.</p>
+            <StockContext preview={validSourcePreview} facilityId={selectedFacilityId} />
+          </>} /> : null}
           materialLabel="Biochar"
           wetMassKg={watchedMassKg}
           moisturePercent={watchedMoisture}
@@ -448,7 +453,7 @@ export function BiocharProductForm({
             placeholder: "e.g. 500",
             helperText: isEditMode
               ? "Source allocation is fixed."
-              : undefined,
+              : "",
             registration: register("massKg", { setValueAs: nullableNumericValue }),
           }}
           moisture={{
@@ -457,7 +462,7 @@ export function BiocharProductForm({
             required: true,
             disabled: isSubmitting,
             placeholder: "e.g. 2",
-            helperText: "Typically 1 to 2% for biochar",
+            helperText: "",
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           addedWaterField={
@@ -466,7 +471,6 @@ export function BiocharProductForm({
                 id="waterAddedKg"
                 label="Water added (kg)"
                 error={errors.waterAddedKg?.message}
-                helperText="Water added to reach target moisture"
                 hint="Dry mass is unchanged by added water."
                 required
               >
@@ -545,6 +549,7 @@ export function BiocharProductForm({
           composition={composition}
           isSubmitting={isSubmitting}
           allocationFrozen={hasFrozenSourceAllocation}
+          detailed={detailed}
           previews={productStockPreview.data}
           previewsAvailable={!affectedBinsUnavailable}
         />
@@ -568,6 +573,7 @@ export function BiocharProductForm({
             render={({ field, fieldState }) => (
               <EntitySelect
                 entityType="storageLocation"
+                showRemainingMass={false}
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder="Select a product bin..."
@@ -585,7 +591,7 @@ export function BiocharProductForm({
             )}
           />
         </FormField>
-        {detailed && <CompositionCard title="Product composition" totalKg={destinationWetProductKg} components={productComponents} details={<><p>{hasFrozenSourceAllocation ? "Dry biochar is fixed by the recorded source allocation." : "Dry biochar comes from the source lots at the measured moisture."} Added water and ingredient solids leave it unchanged.</p><StockContext preview={destinationPreview} facilityId={selectedFacilityId} /></>} />}
+        {detailed && <CompositionCard title="Product composition" totalKg={destinationWetProductKg} components={productComponents} details={<><CalculationFacts facts={[{ label: "Biochar (wet)", massKg: massKgNum }, ...(watchedIngredientBins ?? []).map(ingredient => ({ label: `${ingredient.feedstockTypeName} (wet)`, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : null })), { label: "Added water", massKg: waterAddedKgNum }, { label: "Wet total", massKg: destinationWetProductKg }]} /><p className="body-small">{hasFrozenSourceAllocation ? "Dry biochar is fixed by the recorded source allocation." : "Dry biochar comes from the source lots at the measured moisture."} Added water and ingredient solids leave it unchanged.</p><StockContext preview={destinationPreview} facilityId={selectedFacilityId} /></>} />}
       </FormSection>
       </FormSpine>
 
