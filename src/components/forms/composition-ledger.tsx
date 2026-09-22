@@ -5,7 +5,8 @@ import { formatMassKg } from "@/lib/format-utils";
 
 export type MassCategory = "dry-biochar" | "ingredient-solids" | "existing-water" | "added-water" | "dry-batch";
 export type MassSegment = { label: string; mass: number | null; category: MassCategory };
-const FILLS: Record<MassCategory, string> = {
+/** Fill per mass category, shared by the ledger mini bars and the segment bar. */
+export const MASS_CATEGORY_FILLS: Record<MassCategory, string> = {
   "dry-biochar": "bg-[var(--clr-dark-purple-80)]",
   "ingredient-solids": "bg-[var(--clr-dark-purple-40)]",
   "existing-water": "moisture-water-hatch",
@@ -32,7 +33,7 @@ function share(mass: number | null, total: number | null) {
 
 function MiniBar({ segment, total }: { segment: MassSegment; total: number | null }) {
   return <div aria-hidden="true" className="mt-4 h-4 w-full bg-[var(--color-border-secondary)]">
-    {total !== null && total > 0 && segment.mass !== null && <div className={`h-full ${FILLS[segment.category]}`} style={{ width: `${segment.mass / total * PERCENT_SCALE}%` }} />}
+    {total !== null && total > 0 && segment.mass !== null && <div className={`h-full ${MASS_CATEGORY_FILLS[segment.category]}`} style={{ width: `${segment.mass / total * PERCENT_SCALE}%` }} />}
   </div>;
 }
 
