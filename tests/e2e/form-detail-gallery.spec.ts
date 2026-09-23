@@ -278,7 +278,7 @@ test("gallery production run create read edit credit batch and sample read", asy
   await navigate(page, "credit-batches", d.facility);
   await page.getByText(batch.creditBatchCode, { exact: true }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await pairs(page, "credit-batch-read", ["Carbon ledger", "Batch definition", "Production runs"]);
+  await pairs(page, "credit-batch-read", ["Production runs", "Batch definition"]);
   await navigate(page, "samples", d.facility);
   await openRow(page, batch.sampleCodes[0]);
   await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeVisible();
@@ -331,5 +331,5 @@ test("gallery credit batch applied mass context", async ({ adminPage: page, test
   await navigate(page, "credit-batches", f.facility);
   await page.getByText(batch.code, { exact: true }).first().click();
   await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-  await pairs(page, "credit-batch-applied-read", ["Carbon ledger", "Batch definition", "Production runs"]);
+  await pairs(page, "credit-batch-applied-read", ["Production runs", "Batch definition"]);
 });

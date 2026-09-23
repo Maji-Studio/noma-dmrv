@@ -4,7 +4,7 @@
  * One question drives the order: is this batch ready to become credits, and
  * what needs fixing if not? Certification progress leads, then the batch's
  * identity (mirroring the edit form's section titles), the member production
- * runs, and notes. The interactive certification checklist and lab-sample
+ * runs closed by the carbon estimate they produce, and notes. The interactive certification checklist and lab-sample
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
@@ -33,6 +33,10 @@ import {
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
 
+/** Names the figure, so the headline needs no label of its own. */
+const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
+const CARBON_ESTIMATE_HINT =
+  "A local estimate of stored CO₂e before project emissions. The registry result is authoritative.";
 /** Who turns the input quantities into a deduction. One sentence, not a rule. */
 const CARBON_ESTIMATE_BASIS =
   "Isometric applies the emission factors to these quantities at submission. noma submits the quantities only.";
@@ -44,19 +48,20 @@ function formatInput(value: number | null, unit: string): string {
 }
 
 /**
- * Carbon estimate — one headline figure with the inputs behind it.
+ * Carbon estimate: one headline figure with the inputs behind it.
  *
- * The estimate is the only thing an operator reads off this block, so it is the
- * only thing with size, and the one part Simple keeps. The physical inputs the registry turns into deductions
- * are the arithmetic behind it, not a competing list, so they sit under `Show
- * calculation` as label and figure rows.
+ * It closes the Production runs section because the runs listed above it are
+ * what it is computed from. The figure is the only thing an operator reads off
+ * the block, so it is the one part Simple keeps. The physical inputs the
+ * registry turns into deductions are the arithmetic behind it, not a competing
+ * list, so they sit under Show calculation as label and figure rows.
  *
+ * The caption names the figure, so the headline carries no label of its own.
  * There is no gross-to-net chain to draw here: noma submits input quantities
  * and Isometric applies the emission factors (ADR 0018, ADR 0020), so no local
- * emission figure exists to subtract. The caption says whose number is missing
- * rather than inventing one.
+ * emission figure exists to subtract.
  */
-function CreditBatchCarbonLedger({
+function CreditBatchCarbonEstimate({
   creditBatch,
   productionRuns,
   isLoadingRuns,
@@ -71,7 +76,7 @@ function CreditBatchCarbonLedger({
   const estimate = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
   const inputRows = [
     {
-      label: "Feedstock, dry mass",
+      label: "Feedstock dry mass",
       value:
         totals.feedstockDryKg == null
           ? MISSING_VALUE.notRecorded
@@ -87,11 +92,14 @@ function CreditBatchCarbonLedger({
 
   return (
     <CompositionCard
-      title="Carbon estimate"
-      hint="A local estimate of stored CO₂e before project emissions. The registry result is authoritative."
+      title={CARBON_ESTIMATE_TITLE}
+      hint={CARBON_ESTIMATE_HINT}
       simple="headline"
+      headline={<DerivedHeadline
+        value={estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
+      />}
       calculation={
-        <div className="space-y-8">
+        <div className="flex flex-col gap-8">
           {runsPending ? (
             <StockRows
               label="Production inputs"
@@ -112,26 +120,6 @@ function CreditBatchCarbonLedger({
           </p>
         </div>
       }
-      actions={
-        !runsPending && productionRuns.length > 0 ? (
-          <span className="flex flex-wrap items-baseline gap-x-12 gap-y-4 body-caption">
-            <span className="text-[var(--color-text-tertiary)]">Source runs</span>
-            {productionRuns.map(run => (
-              <Link
-                key={run.id}
-                href={productionRunDeepLinkHref(run.id, creditBatch.facilityId)}
-                className="underline-offset-4 hover:underline"
-              >
-                {formatDate(run.date)}
-              </Link>
-            ))}
-          </span>
-        ) : undefined
-      }
-      headline={<DerivedHeadline
-        value={estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
-        sub="Estimated CO₂e stored, before project emissions"
-      />}
     />
   );
 }
@@ -305,19 +293,6 @@ export function creditBatchSheetSections({
       ),
     },
     {
-      title: "Carbon ledger",
-      detailedOnly: true,
-      fields: [],
-      content: (
-        <CreditBatchCarbonLedger
-          creditBatch={creditBatch}
-          productionRuns={productionRuns}
-          isLoadingRuns={isLoadingRuns}
-          runsError={runsError}
-        />
-      ),
-    },
-    {
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
       fields: [
@@ -366,14 +341,22 @@ export function creditBatchSheetSections({
       title: "Production runs",
       fields: [],
       content: (
-        <CreditBatchRunsContent
-          creditBatch={creditBatch}
-          productionRuns={productionRuns}
-          isLoadingRuns={isLoadingRuns}
-          runsError={runsError}
-          isRetryingRuns={isRetryingRuns}
-          onRetryRuns={onRetryRuns}
-        />
+        <div className="flex flex-col gap-16">
+          <CreditBatchRunsContent
+            creditBatch={creditBatch}
+            productionRuns={productionRuns}
+            isLoadingRuns={isLoadingRuns}
+            runsError={runsError}
+            isRetryingRuns={isRetryingRuns}
+            onRetryRuns={onRetryRuns}
+          />
+          <CreditBatchCarbonEstimate
+            creditBatch={creditBatch}
+            productionRuns={productionRuns}
+            isLoadingRuns={isLoadingRuns}
+            runsError={runsError}
+          />
+        </div>
       ),
     },
     {

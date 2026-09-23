@@ -37,6 +37,8 @@ export interface OrderWithRelations extends Order {
   deliveryCount: number;
   /** Deliveries in the `delivered` status — drives the `x/y delivered` progress. */
   deliveredCount: number;
+  /** Wet mass of the deliveries in the `delivered` status, in kg. */
+  deliveredWetMassKg: number;
   /** Fulfillment derived from delivery counts; see lib/orders/fulfillment. */
   fulfillmentStatus: OrderFulfillmentStatus;
 }
@@ -98,6 +100,9 @@ export async function getOrders(
       total: count().as("delivery_total"),
       delivered: countRows(sql`${deliveries.status} = 'delivered'`).as(
         "delivery_delivered",
+      ),
+      deliveredWetKg: sql<number>`coalesce(sum(${deliveries.deliveredWetMassKg}) filter (where ${deliveries.status} = 'delivered'), 0)`.as(
+        "delivery_delivered_wet_kg",
       ),
     })
     .from(deliveries)
@@ -203,6 +208,9 @@ export async function getOrders(
       ),
       deliveredCount: numericAggregate(
         sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
+      ),
+      deliveredWetMassKg: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.deliveredWetKg}, 0)`,
       ),
     })
     .from(orders)

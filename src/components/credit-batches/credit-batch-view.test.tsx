@@ -77,11 +77,11 @@ function makePreview(
   };
 }
 
-function carbonLedgerMarkup(
+function carbonEstimateMarkup(
   options: Parameters<typeof creditBatchSheetSections>[0],
 ): string {
   const content = creditBatchSheetSections(options).find(
-    (section) => section.title === "Carbon ledger",
+    (section) => section.title === "Production runs",
   )?.content;
   return renderToStaticMarkup(<>{content}</>);
 }
@@ -98,14 +98,14 @@ const baseOptions = {
 describe("credit batch CO₂e stored", () => {
   it("omits the field until a numeric preview is available", () => {
     expect(
-      carbonLedgerMarkup({
+      carbonEstimateMarkup({
         ...baseOptions,
         creditBatch: makeBatch(),
       }),
     ).not.toContain("t CO₂e");
 
     expect(
-      carbonLedgerMarkup({
+      carbonEstimateMarkup({
         ...baseOptions,
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
@@ -116,7 +116,7 @@ describe("credit batch CO₂e stored", () => {
 
   it("renders the figure once the preview resolves", () => {
     expect(
-      carbonLedgerMarkup({
+      carbonEstimateMarkup({
         ...baseOptions,
         creditBatch: makeBatch({
           co2eStoredPreview: makePreview(12.5, []),
@@ -126,7 +126,7 @@ describe("credit batch CO₂e stored", () => {
   });
 
   it("keeps loading production-run data distinct from missing inputs", () => {
-    const html = carbonLedgerMarkup({
+    const html = carbonEstimateMarkup({
       ...baseOptions,
       creditBatch: makeBatch(),
       isLoadingRuns: true,
@@ -135,11 +135,11 @@ describe("credit batch CO₂e stored", () => {
     expect(html).toContain("Production inputs");
     expect(html).toContain("Loading…");
     expect(html).toContain('aria-busy="true"');
-    expect(html).not.toContain("Feedstock, dry mass");
+    expect(html).not.toContain("Feedstock dry mass");
   });
 
   it("explains when production-run data is unavailable", () => {
-    const html = carbonLedgerMarkup({
+    const html = carbonEstimateMarkup({
       ...baseOptions,
       creditBatch: makeBatch(),
       runsError: new Error("request failed"),
@@ -147,7 +147,7 @@ describe("credit batch CO₂e stored", () => {
 
     expect(html).toContain("Not available");
     expect(html).toContain("Reload the production runs");
-    expect(html).not.toContain("Feedstock, dry mass");
+    expect(html).not.toContain("Feedstock dry mass");
   });
 
   it("discloses the raw and capped 1000-year durability calculation", () => {
@@ -227,7 +227,7 @@ describe("credit batch production-run preview", () => {
 function visibleText(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visibleText).join(" ");
 }
-it("keeps saved fields and cap warnings in Simple while carbon and calculation sections are Detailed only", async () => {
+it("keeps saved fields and the carbon estimate figure in Simple while calculation rows are Detailed only", async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const preview = makePreview(12.5, []);
   preview.applicationResults = [{ applicationId: "app", applicationCode: "APP-001", co2eStoredTonnes: 12.5, rawFDurable: 0.97, fDurable: 0.95, durabilityCapped: true, organicCarbonPercent: 79, effectiveSoilTemperatureC: null, missingInputs: [], warnings: [] }];
@@ -235,7 +235,12 @@ it("keeps saved fields and cap warnings in Simple while carbon and calculation s
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FormDetailProvider scope="batch"><FormDetailControl /><EntitySideSheetSections sections={sections} /></FormDetailProvider>); });
   const simple = visibleText(renderer.root);
-  for (const label of ["Carbon ledger", "Carbon estimate", "12.50", "Applied biochar", "Capped durability estimate", "Raw durability estimate", "Preview formula"]) expect(simple).not.toContain(label);
+  for (const label of ["Carbon ledger", "Show calculation", "Feedstock dry mass", "Applied biochar", "Capped durability estimate", "Raw durability estimate", "Preview formula"]) expect(simple).not.toContain(label);
+  // The estimate closes the Production runs section and Simple keeps its figure.
+  expect(simple).toContain("Carbon estimate, before project emissions");
+  expect(simple).toContain("≈ 12.50 t CO₂e");
+  expect(simple.indexOf("Production runs")).toBeLessThan(simple.indexOf("≈ 12.50 t CO₂e"));
+  expect(sections.map(section => section.title)).not.toContain("Carbon ledger");
   expect(simple).toContain("Wood chips");
   expect(simple).toContain("Production emissions included in Removal");
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
@@ -254,21 +259,23 @@ it("leads the carbon estimate with the figure and keeps the input quantities beh
     ...baseOptions,
     creditBatch: makeBatch({ co2eStoredPreview: makePreview(12.5, []) }),
     productionRuns: [makeRun("complete", 1)],
-  }).find((section) => section.title === "Carbon ledger")?.content;
+  }).find((section) => section.title === "Production runs")?.content;
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<>{content}</>); });
   const shown = visibleText(renderer.root);
-  // One headline figure, then the caption naming what the figure excludes.
+  // The caption names the figure, and the one headline figure follows it.
+  expect(shown).toContain("Carbon estimate, before project emissions");
   expect(shown).toContain("≈ 12.50 t CO₂e");
-  expect(shown).toContain("Estimated CO₂e stored, before project emissions");
-  expect(shown).toContain("Source runs");
+  expect(shown).toContain("The registry result is authoritative.");
+  // The runs are listed right above, so the block repeats no source-run links.
+  expect(shown).not.toContain("Source runs");
   // The per-input quantities are the arithmetic behind the figure, not a
   // second list competing with it.
-  expect(shown).not.toContain("Feedstock, dry mass");
+  expect(shown).not.toContain("Feedstock dry mass");
   const disclosure = renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!;
   await act(async () => disclosure.props.onClick());
   const disclosed = visibleText(renderer.root);
-  expect(disclosed).toContain("Feedstock, dry mass");
+  expect(disclosed).toContain("Feedstock dry mass");
   expect(disclosed).toContain("Grid electricity");
   expect(disclosed).toContain("Isometric applies the emission factors");
   await act(async () => renderer.unmount());
