@@ -374,7 +374,7 @@ export function ProductionRunForm({
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
               name="reactorId"
@@ -430,7 +430,7 @@ export function ProductionRunForm({
           </FormField>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="startDate"
             label="Start date"
@@ -464,7 +464,7 @@ export function ProductionRunForm({
           </p>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="endDate"
             label="End date"
@@ -491,7 +491,7 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
             <Controller
               name="operatorId"
@@ -536,12 +536,12 @@ export function ProductionRunForm({
       >
 
         {!watchedFacilityId && (
-          <p className="text-[var(--color-text-tertiary)] body-caption">
+          <p className="body-caption text-[var(--color-text-tertiary)]">
             Select a facility in the sidebar to choose a feedstock source bin.
           </p>
         )}
         {feedstockDrawFields.length === 0 && (
-          <p className="body-small text-[var(--color-text-tertiary)] py-8">
+          <p className="body-caption text-[var(--color-text-tertiary)]">
             Add a source bin and the wet mass drawn from it.
           </p>
         )}
@@ -612,7 +612,7 @@ export function ProductionRunForm({
           />
           <MoistureSplit className="md:col-span-2" wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
               id="feedingRateKgHr"
@@ -731,7 +731,7 @@ export function ProductionRunForm({
           "electricityKwh",
         ]}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="dieselOperationLiters"
             label="Startup / plant diesel (L)"

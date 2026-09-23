@@ -27,6 +27,7 @@ import {
 } from "@/components/forms";
 import type { MassSegment } from "@/components/forms/composition-ledger";
 import { Button } from "@/components/ui";
+import { InfoHint } from "@/components/ui/tooltip";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import { useEntityOptions } from "@/hooks/use-entities";
 import {
@@ -59,6 +60,9 @@ const PERCENT_DISPLAY_TOLERANCE = 0.1;
  * precision so the balanced sum stays a valid 100%.
  */
 const SHARE_PERCENT_STEP = String(1 / PERCENT_DECIMALS);
+
+/** Shared with the read view, which says the same of a saved formulation. */
+export const PURE_BIOCHAR_CUE = "Pure biochar, no ingredients.";
 
 /** A fresh formulation starts as pure biochar; adding ingredients rebalances. */
 const DEFAULT_BIOCHAR_PERCENT = 100;
@@ -243,11 +247,12 @@ export function FormulationForm({
     })),
     unallocatedPercent,
   });
+  // Under 100% the key line already names the unallocated share, so the total
+  // alone is enough; over 100% it is an error and says how to fix it.
+  const totalLine = `Total ${formatSharePercent(totalPercent)}%.`;
   const balanceMessage = isOverAllocated
-    ? `Total ${formatSharePercent(totalPercent)}%. Reduce a share to reach 100%.`
-    : isBalanced
-      ? `Total ${formatSharePercent(totalPercent)}%.`
-      : `Total ${formatSharePercent(totalPercent)}%. ${formatSharePercent(unallocatedPercent)}% is unallocated.`;
+    ? `${totalLine} Reduce a share to reach 100%.`
+    : totalLine;
 
   const handleBalance = () => {
     setAutoBalance(true);
@@ -293,124 +298,126 @@ export function FormulationForm({
             disabled={isSubmitting}
           >
             <PlusIcon size={16} weight="bold" />
-            Add Ingredient
+            Add ingredient
           </Button>
         }
       >
-        {/* Biochar row — the base material, styled like an ingredient row */}
-        <div className="border border-[var(--color-border-tertiary)] p-16 space-y-12">
-          <div className="flex items-center justify-between">
-            <span className="body-small font-medium text-[var(--color-text-secondary)]">
-              Biochar
-            </span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Base material
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
-            <p className="md:col-span-2 body-small text-[var(--color-text-tertiary)] self-center">
-              Pyrolyzed carbon from your production runs.
-            </p>
-            <FormField
-              id="biocharPercent"
-              label="Volume share (%)"
-              error={errors.biocharPercent?.message}
-              helperText={
-                autoBalance ? "Auto-fills the remaining share" : undefined
-              }
-            >
-              <FormInput
-                id="biocharPercent"
-                type="number"
-                step={SHARE_PERCENT_STEP}
-                min="0"
-                max="100"
-                placeholder="e.g., 70"
-                disabled={isSubmitting}
-                error={!!errors.biocharPercent}
-                {...register("biocharPercent", {
-                  onChange: () => {
-                    setAutoBalance(false);
-                  },
-                })}
-              />
-            </FormField>
-          </div>
-        </div>
-
-        {fields.length === 0 && (
-          <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No blend feedstock types are added. This is a pure-biochar formulation.
-            Add a feedstock type to create a blend.
-          </p>
-        )}
-
-        {fields.map((field, index) => (
-          <div
-            key={field.id}
-            className="border border-[var(--color-border-tertiary)] p-16 space-y-12"
-          >
-            <div className="flex items-center justify-between">
-              <span className="body-small font-medium text-[var(--color-text-secondary)]">
-                Ingredient {index + 1}
+        {/* One flat row per material: a sub-title naming it, then its fields.
+            Every share sits in the right-hand column so the shares read down
+            as one column that adds up to 100%. */}
+        <div className="space-y-20">
+          <div className="space-y-12">
+            <div className="flex min-h-24 items-center gap-8">
+              <span className="body-small font-medium text-[var(--color-text-primary)]">
+                Biochar
               </span>
-              <Button
-                variant="destructive"
-                size="small"
-                onClick={() => remove(index)}
-                disabled={isSubmitting}
-                aria-label={`Remove ingredient ${index + 1}`}
-              >
-                <TrashIcon size={16} weight="bold" />
-              </Button>
+              <span className="body-caption text-[var(--color-text-tertiary)]">
+                Base material
+              </span>
+              <InfoHint label="About biochar">
+                Pyrolyzed carbon from your production runs.
+              </InfoHint>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
-              <div className="md:col-span-2">
-                <FormEntitySelect
-                  control={formControl}
-                  name={`ingredients.${index}.feedstockTypeId`}
-                  label="Blend material"
-                  entityType="feedstockType"
-                  placeholder="Select a blend material..."
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+              <div className="md:col-start-3">
+                <FormField
+                  id="biocharPercent"
+                  label="Volume share (%)"
+                  error={errors.biocharPercent?.message}
+                  helperText={
+                    autoBalance ? "Auto-fills the remaining share" : undefined
+                  }
+                >
+                  <FormInput
+                    id="biocharPercent"
+                    type="number"
+                    step={SHARE_PERCENT_STEP}
+                    min="0"
+                    max="100"
+                    placeholder="e.g., 70"
+                    disabled={isSubmitting}
+                    error={!!errors.biocharPercent}
+                    {...register("biocharPercent", {
+                      onChange: () => {
+                        setAutoBalance(false);
+                      },
+                    })}
+                  />
+                </FormField>
+              </div>
+            </div>
+          </div>
+
+          {fields.length === 0 && (
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              {PURE_BIOCHAR_CUE} Add an ingredient to make a blend.
+            </p>
+          )}
+
+          {fields.map((field, index) => (
+            <div key={field.id} className="space-y-12">
+              <div className="flex min-h-24 items-center justify-between gap-8">
+                <span className="body-small font-medium text-[var(--color-text-primary)]">
+                  Ingredient {index + 1}
+                </span>
+                <Button
+                  variant="destructive"
+                  size="small"
+                  onClick={() => remove(index)}
                   disabled={isSubmitting}
-                  required
-                  autoSelectSingle={false}
-                  allowCreate
-                  createLabel="Add blend material"
-                  filterBy={{ usage: FORMULATION_LINE_FEEDSTOCK_USAGE }}
-                  excludeIds={(ingredients ?? [])
-                    .map((ingredient, ingredientIndex) =>
-                      ingredientIndex === index
-                        ? undefined
-                        : ingredient?.feedstockTypeId,
-                    )
-                    .filter((id): id is string => !!id)}
-                  alwaysShowSearch
-                />
+                  aria-label={`Remove ingredient ${index + 1}`}
+                >
+                  <TrashIcon size={16} weight="bold" />
+                </Button>
               </div>
 
-              <FormField
-                id={`ingredients.${index}.sharePercent`}
-                label="Volume share (%)"
-                error={errors.ingredients?.[index]?.sharePercent?.message}
-              >
-                <FormInput
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
+                <div className="md:col-span-2">
+                  <FormEntitySelect
+                    control={formControl}
+                    name={`ingredients.${index}.feedstockTypeId`}
+                    label="Blend material"
+                    entityType="feedstockType"
+                    placeholder="Select a blend material..."
+                    disabled={isSubmitting}
+                    required
+                    autoSelectSingle={false}
+                    allowCreate
+                    createLabel="Add blend material"
+                    filterBy={{ usage: FORMULATION_LINE_FEEDSTOCK_USAGE }}
+                    excludeIds={(ingredients ?? [])
+                      .map((ingredient, ingredientIndex) =>
+                        ingredientIndex === index
+                          ? undefined
+                          : ingredient?.feedstockTypeId,
+                      )
+                      .filter((id): id is string => !!id)}
+                    alwaysShowSearch
+                  />
+                </div>
+
+                <FormField
                   id={`ingredients.${index}.sharePercent`}
-                  type="number"
-                  step={SHARE_PERCENT_STEP}
-                  min="0"
-                  max="100"
-                  placeholder="e.g., 30"
-                  disabled={isSubmitting}
-                  error={!!errors.ingredients?.[index]?.sharePercent}
-                  {...register(`ingredients.${index}.sharePercent`)}
-                />
-              </FormField>
+                  label="Volume share (%)"
+                  error={errors.ingredients?.[index]?.sharePercent?.message}
+                >
+                  <FormInput
+                    id={`ingredients.${index}.sharePercent`}
+                    type="number"
+                    step={SHARE_PERCENT_STEP}
+                    min="0"
+                    max="100"
+                    placeholder="e.g., 30"
+                    disabled={isSubmitting}
+                    error={!!errors.ingredients?.[index]?.sharePercent}
+                    {...register(`ingredients.${index}.sharePercent`)}
+                  />
+                </FormField>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
         {/* What the entered shares make, directly under the share fields.
             Simple hides it, since the share fields already say it, until the
