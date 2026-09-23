@@ -7,17 +7,22 @@ import { test } from "vitest";
 import { load } from "js-yaml";
 
 const root = resolve(import.meta.dirname, "..");
-const sandboxSuite = "tests/isometric-sandbox.integration.test.ts";
+const healthSuite = "tests/isometric-sandbox-health.integration.test.ts";
+const writeSuite = "tests/isometric-sandbox.integration.test.ts";
+const sandboxEnvHelper = "tests/helpers/isometric-sandbox-env.ts";
 const collectionTimeoutMs = 60_000;
 
 // Collection only: no dotenv reads, application imports, API calls or DB tests.
-// The sentinel models another integration suite without importing its DB code.
-test("health command collects only sandbox reads even with telemetry enabled", () => {
+// The write suite sits beside the health suite so a broadened selection would
+// collect it; the sentinel models another integration suite without its DB code.
+test("health command collects only the read-only health file even with telemetry enabled", () => {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), "isometric-health-selection-")));
   try {
-    mkdirSync(join(directory, "tests"));
+    mkdirSync(join(directory, "tests/helpers"), { recursive: true });
     symlinkSync(join(root, "node_modules"), join(directory, "node_modules"));
-    writeFileSync(join(directory, sandboxSuite), readFileSync(join(root, sandboxSuite)));
+    for (const file of [healthSuite, writeSuite, sandboxEnvHelper]) {
+      writeFileSync(join(directory, file), readFileSync(join(root, file)));
+    }
     writeFileSync(join(directory, "tests/unrelated.integration.test.ts"),
       'import { it } from "vitest"; it("DB sentinel must not be selected", () => { throw new Error("collection only"); });');
     writeFileSync(join(directory, "dotenv-stub.ts"), 'export const config = () => ({});');
@@ -29,6 +34,7 @@ test("health command collects only sandbox reads even with telemetry enabled", (
     // Falling back makes the regression demonstrate the original broad selection.
     const command = scripts["test:isometric-health"] ?? scripts["test:integration"];
     assert.match(command, /^RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run /);
+    assert.doesNotMatch(command, /--testNamePattern|\s-t\s/, "select health checks by file, not by test name");
     const collect = command.replace("vitest run ", '"$1" list ') + " --json";
     const env: NodeJS.ProcessEnv = {
       NODE_ENV: "test",
@@ -41,20 +47,25 @@ test("health command collects only sandbox reads even with telemetry enabled", (
       ISOMETRIC_DEMO_FACILITY_ID: "collection-only",
       ISOMETRIC_KNOWN_GHG_ENTRY_SUPPLIER_REF: "collection-only",
     };
-    const output = execFileSync("sh", ["-c", collect, "isometric-health-collection", join(root, "node_modules/.bin/vitest")], {
-      cwd: directory, env, encoding: "utf8", timeout: collectionTimeoutMs,
-    });
-    const collected = JSON.parse(output) as Array<{ file: string; name: string }>;
+    const vitest = join(root, "node_modules/.bin/vitest");
+    const list = (script: string, listEnv: NodeJS.ProcessEnv = env) =>
+      JSON.parse(execFileSync("sh", ["-c", script, "isometric-health-collection", vitest], {
+        cwd: directory, env: listEnv, encoding: "utf8", timeout: collectionTimeoutMs, stdio: "pipe",
+      })) as Array<{ file: string; name: string }>;
+
+    const collected = list(collect);
     assert.ok(collected.length > 0, "must collect real read checks");
-    assert.deepEqual([...new Set(collected.map((entry) => entry.file))], [join(directory, sandboxSuite)]);
+    assert.deepEqual([...new Set(collected.map((entry) => entry.file))], [join(directory, healthSuite)]);
     assert.ok(collected.every((entry) => !entry.name.includes("write path")), "must exclude telemetry writes");
     assert.ok(collected.some((entry) => entry.name.includes("lists projects")));
     assert.ok(collected.some((entry) => entry.name.includes("mass-weighted")));
 
-    assert.throws(() => execFileSync("sh", ["-c", collect, "isometric-health-collection", join(root, "node_modules/.bin/vitest")], {
-      cwd: directory, env: { ...env, ISOMETRIC_CLIENT_SECRET: "" },
-      encoding: "utf8", timeout: collectionTimeoutMs, stdio: "pipe",
-    }), "explicit opt-in without credentials must fail collection");
+    // The excluded file really holds the write path, so the exclusion above is not vacuous.
+    const writes = list(`RUN_ISOMETRIC_SANDBOX_TESTS=1 "$1" list ${writeSuite} --json`);
+    assert.ok(writes.some((entry) => entry.name.includes("write path")), "write suite must hold the telemetry write");
+
+    assert.throws(() => list(collect, { ...env, ISOMETRIC_CLIENT_SECRET: "" }),
+      "explicit opt-in without credentials must fail collection");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

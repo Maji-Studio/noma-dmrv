@@ -514,7 +514,7 @@ companion inherits this file's schema, invariants, and resolution rules.
 ### Sample transport is mapped locally but no longer seen in the live template (`isometric/sample-transport-template-drift`, opened 2026-08-21, `needs-registry-check`)
 
 - **Observed:** the live sandbox check in
-  `tests/isometric-sandbox.integration.test.ts` ("resolves every transport
+  `tests/isometric-sandbox-health.integration.test.ts` ("resolves every transport
   category to mass_distance") once required three
   `mass_distance_based_ci_emissions` components. It was relaxed to the two it
   actually found (feedstock and biochar transport) when the scheduled live

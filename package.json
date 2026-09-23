@@ -38,7 +38,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:integration": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run .integration.test.ts",
-    "test:isometric-health": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run tests/isometric-sandbox.integration.test.ts --testNamePattern=\"^(?!.*write path).*\"",
+    "test:isometric-health": "RUN_ISOMETRIC_SANDBOX_TESTS=1 vitest run tests/isometric-sandbox-health.integration.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "isometric:coverage-check": "tsx scripts/isometric-coverage-check.ts",

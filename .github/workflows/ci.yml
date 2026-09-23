@@ -65,7 +65,7 @@ jobs:
         run: pnpm check:ux-copy
 
   # Full Vitest suite. No secrets — tests/setup.ts fills safe env defaults and
-  # the lone *.integration.test.ts self-skips without
+  # the Isometric sandbox *.integration.test.ts suites self-skip without
   # RUN_ISOMETRIC_SANDBOX_TESTS. A throwaway Postgres service is required
   # because several suites exercise the real `@/db` connection + transactions
   # rather than mocking the data-access layer.
