@@ -1,9 +1,6 @@
 @import "tailwindcss";
 @import "../styles/fonts.css";
-/* Layered so Tailwind utilities (font-medium, font-mono, text-*) win over the
-   type classes and the bare element rules (`p`, `h1`..`h4`). Unlayered, the
-   type classes' font-weight silently beat every `body-small font-medium`. */
-@import "../styles/typography.css" layer(components);
+@import "../styles/typography.css";
 @import "../styles/layout-utilities.css";
 @import "../styles/animations.css";
 

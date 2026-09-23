@@ -154,14 +154,14 @@ Size tokens live in `src/app/globals.css`; the classes live in
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
 
-**Utilities beat the type classes.** `globals.css` imports `typography.css`
-into `layer(components)`, so a Tailwind utility (`font-medium`, `font-mono`,
-`text-*`) overrides a type class and the bare `p` and `h1`..`h4` element rules.
-Before 2026-09-23 the import was unlayered and the type classes silently won:
-`body-small font-medium` rendered at regular weight, and mono or micro
-utilities on a bare `<p>` rendered as 16px body text. Write `body-small
-font-medium` rather than reaching for a `-bold` variant, and a `<p>` takes type
-utilities like any other element.
+**The type classes beat utilities, except `font-medium`.** `typography.css`
+is unlayered, and Tailwind utilities live in a cascade layer, so a type class
+and the bare `p` and `h1`..`h4` element rules win over `font-mono`, `text-*`,
+`tracking-*`, `leading-*`, margin utilities and every weight except one.
+`typography.css` ends with an unlayered `.font-medium` rule, so `body-small
+font-medium` renders medium. Write that rather than reaching for a `-bold`
+variant. For any other override on a type class or a bare `<p>`, drop the type
+class and use utilities alone.
 
 ### Form type, lines and spacing
 
