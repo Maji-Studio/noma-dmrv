@@ -4,8 +4,10 @@ import { useState } from "react";
 import {
   AirplaneIcon,
   BoatIcon,
+  FileDashedIcon,
+  FileTextIcon,
   PathIcon,
-  PencilIcon,
+  PencilSimpleIcon,
   PipeIcon,
   PlusIcon,
   TrainIcon,
@@ -15,6 +17,7 @@ import {
 import type { Icon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
@@ -103,37 +106,20 @@ const TRANSPORT_METHOD_ICONS: Record<TransportMethodValue, Icon> = {
 };
 const FALLBACK_METHOD_ICON: Icon = PathIcon;
 
-const METHOD_ICON_PX = 16;
-const CONTROL_ICON_PX = 16;
-const ADD_ICON_PX = 16;
+// How each stored method reads mid-sentence after the distance, as in
+// "42 km by road". Kept beside the icon map so both stay exhaustive.
+const TRANSPORT_METHOD_PHRASES: Record<TransportMethodValue, string> = {
+  road: "by road",
+  rail: "by rail",
+  ship: "by ship",
+  pipeline: "by pipeline",
+  aircraft: "by air",
+};
 
-/**
- * One label/value pair in a leg's caption row. Wrapping happens between pairs,
- * never inside one, so no fact ever breaks to one word per line.
- */
-function LegFact({
-  label,
-  value,
-  numeric = false,
-}: {
-  label: string;
-  value: string;
-  numeric?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline gap-4">
-      <dt className="text-[var(--color-text-tertiary)]">{label}</dt>
-      <dd
-        className={cn(
-          "text-[var(--color-text-secondary)]",
-          numeric && "tabular-nums",
-        )}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
+const METHOD_ICON_PX = 16;
+const EVIDENCE_ICON_PX = 16;
+const MENU_ICON_PX = 16;
+const ADD_ICON_PX = 16;
 
 /** One journey total under the final stop: label left, figure right. */
 function JourneyTotal({
@@ -146,7 +132,7 @@ function JourneyTotal({
   caption?: string;
 }) {
   return (
-    <div className="border-t border-[var(--color-border-tertiary)] pt-6">
+    <div>
       <div className="flex items-baseline justify-between gap-8">
         <dt className="text-[var(--color-text-tertiary)]">{label}</dt>
         <dd className="tabular-nums text-[var(--color-text-secondary)]">
@@ -160,18 +146,24 @@ function JourneyTotal({
   );
 }
 
-function formatMethod(method: string): string {
-  const cleaned = method.replace(/_/g, " ");
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+function formatMethodPhrase(method: string): string {
+  return (
+    TRANSPORT_METHOD_PHRASES[method as TransportMethodValue] ??
+    `by ${method.replace(/_/g, " ")}`
+  );
 }
 
-/** Lower the label's first letter so it reads mid-sentence after the method. */
-function formatDistanceSource(
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+/** Where the leg's distance came from, as one short sentence. */
+function describeDistanceSource(
   source: DistanceSourceValue | null | undefined,
 ): string {
-  if (!source) return MISSING_VALUE.notRecorded;
+  if (!source) return "Distance source not recorded";
   const label = DISTANCE_SOURCE_LABELS[source];
-  return label.charAt(0).toLowerCase() + label.slice(1);
+  return `Distance from ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 }
 
 function stopDisplayName(raw: string | null | undefined): string {
@@ -262,12 +254,14 @@ interface JourneyTotals {
   /** Names the legs the sum could not include, so the figure is never read as complete. */
   distanceCaption?: string;
   /**
-   * The cargo moved along the journey. Consecutive legs move the same cargo, so
-   * a sum would double-count it: a uniform load reads as one figure and a
-   * varying one as the range the legs cover.
+   * The cargo moved along the journey when every leg carries the same load.
+   * Consecutive legs move the same cargo, so a sum would double-count it.
    */
   load: string;
-  /** True when legs carry different loads, so each leg box names its own. */
+  /**
+   * True when legs carry different loads: each leg row names its own load and
+   * the journey-wide load row is dropped, since a range would repeat them.
+   */
   loadsVary: boolean;
 }
 
@@ -294,11 +288,7 @@ function summarizeJourney(
   const minLoad = loads.length > 0 ? Math.min(...loads) : null;
   const maxLoad = loads.length > 0 ? Math.max(...loads) : null;
   const load =
-    minLoad == null || maxLoad == null
-      ? MISSING_VALUE.notRecorded
-      : minLoad === maxLoad
-        ? formatMass(minLoad)
-        : `${formatMass(minLoad)} to ${formatMass(maxLoad)}`;
+    minLoad == null ? MISSING_VALUE.notRecorded : formatMass(minLoad);
 
   return {
     distance: totalDistance,
@@ -309,13 +299,14 @@ function summarizeJourney(
 }
 
 /**
- * The boxed segment between two stops: the mode it travelled, where its
- * distance came from, the distance itself, and its evidence. Distance
- * provenance and evidence stay on the box rather than behind a hover, because
- * both are certification facts an operator reads, not decoration.
+ * The boxed segment between two stops, on one line: mode icon, "42 km by
+ * road", the leg's load when loads vary, an evidence icon and, when editable,
+ * a menu holding Edit and Delete. The distance source does not fit the line,
+ * so it rides in the accessible text and the hover title of the sentence.
  */
 function JourneyLeg({
   leg,
+  legNumber,
   arrivalStopName,
   evidenceAttached,
   showLoad,
@@ -325,9 +316,11 @@ function JourneyLeg({
   showControls,
 }: {
   leg: EditableTransportLeg;
+  /** 1-based position in the leg list; names the actions menu. */
+  legNumber: number;
   arrivalStopName: string;
   evidenceAttached: boolean;
-  /** Set when the journey's loads differ, so the range in the footer is not the only record. */
+  /** Set when the journey's loads differ, so each leg names its own load. */
   showLoad: boolean;
   onEdit: () => void;
   onDelete: () => void;
@@ -337,60 +330,79 @@ function JourneyLeg({
   const MethodIcon =
     TRANSPORT_METHOD_ICONS[leg.transportMethodType as TransportMethodValue] ??
     FALLBACK_METHOD_ICON;
+  const EvidenceIcon = evidenceAttached ? FileTextIcon : FileDashedIcon;
+  const evidenceLabel = evidenceAttached ? "Evidence attached" : "No evidence";
+  const hasDistance = leg.distanceKm != null;
+  const distanceSource = describeDistanceSource(leg.distanceSource);
 
   return (
-    <div className="space-y-6 border border-[var(--color-border-tertiary)] p-8">
-      <div className="flex items-start justify-between gap-8">
-        <p className="flex min-w-0 items-start gap-6 body-small text-[var(--color-text-secondary)]">
-          <MethodIcon
-            size={METHOD_ICON_PX}
-            className="mt-2 shrink-0 text-[var(--color-icon-secondary)]"
-            aria-hidden
-          />
-          <span className="min-w-0">
-            <span className="sr-only">{`Leg to ${arrivalStopName}. `}</span>
-            {`${formatMethod(leg.transportMethodType)}, ${formatDistanceSource(leg.distanceSource)}`}
-          </span>
-        </p>
-        <span className="shrink-0 body-small font-medium tabular-nums text-[var(--color-text-primary)]">
-          {formatDistanceKm(leg.distanceKm)}
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-8">
-        <dl className="flex flex-wrap gap-x-16 gap-y-4 body-caption">
-          {showLoad && (
-            <LegFact label="Load" numeric value={formatMass(leg.loadMassKg)} />
-          )}
-          <LegFact
-            label="Evidence"
-            value={evidenceAttached ? "Attached" : MISSING_VALUE.none}
-          />
-        </dl>
-        {showControls && (
-          <div className="flex shrink-0 items-center gap-4">
-            <Button
-              type="button"
-              variant="noOutline"
-              size="icon"
-              onClick={onEdit}
-              aria-label="Edit transport leg"
-              disabled={controlsDisabled}
-            >
-              <PencilIcon size={CONTROL_ICON_PX} />
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="icon"
-              onClick={onDelete}
-              aria-label="Delete transport leg"
-              disabled={controlsDisabled}
-            >
-              <TrashIcon size={CONTROL_ICON_PX} />
-            </Button>
-          </div>
+    <div className="flex min-h-40 items-center gap-8 border border-[var(--color-border-tertiary)] px-8 py-4 body-small">
+      <MethodIcon
+        size={METHOD_ICON_PX}
+        className="shrink-0 text-[var(--color-icon-secondary)]"
+        aria-hidden
+      />
+      <p
+        className="min-w-0 flex-1 text-[var(--color-text-secondary)]"
+        title={distanceSource}
+      >
+        <span className="sr-only">{`Leg to ${arrivalStopName}. `}</span>
+        {hasDistance ? (
+          <>
+            <span className="font-medium tabular-nums text-[var(--color-text-primary)]">
+              {formatDistanceKm(leg.distanceKm)}
+            </span>{" "}
+            {formatMethodPhrase(leg.transportMethodType)}
+          </>
+        ) : (
+          `${capitalize(formatMethodPhrase(leg.transportMethodType))}, distance not recorded`
         )}
-      </div>
+        <span className="sr-only">{`. ${distanceSource}.`}</span>
+      </p>
+      {showLoad && (
+        <span className="shrink-0 tabular-nums text-[var(--color-text-secondary)]">
+          <span className="sr-only">Load </span>
+          {formatMass(leg.loadMassKg)}
+        </span>
+      )}
+      <span
+        role="img"
+        aria-label={evidenceLabel}
+        title={evidenceLabel}
+        className={cn(
+          "inline-flex shrink-0",
+          evidenceAttached
+            ? "text-[var(--st-ok)]"
+            : "text-[var(--color-text-tertiary)]",
+        )}
+      >
+        <EvidenceIcon
+          size={EVIDENCE_ICON_PX}
+          weight={evidenceAttached ? "fill" : "regular"}
+          aria-hidden
+        />
+      </span>
+      {showControls && (
+        <RowActionsMenu
+          className="shrink-0"
+          label={`Actions for leg ${legNumber}`}
+          actions={[
+            {
+              label: "Edit",
+              icon: <PencilSimpleIcon size={MENU_ICON_PX} />,
+              onSelect: onEdit,
+              disabled: controlsDisabled,
+            },
+            {
+              label: "Delete",
+              destructive: true,
+              icon: <TrashIcon size={MENU_ICON_PX} />,
+              onSelect: onDelete,
+              disabled: controlsDisabled,
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }
@@ -402,8 +414,9 @@ function JourneyLeg({
  *
  * Every mount is a 390px side sheet, so the legs read as stops on a rail rather
  * than as a table: consecutive legs share a stop, which is what the operator
- * recorded, and each leg sits as a one-row box between the two stops it joins.
- * Long stop names wrap; the distance stays pinned right.
+ * recorded, and each leg sits as a one-line box between the two stops it joins.
+ * Long stop names wrap; the load, evidence icon and actions menu stay pinned
+ * right.
  */
 export function TransportLegsEditor({
   entityType,
@@ -612,6 +625,7 @@ export function TransportLegsEditor({
                   {leg && (
                     <JourneyLeg
                       leg={leg}
+                      legNumber={(stop.legIndex ?? 0) + 1}
                       arrivalStopName={arrivalStopName}
                       evidenceAttached={evidenceAttached}
                       showLoad={totals.loadsVary}
@@ -630,8 +644,10 @@ export function TransportLegsEditor({
                     />
                   )}
                   {isFinalStop && (
-                    <dl className="body-caption">
-                      <JourneyTotal label="Load carried" value={totals.load} />
+                    <dl className="space-y-4 body-caption">
+                      {!totals.loadsVary && (
+                        <JourneyTotal label="Load carried" value={totals.load} />
+                      )}
                       <JourneyTotal
                         label="Total distance"
                         value={totals.distance}

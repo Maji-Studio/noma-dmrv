@@ -119,19 +119,28 @@ describe("TransportLegsEditor journey timeline", () => {
     }
   });
 
-  it("carries the mode, the distance source and the distance on the leg box", () => {
-    const rendered = text(renderEditor({ readOnly: true }));
+  it("reads each leg as one line: distance, mode and an evidence icon", () => {
+    const html = renderEditor({ readOnly: true });
+    const rendered = text(html);
 
-    expect(rendered).toContain("Road, manual entry");
-    expect(rendered).toContain("12 km");
-    expect(rendered).toContain("Evidence None");
+    expect(rendered).toContain("12 km by road");
+    expect(html).toContain('role="img" aria-label="No evidence"');
+    expect(html).not.toContain("Evidence attached");
   });
 
-  it("keeps the distance source visible in read-only mode", () => {
-    mocks.legs = [savedLeg({ distanceSource: "map_estimate" })];
-    const rendered = text(renderEditor({ readOnly: true }));
+  it("names attached evidence on the icon", () => {
+    mocks.legs = [savedLeg({ transportEvidenceDocumentCount: 1 })];
+    const html = renderEditor({ readOnly: true });
 
-    expect(rendered).toContain("Road, route calculation");
+    expect(html).toContain('role="img" aria-label="Evidence attached"');
+  });
+
+  it("keeps the distance source in the leg's accessible text and hover title", () => {
+    mocks.legs = [savedLeg({ distanceSource: "map_estimate" })];
+    const html = renderEditor({ readOnly: true });
+
+    expect(text(html)).toContain("Distance from route calculation.");
+    expect(html).toContain('title="Distance from route calculation"');
   });
 
   it("totals the journey under the final stop", () => {
@@ -149,9 +158,10 @@ describe("TransportLegsEditor journey timeline", () => {
     expect(rendered).toContain("Total distance 192 km");
     // The same cargo moves along both legs, so the load is reported once.
     expect(rendered).toContain("Load carried 2 kg");
+    expect(rendered).not.toContain("Load 2 kg");
   });
 
-  it("reports the load as a range when the legs carry different loads", () => {
+  it("names each leg's load inline when the legs carry different loads", () => {
     mocks.legs = [
       savedLeg(),
       savedLeg({
@@ -163,8 +173,7 @@ describe("TransportLegsEditor journey timeline", () => {
     ];
     const rendered = text(renderEditor({ readOnly: true }));
 
-    expect(rendered).toContain("Load carried 2 kg to 5 kg");
-    // The range alone loses which leg carried what, so each box names its load.
+    expect(rendered).not.toContain("Load carried");
     expect(rendered).toContain("Load 2 kg");
     expect(rendered).toContain("Load 5 kg");
   });
@@ -191,20 +200,27 @@ describe("TransportLegsEditor journey timeline", () => {
     expect(html.match(/CERT/g)?.length).toBe(1);
   });
 
-  it("keeps the add, edit and delete controls in edit mode", () => {
+  it("keeps the add button and a per-leg actions menu in edit mode", () => {
+    mocks.legs = [
+      savedLeg(),
+      savedLeg({
+        id: "leg-2",
+        originName: "E2E Regional collection hub",
+        destinationName: "E2E Carbon Laboratory",
+      }),
+    ];
     const html = renderEditor();
 
     expect(html).toContain("Add transport leg");
-    expect(html).toContain('aria-label="Edit transport leg"');
-    expect(html).toContain('aria-label="Delete transport leg"');
+    expect(html).toContain('aria-label="Actions for leg 1"');
+    expect(html).toContain('aria-label="Actions for leg 2"');
   });
 
   it("omits every control in read-only mode", () => {
     const html = renderEditor({ readOnly: true });
 
     expect(html).not.toContain("Add transport leg");
-    expect(html).not.toContain('aria-label="Edit transport leg"');
-    expect(html).not.toContain('aria-label="Delete transport leg"');
+    expect(html).not.toContain("Actions for leg");
   });
 
   it("reports an unrecorded distance instead of a bare unit", () => {
@@ -219,7 +235,8 @@ describe("TransportLegsEditor journey timeline", () => {
       ),
     );
 
-    expect(rendered).toContain("Not recorded");
+    expect(rendered).toContain("By road, distance not recorded");
+    expect(rendered).toContain("Distance source not recorded.");
     expect(rendered).not.toContain("null km");
   });
 
