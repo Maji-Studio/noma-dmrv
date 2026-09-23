@@ -215,6 +215,10 @@ Notes:
   `scripts/env-tpl-utils.ts`). `pnpm env:check` reports the same split.
 - `load-secrets-action` **fails the step** when a referenced `op://` field does
   not exist — it does not skip. Add the field before the workflow runs.
+- The `op` CLI that `load-secrets-action` installs is pinned through its
+  `version` input, read from the workflow-level `OP_CLI_VERSION` env in each of
+  the four workflows above. Bump it in all four together, to a release listed at
+  <https://app-updates.agilebits.com/product_history/CLI2>.
 - Never put real keys in code, comments, or docs — use `<REDACTED_API_KEY>` in
   examples. If a key leaks: rotate it in 1Password immediately, then scrub git
   history with `git-filter-repo`.
