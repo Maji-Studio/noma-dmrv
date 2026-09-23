@@ -277,6 +277,18 @@ it("leads the carbon estimate with the figure and keeps the input quantities beh
   const disclosed = visibleText(renderer.root);
   expect(disclosed).toContain("Feedstock dry mass");
   expect(disclosed).toContain("Grid electricity");
-  expect(disclosed).toContain("Isometric applies the emission factors");
+  expect(disclosed).toContain("These inputs are not in the estimate.");
   await act(async () => renderer.unmount());
+});
+
+it.each([
+  [["facilityCertifierProject"], "No certifier project is linked to this facility."],
+  [["applicationIds", "thousandYearReplicates"], "No applications recorded for this batch yet."],
+  [["organicCarbonPercent", "soilTemperatureC"], "Missing: Organic carbon content, Soil temperature."],
+])("says why the carbon estimate is not available (%j)", (missingInputs, reason) => {
+  const markup = carbonEstimateMarkup({
+    ...baseOptions,
+    creditBatch: makeBatch({ co2eStoredPreview: makePreview(null, missingInputs) }),
+  });
+  expect(markup).toContain(reason);
 });

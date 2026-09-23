@@ -28,6 +28,8 @@ import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { computeCohortInputTotals } from "./cohort-input-ledger";
+import { carbonGapLabels } from "@/lib/certification/batch-health-facts";
+import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
 import {
   certificationRemovalsHref,
   productionRunDeepLinkHref,
@@ -37,9 +39,22 @@ import {
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
 const CARBON_ESTIMATE_HINT =
   "A local estimate of stored CO₂e before project emissions. The registry result is authoritative.";
-/** Who turns the input quantities into a deduction. One sentence, not a rule. */
+/** What the input rows are to the estimate above them. */
 const CARBON_ESTIMATE_BASIS =
-  "Isometric applies the emission factors to these quantities at submission. noma submits the quantities only.";
+  "These inputs are not in the estimate. Isometric turns them into project emissions at submission.";
+
+/**
+ * Why the estimate is missing, as one caption under the empty figure. Setup
+ * gaps come first because they block every other input.
+ */
+function carbonEstimateGap(missingInputs: readonly string[]): string | null {
+  if (missingInputs.includes("facilityCertifierProject")) return "No certifier project is linked to this facility.";
+  if (missingInputs.includes("isometricCertifier")) return "Estimates are available for Isometric projects only.";
+  if (missingInputs.includes(STORED_CO2E_PREVIEW_REVERIFICATION_GAP)) return "Paused for 200-year batches until the soil storage module is re-verified.";
+  if (missingInputs.includes("applicationIds")) return "No applications recorded for this batch yet.";
+  const gaps = carbonGapLabels(missingInputs);
+  return gaps.length > 0 ? `Missing: ${gaps.join(", ")}.` : null;
+}
 
 function formatInput(value: number | null, unit: string): string {
   return value == null
@@ -74,6 +89,7 @@ function CreditBatchCarbonEstimate({
 }) {
   const totals = computeCohortInputTotals(productionRuns);
   const estimate = creditBatch.co2eStoredPreview?.co2eStoredTonnes ?? null;
+  const gap = estimate == null ? carbonEstimateGap(creditBatch.co2eStoredPreview?.missingInputs ?? []) : null;
   const inputRows = [
     {
       label: "Feedstock dry mass",
@@ -97,6 +113,7 @@ function CreditBatchCarbonEstimate({
       simple="headline"
       headline={<DerivedHeadline
         value={estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
+        sub={gap ?? undefined}
       />}
       calculation={
         <div className="flex flex-col gap-8">
