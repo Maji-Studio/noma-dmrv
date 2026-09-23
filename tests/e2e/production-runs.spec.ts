@@ -167,7 +167,17 @@ test.describe("Production Run + Sample UI CRUD", () => {
         .locator('input[name="feedstockDraws.1.wetMassKg"]')
         .fill("70");
       await page.locator('input[name="feedstockMoisturePercent"]').fill("15");
-      await expect(page.getByText("120 kg from 2 bins")).toBeVisible();
+      // The "Total wet input" recap is gone; the Detailed composition ledger
+      // carries the summed wet mass and the process flow names the bin count.
+      await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
+      await expect(
+        page.getByRole("table", { name: /^Feedstock composition/ })
+          .getByRole("row").filter({ hasText: "Wet total" }),
+      ).toContainText("120 kg");
+      // The hidden calculation repeats the bin name, so match only the visible copy.
+      await expect(
+        page.getByText(`${seededData.feedstockStorageLocation.name} + 1 more`, { exact: true }).locator("visible=true"),
+      ).toBeVisible();
       await submitCreate(page);
       await waitForSideSheetClose(page);
 

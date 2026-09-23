@@ -26,7 +26,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { FormulationForm } from "./formulation-form";
+import { FormulationForm, PURE_BIOCHAR_CUE } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -277,8 +277,8 @@ export function FormulationList() {
           ...ingredientFields,
         ],
         content: ingredientCount === 0 ? (
-          <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No blend feedstock types are added. This is a pure-biochar formulation.
+          <p className="body-caption text-[var(--color-text-tertiary)]">
+            {PURE_BIOCHAR_CUE}
           </p>
         ) : undefined,
       },
@@ -382,6 +382,8 @@ export function FormulationList() {
       />
 
       <EntitySideSheet
+        detailToggle="form"
+        detailScope={sideSheet?.entity?.id ?? "create"}
         open={!!sideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={sideSheet?.mode ?? "create"}

@@ -106,7 +106,7 @@ export function FieldPositionField({
             <span className="body-small text-[var(--color-text-secondary)]">
               Customer location
             </span>
-            <span className="body-medium font-medium text-[var(--color-text-primary)]">
+            <span className="body-small font-medium text-[var(--color-text-primary)]">
               {derived
                 ? `${derived.gpsLatitude}, ${derived.gpsLongitude}`
                 : hasDelivery

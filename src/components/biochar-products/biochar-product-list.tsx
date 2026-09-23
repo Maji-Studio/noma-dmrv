@@ -6,18 +6,15 @@
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { TransportLegsSummary } from "@/components/transport-legs";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { MassPair } from "@/components/ui/mass-pair";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import {
-  BLEND_WET_MASS_LABEL,
   PURE_BIOCHAR_LABEL,
 } from "@/config/product-labels";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -38,7 +35,6 @@ import {
 import {
   deriveBlendEffectiveMoisturePercent,
   deriveSourceBiocharDryMassKg,
-  deriveSourceBiocharMassKg,
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -47,11 +43,9 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
-  MOISTURE_FIELD_LABEL,
-  qualifyMassLabel,
 } from "@/lib/mass-moisture";
 import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
@@ -65,19 +59,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
-import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
+import { productSheetSections } from "./product-read-details";
 
 const WET_PRODUCT_LABEL = "Wet product";
 const DRY_BIOCHAR_LABEL = "Dry biochar";
-
-function sourceBiocharWetMassKg(
-  product: Pick<BiocharProductWithRelations, "massKg" | "composition">,
-): number | null {
-  return deriveSourceBiocharMassKg(
-    product.massKg,
-    fromCompositionJsonb(product.composition),
-  );
-}
 
 function sourceBiocharDryMassKg(
   product: Pick<
@@ -448,12 +433,6 @@ export function BiocharProductList() {
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const viewedEntity =
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
-  const viewedSourceWetMassKg = viewedEntity
-    ? sourceBiocharWetMassKg(viewedEntity)
-    : null;
-  const viewedSourceDryMassKg = viewedEntity
-    ? sourceBiocharDryMassKg(viewedEntity)
-    : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
 
   const columns = createColumns(openEdit, handleDelete);
@@ -604,6 +583,7 @@ export function BiocharProductList() {
 
       <EntitySideSheet
         numberedSections
+        detailToggle
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={displaySideSheet?.mode ?? "create"}
@@ -611,82 +591,7 @@ export function BiocharProductList() {
         title={displaySideSheet?.mode === "create" ? "Create Biochar Product" : (displaySideSheet?.entity?.code ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
         editLabel="Edit Product"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
-          {
-            title: "Placement",
-            fields: [{ label: "Mixing and placement date", value: formatDate(displaySideSheet.entity.placedAt) }],
-          },
-          {
-            title: "Source",
-            fields: [
-              {
-                label: "Source biochar bin",
-                value:
-                  displaySideSheet.entity.sourceBiocharStorageLocation?.name ??
-                  displaySideSheet.entity.linkedProductionRun
-                    ?.biocharStorageLocationName,
-              },
-              { label: "Source biochar wet mass (kg)", value: formatMassKg(viewedSourceWetMassKg) },
-              { label: BLEND_WET_MASS_LABEL, value: formatMassKg(displaySideSheet.entity.massKg) },
-              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
-              { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
-              { label: "Density (kg/m³)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
-            ],
-            content: (
-              <div className="space-y-12">
-                <ZeroSourceBiocharWarning
-                  sourceBiocharMassKg={viewedSourceWetMassKg}
-                />
-                <MassPair
-                  wetKg={finalWetProductMassKg(displaySideSheet.entity)}
-                  dryKg={viewedSourceDryMassKg}
-                  wetLabel={WET_PRODUCT_LABEL}
-                  dryLabel={DRY_BIOCHAR_LABEL}
-                />
-              </div>
-            ),
-          },
-          {
-            title: "Destination & product",
-            fields: [
-              { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
-              ...fromCompositionJsonb(displaySideSheet.entity.composition).flatMap((ingredient, index) => {
-                const prefix = `Ingredient ${index + 1}`;
-                return [
-                  {
-                    label: `${prefix} · Blend material`,
-                    value: ingredient.feedstockTypeName,
-                  },
-                  {
-                    label: `${prefix} · Mass (kg)`,
-                    value: ingredient.massKg != null ? formatMassKg(ingredient.massKg) : null,
-                  },
-                  {
-                    label: `${prefix} · Source bin`,
-                    value: (
-                      <EntityDetailValue
-                        entityType="storageLocation"
-                        id={ingredient.storageLocationId}
-                      />
-                    ),
-                  },
-                ];
-              }),
-              { label: "Product bin", value: displaySideSheet.entity.storageLocation?.name },
-            ],
-          },
-          {
-            title: "Derived transport",
-            fields: [],
-            content: (
-              <TransportLegsSummary
-                entityType="biochar"
-                entityId={displaySideSheet.entity.id}
-                emptyMessage="Transport legs are derived from this product's deliveries. Record a delivery to a destination with a distance from the facility."
-              />
-            ),
-          },
-        ] : undefined}
+        sections={viewedEntity ? productSheetSections(viewedEntity) : undefined}
       >
         <BiocharProductForm
           key={editingEntity?.id ?? "create"}

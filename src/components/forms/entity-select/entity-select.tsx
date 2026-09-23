@@ -26,6 +26,7 @@ import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { formatRemainingMass } from "./remaining-mass";
+import { useFormDetailLevel } from "../form-detail-context";
 
 // Icons
 function ChevronDown({ className }: { className?: string }) {
@@ -230,6 +231,7 @@ export function EntitySelect({
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: EntitySelectProps) {
+  const showRemainingMass = useFormDetailLevel() === "detailed";
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -246,6 +248,7 @@ export function EntitySelect({
   const entitySelectId = useId();
   const listboxId = `${entitySelectId}-listbox`;
   const remainingMassId = `${entitySelectId}-remaining-mass`;
+  const selectedLabelId = `${entitySelectId}-selected`;
 
   // Debounce search for better performance
   const debouncedSearch = useDebounce(searchQuery, 200);
@@ -302,9 +305,13 @@ export function EntitySelect({
     detailDataUpdatedAt,
     value,
   });
+  // The trigger's aria-label names the field, which hides its content from
+  // the accessible name. The selected label can carry the stock change
+  // ("(−100 kg wet)"), so it is announced as the first description instead.
   const triggerDescribedBy = [
     ariaDescribedBy,
-    remainingMass ? remainingMassId : undefined,
+    displayText ? selectedLabelId : undefined,
+    remainingMass && showRemainingMass ? remainingMassId : undefined,
   ]
     .filter(Boolean)
     .join(" ") || undefined;
@@ -539,8 +546,9 @@ export function EntitySelect({
           )}
         >
           <span
+            id={selectedLabelId}
             className={cn(
-              "truncate text-left",
+              "min-w-0 flex-1 truncate text-left",
               (value && !isSelectionLoading) || (!value && noneOption)
                 ? "text-[var(--color-text-primary)]"
                 : "text-[var(--color-text-tertiary)]"
@@ -574,7 +582,7 @@ export function EntitySelect({
         )}
       </div>
 
-      {remainingMass && (
+      {remainingMass && showRemainingMass && (
         <p
           id={remainingMassId}
           className="body-caption text-[var(--color-text-tertiary)] mt-4"

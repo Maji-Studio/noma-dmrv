@@ -2,16 +2,14 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
-import { add, compare, decimal, divide, grams, kilograms, multiply, planOutputStock, rational, readRational, subtract, type OutputStockLayer, type Rational } from '@/lib/output-stock';
+import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, subtract, type OutputStockLayer, type Rational } from '@/lib/output-stock';
 import { outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
-import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
+import { estimateWetAtRecordedMoisture, getBiocharOutputStockLayers, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
 import { prepareOutputCorrection } from './output-stock-corrections';
-import { formatFacilityDate } from '@/lib/date-utils';
-import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
@@ -57,7 +55,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
       : { kind: 'wet', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent! });
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
-    blockingMessage = error.message;
+    blockingMessage = operatorStockMessage(error.message);
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
   const beforeDryKg = Number(kilograms(layers.filter(l => l.physicalDate <= input.physicalDate).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
@@ -73,6 +71,9 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   }));
   const [formulation] = bin.formulationId ? await reader.select({ name: formulations.name }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, bin.formulationId))) : [];
   const afterLayers = layers.map(l => plan?.remainingLayers.find(a => a.id === l.id) ?? l);
+  // A count is judged against what the records say the bin holds, not against
+  // its own moisture: only there does drying show as a lower wet figure.
+  const recordedWet = input.kind === 'count' ? await estimateWetAtRecordedMoisture(ctx, bin, layers, input.physicalDate, reader) : null;
   const preview: OutputStockPreview = {
     basisFingerprint, storageLocationId: bin.id, binName: bin.name, binCode: bin.code, formulationName: formulation?.name ?? null, lane, beforeDryKg,
     beforeAllocations: layerViews(layers), afterAllocations: layerViews(afterLayers),
@@ -80,6 +81,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     removedDryKg: Number(plan?.drawnDryKg ?? 0), removedWetKg: input.kind === 'count' ? null : input.wetMassKg,
     estimateMoisturePercent: moisture, beforeEstimatedWetKg: fraction ? beforeSolidsKg / fraction : null,
     afterEstimatedWetKg: fraction ? afterSolidsKg / fraction : null,
+    beforeRecordedWetKg: recordedWet?.estimatedWetMassKg ?? null,
     discrepancySolidsKg: plan ? rationalNumber(plan.discrepancySolidsKg) : 0,
     allocations: plan?.allocations.map(a => ({ layerId: a.layerId, code: codeMap.get(a.layerId) ?? a.layerId,
       dryMassKg: Number(a.dryKg), wetMassKg: a.wetShareKg ? rationalNumber(a.wetShareKg) : null,
@@ -117,10 +119,12 @@ export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId
   const [formulation] = await db.select({ id: formulations.id }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, input.formulationId)));
   if (!formulation) throw new SafeError('Formulation not found');
   const bins = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, 'product_bin'), eq(storageLocations.formulationId, input.formulationId), isNull(storageLocations.archivedAt))).orderBy(asc(storageLocations.code));
-  const physicalDate = formatFacilityDate(new Date(), await getOutputStockFacilityTimezone(ctx, input.facilityId, db));
+  // Orders carry no departure moisture, so wet availability is the bin's
+  // estimate at each batch's recorded moisture, as the bin selectors show it.
+  // A bin whose layers do not resolve reads null instead of failing the list.
   return Promise.all(bins.map(async bin => {
-    const state = await getProductOutputStockLayers(ctx, { ...input, storageLocationId: bin.id, physicalDate });
-    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg: Number(state.remainingDryKg), recordedWetMassKg: null };
+    const { dryMassKg, estimatedWetMassKg } = await getOutputBinStockView(ctx, bin.id);
+    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg, recordedWetMassKg: null, estimatedWetMassKg };
   }));
 }
 export { getOutputStockHistory } from './output-stock-history';

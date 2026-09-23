@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
 import { nullableNumericValue } from "@/lib/form-utils";
@@ -98,8 +99,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     orderId: delivery?.orderId ?? "",
     deliveryDate: toDateInputValue(delivery?.deliveryDate),
     status: "delivered" as const,
-    deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
-    moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
+    // Match the registered empty values so focusing the header is not an edit.
+    deliveredWetMassKg: delivery?.deliveredWetMassKg ?? null,
+    moistureContentPercent: delivery?.moistureContentPercent ?? "",
     storageLocationId: delivery?.storageLocationId ?? "",
     driverId: delivery?.driverId ?? undefined,
     vehicleId: delivery?.vehicleId ?? undefined,
@@ -323,8 +325,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <FormField id="storageLocationId" label="Actual source bin" required error={errors.storageLocationId?.message}>
           <FormSelect id="storageLocationId" placeholder="Select matching source bin..." disabled={isSubmitting || isEditMode} options={(matchingBins.data ?? []).map(bin => ({ value: bin.id, label: bin.name }))} {...register("storageLocationId")} />
         </FormField>
-        {matchingBins.error && <p role="alert">{matchingBins.error.message}</p>}
-        {isEditMode && delivery?.storageLocationId && <div className="space-y-8"><p className="body-small">To change stock measurements, open More info and correct the original delivery entry. Saved stock history is preserved.</p><OutputStockHistory storageLocationId={delivery.storageLocationId} facilityId={formFacilityId ?? ""} /></div>}
+        {matchingBins.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{matchingBins.error.message}</p>}
       </FormSection>
 
       {/* Mass & Moisture Section */}
@@ -357,10 +358,16 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             placeholder="e.g. 20"
             registration={register("moistureContentPercent")}
           />
+          {/* The composition cards belong to the same grid as the two inputs
+              above them, so they align to the field columns and inherit the
+              row rhythm instead of stacking on a second spacing scale. */}
+          <div className="md:col-span-2 space-y-16">
+            {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
+            {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
+            {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
+          </div>
         </div>
-        {stockPreview.isFetching && <p role="status">Refreshing stock preview...</p>}
-        {stockPreview.error && <p role="alert">{stockPreview.error.message}</p>}
-        {stockPreview.data && <OutputStockPreview preview={stockPreview.data} moreInfo={<OutputStockHistory storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
       </FormSection>
 
       {/* Transport Section */}

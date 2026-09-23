@@ -172,7 +172,7 @@ export function ProductionSampleTable({
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
           In-process measurements
         </h3>
         {!readOnly && !formDialog.open && (

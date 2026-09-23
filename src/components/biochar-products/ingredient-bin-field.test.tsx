@@ -13,6 +13,7 @@ interface CapturedEntitySelectProps {
   emptyHint?: { message: string };
   filterBy?: Record<string, string>;
   onCreateNew?: () => void;
+  formatSelectedLabel?: (entity: { id: string; name: string; subtitle?: string }) => ReactNode;
 }
 
 interface CapturedDialogProps {
@@ -40,6 +41,7 @@ const state = vi.hoisted(() => ({
   open: vi.fn(),
   select: undefined as CapturedEntitySelectProps | undefined,
   storageChange: vi.fn(),
+  storageValue: "",
 }));
 
 vi.mock("react-hook-form", () => ({
@@ -67,7 +69,7 @@ vi.mock("react-hook-form", () => ({
           ? state.storageChange
           : state.massChange,
         ref: () => undefined,
-        value: "",
+        value: name.endsWith("storageLocationId") ? state.storageValue : "",
       },
       fieldState: { error: undefined },
     }),
@@ -111,6 +113,7 @@ import {
   IngredientMassInput,
   parseIngredientMassDraft,
 } from "./ingredient-bin-field";
+import type { AffectedStockPreview } from "@/types/output-stock";
 
 const row: CompositionRow = {
   key: "ingredient-1",
@@ -124,7 +127,11 @@ const row: CompositionRow = {
   storageLocationFieldName: "ingredientBins.0.storageLocationId",
 };
 
-function renderField(allocationFrozen = false) {
+function renderField(
+  allocationFrozen = false,
+  previews?: AffectedStockPreview[],
+  previewsAvailable = false,
+) {
   return renderToStaticMarkup(
     <IngredientBinField
       row={row}
@@ -132,8 +139,24 @@ function renderField(allocationFrozen = false) {
       isSubmitting={false}
       facilityId="facility-1"
       allocationFrozen={allocationFrozen}
+      previews={previews}
+      previewsAvailable={previewsAvailable}
     />,
   );
+}
+
+const manureBinPreview = {
+  lane: "ingredient",
+  storageLocationId: "bin-manure",
+  binName: "Manure bin M1",
+  removedWetKg: 240,
+  discrepancySolidsKg: 0,
+  blockingMessage: null,
+} as AffectedStockPreview;
+
+function selectedLabel(): string {
+  const label = state.select?.formatSelectedLabel?.({ id: "bin-manure", name: "Manure bin M1" });
+  return renderToStaticMarkup(<>{label}</>).replace(/<[^>]+>/g, "");
 }
 
 function IngredientMassHarness() {
@@ -163,6 +186,7 @@ beforeEach(() => {
   state.open.mockClear();
   state.select = undefined;
   state.storageChange.mockClear();
+  state.storageValue = "";
 });
 
 describe("IngredientBinField feedstock-bin quick add", () => {
@@ -271,4 +295,32 @@ describe("IngredientBinField feedstock-bin quick add", () => {
   });
 });
 
+describe("IngredientBinField stock change", () => {
+  it("shows the draw inside the selector while the projection is fresh", () => {
+    state.storageValue = "bin-manure";
+    renderField(false, [manureBinPreview], true);
+    expect(selectedLabel()).toBe("Manure bin M1(−240 kg wet)");
+  });
+
+  it("shows the name only while the projection is stale", () => {
+    state.storageValue = "bin-manure";
+    renderField(false, [manureBinPreview], false);
+    expect(selectedLabel()).toBe("Manure bin M1");
+  });
+
+  it("keeps a refusal visible under the selector", () => {
+    state.storageValue = "bin-manure";
+    const html = renderField(false, [{ ...manureBinPreview, blockingMessage: "Not enough manure in the selected bin." }], false);
+    expect(html).toContain("Not enough manure in the selected bin.");
+    expect(html).toContain('role="alert"');
+  });
+
+  it("ignores projections for other bins", () => {
+    state.storageValue = "bin-other";
+    const html = renderField(false, [{ ...manureBinPreview, blockingMessage: "Not enough manure in the selected bin." }], true);
+    expect(html).not.toContain("Not enough manure");
+  });
+});
+
 vi.mock("./ingredient-moisture-field", () => ({ IngredientMoistureField: () => null }));
+vi.mock("./ingredient-mass-split", () => ({ IngredientMassSplit: () => null }));

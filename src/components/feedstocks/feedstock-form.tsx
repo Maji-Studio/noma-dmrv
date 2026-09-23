@@ -18,7 +18,7 @@ import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
@@ -135,8 +135,8 @@ export function FeedstockForm({
       feedstock?.transportDistanceSource ?? (null as DistanceSourceValue | null),
     transportTripType: orgDefaults.defaultTripType as TripTypeValue,
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
-    totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
-    moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
+    totalWetMassKg: feedstock?.massWetKg ?? undefined as number | undefined,
+    moisturePercent: feedstock?.moistureContentPercent ?? undefined as number | undefined,
     // An allocation mass the record does not have stays blank, never 0: the
     // schema requires a positive mass, so seeding 0 would prefill a value that
     // fails submit on a `missing_data` record with no wet mass yet.
@@ -144,10 +144,10 @@ export function FeedstockForm({
       ? [
           {
             storageLocationId: feedstock.storageLocationId ?? "",
-            allocatedWetMassKg: feedstock.massWetKg ?? ("" as unknown as number),
+            allocatedWetMassKg: feedstock.massWetKg ?? undefined as number | undefined,
           },
         ]
-      : [{ storageLocationId: "", allocatedWetMassKg: "" as unknown as number }],
+      : [{ storageLocationId: "", allocatedWetMassKg: undefined as number | undefined }],
     overrideJustification: feedstock?.overrideJustification ?? "",
     notes: feedstock?.notes ?? "",
   };
@@ -568,7 +568,7 @@ export function FeedstockForm({
                 certifyStatus={transportDistanceCertStatus}
                 helperText={
                   storedDistanceKm != null
-                    ? "Supplier › facility distance, autofilled from the supplier. Override if the route differs."
+                    ? "Autofilled from the supplier. Override if this delivery took a different route."
                     : "Set a one-way distance on the supplier (or its default location) to autofill this."
                 }
               >
@@ -697,7 +697,7 @@ export function FeedstockForm({
                   onClick={() =>
                     append({
                       storageLocationId: "",
-                      allocatedWetMassKg: "" as unknown as number,
+                      allocatedWetMassKg: undefined as number | undefined,
                     })
                   }
                   disabled={isSubmitting}
@@ -708,9 +708,7 @@ export function FeedstockForm({
               )
             }
           >
-            {errors.allocations?.message && (
-              <p className="body-small text-[var(--color-status-error)]">{errors.allocations.message}</p>
-            )}
+            <FormError id="allocations-error" message={errors.allocations?.message} />
 
             <div className="space-y-12">
               {fields.map((field, index) => (

@@ -140,17 +140,17 @@ export function AddressSearch({
           className="absolute z-20 mt-2 max-h-[220px] w-full overflow-y-auto border border-[var(--clr-dark-purple)] bg-[var(--color-background-white)] shadow-[0_4px_16px_var(--color-black-10)]"
         >
           {isFetching && hits.length === 0 && (
-            <li className="px-12 py-10 body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+            <li className="px-12 py-10 body-caption text-[var(--color-text-tertiary)]">
               Searching…
             </li>
           )}
           {isError && (
-            <li className="px-12 py-10 body-caption uppercase tracking-[0.08em] text-[var(--color-signal-red)]">
+            <li className="px-12 py-10 body-caption text-[var(--color-signal-red)]">
               Addresses could not be searched. Try again.
             </li>
           )}
           {!isFetching && !isError && hits.length === 0 && (
-            <li className="px-12 py-10 body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+            <li className="px-12 py-10 body-caption text-[var(--color-text-tertiary)]">
               No matches
             </li>
           )}

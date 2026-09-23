@@ -42,8 +42,8 @@ const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
 const feedstockOverdrawText =
   /^Only .+ of wet feedstock is available\. Reduce the wet mass\.$/;
-const biocharOverdrawText = /Insufficient exact dry solids/;
-const deliveryOverdrawText = /Insufficient exact dry solids/;
+const biocharOverdrawText = /Not enough dry biochar in the selected bin/;
+const deliveryOverdrawText = /Not enough dry biochar in the selected bin/;
 
 /** Open the existing draft run form against the seeded 120 kg-wet source bin. */
 async function openRunFormWithSource(
@@ -677,7 +677,7 @@ async function openDeliveryCorrection(page: Page, seededData: SeededChainData) {
   await page.getByText(seededData.productStorageLocation.name, { exact: true }).first().click();
   await page.getByRole("button", { name: "More info", exact: true }).first().click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  await history.locator("article").filter({ has: page.getByRole("heading", { name: "Delivery, original entry", exact: true }) }).getByRole("button", { name: "Correct entry" }).click();
+  await history.locator("article").filter({ has: page.getByRole("heading", { name: "Delivery", exact: true }) }).getByRole("button", { name: "Correct entry" }).click();
   await history.locator("#stock-reason").fill("E2E corrected loading measurement");
   return history;
 }
@@ -709,7 +709,11 @@ test.describe("updateDelivery product-batch guard", () => {
     await history.locator("#stock-wet").fill("90000");
     await history.getByRole("button", { name: "Save correction", exact: true }).click();
     await expect(history.getByText("E2E corrected loading measurement", { exact: true }).first()).toBeVisible();
-    await expect(history.getByRole("heading", { name: "Delivery, original entry", exact: true })).toBeVisible();
-    await expect(history.getByRole("heading", { name: /^Reversal, corrects/ })).toBeVisible();
+    // The original entry stays, marked reversed; its reversal is folded into
+    // the replacement that names it.
+    await expect(history.getByRole("heading", { name: /^Delivery\s*Reversed$/ })).toBeVisible();
+    const replacement = history.locator("article").filter({ hasText: "E2E corrected loading measurement" });
+    await expect(replacement).toContainText("Replacement");
+    await expect(replacement).toContainText(/Reverses the entry recorded /);
   });
 });
