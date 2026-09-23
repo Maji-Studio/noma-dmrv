@@ -248,26 +248,6 @@ Pure starter residue; org scoping came later via ADR 0010.
   carry a client-supplied operation id the server records and a retry can look
   up, or whether the retry-and-duplicate risk stays with the operator.
 
-### A negative feedstock bin has no repair path (`stock/negative-feedstock-bin-repair`, opened 2026-09-17)
-
-- **Decision (2026-09-17):** a stock take is the one sanctioned repair for a
-  bin whose derived lane sits below zero, and the intake-edit refusal should
-  lead the operator to it.
-- **Observed:** the app cannot do that today.
-  `src/data-access/bin-movements.ts:recordStockTakeMovement` refuses any count
-  above the derived stock ("Stock-takes can only confirm or reduce
-  inventory"), so a bin at -30 kg refuses every count of 0 kg or more.
-  `src/components/storage-locations/bin-reconcile-sheet.tsx:BinReconcileSheet`
-  renders only the loss form for a `feedstock_bin`; no feedstock count form
-  exists, and a loss only deepens the shortfall.
-  `src/data-access/feedstock-bin-stock-integrity.ts:assertFeedstockBinLanesNotNegative`
-  therefore names the blocking runs and products and no repair.
-- **Resolve via:** decide whether a stock take may raise a feedstock lane
-  (relax the increase guard for negative lanes, or add an explicit "correction"
-  movement kind with its own justification), then build the feedstock count
-  form in the reconcile sheet, and point the refusal copy and the feedstock
-  edit sheet at it. Until then the refusal stays a review instruction.
-
 ### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
 
 - **Rule:** every updater behind an edit form checks `expectedUpdatedAt`

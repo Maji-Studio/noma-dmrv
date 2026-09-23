@@ -22,6 +22,17 @@ not constrain a physical withdrawal.
   movement.
 - Storage selectors, summaries, and overdraw messages use authoritative wet
   stock. A dry estimate may be displayed only when clearly marked non-binding.
+- Nothing in the app adds mass back to a feedstock bin (decided 2026-09-23).
+  A stock take can only confirm or reduce stock
+  (`src/data-access/bin-movements.ts:recordStockTakeMovement`), and there is
+  no correction movement that raises a lane. A lane never persists below zero:
+  every feedstock write that can shrink one re-derives it and rolls back
+  (`src/data-access/feedstock-bin-stock-integrity.ts:assertFeedstockBinLanesNotNegative`).
+  When an intake correction is refused, the repair is to correct whichever
+  withdrawal is wrong, which the refusal lists as blockers. Feedstock mass
+  that no delivery backs would be an unexplained ledger entry for a verifier.
+  This replaces decision 3 of 2026-09-17, which named the stock take as the
+  repair.
 - Biochar and finished-product stock semantics are unchanged by this decision.
   Their subsequent FIFO design is recorded in [ADR 0029](./0029-output-bin-stock-is-dry-biochar-drawn-fifo.md), with implementation pending.
 

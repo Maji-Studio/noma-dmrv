@@ -13,11 +13,9 @@
  *
  * The refusal carries the bin as its `conflict` and lists the withdrawals
  * still drawing on it as `blockers`, so the form can show the operator which
- * records hold the mass (decision 2026-09-17). It does not name a repair: a
- * stock take can only confirm or reduce stock
- * (`bin-movements.ts:recordStockTakeMovement`), so no movement in the app can
- * lift a negative lane. See docs/open-questions.md, "A negative feedstock bin
- * has no repair path".
+ * records hold the mass (decision 2026-09-17). The repair is to correct the
+ * withdrawal that is wrong: nothing in the app adds mass back to a feedstock
+ * bin (ADR 0027, decided 2026-09-23).
  */
 
 import { and, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
