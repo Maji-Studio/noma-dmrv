@@ -46,7 +46,7 @@ const CustomerLocationMiniMap = dynamic(
         className="flex h-full w-full items-center justify-center bg-[var(--color-background-light)]"
         data-testid="order-location-map-loading"
       >
-        <span className="label-button uppercase text-[var(--color-text-tertiary)]">
+        <span className="body-caption text-[var(--color-text-tertiary)]">
           Loading map…
         </span>
       </div>
@@ -127,19 +127,17 @@ export function CustomerLocationDetails({
       className="border-[1.5px] border-[var(--clr-dark-purple)]"
       data-testid="order-location-details"
     >
-      <div className="flex items-baseline justify-between border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
-        <span className="label-button uppercase text-[var(--color-text-primary)]">
+      {/* The location select above already names the location. */}
+      <div className="border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
+        <span className="body-small font-medium text-[var(--color-text-primary)]">
           Delivery location
-        </span>
-        <span className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          {location.name ?? "Unnamed location"}
         </span>
       </div>
 
       <div className="space-y-12 p-12">
         <div className="space-y-2">
           {location.address ? (
-            <p className="body-medium text-[var(--color-text-primary)]">
+            <p className="body-small text-[var(--color-text-primary)]">
               {location.address}
             </p>
           ) : (
@@ -151,7 +149,7 @@ export function CustomerLocationDetails({
               <p className="body-caption text-[var(--color-text-secondary)]">
                 {SITE_DESCRIPTION_LABEL}
               </p>
-              <p className="body-medium text-[var(--color-text-tertiary)]">
+              <p className="body-small text-[var(--color-text-tertiary)]">
                 {MISSING_VALUE.notRecorded}
               </p>
             </div>
@@ -162,7 +160,7 @@ export function CustomerLocationDetails({
             </p>
           )}
           <p
-            className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]"
+            className="body-caption text-[var(--color-text-tertiary)]"
             data-testid="order-location-distance"
           >
             {location.distanceFromFacilityKm != null
@@ -170,7 +168,7 @@ export function CustomerLocationDetails({
               : "Distance from facility not recorded"}
             {location.distanceFromFacilityKm != null &&
               location.distanceSource != null &&
-              ` · ${DISTANCE_SOURCE_LABELS[location.distanceSource]}`}
+              ` (${DISTANCE_SOURCE_LABELS[location.distanceSource].toLowerCase()})`}
           </p>
         </div>
 
@@ -186,7 +184,7 @@ export function CustomerLocationDetails({
               />
             </div>
             {/* Swatches mirror the Carbon Viewer legend (viewer-rails.tsx). */}
-            <p className="flex items-center gap-6 body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+            <p className="flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">
               <span
                 className="size-[9px] shrink-0"
                 style={{ background: "var(--clr-purple)" }}

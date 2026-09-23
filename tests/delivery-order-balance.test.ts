@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { deliveries, outputStockAllocations, orders } from "@/db/schema";
 import { createDelivery, updateDelivery, deleteDelivery } from "@/data-access/deliveries";
 import { createApplication } from "@/data-access/applications";
-import { createOrder, updateOrder } from "@/data-access/orders";
+import { createOrder, getOrders, updateOrder } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import { getOutputBinDryBalance } from "@/data-access/output-stock";
@@ -87,6 +87,8 @@ describe("completed delivery order balance", () => {
   it("counts completed trucks toward the remaining commercial order quantity", async () => {
     const f = await fixture(); await postDelivery(f, 60);
     await expect(postDelivery(f, 50)).rejects.toThrow("Only 40 kg remains on this order");
+    const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
+    expect(listed).toMatchObject({ deliveredCount: 1, deliveredWetMassKg: 60 });
   });
   it("re-credits the original truck only through explicit correction", async () => {
     const f = await fixture(); await postDelivery(f, 20); const current = await postDelivery(f, 60);

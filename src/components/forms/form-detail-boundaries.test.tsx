@@ -14,7 +14,7 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ fa
 vi.mock("@/hooks/use-entities", () => ({ useEntityOptions: () => ({ data: [] }) }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: () => <button type="button">Stock history</button> }));
 vi.mock("@/hooks/use-output-stock", () => ({
-  useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, recordedWetMassKg: null }], isLoading: false, error: null }),
+  useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, recordedWetMassKg: null, estimatedWetMassKg: null }], isLoading: false, error: null }),
   useOutputStockPreview: () => ({ data: undefined, isLoading: false, error: null }),
   useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", physicalDate: "2026-09-22", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [] }] }], isLoading: false, error: null }),
 }));
@@ -156,7 +156,7 @@ const carbonEstimate = creditBatchSheetSections({
   isRetryingRuns: false,
   onRetryRuns: () => undefined,
   isHealthLoading: false,
-}).find(section => section.title === "Carbon ledger")?.content;
+}).find(section => section.title === "Production runs")?.content;
 
 const overAllocated = {
   id: "formulation", name: "Mix", description: null, biocharRatio: 0.8,
@@ -193,7 +193,7 @@ const SIMPLE_BOUNDARIES: { block: string; presence: string; element: ReactNode; 
     present: ["H:C org", "0.4200", "O:C org", "0.1500"], absent: ["atomic ratio", "Show calculation"] },
   { block: "Carbon estimate", presence: "headline",
     element: carbonEstimate,
-    present: ["Carbon estimate", "≈ 3.20 t CO₂e"], absent: ["Show calculation", "Feedstock, dry mass", "Isometric applies"] },
+    present: ["Carbon estimate, before project emissions", "≈ 3.20 t CO₂e"], absent: ["Show calculation", "Feedstock dry mass", "Isometric applies"] },
   { block: "Original entry figures", presence: "hidden",
     element: <DetailedOnly><StockRows label="Original entry figures" rows={[{ label: "Wet mass", value: "100 kg" }]} /></DetailedOnly>,
     present: [], absent: ["Wet mass", "100 kg"] },
