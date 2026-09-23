@@ -816,7 +816,6 @@ export function BiocharProductForm({
             so this appears only once ingredients join the blend. */}
         {ingredientSegments.length > 0 && (
           <ProductCompositionPreview
-            followFormDetail
             wetMassKg={destinationWetProductKg}
             dryBiocharKg={destinationDryBiocharKg}
             ingredients={ingredientSegments}

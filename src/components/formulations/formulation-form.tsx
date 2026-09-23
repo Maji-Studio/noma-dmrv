@@ -412,11 +412,14 @@ export function FormulationForm({
           </div>
         ))}
 
-        {/* What the entered shares make, directly under the share fields */}
+        {/* What the entered shares make, directly under the share fields.
+            Simple hides it, since the share fields already say it, until the
+            shares pass 100%: that total is an error to fix, not a detail. */}
         {(biocharNum > 0 || fields.length > 0) && (
           <CompositionCard
             title="Blend by volume"
             hint="Shares are percentages of the solid blend's volume. Water is recorded separately on the product."
+            simple={isOverAllocated ? "picture" : "hidden"}
             actions={showBalanceButton ? (
               <Button
                 type="button"

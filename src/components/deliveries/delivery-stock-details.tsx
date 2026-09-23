@@ -9,12 +9,12 @@
  * The action row carries `Show calculation` for the production runs behind each
  * batch and the stock history dialog. The calculation deliberately holds runs
  * only: the ledger directly above it already totals every batch, and two
- * breakdowns of the same draw read as two competing answers. Stock history
- * stays mounted at both detail levels so a half-written correction survives a
- * toggle.
+ * breakdowns of the same draw read as two competing answers. Stock history is
+ * the block's own action, so Simple keeps it; the card keeps it mounted at
+ * both levels so a half-written correction survives a toggle.
  */
 "use client";
-import { useFormDetailLevel, CompositionCard, CompositionLedger } from "@/components/forms";
+import { CompositionCard, CompositionLedger } from "@/components/forms";
 import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-run-groups";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import type { MassSegment } from "@/components/forms/composition-ledger";
@@ -29,8 +29,6 @@ const DELIVERY_STOCK_HINT =
 const TOTAL_LABEL = "Dry biochar";
 
 export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId, wetMassKg, dryMassKg }: { deliveryId: string; storageLocationId: string | null; facilityId: string; wetMassKg: number | null; dryMassKg: number | null }) {
-  const level = useFormDetailLevel();
-  const detailed = level === "detailed";
   const history = useOutputStockHistory(storageLocationId ?? "", !!storageLocationId);
   const entries = history.data?.filter(entry => entry.deliveryId === deliveryId && entry.kind !== "reversal");
   const reversedIds = new Set(history.data?.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
@@ -50,24 +48,26 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
       runs: allocation.runs.map(run => ({ id: run.productionRunId, code: run.code, dryMassKg: run.dryMassKg })),
     }));
   return <>
-    {history.isLoading && detailed && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the batch breakdown</p>}
     {history.error && <StockNotice tone="error" role="alert">{history.error.message}</StockNotice>}
     <CompositionCard
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}
-      calculation={detailed && groups.length > 0 ? <SourceRunGroups label="Source production runs per delivered batch" groups={groups} /> : undefined}
+      simple="picture"
+      calculation={groups.length > 0 ? <SourceRunGroups label="Source production runs per delivered batch" groups={groups} /> : undefined}
       actions={storageLocationId ? <OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} /> : undefined}
+      detail={<>
+        {history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the batch breakdown</p>}
+        {/* Figures, not prose. The wet row is the saved measurement as
+            corrected, which is the one number the delivery's own field can no
+            longer show. */}
+        <StockRows label="Delivery stock figures" rows={[{ label: "Wet mass", value: formatWetAtMoisture(current ? current.wetMassKg : wetMassKg, current?.moisturePercent ?? null) }]} />
+        <CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />
+      </>}
     >
       {drawn.length > 0 && <div className="space-y-8">
         <SegmentBar label={TOTAL_LABEL} segments={drawn} />
         <SegmentKey segments={drawn} />
       </div>}
-      {/* Figures, not prose. The wet row is the saved measurement as corrected,
-          which is the one number the delivery's own field can no longer show. */}
-      <div hidden={!detailed} className="space-y-12">
-        <StockRows label="Delivery stock figures" rows={[{ label: "Wet mass", value: formatWetAtMoisture(current ? current.wetMassKg : wetMassKg, current?.moisturePercent ?? null) }]} />
-        <CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />
-      </div>
     </CompositionCard>
   </>;
 }

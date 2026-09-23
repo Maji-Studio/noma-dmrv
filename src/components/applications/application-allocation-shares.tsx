@@ -10,7 +10,7 @@
  */
 "use client";
 
-import { useFormDetailLevel, CompositionCard, CompositionLedger } from "@/components/forms";
+import { CompositionCard, CompositionLedger } from "@/components/forms";
 import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-run-groups";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import type { MassSegment } from "@/components/forms/composition-ledger";
@@ -22,8 +22,6 @@ const APPLIED_BATCHES_HINT =
 const TOTAL_LABEL = "Applied dry biochar";
 
 export function ApplicationAllocationShares({ shares }: { shares: ApplicationAllocationShare[] }) {
-  const level = useFormDetailLevel();
-  const detailed = level === "detailed";
   const products = [...new Set(shares.map(share => share.biocharProductId))];
   if (!products.length) return null;
   const total = shares.reduce((sum, share) => sum + share.dryMassKg, 0);
@@ -43,12 +41,13 @@ export function ApplicationAllocationShares({ shares }: { shares: ApplicationAll
   return <CompositionCard
     title="Applied batches"
     hint={APPLIED_BATCHES_HINT}
-    calculation={detailed ? <SourceRunGroups label="Source production runs per applied batch" groups={groups} /> : undefined}
+    simple="picture"
+    detail={<CompositionLedger label="Applied batches" totalLabel={TOTAL_LABEL} total={total} segments={segments} />}
+    calculation={<SourceRunGroups label="Source production runs per applied batch" groups={groups} />}
   >
     <div className="space-y-8">
       <SegmentBar label={TOTAL_LABEL} segments={segments} />
       <SegmentKey segments={segments} />
     </div>
-    {detailed && <CompositionLedger label="Applied batches" totalLabel={TOTAL_LABEL} total={total} segments={segments} />}
   </CompositionCard>;
 }

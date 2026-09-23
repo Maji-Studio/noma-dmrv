@@ -25,10 +25,10 @@
  * `calculation={false}` drops that table where the host surface already owns a
  * disclosure for the arithmetic.
  *
- * `followFormDetail` ties the calculation table to the surrounding form detail
- * level: Simple keeps the bar and key line, because those are what the two
- * inputs mean, and Detailed adds the table. Without a form detail scope (read
- * side sheets) the level resolves to detailed and the table always shows.
+ * Its Simple boundary is the picture: Simple keeps the bar and key line,
+ * because those are what the two inputs mean, and Detailed adds the table.
+ * Without a form detail scope (unmanaged sheets) the level resolves to
+ * Detailed and the table always shows.
  *
  * The key line carries `aria-live`, so a screen reader hears the recalculated
  * split without the table being re-announced on every keystroke.
@@ -41,7 +41,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { useSimplePresence } from "@/components/forms/form-detail-context";
 import { CompositionLedger } from "@/components/forms/composition-ledger";
 import {
   describeMassSplit,
@@ -66,7 +66,6 @@ const COMPACT_BAR_HEIGHT = "h-8";
 const SWATCH = "inline-block h-12 w-12 shrink-0";
 
 interface MoistureSplitProps {
-  followFormDetail?: boolean;
   /**
    * `detail` only. Set false where the surrounding surface already discloses the
    * arithmetic, so the split contributes the bar and its key line and nothing
@@ -401,7 +400,6 @@ export function MoistureSplit({
   dryMassKg,
   addedWaterKg,
   variant = "detail",
-  followFormDetail = false,
   calculation = true,
   materialLabel,
   wetLabel,
@@ -410,7 +408,7 @@ export function MoistureSplit({
   note,
   className = "",
 }: MoistureSplitProps) {
-  const level = useFormDetailLevel();
+  const parts = useSimplePresence("picture");
   const display = resolveDisplaySplit(wetMassKg, moisturePercent, dryMassKg);
   const unresolvedDryLabel =
     dryLabel ?? (materialLabel ? `${materialLabel} dry mass` : "Dry mass");
@@ -495,8 +493,7 @@ export function MoistureSplit({
 
   // The bar and its key are what the two inputs mean, so they stay in Simple.
   // The table is the arithmetic behind them, which is what Detailed adds.
-  const showCalculation =
-    calculation && (!followFormDetail || level === "detailed");
+  const showCalculation = calculation && parts.detailed;
 
   return (
     <div className={`flex flex-col gap-12 ${className}`}>

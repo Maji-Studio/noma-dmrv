@@ -22,6 +22,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 
@@ -88,10 +89,6 @@ export function InlineMassChange({
  *
  * An unchanged balance is the answer to a question the operator asked, not a
  * missing result, so it is labelled rather than left to look like a bug.
- *
- * The label is a sentence-case caption, not the uppercase mono eyebrow: a split
- * bar now sits above this pair on the stock surfaces, and two competing small
- * labels in two different type styles read as two unrelated sections.
  */
 export function StockBalanceChange({
   label,
@@ -107,36 +104,16 @@ export function StockBalanceChange({
   const unchanged =
     beforeKg !== null && afterKg !== null && beforeKg === afterKg;
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-8">
-        <span className="body-caption text-[var(--color-text-secondary)]">
-          {label}
-        </span>
+    <DerivedHeadline
+      label={<>
+        <span>{label}</span>
         {unchanged && <StockChip>Unchanged</StockChip>}
-      </div>
-      <div
-        className="flex items-center gap-10"
-        role="group"
-        aria-label={`${label}: ${formatMassKg(beforeKg)} before, ${formatMassKg(afterKg)} after`}
-      >
-        <span className="body-large tabular-nums text-[var(--color-text-tertiary)]">
-          {formatMassKg(beforeKg)}
-        </span>
-        <ArrowRightIcon
-          size={18}
-          aria-hidden="true"
-          className="shrink-0 text-[var(--color-icon-secondary)]"
-        />
-        <span className="body-large font-medium tabular-nums">
-          {formatMassKg(afterKg)}
-        </span>
-      </div>
-      {supportingLine && (
-        <p className="body-caption text-[var(--color-text-secondary)]">
-          {supportingLine}
-        </p>
-      )}
-    </div>
+      </>}
+      before={formatMassKg(beforeKg)}
+      value={formatMassKg(afterKg)}
+      figureLabel={`${label}: ${formatMassKg(beforeKg)} before, ${formatMassKg(afterKg)} after`}
+      sub={supportingLine}
+    />
   );
 }
 

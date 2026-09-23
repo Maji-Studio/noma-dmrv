@@ -8,13 +8,14 @@
  * whichever figure the eligibility check will actually use, so an operator can
  * see their entry take effect.
  *
- * Simple is the two figures. Detailed adds the atomic formulas with this
- * sample's own numbers behind `Show calculation`, the same way the moisture
- * split discloses its arithmetic.
+ * The two figures are the block's headline, and Simple keeps the headline only.
+ * Detailed adds the atomic formulas with this sample's own numbers behind
+ * `Show calculation`, the same way the moisture split discloses its arithmetic.
  */
 "use client";
 
 import { CompositionCard } from "@/components/forms/composition-card";
+import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -35,15 +36,13 @@ function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {
   certifyStatus?: CertFieldStatus;
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <span className="flex items-center gap-4 body-caption text-[var(--color-text-secondary)]">
-        {label}
+    <DerivedHeadline
+      label={<>
+        <span>{label}</span>
         {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
-      </span>
-      <span className={`body-large tabular-nums ${value == null ? "text-[var(--color-text-tertiary)]" : ""}`}>
-        {formatRatio(value)}
-      </span>
-    </div>
+      </>}
+      value={value == null ? null : formatRatio(value)}
+    />
   );
 }
 
@@ -59,7 +58,6 @@ export function SampleDerivedRatios({
   oxygenPercent,
   organicCarbonPercent,
   oToCFromLab,
-  detailed,
   error,
   certifyRequired,
   certifyStatus,
@@ -72,8 +70,6 @@ export function SampleDerivedRatios({
   organicCarbonPercent: number | null;
   /** Whether O:C_org came from the lab field rather than from oxygen and carbon. */
   oToCFromLab: boolean;
-  /** Detailed adds the formulas; Simple is the two figures. */
-  detailed: boolean;
   /**
    * A derived ratio can still be refused: the numeric(7,6) cap is re-checked
    * after the resolver runs, and with no input to attach it to the refusal
@@ -86,7 +82,20 @@ export function SampleDerivedRatios({
   return (
     <CompositionCard
       title="Derived ratios"
-      calculation={detailed ? (
+      simple="headline"
+      headline={<>
+        <div className="flex flex-wrap gap-x-32 gap-y-12">
+          <DerivedRatio
+            label="H:C org"
+            value={hToCOrgRatio}
+            certifyRequired={certifyRequired("hToCOrgRatio")}
+            certifyStatus={certifyStatus("hToCOrgRatio")}
+          />
+          <DerivedRatio label="O:C org" value={oToCOrgRatio} />
+        </div>
+        {error && <p role="alert" className="body-caption text-[var(--st-bad)]">{error}</p>}
+      </>}
+      calculation={(
         <dl className="space-y-8 body-caption text-[var(--color-text-secondary)]">
           <div>
             <dt>H:C org is the atomic ratio of hydrogen to organic carbon.</dt>
@@ -107,18 +116,7 @@ export function SampleDerivedRatios({
             </dd>
           </div>
         </dl>
-      ) : undefined}
-    >
-      <div className="flex flex-wrap gap-x-32 gap-y-12">
-        <DerivedRatio
-          label="H:C org"
-          value={hToCOrgRatio}
-          certifyRequired={certifyRequired("hToCOrgRatio")}
-          certifyStatus={certifyStatus("hToCOrgRatio")}
-        />
-        <DerivedRatio label="O:C org" value={oToCOrgRatio} />
-      </div>
-      {error && <p role="alert" className="body-caption text-[var(--st-bad)]">{error}</p>}
-    </CompositionCard>
+      )}
+    />
   );
 }

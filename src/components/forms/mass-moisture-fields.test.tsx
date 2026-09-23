@@ -60,7 +60,6 @@ describe("MassMoistureFields", () => {
     const html = renderToStaticMarkup(
       <FormDetailProvider scope="feedstock">
         <MassMoistureFields
-          followFormDetail
           wetMassKg={4000}
           moisturePercent={20}
           wet={{ id: "massKg", registration: registration("massKg") }}

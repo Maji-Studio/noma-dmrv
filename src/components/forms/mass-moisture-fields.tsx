@@ -160,7 +160,6 @@ export function WetMassField({
 }
 
 interface MassMoistureFieldsProps {
-  followFormDetail?: boolean;
   wet: MassMoistureInputProps;
   moisture: MassMoistureInputProps;
   /** Watched wet-mass value driving the live split. */
@@ -192,7 +191,6 @@ interface MassMoistureFieldsProps {
  * calculation to show from the form detail level; nothing here is hidden.
  */
 export function MassMoistureFields({
-  followFormDetail,
   wet,
   moisture,
   wetMassKg,
@@ -216,7 +214,6 @@ export function MassMoistureFields({
       )}
       <div data-testid="mass-moisture-split" className="md:col-span-2">
         <MoistureSplit
-          followFormDetail={followFormDetail}
           wetMassKg={parseWatchedNumber(wetMassKg)}
           moisturePercent={parseWatchedNumber(moisturePercent)}
           addedWaterKg={parseWatchedNumber(addedWaterKg)}

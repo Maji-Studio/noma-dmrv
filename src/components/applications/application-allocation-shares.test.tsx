@@ -34,7 +34,7 @@ it("carries the bar and its key in Simple, then adds the ledger and the run spli
   expect(simple).toContain("600 kg");
   expect(simple).toContain("125 kg");
   expect(simple).not.toContain("% of total");
-  expect(renderer.root.findAllByType("button")).toHaveLength(0);
+  expect(simple).not.toContain("Show calculation");
 
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   expect(visible(renderer.root)).toContain("% of total");

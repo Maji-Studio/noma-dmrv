@@ -24,7 +24,6 @@
  */
 "use client";
 
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { CompositionCard } from "@/components/forms/composition-card";
 import {
   CompositionLedger,
@@ -56,7 +55,6 @@ export interface ProductCompositionIngredient {
 
 interface ProductCompositionPreviewProps {
   variant?: "detail" | "compact";
-  followFormDetail?: boolean;
   wetMassKg: number | null | undefined;
   dryBiocharKg: number | null | undefined;
   /** Blend masses as received, one segment and one ledger row each. */
@@ -160,7 +158,6 @@ function UnresolvedBar() {
 
 export function ProductCompositionPreview({
   variant = "detail",
-  followFormDetail = false,
   wetMassKg,
   dryBiocharKg,
   ingredients,
@@ -173,7 +170,6 @@ export function ProductCompositionPreview({
   className = "",
   testId = "product-composition-preview",
 }: ProductCompositionPreviewProps) {
-  const level = useFormDetailLevel();
   const segments = resolveSegments({
     wetMassKg,
     dryBiocharKg,
@@ -218,16 +214,15 @@ export function ProductCompositionPreview({
     );
   }
 
-  // The bar and its key are what the fields above mean, so they stay in Simple.
-  // The ledger and the addition behind the total are what Detailed adds.
-  const showCalculation = segments !== null && (!followFormDetail || level === "detailed");
-
+  // The bar and its key are what the fields above mean, so Simple keeps the
+  // picture. The ledger and the addition behind the total are the calculation.
   return (
     <div data-testid={testId} className={className} aria-live="polite">
       <CompositionCard
         title={BLOCK_TITLE}
         hint={note ?? COMPOSITION_HINT}
-        calculation={showCalculation && segments ? (
+        simple="picture"
+        calculation={segments ? (
           <div className="flex flex-col gap-8">
             <CompositionLedger
               label={BLOCK_TITLE}

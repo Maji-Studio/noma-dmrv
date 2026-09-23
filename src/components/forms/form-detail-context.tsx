@@ -48,6 +48,33 @@ export function FormDetailControl() {
   return context ? <FormDetailToggle value={context.level} onChange={context.setLevel} /> : null;
 }
 
+/**
+ * How much of a derived block Simple shows. Detailed, and any surface outside a
+ * provider, shows the whole block.
+ *
+ * - `picture`: caption, headline and the picture (a bar and its key).
+ * - `headline`: caption and the headline figure.
+ * - `hidden`: nothing.
+ */
+export type SimplePresence = "hidden" | "headline" | "picture";
+
+/** Which parts of a derived block show at the current level. */
+export function useSimplePresence(simple: SimplePresence): {
+  /** The block renders at all. */
+  block: boolean;
+  /** The picture under the headline renders. */
+  picture: boolean;
+  /** Detailed: detail rows, the action row and the calculation render too. */
+  detailed: boolean;
+} {
+  const detailed = useFormDetailLevel() === "detailed";
+  return {
+    block: detailed || simple !== "hidden",
+    picture: detailed || simple === "picture",
+    detailed,
+  };
+}
+
 /** Only wrap optional, stateless explanation; never fields, warnings or evidence editors. */
 export function DetailedOnly({ children }: { children: ReactNode }) {
   return useFormDetailLevel() === "detailed" ? children : null;

@@ -382,6 +382,8 @@ export function FormulationList() {
       />
 
       <EntitySideSheet
+        detailToggle="form"
+        detailScope={sideSheet?.entity?.id ?? "create"}
         open={!!sideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={sideSheet?.mode ?? "create"}

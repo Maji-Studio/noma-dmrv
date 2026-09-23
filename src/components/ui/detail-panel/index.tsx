@@ -91,7 +91,7 @@ function DetailValueSkeleton({ className }: { className?: string }) {
 DetailValueSkeleton.displayName = "DetailValueSkeleton";
 
 /* -------------------------------------------------------------------------------------------------
- * DetailSection - Flat section with mono label, mirrors FormSection so the
+ * DetailSection - Flat section with a section label, mirrors FormSection so the
  * view ↔ edit mode toggle reads as the same surface (hairline divider above
  * every section but the first).
  * -----------------------------------------------------------------------------------------------*/
