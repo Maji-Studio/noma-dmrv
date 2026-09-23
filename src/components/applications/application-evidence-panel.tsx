@@ -117,7 +117,7 @@ function GisReferenceField({
         <MapTrifoldIcon size={20} weight="bold" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="body-medium font-medium text-[var(--color-text-primary)]">
+        <span className="body-small font-medium text-[var(--color-text-primary)]">
           Add GIS reference
         </span>
         <span className="body-small text-[var(--color-text-tertiary)]">

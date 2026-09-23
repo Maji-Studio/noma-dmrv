@@ -108,8 +108,8 @@ export function ProductionIncidentTable({
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-center justify-between">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Production Incidents
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
+          Production incidents
         </h3>
         {!readOnly && !formDialog.open && (
           <Button variant="default" size="small" onClick={openCreate}>
