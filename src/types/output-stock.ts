@@ -74,6 +74,8 @@ export interface MatchingOutputBin {
   name: string;
   dryMassKg: number;
   recordedWetMassKg: number | null;
+  /** Wet stock at each batch's recorded moisture; null when the bin's layers do not resolve. */
+  estimatedWetMassKg: number | null;
 }
 
 /** Ingredient wet stock remains usable when its dry estimate is unavailable. */

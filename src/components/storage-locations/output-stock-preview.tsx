@@ -31,7 +31,29 @@ const STOCK_SIMPLE_PRESENCE: SimplePresence = "hidden";
 
 /** The one definition the availability block cannot show as a number. */
 const AVAILABILITY_HINT =
-  "Dry biochar is the tracked quantity. Stock stays available to every order until a delivery records the bin it left.";
+  "Dry biochar is the tracked quantity. Wet availability depends on measured departure moisture. Stock stays available to every order until a delivery records the bin it left.";
+
+/**
+ * Wet estimates are whole kilograms. They are computed at an entered moisture,
+ * not weighed, so a decimal would claim a precision the figure does not have.
+ */
+const WET_ESTIMATE_DIGITS = 0;
+
+/** What the operator entered, named the way the form's own fields name it. */
+export type StockEntryKind = "correction" | "loss" | "count" | "delivery";
+
+/** The entry behind a movement block: its kind and the wet mass as typed. */
+export interface StockEntry {
+  kind: StockEntryKind;
+  wetMassKg: number | null | undefined;
+}
+
+/** "310 kg wet removed", "48 kg wet lost", "1,190 kg wet loaded". A count reads "Counted …". */
+const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
+  correction: "removed",
+  loss: "lost",
+  delivery: "loaded",
+};
 
 /**
  * Which batches a draw touched, and which run produced each one.
@@ -80,46 +102,49 @@ function batchSegments(allocations: readonly OutputStockBalanceView[]): MassSegm
   }));
 }
 
+/** Whole kilograms without the unit, for the muted before figure of a pair. */
+function formatWetEstimate(kg: number): string {
+  return kg.toLocaleString(undefined, { maximumFractionDigits: WET_ESTIMATE_DIGITS });
+}
+
 /**
  * A bin's current stock, for surfaces that pick a bin rather than move material.
  *
- * Same shape as the movement blocks: caption, the batches it holds as one bar,
- * the tracked quantity as the single headline figure, one action row. There is
- * no before and after because nothing is moving yet, and no wet figure because
- * wet availability depends on a departure moisture nobody has measured.
+ * Same shape as the movement blocks: caption, one headline figure, the batches
+ * the bin holds as one bar and its key, then the tracked dry stock as a row in
+ * Detailed, then one action row. There is no before and after because nothing
+ * is moving yet.
+ *
+ * Operators plan loads in wet mass, so the headline is the wet estimate when a
+ * moisture gives one (`wetEstimate`, with the basis it was computed at as its
+ * caption). Without it the dry stock is the only honest figure and takes the
+ * headline itself: a wet number at a moisture nobody measured would be made up.
  */
-export function OutputStockAvailability({ binName, binCode, subtitle, label, dryKg, dryLabel = "dry biochar", allocations = [], actions }: {
+export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, allocations = [], actions }: {
   binName: string;
-  binCode?: string;
-  /** What kind of bin this is, or the formulation it holds. */
-  subtitle?: string | null;
-  /** Names the headline figure, such as "Available dry stock". */
-  label: string;
   dryKg: number | null;
-  dryLabel?: string;
+  /** Wet stock at a known moisture, and a caption naming that moisture. */
+  wetEstimate?: { kg: number; basis: string } | null;
   allocations?: OutputStockAllocationView[];
   actions?: ReactNode;
 }) {
   const segments = batchSegments(allocations);
+  const dry = `${formatMassKg(dryKg)} dry biochar`;
   return (
     <CompositionCard
       title={binName}
       hint={AVAILABILITY_HINT}
       actions={actions}
       calculation={allocations.length > 0 ? <OutputStockAllocations allocations={allocations} /> : undefined}
+      headline={wetEstimate
+        ? <DerivedHeadline label="Available wet stock, estimate" value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`} sub={wetEstimate.basis} />
+        : <DerivedHeadline label="Available dry stock" value={dry} />}
+      detail={wetEstimate ? <StockRows label="Tracked stock" rows={[{ label: "Available dry stock", value: dry }]} /> : undefined}
     >
-      {(binCode || subtitle) && (
-        <p className="body-caption text-[var(--color-text-secondary)]">
-          {binCode ? `${binCode}${subtitle ? " · " : ""}` : ""}{subtitle}
-        </p>
-      )}
-      {segments.length > 0 && <div className="space-y-6">
+      {segments.length > 0 && <div className="flex flex-col gap-6">
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />
         <SegmentKey segments={segments} />
       </div>}
-      {/* Same shape as the balance pair's headline, so one figure and a pair
-          of them read as the same kind of answer. */}
-      <DerivedHeadline label={label} value={`${formatMassKg(dryKg)} ${dryLabel}`} />
     </CompositionCard>
   );
 }
@@ -133,12 +158,16 @@ export function OutputStockAvailability({ binName, binCode, subtitle, label, dry
  * operator is doing. Refusals, blockers and discrepancies are not optional, so
  * they stay visible at both levels.
  *
+ * `entry` is what the operator typed on a movement surface: its kind names the
+ * movement in the headline's caption ("310 kg wet removed at 22.7% moisture"),
+ * and its wet mass is the one figure a count cannot recover from the preview.
+ *
  * `hideBlockingMessage` is for forms that already render `preview.blockingMessage`
  * as the error on the field the operator must change. The same sentence in two
  * places reads as two separate problems, so the copy closest to the field wins
  * and the preview drops its own alert.
  */
-export function OutputStockPreview({ variant = "load", preview, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
+export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const parts = useSimplePresence(STOCK_SIMPLE_PRESENCE);
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
   const needsAttention = Boolean(blockingMessage) || Boolean(preview.blockers?.length) || preview.discrepancySolidsKg > 0;
@@ -148,7 +177,7 @@ export function OutputStockPreview({ variant = "load", preview, moreInfo, render
   return (
     <section hidden={!parts.block && !needsAttention} className="flex flex-col gap-16" aria-label="Stock preview" aria-live="polite">
       {variant === "movement" ? (
-        <StockMovementCard preview={preview} moreInfo={moreInfo} />
+        <StockMovementCard preview={preview} entry={entry} moreInfo={moreInfo} />
       ) : (
         <StockLoadCard
           preview={preview}
@@ -165,43 +194,123 @@ export function OutputStockPreview({ variant = "load", preview, moreInfo, render
 /**
  * What this movement does to the bin, in one block.
  *
- * Top to bottom it answers three questions in the order an operator asks them.
- * What did I enter: the wet mass drawn as a moisture split, so the dry share
- * that stock is kept in is visible instead of arithmetic. What does the bin hold
- * now: the balance before and after. How was that reached: the entered figures
- * and the FIFO draw, behind "Show calculation" because they restate the two
- * blocks above rather than adding to them.
+ * Operators weigh and load wet mass, so the block leads with the bin's wet
+ * stock before and after, labelled as an estimate because it is the tracked
+ * solids at the moisture entered here, not a weighing. Its caption is the entry
+ * itself. Under it the entered wet mass as a moisture split, then the one
+ * notice a drying only count needs, then the tracked dry balance as a row in
+ * Detailed: stock is kept in dry biochar, only the presentation leads wet. The
+ * entered figures and the FIFO draw sit behind "Show calculation".
+ *
+ * Without a moisture there is no wet estimate to show, so the dry balance takes
+ * the headline instead of a made up figure. The ingredient lane tracks wet stock
+ * directly, so its headline is the same pair without the estimate label.
  *
  * Definitions live in the title's hint; an operator confirming a correction
  * needs the numbers, not the vocabulary.
  */
-function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?: ReactNode }) {
-  const headline = headlineBalance(preview);
+function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; entry?: StockEntry; moreInfo?: ReactNode }) {
+  const kind = entryKind(preview, entry);
   const enteredWetKg = splitWetMassKg(preview);
+  const line = enteredLine(preview, kind, entry);
+  const wet = wetBalance(preview);
+  const dry = dryBalance(preview);
   const notice = dryingNotice(preview, enteredWetKg);
-  const rows = movementRows(preview);
+  const rows = entryRows(preview, kind, entry);
   const ledger = movementLedger(preview);
+  const dryPair = dry && <StockBalanceChange variant={wet ? "row" : "headline"} label={dry.label} beforeKg={dry.before} afterKg={dry.after} supportingLine={wet ? undefined : line} />;
   return (
     <CompositionCard
       title={preview.binName}
       hint={stockCardHint(preview)}
       simple={STOCK_SIMPLE_PRESENCE}
       actions={moreInfo}
+      headline={wet
+        ? <DerivedHeadline label={wet.label} before={wet.before} value={wet.after} figureLabel={wet.figureLabel} sub={line} />
+        : dryPair}
+      detail={wet ? dryPair : undefined}
       calculation={rows.length > 0 || ledger ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
         {ledger}
       </> : undefined}
     >
-      {enteredWetKg !== null && <div className="space-y-6">
-        <p className="body-caption text-[var(--color-text-secondary)]">What you entered</p>
-        {/* The block's own disclosure holds the arithmetic, so the split
-            contributes the bar and its key line and no second ledger. */}
-        <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.estimateMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
-      </div>}
+      {/* The block's own disclosure holds the arithmetic, so the split
+          contributes the bar and its key line and no second ledger. */}
+      {enteredWetKg !== null && <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.estimateMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />}
       {notice && <StockNotice>{notice}</StockNotice>}
-      <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} />
     </CompositionCard>
   );
+}
+
+/** A preview without an entry reads as a count when nothing was removed. */
+function entryKind(preview: Preview, entry?: StockEntry): StockEntryKind {
+  return entry?.kind ?? (preview.removedWetKg === null ? "count" : "correction");
+}
+
+/**
+ * The wet mass as entered. The typed figure wins over the preview's, because a
+ * count reaches the preview only as an after balance, and only while accepted.
+ */
+function enteredWetMassKg(preview: Preview, entry?: StockEntry): number | null {
+  const typed = entry?.wetMassKg;
+  if (typed != null && Number.isFinite(typed)) return typed;
+  return preview.removedWetKg === null ? splitWetMassKg(preview) : Math.abs(preview.removedWetKg);
+}
+
+/** The entry as one caption: "310 kg wet removed at 22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture". */
+function enteredLine(preview: Preview, kind: StockEntryKind, entry?: StockEntry): string | null {
+  const wetKg = enteredWetMassKg(preview, entry);
+  if (wetKg === null) return null;
+  const moisture = preview.estimateMoisturePercent === null ? "" : ` at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture`;
+  return kind === "count"
+    ? `Counted ${formatMassKg(wetKg)} wet${moisture}`
+    : `${formatMassKg(wetKg)} wet ${ENTRY_VERB[kind]}${moisture}`;
+}
+
+/**
+ * The headline pair in wet mass, or null when no moisture gives one. Output
+ * bins estimate it at the entered moisture; ingredient bins track it.
+ */
+function wetBalance(preview: Preview): { label: string; before: string; after: string; figureLabel: string } | null {
+  const { beforeEstimatedWetKg: before, afterEstimatedWetKg: after } = preview;
+  if (before === null || after === null) return null;
+  if (preview.lane === "ingredient") {
+    const label = binLabel(preview.wetLabel ?? "wet stock");
+    return { label, before: formatMassKg(before), after: formatMassKg(after), figureLabel: `${label}: ${formatMassKg(before)} before, ${formatMassKg(after)} after` };
+  }
+  const label = "Wet stock in bin, estimate";
+  return {
+    label,
+    before: `≈ ${formatWetEstimate(before)}`,
+    after: `${formatWetEstimate(after)} kg`,
+    figureLabel: `${label}: about ${formatWetEstimate(before)} kg before, ${formatWetEstimate(after)} kg after`,
+  };
+}
+
+/** The tracked quantity before and after, or null when the lane has no estimate of it. */
+function dryBalance(preview: Preview): { label: string; before: number | null; after: number | null } | null {
+  if (preview.beforeDryKg === null && preview.afterDryKg === null) return null;
+  return { label: binLabel(preview.dryLabel ?? "dry biochar"), before: preview.beforeDryKg, after: preview.afterDryKg };
+}
+
+/**
+ * The entered figures and the dry mass they move, in the order and words of
+ * the entry fields. The balances are already on the block, so none repeats here.
+ */
+function entryRows(preview: Preview, kind: StockEntryKind, entry?: StockEntry): StockRow[] {
+  const dryLabel = preview.dryLabel ?? "dry biochar";
+  const rows: StockRow[] = [];
+  const wetKg = enteredWetMassKg(preview, entry);
+  if (wetKg !== null) {
+    rows.push({ label: kind === "count" ? "Counted wet mass" : kind === "delivery" ? "Wet loaded" : "Wet removed", value: formatMassKg(wetKg) });
+  }
+  if (preview.estimateMoisturePercent !== null) {
+    rows.push({ label: kind === "delivery" ? "Departure moisture" : "Moisture", value: formatMoisturePercent(preview.estimateMoisturePercent) });
+  }
+  if (preview.removedDryKg !== null) {
+    rows.push({ label: capitalize(`${dryLabel} ${kind === "delivery" ? "drawn" : "removed"}`), value: formatMassKg(Math.abs(preview.removedDryKg)) });
+  }
+  return rows;
 }
 
 /**

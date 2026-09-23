@@ -13,7 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { OutputStockHistory } from "./output-stock-history";
-import { OutputStockPreview } from "./output-stock-preview";
+import { OutputStockPreview, type StockEntryKind } from "./output-stock-preview";
 import { formatWetAtMoisture, InlineMassChange, StockNotice, StockRows } from "./stock-figures";
 
 interface Props {
@@ -46,6 +46,9 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   const candidate = outputStockPreviewSchema.safeParse({ ...values, moisturePercent: kind === "count" && wetMassKg === 0 ? null : values.moisturePercent });
   const input = candidate.success ? candidate.data : null;
   const preview = useOutputStockPreview(input);
+  // Names the entry in the preview's caption. A replaced loss or delivery is
+  // still wet mass removed from the bin; a replaced count is still a count.
+  const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";
   const submit = handleSubmit(async (data) => {
     if (!input || !preview.data || preview.isFetching || preview.data.blockingMessage) return;
     setServerError(undefined);
@@ -80,7 +83,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
         </div>
         {preview.isFetching && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Refreshing the stock preview</p>}
         {preview.error && <StockNotice tone="error" role="alert">{preview.error.message}</StockNotice>}
-        {preview.data && <OutputStockPreview variant="movement" preview={preview.data} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
+        {preview.data && <OutputStockPreview variant="movement" preview={preview.data} entry={{ kind: entryKind, wetMassKg: input?.wetMassKg }} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
       </FormSection>
       <FormSection title="Reason" fields={["reason"]}>
         <FormField id="stock-reason" label="Reason" required error={errors.reason?.message}>

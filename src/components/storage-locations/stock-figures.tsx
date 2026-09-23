@@ -85,7 +85,13 @@ export function InlineMassChange({
 }
 
 /**
- * The headline of a stock surface: one balance, before and after the movement.
+ * One balance, before and after the movement.
+ *
+ * `headline` (default) makes it the block's one figure. `row` is the same pair
+ * as an aligned label and value line, for a block whose headline is another
+ * figure: the stock blocks lead with the wet estimate and keep the tracked dry
+ * balance as a row under the picture. Both name the figure row as one phrase
+ * ("Dry biochar in bin: 350 kg before, 280 kg after").
  *
  * An unchanged balance is the answer to a question the operator asked, not a
  * missing result, so it is labelled rather than left to look like a bug.
@@ -95,14 +101,30 @@ export function StockBalanceChange({
   beforeKg,
   afterKg,
   supportingLine,
+  variant = "headline",
 }: {
   label: string;
   beforeKg: number | null;
   afterKg: number | null;
   supportingLine?: ReactNode;
+  variant?: "headline" | "row";
 }) {
   const unchanged =
     beforeKg !== null && afterKg !== null && beforeKg === afterKg;
+  const figureLabel = `${label}: ${formatMassKg(beforeKg)} before, ${formatMassKg(afterKg)} after`;
+  if (variant === "row") {
+    return (
+      <div className="flex items-baseline justify-between gap-12">
+        <span className="flex items-center gap-8 body-caption text-[var(--color-text-secondary)]">
+          <span>{label}</span>
+          {unchanged && <StockChip>Unchanged</StockChip>}
+        </span>
+        <span role="group" aria-label={figureLabel} className="body-small tabular-nums text-right">
+          <InlineMassChange beforeKg={beforeKg} afterKg={afterKg} />
+        </span>
+      </div>
+    );
+  }
   return (
     <DerivedHeadline
       label={<>
@@ -111,7 +133,7 @@ export function StockBalanceChange({
       </>}
       before={formatMassKg(beforeKg)}
       value={formatMassKg(afterKg)}
-      figureLabel={`${label}: ${formatMassKg(beforeKg)} before, ${formatMassKg(afterKg)} after`}
+      figureLabel={figureLabel}
       sub={supportingLine}
     />
   );

@@ -3,7 +3,7 @@ import { conflictCode } from '@/lib/conflict-ref';
 import { ActionConflictError } from '@/lib/errors';
 import { rational } from '@/lib/output-stock';
 
-const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), view: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
 vi.mock('@/db', () => {
   const tx = { select: () => {
     const query = { from: () => query, where: () => query, orderBy: () => query, then: (resolve: (value: unknown) => unknown) => Promise.resolve(mocks.reads.shift()).then(resolve) };
@@ -11,7 +11,7 @@ vi.mock('@/db', () => {
   } };
   return { db: { ...tx, transaction: (run: (reader: unknown) => unknown) => run(tx) } };
 });
-vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state }));
+vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStockView: mocks.view }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
@@ -56,8 +56,10 @@ it('matches product-bin stock using facility-local today across UTC midnight', a
   try {
     mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }], [{ timezone: 'Africa/Dar_es_Salaam' }]];
     mocks.state.mockResolvedValue({ remainingDryKg: '100.000' });
+    mocks.view.mockResolvedValue({ dryMassKg: 100, recordedWetMassKg: 130, estimatedWetMassKg: 118 });
     const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
-    expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toMatchObject([{ id: 'bin', dryMassKg: 100 }]);
+    expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toMatchObject([{ id: 'bin', dryMassKg: 100, estimatedWetMassKg: 118 }]);
+    expect(mocks.view).toHaveBeenLastCalledWith(ctx, 'bin');
     expect(mocks.state).toHaveBeenLastCalledWith(ctx, { facilityId: 'facility', formulationId: 'recipe', storageLocationId: 'bin', physicalDate: '2026-09-16' });
   } finally { vi.useRealTimers(); }
 });
