@@ -1,4 +1,5 @@
 "use client";
+import { useSimplePresence } from "@/components/forms/form-detail-context";
 import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -8,13 +9,18 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
 import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
 
+/**
+ * Matching stock is context for an order, not one of its fields, so Simple
+ * hides the block and Detailed shows it.
+ */
 export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: string; formulationId: string }) {
+  const parts = useSimplePresence("hidden");
   const bins = useMatchingOutputBins(facilityId, formulationId);
   const { facilities } = useFacilityContext();
   const timezone = facilities.find(facility => facility.id === facilityId)?.timezone;
   const physicalDate = timezone ? formatFacilityDate(new Date(), timezone) : null;
   if (!formulationId) return null;
-  return <section className="space-y-12" aria-label="Matching storage bins">
+  return <section hidden={!parts.block} className="space-y-12" aria-label="Matching storage bins">
     <p className="body-small">Orders do not reserve stock. Choose the actual source bin when recording the completed delivery.</p>
     {bins.isLoading && <p role="status">Loading matching bins...</p>}
     {bins.error && <p role="alert">{bins.error.message}</p>}

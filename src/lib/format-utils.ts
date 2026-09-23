@@ -149,11 +149,13 @@ export function formatMass(kg: number | null | undefined): string {
  * "900 kg" in the same readout would make them incomparable. Everywhere a lone
  * mass is shown, prefer `formatMass`.
  *
+ * Pass `digits` when a saved-record view needs the storage precision
+ * (`MASS_KG_STORAGE_DECIMALS`).
  * Note the precision difference as well as the unit one — see `formatMass`.
  */
-export function formatMassKg(kg: number | null | undefined): string {
+export function formatMassKg(kg: number | null | undefined, opts?: { digits?: number }): string {
   if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notRecorded;
-  return `${kg.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_MAX_FRACTION_DIGITS })} kg`;
+  return `${kg.toLocaleString(undefined, { maximumFractionDigits: opts?.digits ?? MASS_KG_MAX_FRACTION_DIGITS })} kg`;
 }
 
 /**

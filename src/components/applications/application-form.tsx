@@ -102,7 +102,6 @@ function AppliedMassSplit({
 }) {
   return (
     <ProductCompositionPreview
-      followFormDetail
       className="col-span-full"
       wetMassKg={appliedKg}
       dryBiocharKg={dryBiocharKg}

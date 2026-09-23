@@ -1,7 +1,7 @@
 /**
  * FormSection — the single section block for sheet forms.
  *
- * Encapsulates the production-run form grammar: mono uppercase SectionLabel
+ * Encapsulates the production-run form grammar: a sentence case SectionLabel
  * above a space-y-16 field stack, separated from the previous section by a
  * pt-16 hairline divider. The first section of a form passes
  * `divider={false}` (nothing to separate from).

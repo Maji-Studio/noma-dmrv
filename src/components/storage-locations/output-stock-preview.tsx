@@ -1,7 +1,7 @@
 "use client";
 
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
-import { CompositionCard, CompositionLedger } from "@/components/forms";
+import { useSimplePresence, type SimplePresence } from "@/components/forms/form-detail-context";
+import { CompositionCard, CompositionLedger, DerivedHeadline } from "@/components/forms";
 import type { MassSegment } from "@/components/forms/composition-ledger";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -25,6 +25,9 @@ import { InlineMassChange, StockBalanceChange, StockNotice, StockRows, type Stoc
  * the balance pair keeps the tracked quantity.
  */
 const SPLIT_MATERIAL_LABEL = "Solids";
+
+/** Stock movement blocks are optional in Simple; see `OutputStockPreview`. */
+const STOCK_SIMPLE_PRESENCE: SimplePresence = "hidden";
 
 /** The one definition the availability block cannot show as a number. */
 const AVAILABILITY_HINT =
@@ -114,32 +117,39 @@ export function OutputStockAvailability({ binName, binCode, subtitle, label, dry
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />
         <SegmentKey segments={segments} />
       </div>}
-      {/* Same treatment as the balance pair's headline, so one figure and a
-          pair of them read as the same kind of answer. */}
-      <div className="space-y-6">
-        <span className="block body-caption text-[var(--color-text-secondary)]">{label}</span>
-        <span className="block body-large font-medium tabular-nums">{formatMassKg(dryKg)} {dryLabel}</span>
-      </div>
+      {/* Same shape as the balance pair's headline, so one figure and a pair
+          of them read as the same kind of answer. */}
+      <DerivedHeadline label={label} value={`${formatMassKg(dryKg)} ${dryLabel}`} />
     </CompositionCard>
   );
 }
 
 /**
+ * `variant` picks the block: `movement` for a surface that records one movement
+ * against one bin (a correction, a loss, a count, a delivery load), `load` for
+ * a surface that shows several bins at once (the product form).
+ *
+ * The stock family is hidden in Simple: the entry fields already say what the
+ * operator is doing. Refusals, blockers and discrepancies are not optional, so
+ * they stay visible at both levels.
+ *
  * `hideBlockingMessage` is for forms that already render `preview.blockingMessage`
  * as the error on the field the operator must change. The same sentence in two
  * places reads as two separate problems, so the copy closest to the field wins
  * and the preview drops its own alert.
  */
-export function OutputStockPreview({ followFormDetail = false, preview, moreInfo, renderBlocker, hideBlockingMessage = false }: { followFormDetail?: boolean; preview: Preview; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
-  const level = useFormDetailLevel();
-  const detailed = !followFormDetail || level === "detailed";
+export function OutputStockPreview({ variant = "load", preview, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
+  const parts = useSimplePresence(STOCK_SIMPLE_PRESENCE);
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
+  const needsAttention = Boolean(blockingMessage) || Boolean(preview.blockers?.length) || preview.discrepancySolidsKg > 0;
 
+  // The live region stays mounted while the level hides it, so a blocker that
+  // appears later is still announced.
   return (
-    <section hidden={followFormDetail && !detailed && !blockingMessage && !preview.blockers?.length && preview.discrepancySolidsKg <= 0} className="space-y-16" aria-label="Stock preview" aria-live="polite">
-      {followFormDetail ? <div hidden={!detailed}>
+    <section hidden={!parts.block && !needsAttention} className="flex flex-col gap-16" aria-label="Stock preview" aria-live="polite">
+      {variant === "movement" ? (
         <StockMovementCard preview={preview} moreInfo={moreInfo} />
-      </div> : (
+      ) : (
         <StockLoadCard
           preview={preview}
           actions={moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)}
@@ -175,6 +185,7 @@ function StockMovementCard({ preview, moreInfo }: { preview: Preview; moreInfo?:
     <CompositionCard
       title={preview.binName}
       hint={stockCardHint(preview)}
+      simple={STOCK_SIMPLE_PRESENCE}
       actions={moreInfo}
       calculation={rows.length > 0 || ledger ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}
@@ -216,6 +227,7 @@ function StockLoadCard({ preview, actions }: { preview: Preview; actions?: React
     <CompositionCard
       title={preview.binName}
       hint={stockCardHint(preview)}
+      simple={STOCK_SIMPLE_PRESENCE}
       actions={actions}
       calculation={rows.length > 0 || preview.allocations.length > 0 ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}

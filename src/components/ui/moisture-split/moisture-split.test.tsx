@@ -203,7 +203,6 @@ describe("MoistureSplit", () => {
     const simple = renderToStaticMarkup(
       <FormDetailProvider scope="feedstock">
         <MoistureSplit
-          followFormDetail
           wetMassKg={4000}
           moisturePercent={20}
           materialLabel="Feedstock"
@@ -220,7 +219,6 @@ describe("MoistureSplit", () => {
     // No provider means no managed detail level, so read surfaces stay expanded.
     const detailed = renderToStaticMarkup(
       <MoistureSplit
-        followFormDetail
         wetMassKg={4000}
         moisturePercent={20}
         materialLabel="Feedstock"

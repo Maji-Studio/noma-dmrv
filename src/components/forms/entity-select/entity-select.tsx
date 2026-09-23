@@ -542,7 +542,7 @@ export function EntitySelect({
         >
           <span
             className={cn(
-              "truncate text-left",
+              "min-w-0 flex-1 truncate text-left",
               (value && !isSelectionLoading) || (!value && noneOption)
                 ? "text-[var(--color-text-primary)]"
                 : "text-[var(--color-text-tertiary)]"

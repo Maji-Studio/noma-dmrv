@@ -49,7 +49,8 @@ export {
 } from "./entity-select";
 
 export { FormDetailToggle, type FormDetailLevel } from "./form-detail-toggle";
-export { FormDetailProvider, FormDetailControl, DetailedOnly, useFormDetailLevel } from "./form-detail-context";
+export { FormDetailProvider, FormDetailControl, DetailedOnly, useFormDetailLevel, useSimplePresence, type SimplePresence } from "./form-detail-context";
 
 export { CompositionCard } from "./composition-card";
+export { DerivedHeadline } from "./derived-headline";
 export { CompositionLedger } from "./composition-ledger";

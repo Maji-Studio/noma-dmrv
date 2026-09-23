@@ -7,7 +7,7 @@
  * runs, and notes. The interactive certification checklist and lab-sample
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
-import { CompositionCard } from "@/components/forms";
+import { CompositionCard, DerivedHeadline } from "@/components/forms";
 import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
@@ -47,7 +47,7 @@ function formatInput(value: number | null, unit: string): string {
  * Carbon estimate — one headline figure with the inputs behind it.
  *
  * The estimate is the only thing an operator reads off this block, so it is the
- * only thing with size. The physical inputs the registry turns into deductions
+ * only thing with size, and the one part Simple keeps. The physical inputs the registry turns into deductions
  * are the arithmetic behind it, not a competing list, so they sit under `Show
  * calculation` as label and figure rows.
  *
@@ -89,6 +89,7 @@ function CreditBatchCarbonLedger({
     <CompositionCard
       title="Carbon estimate"
       hint="A local estimate of stored CO₂e before project emissions. The registry result is authoritative."
+      simple="headline"
       calculation={
         <div className="space-y-8">
           {runsPending ? (
@@ -127,18 +128,11 @@ function CreditBatchCarbonLedger({
           </span>
         ) : undefined
       }
-    >
-      <div className="space-y-4">
-        <p className="body-lead tabular-nums">
-          {estimate == null
-            ? MISSING_VALUE.notAvailable
-            : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
-        </p>
-        <p className="body-caption text-[var(--color-text-secondary)]">
-          Estimated CO₂e stored, before project emissions
-        </p>
-      </div>
-    </CompositionCard>
+      headline={<DerivedHeadline
+        value={estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
+        sub="Estimated CO₂e stored, before project emissions"
+      />}
+    />
   );
 }
 

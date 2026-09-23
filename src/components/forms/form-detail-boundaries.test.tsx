@@ -9,6 +9,21 @@ vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: ({ label }: { children: ReactNode; label: string }) => <span aria-label={label} />,
   Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
+vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a> }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilities: [{ id: "facility", timezone: "UTC" }] }) }));
+vi.mock("@/hooks/use-entities", () => ({ useEntityOptions: () => ({ data: [] }) }));
+vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: () => <button type="button">Stock history</button> }));
+vi.mock("@/hooks/use-output-stock", () => ({
+  useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, recordedWetMassKg: null }], isLoading: false, error: null }),
+  useOutputStockPreview: () => ({ data: undefined, isLoading: false, error: null }),
+  useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", physicalDate: "2026-09-22", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [] }] }], isLoading: false, error: null }),
+}));
+// Only the blend block is under test on the formulation form; the material
+// selector needs a query client this suite does not provide.
+vi.mock("@/components/forms/entity-select", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/components/forms/entity-select")>(),
+  FormEntitySelect: () => <span>Blend material</span>,
+}));
 import { SpineSectionStatic } from "./form-spine";
 import { FormDetailControl, FormDetailProvider } from "./form-detail-context";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
@@ -16,6 +31,17 @@ import { MoistureSplit } from "@/components/ui/moisture-split";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import { SampleEligibilityAdvisory } from "@/components/samples/sample-eligibility-advisory";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
+import { ProcessFlowPreview } from "@/components/production-runs/production-run-process-flow-preview";
+import { ApplicationAllocationShares } from "@/components/applications/application-allocation-shares";
+import { SampleDerivedRatios } from "@/components/samples/sample-derived-ratios";
+import { creditBatchSheetSections } from "@/components/credit-batches/credit-batch-view";
+import { FormulationForm } from "@/components/formulations/formulation-form";
+import { MatchingOutputBins } from "@/components/orders/matching-output-bins";
+import { DeliveryStockDetails } from "@/components/deliveries/delivery-stock-details";
+import { StockRows } from "@/components/storage-locations/stock-figures";
+import { DetailedOnly } from "./form-detail-context";
+import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
+import type { FormulationWithIngredients } from "@/data-access/formulations";
 import type { OutputStockPreview as Preview } from "@/types/output-stock";
 
 function visibleText(node: ReactTestInstance | string): string {
@@ -37,7 +63,7 @@ const preview: Preview = {
 describe("optional detail boundaries", () => {
   it("keeps warnings and blockers but hides optional stock readouts in Simple", async () => {
     let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<FormDetailProvider scope="stock"><FormDetailControl /><OutputStockPreview followFormDetail preview={preview} /></FormDetailProvider>); });
+    await act(async () => { renderer = create(<FormDetailProvider scope="stock"><FormDetailControl /><OutputStockPreview variant="movement" preview={preview} /></FormDetailProvider>); });
     const simple = visibleText(renderer.root);
     expect(simple).toContain("Correction blocked");
     expect(simple).toContain("Count exceeds tracked solids");
@@ -61,9 +87,9 @@ describe("optional detail boundaries", () => {
   it("keeps the moisture bar and key in Simple while hiding its calculation table", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => { renderer = create(<FormDetailProvider scope="read">
-      <MoistureSplit followFormDetail wetMassKg={100} moisturePercent={20} />
-      <MoistureSplit followFormDetail wetMassKg={100} moisturePercent={null} />
-      <ProductCompositionPreview followFormDetail wetMassKg={100} dryBiocharKg={60} />
+      <MoistureSplit wetMassKg={100} moisturePercent={20} />
+      <MoistureSplit wetMassKg={100} moisturePercent={null} />
+      <ProductCompositionPreview wetMassKg={100} dryBiocharKg={60} />
       <SampleEligibilityAdvisory hToCOrgRatio={0.8} oToCOrgRatio={0.3} />
       <EntitySideSheetSections sections={[{ title: "Definition", fields: [
         { label: "Preview formula", value: "formula-v1", detailedOnly: true },
@@ -120,4 +146,78 @@ it("omits optional read-section headings in Simple and numbers visible sections 
   expect(visibleText(renderer.root)).toContain("80 kg");
   expect(renderer.root.findAllByType("button").filter(node => node.props["aria-controls"])).toHaveLength(0);
   await act(async () => renderer.unmount());
+});
+
+const carbonEstimate = creditBatchSheetSections({
+  creditBatch: { id: "batch", code: "CB-26-001", facilityId: "facility", co2eStoredPreview: { co2eStoredTonnes: 3.2, applicationResults: [], missingInputs: [], warnings: [] } } as unknown as CreditBatchWithRelations,
+  productionRuns: [],
+  isLoadingRuns: false,
+  runsError: null,
+  isRetryingRuns: false,
+  onRetryRuns: () => undefined,
+  isHealthLoading: false,
+}).find(section => section.title === "Carbon ledger")?.content;
+
+const overAllocated = {
+  id: "formulation", name: "Mix", description: null, biocharRatio: 0.8,
+  ingredients: [{ feedstockTypeId: "manure", ratio: 0.4, feedstockType: { name: "Manure" } }],
+} as unknown as FormulationWithIngredients;
+
+/**
+ * The Simple boundary of every derived block, one row each: what an operator
+ * still sees in Simple and what waits for Detailed. `picture` keeps caption,
+ * headline and picture; `headline` keeps caption and headline; `hidden` keeps
+ * nothing unless the block has an error to show.
+ */
+const SIMPLE_BOUNDARIES: { block: string; presence: string; element: ReactNode; present: string[]; absent: string[] }[] = [
+  { block: "Moisture split", presence: "picture",
+    element: <MoistureSplit wetMassKg={100} moisturePercent={20} materialLabel="Feedstock" />,
+    present: ["Dry feedstock 80 kg", "Water 20 kg"], absent: ["% of total", "Dry = wet"] },
+  { block: "Product composition", presence: "picture",
+    element: <ProductCompositionPreview wetMassKg={100} dryBiocharKg={60} />,
+    present: ["Product composition", "Dry biochar", "60 kg"], absent: ["Show calculation", "sum of its parts"] },
+  { block: "Blend by volume", presence: "hidden",
+    element: <FormulationForm onSubmit={() => undefined} />,
+    present: ["Biochar"], absent: ["Blend by volume", "Total 100%"] },
+  { block: "Blend by volume, over 100%", presence: "picture while the total is an error",
+    element: <FormulationForm formulation={overAllocated} onSubmit={() => undefined} />,
+    present: ["Blend by volume", "Total 120%. Reduce a share to reach 100%."], absent: ["Show calculation"] },
+  { block: "Process flow", presence: "headline",
+    element: <ProcessFlowPreview sourceBinName="Feedstock July" feedstockKg={100} feedstockMoisturePercent={10} feedstockDryKg={90} reactorName="Reactor 1" biocharKg={50} biocharMoisturePercent={10} biocharDryKg={45} destinationBinName="Biochar July" />,
+    present: ["Process flow", "Dry yield", "50%"], absent: ["Feedstock July", "Feedstock in", "Show calculation"] },
+  { block: "Applied batches", presence: "picture",
+    element: <ApplicationAllocationShares shares={[{ applicationId: "application", deliveryId: "delivery", biocharProductId: "product", productCode: "BP-26-001", productionRunId: "run", productionRunCode: "PR-26-001", dryMassKg: 600, wetMassKg: 1200 }]} />,
+    present: ["Applied batches", "BP-26-001", "600 kg"], absent: ["% of total", "Show calculation", "PR-26-001"] },
+  { block: "Derived ratios", presence: "headline",
+    element: <SampleDerivedRatios hToCOrgRatio={0.42} oToCOrgRatio={0.15} hydrogenPercent={2.5} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab={false} certifyRequired={() => false} certifyStatus={() => "neutral"} />,
+    present: ["H:C org", "0.4200", "O:C org", "0.1500"], absent: ["atomic ratio", "Show calculation"] },
+  { block: "Carbon estimate", presence: "headline",
+    element: carbonEstimate,
+    present: ["Carbon estimate", "≈ 3.20 t CO₂e"], absent: ["Show calculation", "Feedstock, dry mass", "Isometric applies"] },
+  { block: "Original entry figures", presence: "hidden",
+    element: <DetailedOnly><StockRows label="Original entry figures" rows={[{ label: "Wet mass", value: "100 kg" }]} /></DetailedOnly>,
+    present: [], absent: ["Wet mass", "100 kg"] },
+  { block: "Matching stock", presence: "hidden",
+    element: <MatchingOutputBins facilityId="facility" formulationId="mix" />,
+    present: [], absent: ["Product bin", "1,500 kg", "Orders do not reserve stock"] },
+  { block: "Stock movement preview", presence: "hidden",
+    element: <OutputStockPreview variant="movement" preview={{ ...preview, blockingMessage: null, blockers: [], discrepancySolidsKg: 0 }} />,
+    present: [], absent: ["Product bin", "1,150 kg", "Show calculation"] },
+  { block: "Stock movement preview, blocked", presence: "notices only",
+    element: <OutputStockPreview variant="movement" preview={preview} />,
+    present: ["Correction blocked", "Count exceeds tracked solids"], absent: ["Product bin", "Batch A", "Show calculation"] },
+  { block: "Delivery stock", presence: "picture and its history action",
+    element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} />,
+    present: ["Delivery stock", "B-001", "80 kg", "Stock history"], absent: ["Wet mass", "Show calculation"] },
+];
+
+describe("Simple boundary table", () => {
+  it.each(SIMPLE_BOUNDARIES)("$block: $presence", async ({ element, present, absent }) => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => { renderer = create(<FormDetailProvider scope="boundary">{element}</FormDetailProvider>); });
+    const simple = visibleText(renderer.root).replace(/\s+/g, " ");
+    for (const text of present) expect(simple).toContain(text);
+    for (const text of absent) expect(simple).not.toContain(text);
+    await act(async () => renderer.unmount());
+  });
 });

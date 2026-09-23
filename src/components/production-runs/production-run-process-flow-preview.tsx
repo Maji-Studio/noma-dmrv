@@ -6,15 +6,16 @@
  * segments between them carry the masses. The first segment is the feedstock
  * going in, drawn as its moisture split so the dry matter the yield is measured
  * on is visible rather than implied. The second is the biochar coming out, the
- * same way, with the dry-basis yield as the one headline figure of the block.
+ * same way. The yield is the block's one headline figure, above the rail.
  *
  * It replaces a three-box recap that read as three unrelated cards: a run is a
  * sequence, so it is drawn as one, and it reuses the transport journey's shape
  * (nodes on a rail, the leg boxed between them) because an operator has already
  * learnt to read that on the delivery and sample sheets.
  *
- * Simple keeps the rail, the two masses and the yield, because that is what the
- * fields it derives from mean. Detailed adds the yield arithmetic. Both bases
+ * Simple keeps the yield headline only: the fields above already hold the two
+ * masses, and the yield is what they add up to. Detailed adds the rail and the
+ * yield arithmetic behind Show calculation. Both bases
  * are honest: when either dry mass is missing the whole equation falls back to
  * wet mass and says so in the yield's own label, rather than mixing a dry
  * numerator with a wet denominator. The segment whose dry mass is missing
@@ -24,7 +25,7 @@
 
 import type { ReactNode } from "react";
 import { CompositionCard } from "@/components/forms/composition-card";
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { formatMassKg, formatPercent } from "@/lib/format-utils";
 import { PERCENT_SCALE } from "@/lib/mass-moisture";
@@ -79,16 +80,21 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
     biocharDryKg,
     destinationBinName,
   } = props;
-  const detailed = useFormDetailLevel() === "detailed";
   if (!sourceBinName && !reactorName && !destinationBinName) return null;
   const basis = resolveBasis(props);
-  const yieldLabel = `${basis.dry ? "Dry" : "Wet"} yield`;
+  // Until a yield resolves there is no basis to name, only the figure missing.
+  const yieldLabel = basis.yieldPercent === null ? "Yield" : `${basis.dry ? "Dry" : "Wet"} yield`;
 
   return (
     <CompositionCard
       title="Process flow"
       hint={PROCESS_FLOW_HINT}
-      calculation={detailed && basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
+      simple="headline"
+      headline={<DerivedHeadline
+        label={yieldLabel}
+        value={basis.yieldPercent === null ? null : formatPercent(basis.yieldPercent, { digits: YIELD_DIGITS })}
+      />}
+      calculation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
     >
       {/* The block's own section already carries the name. */}
       <ol>
@@ -108,7 +114,6 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
             moisturePercent={biocharMoisturePercent}
             dryMassKg={biocharDryKg}
             materialLabel="Biochar"
-            figure={basis.yieldPercent === null ? undefined : { label: yieldLabel, value: formatPercent(basis.yieldPercent, { digits: YIELD_DIGITS }) }}
           />
         </FlowStop>
         <FlowStop name={destinationBinName} placeholder="Select destination bin" />
@@ -144,14 +149,12 @@ function FlowStop({ name, placeholder, children }: { name: string | null; placeh
  * the split between the dry matter and the water. The mass stays pinned right
  * against the wrapping label, the way a transport leg pins its distance.
  */
-function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel, figure }: {
+function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel }: {
   label: string;
   massKg: number | null;
   moisturePercent: number | null;
   dryMassKg: number | null;
   materialLabel: string;
-  /** The one headline figure this segment carries, such as the run's yield. */
-  figure?: { label: string; value: string };
 }) {
   return (
     <div className="space-y-8 border border-[var(--color-border-tertiary)] p-8">
@@ -162,12 +165,6 @@ function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel,
         {massKg !== null && <span className="shrink-0 body-small font-medium tabular-nums">{formatMassKg(massKg)} wet</span>}
       </div>
       <MoistureSplit calculation={false} wetMassKg={massKg} moisturePercent={moisturePercent} dryMassKg={dryMassKg} materialLabel={materialLabel} />
-      {figure && (
-        <div className="space-y-2">
-          <span className="block body-caption text-[var(--color-text-secondary)]">{figure.label}</span>
-          <span className="block body-large font-medium tabular-nums">{figure.value}</span>
-        </div>
-      )}
     </div>
   );
 }

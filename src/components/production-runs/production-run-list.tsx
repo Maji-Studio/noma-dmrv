@@ -673,7 +673,6 @@ export function ProductionRunList() {
             ],
             content: (
               <MoistureSplit
-                followFormDetail
                 wetMassKg={sideSheetEntity.totalFeedstockWetMassKg}
                 moisturePercent={sideSheetEntity.feedstockMoisturePercent}
                 dryMassKg={sideSheetEntity.feedstockMassDryKg}
@@ -693,7 +692,6 @@ export function ProductionRunList() {
             ],
             content: (
               <MoistureSplit
-                followFormDetail
                 wetMassKg={sideSheetEntity.biocharOutputKg}
                 moisturePercent={sideSheetEntity.biocharMoisturePercent}
                 dryMassKg={sideSheetEntity.biocharDryMassKg}

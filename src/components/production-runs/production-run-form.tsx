@@ -610,7 +610,7 @@ export function ProductionRunForm({
               setValueAs: nullableNumericValue,
             })}
           />
-          <MoistureSplit className="md:col-span-2" followFormDetail wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
+          <MoistureSplit className="md:col-span-2" wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
@@ -678,7 +678,6 @@ export function ProductionRunForm({
         </FormField>
 
         <MassMoistureFields
-            followFormDetail
           materialLabel="Biochar"
           wetMassKg={watchedBiocharKg}
           moisturePercent={watchedBiocharMoisture}

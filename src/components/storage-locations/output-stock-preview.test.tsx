@@ -154,7 +154,7 @@ describe("StockMovementCard", () => {
   }
   async function render(preview: Preview) {
     let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<FormDetailProvider scope="stock"><FormDetailControl /><OutputStockPreview followFormDetail preview={preview} /></FormDetailProvider>); });
+    await act(async () => { renderer = create(<FormDetailProvider scope="stock"><FormDetailControl /><OutputStockPreview variant="movement" preview={preview} /></FormDetailProvider>); });
     // The card is the Detailed presentation of this surface; Simple keeps only
     // the notices, which the boundary suite covers.
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());

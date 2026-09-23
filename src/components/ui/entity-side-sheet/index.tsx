@@ -53,8 +53,11 @@ function ArrowLeftIcon() {
 type SideSheetMode = "view" | "edit" | "create";
 
 interface EntitySideSheetProps {
-  /** Explicit opt-in, optionally limited to saved read mode. */
-  detailToggle?: boolean | "view";
+  /**
+   * Explicit opt-in: `true` in every mode, `"view"` in saved read mode only,
+   * `"form"` in create and edit only (a read view with nothing optional).
+   */
+  detailToggle?: boolean | "view" | "form";
   detailScope?: string;
   /** Controlled open state */
   open: boolean;
@@ -202,7 +205,9 @@ function EntitySideSheet({
     dirtyRef.current = true;
   };
 
-  const showDetailToggle = detailToggle === true || (detailToggle === "view" && isViewMode);
+  const showDetailToggle = detailToggle === true
+    || (detailToggle === "view" && isViewMode)
+    || (detailToggle === "form" && !isViewMode);
   return (
     <FormDetailProvider scope={`${open}:${mode}:${detailScope}`} enabled={showDetailToggle}>
     <SlideOverPanel.Root open={open} onOpenChange={handleOpenChange}>
