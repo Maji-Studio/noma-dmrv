@@ -54,6 +54,13 @@ import {
 } from "../lane-stock-derivation";
 import { requireOrgScope } from "../utils";
 
+
+/** Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet, 249.6 kg dry biochar". */
+function outputBinStockSubtitle(stock: { estimatedWetMassKg: number | null; dryMassKg: number | null }): string {
+  const wet = stock.estimatedWetMassKg == null ? `wet ${MISSING_VALUE.notAvailable.toLowerCase()}` : `≈ ${formatMassKg(stock.estimatedWetMassKg)} wet`;
+  const dry = stock.dryMassKg == null ? `dry biochar ${MISSING_VALUE.notAvailable.toLowerCase()}` : `${formatMassKg(stock.dryMassKg)} dry biochar`;
+  return `${wet}, ${dry}`;
+}
 export function formatStorageLocationSubtitle(
   type: string,
   feedstockTypeName: string | null,
@@ -797,7 +804,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     const option = toStorageLocationEntityOption(result, laneStockById.get(result.id));
     if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id))?.moisturePercent ?? null } };
     const stock = await getOutputBinStockView(ctx, result.id);
-    return { ...option, remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg }, subtitle: `Estimated wet: ${stock.estimatedWetMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(stock.estimatedWetMassKg)} · Dry biochar: ${stock.dryMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(stock.dryMassKg)}` };
+    return { ...option, remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg }, subtitle: outputBinStockSubtitle(stock) };
   }));
 }
 
@@ -969,5 +976,5 @@ export async function getStorageLocationById(
   const option = toStorageLocationEntityOption(result, stock);
   if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id, physicalDate, executor))?.moisturePercent ?? null } };
   const output = await getOutputBinStockView(ctx, result.id, executor);
-  return { ...option, remainingMass: { wetKg: output.estimatedWetMassKg, dryKg: output.dryMassKg }, subtitle: `Estimated wet: ${output.estimatedWetMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(output.estimatedWetMassKg)} · Dry biochar: ${output.dryMassKg == null ? MISSING_VALUE.notAvailable : formatMassKg(output.dryMassKg)}` };
+  return { ...option, remainingMass: { wetKg: output.estimatedWetMassKg, dryKg: output.dryMassKg }, subtitle: outputBinStockSubtitle(output) };
 }

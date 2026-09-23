@@ -70,11 +70,11 @@ export function ProductionRunFeedstockDrawRow({
 
   return (
     <div
-      className="border border-[var(--color-border-tertiary)] p-16 space-y-12"
+      className="space-y-12"
       data-testid={`feedstock-draw-row-${index}`}
     >
       <div className="flex items-center justify-between gap-12">
-        <span className="body-small font-medium text-[var(--color-text-secondary)]">
+        <span className="body-small font-medium text-[var(--color-text-primary)]">
           Feedstock source {index + 1}
         </span>
         <Button

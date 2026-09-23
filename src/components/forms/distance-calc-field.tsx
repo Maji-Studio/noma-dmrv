@@ -181,7 +181,7 @@ export function DistanceCalcField({
         </div>
         {showSourceBadge && source && (
           <p
-            className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+            className="body-caption text-[var(--color-text-tertiary)] mt-6"
             data-testid={`${id}-distance-source`}
           >
             Source: {DISTANCE_SOURCE_LABELS[source]}

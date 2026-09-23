@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { deliveries, outputStockAllocations, orders } from "@/db/schema";
 import { createDelivery, updateDelivery, deleteDelivery } from "@/data-access/deliveries";
 import { createApplication } from "@/data-access/applications";
-import { createOrder, updateOrder } from "@/data-access/orders";
+import { createOrder, getOrders, updateOrder } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
 import { getOutputBinDryBalance } from "@/data-access/output-stock";
@@ -77,7 +77,7 @@ describe("completed delivery order balance", () => {
     const other = await createOrder(f.ctx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" });
     expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(1000);
     await postDelivery(f, 800);
-    await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Insufficient/);
+    await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Not enough dry biochar/);
   });
   it("locks the order formulation once a completed delivery uses it", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 50);
@@ -87,6 +87,8 @@ describe("completed delivery order balance", () => {
   it("counts completed trucks toward the remaining commercial order quantity", async () => {
     const f = await fixture(); await postDelivery(f, 60);
     await expect(postDelivery(f, 50)).rejects.toThrow("Only 40 kg remains on this order");
+    const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
+    expect(listed).toMatchObject({ deliveredCount: 1, deliveredWetMassKg: 60 });
   });
   it("re-credits the original truck only through explicit correction", async () => {
     const f = await fixture(); await postDelivery(f, 20); const current = await postDelivery(f, 60);

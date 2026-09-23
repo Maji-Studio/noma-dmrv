@@ -140,7 +140,8 @@ The ramp stays available for non-status uses (charts, feedback, accents).
 
 ## Typography
 
-Class definitions live in `src/app/globals.css`. Size → class ladder:
+Size tokens live in `src/app/globals.css`; the classes live in
+`src/styles/typography.css`. Size → class ladder:
 
 - **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase table headers)
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons)
@@ -152,6 +153,49 @@ Class definitions live in `src/app/globals.css`. Size → class ladder:
 
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
+
+**The type classes beat utilities, except `font-medium`.** `typography.css`
+is unlayered, and Tailwind utilities live in a cascade layer, so a type class
+and the bare `p` and `h1`..`h4` element rules win over `font-mono`, `text-*`,
+`tracking-*`, `leading-*`, margin utilities and every weight except one.
+`typography.css` ends with an unlayered `.font-medium` rule, so `body-small
+font-medium` renders medium. Write that rather than reaching for a `-bold`
+variant. For any other override on a type class or a bare `<p>`, drop the type
+class and use utilities alone.
+
+### Form type, lines and spacing
+
+Forms and the derived blocks inside them ([forms.md](./forms.md#derived-blocks))
+use at most four text styles:
+
+| Style | Classes | Used for |
+|---|---|---|
+| Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, helper cues, calculation rows' labels |
+| Label | `body-small font-medium` | field labels (secondary ink) and section titles (primary ink) |
+| Value | `body-small` | figures in a derived block's rows (`StockRows`) |
+| Headline figure | `body-large font-medium` | the one `DerivedHeadline` figure per block |
+
+Control text (inputs, selects, the entity select trigger) is the primitives'
+own 16px `--text-s`, and read-sheet `DetailField` values are `body-medium`, the
+same 16px, so a field reads at one size in its form and its read view. Neither
+is restyled inside a form. Hierarchy runs section title, field label, value,
+caption.
+
+- **No eyebrows.** `SectionLabel` (the `FormSection` title) is a sentence case
+  `body-small font-medium` title in primary ink on a `min-h-24` row, not an
+  uppercase tracked micro label. The sheet title and the spine's numbered
+  marker already carry the hierarchy. No mono uppercase micro labels inside
+  forms either; `label-micro` belongs to table headers.
+- **Lines only where they separate things of a different kind.** Kept: the
+  `FormSpine` rail, the hairline between plain `FormSection`s, and the
+  `CompositionCard` action row's top rule. Not drawn: rules between a caption
+  and its content, rules under headlines, doubled dividers, and borders or
+  tints around a derived value.
+- **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose.
+- **Spacing, one rhythm per level:** the form `space-y-20` between sections,
+  `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
+  derived blocks `gap-12` between their parts, key lines and captions
+  `gap-6`/`gap-8`, a label to its control `mb-6`.
 
 ### Label casing
 
@@ -452,25 +496,43 @@ One vocabulary and one visual system for unmixed materials, all from `@/lib/mass
 (`@/components/ui/mass-pair`). **Never retype a moisture label, re-derive the
 split inline, or format a percentage by hand.**
 
-Blended biochar products use `ProductCompositionPreview` instead. It shows the
-conserved `Dry biochar` allocation and the mutually exclusive `Ingredients +
-water` remainder. Show measured finished-product moisture separately as
-delivery evidence; never use it to recalculate either composition mass.
+Blended biochar products use `ProductCompositionPreview` instead. The product
+form and the product read view pass `components` built by
+`biochar-products/product-composition-components.ts`: dry biochar, each
+ingredient's solids, one pooled water part and water added, so both surfaces
+split by one rule (the read view freezes each ingredient at its saved dry
+snapshot and reads at save precision). A surface that only knows the tracked
+dry biochar (an application) gets that against one `Ingredients + water`
+remainder. Show measured finished-product moisture separately as delivery
+evidence; never use it to recalculate a composition mass.
 
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
   `MoistureField` attaches to every moisture input.
-- **`MoistureSplit` variants:** `detail` (figures + bar + footnote — forms and
-  read side sheets) · `compact` (bar + one line) · `inline` (text only — table
-  cells, option labels). Missing moisture renders an explicit *unresolved*
-  state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
-  drives certification readiness, so its absence has to be visible.
+- **`MoistureSplit` variants:** `detail` (bar + key line + calculation table —
+  forms and read side sheets) · `compact` (figures + bar + one line) · `inline`
+  (text only — table cells, option labels). The `detail` surface carries **no
+  card, no frame and no tinted panel**: the bar sits directly under the wet-mass
+  and moisture inputs it describes and moves as they change, with one key line
+  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). Its Simple presence
+  is `picture`: the bar and key line stay in **Simple**, because they are what
+  the two inputs mean, and **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
+  words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
+  is no "Show calculation" disclosure on this surface, and `calculation={false}`
+  drops the table where the host surface owns one (the stock movement card: its
+  disclosure holds the FIFO draw, so the split contributes bar and key line
+  only). The bar names **dry solids**, not the tracked quantity: a blended
+  product bin holding 84 kg of dry solids holds 70 kg of dry biochar, and both
+  masses appear on the same card. Missing moisture renders
+  an explicit *unresolved* state (hatched dashed bar, "Moisture not recorded"),
+  never nothing — dry mass drives certification readiness, so its absence has
+  to be visible.
 - **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter and
   the `.moisture-water-hatch` void for water already present. When an operator
   records a positive amount of added water, a third segment uses solid
-  `--color-moisture-added-water`. The headline and moisture value then use the
-  final wet mass, while the bar still distinguishes the original water from the
-  added water. It does **not** take the production/infrastructure/distribution
+  `--color-moisture-added-water`, and the key line gains that swatch plus the
+  final moisture, while the bar still distinguishes the original water from the
+  added water. The ledger total is the final wet mass. It does **not** take the production/infrastructure/distribution
   accent, so the same moisture concept reads consistently across every area.
 - **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
   auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
@@ -483,7 +545,9 @@ delivery evidence; never use it to recalculate either composition mass.
 
 Mass formatting more broadly: `formatMass` (auto-tonne, for a lone mass in a
 table or KPI) · `formatMassKg` (fixed kg, for related figures that must stay
-comparable) · `formatPercent` — all in `@/lib/format-utils`. The local `formatMass`/`formatKg`
+comparable; saved-record read views pass `{ digits: MASS_KG_STORAGE_DECIMALS }`
+from `@/config/numeric-storage` so a mass reads at the precision it was saved
+at) · `formatPercent` — all in `@/lib/format-utils`. The local `formatMass`/`formatKg`
 copies that shadowed them were removed; don't reintroduce one by copying a
 neighbouring component. A local helper is only acceptable when it formats a
 different quantity and is **named apart** so it cannot shadow the shared one —
@@ -661,10 +725,11 @@ header→content `mb-32`.
 
 ## Forms
 
-Owned entirely by [forms.md](./forms.md) — react-hook-form + Zod resolver,
-`FormSection` / `DetailSection`, the `space-y-20` (side sheet) and `space-y-24`
-(full page) rhythm, and the `@/schemas/helpers` numeric helpers. Read it before
-any form or schema work; nothing about forms is duplicated here.
+Form behaviour is owned by [forms.md](./forms.md): react-hook-form + Zod
+resolver, `FormSection` / `DetailSection`, the section rhythm, the Simple and
+Detailed levels and derived blocks, and the `@/schemas/helpers` numeric
+helpers. This doc owns only the form type set, lines and spacing
+([above](#form-type-lines-and-spacing)).
 
 ## Naming, file structure, React rules
 

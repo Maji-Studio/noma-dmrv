@@ -1,0 +1,246 @@
+/**
+ * Shared figure shapes for the stock surfaces (preview, history, correction).
+ *
+ * Every number an operator has to compare lives in one of three shapes, so the
+ * same quantity reads the same way in a preview card, a history entry and a
+ * correction form:
+ *
+ *  - `StockBalanceChange` — the consequence: one balance before and after.
+ *  - `StockRows` — the inputs: label left, tabular figure right.
+ *  - `CalculationDisclosure` — arithmetic the rows do not already show.
+ *
+ * Prose is deliberately absent. A sentence that only restates a row belongs in
+ * an `InfoHint` on the surface's title, not in this file.
+ */
+"use client";
+
+import {
+  ArrowRightIcon,
+  CaretDownIcon,
+  CaretUpIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react/dist/ssr";
+import { useId, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { DerivedHeadline } from "@/components/forms/derived-headline";
+import { formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
+
+/** "12 kg at 30% moisture", or just the mass when no moisture was measured. */
+export function formatWetAtMoisture(
+  wetMassKg: number | null | undefined,
+  moisturePercent: number | null | undefined,
+): string {
+  const wet = formatMassKg(wetMassKg);
+  return moisturePercent == null
+    ? wet
+    : `${wet} at ${formatMoisturePercent(moisturePercent)} moisture`;
+}
+
+export interface StockRow {
+  label: string;
+  value: ReactNode;
+}
+
+/** Aligned label/value pairs. Never render these figures as a sentence. */
+export function StockRows({ label, rows }: { label: string; rows: StockRow[] }) {
+  return (
+    <dl aria-label={label} className="space-y-6">
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          className="flex items-baseline justify-between gap-12"
+        >
+          <dt className="body-caption text-[var(--color-text-secondary)]">
+            {row.label}
+          </dt>
+          <dd className="body-small tabular-nums text-right">{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Inline before/after for a row value, when the headline is used elsewhere. */
+export function InlineMassChange({
+  beforeKg,
+  afterKg,
+}: {
+  beforeKg: number | null;
+  afterKg: number | null;
+}) {
+  return (
+    <span className="inline-flex items-center gap-6">
+      <span className="text-[var(--color-text-tertiary)]">
+        {formatMassKg(beforeKg)}
+      </span>
+      <ArrowRightIcon
+        size={12}
+        aria-hidden="true"
+        className="shrink-0 text-[var(--color-icon-secondary)]"
+      />
+      <span>{formatMassKg(afterKg)}</span>
+    </span>
+  );
+}
+
+/**
+ * One balance, before and after the movement.
+ *
+ * `headline` (default) makes it the block's one figure. `row` is the same pair
+ * as an aligned label and value line, for a block whose headline is another
+ * figure: the stock blocks lead with the wet estimate and keep the tracked dry
+ * balance as a row under the picture. Both name the figure row as one phrase
+ * ("Dry biochar in bin: 350 kg before, 280 kg after").
+ *
+ * An unchanged balance is the answer to a question the operator asked, not a
+ * missing result, so it is labelled rather than left to look like a bug.
+ */
+export function StockBalanceChange({
+  label,
+  beforeKg,
+  afterKg,
+  supportingLine,
+  variant = "headline",
+}: {
+  label: string;
+  beforeKg: number | null;
+  /** Omitted when nothing will change (a refused movement): only the before figure shows. */
+  afterKg?: number | null;
+  supportingLine?: ReactNode;
+  variant?: "headline" | "row";
+}) {
+  if (afterKg === undefined) {
+    return variant === "row" ? (
+      <div className="flex items-baseline justify-between gap-12">
+        <span className="body-caption text-[var(--color-text-secondary)]">{label}</span>
+        <span className="body-small tabular-nums text-right">{formatMassKg(beforeKg)}</span>
+      </div>
+    ) : (
+      <DerivedHeadline label={label} value={formatMassKg(beforeKg)} sub={supportingLine} />
+    );
+  }
+  const unchanged =
+    beforeKg !== null && afterKg !== null && beforeKg === afterKg;
+  const figureLabel = `${label}: ${formatMassKg(beforeKg)} before, ${formatMassKg(afterKg)} after`;
+  if (variant === "row") {
+    return (
+      <div className="flex items-baseline justify-between gap-12">
+        <span className="flex items-center gap-8 body-caption text-[var(--color-text-secondary)]">
+          <span>{label}</span>
+          {unchanged && <StockChip>Unchanged</StockChip>}
+        </span>
+        <span role="group" aria-label={figureLabel} className="body-small tabular-nums text-right">
+          <InlineMassChange beforeKg={beforeKg} afterKg={afterKg} />
+        </span>
+      </div>
+    );
+  }
+  return (
+    <DerivedHeadline
+      label={<>
+        <span>{label}</span>
+        {unchanged && <StockChip>Unchanged</StockChip>}
+      </>}
+      before={formatMassKg(beforeKg)}
+      value={formatMassKg(afterKg)}
+      figureLabel={figureLabel}
+      sub={supportingLine}
+    />
+  );
+}
+
+/** Square chip naming what a record is. One per record, two at most. */
+export function StockChip({
+  children,
+  emphasis = false,
+}: {
+  children: ReactNode;
+  emphasis?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center border px-6 py-2 body-caption-fit whitespace-nowrap ${
+        emphasis
+          ? "border-[var(--color-border-primary)] text-[var(--color-text-primary)] font-medium"
+          : "border-[var(--color-border-tertiary)] text-[var(--color-text-secondary)]"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * One line, one icon. Blocking refusals are errors; everything else is a status
+ * the operator can read and keep working.
+ */
+export function StockNotice({
+  children,
+  tone = "warning",
+  role = "status",
+}: {
+  children: ReactNode;
+  tone?: "warning" | "error";
+  role?: "status" | "alert";
+}) {
+  return (
+    <p
+      role={role}
+      className={`flex items-start gap-8 body-caption ${
+        tone === "error" ? "text-[var(--st-bad)]" : "text-[var(--st-wait)]"
+      }`}
+    >
+      <WarningCircleIcon
+        size={16}
+        aria-hidden="true"
+        className="mt-2 shrink-0"
+      />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+/**
+ * "Show calculation" for surfaces that are not a `CompositionCard` — a history
+ * entry or a bare form section. Same label, caret and quiet weight as the card,
+ * so the control means one thing everywhere.
+ */
+export function CalculationDisclosure({
+  subject,
+  children,
+}: {
+  /** Names what is being calculated, for the control's accessible label. */
+  subject: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const CaretIcon = open ? CaretUpIcon : CaretDownIcon;
+  return (
+    <div className="space-y-8">
+      <Button
+        data-presentation-control
+        type="button"
+        variant="noOutline"
+        className="min-h-44 gap-6 px-8 normal-case"
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label={`${open ? "Hide" : "Show"} calculation for ${subject}`}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="body-caption normal-case">
+          {open ? "Hide calculation" : "Show calculation"}
+        </span>
+        <CaretIcon size={14} className="shrink-0" aria-hidden="true" />
+      </Button>
+      <div
+        id={id}
+        hidden={!open}
+        className="space-y-8 border-t border-[var(--color-border-secondary)] pt-8"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}

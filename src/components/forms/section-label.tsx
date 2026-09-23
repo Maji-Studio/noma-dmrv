@@ -1,6 +1,11 @@
 /**
  * SectionLabel — reusable form section header
  *
+ * A sentence case title in the field label style, in primary ink. It sits
+ * under the sheet title (`title-heading-4`) and beside the spine's numbered
+ * marker, which already carry the hierarchy, so the title needs no eyebrow
+ * treatment and no size of its own.
+ *
  * Pass `hint` to attach an info ⓘ icon that reveals explanatory text on
  * hover/focus, instead of letting that prose occupy layout space.
  */
@@ -28,7 +33,7 @@ export function SectionLabel({
   icon?: React.ReactNode;
 }) {
   return (
-    <h3 className="flex items-center gap-6 body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+    <h3 className="flex min-h-24 items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
       {icon != null && (
         <span className="inline-flex shrink-0 text-[var(--color-text-secondary)]">
           {icon}

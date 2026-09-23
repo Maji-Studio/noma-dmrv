@@ -3,7 +3,7 @@ import { conflictCode } from '@/lib/conflict-ref';
 import { ActionConflictError } from '@/lib/errors';
 import { rational } from '@/lib/output-stock';
 
-const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), view: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
 vi.mock('@/db', () => {
   const tx = { select: () => {
     const query = { from: () => query, where: () => query, orderBy: () => query, then: (resolve: (value: unknown) => unknown) => Promise.resolve(mocks.reads.shift()).then(resolve) };
@@ -11,7 +11,7 @@ vi.mock('@/db', () => {
   } };
   return { db: { ...tx, transaction: (run: (reader: unknown) => unknown) => run(tx) } };
 });
-vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state }));
+vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStockView: mocks.view }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
@@ -50,14 +50,17 @@ it('passes the blocking movement through when a correction is refused', async ()
   expect(result.blockers).toEqual([movement]);
 });
 
-it('matches product-bin stock using facility-local today across UTC midnight', async () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
-  try {
-    mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }], [{ timezone: 'Africa/Dar_es_Salaam' }]];
-    mocks.state.mockResolvedValue({ remainingDryKg: '100.000' });
-    const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
-    expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toMatchObject([{ id: 'bin', dryMassKg: 100 }]);
-    expect(mocks.state).toHaveBeenLastCalledWith(ctx, { facilityId: 'facility', formulationId: 'recipe', storageLocationId: 'bin', physicalDate: '2026-09-16' });
-  } finally { vi.useRealTimers(); }
+it('reads each matching bin from its stock view and keeps an unresolved bin in the list', async () => {
+  mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }, { id: 'broken', code: 'BIN-2', name: 'Unresolved bin' }]];
+  mocks.state.mockClear();
+  mocks.view.mockImplementation(async (_ctx: unknown, id: string) => id === 'bin'
+    ? { dryMassKg: 100, recordedWetMassKg: 130, estimatedWetMassKg: 118 }
+    : { dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null });
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toEqual([
+    { id: 'bin', code: 'BIN', name: 'E2E bin', dryMassKg: 100, recordedWetMassKg: null, estimatedWetMassKg: 118 },
+    { id: 'broken', code: 'BIN-2', name: 'Unresolved bin', dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null },
+  ]);
+  // The stock view owns the facility-local date; the list no longer computes layers itself.
+  expect(mocks.state).not.toHaveBeenCalled();
 });

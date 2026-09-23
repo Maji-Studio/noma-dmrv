@@ -176,7 +176,9 @@ test.describe("Deferred create attachments", () => {
     await expect(parentDialog.getByText("lab-report-deferred.pdf")).toBeVisible();
 
     // Deferred transport leg via the nested dialog (no sample exists yet).
-    await parentDialog.getByRole("button", { name: "Add leg" }).click();
+    await parentDialog
+      .getByRole("button", { name: "Add transport leg" })
+      .click();
     const transportDialog = page.getByRole("dialog", {
       name: "Add transport leg",
     });
@@ -188,7 +190,9 @@ test.describe("Deferred create attachments", () => {
       .click();
     await expect(transportDialog).toBeHidden();
     await expect(parentDialog).toBeVisible();
-    await expect(parentDialog.getByText("12 km")).toBeVisible();
+    // The journey timeline prints the leg distance and the journey total, so
+    // the figure appears twice; the first is the leg's own box.
+    await expect(parentDialog.getByText("12 km").first()).toBeVisible();
 
     await parentDialog.getByRole("button", { name: "Create Sample" }).click();
     await waitForSideSheetClose(page);
@@ -201,7 +205,7 @@ test.describe("Deferred create attachments", () => {
     await expect(sampleDialog.getByText("lab-report-deferred.pdf")).toBeVisible({
       timeout: 15000,
     });
-    await expect(sampleDialog.getByText("12 km")).toBeVisible();
+    await expect(sampleDialog.getByText("12 km").first()).toBeVisible();
     await expect(
       sampleDialog.getByLabel("Delete lab-report-deferred.pdf"),
     ).toHaveCount(0);

@@ -2,7 +2,7 @@
 
 Conventions, invariants and traps for form handling in noma-dmrv — React Hook Form + Zod 4 schemas in `src/schemas/`, components from `@/components/forms`. Read this before writing or editing any form or form schema. It carries only what the code does not state plainly: which of two coercion layers to use, which shared schema helper already exists, and the round-trip bugs that hand-rolled validation reintroduces.
 
-Related: [design-system.md](./design-system.md) owns the visual contract (Canonical Page Shell, `FormSection` treatment, tokens) · [architecture.md](./architecture.md) owns React Query + `ActionResult` + server-action layering · [code-style.md](./code-style.md) owns naming and React Compiler rules · [storage.md](./storage.md) owns uploads.
+Related: [design-system.md](./design-system.md) owns the visual contract (tokens, the [form type set, lines and spacing](./design-system.md#form-type-lines-and-spacing), the moisture and composition pictures) · [architecture.md](./architecture.md) owns React Query + `ActionResult` + server-action layering · [code-style.md](./code-style.md) owns naming and React Compiler rules · [storage.md](./storage.md) owns uploads.
 
 Canonical form to copy from: `src/components/feedstocks/feedstock-form.tsx`.
 
@@ -191,7 +191,7 @@ startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-l
 
 All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — read it for the full surface; TypeScript carries the prop signatures. Only the non-obvious contracts are documented here.
 
-- **`FormField`** — `hint` (ⓘ icon) is for explanatory prose; `helperText` is for **short**, always-visible cues and auto-collapses into the hint treatment past `INLINE_HELPER_MAX_CHARS`. Long text in `helperText` is a mistake.
+- **`FormField`** — `hint` (ⓘ icon) is for explanatory prose; `helperText` is for **short**, always-visible cues and auto-collapses into the hint treatment past `INLINE_HELPER_MAX_CHARS`. Long text in `helperText` is a mistake. Keep existing short cues ("Typically 1 to 2% for biochar"); do not blank them to tidy a form. The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or hint.
 - **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. For server validation targeting a field, use RHF `setError('root.serverError', …)`.
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
 - **`MassMoistureFields`** — the canonical wet-mass + moisture pair for an unmixed material, with the live `MoistureSplit` bar spanning both. It owns the labels, wet-basis hint, range helper, and derived readout. A blended biochar product is the exception: pair standalone `WetMassField` and `MoistureField` controls with `ProductCompositionPreview`, because finished-product moisture does not split tracked dry biochar from ingredients and water. The standalone fields also cover lab samples with no paired mass and bin stock-takes whose counted mass is recorded separately. Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify canonical labels, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
@@ -211,7 +211,7 @@ Dynamic repeatable rows use RHF `useFieldArray` — reference: `src/components/f
 
 ### FormSection
 
-The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divider, mirrored by `DetailSection` on plain read-only panels) is owned by [design-system.md](./design-system.md). `EntitySideSheet` read mode renders its configured `DetailSection`s through the shared `DetailSpine`. Its numbered passive rail is enabled only when the paired edit form uses `FormSpine`. Never hand-roll a section wrapper or rail. Caveats that live here:
+A `SectionLabel` title over a `space-y-16` field stack, with a `pt-16` hairline divider above every section but the first (mirrored by `DetailSection` on plain read-only panels). The title style is in [design-system.md](./design-system.md#form-type-lines-and-spacing). `EntitySideSheet` read mode renders its configured `DetailSection`s through the shared `DetailSpine`. Its numbered passive rail is enabled only when the paired edit form uses `FormSpine`. Never hand-roll a section wrapper or rail. Caveats that live here:
 
 - `divider` (default `true`) — the first section of a plain form passes `divider={false}`. **`divider` is ignored entirely inside a `FormSpine`**, which owns its own rail chrome; that is why the spine example below omits it.
 - `hint` / `certifyRequired` forward to `SectionLabel`; `actions` adds right-aligned header chrome (an "Add" button, a badge).
@@ -221,8 +221,9 @@ The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divid
 - **`space-y-20`** — all side-sheet forms (top-level `<form>`), sectioned or not. `FormSection` owns intra-section rhythm; nothing else sets section spacing.
 - **`space-y-24`** — full-page and auth forms only.
 - Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
-- Controls in a field-grid row top-align independently; a wrapped label shifts
-  only its own control down. Do not "fix" this with per-field label heights,
+- Controls in a field-grid row top-align independently. `FormField`'s fixed
+  `min-h-24` label row keeps one-line labels level; a wrapped label still shifts
+  only its own control down. Do not "fix" that with per-field label heights,
   spacer elements, or a shared subgrid — a `.grid > .form-field` subgrid was
   tried and reverted (it staggered grids containing any non-`FormField` child
   and opened voids under neighbors of fields with always-visible helper text).
@@ -257,13 +258,13 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 <form className="space-y-20" onSubmit={handleSubmit(onSubmit)}>
   <FormSpine control={control}>
     <FormSection
-      title="Run Setup"
+      title="Run setup"
       icon={<Factory size={14} weight="bold" />}
       fields={["date", "reactorId", "status"]}
     >
       …fields…
     </FormSection>
-    <FormSection title="Transfer Preview" icon={<ArrowsLeftRight size={14} weight="bold" />}>
+    <FormSection title="Transfer preview" icon={<ArrowsLeftRight size={14} weight="bold" />}>
       …read-only recap…
     </FormSection>
   </FormSpine>
@@ -358,3 +359,125 @@ storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
 ```
 
 The underlying `useClearOnDependencyChange` (`@/hooks/use-clear-on-dependency-change`) is standalone — use it directly in custom form components that are not `FormEntitySelect`.
+
+## Simple and Detailed presentation
+
+Use `FormDetailToggle` for the shared compact radio control. Opt entity sheets
+in with `EntitySideSheet`'s `detailToggle` and pass the record ID as
+`detailScope`: `true` shows the control in every mode, `"view"` in saved read
+mode only, `"form"` in create and edit only. A sheet that does not opt in has no
+provider, and everything under it renders at Detailed. The switch lives in
+`SlideOverPanel.Header`'s `actions` slot beside the title, not in an extra row
+above the form. Other sheet owners can use `FormDetailProvider` and
+`FormDetailControl` with a scope containing open state, mode and record ID.
+
+The provider resets to Simple when that scope changes without remounting input
+fields. Presentation state is separate from RHF and payloads. The shared sheet
+excludes `data-presentation-control` events from its unsaved-change heuristic.
+A real input change must still trigger the discard guard.
+
+Simple shows inputs, or the saved field values in read mode, plus what each
+derived block declares as its Simple presence (below). Validation errors,
+shortage blockers, required controls, evidence and save actions stay visible at
+both levels. Detailed adds the rest of every block, optional read fields and
+optional read sections.
+
+### Derived blocks
+
+A derived block is a `CompositionCard` (`@/components/forms`) that sits flat
+under the inputs that drive it, with no tint and no frame: a sentence case
+caption with its one-sentence definition behind an ⓘ `hint`, an optional
+`headline`, the picture as `children`, `detail` rows that Detailed shows in
+place, and one action row holding Show calculation and the block's own
+`actions` (a stock history, a fix such as "Balance to 100%"). `calculation` is
+arithmetic the block does not already show; omit it and no control renders. Do
+not draw proportions from an incomplete or zero basis.
+
+`simple` declares the block's Simple boundary once:
+
+| `simple` | Simple keeps |
+|---|---|
+| `picture` (default) | caption, headline, picture and the block's `actions` |
+| `headline` | caption and headline |
+| `hidden` | nothing |
+
+`detail` rows, Show calculation and the calculation are Detailed only. Parts
+outside the boundary stay mounted behind `hidden`, so an open history dialog or
+a half-written correction survives a level switch. Blocks that are not a
+`CompositionCard` read the same rule through `useSimplePresence(simple)`
+(`MoistureSplit`, `MatchingOutputBins`, `OutputStockPreview`). Never branch a
+derived block on `useFormDetailLevel()` by hand.
+
+The boundaries in use, pinned row by row in
+`src/components/forms/form-detail-boundaries.test.tsx` (add a row with a new
+block):
+
+| Block | Simple |
+|---|---|
+| Moisture split | picture: bar and key; ledger and arithmetic are Detailed |
+| Product composition | picture |
+| Blend by volume (formulation) | hidden, except the picture while the total is over 100% |
+| Process flow (production run) | headline: the dry yield; the rail is Detailed |
+| Applied batches (application) | picture |
+| Derived ratios (sample) | headline |
+| Carbon estimate (credit batch, closing Production runs) | headline |
+| Delivery stock (delivery read) | picture and its stock history |
+| Original entry figures (stock correction) | hidden (`DetailedOnly`) |
+| Matching stock (order form and read) | hidden |
+| Stock movement preview | hidden, unless it has a blocker, refusal or count discrepancy, which show alone |
+
+`DerivedHeadline` is the block's one figure, at most one per block: a caption
+label, the figure with its unit and approximation in the value ("≈ 1,110 kg",
+so the label stays a plain name), an optional muted `before` value and arrow for
+a change, and an optional `sub` caption naming the entry behind it. `null` reads
+"Not available". Pass `figureLabel` so a before and after pair is announced as
+one phrase.
+
+Disclosure state is separate from form state and must never submit or dirty the
+form. Keep stateful history/correction controls mounted while hiding their
+presentation, so switching modes does not reset an active correction. Use
+`DetailedOnly` only for optional stateless context. Read fields may use
+`detailedOnly` for optional technical metadata; never apply it to required values,
+validation messages or evidence. Optional read sections can also use `detailedOnly`;
+filter them before numbering so Simple has no empty headings or gaps in the rail.
+Saved allocations remain saved facts; today's stock on a saved record (the
+order's Matching stock) gets its own Detailed-only section.
+
+### Stock blocks lead with wet mass
+
+Stock is kept in dry biochar, but operators weigh and load wet mass, so the
+stock family presents wet first. Only presentation changes.
+
+- **Movement blocks** (`OutputStockPreview variant="movement"`: correction,
+  loss, count, delivery load). Headline "Wet stock in bin, estimate" as
+  "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet removed at
+  22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture", "1,190 kg wet
+  loaded at 16% moisture"). The picture is the entered wet mass split into
+  solids and water, then any notice. The dry biochar before and after pair is a
+  Detailed row; the entered figures and the FIFO batch draw sit behind Show
+  calculation. Without a moisture there is no estimate, and the dry pair takes
+  the headline. Ingredient bins track wet stock directly, so their headline is
+  not labelled an estimate.
+- **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
+  right after the requested wet mass field). Headline "Available wet stock,
+  estimate" at each batch's recorded moisture, since an order has no departure
+  moisture yet; the batch bar and key as the picture; available dry stock as a
+  Detailed row.
+- A wet estimate is computed at a moisture, not weighed: its label always says
+  "estimate", and it reads in whole kilograms.
+
+### Stock change in bin selectors
+
+A bin selector whose choice moves stock shows the change in its selected value:
+`EntitySelect`'s `formatSelectedLabel` returns a `ReactNode`, and
+`StockChangeLabel` renders "Biochar bin (−100 kg wet)" in amber for a draw and
+"Product bin (+400 kg wet)" in green for an addition. It shows only for a fresh,
+unblocked projection with a finite, non-zero mass; pass `available={false}`
+while the preview refetches or has failed. The biochar product form's biochar,
+ingredient and product bin selectors are the reference; they replace separate
+per-bin stock blocks above the form.
+
+Do not add a switch to a short form or a surface already served by an effective
+accordion or history dialog. Verify narrow header layout, radio keyboard
+operation, scope resets, field preservation, and clean-versus-dirty closing
+when adopting this pattern.

@@ -706,6 +706,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        detailToggle
+        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
@@ -741,6 +743,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               },
               {
                 label: "Dry biochar applied (kg)",
+                detailedOnly: true,
                 ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
@@ -748,11 +751,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               },
             ],
           },
-          {
+          ...(sideSheetEntity.allocationShares.length > 0 ? [{
+            // The bar and key line are Simple content; the block itself
+            // holds back its ledger and source runs until Detailed.
             title: "Batch shares",
             fields: [],
             content: <ApplicationAllocationShares shares={sideSheetEntity.allocationShares} />,
-          },
+          }] : []),
           {
             title: "Field details",
             fields: [

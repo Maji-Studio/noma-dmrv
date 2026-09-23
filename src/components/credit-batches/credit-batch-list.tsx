@@ -677,6 +677,8 @@ export function CreditBatchList({
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        detailToggle="view"
+        detailScope={sideSheetEntity?.id ?? "create"}
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}

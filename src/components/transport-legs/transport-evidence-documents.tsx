@@ -233,7 +233,7 @@ export function TransportEvidencePanel({
     >
       <div className="flex items-center gap-6">
         {!embedded && (
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          <h3 className="body-small font-medium text-[var(--color-text-primary)]">
             {heading}
           </h3>
         )}

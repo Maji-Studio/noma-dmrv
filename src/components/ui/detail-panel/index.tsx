@@ -28,6 +28,8 @@
  */
 "use client";
 
+
+import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -89,7 +91,7 @@ function DetailValueSkeleton({ className }: { className?: string }) {
 DetailValueSkeleton.displayName = "DetailValueSkeleton";
 
 /* -------------------------------------------------------------------------------------------------
- * DetailSection - Flat section with mono label, mirrors FormSection so the
+ * DetailSection - Flat section with a section label, mirrors FormSection so the
  * view ↔ edit mode toggle reads as the same surface (hairline divider above
  * every section but the first).
  * -----------------------------------------------------------------------------------------------*/
@@ -284,6 +286,7 @@ DetailField.displayName = "DetailField";
  * -----------------------------------------------------------------------------------------------*/
 
 export interface DetailPanelField {
+  detailedOnly?: boolean;
   label: string;
   value: React.ReactNode;
   certifyRequired?: boolean;
@@ -297,6 +300,8 @@ export interface DetailPanelField {
 }
 
 export interface DetailPanelSection {
+  /** Optional derived section, excluded from Simple and its numbering. */
+  detailedOnly?: boolean;
   title: string;
   fields: DetailPanelField[];
   /** Optional extension content that belongs inside this mirrored section. */
@@ -311,20 +316,22 @@ interface DetailSpineProps {
 
 /** Shared section renderer for read-only entity details. */
 function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
+  const detailLevel = useFormDetailLevel();
+  const visibleSections = sections.filter(section => !section.detailedOnly || detailLevel === "detailed");
   return (
     <div className={cn("flex flex-col", !numbered && "gap-20")}>
-      {sections.map((section, sectionIdx) => (
+      {visibleSections.map((section, sectionIdx) => (
         <DetailSection
           key={section.title}
           title={section.title}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered
-              ? createSpineMeta(sectionIdx, sections.length)
+              ? createSpineMeta(sectionIdx, visibleSections.length)
               : undefined
           }
         >
-          {chunkFields(section.fields).map((row, rowIdx) => (
+          {chunkFields(section.fields.filter(field => !field.detailedOnly || detailLevel === "detailed")).map((row, rowIdx) => (
             <DetailRow key={rowIdx}>
               {row.map((field, fieldIdx) => (
                 <DetailField

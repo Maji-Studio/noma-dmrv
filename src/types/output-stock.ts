@@ -35,6 +35,12 @@ export interface OutputStockPreview {
   estimateMoisturePercent: number | null;
   beforeEstimatedWetKg: number | null;
   afterEstimatedWetKg: number | null;
+  /**
+   * Counts only: wet stock at each batch's recorded moisture, the figure bin
+   * tiles show. The estimates above use the entered moisture, so a count with
+   * no dry change always matches them; this is what reveals drying.
+   */
+  beforeRecordedWetKg?: number | null;
   discrepancySolidsKg: number;
   allocations: OutputStockAllocationView[];
   beforeAllocations?: OutputStockAllocationView[];
@@ -72,8 +78,11 @@ export interface MatchingOutputBin {
   id: string;
   code: string;
   name: string;
-  dryMassKg: number;
+  /** Null when the bin's layers do not resolve. */
+  dryMassKg: number | null;
   recordedWetMassKg: number | null;
+  /** Wet stock at each batch's recorded moisture; null when the bin's layers do not resolve. */
+  estimatedWetMassKg: number | null;
 }
 
 /** Ingredient wet stock remains usable when its dry estimate is unavailable. */

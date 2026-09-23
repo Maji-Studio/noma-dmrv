@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "./copy-utils";
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import {
   formatCo2e,
   formatDayString,
@@ -109,5 +110,13 @@ describe("formatCo2e", () => {
 describe("formatPercent", () => {
   it("preserves requested lab precision", () => {
     expect(formatPercent(1.96, { digits: 2 })).toBe("1.96%");
+  });
+});
+
+describe("formatMassKg explicit storage precision", () => {
+  it("retains gram precision without changing the default display", () => {
+    expect(formatMassKg(125.125, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("125.125 kg");
+    expect(formatMassKg(125.125)).toBe("125.1 kg");
+    expect(formatMassKg(0.001, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("0.001 kg");
   });
 });
