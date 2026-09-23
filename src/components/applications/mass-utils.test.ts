@@ -66,7 +66,7 @@ describe("application delivery option mass", () => {
     });
 
     expect(formatApplicationDeliveryHelperText(option)).toBe(
-      "Remaining wet mass: 800kg | dry mass: 775kg",
+      "Remaining now: 800 kg wet, 775 kg dry biochar",
     );
   });
 });

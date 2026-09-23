@@ -84,7 +84,7 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
     // Correction history is saved audit data; only the replacement form follows the switch.
     const simpleScope = name === "output-stock-correction" ? sheet.locator("form").last() : sheet;
     await expect(simpleScope.getByText(/^(Wet feedstock|Dry feedstock)(:|$)/).filter({ visible: true })).toHaveCount(0);
-    await expect(simpleScope.getByText(/^(Recorded wet stock|Recorded wet mass.*dry|Wet:.*Dry:|Total wet input|Remaining wet mass)/).filter({ visible: true })).toHaveCount(0);
+    await expect(simpleScope.getByText(/^(Recorded wet stock|Recorded wet mass.*dry|Wet:.*Dry:|Total wet input|Remaining now)/).filter({ visible: true })).toHaveCount(0);
     await expect(simpleScope.getByRole("button", { name: "More info", exact: true })).toHaveCount(0);
     await expect(simpleScope.getByRole("button", { name: /^Show calculation for/ })).toHaveCount(0);
     await scrollTop(sheet);

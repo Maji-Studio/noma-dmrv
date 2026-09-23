@@ -2,27 +2,27 @@ import { describe, expect, it } from "vitest";
 import { formatRemainingMass } from "./remaining-mass";
 
 describe("formatRemainingMass", () => {
-  it("formats wet-only feedstock stock with grouped whole compact kg", () => {
+  it("formats wet-only feedstock stock with grouped whole kg", () => {
     expect(formatRemainingMass({ wetKg: 3_500.4 })).toBe(
-      "Remaining wet mass: 3,500kg",
+      "Remaining now: 3,500 kg wet",
     );
   });
 
-  it("formats wet and dry biochar product stock with the required separator", () => {
+  it("formats wet and dry biochar product stock in one sentence", () => {
     expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_900 })).toBe(
-      "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
+      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
     );
   });
 
   it("can show only wet mass when dry mass is not useful for the task", () => {
     expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_900 }, false)).toBe(
-      "Remaining wet mass: 3,000kg",
+      "Remaining now: 3,000 kg wet",
     );
   });
 
-  it("uses explicit unknown copy for unresolved dry mass", () => {
-    expect(formatRemainingMass({ wetKg: 3_000, dryKg: null })).toBe(
-      "Remaining wet mass: 3,000kg | dry mass: Not recorded",
+  it("uses explicit unknown copy for unresolved masses", () => {
+    expect(formatRemainingMass({ wetKg: null, dryKg: null })).toBe(
+      "Remaining now: wet not recorded, dry biochar not recorded",
     );
   });
 
@@ -33,8 +33,6 @@ describe("formatRemainingMass", () => {
         dryKg: 2_900,
         labelVariant: "excluding-this-order",
       }),
-    ).toBe(
-      "Remaining wet mass excluding this order: 3,000kg | dry mass: 2,900kg",
-    );
+    ).toBe("Remaining, excluding this order: 3,000 kg wet, 2,900 kg dry biochar");
   });
 });

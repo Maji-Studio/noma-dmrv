@@ -248,6 +248,7 @@ export function EntitySelect({
   const entitySelectId = useId();
   const listboxId = `${entitySelectId}-listbox`;
   const remainingMassId = `${entitySelectId}-remaining-mass`;
+  const selectedLabelId = `${entitySelectId}-selected`;
 
   // Debounce search for better performance
   const debouncedSearch = useDebounce(searchQuery, 200);
@@ -304,8 +305,12 @@ export function EntitySelect({
     detailDataUpdatedAt,
     value,
   });
+  // The trigger's aria-label names the field, which hides its content from
+  // the accessible name. The selected label can carry the stock change
+  // ("(−100 kg wet)"), so it is announced as the first description instead.
   const triggerDescribedBy = [
     ariaDescribedBy,
+    displayText ? selectedLabelId : undefined,
     remainingMass && showRemainingMass ? remainingMassId : undefined,
   ]
     .filter(Boolean)
@@ -541,6 +546,7 @@ export function EntitySelect({
           )}
         >
           <span
+            id={selectedLabelId}
             className={cn(
               "min-w-0 flex-1 truncate text-left",
               (value && !isSelectionLoading) || (!value && noneOption)
