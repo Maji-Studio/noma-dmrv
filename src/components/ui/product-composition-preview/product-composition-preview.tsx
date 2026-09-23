@@ -1,29 +1,30 @@
 /**
  * ProductCompositionPreview — what a wet biochar product is made of: the dry
- * biochar carbon accounting is paid on, the blend ingredients as received, the
- * water already in the biochar, and any water added afterwards.
+ * biochar carbon accounting is paid on, the blend ingredients, the water, and
+ * any water added afterwards.
  *
  * It is the product-level counterpart of `MoistureSplit` and follows the same
  * rules. The bar sits flat under the inputs that produce it, inside the same
  * form section, with one key line of swatches beneath it. No card, no tint, no
- * frame: the hierarchy comes from the bar, the key line and the total, never
- * from a background.
+ * frame: the hierarchy comes from the bar and its key, never from a background.
+ * Simple keeps the bar and its key, because those are what the fields mean;
+ * Detailed adds the composition ledger and the arithmetic behind `Show
+ * calculation`.
  *
- * Two surfaces, one component:
- * - `variant="detail"` (default) — the block a form shows under its mass and
- *   ingredient fields. Simple keeps the bar and its key, because those are what
- *   the fields mean; Detailed adds the composition ledger and the arithmetic
- *   behind `Show calculation`.
- * - `variant="compact"` — the total, a bar and one key line, for a nested
- *   readout such as the destination bin in the transfer preview.
- *
- * Pass `ingredients` where the surface knows the individual blend masses and
- * each part becomes its own segment and ledger row. Where it only knows the
- * tracked dry biochar (an application reads it off its delivery), the rest of
- * the wet mass stays one honest "Ingredients + water" part.
+ * Three levels of knowledge, one component, most specific first:
+ * - `components`: the surface already split every part into solids and water
+ *   (`productCompositionComponents` in `@/components/biochar-products`), so an
+ *   ingredient's own water joins the water part instead of counting as solids.
+ *   Missing parts read "Not available" and the bar stays unresolved. The form
+ *   passes live parts; a read view passes the saved snapshot.
+ * - `ingredients`: blend masses as received, one segment each, with the rest
+ *   of the wet mass filed as water in biochar.
+ * - neither: the surface only knows the tracked dry biochar (an application
+ *   reads it off its delivery), so the rest stays one "Ingredients + water".
  */
 "use client";
 
+import type { ReactNode } from "react";
 import { CompositionCard } from "@/components/forms/composition-card";
 import {
   CompositionLedger,
@@ -53,10 +54,24 @@ export interface ProductCompositionIngredient {
   massKg: number | null | undefined;
 }
 
+/** What a part of the product is, which decides its fill and its place in the bar. */
+export type ProductCompositionPartKind = "biochar" | "ingredient" | "water" | "addedWater";
+
+/**
+ * One part of the product, already split. `massKg` is null when the part
+ * cannot be derived, and the key then reads "Not available" for it.
+ */
+export interface ProductCompositionPart {
+  label: string;
+  massKg: number | null;
+  kind: ProductCompositionPartKind;
+}
+
 interface ProductCompositionPreviewProps {
-  variant?: "detail" | "compact";
   wetMassKg: number | null | undefined;
-  dryBiocharKg: number | null | undefined;
+  dryBiocharKg?: number | null | undefined;
+  /** Every part, already split into solids and water. Wins over `ingredients`. */
+  components?: readonly ProductCompositionPart[];
   /** Blend masses as received, one segment and one ledger row each. */
   ingredients?: readonly ProductCompositionIngredient[];
   /** Water added after the biochar was weighed. */
@@ -69,12 +84,46 @@ interface ProductCompositionPreviewProps {
   remainderLabel?: string;
   /** One sentence defining the block, in place of the default hint. */
   note?: string;
+  /** Other controls for the block's action row, such as a stock history. */
+  actions?: ReactNode;
   className?: string;
   testId?: string;
 }
 
 function resolvedMass(mass: number | null | undefined): number | null {
   return typeof mass === "number" && Number.isFinite(mass) && mass >= 0 ? mass : null;
+}
+
+const PART_CATEGORIES: Record<ProductCompositionPartKind, MassSegment["category"]> = {
+  biochar: "dry-biochar",
+  ingredient: "ingredient-solids",
+  water: "existing-water",
+  addedWater: "added-water",
+};
+
+/**
+ * Split parts as segments. Ingredient solids take the entity accents so two
+ * materials never draw as one block; zero added water drops out, as it does
+ * everywhere else, because it is the default and not a part of the product.
+ */
+function partSegments(parts: readonly ProductCompositionPart[]): MassSegment[] {
+  let ingredientIndex = 0;
+  return parts
+    .filter((part) => !(part.kind === "addedWater" && part.massKg === 0))
+    .map((part) => ({
+      label: part.label,
+      mass: resolvedMass(part.massKg),
+      category: PART_CATEGORIES[part.kind],
+      ...(part.kind === "ingredient" ? { fill: batchAccentFill(ingredientIndex++) } : {}),
+    }));
+}
+
+/** Every part known, and together they make the wet total. */
+function partsResolve(segments: readonly MassSegment[], wetKg: number | null): boolean {
+  if (wetKg === null || wetKg <= 0 || segments.length === 0) return false;
+  if (segments.some((segment) => segment.mass === null)) return false;
+  const sum = segments.reduce((total, segment) => total + (segment.mass ?? 0), 0);
+  return Math.abs(sum - wetKg) <= MASS_EPSILON_KG * Math.max(1, wetKg);
 }
 
 /**
@@ -157,9 +206,9 @@ function UnresolvedBar() {
 }
 
 export function ProductCompositionPreview({
-  variant = "detail",
   wetMassKg,
   dryBiocharKg,
+  components,
   ingredients,
   addedWaterKg,
   moisturePercent,
@@ -167,29 +216,34 @@ export function ProductCompositionPreview({
   dryLabel = "Dry biochar",
   remainderLabel = DEFAULT_REMAINDER_LABEL,
   note,
+  actions,
   className = "",
   testId = "product-composition-preview",
 }: ProductCompositionPreviewProps) {
-  const segments = resolveSegments({
-    wetMassKg,
-    dryBiocharKg,
-    ingredients,
-    addedWaterKg,
-    dryLabel,
-    remainderLabel,
-  });
+  const split = components ? partSegments(components) : null;
+  const segments = split
+    ? (partsResolve(split, resolvedMass(wetMassKg)) ? split : null)
+    : resolveSegments({ wetMassKg, dryBiocharKg, ingredients, addedWaterKg, dryLabel, remainderLabel });
+  // A split with some parts known still names each part, so a missing one
+  // reads "Not available" instead of vanishing from the product.
+  const partlyKnown = split !== null && split.some((segment) => segment.mass !== null);
 
   const visual = segments ? (
     <div className="flex flex-col gap-8">
       <SegmentBar segments={segments} label={`${wetLabel} composition`} />
       <SegmentKey segments={segments} className="tabular-nums" />
     </div>
+  ) : partlyKnown ? (
+    <div className="flex flex-col gap-8">
+      <UnresolvedBar />
+      <SegmentKey segments={split} className="tabular-nums" />
+    </div>
   ) : (
     // Dry biochar drives certification, so a known dry mass stays visible while
     // the rest of the product is still missing.
     <div className="flex flex-col gap-6">
       <UnresolvedBar />
-      {resolvedMass(dryBiocharKg) !== null && (
+      {!split && resolvedMass(dryBiocharKg) !== null && (
         <p className="body-caption tabular-nums text-[var(--color-text-secondary)]">
           {dryLabel} {formatCompositionMass(resolvedMass(dryBiocharKg))}
         </p>
@@ -198,41 +252,28 @@ export function ProductCompositionPreview({
     </div>
   );
 
-  if (variant === "compact") {
-    return (
-      <div data-testid={testId} className={`flex flex-col gap-8 ${className}`.trim()} aria-live="polite">
-        <p className="body-small text-[var(--color-text-secondary)]">
-          {wetLabel}: <span className="font-mono">{formatCompositionMass(resolvedMass(wetMassKg))}</span>
-        </p>
-        {visual}
-        {moisturePercent !== undefined && (
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            Measured moisture: {formatMoisturePercent(moisturePercent)}
-          </p>
-        )}
-      </div>
-    );
-  }
+  const ledgerSegments = segments ?? (partlyKnown ? split : null);
 
-  // The bar and its key are what the fields above mean, so Simple keeps the
-  // picture. The ledger and the addition behind the total are the calculation.
   return (
     <div data-testid={testId} className={className} aria-live="polite">
       <CompositionCard
         title={BLOCK_TITLE}
         hint={note ?? COMPOSITION_HINT}
         simple="picture"
-        calculation={segments ? (
+        actions={actions}
+        calculation={ledgerSegments ? (
           <div className="flex flex-col gap-8">
             <CompositionLedger
               label={BLOCK_TITLE}
               totalLabel={wetLabel}
               total={resolvedMass(wetMassKg)}
-              segments={segments}
+              segments={ledgerSegments}
             />
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              {formatCompositionArithmetic(wetLabel, wetMassKg, segments)}
-            </p>
+            {segments && (
+              <p className="body-caption text-[var(--color-text-tertiary)]">
+                {formatCompositionArithmetic(wetLabel, wetMassKg, segments)}
+              </p>
+            )}
             {moisturePercent !== undefined && (
               <p className="body-caption text-[var(--color-text-tertiary)]">
                 Measured moisture: {formatMoisturePercent(moisturePercent)}

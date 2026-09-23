@@ -80,19 +80,87 @@ describe("ProductCompositionPreview", () => {
     expect(html).not.toContain('role="img"');
   });
 
-  it("keeps the compact readout to the total, the bar and one key line", () => {
+  it("splits each ingredient into solids and pools every water", () => {
     const html = renderToStaticMarkup(
       <ProductCompositionPreview
-        variant="compact"
         wetMassKg={1_100}
-        dryBiocharKg={450}
-        wetLabel="Final wet biochar product"
+        components={[
+          { label: "Dry biochar", massKg: 600, kind: "biochar" },
+          { label: "Compost solids", massKg: 190, kind: "ingredient" },
+          { label: "Water", massKg: 150, kind: "water" },
+          { label: "Water added", massKg: 160, kind: "addedWater" },
+        ]}
       />,
     );
 
-    expect(text(html)).toContain("Final wet biochar product: 1,100 kg");
-    expect(text(html)).toContain("Dry biochar 450 kg");
-    expect(text(html)).not.toContain("Show calculation");
-    expect(text(html)).not.toContain("% of total");
+    expect(text(html)).toContain("Dry biochar 600 kg");
+    expect(text(html)).toContain("Compost solids 190 kg");
+    expect(text(html)).toContain("Water 150 kg");
+    expect(text(html)).toContain("Water added 160 kg");
+    expect(html).toContain('data-segment="ingredient-solids"');
+    expect(text(html)).toContain(
+      "Wet biochar product is the sum of its parts: 600 kg + 190 kg + 150 kg + 160 kg = 1,100 kg.",
+    );
+  });
+
+  it("names a missing part as not available and draws no proportions", () => {
+    const html = renderToStaticMarkup(
+      <ProductCompositionPreview
+        wetMassKg={1_100}
+        components={[
+          { label: "Dry biochar", massKg: 600, kind: "biochar" },
+          { label: "Compost solids", massKg: null, kind: "ingredient" },
+          { label: "Water", massKg: null, kind: "water" },
+          { label: "Water added", massKg: 160, kind: "addedWater" },
+        ]}
+      />,
+    );
+
+    expect(text(html)).toContain("Dry biochar 600 kg");
+    expect(text(html)).toContain("Compost solids Not available");
+    expect(html).not.toContain('role="img"');
+    expect(text(html)).not.toContain("sum of its parts");
+  });
+
+  it("leaves zero added water out of the parts", () => {
+    const html = renderToStaticMarkup(
+      <ProductCompositionPreview
+        wetMassKg={100}
+        components={[
+          { label: "Dry biochar", massKg: 90, kind: "biochar" },
+          { label: "Water", massKg: 10, kind: "water" },
+          { label: "Water added", massKg: 0, kind: "addedWater" },
+        ]}
+      />,
+    );
+
+    expect(text(html)).toContain("Dry biochar 90 kg");
+    expect(text(html)).not.toContain("Water added");
+  });
+
+  it("asks for the masses while no part is known", () => {
+    const html = renderToStaticMarkup(
+      <ProductCompositionPreview
+        wetMassKg={null}
+        components={[
+          { label: "Dry biochar", massKg: null, kind: "biochar" },
+          { label: "Water", massKg: null, kind: "water" },
+        ]}
+      />,
+    );
+
+    expect(text(html)).toContain("Record the masses above to see the product composition.");
+  });
+
+  it("puts the block's own actions in its action row", () => {
+    const html = renderToStaticMarkup(
+      <ProductCompositionPreview
+        wetMassKg={100}
+        dryBiocharKg={60}
+        actions={<button type="button">Stock history</button>}
+      />,
+    );
+
+    expect(text(html)).toContain("Stock history");
   });
 });
