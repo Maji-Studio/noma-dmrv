@@ -7,7 +7,7 @@ import { outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
-import { getBiocharOutputStockLayers, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
+import { estimateWetAtRecordedMoisture, getBiocharOutputStockLayers, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
 import { prepareOutputCorrection } from './output-stock-corrections';
 import { requireOrgScope } from './utils';
@@ -71,6 +71,9 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   }));
   const [formulation] = bin.formulationId ? await reader.select({ name: formulations.name }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, bin.formulationId))) : [];
   const afterLayers = layers.map(l => plan?.remainingLayers.find(a => a.id === l.id) ?? l);
+  // A count is judged against what the records say the bin holds, not against
+  // its own moisture: only there does drying show as a lower wet figure.
+  const recordedWet = input.kind === 'count' ? await estimateWetAtRecordedMoisture(ctx, bin, layers, input.physicalDate, reader) : null;
   const preview: OutputStockPreview = {
     basisFingerprint, storageLocationId: bin.id, binName: bin.name, binCode: bin.code, formulationName: formulation?.name ?? null, lane, beforeDryKg,
     beforeAllocations: layerViews(layers), afterAllocations: layerViews(afterLayers),
@@ -78,6 +81,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     removedDryKg: Number(plan?.drawnDryKg ?? 0), removedWetKg: input.kind === 'count' ? null : input.wetMassKg,
     estimateMoisturePercent: moisture, beforeEstimatedWetKg: fraction ? beforeSolidsKg / fraction : null,
     afterEstimatedWetKg: fraction ? afterSolidsKg / fraction : null,
+    beforeRecordedWetKg: recordedWet?.estimatedWetMassKg ?? null,
     discrepancySolidsKg: plan ? rationalNumber(plan.discrepancySolidsKg) : 0,
     allocations: plan?.allocations.map(a => ({ layerId: a.layerId, code: codeMap.get(a.layerId) ?? a.layerId,
       dryMassKg: Number(a.dryKg), wetMassKg: a.wetShareKg ? rationalNumber(a.wetShareKg) : null,

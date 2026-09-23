@@ -146,15 +146,27 @@ export async function getOutputBinStockView(ctx: OrgContext, storageLocationId: 
     if (!(error instanceof UnresolvedOutputStockError)) throw error;
     return { dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null };
   }
+  const wet = await estimateWetAtRecordedMoisture(ctx, bin, state.layers, input.physicalDate, reader);
+  return { dryMassKg: Number(state.remainingDryKg), ...wet };
+}
+
+/**
+ * A bin's wet stock at each batch's recorded moisture: every layer's recorded
+ * wet mass, scaled by the share of its solids it still holds. This is the
+ * figure bin tiles and selectors show, and what a count is compared with.
+ */
+export async function estimateWetAtRecordedMoisture(ctx: OrgContext, bin: { id: string; type: string }, layers: OutputStockLayer[], physicalDate: string, reader: Reader = db) {
+  requireOrgScope(ctx);
   const wetRows = bin.type === 'product_bin'
-    ? await reader.select({ id: biocharProducts.id, wet: sql<number>`coalesce(${biocharProducts.massKg}, 0) + coalesce(${biocharProducts.waterAddedKg}, 0)`.mapWith(Number) }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, storageLocationId)))
-    : await reader.select({ id: productionRuns.id, wet: productionRuns.biocharOutputKg }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, storageLocationId)));
-  const eligible = state.layers.filter(l => l.physicalDate <= input.physicalDate);
+    ? await reader.select({ id: biocharProducts.id, wet: sql<number>`coalesce(${biocharProducts.massKg}, 0) + coalesce(${biocharProducts.waterAddedKg}, 0)`.mapWith(Number) }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
+    : await reader.select({ id: productionRuns.id, wet: productionRuns.biocharOutputKg }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, bin.id)));
+  const eligible = layers.filter(l => l.physicalDate <= physicalDate);
   const recordedWetMassKg = eligible.reduce((sum, l) => sum + Number(wetRows.find(r => r.id === l.id)?.wet ?? 0), 0);
   const estimatedWetMassKg = eligible.reduce((sum, l) => {
     const establishedSolids = Number(l.establishedDryBiocharKg) + Number(l.ingredientDrySolidsKg);
+    if (!(establishedSolids > 0)) return sum;
     const solids = l.remainingSolidsKg!;
     return sum + Number(wetRows.find(r => r.id === l.id)?.wet ?? 0) * (Number(solids.numerator) / Number(solids.denominator)) / establishedSolids;
   }, 0);
-  return { dryMassKg: Number(state.remainingDryKg), recordedWetMassKg, estimatedWetMassKg };
+  return { recordedWetMassKg, estimatedWetMassKg };
 }

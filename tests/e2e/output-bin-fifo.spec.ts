@@ -200,9 +200,9 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
     await fillStock(page, "600", "30", "E2E unchanged measured stock");
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
-    await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeVisible();
+    // 600 kg counted against about 583 kg recorded: nothing dried, so no drying notice.
+    await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeHidden();
     await expect(page.getByRole("group", { name: "Dry biochar in bin: 350 kg before, 350 kg after" })).toBeVisible();
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).last().click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
