@@ -94,11 +94,16 @@ function progressHint(summary: DurabilityBatchSummary): string {
   return `${usableClause}. ${incomplete.count} recorded Sample${incomplete.count === 1 ? " doesn't" : "s don't"} count yet. Enter ${incomplete.label} on ${incomplete.count === 1 ? "it" : "them"}${thenAdd} to reach the minimum of ${minimum}.`;
 }
 
+/**
+ * Flat under the Credit batch select it describes, like every derived block in
+ * a form: no frame or tint, so it reads as that field's consequence rather than
+ * a separate card.
+ */
 function Panel({ children }: { children: React.ReactNode }) {
   return (
     <div
       data-testid="sample-batch-progress"
-      className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16"
+      className="flex flex-col gap-8"
     >
       {children}
     </div>
@@ -153,7 +158,7 @@ export function SampleBatchProgress({
         </span>
         <Link
           href={creditBatchDeepLinkHref(summary.creditBatchId)}
-          className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+          className="inline-flex items-center gap-4 body-caption text-[var(--color-interaction)] underline-offset-2 hover:underline"
         >
           View batch
           <ArrowSquareOutIcon size={12} aria-hidden />

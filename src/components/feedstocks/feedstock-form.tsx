@@ -18,7 +18,7 @@ import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
@@ -708,9 +708,7 @@ export function FeedstockForm({
               )
             }
           >
-            {errors.allocations?.message && (
-              <p className="body-small text-[var(--color-status-error)]">{errors.allocations.message}</p>
-            )}
+            <FormError id="allocations-error" message={errors.allocations?.message} />
 
             <div className="space-y-12">
               {fields.map((field, index) => (

@@ -10,8 +10,10 @@
  *
  * It replaces a three-box recap that read as three unrelated cards: a run is a
  * sequence, so it is drawn as one, and it reuses the transport journey's shape
- * (nodes on a rail, the leg boxed between them) because an operator has already
- * learnt to read that on the delivery and sample sheets.
+ * (nodes on a rail, the leg between them) because an operator has already
+ * learnt to read that on the delivery and sample sheets. A transport leg keeps
+ * its box because it is a record with its own actions; a segment here is only
+ * derived figures, so it sits flat on the rail.
  *
  * Simple keeps the yield headline only: the fields above already hold the two
  * masses, and the yield is what they add up to. Detailed adds the rail and the
@@ -145,9 +147,12 @@ function FlowStop({ name, placeholder, children }: { name: string | null; placeh
 }
 
 /**
- * The boxed segment between two stops: what travelled it, how much of it, and
- * the split between the dry matter and the water. The mass stays pinned right
- * against the wrapping label, the way a transport leg pins its distance.
+ * The segment between two stops: what travelled it, how much of it, and the
+ * split between the dry matter and the water. It sits flat on the rail with no
+ * box of its own: the rail line already joins it to the stops either side, and
+ * a frame around derived figures would only decorate them. The mass stays
+ * pinned right against the wrapping label, the way a transport leg pins its
+ * distance.
  */
 function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel }: {
   label: string;
@@ -157,7 +162,7 @@ function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel 
   materialLabel: string;
 }) {
   return (
-    <div className="space-y-8 border border-[var(--color-border-tertiary)] p-8">
+    <div className="space-y-8">
       <div className="flex items-baseline justify-between gap-8">
         <p className="body-small text-[var(--color-text-secondary)]">{label}</p>
         {/* No mass yet means no figure: the split bar below already names the
