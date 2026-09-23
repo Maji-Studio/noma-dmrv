@@ -16,6 +16,10 @@ const VIEWPORTS = [{ width: 1440, height: 1100 }, { width: 390, height: 844 }];
 const CAPTURE_TIMEOUT = 600_000;
 const ACTION_TIMEOUT = 25_000;
 const DATE = "2026-09-14";
+/** Blocks whose calculation gets its own `additional-details` capture, by scene. */
+const EXTRA_DISCLOSURES: Record<string, string> = { "production-run-create": "process flow", "product-create": "product composition", "product-read": "product composition" };
+/** Long forms whose Simple level also gets a capture of a lower section, by scene. */
+const SIMPLE_LOWER_SECTIONS: Record<string, string> = { "product-create": "Product" };
 
 if (process.env.CAPTURE_FORM_DETAIL_GALLERY === "1" && process.env.NEXT_PUBLIC_APP_URL !== "http://localhost:3102") {
   throw new Error("Gallery capture requires the isolated local server on port 3102.");
@@ -71,7 +75,7 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
   await page.waitForTimeout(500); // Allow debounced preview requests to start before recording button state.
   await settled(page);
   const initialValues = await values();
-  const save = sheet.getByRole("button", { name: /^(Save changes|Save correction|Create Delivery|Create Application)$/ }).last();
+  const save = sheet.getByRole("button", { name: /^(Save changes|Save correction|Create (Delivery|Application|Product|Order|Formulation))$/ }).last();
   const initialDisabled = await save.count() ? await save.isDisabled() : null;
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
@@ -87,6 +91,11 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
     const heading = sheet.getByRole("heading", { name: sectionNames[0], exact: true }).first();
     if (await heading.isVisible()) await focusSection(heading);
     await capture(page, `${name}-${viewport.width}-simple`);
+    const lower = SIMPLE_LOWER_SECTIONS[name];
+    if (lower) {
+      await focusSection(sheet.getByRole("heading", { name: lower, exact: true }).first());
+      await capture(page, `${name}-${viewport.width}-simple-lower`);
+    }
     await sheet.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     await settled(page);
     const disclosures = sheet.getByRole("button", { name: /^(Show|Hide) calculation for/ });
@@ -121,10 +130,11 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
       await page.keyboard.press("Space");
       await expect(first).toHaveAttribute("aria-expanded", "false");
     }
-    if (name === "production-run-create" || name === "output-stock-correction") {
-      const extra = name === "production-run-create"
-        ? sheet.getByRole("button", { name: /^(Show|Hide) calculation for process flow$/ })
-        : disclosures.last();
+    const extraBlock = EXTRA_DISCLOSURES[name];
+    const extra = extraBlock ? sheet.getByRole("button", { name: new RegExp(`^(Show|Hide) calculation for ${extraBlock}$`) }) : name === "output-stock-correction" ? disclosures.last() : null;
+    // A second block worth opening, unless it is the one the details capture already opened.
+    const firstControls = await first.count() ? await first.getAttribute("aria-controls") : null;
+    if (extra && await extra.count() && await extra.getAttribute("aria-controls") !== firstControls) {
       await extra.click();
       await expect(extra).toHaveAttribute("aria-expanded", "true");
       await focusSection(extra.locator("xpath=ancestor::section[1]"));
@@ -133,6 +143,28 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
     }
     expect(await values()).toEqual(initialValues);
     if (initialDisabled !== null) expect(await save.isDisabled()).toBe(initialDisabled);
+    expect(await sheet.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize(VIEWPORTS[0]);
+}
+/** A form without a level toggle renders Detailed; capture it and its first calculation at both widths. */
+async function unmanaged(page: Page, name: string, sectionName: string, calculationFor: string) {
+  const sheet = page.getByRole("dialog").last();
+  await expect(sheet.getByRole("radio", { name: "Simple", exact: true })).toHaveCount(0);
+  const calculation = sheet.getByRole("button", { name: `Show calculation for ${calculationFor}`, exact: true });
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await settled(page);
+    await focusSection(sheet.getByRole("heading", { name: sectionName, exact: true }).first());
+    await capture(page, `${name}-${viewport.width}-detailed`);
+    if (await calculation.count()) {
+      await calculation.click();
+      await expect(sheet.getByRole("button", { name: `Hide calculation for ${calculationFor}`, exact: true })).toHaveAttribute("aria-expanded", "true");
+      await focusSection(sheet.getByRole("heading", { name: sectionName, exact: true }).first());
+      await capture(page, `${name}-${viewport.width}-details`);
+      await sheet.getByRole("button", { name: `Hide calculation for ${calculationFor}`, exact: true }).click();
+    }
     expect(await sheet.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
@@ -332,4 +364,79 @@ test("gallery credit batch applied mass context", async ({ adminPage: page, test
   await page.getByText(batch.code, { exact: true }).first().click();
   await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
   await pairs(page, "credit-batch-applied-read", ["Production runs", "Batch definition"]);
+});
+
+test("gallery biochar product create and read", async ({ adminPage: page, testUsers }) => {
+  const f = await seedOutputStockBrowserFixture(testUsers.admin.id);
+  const { db, pool } = createDbConnection();
+  try {
+    // The fixture's two products drain the source bin; one more run gives the new product something to draw.
+    await db.insert(schema.productionRuns).values({ organizationId: DEC_ORG_ID, facilityId: f.facility.id, reactorId: f.runs[0].reactorId, code: `E2E-GALLERY-PR-${f.tag}`, status: "complete", startTime: new Date("2026-09-13T08:00:00Z"), endTime: new Date("2026-09-13T12:00:00Z"), biocharStorageLocationId: f.source.id, biocharOutputKg: 1100, biocharMoisturePercent: 10, biocharDryMassKg: 990 });
+  } finally { await pool.end(); }
+  await navigate(page, "biochar-products", f.facility);
+  await page.getByRole("button", { name: "New Product", exact: true }).click();
+  await page.locator("#placedAt").fill(FIFO_BROWSER_DATE);
+  await selectEntity(page, "Biochar bin", f.source.id, f.source.name);
+  await page.locator('input[name="massKg"]').fill("300");
+  await page.locator('input[name="moistureContentPercent"]').fill("10");
+  await selectEntity(page, "Formulation", f.recipe.id, f.recipe.name);
+  const ingredientMass = page.locator('[id="ingredientBins.0.massKg"]');
+  await ingredientMass.fill("80");
+  await ingredientMass.blur();
+  await page.locator('[id="ingredientBins.0.moistureContentPercent"]').fill("40");
+  await page.locator("#waterAddedKg").fill("20");
+  await selectEntity(page, "Product bin", f.bin.id, f.bin.name);
+  await expect(page.getByRole("button", { name: "Create Product", exact: true })).toBeEnabled();
+  await pairs(page, "product-create", ["Source", "Formulation & ingredients", "Product"]);
+  // Read the product just saved through the form: the fixture's direct writes omit the ingredient names the read view needs.
+  await page.getByRole("button", { name: "Create Product", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const seeded = new Set(f.products.map(product => product.id));
+  const created = (await readOutputStockBrowserFixture(f)).products.find(product => !seeded.has(product.id));
+  expect(created).toBeDefined();
+  await openRow(page, created!.code);
+  await pairs(page, "product-read", ["Source", "Formulation & ingredients", "Product"]);
+});
+
+test("gallery order create and read", async ({ adminPage: page, testUsers }) => {
+  const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
+  await navigate(page, "orders", f.facility);
+  await page.getByRole("button", { name: "New Order", exact: true }).click();
+  await page.locator("#orderDate").fill(FIFO_BROWSER_DATE);
+  await selectEntity(page, "Customer", f.customer.id, f.customer.name);
+  await selectEntity(page, "Formulation", f.recipe.id, f.recipe.name);
+  await page.locator("#quantityKg").fill("1500");
+  await page.locator("#packaging").selectOption("loose");
+  await pairs(page, "order-create", ["Product details"]);
+  await navigate(page, "orders", f.facility);
+  await openRow(page, f.order.code);
+  await pairs(page, "order-read", ["Product details", "Fulfillment"]);
+});
+
+test("gallery formulation shares and sample derived ratios", async ({ adminPage: page, seededData: d }) => {
+  const { db, pool } = createDbConnection();
+  let blend: { id: string; name: string };
+  try {
+    const tag = crypto.randomUUID().slice(0, 6).toUpperCase();
+    [blend] = await db.insert(schema.feedstockTypes).values({ organizationId: DEC_ORG_ID, code: `E2E-GALLERY-BLEND-${tag}`, name: `E2E Gallery compost ${tag}`, category: "compost", usage: "blend" }).returning();
+  } finally { await pool.end(); }
+  await navigate(page, "formulations", d.facility);
+  await page.getByRole("button", { name: "New Formulation", exact: true }).click();
+  await page.locator("#name").fill("E2E Gallery compost blend");
+  await page.locator("#biocharPercent").fill("60");
+  await page.getByRole("button", { name: "Add ingredient", exact: true }).click();
+  await selectEntity(page, "Blend material", blend.id, blend.name);
+  await page.locator('[id="ingredients.0.sharePercent"]').fill("25");
+  await pairs(page, "formulation-create-under", ["Blend composition by volume"]);
+  await page.locator('[id="ingredients.0.sharePercent"]').fill("55");
+  await pairs(page, "formulation-create-over", ["Blend composition by volume"]);
+  await navigate(page, "samples", d.facility);
+  await page.getByRole("button", { name: "New Sample", exact: true }).click();
+  await page.locator("#totalCarbonPercent").fill("80");
+  await page.locator("#organicCarbonPercent").fill("78");
+  await page.locator("#inorganicCarbonPercent").fill("2");
+  await page.locator("#totalHydrogenPercent").fill("2.5");
+  await page.locator("#totalOxygenPercent").fill("8");
+  await expect(page.getByRole("region", { name: "Derived ratios", exact: true })).toBeVisible();
+  await unmanaged(page, "sample-create", "Stability ratios", "derived ratios");
 });
