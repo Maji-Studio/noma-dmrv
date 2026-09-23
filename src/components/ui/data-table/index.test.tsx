@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ColumnDef, Table as TanStackTable } from "@tanstack/react-table";
 import { describe, expect, it, vi } from "vitest";
-import { DataTable, useDataTable } from ".";
+import { DataTable, recordRowId, useDataTable } from ".";
 
 interface TestRow {
   id: string;
@@ -107,5 +107,29 @@ describe("DataTable controlled state", () => {
     expect(html).toContain('aria-label="Filter by status"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('aria-haspopup="dialog"');
+  });
+});
+
+describe("DataTable row identity", () => {
+  it("keys rows by record id so a reordered refetch keeps each row", () => {
+    let table: TanStackTable<TestRow> | undefined;
+    const rows: TestRow[] = [
+      { id: "sup-b", name: "Beta", status: "Active" },
+      { id: "sup-a", name: "Alpha", status: "Active" },
+    ];
+
+    renderToStaticMarkup(
+      <DataTable columns={columns} data={rows}>
+        <TableProbe capture={(nextTable) => { table = nextTable; }} />
+      </DataTable>,
+    );
+
+    expect(table?.getRowModel().rows.map((row) => row.id)).toEqual(["sup-b", "sup-a"]);
+  });
+
+  it("falls back to the position for rows without an id", () => {
+    expect(recordRowId({ name: "No id" }, 3)).toBe("3");
+    expect(recordRowId({ id: "" }, 1)).toBe("1");
+    expect(recordRowId({ id: 42 }, 0)).toBe("42");
   });
 });
