@@ -162,6 +162,10 @@ const overAllocated = {
   id: "formulation", name: "Mix", description: null, biocharRatio: 0.8,
   ingredients: [{ feedstockTypeId: "manure", ratio: 0.4, feedstockType: { name: "Manure" } }],
 } as unknown as FormulationWithIngredients;
+const underAllocated = {
+  ...overAllocated, biocharRatio: 0.5,
+  ingredients: [{ feedstockTypeId: "manure", ratio: 0.4, feedstockType: { name: "Manure" } }],
+} as unknown as FormulationWithIngredients;
 
 /**
  * The Simple boundary of every derived block, one row each: what an operator
@@ -179,6 +183,9 @@ const SIMPLE_BOUNDARIES: { block: string; presence: string; element: ReactNode; 
   { block: "Blend by volume", presence: "hidden",
     element: <FormulationForm onSubmit={() => undefined} />,
     present: ["Biochar"], absent: ["Blend by volume", "Total 100%"] },
+  { block: "Blend by volume, under 100%", presence: "picture while the total is not 100%",
+    element: <FormulationForm formulation={underAllocated} onSubmit={() => undefined} />,
+    present: ["Blend by volume", "Total 90%.", "Balance to 100%"], absent: ["Show calculation"] },
   { block: "Blend by volume, over 100%", presence: "picture while the total is an error",
     element: <FormulationForm formulation={overAllocated} onSubmit={() => undefined} />,
     present: ["Blend by volume", "Total 120%. Reduce a share to reach 100%."], absent: ["Show calculation"] },
