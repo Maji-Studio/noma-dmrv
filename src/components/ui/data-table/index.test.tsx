@@ -111,7 +111,7 @@ describe("DataTable controlled state", () => {
 });
 
 describe("DataTable row identity", () => {
-  it("keys rows by record id so a reordered refetch keeps each row", () => {
+  it("keys rows by record id, not position", () => {
     let table: TanStackTable<TestRow> | undefined;
     const rows: TestRow[] = [
       { id: "sup-b", name: "Beta", status: "Active" },
