@@ -1,23 +1,30 @@
 import type { EntityOption } from "./types";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 
-const KG_SUFFIX = "kg";
-
-function formatWholeKg(kg: number | null): string {
-  if (kg == null || !Number.isFinite(kg)) return MISSING_VALUE.notRecorded;
-  return `${Math.round(kg).toLocaleString("en-US")}${KG_SUFFIX}`;
+function formatWholeKg(kg: number): string {
+  return `${Math.round(kg).toLocaleString("en-US")} kg`;
 }
 
-/** Exact operator copy for the selected option's always-visible stock caption. */
+function formatPart(kg: number | null, noun: string): string {
+  if (kg == null || !Number.isFinite(kg)) {
+    return `${noun} ${MISSING_VALUE.notRecorded.toLowerCase()}`;
+  }
+  return `${formatWholeKg(kg)} ${noun}`;
+}
+
+/**
+ * Exact operator copy for the selected option's always-visible stock caption:
+ * what is left now, before this record takes its share.
+ */
 export function formatRemainingMass(
   remainingMass: NonNullable<EntityOption["remainingMass"]>,
   includeDryMass = true,
 ): string {
-  const wetLabel =
+  const lead =
     remainingMass.labelVariant === "excluding-this-order"
-      ? "Remaining wet mass excluding this order"
-      : "Remaining wet mass";
-  const wet = `${wetLabel}: ${formatWholeKg(remainingMass.wetKg)}`;
-  if (!includeDryMass || !("dryKg" in remainingMass)) return wet;
-  return `${wet} | dry mass: ${formatWholeKg(remainingMass.dryKg ?? null)}`;
+      ? "Remaining, excluding this order"
+      : "Remaining now";
+  const wet = formatPart(remainingMass.wetKg, "wet");
+  if (!includeDryMass || !("dryKg" in remainingMass)) return `${lead}: ${wet}`;
+  return `${lead}: ${wet}, ${formatPart(remainingMass.dryKg ?? null, "dry biochar")}`;
 }
