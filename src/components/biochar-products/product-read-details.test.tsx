@@ -50,7 +50,7 @@ function visibleText(node: ReactTestInstance | string): string {
 const text = (node: ReactTestInstance) => visibleText(node).replace(/\s+/g, " ");
 
 describe("Product read view levels", () => {
-  it("keeps saved fields and the composition picture in Simple, and adds dry rows, ledger and transport in Detailed", async () => {
+  it("keeps saved fields and the composition picture in Simple, and adds dry rows, transport and the ledger behind Show calculation in Detailed", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     let renderer!: ReactTestRenderer;
     await act(async () => {
@@ -68,7 +68,9 @@ describe("Product read view levels", () => {
     // Headline and key at save precision, from the saved allocation.
     expect(simple).toContain("400 kg");
     expect(simple).toContain("Dry biochar 200 kg");
-    expect(simple).toContain("Chicken manure (dry) 80 kg");
+    // The form's split rule and labels: each ingredient as its solids, one pooled water.
+    expect(simple).toContain("Chicken manure solids 80 kg");
+    expect(simple).toContain("Water 70 kg");
     expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(1);
     for (const hidden of ["Dry biochar (kg)", "dry solids (kg)", "% of total", "Show calculation", "Derived transport", "Transport legs"]) {
       expect(simple).not.toContain(hidden);
@@ -78,12 +80,13 @@ describe("Product read view levels", () => {
     const detailed = text(renderer.root);
     expect(detailed).toContain("Dry biochar (kg)");
     expect(detailed).toContain("Chicken manure dry solids (kg)");
-    expect(detailed).toContain("% of total");
     expect(detailed).toContain("Derived transport");
+    expect(detailed).toContain("Show calculation");
     const disclosure = renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!;
     await act(async () => disclosure.props.onClick());
     const disclosed = text(renderer.root);
-    expect(disclosed).toContain("Source biochar (wet)");
+    expect(disclosed).toContain("% of total");
+    expect(disclosed).toContain("Wet biochar product is the sum of its parts: 200 kg + 80 kg + 70 kg + 50 kg = 400 kg.");
     expect(disclosed).toContain("source allocation saved with the product");
     expect(disclosed).toContain("snapshot saved with the product");
     await act(async () => renderer.unmount());
@@ -98,7 +101,9 @@ describe("Product read view levels", () => {
     });
     const shown = text(renderer.root);
     expect(shown).toContain("50.125 kg");
-    expect(shown).toContain("Chicken manure (dry) Not available");
+    expect(shown).toContain("Chicken manure solids Not available");
+    // The key reads at save precision too, not only the saved field.
+    expect(shown).toContain("Water added 50.125 kg");
     expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(0);
     await act(async () => renderer.unmount());
   });

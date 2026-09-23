@@ -16,7 +16,9 @@
  *   (`productCompositionComponents` in `@/components/biochar-products`), so an
  *   ingredient's own water joins the water part instead of counting as solids.
  *   Missing parts read "Not available" and the bar stays unresolved. The form
- *   passes live parts; a read view passes the saved snapshot.
+ *   passes live parts; the product read view passes the saved snapshot with
+ *   its total as `headline`, `formatMass` at save precision and the saved
+ *   basis under the arithmetic.
  * - `ingredients`: blend masses as received, one segment each, with the rest
  *   of the wet mass filed as water in biochar.
  * - neither: the surface only knows the tracked dry biochar (an application
@@ -31,7 +33,12 @@ import {
   formatCompositionMass,
   type MassSegment,
 } from "@/components/forms/composition-ledger";
-import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
+import {
+  SegmentBar,
+  SegmentKey,
+  batchAccentFill,
+  type SegmentFormat,
+} from "@/components/ui/segment-bar";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
 
 /**
@@ -84,6 +91,12 @@ interface ProductCompositionPreviewProps {
   remainderLabel?: string;
   /** One sentence defining the block, in place of the default hint. */
   note?: string;
+  /** The block's one figure, usually the wet total as a `DerivedHeadline`. */
+  headline?: ReactNode;
+  /** Mass formatter for the bar, its key and the arithmetic. Defaults to kilograms at display precision. */
+  formatMass?: SegmentFormat;
+  /** Where the figures come from, shown under the arithmetic behind Show calculation. */
+  basis?: ReactNode;
   /** Other controls for the block's action row, such as a stock history. */
   actions?: ReactNode;
   className?: string;
@@ -191,9 +204,10 @@ function formatCompositionArithmetic(
   wetLabel: string,
   wetMassKg: number | null | undefined,
   segments: readonly MassSegment[],
+  format: SegmentFormat,
 ): string {
-  const parts = segments.map((segment) => formatCompositionMass(segment.mass)).join(" + ");
-  return `${wetLabel} is the sum of its parts: ${parts} = ${formatCompositionMass(resolvedMass(wetMassKg))}.`;
+  const parts = segments.map((segment) => format(segment.mass)).join(" + ");
+  return `${wetLabel} is the sum of its parts: ${parts} = ${format(resolvedMass(wetMassKg))}.`;
 }
 
 function UnresolvedBar() {
@@ -216,6 +230,9 @@ export function ProductCompositionPreview({
   dryLabel = "Dry biochar",
   remainderLabel = DEFAULT_REMAINDER_LABEL,
   note,
+  headline,
+  formatMass = formatCompositionMass,
+  basis,
   actions,
   className = "",
   testId = "product-composition-preview",
@@ -230,13 +247,13 @@ export function ProductCompositionPreview({
 
   const visual = segments ? (
     <div className="flex flex-col gap-8">
-      <SegmentBar segments={segments} label={`${wetLabel} composition`} />
-      <SegmentKey segments={segments} className="tabular-nums" />
+      <SegmentBar segments={segments} label={`${wetLabel} composition`} format={formatMass} />
+      <SegmentKey segments={segments} format={formatMass} className="tabular-nums" />
     </div>
   ) : partlyKnown ? (
     <div className="flex flex-col gap-8">
       <UnresolvedBar />
-      <SegmentKey segments={split} className="tabular-nums" />
+      <SegmentKey segments={split} format={formatMass} className="tabular-nums" />
     </div>
   ) : (
     // Dry biochar drives certification, so a known dry mass stays visible while
@@ -245,7 +262,7 @@ export function ProductCompositionPreview({
       <UnresolvedBar />
       {!split && resolvedMass(dryBiocharKg) !== null && (
         <p className="body-caption tabular-nums text-[var(--color-text-secondary)]">
-          {dryLabel} {formatCompositionMass(resolvedMass(dryBiocharKg))}
+          {dryLabel} {formatMass(resolvedMass(dryBiocharKg))}
         </p>
       )}
       <p className="body-caption text-[var(--color-text-tertiary)]">{UNRESOLVED_COPY}</p>
@@ -260,6 +277,7 @@ export function ProductCompositionPreview({
         title={BLOCK_TITLE}
         hint={note ?? COMPOSITION_HINT}
         simple="picture"
+        headline={headline}
         actions={actions}
         calculation={ledgerSegments ? (
           <div className="flex flex-col gap-8">
@@ -271,9 +289,10 @@ export function ProductCompositionPreview({
             />
             {segments && (
               <p className="body-caption text-[var(--color-text-tertiary)]">
-                {formatCompositionArithmetic(wetLabel, wetMassKg, segments)}
+                {formatCompositionArithmetic(wetLabel, wetMassKg, segments, formatMass)}
               </p>
             )}
+            {basis}
             {moisturePercent !== undefined && (
               <p className="body-caption text-[var(--color-text-tertiary)]">
                 Measured moisture: {formatMoisturePercent(moisturePercent)}

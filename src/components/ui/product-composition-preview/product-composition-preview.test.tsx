@@ -163,4 +163,26 @@ describe("ProductCompositionPreview", () => {
 
     expect(text(html)).toContain("Stock history");
   });
+
+  it("takes a headline, a mass formatter and a basis line for a saved record", () => {
+    const html = renderToStaticMarkup(
+      <ProductCompositionPreview
+        wetMassKg={100.125}
+        components={[
+          { label: "Dry biochar", massKg: 90, kind: "biochar" },
+          { label: "Water", massKg: 10.125, kind: "water" },
+        ]}
+        formatMass={(mass) => (mass === null ? "Not available" : `${mass.toFixed(3)} kg`)}
+        headline={<span>Saved total</span>}
+        basis={<p>Saved with the product.</p>}
+      />,
+    );
+
+    expect(text(html)).toContain("Saved total");
+    expect(text(html)).toContain("Water 10.125 kg");
+    expect(text(html)).toContain(
+      "Wet biochar product is the sum of its parts: 90.000 kg + 10.125 kg = 100.125 kg.",
+    );
+    expect(text(html)).toContain("Saved with the product.");
+  });
 });
