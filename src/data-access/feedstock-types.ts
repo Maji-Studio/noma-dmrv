@@ -2,10 +2,12 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   creditBatches,
+  facilities,
   feedstockDeliveries,
   feedstocks,
   feedstockTypes,
   formulationIngredients,
+  formulations,
   productionProcesses,
   storageLocations,
   type FeedstockType,
@@ -181,21 +183,26 @@ async function findDeleteConflict(
       .where(and(eq(feedstockDeliveries.feedstockTypeId, feedstockTypeId), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
       .limit(1)
       .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "feedstock-delivery", id: row.id, code: conflictCode(row.code) }))),
-    db.select({ id: productionProcesses.id })
+    // A production process has no code of its own; point at its facility,
+    // where the operator manages it.
+    db.select({ id: facilities.id, code: facilities.code })
       .from(productionProcesses)
+      .innerJoin(facilities, and(eq(productionProcesses.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
       .where(and(eq(productionProcesses.feedstockTypeId, feedstockTypeId), eq(productionProcesses.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "production-process", id: row.id, code: conflictCode(row.id) }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "facility", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: creditBatches.id, code: creditBatches.code })
       .from(creditBatches)
       .where(and(eq(creditBatches.feedstockTypeId, feedstockTypeId), eq(creditBatches.organizationId, ctx.organizationId)))
       .limit(1)
       .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "credit-batch", id: row.id, code: conflictCode(row.code) }))),
-    db.select({ id: formulationIngredients.id })
+    // A formulation ingredient has no code of its own; point at its formulation.
+    db.select({ id: formulations.id, code: formulations.code })
       .from(formulationIngredients)
+      .innerJoin(formulations, and(eq(formulationIngredients.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
       .where(and(eq(formulationIngredients.feedstockTypeId, feedstockTypeId), eq(formulationIngredients.organizationId, ctx.organizationId)))
       .limit(1)
-      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "formulation-ingredient", id: row.id, code: conflictCode(row.id) }))),
+      .then((rows) => rows.map((row): FeedstockTypeDeleteConflict => ({ entity: "formulation", id: row.id, code: conflictCode(row.code) }))),
     db.select({ id: storageLocations.id, code: storageLocations.code })
       .from(storageLocations)
       .where(and(eq(storageLocations.feedstockTypeId, feedstockTypeId), eq(storageLocations.organizationId, ctx.organizationId)))
