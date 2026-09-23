@@ -10,8 +10,6 @@ import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
 import { prepareOutputCorrection } from './output-stock-corrections';
-import { formatFacilityDate } from '@/lib/date-utils';
-import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
@@ -117,13 +115,12 @@ export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId
   const [formulation] = await db.select({ id: formulations.id }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, input.formulationId)));
   if (!formulation) throw new SafeError('Formulation not found');
   const bins = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, 'product_bin'), eq(storageLocations.formulationId, input.formulationId), isNull(storageLocations.archivedAt))).orderBy(asc(storageLocations.code));
-  const physicalDate = formatFacilityDate(new Date(), await getOutputStockFacilityTimezone(ctx, input.facilityId, db));
+  // Orders carry no departure moisture, so wet availability is the bin's
+  // estimate at each batch's recorded moisture, as the bin selectors show it.
+  // A bin whose layers do not resolve reads null instead of failing the list.
   return Promise.all(bins.map(async bin => {
-    const state = await getProductOutputStockLayers(ctx, { ...input, storageLocationId: bin.id, physicalDate });
-    // Orders carry no departure moisture, so wet availability is the bin's
-    // estimate at each batch's recorded moisture, as the bin selectors show it.
-    const { estimatedWetMassKg } = await getOutputBinStockView(ctx, bin.id);
-    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg: Number(state.remainingDryKg), recordedWetMassKg: null, estimatedWetMassKg };
+    const { dryMassKg, estimatedWetMassKg } = await getOutputBinStockView(ctx, bin.id);
+    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg, recordedWetMassKg: null, estimatedWetMassKg };
   }));
 }
 export { getOutputStockHistory } from './output-stock-history';

@@ -105,10 +105,21 @@ export function StockBalanceChange({
 }: {
   label: string;
   beforeKg: number | null;
-  afterKg: number | null;
+  /** Omitted when nothing will change (a refused movement): only the before figure shows. */
+  afterKg?: number | null;
   supportingLine?: ReactNode;
   variant?: "headline" | "row";
 }) {
+  if (afterKg === undefined) {
+    return variant === "row" ? (
+      <div className="flex items-baseline justify-between gap-12">
+        <span className="body-caption text-[var(--color-text-secondary)]">{label}</span>
+        <span className="body-small tabular-nums text-right">{formatMassKg(beforeKg)}</span>
+      </div>
+    ) : (
+      <DerivedHeadline label={label} value={formatMassKg(beforeKg)} sub={supportingLine} />
+    );
+  }
   const unchanged =
     beforeKg !== null && afterKg !== null && beforeKg === afterKg;
   const figureLabel = `${label}: ${formatMassKg(beforeKg)} before, ${formatMassKg(afterKg)} after`;

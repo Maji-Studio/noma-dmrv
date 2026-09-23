@@ -252,19 +252,38 @@ describe("StockMovementCard", () => {
     await act(async () => card.renderer.unmount());
   });
 
-  it("explains a drying only count above an unchanged pair", async () => {
+  it("explains a drying only count below the wet estimate above an unchanged pair", async () => {
     const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, beforeDryKg: 343, afterDryKg: 343,
-      beforeEstimatedWetKg: 420, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
+      beforeEstimatedWetKg: 460, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
     const text = card.text();
     expect(text).toContain("Drying alone does not remove dry biochar.");
     expect(text).toContain("Unchanged");
     expect(card.markup()).toContain('"data-moisture-segment":"dry"');
-    expect(text).toMatch(/≈ 420\s+429 kg/);
+    expect(text).toMatch(/≈ 460\s+429 kg/);
     expect(text.indexOf("Drying alone")).toBeLessThan(text.indexOf("Dry biochar in bin"));
     // A count draws no layer, so the disclosure falls back to what the bin keeps.
     await card.open();
     expect(card.text()).toContain("Batch A");
     expect(card.text()).not.toContain("Batch B");
+    await act(async () => card.renderer.unmount());
+  });
+
+  it.each([["matches", 428.75], ["exceeds", 420]])("says nothing about drying when the count %s the wet estimate", async (_case, beforeEstimatedWetKg) => {
+    const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, beforeDryKg: 343, afterDryKg: 343,
+      beforeEstimatedWetKg, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
+    expect(card.text()).not.toContain("Drying alone");
+    await act(async () => card.renderer.unmount());
+  });
+
+  it("shows a refused movement at its current balance, without an after figure or a verb", async () => {
+    const card = await render({ ...loss, removedDryKg: 0, afterDryKg: 350, afterEstimatedWetKg: 500, allocations: [],
+      blockingMessage: "Loss exceeds the dry biochar in this bin." });
+    const text = card.text();
+    // Before is ≈ 500 kg wet and 350 kg dry; the refused after figures never show.
+    expect(text).toContain("≈ 500 kg");
+    expect(text).toContain("10 kg wet at 30% moisture");
+    expect(text).not.toMatch(/lost at|≈ 500\s+500 kg|350 kg\s+350 kg/);
+    expect(text).not.toContain("Unchanged");
     await act(async () => card.renderer.unmount());
   });
 

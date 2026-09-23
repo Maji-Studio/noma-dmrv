@@ -72,7 +72,8 @@ export interface MatchingOutputBin {
   id: string;
   code: string;
   name: string;
-  dryMassKg: number;
+  /** Null when the bin's layers do not resolve. */
+  dryMassKg: number | null;
   recordedWetMassKg: number | null;
   /** Wet stock at each batch's recorded moisture; null when the bin's layers do not resolve. */
   estimatedWetMassKg: number | null;
