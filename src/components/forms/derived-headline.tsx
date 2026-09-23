@@ -46,7 +46,7 @@ export function DerivedHeadline({ label, value, before, sub, figureLabel }: {
       >
         {before != null && (
           <>
-            <span className="font-light text-[var(--color-text-tertiary)]">{before}</span>
+            <span className="text-[var(--color-text-tertiary)]">{before}</span>
             <ArrowRightIcon
               size={ARROW_ICON_PX}
               aria-hidden="true"

@@ -583,7 +583,7 @@ export function BiocharProductList() {
 
       <EntitySideSheet
         numberedSections
-        detailToggle="view"
+        detailToggle
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={displaySideSheet?.mode ?? "create"}
