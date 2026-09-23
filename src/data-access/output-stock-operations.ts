@@ -7,7 +7,7 @@ import { outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
-import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
+import { getBiocharOutputStockLayers, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
 import { prepareOutputCorrection } from './output-stock-corrections';
 import { formatFacilityDate } from '@/lib/date-utils';
@@ -120,7 +120,10 @@ export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId
   const physicalDate = formatFacilityDate(new Date(), await getOutputStockFacilityTimezone(ctx, input.facilityId, db));
   return Promise.all(bins.map(async bin => {
     const state = await getProductOutputStockLayers(ctx, { ...input, storageLocationId: bin.id, physicalDate });
-    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg: Number(state.remainingDryKg), recordedWetMassKg: null };
+    // Orders carry no departure moisture, so wet availability is the bin's
+    // estimate at each batch's recorded moisture, as the bin selectors show it.
+    const { estimatedWetMassKg } = await getOutputBinStockView(ctx, bin.id);
+    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg: Number(state.remainingDryKg), recordedWetMassKg: null, estimatedWetMassKg };
   }));
 }
 export { getOutputStockHistory } from './output-stock-history';

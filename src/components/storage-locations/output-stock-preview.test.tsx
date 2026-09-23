@@ -7,7 +7,7 @@ import type { OutputStockPreview as Preview } from "@/types/output-stock";
 // environment does not have; the hint's copy is not what these tests assert.
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
-import { OutputStockAvailability, OutputStockPreview } from "./output-stock-preview";
+import { OutputStockAvailability, OutputStockPreview, type StockEntry } from "./output-stock-preview";
 
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
@@ -106,22 +106,40 @@ describe("OutputStockPreview", () => {
 });
 
 describe("OutputStockAvailability", () => {
-  it("names the batches on hand and the tracked total, with no before and after", () => {
+  it("leads with the dry stock when no moisture gives a wet estimate, with no before and after", () => {
     const html = renderToStaticMarkup(<OutputStockAvailability
-      binName="Product bin" binCode="PB-001" subtitle="Mix" label="Available dry stock" dryKg={1150}
-      allocations={rain.allocations} actions={<button>Stock history</button>}
+      binName="Product bin" dryKg={1150} allocations={rain.allocations} actions={<button>Stock history</button>}
     />);
-    expect(html).toContain("PB-001 · Mix");
     expect(html).toContain("Batch A 900 kg");
     expect(html).toContain("Available dry stock");
     expect(html).toContain("1,150 kg dry biochar");
+    expect(html).not.toContain("wet");
     expect(html).toContain("Stock history");
     expect(html).toContain("Source run Run A");
     expect(html).not.toMatch(/before|after/i);
   });
 
+  it("leads with the wet estimate at its basis and keeps the dry stock as a Detailed row", async () => {
+    let renderer!: ReactTestRenderer;
+    const element = <FormDetailProvider scope="availability"><FormDetailControl /><OutputStockAvailability
+      binName="Output bin B2" dryKg={2380} wetEstimate={{ kg: 2833.4, basis: "At 16% departure moisture" }} allocations={rain.allocations}
+    /></FormDetailProvider>;
+    await act(async () => { renderer = create(element); });
+    const visible = (node: ReactTestInstance | string): string => typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
+    await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
+    const text = visible(renderer.root);
+    expect(text).toContain("Available wet stock, estimate");
+    expect(text).toContain("≈ 2,833 kg wet");
+    expect(text).toContain("At 16% departure moisture");
+    expect(text).toContain("Available dry stock");
+    expect(text).toContain("2,380 kg dry biochar");
+    expect(text.indexOf("≈ 2,833 kg wet")).toBeLessThan(text.indexOf("Batch A"));
+    expect(text.indexOf("Batch A")).toBeLessThan(text.indexOf("Available dry stock"));
+    await act(async () => renderer.unmount());
+  });
+
   it("states an empty bin as a figure rather than a bar", () => {
-    const html = renderToStaticMarkup(<OutputStockAvailability binName="Empty bin" label="Available dry stock" dryKg={0} />);
+    const html = renderToStaticMarkup(<OutputStockAvailability binName="Empty bin" dryKg={0} />);
     expect(html).toContain("0 kg dry biochar");
     expect(html).not.toContain("Batch breakdown");
     expect(html).not.toContain("Show calculation");
@@ -152,9 +170,9 @@ describe("StockMovementCard", () => {
   function visible(node: ReactTestInstance | string): string {
     return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
   }
-  async function render(preview: Preview) {
+  async function render(preview: Preview, entry?: StockEntry) {
     let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<FormDetailProvider scope="stock"><FormDetailControl /><OutputStockPreview variant="movement" preview={preview} /></FormDetailProvider>); });
+    await act(async () => { renderer = create(<FormDetailProvider scope="stock"><FormDetailControl /><OutputStockPreview variant="movement" preview={preview} entry={entry} /></FormDetailProvider>); });
     // The card is the Detailed presentation of this surface; Simple keeps only
     // the notices, which the boundary suite covers.
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
@@ -168,23 +186,40 @@ describe("StockMovementCard", () => {
     };
   }
 
-  it("draws the entered wet mass as a split bar above the dry balance pair", async () => {
-    const card = await render(loss);
+  it("leads with the wet estimate and its entry, then the split bar, then the dry pair as a row", async () => {
+    const card = await render(loss, { kind: "loss", wetMassKg: 10 });
     const text = card.text();
-    expect(text).toContain("What you entered");
+    expect(text).toContain("Wet stock in bin, estimate");
+    expect(text).toMatch(/≈ 500\s+490 kg/);
+    expect(text).toContain("10 kg wet lost at 30% moisture");
     expect(text).toMatch(/Dry solids\s+7 kg/);
     expect(text).toMatch(/Water\s+3 kg/);
     expect(card.markup()).toContain('"data-moisture-segment":"dry"');
-    expect(text).toContain("Dry biochar in bin");
-    expect(text).toContain("350 kg");
-    expect(text).toContain("343 kg");
-    expect(text.indexOf("What you entered")).toBeLessThan(text.indexOf("Dry biochar in bin"));
+    expect(card.renderer.root.findAll(node => node.props.role === "group" && node.props["aria-label"] === "Dry biochar in bin: 350 kg before, 343 kg after")).toHaveLength(1);
+    expect(text.indexOf("Wet stock in bin")).toBeLessThan(text.indexOf("Dry solids"));
+    expect(text.indexOf("Dry solids")).toBeLessThan(text.indexOf("Dry biochar in bin"));
     // The entered figures are the inputs, not the consequence, so none of them
     // is readable until the disclosure is opened.
     expect(text).not.toContain("Wet removed");
-    expect(text).not.toContain("Moisture");
+    expect(text).not.toContain("Moisture ");
     expect(text).not.toContain("Batch A");
     await act(async () => card.renderer.unmount());
+  });
+
+  it("names each entry kind in the headline caption", async () => {
+    for (const [entry, line] of [
+      [{ kind: "correction", wetMassKg: 10 }, "10 kg wet removed at 30% moisture"],
+      [{ kind: "delivery", wetMassKg: 10 }, "10 kg wet loaded at 30% moisture"],
+    ] as const) {
+      const card = await render(loss, entry);
+      expect(card.text()).toContain(line);
+      await act(async () => card.renderer.unmount());
+    }
+    const count = await render({ ...loss, removedWetKg: null, removedDryKg: 0, afterDryKg: 350, allocations: [] }, { kind: "count", wetMassKg: 2650 });
+    expect(count.text()).toContain("Counted 2,650 kg wet at 30% moisture");
+    await count.open();
+    expect(count.text()).toContain("Counted wet mass");
+    await act(async () => count.renderer.unmount());
   });
 
   it("holds the entered figures and the FIFO draw behind Show calculation, zero layers hidden", async () => {
@@ -196,19 +231,21 @@ describe("StockMovementCard", () => {
     expect(opened).toContain("Dry biochar removed");
     expect(opened).toContain("Moisture");
     expect(opened).toContain("30%");
-    expect(opened).toContain("Wet estimate in bin");
-    expect(opened).toContain("490 kg");
+    // The balances are on the block already; the rows add only the entry.
+    expect(opened).not.toContain("Wet estimate in bin");
     expect(opened).toContain("Batch A");
     expect(opened).not.toContain("Batch B");
     await act(async () => card.renderer.unmount());
   });
 
-  it("shows the pair alone when a dry only entry has no wet mass to split", async () => {
-    const card = await render({ ...loss, removedWetKg: null, estimateMoisturePercent: null, beforeEstimatedWetKg: null, afterEstimatedWetKg: null });
-    expect(card.text()).not.toContain("What you entered");
+  it("falls back to the dry pair as the headline when no moisture gives a wet estimate", async () => {
+    const card = await render({ ...loss, removedWetKg: null, estimateMoisturePercent: null, beforeEstimatedWetKg: null, afterEstimatedWetKg: null }, { kind: "count", wetMassKg: 0 });
     expect(card.markup()).not.toContain("data-moisture-segment");
+    expect(card.text()).not.toContain("Wet stock in bin");
+    expect(card.text()).not.toContain("Not available");
     expect(card.text()).toContain("Dry biochar in bin");
     expect(card.text()).toContain("343 kg");
+    expect(card.text()).toContain("Counted 0 kg wet");
     await card.open();
     expect(card.text()).toContain("Dry biochar removed");
     expect(card.text()).not.toContain("Moisture");
@@ -222,6 +259,7 @@ describe("StockMovementCard", () => {
     expect(text).toContain("Drying alone does not remove dry biochar.");
     expect(text).toContain("Unchanged");
     expect(card.markup()).toContain('"data-moisture-segment":"dry"');
+    expect(text).toMatch(/≈ 420\s+429 kg/);
     expect(text.indexOf("Drying alone")).toBeLessThan(text.indexOf("Dry biochar in bin"));
     // A count draws no layer, so the disclosure falls back to what the bin keeps.
     await card.open();
@@ -242,7 +280,7 @@ describe("StockMovementCard", () => {
 
   it("keeps the bar off a count that exceeds tracked solids", async () => {
     const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, discrepancySolidsKg: 80, allocations: [] });
-    expect(card.text()).not.toContain("What you entered");
+    expect(card.markup()).not.toContain("data-moisture-segment");
     expect(card.text()).toContain("Count exceeds tracked solids");
     await act(async () => card.renderer.unmount());
   });
@@ -251,10 +289,12 @@ describe("StockMovementCard", () => {
     const card = await render({ ...loss, lane: "ingredient", dryLabel: "dry solids", wetLabel: "wet stock",
       beforeEstimatedWetKg: 150, afterEstimatedWetKg: 140, allocations: [], afterAllocations: [] });
     expect(card.text()).toContain("Wet stock in bin");
+    // Ingredient wet stock is tracked, not estimated at the entered moisture.
+    expect(card.text()).not.toContain("estimate");
     expect(card.text()).toMatch(/Dry solids\s+7 kg/);
+    expect(card.text()).toContain("Dry solids in bin");
     await card.open();
     expect(card.text()).toContain("Dry solids removed");
-    expect(card.text()).toContain("Dry solids in bin");
     await act(async () => card.renderer.unmount());
   });
 });
