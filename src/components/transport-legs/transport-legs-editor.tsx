@@ -408,7 +408,7 @@ function JourneyLeg({
 }
 
 /**
- * Transport-leg management for the entity side sheet: a `border-t` section with
+ * Transport-leg management for the entity side sheet: a section with
  * a caption + add button, the legs as one journey timeline, and a centered
  * add/edit dialog. Pass `readOnly` for the view-mode summary.
  *
@@ -539,7 +539,7 @@ export function TransportLegsEditor({
   );
 
   return (
-    <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
+    <div className="space-y-16">
       {/* Header: a caption, not a heading. The surrounding section already
           carries the "Transport" title on the page's heading ladder. */}
       <div className="flex flex-wrap items-center justify-between gap-8">

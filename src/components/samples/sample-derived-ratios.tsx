@@ -84,7 +84,9 @@ export function SampleDerivedRatios({
       title="Derived ratios"
       simple="headline"
       headline={<>
-        <div className="flex flex-wrap gap-x-32 gap-y-12">
+        {/* Bottom-aligned: the CERT tag makes the H:C label row taller than
+            O:C's, and top alignment would drop one figure below the other. */}
+        <div className="flex flex-wrap items-end gap-x-32 gap-y-12">
           <DerivedRatio
             label="H:C org"
             value={hToCOrgRatio}
