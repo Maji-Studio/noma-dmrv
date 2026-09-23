@@ -2,7 +2,7 @@
 
 Real viewport captures (1440x1100 and 390x844) of the Simple and Detailed levels on PR #822, taken from an isolated local app with synthetic fixtures and normal authentication. `captures.jsonl` records the viewport and route of each image.
 
-The images were last captured on 22 September 2026, before the schematic picks and the form layout contract landed, and get refreshed before the PR is marked ready. A recapture shows the current state:
+The images were last captured on 23 September 2026, after the fix round that followed the layout contract, and get refreshed again before the PR is marked ready. They show:
 
 - Simple keeps inputs, saved fields, blockers, warnings and evidence, plus each derived block's declared Simple presence (the boundary table in [forms.md](../../../forms.md#simple-and-detailed-presentation)).
 - Derived blocks sit flat under the inputs that drive them: a sentence case caption with an ⓘ hint, at most one headline figure, the picture, and one action row. Show calculation is Detailed only.
@@ -11,7 +11,7 @@ The images were last captured on 22 September 2026, before the schematic picks a
 
 ## Reproduce
 
-Opt-in and skipped in ordinary CI. `tests/e2e/form-detail-gallery.spec.ts` is hardcoded to an isolated server on port 3102 (a guard at the top, an assertion in `beforeEach`, and a route filter that aborts every other host). The PR worktree serves on port 3105 (`DISABLE_RATE_LIMIT=true NEXT_PUBLIC_APP_URL=http://localhost:3105 pnpm exec next dev -p 3105`, database `noma_dmrv_worktree`), so captures run from a temporary copy of the spec:
+Opt-in and skipped in ordinary CI. `tests/e2e/form-detail-gallery.spec.ts` is hardcoded to an isolated server on port 3102 (a guard at the top, an assertion in `beforeEach`, and a route filter that aborts every other host). Captures run from a temporary copy of the spec pointed at the server in use. The example below targets a worktree on port 3105 (`DISABLE_RATE_LIMIT=true NEXT_PUBLIC_APP_URL=http://localhost:3105 pnpm exec next dev -p 3105`, database `noma_dmrv_worktree`); from the main checkout, substitute 3100 for 3105 throughout:
 
 ```sh
 sed 's/3102/3105/g' tests/e2e/form-detail-gallery.spec.ts > tests/e2e/zz-tmp-form-detail-gallery.spec.ts
@@ -29,29 +29,29 @@ For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of d
 
 ### 1440px
 
-| Simple | Detailed |
-|---|---|
-| ![application-create 1440 Simple](application-create-1440-simple.png) | ![application-create 1440 Detailed](application-create-1440-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![application-create 1440 Simple](application-create-1440-simple.png) | ![application-create 1440 Detailed](application-create-1440-detailed.png) | ![application-create 1440 Calculation shown](application-create-1440-details.png) |
 
 ### 390px
 
-| Simple | Detailed |
-|---|---|
-| ![application-create 390 Simple](application-create-390-simple.png) | ![application-create 390 Detailed](application-create-390-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![application-create 390 Simple](application-create-390-simple.png) | ![application-create 390 Detailed](application-create-390-detailed.png) | ![application-create 390 Calculation shown](application-create-390-details.png) |
 
 ## Application edit
 
 ### 1440px
 
-| Simple | Detailed |
-|---|---|
-| ![application-edit 1440 Simple](application-edit-1440-simple.png) | ![application-edit 1440 Detailed](application-edit-1440-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![application-edit 1440 Simple](application-edit-1440-simple.png) | ![application-edit 1440 Detailed](application-edit-1440-detailed.png) | ![application-edit 1440 Calculation shown](application-edit-1440-details.png) |
 
 ### 390px
 
-| Simple | Detailed |
-|---|---|
-| ![application-edit 390 Simple](application-edit-390-simple.png) | ![application-edit 390 Detailed](application-edit-390-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![application-edit 390 Simple](application-edit-390-simple.png) | ![application-edit 390 Detailed](application-edit-390-detailed.png) | ![application-edit 390 Calculation shown](application-edit-390-details.png) |
 
 ## Application read
 
@@ -71,29 +71,29 @@ For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of d
 
 ### 1440px
 
-| Simple | Detailed |
-|---|---|
-| ![credit-batch-applied-read 1440 Simple](credit-batch-applied-read-1440-simple.png) | ![credit-batch-applied-read 1440 Detailed](credit-batch-applied-read-1440-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![credit-batch-applied-read 1440 Simple](credit-batch-applied-read-1440-simple.png) | ![credit-batch-applied-read 1440 Detailed](credit-batch-applied-read-1440-detailed.png) | ![credit-batch-applied-read 1440 Calculation shown](credit-batch-applied-read-1440-details.png) |
 
 ### 390px
 
-| Simple | Detailed |
-|---|---|
-| ![credit-batch-applied-read 390 Simple](credit-batch-applied-read-390-simple.png) | ![credit-batch-applied-read 390 Detailed](credit-batch-applied-read-390-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![credit-batch-applied-read 390 Simple](credit-batch-applied-read-390-simple.png) | ![credit-batch-applied-read 390 Detailed](credit-batch-applied-read-390-detailed.png) | ![credit-batch-applied-read 390 Calculation shown](credit-batch-applied-read-390-details.png) |
 
 ## Credit batch read
 
 ### 1440px
 
-| Simple | Detailed |
-|---|---|
-| ![credit-batch-read 1440 Simple](credit-batch-read-1440-simple.png) | ![credit-batch-read 1440 Detailed](credit-batch-read-1440-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![credit-batch-read 1440 Simple](credit-batch-read-1440-simple.png) | ![credit-batch-read 1440 Detailed](credit-batch-read-1440-detailed.png) | ![credit-batch-read 1440 Calculation shown](credit-batch-read-1440-details.png) |
 
 ### 390px
 
-| Simple | Detailed |
-|---|---|
-| ![credit-batch-read 390 Simple](credit-batch-read-390-simple.png) | ![credit-batch-read 390 Detailed](credit-batch-read-390-detailed.png) |
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![credit-batch-read 390 Simple](credit-batch-read-390-simple.png) | ![credit-batch-read 390 Detailed](credit-batch-read-390-detailed.png) | ![credit-batch-read 390 Calculation shown](credit-batch-read-390-details.png) |
 
 ## Delivery create
 
@@ -179,6 +179,62 @@ For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of d
 |---|---|
 | ![feedstock-read 390 Simple](feedstock-read-390-simple.png) | ![feedstock-read 390 Detailed](feedstock-read-390-detailed.png) |
 
+## Formulation create over
+
+### 1440px
+
+| Simple | Detailed |
+|---|---|
+| ![formulation-create-over 1440 Simple](formulation-create-over-1440-simple.png) | ![formulation-create-over 1440 Detailed](formulation-create-over-1440-detailed.png) |
+
+### 390px
+
+| Simple | Detailed |
+|---|---|
+| ![formulation-create-over 390 Simple](formulation-create-over-390-simple.png) | ![formulation-create-over 390 Detailed](formulation-create-over-390-detailed.png) |
+
+## Formulation create under
+
+### 1440px
+
+| Simple | Detailed |
+|---|---|
+| ![formulation-create-under 1440 Simple](formulation-create-under-1440-simple.png) | ![formulation-create-under 1440 Detailed](formulation-create-under-1440-detailed.png) |
+
+### 390px
+
+| Simple | Detailed |
+|---|---|
+| ![formulation-create-under 390 Simple](formulation-create-under-390-simple.png) | ![formulation-create-under 390 Detailed](formulation-create-under-390-detailed.png) |
+
+## Order create
+
+### 1440px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![order-create 1440 Simple](order-create-1440-simple.png) | ![order-create 1440 Detailed](order-create-1440-detailed.png) | ![order-create 1440 Calculation shown](order-create-1440-details.png) |
+
+### 390px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![order-create 390 Simple](order-create-390-simple.png) | ![order-create 390 Detailed](order-create-390-detailed.png) | ![order-create 390 Calculation shown](order-create-390-details.png) |
+
+## Order read
+
+### 1440px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![order-read 1440 Simple](order-read-1440-simple.png) | ![order-read 1440 Detailed](order-read-1440-detailed.png) | ![order-read 1440 Calculation shown](order-read-1440-details.png) |
+
+### 390px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![order-read 390 Simple](order-read-390-simple.png) | ![order-read 390 Detailed](order-read-390-detailed.png) | ![order-read 390 Calculation shown](order-read-390-details.png) |
+
 ## Output bin loss
 
 ### 1440px
@@ -220,6 +276,34 @@ For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of d
 | Simple | Detailed | Calculation shown |
 |---|---|---|
 | ![output-stock-correction 390 Simple](output-stock-correction-390-simple.png) | ![output-stock-correction 390 Detailed](output-stock-correction-390-detailed.png) | ![output-stock-correction 390 Calculation shown](output-stock-correction-390-details.png) |
+
+## Product create
+
+### 1440px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![product-create 1440 Simple](product-create-1440-simple.png) | ![product-create 1440 Detailed](product-create-1440-detailed.png) | ![product-create 1440 Calculation shown](product-create-1440-details.png) |
+
+### 390px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![product-create 390 Simple](product-create-390-simple.png) | ![product-create 390 Detailed](product-create-390-detailed.png) | ![product-create 390 Calculation shown](product-create-390-details.png) |
+
+## Product read
+
+### 1440px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![product-read 1440 Simple](product-read-1440-simple.png) | ![product-read 1440 Detailed](product-read-1440-detailed.png) | ![product-read 1440 Calculation shown](product-read-1440-details.png) |
+
+### 390px
+
+| Simple | Detailed | Calculation shown |
+|---|---|---|
+| ![product-read 390 Simple](product-read-390-simple.png) | ![product-read 390 Detailed](product-read-390-detailed.png) | ![product-read 390 Calculation shown](product-read-390-details.png) |
 
 ## Production run create
 
@@ -263,6 +347,20 @@ For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of d
 |---|---|
 | ![production-run-read 390 Simple](production-run-read-390-simple.png) | ![production-run-read 390 Detailed](production-run-read-390-detailed.png) |
 
+## Sample create
+
+### 1440px
+
+| Detailed | Calculation shown |
+|---|---|
+| ![sample-create 1440 Detailed](sample-create-1440-detailed.png) | ![sample-create 1440 Calculation shown](sample-create-1440-details.png) |
+
+### 390px
+
+| Detailed | Calculation shown |
+|---|---|
+| ![sample-create 390 Detailed](sample-create-390-detailed.png) | ![sample-create 390 Calculation shown](sample-create-390-details.png) |
+
 ## Sample read
 
 ### 1440px
@@ -283,14 +381,6 @@ For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of d
 
 ![delivery-create-1440-simple-blocker](delivery-create-1440-simple-blocker.png)
 
-### output stock correction 1440 additional details
-
-![output-stock-correction-1440-additional-details](output-stock-correction-1440-additional-details.png)
-
-### output stock correction 390 additional details
-
-![output-stock-correction-390-additional-details](output-stock-correction-390-additional-details.png)
-
 ### output stock correction saved 1440 history
 
 ![output-stock-correction-saved-1440-history](output-stock-correction-saved-1440-history.png)
@@ -299,10 +389,10 @@ For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of d
 
 ![output-stock-correction-saved-390-history](output-stock-correction-saved-390-history.png)
 
-### production run create 1440 additional details
+### product create 1440 simple lower
 
-![production-run-create-1440-additional-details](production-run-create-1440-additional-details.png)
+![product-create-1440-simple-lower](product-create-1440-simple-lower.png)
 
-### production run create 390 additional details
+### product create 390 simple lower
 
-![production-run-create-390-additional-details](production-run-create-390-additional-details.png)
+![product-create-390-simple-lower](product-create-390-simple-lower.png)
