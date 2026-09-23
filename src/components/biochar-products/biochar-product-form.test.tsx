@@ -4,8 +4,9 @@ import type { UseFormRegisterReturn } from "react-hook-form";
 import {
   BiocharSourceMassFields,
   prepareBiocharProductSubmission,
-  TransferFlowPreview,
 } from "./biochar-product-form";
+import { formProductComposition } from "./form-product-composition";
+import type { AffectedStockPreview } from "@/types/output-stock";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 
 const registration = (name: string): UseFormRegisterReturn => ({
@@ -83,193 +84,103 @@ describe("prepareBiocharProductSubmission", () => {
   });
 });
 
-describe("TransferFlowPreview", () => {
-  it("derives the source dry draw from the entered biochar moisture", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={400}
-        sourceWetMassKg={100}
-        moisturePercent={10}
-        destinationDryMassKg={90}
-        destinationBinLabel="Product July"
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
+describe("formProductComposition", () => {
+  const base = {
+    isEditMode: false,
+    massKg: 100,
+    moisturePercent: 10,
+    waterAddedKg: 0,
+    recordedSourceDryMassKg: null,
+    ingredients: [],
+    allocationFrozen: false,
+  };
+  const manure = {
+    formulationIngredientId: "11111111-1111-4111-8111-111111111111",
+    feedstockTypeId: "22222222-2222-4222-8222-222222222222",
+    feedstockTypeName: "Chicken manure",
+    feedstockTypeCategory: "manure",
+    massKg: 550,
+    moistureContentPercent: 20,
+    moistureSource: "operator_override" as const,
+    storageLocationId: "33333333-3333-4333-8333-333333333333",
+  };
+  const part = (composition: ReturnType<typeof formProductComposition>, label: string) =>
+    composition.components.find((component) => component.label === label)?.massKg;
 
-    expect(text).toContain("Source · Biochar July");
-    expect(text).toContain("Dry biochar available: 400 kg (−90 kg)");
-    expect(text).toContain("Remaining: 310 kg");
-    // The destination cannot draw a product yet, but the dry biochar it will
-    // carry is the certification figure, so it stays visible.
-    expect(text).toContain("Dry biochar 90 kg");
-    expect(text).toContain("Record the masses above to see the product composition.");
+  it("derives the dry draw from the entered biochar moisture", () => {
+    const composition = formProductComposition(base);
+    expect(composition.sourceDryKg).toBe(90);
+    expect(part(composition, "Dry biochar")).toBe(90);
+    expect(part(composition, "Water")).toBe(10);
+    expect(composition.wetProductKg).toBe(100);
   });
 
-  it("lists ingredient and water additions on the transfer arrow", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={493}
-        sourceWetMassKg={500}
-        moisturePercent={10}
-        additions={[
-          { label: "Chicken Manure", massKg: 550 },
-          { label: "Water", massKg: 50 },
-        ]}
-        destinationDryMassKg={450}
-        destinationWetProductKg={1100}
-        destinationBinLabel="Product Bin July"
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
-
-    expect(text).toContain("+550 kg Chicken Manure");
-    expect(text).toContain("+50 kg Water");
-    expect(text).toContain("Final wet biochar product: 1,100 kg");
-    expect(text).toContain("Dry biochar 450 kg");
-    expect(text).toContain("Ingredients + water 650 kg");
-  });
-
-  it("omits the wet product line while the total is unknown", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={400}
-        sourceWetMassKg={100}
-        moisturePercent={10}
-        destinationDryMassKg={90}
-        destinationWetProductKg={null}
-        destinationBinLabel="Product July"
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
-
-    expect(text).not.toContain("Wet product:");
-  });
-
-  it("asks for moisture while the dry draw is unresolved", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={400}
-        sourceWetMassKg={100}
-        moisturePercent={null}
-        destinationDryMassKg={null}
-        destinationBinLabel="Product July"
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
-
-    expect(text).toContain("Record moisture to calculate the dry draw.");
-    expect(text).not.toContain("Remaining:");
+  it("leaves the dry draw unresolved while moisture is missing", () => {
+    const composition = formProductComposition({ ...base, moisturePercent: null });
+    expect(composition.sourceDryKg).toBeNull();
+    expect(part(composition, "Dry biochar")).toBeNull();
   });
 
   it("uses the recorded edit allocation instead of the entered moisture", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={50}
-        sourceWetMassKg={50}
-        moisturePercent={10}
-        recordedSourceDryMassKg={40}
-        destinationDryMassKg={45}
-        destinationBinLabel={null}
-        isEditMode
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
-
-    expect(text).toContain("Dry biochar available: 90 kg (−40 kg)");
-    expect(text).toContain("Remaining: 50 kg");
-    expect(text).not.toContain("(−45 kg)");
+    const composition = formProductComposition({
+      ...base,
+      isEditMode: true,
+      massKg: 50,
+      recordedSourceDryMassKg: 40,
+    });
+    expect(composition.sourceDryKg).toBe(40);
+    expect(part(composition, "Water")).toBe(10);
   });
 
-  it("reconstructs the recorded edit draw when the source bin is exhausted", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={0}
-        sourceWetMassKg={50}
-        recordedSourceDryMassKg={40}
-        destinationDryMassKg={45}
-        destinationBinLabel={null}
-        isEditMode
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
-
-    expect(text).toContain("Dry biochar available: 40 kg (−40 kg)");
-    expect(text).toContain("Remaining: 0 kg");
+  it("falls back to the entered moisture on a legacy edit without a recorded allocation", () => {
+    const composition = formProductComposition({ ...base, isEditMode: true, massKg: 50 });
+    expect(composition.sourceDryKg).toBe(45);
   });
 
-  it("does not invent an edit draw when the recorded allocation is unavailable", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Legacy biochar"
-        sourceAvailableDryMassKg={50}
-        sourceWetMassKg={50}
-        moisturePercent={10}
-        recordedSourceDryMassKg={null}
-        destinationDryMassKg={45}
-        destinationBinLabel={null}
-        isEditMode
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
-
-    expect(text).toContain("Recorded source dry allocation is not available.");
-    expect(text).not.toContain("(−45 kg)");
-    expect(text).not.toContain("Remaining:");
+  it("stacks ingredients and added water on the biochar and splits each ingredient", () => {
+    const composition = formProductComposition({
+      ...base,
+      massKg: 500,
+      waterAddedKg: 50,
+      ingredients: [manure],
+    });
+    expect(composition.wetProductKg).toBe(1_100);
+    expect(part(composition, "Dry biochar")).toBe(450);
+    expect(part(composition, "Chicken manure solids")).toBe(440);
+    expect(part(composition, "Water")).toBe(160);
+    expect(part(composition, "Water added")).toBe(50);
   });
 
-  it("names unavailable source dry stock instead of asking for entered fields", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={null}
-        sourceWetMassKg={100}
-        moisturePercent={10}
-        destinationDryMassKg={90}
-        destinationBinLabel={null}
-      />,
-    );
-    const text = html.replace(/<[^>]+>/g, "");
-
-    expect(text).toContain(
-      "Source dry stock is not available. Reconcile the storage bin.",
-    );
-    expect(text).not.toContain("Add biochar wet mass");
-    expect(text).not.toContain("Remaining:");
+  it("uses the ingredient bin's projected stock ratio for a weighted moisture", () => {
+    const stock = {
+      lane: "ingredient",
+      storageLocationId: manure.storageLocationId,
+      beforeDryKg: 300,
+      beforeEstimatedWetKg: 400,
+    } as AffectedStockPreview;
+    const weighted = { ...manure, moistureSource: "weighted_remaining" as const };
+    const withStock = formProductComposition({ ...base, ingredients: [weighted], previews: [stock] });
+    expect(part(withStock, "Chicken manure solids")).toBe(412.5);
+    // Without a fresh projection the part stays unknown rather than guessed.
+    const stale = formProductComposition({ ...base, ingredients: [weighted] });
+    expect(part(stale, "Chicken manure solids")).toBeNull();
   });
 
-  it("keeps a visible preview while the operator has entered only wet mass", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName={null}
-        sourceAvailableDryMassKg={null}
-        sourceWetMassKg={100}
-        destinationDryMassKg={null}
-        destinationBinLabel={null}
-      />,
-    );
-
-    expect(html).toContain("Select a biochar bin");
-    expect(html).toContain("Select a bin");
+  it("keeps the saved ingredient dry snapshot on a frozen allocation", () => {
+    const composition = formProductComposition({
+      ...base,
+      isEditMode: true,
+      recordedSourceDryMassKg: 90,
+      allocationFrozen: true,
+      ingredients: [{ ...manure, massDryKg: 500 }],
+    });
+    expect(part(composition, "Chicken manure solids")).toBe(500);
   });
 
-  it("names missing product moisture when the destination dry mass is unresolved", () => {
-    const html = renderToStaticMarkup(
-      <TransferFlowPreview
-        sourceBinName="Biochar July"
-        sourceAvailableDryMassKg={400}
-        sourceWetMassKg={100}
-        moisturePercent={10}
-        destinationDryMassKg={null}
-        destinationBinLabel="Product July"
-      />,
-    );
-
-    expect(html).toContain("Record moisture to calculate the dry biochar.");
+  it("omits the wet product total while water or an ingredient mass is blank", () => {
+    expect(formProductComposition({ ...base, waterAddedKg: null }).wetProductKg).toBeNull();
+    expect(
+      formProductComposition({ ...base, ingredients: [{ ...manure, massKg: null }] }).wetProductKg,
+    ).toBeNull();
   });
 });
