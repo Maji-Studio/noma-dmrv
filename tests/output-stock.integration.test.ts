@@ -79,6 +79,10 @@ describe('output FIFO transactions', () => {
     const f = await fixture();
     await createDelivery(f.ctx, f.deliveryInput);
     const base = { ...f.input, kind: 'count' as const, wetMassKg: 600 };
+    // A count is compared with the recorded wet stock: product 1 (1,000 kg wet,
+    // 720 kg solids) keeps the 420 kg of solids the delivery did not draw.
+    expect((await previewOutputStock(f.ctx, base)).beforeRecordedWetKg).toBeCloseTo(1000 * 420 / 720, 1);
+    expect((await previewOutputStock(f.ctx, { ...base, kind: 'loss', wetMassKg: 10 })).beforeRecordedWetKg).toBeNull();
     expect((await post(f, base)).preview.removedDryKg).toBe(0);
     expect((await post(f, { ...base, wetMassKg: 700 })).preview.removedDryKg).toBe(0);
     const loss = await post(f, { ...base, kind: 'loss', wetMassKg: 120 });

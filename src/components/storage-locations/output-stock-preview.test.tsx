@@ -252,9 +252,9 @@ describe("StockMovementCard", () => {
     await act(async () => card.renderer.unmount());
   });
 
-  it("explains a drying only count below the wet estimate above an unchanged pair", async () => {
+  it("explains a drying only count below the recorded wet stock above an unchanged pair", async () => {
     const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, beforeDryKg: 343, afterDryKg: 343,
-      beforeEstimatedWetKg: 460, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
+      beforeEstimatedWetKg: 428.75, beforeRecordedWetKg: 460, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
     const text = card.text();
     expect(text).toContain("Drying alone does not remove dry biochar.");
     expect(text).toContain("Unchanged");
@@ -268,9 +268,9 @@ describe("StockMovementCard", () => {
     await act(async () => card.renderer.unmount());
   });
 
-  it.each([["matches", 428.75], ["exceeds", 420]])("says nothing about drying when the count %s the wet estimate", async (_case, beforeEstimatedWetKg) => {
+  it.each([["matches", 428.75], ["exceeds", 420], ["has no recorded figure for", null]])("says nothing about drying when the count %s the recorded wet stock", async (_case, beforeRecordedWetKg) => {
     const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, beforeDryKg: 343, afterDryKg: 343,
-      beforeEstimatedWetKg, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
+      beforeEstimatedWetKg: 428.75, beforeRecordedWetKg, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
     expect(card.text()).not.toContain("Drying alone");
     await act(async () => card.renderer.unmount());
   });

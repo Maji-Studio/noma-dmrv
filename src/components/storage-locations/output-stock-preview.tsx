@@ -291,7 +291,9 @@ function enteredLine(preview: Preview, kind: StockEntryKind, entry: StockEntry |
  * bins estimate it at the entered moisture; ingredient bins track it.
  */
 function wetBalance(preview: Preview): { label: string; before: string; after: string; current: string; figureLabel: string } | null {
-  const { beforeEstimatedWetKg: before, afterEstimatedWetKg: after } = preview;
+  const { afterEstimatedWetKg: after } = preview;
+  // A count's before is what the records say the bin holds; see `beforeRecordedWetKg`.
+  const before = preview.beforeRecordedWetKg ?? preview.beforeEstimatedWetKg;
   if (before === null || after === null) return null;
   if (preview.lane === "ingredient") {
     const label = binLabel(preview.wetLabel ?? "wet stock");
@@ -490,14 +492,14 @@ function binLabel(quantity: string): string {
  * nothing removed, and its blocking message is the sentence that applies.
  */
 /**
- * Only a count below the wet estimate reads as lost material, so only then does
- * the block say drying removes none. A count that matches the estimate needs no
- * explanation, and without an estimate there is nothing to compare against.
+ * Only a count below the recorded wet stock reads as lost material, so only
+ * then does the block say drying removes none. A count at or above it needs no
+ * explanation, and without a recorded figure there is nothing to compare with.
  */
 function dryingNotice(preview: Preview, enteredWetKg: number | null): string | null {
   const dryLabel = preview.dryLabel ?? "dry biochar";
   const acceptedCount = preview.removedWetKg === null && preview.blockingMessage === null;
-  const estimate = preview.beforeEstimatedWetKg;
+  const estimate = preview.beforeRecordedWetKg ?? null;
   const belowEstimate = enteredWetKg !== null && estimate !== null
     && Math.round(enteredWetKg) < Math.round(estimate);
   return acceptedCount && preview.removedDryKg === 0 && belowEstimate
