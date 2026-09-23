@@ -28,8 +28,10 @@ directory.
   The Isometric suite fails closed if explicitly opted in without complete sandbox
   configuration; telemetry writes are enabled when its facility ID is also set.
 - `pnpm test:isometric-health` — opts into only
-  `tests/isometric-sandbox.integration.test.ts` and excludes describes matching
-  `write path`, even when telemetry is configured. Requires sandbox credentials
+  `tests/isometric-sandbox-health.integration.test.ts`, the read-only sandbox
+  checks. Write paths live in `tests/isometric-sandbox.integration.test.ts`,
+  which this command never collects; add a registry write there, never to the
+  health file. Both share `tests/helpers/isometric-sandbox-env.ts`. Requires sandbox credentials
   (`ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`),
   `ISOMETRIC_ENVIRONMENT=sandbox`, and `ISOMETRIC_DEMO_PROJECT_ID`. No DB required.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
@@ -175,8 +177,9 @@ These are sandbox/read-only signals, not production readiness or write-path cove
 
 Run the hermetic selection regression with
 `pnpm test run tests/isometric-health-selection.test.ts`.
-It also runs in normal Vitest CI. It collects the real sandbox suite with Vitest, enables telemetry using placeholders,
-and verifies only reads are selected and missing opted-in credentials fail closed.
+It also runs in normal Vitest CI. It collects the real health command with Vitest, enables telemetry using placeholders,
+and verifies only the health file is selected (the write-path file sits beside it
+and must stay out), and missing opted-in credentials fail closed.
 Collection uses an isolated config and a dotenv stub; no test bodies execute, no
 local env files are read, and placeholders are never sent to the API. A sentinel
 integration suite catches accidental broadening without loading database tests.

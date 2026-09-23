@@ -2,9 +2,10 @@ name: Isometric API health
 
 # Daily read-only ping of the Isometric Certify sandbox to catch upstream
 # breakage (auth regressions, schema drift, downtime) before it surfaces as a
-# user-facing submit failure. Reuses the existing opt-in vitest in
-# tests/isometric-sandbox.integration.test.ts — the registry's read paths,
-# including projects, templates, GHG entries, and blueprints.
+# user-facing submit failure. Runs only the opt-in vitest file
+# tests/isometric-sandbox-health.integration.test.ts — the registry's read
+# paths, including projects, templates, GHG entries, and blueprints. Write
+# paths live in a separate file this workflow never collects.
 # No writes. No noma DB. No app boot.
 #
 # This workflow intentionally uses its dedicated environment credential pair
