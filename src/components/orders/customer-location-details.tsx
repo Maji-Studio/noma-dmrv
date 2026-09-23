@@ -123,18 +123,15 @@ export function CustomerLocationDetails({
     : "fallback";
 
   return (
-    <div
-      className="border-[1.5px] border-[var(--clr-dark-purple)]"
-      data-testid="order-location-details"
-    >
+    // Unboxed like every other block in the form (layout contract): the title
+    // and the map frame carry the structure, not a border around both.
+    <div className="space-y-8" data-testid="order-location-details">
       {/* The location select above already names the location. */}
-      <div className="border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          Delivery location
-        </span>
-      </div>
+      <span className="body-small font-medium text-[var(--color-text-primary)]">
+        Delivery location
+      </span>
 
-      <div className="space-y-12 p-12">
+      <div className="space-y-12">
         <div className="space-y-2">
           {location.address ? (
             <p className="body-small text-[var(--color-text-primary)]">

@@ -70,7 +70,7 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
       detailedOnly: !hasDeliveries,
       fields: [
         {
-          label: "Fulfillment",
+          label: "Status",
           detailedOnly: true,
           value: <StatusBadge status={fulfillment.badgeStatus} label={fulfillment.label} />,
         },
