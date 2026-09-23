@@ -1,24 +1,29 @@
-# Form detail gallery, 22 September 2026
+# Form detail gallery, PR #822
 
-Screenshots of the Simple / Detailed presentation after the design pass on PR #822, captured from an isolated local app with synthetic fixtures and normal authentication. Real viewport captures at 1440x1100 and 390x844, not mockups.
+Real viewport captures (1440x1100 and 390x844) of the Simple and Detailed levels on PR #822, taken from an isolated local app with synthetic fixtures and normal authentication. `captures.jsonl` records the viewport and route of each image.
 
-Simple shows inputs and their saved fields, plus every blocker, warning and required-evidence tag. Detailed adds tinted composition cards: a title with a definition behind an info hint, aligned label and value rows, a 4px mini bar per component, and a "Show calculation" disclosure only where there is real arithmetic to reveal (before and after balances, FIFO layer draws, source runs). Formula text, provenance boilerplate and restated totals are gone. Transport legs render as stacked leg blocks instead of a wide table. Stock history is a timeline of entries with kind chips and before and after rows.
+The images were last captured on 22 September 2026, before the schematic picks and the form layout contract landed, and get refreshed before the PR is marked ready. A recapture shows the current state:
 
-## Verification result
-
-All five capture scenarios passed. Typecheck, lint, spacing check and the colocated Vitest suite passed apart from three pre-existing failures in the supplier quick-add dialog test that also fail on the PR head in CI. The blocker on Delivery create renders once, under the wet-mass field.
+- Simple keeps inputs, saved fields, blockers, warnings and evidence, plus each derived block's declared Simple presence (the boundary table in [forms.md](../../../forms.md#simple-and-detailed-presentation)).
+- Derived blocks sit flat under the inputs that drive them: a sentence case caption with an ⓘ hint, at most one headline figure, the picture, and one action row. Show calculation is Detailed only.
+- Stock blocks lead with the bin's wet estimate; the dry biochar pair is Detailed only. Bin selectors show the stock change inline.
+- Transport legs are one line each with an actions menu. Section titles are sentence case, not eyebrows.
 
 ## Reproduce
 
-Opt-in and skipped in ordinary CI. Serve the app on localhost:3102 against an isolated database, then:
+Opt-in and skipped in ordinary CI. `tests/e2e/form-detail-gallery.spec.ts` is hardcoded to an isolated server on port 3102 (a guard at the top, an assertion in `beforeEach`, and a route filter that aborts every other host). The PR worktree serves on port 3105 (`DISABLE_RATE_LIMIT=true NEXT_PUBLIC_APP_URL=http://localhost:3105 pnpm exec next dev -p 3105`, database `noma_dmrv_worktree`), so captures run from a temporary copy of the spec:
 
 ```sh
+sed 's/3102/3105/g' tests/e2e/form-detail-gallery.spec.ts > tests/e2e/zz-tmp-form-detail-gallery.spec.ts
 find docs/archive/qa/2026-09-22-form-detail-e -type f -name '*.png' -delete
 rm -f docs/archive/qa/2026-09-22-form-detail-e/captures.jsonl
-CAPTURE_FORM_DETAIL_GALLERY=1 NEXT_PUBLIC_APP_URL=http://localhost:3102 pnpm exec playwright test tests/e2e/form-detail-gallery.spec.ts --workers=1 --reporter=line
+set -a; source .env.local; set +a
+CAPTURE_FORM_DETAIL_GALLERY=1 NODE_ENV=test NEXT_PUBLIC_APP_URL=http://localhost:3105 DISABLE_RATE_LIMIT=true \
+  pnpm exec playwright test tests/e2e/zz-tmp-form-detail-gallery.spec.ts --workers=1 --reporter=line
+rm tests/e2e/zz-tmp-form-detail-gallery.spec.ts
 ```
 
-`captures.jsonl` records viewport and route per image. 97 PNGs across 18 surface groups.
+For a throwaway run, point `OUTPUT` in the copy at a scratch folder instead of deleting these images. Never commit the `zz-tmp-` copy.
 
 ## Application create
 
