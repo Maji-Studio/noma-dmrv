@@ -50,16 +50,17 @@ it('passes the blocking movement through when a correction is refused', async ()
   expect(result.blockers).toEqual([movement]);
 });
 
-it('matches product-bin stock using facility-local today across UTC midnight', async () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
-  try {
-    mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }], [{ timezone: 'Africa/Dar_es_Salaam' }]];
-    mocks.state.mockResolvedValue({ remainingDryKg: '100.000' });
-    mocks.view.mockResolvedValue({ dryMassKg: 100, recordedWetMassKg: 130, estimatedWetMassKg: 118 });
-    const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
-    expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toMatchObject([{ id: 'bin', dryMassKg: 100, estimatedWetMassKg: 118 }]);
-    expect(mocks.view).toHaveBeenLastCalledWith(ctx, 'bin');
-    expect(mocks.state).toHaveBeenLastCalledWith(ctx, { facilityId: 'facility', formulationId: 'recipe', storageLocationId: 'bin', physicalDate: '2026-09-16' });
-  } finally { vi.useRealTimers(); }
+it('reads each matching bin from its stock view and keeps an unresolved bin in the list', async () => {
+  mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }, { id: 'broken', code: 'BIN-2', name: 'Unresolved bin' }]];
+  mocks.state.mockClear();
+  mocks.view.mockImplementation(async (_ctx: unknown, id: string) => id === 'bin'
+    ? { dryMassKg: 100, recordedWetMassKg: 130, estimatedWetMassKg: 118 }
+    : { dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null });
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toEqual([
+    { id: 'bin', code: 'BIN', name: 'E2E bin', dryMassKg: 100, recordedWetMassKg: null, estimatedWetMassKg: 118 },
+    { id: 'broken', code: 'BIN-2', name: 'Unresolved bin', dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null },
+  ]);
+  // The stock view owns the facility-local date; the list no longer computes layers itself.
+  expect(mocks.state).not.toHaveBeenCalled();
 });

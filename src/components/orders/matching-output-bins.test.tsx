@@ -43,7 +43,7 @@ describe("MatchingOutputBins", () => {
     expect(state.inputs).toEqual([{ storageLocationId: "bin", facilityId: "facility", physicalDate: "2026-09-16", kind: "count", wetMassKg: 0, moisturePercent: null }]);
     // The bar names the batch on hand and its dry mass, in its own accent.
     expect(html).toContain('aria-label="Batches in Bin: BP-001 100 kg"');
-    expect(html).toContain("BP-001 100 kg");
+    expect(html).toContain("BP-001 100 kg dry");
     expect(html).toContain("background:var(--acc-prod)");
     expect(html).toContain('data-history-bin="bin" data-facility="facility"');
     expect(html).toContain("More info");

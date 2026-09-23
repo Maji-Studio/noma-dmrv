@@ -2,9 +2,10 @@
 
 import { useSimplePresence, type SimplePresence } from "@/components/forms/form-detail-context";
 import { CompositionCard, CompositionLedger, DerivedHeadline } from "@/components/forms";
-import type { MassSegment } from "@/components/forms/composition-ledger";
+import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import type {
@@ -102,6 +103,11 @@ function batchSegments(allocations: readonly OutputStockBalanceView[]): MassSegm
   }));
 }
 
+/** Key figures under a wet headline: batches are tracked dry, so they say so. */
+function formatDryKeyMass(kg: number | null): string {
+  return `${formatCompositionMass(kg)} dry`;
+}
+
 /** Whole kilograms without the unit, for the muted before figure of a pair. */
 function formatWetEstimate(kg: number): string {
   return kg.toLocaleString(undefined, { maximumFractionDigits: WET_ESTIMATE_DIGITS });
@@ -128,14 +134,16 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
   allocations?: OutputStockAllocationView[];
   actions?: ReactNode;
 }) {
-  const segments = batchSegments(allocations);
-  const dry = `${formatMassKg(dryKg)} dry biochar`;
+  // A spent batch holds nothing to order against, so it stays off the block.
+  const held = allocations.filter(allocation => allocation.dryMassKg > 0);
+  const segments = batchSegments(held);
+  const dry = dryKg == null ? MISSING_VALUE.notAvailable : `${formatMassKg(dryKg)} dry biochar`;
   return (
     <CompositionCard
       title={binName}
       hint={AVAILABILITY_HINT}
       actions={actions}
-      calculation={allocations.length > 0 ? <OutputStockAllocations allocations={allocations} /> : undefined}
+      calculation={held.length > 0 ? <OutputStockAllocations allocations={held} /> : undefined}
       headline={wetEstimate
         ? <DerivedHeadline label="Available wet stock, estimate" value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`} sub={wetEstimate.basis} />
         : <DerivedHeadline label="Available dry stock" value={dry} />}
@@ -143,7 +151,7 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
     >
       {segments.length > 0 && <div className="flex flex-col gap-6">
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />
-        <SegmentKey segments={segments} />
+        <SegmentKey segments={segments} format={formatDryKeyMass} />
       </div>}
     </CompositionCard>
   );
@@ -211,14 +219,18 @@ export function OutputStockPreview({ variant = "load", preview, entry, moreInfo,
  */
 function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; entry?: StockEntry; moreInfo?: ReactNode }) {
   const kind = entryKind(preview, entry);
+  // A refused movement changes nothing. The block keeps the current balance
+  // and the entry without its verb, so it cannot read as applied, even where
+  // the form shows the refusal on a field instead of in this block.
+  const refused = preview.blockingMessage != null;
   const enteredWetKg = splitWetMassKg(preview);
-  const line = enteredLine(preview, kind, entry);
+  const line = enteredLine(preview, kind, entry, refused);
   const wet = wetBalance(preview);
   const dry = dryBalance(preview);
   const notice = dryingNotice(preview, enteredWetKg);
   const rows = entryRows(preview, kind, entry);
   const ledger = movementLedger(preview);
-  const dryPair = dry && <StockBalanceChange variant={wet ? "row" : "headline"} label={dry.label} beforeKg={dry.before} afterKg={dry.after} supportingLine={wet ? undefined : line} />;
+  const dryPair = dry && <StockBalanceChange variant={wet ? "row" : "headline"} label={dry.label} beforeKg={dry.before} afterKg={refused ? undefined : dry.after} supportingLine={wet ? undefined : line} />;
   return (
     <CompositionCard
       title={preview.binName}
@@ -226,7 +238,9 @@ function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; ent
       simple={STOCK_SIMPLE_PRESENCE}
       actions={moreInfo}
       headline={wet
-        ? <DerivedHeadline label={wet.label} before={wet.before} value={wet.after} figureLabel={wet.figureLabel} sub={line} />
+        ? refused
+          ? <DerivedHeadline label={wet.label} value={wet.current} sub={line} />
+          : <DerivedHeadline label={wet.label} before={wet.before} value={wet.after} figureLabel={wet.figureLabel} sub={line} />
         : dryPair}
       detail={wet ? dryPair : undefined}
       calculation={rows.length > 0 || ledger ? <>
@@ -257,11 +271,16 @@ function enteredWetMassKg(preview: Preview, entry?: StockEntry): number | null {
   return preview.removedWetKg === null ? splitWetMassKg(preview) : Math.abs(preview.removedWetKg);
 }
 
-/** The entry as one caption: "310 kg wet removed at 22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture". */
-function enteredLine(preview: Preview, kind: StockEntryKind, entry?: StockEntry): string | null {
+/**
+ * The entry as one caption: "310 kg wet removed at 22.7% moisture", "Counted
+ * 2,650 kg wet at 27.4% moisture". A refused entry drops the verb: "310 kg wet
+ * at 22.7% moisture".
+ */
+function enteredLine(preview: Preview, kind: StockEntryKind, entry: StockEntry | undefined, refused: boolean): string | null {
   const wetKg = enteredWetMassKg(preview, entry);
   if (wetKg === null) return null;
   const moisture = preview.estimateMoisturePercent === null ? "" : ` at ${formatMoisturePercent(preview.estimateMoisturePercent)} moisture`;
+  if (refused) return `${formatMassKg(wetKg)} wet${moisture}`;
   return kind === "count"
     ? `Counted ${formatMassKg(wetKg)} wet${moisture}`
     : `${formatMassKg(wetKg)} wet ${ENTRY_VERB[kind]}${moisture}`;
@@ -271,18 +290,19 @@ function enteredLine(preview: Preview, kind: StockEntryKind, entry?: StockEntry)
  * The headline pair in wet mass, or null when no moisture gives one. Output
  * bins estimate it at the entered moisture; ingredient bins track it.
  */
-function wetBalance(preview: Preview): { label: string; before: string; after: string; figureLabel: string } | null {
+function wetBalance(preview: Preview): { label: string; before: string; after: string; current: string; figureLabel: string } | null {
   const { beforeEstimatedWetKg: before, afterEstimatedWetKg: after } = preview;
   if (before === null || after === null) return null;
   if (preview.lane === "ingredient") {
     const label = binLabel(preview.wetLabel ?? "wet stock");
-    return { label, before: formatMassKg(before), after: formatMassKg(after), figureLabel: `${label}: ${formatMassKg(before)} before, ${formatMassKg(after)} after` };
+    return { label, before: formatMassKg(before), after: formatMassKg(after), current: formatMassKg(before), figureLabel: `${label}: ${formatMassKg(before)} before, ${formatMassKg(after)} after` };
   }
   const label = "Wet stock in bin, estimate";
   return {
     label,
     before: `≈ ${formatWetEstimate(before)}`,
     after: `${formatWetEstimate(after)} kg`,
+    current: `≈ ${formatWetEstimate(before)} kg`,
     figureLabel: `${label}: about ${formatWetEstimate(before)} kg before, ${formatWetEstimate(after)} kg after`,
   };
 }
@@ -469,10 +489,18 @@ function binLabel(quantity: string): string {
  * explains. Only an accepted count qualifies: a refused loss also arrives with
  * nothing removed, and its blocking message is the sentence that applies.
  */
+/**
+ * Only a count below the wet estimate reads as lost material, so only then does
+ * the block say drying removes none. A count that matches the estimate needs no
+ * explanation, and without an estimate there is nothing to compare against.
+ */
 function dryingNotice(preview: Preview, enteredWetKg: number | null): string | null {
   const dryLabel = preview.dryLabel ?? "dry biochar";
   const acceptedCount = preview.removedWetKg === null && preview.blockingMessage === null;
-  return acceptedCount && preview.removedDryKg === 0 && enteredWetKg !== null
+  const estimate = preview.beforeEstimatedWetKg;
+  const belowEstimate = enteredWetKg !== null && estimate !== null
+    && Math.round(enteredWetKg) < Math.round(estimate);
+  return acceptedCount && preview.removedDryKg === 0 && belowEstimate
     ? `Drying alone does not remove ${dryLabel}.`
     : null;
 }

@@ -35,10 +35,10 @@ export function useOutputStockPreview(input: OutputStockPreviewInput | null) {
   });
 }
 
-export function useMatchingOutputBins(facilityId: string, formulationId: string) {
+export function useMatchingOutputBins(facilityId: string, formulationId: string, enabled = true) {
   return useQuery({
     queryKey: outputStockKeys.matching(facilityId, formulationId),
-    enabled: !!facilityId && !!formulationId,
+    enabled: enabled && !!facilityId && !!formulationId,
     queryFn: async () => {
       const result = await getMatchingOutputBinsFn({ facilityId, formulationId });
       if (!result.success) throw new Error(result.error);
