@@ -15,7 +15,7 @@
  * still drawing on it as `blockers`, so the form can show the operator which
  * records hold the mass (decision 2026-09-17). The repair is to correct the
  * withdrawal that is wrong: nothing in the app adds mass back to a feedstock
- * bin (ADR 0027, decided 2026-09-23).
+ * bin (ADR 0027).
  */
 
 import { and, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";

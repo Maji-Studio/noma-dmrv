@@ -110,7 +110,7 @@ branded through `conflictCode()`, which proves only that it is not blank; the
 type does not prove it is a stored record code. The convention is the record's
 human code, and `conflict` points at a record that has one (the bin, not the
 movement). Known exceptions: a bin movement rides as a `blocker` under its
-history-row label (decided 2026-09-23), and the stale-version sentinel
+history-row label, and the stale-version sentinel
 `stale-version`. A record without a code of its own is reported as the coded
 parent the operator manages it from: a feedstock-type delete blocked by a
 production process names its facility, one blocked by a formulation
