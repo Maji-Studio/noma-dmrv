@@ -420,13 +420,14 @@ export function FormulationForm({
         </div>
 
         {/* What the entered shares make, directly under the share fields.
-            Simple hides it, since the share fields already say it, until the
-            shares pass 100%: that total is an error to fix, not a detail. */}
+            Simple hides it while the shares make 100%, since the fields
+            already say it. Any other total is something to fix, so Simple
+            shows the picture and the Balance action with it. */}
         {(biocharNum > 0 || fields.length > 0) && (
           <CompositionCard
             title="Blend by volume"
             hint="Shares are percentages of the solid blend's volume. Water is recorded separately on the product."
-            simple={isOverAllocated ? "picture" : "hidden"}
+            simple={isBalanced ? "hidden" : "picture"}
             actions={showBalanceButton ? (
               <Button
                 type="button"
@@ -440,11 +441,23 @@ export function FormulationForm({
             ) : undefined}
           >
             <div className="flex flex-col gap-8">
-              <SegmentBar
-                segments={shareSegments}
-                label="Blend by volume"
-                format={formatShareSegment}
-              />
+              {/* The bar always fills its width, so over 100% a mark shows
+                  where 100% falls; everything right of it is the excess. */}
+              <div className="relative">
+                <SegmentBar
+                  segments={shareSegments}
+                  label="Blend by volume"
+                  format={formatShareSegment}
+                />
+                {isOverAllocated && (
+                  <span
+                    aria-hidden="true"
+                    data-testid="blend-full-mark"
+                    className="absolute -inset-y-4 w-2 bg-[var(--st-bad)]"
+                    style={{ left: `${(100 / totalPercent) * 100}%` }}
+                  />
+                )}
+              </div>
               <SegmentKey
                 segments={shareSegments}
                 format={formatShareSegment}
