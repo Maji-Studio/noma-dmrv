@@ -1,0 +1,3 @@
+node_modules/
+# Generated standalone review; rebuild with pnpm build.
+index.html
