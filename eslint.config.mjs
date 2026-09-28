@@ -59,6 +59,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // Standalone R3F study has an independent typecheck and geometry checks.
+    "prototypes/biochar-landscape/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

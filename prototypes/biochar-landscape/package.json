@@ -1,0 +1,28 @@
+{
+  "name": "biochar-landscape-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "preview": "node serve.cjs",
+    "bake:models": "node bake-model-light.mjs",
+    "bake:terrain": "node bake-terrain.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "node verify-compositions.mjs",
+    "check": "pnpm typecheck && pnpm verify && pnpm build",
+    "bake:all": "pnpm bake:terrain && pnpm bake:models atlas && pnpm bake:models circle && pnpm bake:models campus"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.3.0",
+    "@react-three/drei": "^10.7.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "@types/react": "^19.2.13",
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.3"
+  }
+}
