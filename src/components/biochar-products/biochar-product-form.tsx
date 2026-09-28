@@ -342,6 +342,11 @@ export function BiocharProductForm({
     previews: productPreviewsAvailable ? affectedBins : undefined,
   });
   const detailed = useFormDetailLevel() === "detailed";
+  // Simple draws the composition once the biochar or an ingredient has a mass;
+  // before that it would be a key of "Not available" rows.
+  const compositionStarted =
+    massKgNum !== null ||
+    (watchedIngredientBins ?? []).some((ingredient) => typeof ingredient.massKg === "number");
 
   return (
     <div className="space-y-20">
@@ -603,7 +608,7 @@ export function BiocharProductForm({
         )}
         {productStockPreview.isFetching && <p role="status" className="sr-only">Refreshing affected bins</p>}
 
-        <ProductCompositionPreview
+        {(detailed || compositionStarted) && <ProductCompositionPreview
           wetMassKg={composition.wetProductKg}
           components={composition.components}
           note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
@@ -615,7 +620,7 @@ export function BiocharProductForm({
               triggerLabel="Stock history"
             />
           ) : undefined}
-        />
+        />}
       </FormSection>
       </FormSpine>
 

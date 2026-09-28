@@ -401,6 +401,10 @@ not draw proportions from an incomplete or zero basis.
 | `headline` | caption and headline |
 | `hidden` | nothing |
 
+In a form, Simple draws a picture only once one of its inputs has a value (the
+moisture split under wet mass and moisture, the product composition under the
+biochar and ingredient masses); Detailed keeps the unresolved state visible.
+
 `detail` rows, Show calculation and the calculation are Detailed only. Parts
 outside the boundary stay mounted behind `hidden`, so an open history dialog or
 a half-written correction survives a level switch. Blocks that are not a
