@@ -34,7 +34,7 @@ function delivery(
 describe("application delivery option mass", () => {
   it("shows wet and dry mass together", () => {
     expect(getApplicationDeliveryMassLabel(delivery())).toBe(
-      "Wet biochar product: 850kg | Dry biochar: 820kg",
+      "850 kg wet, 820 kg dry biochar",
     );
   });
 
@@ -44,7 +44,7 @@ describe("application delivery option mass", () => {
         delivery({ massDryKg: null, moistureContentPercent: null }),
       ),
     ).toBe(
-      "Wet biochar product: 850kg | Dry biochar: Not recorded",
+      "850 kg wet, dry biochar not recorded",
     );
   });
 
@@ -53,7 +53,7 @@ describe("application delivery option mass", () => {
 
     expect(label).toContain("Finished product north");
     expect(label).toContain(
-      "Wet biochar product: 850kg | Dry biochar: 820kg",
+      "850 kg wet, 820 kg dry biochar",
     );
     expect(label).not.toContain("DL-26-004");
     expect(label).not.toContain("OR-26-003");
