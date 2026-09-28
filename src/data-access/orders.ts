@@ -17,6 +17,7 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import {
   deriveOrderFulfillmentStatus,
+  ORDER_FULFILLED_SHORTFALL_FRACTION,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
@@ -39,7 +40,7 @@ export interface OrderWithRelations extends Order {
   deliveredCount: number;
   /** Wet mass of the deliveries in the `delivered` status, in kg. */
   deliveredWetMassKg: number;
-  /** Fulfillment derived from delivery counts; see lib/orders/fulfillment. */
+  /** Fulfillment derived from delivered against requested wet mass; see lib/orders/fulfillment. */
   fulfillmentStatus: OrderFulfillmentStatus;
 }
 
@@ -117,9 +118,8 @@ export async function getOrders(
   const fulfillmentExpr = sql<OrderFulfillmentStatus>`
     case
       when coalesce(${deliveryAgg.total}, 0) = 0 then 'no_deliveries'
-      when coalesce(${deliveryAgg.delivered}, 0) = 0 then 'pending'
-      when coalesce(${deliveryAgg.delivered}, 0) < coalesce(${deliveryAgg.total}, 0) then 'partial'
-      else 'fulfilled'
+      when coalesce(${deliveryAgg.deliveredWetKg}, 0) >= ${orders.quantityKg} * ${1 - ORDER_FULFILLED_SHORTFALL_FRACTION} then 'fulfilled'
+      else 'partial'
     end
   `;
 
@@ -224,7 +224,7 @@ export async function getOrders(
     .limit(pageSize)
     .offset(offset);
 
-  // Combine data — derive fulfillment status from the counts (single source of truth)
+  // Combine data — derive fulfillment status from the delivered mass (single source of truth)
   const items: OrderWithRelations[] = orderList.map((o) => {
     const deliveryCount = o.deliveryCount;
     const deliveredCount = o.deliveredCount;
@@ -232,7 +232,7 @@ export async function getOrders(
       ...o,
       deliveryCount,
       deliveredCount,
-      fulfillmentStatus: deriveOrderFulfillmentStatus(deliveryCount, deliveredCount),
+      fulfillmentStatus: deriveOrderFulfillmentStatus(deliveryCount, o.deliveredWetMassKg, o.quantityKg),
     };
   });
 

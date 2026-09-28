@@ -88,7 +88,17 @@ describe("completed delivery order balance", () => {
     const f = await fixture(); await postDelivery(f, 60);
     await expect(postDelivery(f, 50)).rejects.toThrow("Only 40 kg remains on this order");
     const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
-    expect(listed).toMatchObject({ deliveredCount: 1, deliveredWetMassKg: 60 });
+    expect(listed).toMatchObject({ deliveredCount: 1, deliveredWetMassKg: 60, fulfillmentStatus: "partial" });
+  });
+  it("derives fulfillment from delivered wet mass in the list and its status filter", async () => {
+    const f = await fixture(); await postDelivery(f, 60);
+    const idsWith = async (status: "partial" | "fulfilled") =>
+      (await getOrders(f.ctx, { facilityId: f.order.facilityId, status, pageSize: 100 })).items.map(order => order.id);
+    expect(await idsWith("partial")).toContain(f.order.id);
+    expect(await idsWith("fulfilled")).not.toContain(f.order.id);
+    await postDelivery(f, 40);
+    expect(await idsWith("fulfilled")).toContain(f.order.id);
+    expect(await idsWith("partial")).not.toContain(f.order.id);
   });
   it("re-credits the original truck only through explicit correction", async () => {
     const f = await fixture(); await postDelivery(f, 20); const current = await postDelivery(f, 60);
