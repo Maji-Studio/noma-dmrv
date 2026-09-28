@@ -116,11 +116,31 @@ _Avoid_: equating blended-product dry solids with dry biochar; dry product mass.
 **Output-bin layer**:
 One production run's or product batch's remaining dry biochar in a storage bin,
 with its source identity and physical placement date.
-_Avoid_: treating an accounting layer as proof of a physically separate pile.
+_Avoid_: treating an accounting layer as proof of a physically separate pile;
+only a **split bin**'s sub-bins are physically separate.
+
+**Split bin**:
+An output bin whose layers sit physically apart as **sub-bins**. The operator
+records which sub-bins a removal came from and the order they were emptied;
+oldest first is the default.
+
+**Sub-bin**:
+One layer of a split bin in its own bay, bag or heap, with its own moisture.
+_Avoid_: using it for a layer in a mix bin.
+
+**Mix bin**:
+An output bin holding one well-mixed pile. Every removal takes each layer in
+proportion to its remaining solids.
 
 **Departure moisture**:
-The water fraction measured in material leaving a storage bin, describing
-that draw rather than the condition of the remaining pile.
+The water fraction measured in material leaving a storage bin. It sets that
+draw's dry mass and resets the **estimated moisture** of the sub-bin or mix
+pile it was taken from.
+
+**Estimated moisture**:
+A sub-bin's or mix pile's current water fraction by the records: the latest
+reading, carried forward through later additions. A hint beside moisture
+fields, never a prefilled value.
 
 **Biochar share of solids**:
 The fraction of a product batch's dry solids that is biochar, established from
