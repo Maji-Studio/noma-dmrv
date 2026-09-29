@@ -2,6 +2,7 @@ import type { DbTransaction } from '@/db';
 import { applicationOutputAllocations, outputStockAllocations } from '@/db/schema';
 import { MIX_BIN_REMOVALS_CREDITABLE } from '@/config/output-stock';
 import type { OrgContext } from '@/lib/auth/server';
+import { PRO_RATA_POLICY } from '@/lib/output-stock';
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { requireOrgScope } from './utils';
 
@@ -26,7 +27,7 @@ export async function getMixBinHeldApplicationIds(ctx: OrgContext, reader: Reade
   const draws = await reader.select({ id: outputStockAllocations.id, deliveryId: outputStockAllocations.deliveryId, productId: outputStockAllocations.targetBiocharProductId, reverses: outputStockAllocations.reversesAllocationId })
     .from(outputStockAllocations)
     .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId),
-      sql`${outputStockAllocations.basisSnapshot}->>'policy' = 'pro_rata'`,
+      sql`${outputStockAllocations.basisSnapshot}->>'policy' = ${PRO_RATA_POLICY}`,
       or(inArray(outputStockAllocations.deliveryId, deliveryIds), inArray(outputStockAllocations.targetBiocharProductId, productIds))));
   // Reversal rows copy the original's snapshot, so they arrive in the same read.
   const reversed = new Set(draws.flatMap(d => d.reverses ? [d.reverses] : []));

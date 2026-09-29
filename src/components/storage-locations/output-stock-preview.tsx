@@ -6,7 +6,7 @@ import { useSimplePresence } from "@/components/forms/form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { calculatedWithoutNotice } from "@/lib/output-stock/messages";
+import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 import type { ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
@@ -53,7 +53,7 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
 export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const parts = useSimplePresence(STOCK_SIMPLE_PRESENCE);
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
-  const backdated = "calculatedWithout" in preview ? calculatedWithoutNotice(preview.calculatedWithout ?? []) : null;
+  const backdated = backdatedNotice(preview);
   const needsAttention = Boolean(blockingMessage) || Boolean(preview.blockers?.length) || preview.discrepancySolidsKg > 0 || Boolean(backdated);
 
   // The live region stays mounted while the level hides it, so a blocker that

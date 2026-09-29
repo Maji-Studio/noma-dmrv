@@ -48,6 +48,9 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
   const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
   const count = counts.find(m => (m.outputKind === 'count' || m.inputSnapshot?.kind === 'count') && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
   if (count) throw await blockedBy({ ...count, reason: 'Count' }, () => 'Correction blocked by a later count.');
+  // A bin switched back to split held nothing then; restoring stock across the switch would put a mixed pile back as sub-bins.
+  const split = counts.find(m => m.outputKind === 'split');
+  if (split) throw await blockedBy(split, at => `Correction blocked by the switch to split at ${at}. Stock from before it cannot return to the bin.`);
   const deliveryId = allocations.find(a => a.deliveryId)?.deliveryId ?? null;
   if (deliveryId) {
     const [application] = await reader.select({ id: applications.id, code: applications.code }).from(applications).where(and(eq(applications.organizationId, ctx.organizationId), eq(applications.deliveryId, deliveryId)));
