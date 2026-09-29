@@ -185,7 +185,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await evidence(page, info, "application-batch-run-shares");
 
     await openBin(page, f);
-    await page.getByRole("button", { name: "More info", exact: true }).first().click();
+    await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
     const deliveryEntry = page.getByRole("dialog", { name: "Stock history" }).locator("article").filter({ has: page.getByRole("heading", { name: "Delivery", exact: true }) });
     await deliveryEntry.getByRole("button", { name: "Correct entry" }).click();
     await fillStock(page, "1900", "30", "E2E attempted used delivery correction");
@@ -221,7 +221,7 @@ test.describe("Output-bin conserved FIFO", () => {
     expect((await readOutputStockBrowserFixture(f)).balance.beforeDryKg).toBe(280);
 
     await openBin(page, f);
-    await page.getByRole("button", { name: "More info", exact: true }).first().click();
+    await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
     const history = page.getByRole("dialog", { name: "Stock history", exact: true });
     await history.locator("article").filter({ hasText: "E2E FIFO spill" }).getByRole("button", { name: "Correct entry" }).click();
     await fillStock(page, "12", "30", "E2E corrected spill");

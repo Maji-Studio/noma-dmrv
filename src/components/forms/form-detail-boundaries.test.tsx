@@ -26,6 +26,7 @@ vi.mock("@/components/forms/entity-select", async (importOriginal) => ({
   FormEntitySelect: () => <span>Blend material</span>,
 }));
 import { SpineSectionStatic } from "./form-spine";
+import { MassMoistureFields } from "./mass-moisture-fields";
 import { FormDetailControl, FormDetailProvider } from "./form-detail-context";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { MoistureSplit } from "@/components/ui/moisture-split";
@@ -124,6 +125,27 @@ describe("optional detail boundaries", () => {
     expect(renderer.root.findAllByProps({ role: "img" })).toHaveLength(2);
     await act(async () => renderer.unmount());
   });
+});
+
+it("draws the moisture split in a Simple form only once an input has a value", async () => {
+  const registration = { name: "field", onChange: async () => {}, onBlur: async () => {}, ref: () => {} };
+  const fields = (wetMassKg: unknown) => (
+    <MassMoistureFields
+      wet={{ id: "wet", registration }}
+      moisture={{ id: "moisture", registration }}
+      wetMassKg={wetMassKg}
+      moisturePercent={null}
+    />
+  );
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(<FormDetailProvider scope="form"><FormDetailControl />{fields(null)}</FormDetailProvider>); });
+  expect(visibleText(renderer.root)).not.toContain("not recorded");
+  await act(async () => renderer.update(<FormDetailProvider scope="form"><FormDetailControl />{fields(100)}</FormDetailProvider>));
+  expect(visibleText(renderer.root)).toMatch(/Moisture\s+not recorded/);
+  await act(async () => renderer.update(<FormDetailProvider scope="form"><FormDetailControl />{fields(null)}</FormDetailProvider>));
+  await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
+  expect(visibleText(renderer.root)).toMatch(/Wet mass\s+not recorded/);
+  await act(async () => renderer.unmount());
 });
 
 it("omits optional read-section headings in Simple and numbers visible sections contiguously", async () => {

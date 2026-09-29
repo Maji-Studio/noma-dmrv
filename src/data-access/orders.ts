@@ -4,7 +4,7 @@
  */
 
 import { db, type DbTransaction } from "@/db";
-import { countRows, numericAggregate } from "@/db/aggregate";
+import { numericAggregate } from "@/db/aggregate";
 import {
   customerLocations,
   customers,
@@ -16,7 +16,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import {
-  deriveOrderFulfillmentStatus,
+  ORDER_FULFILLED_SHORTFALL_FRACTION,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
@@ -35,11 +35,9 @@ export interface OrderWithRelations extends Order {
 
   /** Total deliveries linked to this order (non-archived). */
   deliveryCount: number;
-  /** Deliveries in the `delivered` status — drives the `x/y delivered` progress. */
-  deliveredCount: number;
   /** Wet mass of the deliveries in the `delivered` status, in kg. */
   deliveredWetMassKg: number;
-  /** Fulfillment derived from delivery counts; see lib/orders/fulfillment. */
+  /** Fulfillment derived in SQL from delivered against requested wet mass (`getOrders`). */
   fulfillmentStatus: OrderFulfillmentStatus;
 }
 
@@ -92,15 +90,12 @@ export async function getOrders(
     sortOrder = "desc",
   } = filters ?? {};
 
-  // Per-order delivery aggregate (non-archived): total + delivered counts.
-  // Powers both the `x/y delivered` progress and the derived fulfillment status.
+  // Per-order delivery aggregate (non-archived): total count and delivered wet mass.
+  // Powers the derived fulfillment status.
   const deliveryAgg = db
     .select({
       orderId: deliveries.orderId,
       total: count().as("delivery_total"),
-      delivered: countRows(sql`${deliveries.status} = 'delivered'`).as(
-        "delivery_delivered",
-      ),
       deliveredWetKg: sql<number>`coalesce(sum(${deliveries.deliveredWetMassKg}) filter (where ${deliveries.status} = 'delivered'), 0)`.as(
         "delivery_delivered_wet_kg",
       ),
@@ -113,13 +108,15 @@ export async function getOrders(
     .groupBy(deliveries.orderId)
     .as("delivery_agg");
 
-  // SQL mirror of deriveOrderFulfillmentStatus — keep the two thresholds in sync.
+  // The one implementation of order fulfillment: the list rows select it and
+  // the status filter matches on it, so a badge and its filter cannot disagree.
+  // The threshold is exact numeric arithmetic (no float, no rounding):
+  // delivered >= requested x (1 - shortfall fraction).
   const fulfillmentExpr = sql<OrderFulfillmentStatus>`
     case
       when coalesce(${deliveryAgg.total}, 0) = 0 then 'no_deliveries'
-      when coalesce(${deliveryAgg.delivered}, 0) = 0 then 'pending'
-      when coalesce(${deliveryAgg.delivered}, 0) < coalesce(${deliveryAgg.total}, 0) then 'partial'
-      else 'fulfilled'
+      when coalesce(${deliveryAgg.deliveredWetKg}, 0) >= ${orders.quantityKg}::numeric * (1 - ${ORDER_FULFILLED_SHORTFALL_FRACTION}::numeric) then 'fulfilled'
+      else 'partial'
     end
   `;
 
@@ -206,12 +203,10 @@ export async function getOrders(
       deliveryCount: numericAggregate(
         sql<number>`coalesce(${deliveryAgg.total}, 0)`,
       ),
-      deliveredCount: numericAggregate(
-        sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
-      ),
       deliveredWetMassKg: numericAggregate(
         sql<number>`coalesce(${deliveryAgg.deliveredWetKg}, 0)`,
       ),
+      fulfillmentStatus: fulfillmentExpr,
     })
     .from(orders)
     .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -224,20 +219,8 @@ export async function getOrders(
     .limit(pageSize)
     .offset(offset);
 
-  // Combine data — derive fulfillment status from the counts (single source of truth)
-  const items: OrderWithRelations[] = orderList.map((o) => {
-    const deliveryCount = o.deliveryCount;
-    const deliveredCount = o.deliveredCount;
-    return {
-      ...o,
-      deliveryCount,
-      deliveredCount,
-      fulfillmentStatus: deriveOrderFulfillmentStatus(deliveryCount, deliveredCount),
-    };
-  });
-
   return {
-    items,
+    items: orderList,
     total,
     page,
     pageSize,
