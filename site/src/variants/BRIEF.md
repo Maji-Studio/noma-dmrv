@@ -25,7 +25,7 @@ Five landing page variants live on one route (`site/src/pages/index.astro`), swi
 - New copy (labels, connective lines) is allowed only if short, true to the claim boundaries, no en or em dashes, sentence case. List every new line in your report.
 - Client scripts: `<script>` inside the component. Do setup inside `onShown("X", (root) => { ... })` so hidden variants stay idle. Visuals are mounted before `onShown` fires, so `root.querySelector('[data-visual="chain"]').noma.pin("r1")` works there. Trace visuals emit a bubbling `noma:select` event.
 - Must work at 400 px wide with no horizontal page scroll, by keyboard, and with `prefers-reduced-motion` (no scroll-jacking; motion is optional garnish).
-- No new dependencies. Don't run `astro build` (others share `dist/`); the dev server is already running at http://localhost:3110.
+- No new dependencies. Don't run `astro build` (others share `dist/`); the dev server is already running at http://localhost:3120.
 
 ## Check your work
 
