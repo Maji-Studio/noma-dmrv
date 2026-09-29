@@ -1,16 +1,31 @@
 // Trace visuals: simple chain (A), dense six-week graph (B), map (C).
-import { STAGES, countsHtml, detailHtml, drawGraph, el, esc, makeGraph, rng, walk, wire } from "./core.js";
+import { copy } from "../content/copy.js";
+import { STAGES, countsHtml, detailHtml, drawGraph, el, esc, makeGraph, rng, scrollCue, walk, wire } from "./core.js";
 import { CHAIN_EDGES, CHAIN_NODES, PLANT, denseGraph } from "./data.js";
 
 const LEGEND = `<div class="nv-legend"><span><i class="lg-infra"></i>Supplier, ingredient</span><span><i class="lg-prod"></i>Production and stock</span><span><i class="lg-dist"></i>Product and distribution</span><span><i class="lg-ver"></i>Verification</span></div>`;
 
-/** Builds the frame: svg in a scroll box, optional legend, optional side panel. */
-function frame(root, { viewBox, minWidth, label }) {
+/**
+ * Builds the frame: svg in a scroll box, optional legend, optional side panel.
+ * `minWidth` keeps the svg readable beside the side panel; `narrowWidth` (the viewBox width, so 1 unit is 1 CSS px)
+ * applies once the layout stacks, which keeps labels near 11px and hit areas at 24px or more on phones.
+ */
+function frame(root, { viewBox, minWidth, narrowWidth, label }) {
   const side = root.dataset.side || "right";
   const legend = root.dataset.legend !== "false";
   root.classList.add("nv-viz", `nv-side-${side}`);
-  root.innerHTML = `<div class="nv-main"><div class="nv-scroll"><svg viewBox="${viewBox}" style="min-width:${minWidth}px" role="group" aria-label="${esc(label)}"></svg></div>${legend ? LEGEND : ""}</div>${side === "none" ? "" : `<aside class="nv-side" aria-live="polite"></aside>`}`;
-  return { svg: root.querySelector("svg"), sideEl: root.querySelector(".nv-side") };
+  root.innerHTML = `<div class="nv-main"><div class="nv-scroll"><svg viewBox="${viewBox}" style="--nv-min:${minWidth}px;--nv-min-narrow:${narrowWidth}px" role="group" aria-label="${esc(label)}"></svg></div>${legend ? LEGEND : ""}</div>${side === "none" ? "" : `<aside class="nv-side" aria-live="polite"></aside>`}`;
+  const scroller = root.querySelector(".nv-scroll");
+  scrollCue(scroller, copy.visuals.scrollHint);
+  return { svg: root.querySelector("svg"), sideEl: root.querySelector(".nv-side"), scroller };
+}
+/** A "Trace from" select above the diagram: the keyboard and screen reader route to every node. groups = [[label, [[id, text], ...]], ...] */
+function jumpSelect(root, groups, ctl) {
+  const v = copy.visuals, tools = document.createElement("div");
+  tools.className = "nv-tools";
+  tools.innerHTML = `<label><span>${esc(v.traceFrom)}</span><select class="nv-jump"><option value="">${esc(v.tracePlaceholder)}</option>${groups.filter(([, items]) => items.length).map(([lab, items]) => `<optgroup label="${esc(lab)}">${items.map(([id, text]) => `<option value="${esc(id)}">${esc(text)}</option>`).join("")}</optgroup>`).join("")}</select></label>`;
+  tools.querySelector("select").addEventListener("change", (e) => ctl.pin(e.target.value));
+  root.querySelector(".nv-main").prepend(tools);
 }
 function emit(root, g, id) {
   root.dispatchEvent(new CustomEvent("noma:select", { bubbles: true, detail: { id, node: id ? g.byId.get(id) : null } }));
@@ -18,7 +33,7 @@ function emit(root, g, id) {
 
 const CHAIN_IDLE = `<div class="nv-stage">How to read it</div><p>Fourteen records behind one removal. Hover the field (AP-2026-031): the whole chain back to the sawmill lights up, plus the manure that went into the blend.</p><p class="nv-hint">1,000 kg feedstock at 20% moisture gives 300 kg biochar at 10%, so 270 kg dry.</p>`;
 export function mountChain(root) {
-  const { svg, sideEl } = frame(root, { viewBox: "0 0 1010 300", minWidth: 760, label: "Chain of custody for one removal" });
+  const { svg, sideEl } = frame(root, { viewBox: "0 0 1010 300", minWidth: 760, narrowWidth: 1010, label: "Chain of custody for one removal" });
   const g = makeGraph(CHAIN_NODES.map((n) => ({ ...n })), CHAIN_EDGES);
   drawGraph(svg, g, { size: 30, glyphs: true, labels: true, focusable: true });
   if (sideEl) sideEl.innerHTML = CHAIN_IDLE;
@@ -27,20 +42,19 @@ export function mountChain(root) {
 
 const DENSE_IDLE = `<div class="nv-stage">How to read it</div><p>One plant, six weeks: 7 suppliers, 28 deliveries in, 18 runs, 8 biochar bins, 20 products, 45 fields, 5 removals.</p><p>Hover a <b>mix bin</b> (Bin B, D or E) to see how far one merge reaches. Hover a <b>field</b> to walk it back to the sawmills.</p><p class="nv-hint">Made-up data. Bottom row: credit batches and lab samples.</p>`;
 export function mountDense(root) {
-  const { svg, sideEl } = frame(root, { viewBox: "0 0 1200 700", minWidth: 820, label: "Chain of custody, six weeks of records" });
+  const { svg, sideEl } = frame(root, { viewBox: "0 0 1200 700", minWidth: 820, narrowWidth: 1200, label: "Chain of custody, six weeks of records" });
   const src = denseGraph();
   const g = makeGraph(src.nodes.map((n) => ({ ...n })), src.edges);
   const glyphs = root.dataset.style !== "dots";
-  drawGraph(svg, g, { size: glyphs ? 15 : 8, glyphs, labels: false, focusable: false });
+  drawGraph(svg, g, { size: glyphs ? 15 : 8, glyphs, labels: false, focusable: false, hit: glyphs ? 10 : 12 });
   const t = el("text", { x: 470, y: 598, class: "nv-town" }, svg); t.textContent = "Credit batches and lab samples";
   if (sideEl) sideEl.innerHTML = DENSE_IDLE;
   const ctl = wire(svg, g, (id) => { if (sideEl) sideEl.innerHTML = id ? detailHtml(g, id) : DENSE_IDLE; emit(root, g, id); });
   if (root.dataset.jump === "true") {
-    const sel = document.createElement("select");
-    sel.className = "nv-jump"; sel.setAttribute("aria-label", "Trace from a record");
-    sel.innerHTML = `<option value="">Trace from…</option>` + [["Removals", "rem"], ["Mix bins", "bbin"], ["Credit batches", "cb"]].map(([lab, st]) => `<optgroup label="${lab}">${g.nodes.filter((n) => n.st === st && (st !== "bbin" || n.mode === "mix")).map((n) => `<option value="${n.id}">${esc(n.code)}</option>`).join("")}</optgroup>`).join("");
-    sel.addEventListener("change", () => ctl.pin(sel.value));
-    root.querySelector(".nv-main").prepend(sel);
+    // Every stage a pointer user can trace from, most useful first.
+    const JUMP_ORDER = ["rem", "cb", "bbin", "app", "del", "prod", "run", "fbin", "ing", "fd", "smp", "sup"];
+    const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+    jumpSelect(root, JUMP_ORDER.map((st) => [cap(STAGES[st].plural), g.nodes.filter((n) => n.st === st).map((n) => [n.id, n.code])]), ctl);
   }
   return ctl;
 }
@@ -51,7 +65,7 @@ const TOWNS = [["Iringa", -7.77, 35.69], ["Mafinga", -8.3, 35.28], ["Makambako",
 const MAP_IDLE = `<div class="nv-stage">How to read it</div><p>The same records, placed where they happened. Everything inside the plant collapses into one square.</p><p>Hover a <b>field</b> to see which sawmills its biochar came from. Hover a <b>sawmill</b> to see every field it ended up in.</p>`;
 export function mountMap(root) {
   root.dataset.legend = root.dataset.legend || "false";
-  const { svg, sideEl } = frame(root, { viewBox: "0 0 1000 680", minWidth: 680, label: "Chain of custody on a map of the Southern Highlands, Tanzania" });
+  const { svg, sideEl, scroller } = frame(root, { viewBox: "0 0 1000 680", minWidth: 680, narrowWidth: 1000, label: "Chain of custody on a map of the Southern Highlands, Tanzania" });
   const dense = denseGraph();
   el("rect", { class: "nv-land", x: 0, y: 0, width: 1000, height: 680 }, svg);
   const r = rng(7), cg = el("g", {}, svg);
@@ -79,8 +93,9 @@ export function mountMap(root) {
   const nEls = new Map();
   mg.nodes.forEach((n) => {
     const st = STAGES[n.st], s = n.st === "plant" ? 26 : n.st === "sup" ? 15 : 11;
-    const g = el("g", { class: `nv-node d-${st.dom}`, transform: `translate(${n.x - s / 2},${n.y - s / 2})`, "data-id": n.id, role: "button", tabindex: n.st === "app" ? "-1" : "0", "aria-label": `${st.label} ${n.code}` }, nG);
-    el("rect", { class: "nv-hit", x: -5, y: -5, width: s + 10, height: s + 10 }, g);
+    const g = el("g", { class: `nv-node d-${st.dom}`, transform: `translate(${n.x - s / 2},${n.y - s / 2})`, "data-id": n.id, role: "button", tabindex: n.st === "app" ? "-1" : "0", "aria-label": `${st.label} ${n.code}`, "aria-pressed": "false" }, nG);
+    const hp = s >= 15 ? 7 : 9;
+    el("rect", { class: "nv-hit", x: -hp, y: -hp, width: s + hp * 2, height: s + hp * 2 }, g);
     el("rect", { class: "nv-body", width: s, height: s, rx: 2 }, g);
     if (s >= 15) { const k = (s - 4) / 16; el("path", { class: "nv-glyph", d: st.g, transform: `translate(2,2) scale(${k})`, "stroke-width": 1.4 / k }, g); }
     if (n.st === "plant") { const t = el("text", { x: s + 6, y: s / 2 + 4 }, g); t.textContent = "Plant"; }
@@ -93,25 +108,30 @@ export function mountMap(root) {
     const all = new Set([...walk(dense, id, "up"), ...walk(dense, id, "down"), id]);
     return { sups: new Set([...all].filter((x) => dense.byId.get(x).st === "sup")), apps: new Set([...all].filter((x) => dense.byId.get(x).st === "app")) };
   };
-  let pinned = null;
-  const show = (id) => {
-    root.dispatchEvent(new CustomEvent("noma:select", { bubbles: true, detail: { id, node: id ? mg.byId.get(id) || dense.byId.get(id) : null } }));
-    if (!id) { svg.classList.remove("nv-hl"); nEls.forEach((e) => e.classList.remove("on", "self")); arcs.forEach((a) => a.classList.remove("on")); if (sideEl) sideEl.innerHTML = MAP_IDLE; return; }
+  const paint = (id) => {
+    if (!id) { svg.classList.remove("nv-hl"); nEls.forEach((e) => e.classList.remove("on", "self")); arcs.forEach((a) => a.classList.remove("on")); return; }
     const L = lineage(id); svg.classList.add("nv-hl");
     nEls.forEach((e, k) => { e.classList.toggle("on", k === "plant" || L.sups.has(k) || L.apps.has(k)); e.classList.toggle("self", k === id); });
     arcs.forEach((a) => a.classList.toggle("on", (L.sups.has(a._a) && a._b === "plant") || (a._a === "plant" && L.apps.has(a._b))));
-    if (!sideEl) return;
-    const n = mg.byId.get(id) || dense.byId.get(id);
-    const supNames = [...L.sups].map((s) => dense.byId.get(s).code);
-    const extra = id === "plant" ? "" : `<div class="nv-group"><div class="nv-label">${n.st === "sup" ? "Went to" : "Biochar and blend from"}</div><div class="nv-counts">${n.st === "sup" ? `<span>${L.apps.size} fields</span>` : supNames.map((s) => `<span>${esc(s)}</span>`).join("")}</div></div>`;
-    sideEl.innerHTML = `<div><div class="nv-stage">${esc(STAGES[n.st].label)}</div><div class="nv-code">${esc(n.code)}</div></div><div class="nv-meta">${(n.meta || []).map((m) => `<div>${esc(m)}</div>`).join("")}</div>${extra}` + (dense.byId.get(id) ? `<div class="nv-group"><div class="nv-label">Full lineage</div>${countsHtml(dense, new Set([...walk(dense, id, "up"), ...walk(dense, id, "down")]))}</div>` : "");
   };
-  const idOf = (t) => { const n = t && t.closest && t.closest("[data-id]"); return n ? n.getAttribute("data-id") : null; };
-  svg.addEventListener("pointerover", (e) => { const id = idOf(e.target); if (id && !pinned) show(id); });
-  svg.addEventListener("pointerout", (e) => { const id = idOf(e.target); if (id && !pinned && !idOf(e.relatedTarget || document.body)) show(null); });
-  svg.addEventListener("click", (e) => { const id = idOf(e.target); if (!id) { pinned = null; show(null); return; } pinned = pinned === id ? null : id; show(pinned || id); });
-  svg.addEventListener("focusin", (e) => { const id = idOf(e.target); if (id && e.target.matches(":focus-visible")) { pinned = id; show(id); } });
-  svg.addEventListener("keydown", (e) => { if (e.key === "Escape") { pinned = null; show(null); } });
+  const describe = (id) => {
+    const n = mg.byId.get(id) || dense.byId.get(id);
+    const L = lineage(id), supNames = [...L.sups].map((s) => dense.byId.get(s).code);
+    const extra = id === "plant" ? "" : `<div class="nv-group"><div class="nv-label">${n.st === "sup" ? "Went to" : "Biochar and blend from"}</div><div class="nv-counts">${n.st === "sup" ? `<span>${L.apps.size} fields</span>` : supNames.map((s) => `<span>${esc(s)}</span>`).join("")}</div></div>`;
+    return `<div><div class="nv-stage">${esc(STAGES[n.st].label)}</div><div class="nv-code">${esc(n.code)}</div></div><div class="nv-meta">${(n.meta || []).map((m) => `<div>${esc(m)}</div>`).join("")}</div>${extra}` + (dense.byId.get(id) ? `<div class="nv-group"><div class="nv-label">Full lineage</div>${countsHtml(dense, new Set([...walk(dense, id, "up"), ...walk(dense, id, "down")]))}</div>` : "");
+  };
+  const ctl = wire(svg, mg, (id) => {
+    root.dispatchEvent(new CustomEvent("noma:select", { bubbles: true, detail: { id, node: id ? mg.byId.get(id) || dense.byId.get(id) : null } }));
+    if (sideEl) sideEl.innerHTML = id ? describe(id) : MAP_IDLE;
+  }, { nodeEls: nEls, highlight: paint, arrows: false });
   if (sideEl) sideEl.innerHTML = MAP_IDLE;
-  return { pin(id) { pinned = id || null; show(pinned); }, clear() { pinned = null; show(null); } };
+  // Fields have no tab stop of their own, so the keyboard route to them is this select.
+  const opts = (st) => mg.nodes.filter((n) => n.st === st).map((n) => [n.id, n.code]);
+  jumpSelect(root, [["Plant", opts("plant")], ["Suppliers", opts("sup")], ["Fields", opts("app")]], ctl);
+  // On narrow screens the map overflows sideways: open it with the plant in view.
+  requestAnimationFrame(() => {
+    const over = scroller.scrollWidth - scroller.clientWidth;
+    if (over > 1) scroller.scrollLeft = Math.max(0, Math.min(over, (mg.byId.get("plant").x / MAPB.W) * scroller.scrollWidth - scroller.clientWidth / 2));
+  });
+  return ctl;
 }

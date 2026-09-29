@@ -83,8 +83,9 @@ export function drawGraph(svg, g, opt) {
   g.nodeEls = new Map();
   g.nodes.forEach((n) => {
     const st = STAGES[n.st];
-    const gg = el("g", { class: `nv-node d-${st.dom}`, transform: `translate(${n.x - s / 2},${n.y - s / 2})`, "data-id": n.id, tabindex: opt.focusable ? "0" : "-1", role: "button", "aria-label": `${st.label} ${n.code}` }, nG);
-    el("rect", { class: "nv-hit", x: -6, y: -6, width: s + 12, height: s + 12 }, gg);
+    const gg = el("g", { class: `nv-node d-${st.dom}`, transform: `translate(${n.x - s / 2},${n.y - s / 2})`, "data-id": n.id, tabindex: opt.focusable ? "0" : "-1", role: "button", "aria-label": `${st.label} ${n.code}`, "aria-pressed": "false" }, nG);
+    const hp = opt.hit ?? 6;
+    el("rect", { class: "nv-hit", x: -hp, y: -hp, width: s + hp * 2, height: s + hp * 2 }, gg);
     el("rect", { class: "nv-body", width: s, height: s, rx: Math.max(1.5, s * 0.12) }, gg);
     if (opt.glyphs) { const k = (s - 4) / 16; el("path", { class: "nv-glyph", d: st.g, transform: `translate(2,2) scale(${k})`, "stroke-width": (1.4 / k) * Math.min(1, k * 1.1) }, gg); }
     if (opt.labels) {
@@ -113,20 +114,27 @@ export function highlight(svg, g, id) {
 }
 /**
  * Hover, tap, focus and keyboard handling. Calls onShow(id|null) after every change.
+ * Enter and Space pin or unpin the focused node; `aria-pressed` mirrors the pin.
+ * opts: { nodeEls, highlight(id), arrows } let the map reuse this with its own highlighting and no arrow walking.
  * Returns a controller with pin(id) and clear().
  */
-export function wire(svg, g, onShow) {
+export function wire(svg, g, onShow, opts = {}) {
   let pinned = null;
-  const show = (id) => { highlight(svg, g, id); onShow(id); };
+  const nodeEls = opts.nodeEls || g.nodeEls;
+  const paint = opts.highlight || ((id) => highlight(svg, g, id));
+  const show = (id) => { paint(id); nodeEls.forEach((e, k) => e.setAttribute("aria-pressed", String(k === pinned))); onShow(id); };
   const idOf = (t) => { const n = t && t.closest && t.closest("[data-id]"); return n ? n.getAttribute("data-id") : null; };
+  const toggle = (id) => { pinned = pinned === id ? null : id; show(pinned || id); };
   svg.addEventListener("pointerover", (e) => { const id = idOf(e.target); if (id && !pinned) show(id); });
   svg.addEventListener("pointerout", (e) => { const id = idOf(e.target); if (id && !pinned && !idOf(e.relatedTarget || document.body)) show(null); });
-  svg.addEventListener("click", (e) => { const id = idOf(e.target); if (!id) { pinned = null; show(null); return; } pinned = pinned === id ? null : id; show(pinned || id); });
+  svg.addEventListener("click", (e) => { const id = idOf(e.target); if (!id) { pinned = null; show(null); return; } toggle(id); });
   svg.addEventListener("focusin", (e) => { const id = idOf(e.target); if (id && e.target.matches(":focus-visible")) { pinned = id; show(id); } });
   svg.addEventListener("keydown", (e) => {
     const id = idOf(e.target);
     if (e.key === "Escape") { pinned = null; show(null); e.target.blur && e.target.blur(); return; }
     if (!id) return;
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(id); return; }
+    if (opts.arrows === false) return;
     let next = null;
     if (e.key === "ArrowRight") next = (g.out.get(id) || [])[0];
     if (e.key === "ArrowLeft") next = (g.inn.get(id) || [])[0];
@@ -138,11 +146,35 @@ export function wire(svg, g, onShow) {
     }
     if (next) {
       e.preventDefault();
-      const ne = g.nodeEls.get(next);
+      const ne = nodeEls.get(next);
       if (ne.getAttribute("tabindex") === "0") ne.focus(); else { pinned = next; show(next); }
     }
   });
   return { pin(id) { pinned = id || null; show(pinned); }, clear() { pinned = null; show(null); } };
+}
+
+/**
+ * Overflow cue for a horizontally scrolling box: edge fades (classes can-left / can-right on the box) and a short
+ * hint line after it, both shown only while the content actually overflows. The hint retires once the box is scrolled.
+ */
+export function scrollCue(box, hintText) {
+  const hint = document.createElement("p");
+  hint.className = "nv-scroll-hint"; hint.textContent = hintText; hint.hidden = true;
+  box.before(hint);
+  let touched = false;
+  const update = () => {
+    const max = box.scrollWidth - box.clientWidth, over = max > 1;
+    box.classList.toggle("can-left", over && box.scrollLeft > 4);
+    box.classList.toggle("can-right", over && box.scrollLeft < max - 4);
+    hint.hidden = !over || touched;
+  };
+  // Only a person's own scrolling retires the hint (the map opens pre-scrolled by script).
+  let user = false, from = 0;
+  ["touchstart", "wheel", "pointerdown"].forEach((t) => box.addEventListener(t, () => { user = true; from = box.scrollLeft; }, { passive: true }));
+  box.addEventListener("scroll", () => { if (user && Math.abs(box.scrollLeft - from) > 8) touched = true; update(); }, { passive: true });
+  new ResizeObserver(update).observe(box);
+  update();
+  return update;
 }
 
 export function featIcon(g, dom) {

@@ -15,7 +15,7 @@ const c = copy;
       <nav aria-label={c.chrome.navLabel}>
         {c.nav.map((n) => <a href={n.href}>{n.label}</a>)}
       </nav>
-      <BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink>
+      <BlockLink href={c.cta.primaryHref} size="sm">{c.cta.primary}</BlockLink>
     </div>
   </div>
 </header>
@@ -23,14 +23,15 @@ const c = copy;
   .skip { position: fixed; left: 12px; top: 12px; z-index: 100; padding: 14px 20px; background: var(--paper); border: var(--rule-strong); transform: translateY(-200%); }
   .skip:focus { transform: none; }
   .site-header { padding-inline: var(--gutter); }
-  .bar { max-width: var(--max-width); margin-inline: auto; display: flex; align-items: center; gap: 24px var(--col-gap); padding-block: 16px; flex-wrap: wrap; }
+  .bar { max-width: var(--max-width); margin-inline: auto; display: flex; align-items: center; gap: 24px var(--col-gap); padding-block: 14px; flex-wrap: wrap; }
   .brand { display: inline-flex; align-items: baseline; gap: 10px; min-height: var(--tap); text-decoration: none; margin-right: auto; align-self: center; }
-  .name { font-size: 34px; letter-spacing: var(--track-heading); line-height: 1; }
+  .name { font-size: 32px; letter-spacing: var(--track-heading); line-height: 1; }
   .by { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
   .menu { display: flex; align-items: center; gap: 24px 40px; }
   nav { display: flex; gap: 0 32px; }
-  nav a { display: inline-flex; align-items: center; min-height: var(--tap); font-size: var(--fs-small); text-decoration: none; }
-  nav a:hover { text-decoration: underline; text-underline-offset: 6px; }
+  nav a { display: inline-flex; align-items: center; min-height: var(--tap); font-size: var(--fs-small); }
+  nav a { text-decoration: underline; text-decoration-color: transparent; text-decoration-thickness: 1px; text-underline-offset: 4px; transition: text-decoration-color 0.2s var(--ease), text-underline-offset 0.2s var(--ease); }
+  nav a:hover, nav a:focus-visible { text-decoration-color: currentColor; text-underline-offset: 8px; }
   .menu-btn { display: none; min-height: var(--tap); padding: 0 20px; background: none; border: var(--rule-strong); cursor: pointer; font-size: var(--fs-small); }
   @media (max-width: 760px) {
     .bar { flex-wrap: wrap; }

@@ -1,10 +1,17 @@
 ---
-// Primary action: solid purple block link.
-const { href, ...rest } = Astro.props;
+// Primary action: solid purple block link. `size="sm"` is the compact header size (still a 44px target).
+interface Props { href: string; size?: "md" | "sm"; [attr: string]: unknown }
+const { href, size = "md", ...rest } = Astro.props;
 ---
-<a class="block-link" href={href} {...rest}><slot /></a>
+<a class:list={["block-link", size]} href={href} {...rest}>
+  <span><slot /></span>
+  <svg viewBox="0 0 16 10" aria-hidden="true"><path d="M0 5h14 M10 1l4 4-4 4" /></svg>
+</a>
 <style>
-  .block-link { display: inline-flex; align-items: center; justify-content: center; min-height: var(--block-height); padding: 0 32px; background: var(--clr-purple); color: var(--paper); font-size: var(--fs-body); text-decoration: none; text-align: center; transition: background-color 0.15s; }
+  .block-link { display: inline-flex; align-items: center; justify-content: center; gap: 14px; min-height: var(--block-height); padding: 0 32px; background: var(--clr-purple); color: var(--paper); font-size: var(--fs-body); text-decoration: none; text-align: center; transition: background-color 0.2s var(--ease); }
+  .block-link.sm { min-height: var(--block-height-sm); padding: 0 20px; gap: 10px; font-size: var(--fs-small); }
   .block-link:hover { background: var(--clr-dark-purple); }
   .block-link:focus-visible { outline-color: var(--clr-dark-purple); }
+  svg { width: 16px; height: 10px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; transition: transform 0.25s var(--ease); }
+  .block-link:hover svg, .block-link:focus-visible svg { transform: translateX(4px); }
 </style>

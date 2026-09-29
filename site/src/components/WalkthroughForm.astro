@@ -2,11 +2,12 @@
 // Walkthrough request form. `data-state` on the form is one of idle | sending | sent | error.
 // Submission goes through submitWalkthrough (src/lib/walkthrough.js), a stub until the endpoint slice.
 import { copy } from "../content/copy.js";
+interface Props { idPrefix?: string }
 const { idPrefix = "wt" } = Astro.props;
 const w = copy.walkthrough;
-const field = (k) => `${idPrefix}-${k}`;
+const field = (k: string) => `${idPrefix}-${k}`;
 ---
-<form class="wt-form" data-walkthrough data-state="idle" novalidate
+<form class="wt-form" method="post" action="/api/walkthrough" data-walkthrough data-state="idle" novalidate
   data-msg-sending={w.sending} data-msg-sent={`${w.sent} ${w.prototypeNote}`} data-msg-error={w.error}
   data-err-name={w.errors.name} data-err-email={w.errors.email} data-err-email-invalid={w.errors.emailInvalid} data-err-company={w.errors.company}>
   <div class="fields">

@@ -4,7 +4,14 @@
 @media (max-width: 860px) { .nv-viz { grid-template-columns: 1fr; } }
 .nv-main { position: relative; min-width: 0; }
 .nv-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
-.nv-scroll svg { display: block; width: 100%; height: auto; }
+.nv-scroll svg { display: block; width: 100%; height: auto; min-width: var(--nv-min, 0); }
+@media (max-width: 860px) { .nv-scroll svg { min-width: var(--nv-min-narrow, var(--nv-min, 0)); } }
+/* Overflow cue: edge fades while there is more to scroll to, plus a short hint line (script toggles both). */
+.nv-scroll.can-right { mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
+.nv-scroll.can-left { mask-image: linear-gradient(90deg, transparent, #000 40px); }
+.nv-scroll.can-left.can-right { mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+.nv-scroll-hint { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); padding: 10px 0; }
+.nv-scroll-hint::after { content: ""; display: inline-block; width: 14px; height: 1px; background: currentColor; margin-left: 8px; vertical-align: middle; }
 .nv-side { padding: 24px; display: grid; gap: 12px; align-content: start; font-size: var(--fs-small); line-height: 1.5; background: var(--clr-purple-5); border-left: var(--rule); }
 .nv-side-below .nv-side { border-left: 0; border-top: var(--rule); }
 @media (max-width: 860px) { .nv-side { border-left: 0; border-top: var(--rule); } }
@@ -16,7 +23,10 @@
 .nv-counts span { font-size: var(--fs-fine); border: var(--rule); padding: 1px 8px; background: var(--paper); }
 .nv-hint { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-mono { font-family: var(--f-mono); font-weight: 500; font-size: 0.85em; }
-.nv-jump { position: absolute; top: 12px; left: 0; z-index: 1; min-height: var(--tap); border: var(--rule-strong); background: var(--paper); border-radius: 0; padding: 4px 12px; font-size: var(--fs-small); max-width: 230px; }
+.nv-tools { padding: 14px 0; border-bottom: var(--rule); }
+.nv-tools label { display: inline-flex; align-items: center; gap: 12px; font-size: var(--fs-small); color: var(--clr-dark-purple-70); max-width: 100%; }
+.nv-jump { min-height: var(--tap); border: var(--rule-strong); background: var(--paper); border-radius: 0; padding: 4px 12px; font-size: var(--fs-small); color: var(--ink); min-width: 0; max-width: 260px; }
+.nv-jump:hover { border-color: var(--clr-purple); }
 .nv-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 14px 0; border-top: var(--rule); font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .nv-legend i { width: 12px; height: 12px; border: 1.5px solid; }
@@ -30,7 +40,7 @@
 .nv-node .nv-body { stroke-width: 1.5; transition: opacity 0.15s; rx: 0; }
 .nv-node .nv-glyph { fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .nv-node text { fill: var(--ink); font-family: var(--f-mono); font-weight: 500; font-size: 11px; }
-.nv-node text.nv-st { fill: var(--ink-3); font-family: var(--f-sans); font-weight: 300; font-size: 10px; }
+.nv-node text.nv-st { fill: var(--ink-3); font-family: var(--f-sans); font-weight: 300; font-size: 11px; }
 .nv-node .nv-hit { fill: transparent; stroke: none; }
 .nv-node:focus-visible .nv-body { stroke: var(--clr-dark-purple); stroke-width: 3; }
 .d-prod .nv-body { fill: var(--prod-bg); stroke: var(--prod); } .d-prod .nv-glyph { stroke: var(--prod); }
@@ -67,13 +77,13 @@ svg.nv-hl .nv-arc.on { opacity: 1; stroke-opacity: 0.95; stroke-width: 2; }
 .nv-morph { display: grid; gap: 10px; }
 .nv-m-head, .nv-m-row { display: grid; grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr); align-items: center; }
 .nv-m-head { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
-.nv-m-chip { border-top: var(--rule); padding: 10px 12px; min-width: 0; transition: background 0.3s, opacity 0.3s; }
+.nv-m-chip { border-top: var(--rule); padding: 10px 12px; min-width: 0; transition: background 0.3s; }
 .nv-m-chip .e { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-m-chip .f { font-family: var(--f-mono); font-weight: 500; font-size: 12.5px; overflow-wrap: anywhere; }
 .nv-m-chip .v { font-weight: 300; font-size: var(--fs-small); }
 .nv-m-left { border-left: 3px solid var(--prod); }
-.nv-m-right { border-left: 3px solid var(--ver); opacity: 0.35; }
-.nv-m-row.done .nv-m-right { opacity: 1; background: var(--ver-bg); }
+.nv-m-right { border-left: 3px dashed var(--ver); border-top: 1px dashed var(--clr-purple-40); background: var(--off-bg); }
+.nv-m-row.done .nv-m-right { border-left-style: solid; border-top: var(--rule); background: var(--ver-bg); }
 .nv-m-row.active .nv-m-left { background: var(--prod-bg); }
 .nv-m-link { height: 24px; width: 100%; }
 .nv-m-link path { fill: none; stroke: var(--hair-2); stroke-width: 1.5; stroke-dasharray: 4 4; }
@@ -81,7 +91,7 @@ svg.nv-hl .nv-arc.on { opacity: 1; stroke-opacity: 0.95; stroke-width: 2; }
 @media (prefers-reduced-motion: no-preference) { .nv-m-row.active .nv-m-link path { animation: nv-flow 0.6s linear infinite; } }
 .nv-m-bundle { margin-top: 8px; border: 1px dashed var(--clr-purple-40); padding: 16px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .nv-m-bundle.done { border-style: solid; border-color: var(--ver); background: var(--ver-bg); }
-@media (max-width: 640px) { .nv-m-head, .nv-m-row { grid-template-columns: 1fr; } .nv-m-link { transform: rotate(90deg); width: 22px; justify-self: center; } .nv-m-head div:nth-child(2) { display: none; } }
+@media (max-width: 640px) { .nv-m-head, .nv-m-row { grid-template-columns: 1fr; } .nv-m-link { transform: rotate(90deg); width: 22px; justify-self: center; } .nv-m-head { display: none; } .nv-m-chip::before { content: attr(data-label); display: block; font-size: var(--fs-fine); color: var(--clr-purple); margin-bottom: 2px; } }
 
 .nv-bins { display: grid; gap: 20px; padding-block: 24px; }
 .nv-bin-ctrl { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }

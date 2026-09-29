@@ -10,23 +10,28 @@ const c = copy;
   <div class="inner">
     <h1>{c.hero.title}</h1>
     <div class="intro">
-      <p class="lead">{c.hero.lead}</p>
-      <div class="cta"><BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink></div>
-    </div>
-    <VisualFrame visual="chain" caption={c.captions.chain} />
-    <div class="proof">
-      <LogoStrip label={c.proof.label} logos={c.proof.logos} />
+      <div class="pitch">
+        <p class="lead">{c.hero.lead}</p>
+        <div class="cta">
+          <BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink>
+        </div>
+      </div>
       <FactLine figures={c.proof.figures} />
     </div>
+    <div class="proof-trace"><VisualFrame visual="chain" caption={c.captions.chain} /></div>
+    <LogoStrip label={c.proof.label} logos={c.proof.logos} />
   </div>
 </section>
 <style>
   .hero { padding-inline: var(--gutter); }
-  .inner { max-width: var(--max-width); margin-inline: auto; padding-block: clamp(32px, 4vw, 64px) var(--section-space); display: grid; gap: clamp(32px, 4vw, 56px); }
-  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 17ch; }
-  .intro { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); column-gap: var(--col-gap); row-gap: 32px; align-items: end; }
+  .inner { max-width: var(--max-width); margin-inline: auto; padding-block: clamp(24px, 4vw, 72px) var(--section-space); display: grid; gap: clamp(40px, 5vw, 72px); }
+  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 18ch; }
+  .intro { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.8fr); column-gap: calc(var(--col-gap) * 1.6); row-gap: 40px; align-items: start; }
+  .pitch { display: grid; gap: 32px; border-top: var(--rule-strong); padding-top: 24px; }
   .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); }
-  .cta { display: flex; justify-content: flex-start; }
-  .proof { display: grid; gap: clamp(32px, 4vw, 56px); margin-top: clamp(16px, 3vw, 40px); }
-  @media (max-width: 860px) { .intro { grid-template-columns: 1fr; } }
+  .cta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 32px; }
+  .intro :global(.facts) { border-top: var(--rule-strong); }
+  .intro :global(.fact:first-child) { border-top: 0; padding-top: 24px; }
+  .proof-trace { margin-top: clamp(0px, 1vw, 16px); }
+  @media (max-width: 860px) { .intro { grid-template-columns: 1fr; } .intro :global(.facts) { border-top: 0; } }
 </style>

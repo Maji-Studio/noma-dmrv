@@ -19,6 +19,14 @@ export const copy = {
     logoPlaceholder: "Logo to come",
     figurePlaceholder: "Placeholder until the figure is confirmed",
     screenshotPlaceholder: "Screenshot placeholder",
+    backToTop: "Back to top",
+    tableCaption: "Spreadsheet compared with noma",
+  },
+  // Strings the visuals (visuals/*.js) render.
+  visuals: {
+    scrollHint: "Scroll sideways",
+    traceFrom: "Trace from",
+    tracePlaceholder: "Choose a record",
   },
   captions: {
     chain: "Illustrative: made-up records, real record types.",
@@ -35,16 +43,22 @@ export const copy = {
   proof: {
     label: "Built with and supported by",
     logos: ["Dark Earth Carbon", "REPIC", "FiBL", "Isometric"],
-    // Placeholders until DEC gives written OK and the current figure (plan: Inputs from the owner).
+    // Both figures wait on DEC's written OK (plan: Inputs from the owner). `pending: true` renders the placeholder
+    // treatment; drop it from a figure once approved. Never inferred from the string.
     figures: [
-      { value: "1,800 t", text: "of biochar a year at the first site in Mafinga, Tanzania" },
-      { value: "[figure] t", text: "traced in noma so far" },
+      { value: "1,800 t", pending: true, text: "of biochar a year at the first site in Mafinga, Tanzania" },
+      { value: "[figure] t", pending: true, text: "traced in noma so far" },
     ],
   },
   dense: {
     title: "Real plants are messy. The trace still holds.",
     lead: "Split bins, mix bins, several deliveries per run. Hover a mix bin to see how far one merge reaches, or a field to walk it back to the sawmills.",
-    screenshots: ["Traceability, DAG view", "Bin history", "Removal readiness"],
+    // First is the lead screenshot. Set `src` (1440x900 capture at 2x, under site/public) to swap in the real image.
+    screenshots: [
+      { caption: "Traceability, DAG view", alt: "The noma traceability graph for one credit batch: feedstock deliveries, production runs, biochar products and a delivery out, ending in three field applications.", src: "/screenshots/dag.webp", width: 2880, height: 1800 },
+      { caption: "Bin history", alt: "The stock history of a product bin in noma: two intakes and one delivery draw, each with wet mass, moisture and dry biochar before and after.", src: "/screenshots/bin-history.webp", width: 1400, height: 1050 },
+      { caption: "Removal readiness", alt: "The noma removal readiness check: 0.4 t of dry biochar traced back to three production runs and three applications, five checks passed and one issue left to fix.", src: "/screenshots/removal-readiness.webp", width: 1750, height: 1324 },
+    ],
   },
   map: {
     title: "Same records, on the map.",

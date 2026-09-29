@@ -23,7 +23,7 @@ import { copy as c } from "../content/copy.js";
 
     <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead} split>
       <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
-      <div class="shots">{c.dense.screenshots.map((s) => <ScreenshotFrame caption={s} />)}</div>
+      <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
     </Section>
 
     <Section title={c.map.title} lead={c.map.lead} split>
@@ -45,7 +45,7 @@ import { copy as c } from "../content/copy.js";
       <ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} />
     </Section>
 
-    <Section id="registry" title={c.registry.title} lead={c.registry.lead} split>
+    <Section id="registry" title={c.registry.title} lead={c.registry.lead} aside>
       <VisualFrame visual="morph" caption={c.captions.morph} />
     </Section>
 
@@ -60,8 +60,10 @@ import { copy as c } from "../content/copy.js";
   <SiteFooter />
 </BaseLayout>
 <style>
-  .shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(24px, 3vw, 48px); }
-  @media (max-width: 900px) { .shots { grid-template-columns: 1fr; } }
+  .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); row-gap: clamp(24px, 3vw, 40px); align-items: start; }
+  .shots > :global(.lead) { grid-row: 1 / span 2; }
+  @media (max-width: 900px) { .shots { grid-template-columns: 1fr; } .shots > :global(.lead) { grid-row: auto; } }
   .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
   .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
 </style>
