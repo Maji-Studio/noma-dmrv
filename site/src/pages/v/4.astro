@@ -3,7 +3,8 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteHeader from "../../components/SiteHeader.astro";
 import SiteFooter from "../../components/SiteFooter.astro";
-import Hero from "../../components/Hero.astro";
+import Hero from "../../variants/v4/Hero.astro";
+import "../../variants/v4/v4.css";
 import Section from "../../components/Section.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
 import ScreenshotFrame from "../../components/ScreenshotFrame.astro";
@@ -12,6 +13,7 @@ import ComparisonTable from "../../components/ComparisonTable.astro";
 import OpenSourceOptions from "../../components/OpenSourceOptions.astro";
 import WalkthroughForm from "../../components/WalkthroughForm.astro";
 import { copy as c } from "../../content/copy.js";
+import "../../variants/measure-cap.css";
 ---
 <BaseLayout layout="4"
   title="noma, open-source biochar dMRV by MAJI"
@@ -22,12 +24,12 @@ import { copy as c } from "../../content/copy.js";
     <Hero />
 
     <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead} split>
-      <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
+      <VisualFrame visual="dense" attrs={{ "data-jump": "true", "data-side": "below" }} caption={c.captions.dense} />
       <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
     </Section>
 
     <Section title={c.map.title} lead={c.map.lead} split>
-      <VisualFrame visual="map" caption={c.captions.map} />
+      <VisualFrame visual="map" attrs={{ "data-side": "below" }} caption={c.captions.map} />
     </Section>
 
     <Section id="features" band="rose" title={c.features.title} lead={c.features.lead} split>
@@ -60,10 +62,7 @@ import { copy as c } from "../../content/copy.js";
   <SiteFooter />
 </BaseLayout>
 <style>
-  .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); row-gap: clamp(24px, 3vw, 40px); align-items: start; }
-  .shots > :global(.lead) { grid-row: 1 / span 2; }
-  @media (max-width: 900px) { .shots { grid-template-columns: 1fr; } .shots > :global(.lead) { grid-row: auto; } }
-  .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
-  .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
-  .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
+  .feat-title { font-size: var(--fs-subheading); letter-spacing: var(--track-heading); }
+  .hint { font-size: var(--fs-small); color: var(--ink-2); }
+  .feat-title + p { font-size: var(--fs-body); }
 </style>

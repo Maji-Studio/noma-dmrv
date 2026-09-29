@@ -1,9 +1,9 @@
 ---
-// PROTOTYPE layout variant 7 (see src/variants/BRIEF.md). Starts as a copy of index.astro; the variant agent rewrites it.
+// PROTOTYPE layout variant 7, "Stripe style" (see src/variants/BRIEF.md): strict centred grid, boxed panels, 1.2fr / 0.8fr headings.
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteHeader from "../../components/SiteHeader.astro";
 import SiteFooter from "../../components/SiteFooter.astro";
-import Hero from "../../components/Hero.astro";
+import Hero from "../../variants/v7/Hero.astro";
 import Section from "../../components/Section.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
 import ScreenshotFrame from "../../components/ScreenshotFrame.astro";
@@ -66,4 +66,32 @@ import { copy as c } from "../../content/copy.js";
   .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
   .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
   .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
+</style>
+<style is:global>
+  :root[data-layout="7"] {
+    --frame: 1200px;
+    --pad: clamp(20px, 4vw, 32px);
+    --gutter: var(--pad);
+    --col-gap: clamp(24px, 4vw, 64px);
+    --section-space: clamp(56px, 6vw, 96px);
+    --fs-display: clamp(40px, 5.4vw, 76px);
+    --fs-heading: clamp(30px, 3.6vw, 52px);
+    --measure: 60ch;
+    --edge: calc(var(--frame) + 2 * var(--pad));
+  }
+  /* One edge system: every block sits in the same centred column. */
+  :root[data-layout="7"] .site-header .bar,
+  :root[data-layout="7"] main .inner,
+  :root[data-layout="7"] .foot .inner { max-width: var(--edge); margin-inline: auto; }
+  :root[data-layout="7"] .site-header .bar { padding-inline: var(--pad); }
+  :root[data-layout="7"] .section { border-top: 0 !important; }
+  /* Visuals are boxed panels inside the column, never bleeding. */
+  :root[data-layout="7"] .vf { margin-inline: 0 !important; border: var(--panel-border); }
+  :root[data-layout="7"] .aside .vf figcaption { padding-inline-start: var(--viz-pad); }
+  /* Registry alternates: visual left, copy right. */
+  @media (min-width: 861px) {
+    :root[data-layout="7"] #registry .inner.aside { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); }
+    :root[data-layout="7"] #registry .head { order: 2; }
+  }
+  :root[data-layout="7"] .foot .row { margin-inline: 0; padding-inline: 0; }
 </style>

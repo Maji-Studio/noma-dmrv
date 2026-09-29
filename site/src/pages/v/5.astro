@@ -1,10 +1,15 @@
 ---
-// PROTOTYPE layout variant 5 (see src/variants/BRIEF.md). Starts as a copy of index.astro; the variant agent rewrites it.
+// PROTOTYPE layout variant 5, "Creative" (see src/variants/BRIEF.md).
+// Idea: a spine. A hairline rail runs down the left edge of the page and every section hangs off it on a square node,
+// the same square the trace draws for a record. Prose keeps a fixed narrow column on the rail's right; diagrams take a
+// larger field beside it, so each diagram's own "How to read it" panel is never far from the prose that introduces it.
+// The dense trace breaks the pattern and runs the full width under its heading.
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteHeader from "../../components/SiteHeader.astro";
 import SiteFooter from "../../components/SiteFooter.astro";
-import Hero from "../../components/Hero.astro";
-import Section from "../../components/Section.astro";
+import BlockLink from "../../components/BlockLink.astro";
+import LogoStrip from "../../components/LogoStrip.astro";
+import FactLine from "../../components/FactLine.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
 import ScreenshotFrame from "../../components/ScreenshotFrame.astro";
 import FeatureList from "../../components/FeatureList.astro";
@@ -18,52 +23,168 @@ import { copy as c } from "../../content/copy.js";
   description="Trace every tonne of biochar, from feedstock to certification. Open-source digital monitoring, reporting and verification for biochar producers."
 >
   <SiteHeader />
-  <main id="main">
-    <Hero />
+  <main id="main" class="spine">
+    <section class="s hero" data-tone="infra">
+      <span class="node" aria-hidden="true"></span>
+      <h1>{c.hero.title}</h1>
+      <div class="head">
+        <p class="lead">{c.hero.lead}</p>
+        <div class="cta"><BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink></div>
+      </div>
+      <div class="proof"><FactLine figures={c.proof.figures} /></div>
+      <div class="field"><VisualFrame visual="chain" caption={c.captions.chain} /></div>
+      <div class="logos"><LogoStrip label={c.proof.label} logos={c.proof.logos} /></div>
+    </section>
 
-    <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead} split>
-      <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
-      <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
-    </Section>
+    <section class="s wide" id="trace" data-tone="prod">
+      <span class="node" aria-hidden="true"></span>
+      <header class="head"><h2>{c.dense.title}</h2><p class="lead">{c.dense.lead}</p></header>
+      <div class="field">
+        <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
+        <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
+      </div>
+    </section>
 
-    <Section title={c.map.title} lead={c.map.lead} split>
-      <VisualFrame visual="map" caption={c.captions.map} />
-    </Section>
+    <section class="s" data-tone="prod">
+      <span class="node" aria-hidden="true"></span>
+      <header class="head"><h2>{c.map.title}</h2><p class="lead">{c.map.lead}</p></header>
+      <div class="field"><VisualFrame visual="map" caption={c.captions.map} /></div>
+    </section>
 
-    <Section id="features" band="rose" title={c.features.title} lead={c.features.lead} split>
-      <VisualFrame visual="bins" caption={c.captions.bins}>
-        <Fragment slot="side">
-          <h3 class="feat-title">{c.features.bins.title}</h3>
-          <p>{c.features.bins.text}</p>
-          <p class="hint">{c.features.bins.hint}</p>
-        </Fragment>
-      </VisualFrame>
-      <FeatureList
-        shipped={c.features.shipped} upcoming={c.features.upcoming} upcomingLabel={c.features.upcomingLabel}
-        shippedHeading={c.features.shippedHeading} upcomingHeading={c.features.upcomingHeading}
-      />
-      <ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} />
-    </Section>
+    <section class="s" id="features" data-tone="dist">
+      <span class="node" aria-hidden="true"></span>
+      <header class="head"><h2>{c.features.title}</h2><p class="lead">{c.features.lead}</p></header>
+      <div class="field">
+        <VisualFrame visual="bins" caption={c.captions.bins}>
+          <Fragment slot="side">
+            <h3 class="feat-title">{c.features.bins.title}</h3>
+            <p>{c.features.bins.text}</p>
+            <p class="hint">{c.features.bins.hint}</p>
+          </Fragment>
+        </VisualFrame>
+        <FeatureList
+          shipped={c.features.shipped} upcoming={c.features.upcoming} upcomingLabel={c.features.upcomingLabel}
+          shippedHeading={c.features.shippedHeading} upcomingHeading={c.features.upcomingHeading}
+        />
+        <ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} />
+      </div>
+    </section>
 
-    <Section id="registry" title={c.registry.title} lead={c.registry.lead} aside>
-      <VisualFrame visual="morph" caption={c.captions.morph} />
-    </Section>
+    <section class="s" id="registry" data-tone="ver">
+      <span class="node" aria-hidden="true"></span>
+      <header class="head"><h2>{c.registry.title}</h2><p class="lead">{c.registry.lead}</p></header>
+      <div class="field"><VisualFrame visual="morph" caption={c.captions.morph} /></div>
+    </section>
 
-    <Section id="open-source" band="purple" title={c.openSource.title}>
-      <OpenSourceOptions cards={c.openSource.cards} />
-    </Section>
+    <section class="s" id="open-source" data-tone="infra">
+      <span class="node" aria-hidden="true"></span>
+      <header class="head"><h2>{c.openSource.title}</h2></header>
+      <div class="field"><OpenSourceOptions cards={c.openSource.cards} /></div>
+    </section>
 
-    <Section id="walkthrough" title={c.walkthrough.title} lead={c.walkthrough.lead} aside>
-      <WalkthroughForm idPrefix="wt" />
-    </Section>
+    <section class="s" id="walkthrough" data-tone="ver">
+      <span class="node" aria-hidden="true"></span>
+      <header class="head"><h2>{c.walkthrough.title}</h2><p class="lead">{c.walkthrough.lead}</p></header>
+      <div class="field"><WalkthroughForm idPrefix="wt" /></div>
+    </section>
   </main>
   <SiteFooter />
 </BaseLayout>
-<style>
-  .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); row-gap: clamp(24px, 3vw, 40px); align-items: start; }
-  .shots > :global(.lead) { grid-row: 1 / span 2; }
-  @media (max-width: 900px) { .shots { grid-template-columns: 1fr; } .shots > :global(.lead) { grid-row: auto; } }
-  .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
-  .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
-  .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
+<style is:global>
+  :root[data-layout="5"] {
+    /* layout literals for this variant */
+    --frame: 2080px;                          /* widest the page composition grows; wider screens get plain margins */
+    --rail: 56px;                             /* the spine's column */
+    --prose: clamp(300px, 25vw, 500px);       /* fixed narrow prose measure (about 55 characters of body text) */
+    --field-gap: clamp(32px, 4vw, 72px);
+    --node: 18px;
+    --gutter: clamp(20px, 4vw, 72px);
+    --section-space: clamp(56px, 4.6vw, 96px);
+    --side-width: clamp(270px, 17vw, 330px);
+    --viz-max-h: 1100px;
+    --edge: max(var(--gutter), calc((100% - var(--frame)) / 2));
+  }
+  /* Header and footer share the page's edges. */
+  :root[data-layout="5"] .site-header .bar { padding-inline: var(--edge); }
+  :root[data-layout="5"] .foot .inner { padding-inline: var(--edge); }
+  :root[data-layout="5"] .foot .row { margin-inline: calc(var(--edge) * -1); padding-inline: var(--edge); }
+
+  /* The spine */
+  :root[data-layout="5"] .spine { position: relative; }
+  :root[data-layout="5"] .spine::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--edge) + var(--rail) / 2); border-left: var(--rule-strong); }
+  :root[data-layout="5"] .s { position: relative; display: grid; grid-template-columns: var(--rail) minmax(0, var(--prose)) minmax(0, 1fr); column-gap: var(--field-gap); padding: var(--section-space) var(--edge); }
+  :root[data-layout="5"] .s::before { content: ""; grid-column: 2 / -1; grid-row: 1; border-top: var(--rule-strong); margin-bottom: clamp(24px, 2.4vw, 36px); }
+  :root[data-layout="5"] .s.hero::before { display: none; }
+  :root[data-layout="5"] .s > .node { grid-column: 1; grid-row: 1 / span 2; justify-self: center; align-self: start; width: var(--node); height: var(--node); margin-top: calc(var(--node) / -2); border: 1.5px solid var(--node-line); background: var(--node-fill); }
+  :root[data-layout="5"] .s.hero > .node { margin-top: clamp(12px, 1.6vw, 28px); }
+  :root[data-layout="5"] [data-tone="prod"] { --node-line: var(--prod); --node-fill: var(--prod-bg); }
+  :root[data-layout="5"] [data-tone="infra"] { --node-line: var(--infra); --node-fill: var(--infra-bg); }
+  :root[data-layout="5"] [data-tone="dist"] { --node-line: var(--dist); --node-fill: var(--dist-bg); }
+  :root[data-layout="5"] [data-tone="ver"] { --node-line: var(--ver); --node-fill: var(--ver-bg); }
+
+  /* Prose column (sticky) and diagram field. Local gutter is small: the frame is the field, not the page. */
+  :root[data-layout="5"] .s > .head { grid-column: 2; grid-row: 2; align-self: start; position: sticky; top: 24px; display: grid; gap: 20px; }
+  :root[data-layout="5"] .s > .field { --gutter: 24px; grid-column: 3; grid-row: 2; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(32px, 3.6vw, 56px); align-content: start; }
+  :root[data-layout="5"] .s .head h2 { font-size: clamp(30px, 3vw, 52px); max-width: 16ch; }
+  :root[data-layout="5"] .s .head .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: 46ch; color: var(--clr-dark-purple-70); }
+  :root[data-layout="5"] .field .vf { margin-inline: 0; border: var(--panel-border); }
+  :root[data-layout="5"] .field .vf.has-side { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr); }
+  :root[data-layout="5"] .field .features .shipped { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  :root[data-layout="5"] .field .compare { margin-top: 0; }
+  :root[data-layout="5"] .field .options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :root[data-layout="5"] .field .wt-form { max-width: 760px; }
+
+  /* Hero: headline, then lead beside the two figures, then the trace at the full width of the page's field */
+  :root[data-layout="5"] .hero > h1 { grid-column: 2 / -1; grid-row: 1; font-size: clamp(44px, 5.8vw, 112px); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 24ch; margin-bottom: clamp(40px, 5vw, 80px); }
+  :root[data-layout="5"] .hero > .head { grid-row: 2; position: static; gap: 28px; }
+  :root[data-layout="5"] .hero > .node { grid-row: 1; }
+  :root[data-layout="5"] .hero .head .lead { color: var(--ink); }
+  :root[data-layout="5"] .hero > .proof { grid-column: 3; grid-row: 2; align-self: start; border-top: var(--rule-strong); }
+  :root[data-layout="5"] .hero .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--field-gap); }
+  :root[data-layout="5"] .hero .fact { border-top: 0; padding-top: 24px; }
+  :root[data-layout="5"] .hero > .field { --gutter: 24px; grid-column: 2 / -1; grid-row: 3; margin-top: clamp(40px, 4.4vw, 72px); }
+  :root[data-layout="5"] .hero > .logos { grid-column: 2 / -1; grid-row: 4; margin-top: clamp(48px, 6vw, 96px); }
+
+  /* Dense trace: full width under its heading */
+  :root[data-layout="5"] .s.wide > .head { position: static; grid-column: 2 / -1; grid-template-columns: minmax(0, var(--prose)) minmax(0, 1fr); column-gap: var(--field-gap); align-items: end; }
+  :root[data-layout="5"] .s.wide > .field { --gutter: 24px; grid-column: 2 / -1; grid-row: 3; margin-top: clamp(32px, 3.6vw, 56px); }
+  :root[data-layout="5"] .s.wide .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); row-gap: clamp(24px, 3vw, 40px); align-items: start; }
+  :root[data-layout="5"] .s.wide .shots > .lead { grid-row: 1 / span 2; }
+
+  :root[data-layout="5"] .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
+  :root[data-layout="5"] .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  :root[data-layout="5"] .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
+
+  /* Mid widths: the prose column would squeeze the diagrams, so every section runs its heading over the field, like the dense trace. */
+  @media (min-width: 861px) and (max-width: 1439px) {
+    :root[data-layout="5"] .s:not(.hero) > .head { position: static; grid-column: 2 / -1; grid-template-columns: minmax(0, var(--prose)) minmax(0, 1fr); column-gap: var(--field-gap); align-items: end; }
+    :root[data-layout="5"] .s:not(.hero) > .field { grid-column: 2 / -1; grid-row: 3; margin-top: clamp(28px, 3vw, 44px); }
+    :root[data-layout="5"] .s:not(.hero) > .node { grid-row: 1 / span 3; }
+  }
+
+  /* Below the two-column layout: one clean column, no spine. */
+  @media (max-width: 1100px) {
+    :root[data-layout="5"] .field .features .shipped { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 900px) {
+    :root[data-layout="5"] .field .vf.has-side { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 860px) {
+    :root[data-layout="5"] { --edge: var(--gutter); }
+    :root[data-layout="5"] .spine::before, :root[data-layout="5"] .s > .node { display: none; }
+    :root[data-layout="5"] .s { grid-template-columns: minmax(0, 1fr); row-gap: 32px; }
+    :root[data-layout="5"] .s > .head, :root[data-layout="5"] .s > .field, :root[data-layout="5"] .s.wide > .field, :root[data-layout="5"] .s.wide > .head, :root[data-layout="5"] .hero > h1, :root[data-layout="5"] .hero > .head, :root[data-layout="5"] .hero > .proof, :root[data-layout="5"] .hero > .field, :root[data-layout="5"] .hero > .logos, :root[data-layout="5"] .s::before { grid-column: 1; grid-row: auto; }
+    :root[data-layout="5"] .s::before { margin-bottom: 0; }
+    :root[data-layout="5"] .s > .head, :root[data-layout="5"] .s.wide > .head { position: static; grid-template-columns: minmax(0, 1fr); }
+    :root[data-layout="5"] .hero > .proof { border-top: 0; }
+    :root[data-layout="5"] .hero .facts { grid-template-columns: 1fr; }
+    :root[data-layout="5"] .hero > h1 { margin-bottom: 0; }
+    :root[data-layout="5"] .hero > .logos { margin-top: 16px; }
+    :root[data-layout="5"] .s .head h2 { font-size: var(--fs-heading); }
+    :root[data-layout="5"] .s > .field, :root[data-layout="5"] .s.wide > .field { --gutter: 20px; margin-top: 0; }
+    :root[data-layout="5"] .s.wide .shots { grid-template-columns: 1fr; }
+    :root[data-layout="5"] .s.wide .shots > .lead { grid-row: auto; }
+    :root[data-layout="5"] .field .options { grid-template-columns: 1fr; }
+    :root[data-layout="5"] .field .features .shipped { grid-template-columns: 1fr; }
+  }
 </style>

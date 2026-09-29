@@ -1,17 +1,21 @@
 ---
-// PROTOTYPE layout variant 10 (see src/variants/BRIEF.md). Starts as a copy of index.astro; the variant agent rewrites it.
+// PROTOTYPE layout variant 10, "Notion style" (see src/variants/BRIEF.md).
+// One calm document column (760px) for every heading, lead, list and the form. Visuals break out to 1160px, centred.
+// The trace panels sit under their diagram inside the breakout (the map keeps its panel beside it). No split grids.
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteHeader from "../../components/SiteHeader.astro";
 import SiteFooter from "../../components/SiteFooter.astro";
-import Hero from "../../components/Hero.astro";
-import Section from "../../components/Section.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
 import ScreenshotFrame from "../../components/ScreenshotFrame.astro";
 import FeatureList from "../../components/FeatureList.astro";
 import ComparisonTable from "../../components/ComparisonTable.astro";
 import OpenSourceOptions from "../../components/OpenSourceOptions.astro";
 import WalkthroughForm from "../../components/WalkthroughForm.astro";
+import BlockLink from "../../components/BlockLink.astro";
+import LogoStrip from "../../components/LogoStrip.astro";
+import FactLine from "../../components/FactLine.astro";
 import { copy as c } from "../../content/copy.js";
+import "../../variants/measure-cap.css";
 ---
 <BaseLayout layout="10"
   title="noma, open-source biochar dMRV by MAJI"
@@ -19,51 +23,124 @@ import { copy as c } from "../../content/copy.js";
 >
   <SiteHeader />
   <main id="main">
-    <Hero />
+    <section class="v10-sec v10-hero">
+      <div class="v10-doc">
+        <h1>{c.hero.title}</h1>
+        <p class="lead">{c.hero.lead}</p>
+        <div class="v10-cta"><BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink></div>
+      </div>
+      <div class="v10-wide v10-pf"><VisualFrame visual="chain" attrs={{ "data-side": "below" }} caption={c.captions.chain} /></div>
+      <div class="v10-doc">
+        <FactLine figures={c.proof.figures} />
+        <LogoStrip label={c.proof.label} logos={c.proof.logos} />
+      </div>
+    </section>
 
-    <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead} split>
-      <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
-      <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
-    </Section>
+    <section class="v10-sec" id="trace">
+      <div class="v10-doc"><h2>{c.dense.title}</h2><p class="lead">{c.dense.lead}</p></div>
+      <div class="v10-wide v10-pf"><VisualFrame visual="dense" attrs={{ "data-jump": "true", "data-side": "below" }} caption={c.captions.dense} /></div>
+      <div class="v10-wide v10-shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
+    </section>
 
-    <Section title={c.map.title} lead={c.map.lead} split>
-      <VisualFrame visual="map" caption={c.captions.map} />
-    </Section>
+    <section class="v10-sec">
+      <div class="v10-doc"><h2>{c.map.title}</h2><p class="lead">{c.map.lead}</p></div>
+      <div class="v10-wide v10-pf v10-map"><VisualFrame visual="map" caption={c.captions.map} /></div>
+    </section>
 
-    <Section id="features" band="rose" title={c.features.title} lead={c.features.lead} split>
-      <VisualFrame visual="bins" caption={c.captions.bins}>
-        <Fragment slot="side">
-          <h3 class="feat-title">{c.features.bins.title}</h3>
-          <p>{c.features.bins.text}</p>
-          <p class="hint">{c.features.bins.hint}</p>
-        </Fragment>
-      </VisualFrame>
-      <FeatureList
-        shipped={c.features.shipped} upcoming={c.features.upcoming} upcomingLabel={c.features.upcomingLabel}
-        shippedHeading={c.features.shippedHeading} upcomingHeading={c.features.upcomingHeading}
-      />
-      <ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} />
-    </Section>
+    <section class="v10-sec" id="features">
+      <div class="v10-doc"><h2>{c.features.title}</h2><p class="lead">{c.features.lead}</p></div>
+      <div class="v10-doc">
+        <h3>{c.features.bins.title}</h3>
+        <p>{c.features.bins.text}</p>
+        <p class="v10-hint">{c.features.bins.hint}</p>
+      </div>
+      <div class="v10-wide v10-pf"><VisualFrame visual="bins" caption={c.captions.bins} /></div>
+      <div class="v10-wide v10-features">
+        <FeatureList
+          shipped={c.features.shipped} upcoming={c.features.upcoming} upcomingLabel={c.features.upcomingLabel}
+          shippedHeading={c.features.shippedHeading} upcomingHeading={c.features.upcomingHeading}
+        />
+      </div>
+      <div class="v10-doc"><ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} /></div>
+    </section>
 
-    <Section id="registry" title={c.registry.title} lead={c.registry.lead} aside>
-      <VisualFrame visual="morph" caption={c.captions.morph} />
-    </Section>
+    <section class="v10-sec" id="registry">
+      <div class="v10-doc"><h2>{c.registry.title}</h2><p class="lead">{c.registry.lead}</p></div>
+      <div class="v10-doc v10-pf"><VisualFrame visual="morph" caption={c.captions.morph} /></div>
+    </section>
 
-    <Section id="open-source" band="purple" title={c.openSource.title}>
-      <OpenSourceOptions cards={c.openSource.cards} />
-    </Section>
+    <section class="v10-sec" id="open-source">
+      <div class="v10-doc"><h2>{c.openSource.title}</h2></div>
+      <div class="v10-doc"><OpenSourceOptions cards={c.openSource.cards} /></div>
+    </section>
 
-    <Section id="walkthrough" title={c.walkthrough.title} lead={c.walkthrough.lead} aside>
-      <WalkthroughForm idPrefix="wt" />
-    </Section>
+    <section class="v10-sec" id="walkthrough">
+      <div class="v10-doc"><h2>{c.walkthrough.title}</h2><p class="lead">{c.walkthrough.lead}</p></div>
+      <div class="v10-doc"><WalkthroughForm idPrefix="wt" /></div>
+    </section>
   </main>
   <SiteFooter />
 </BaseLayout>
-<style>
-  .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); row-gap: clamp(24px, 3vw, 40px); align-items: start; }
-  .shots > :global(.lead) { grid-row: 1 / span 2; }
-  @media (max-width: 900px) { .shots { grid-template-columns: 1fr; } .shots > :global(.lead) { grid-row: auto; } }
-  .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
-  .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
-  .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
+<style is:global>
+  :root[data-layout="10"] {
+    --doc: 760px;
+    --wide: 1160px;
+    --pad: clamp(20px, 5vw, 48px);
+    --gutter: var(--pad);
+    --section-space: clamp(64px, 8vw, 128px);
+    --measure: 64ch;
+    --viz-pad: 20px;
+    --viz-max-h: 800px;
+    --table-pad: 16px;
+    --cell-pad: 24px;
+    --v10-h1: clamp(40px, 5.4vw, 72px);
+    --v10-h2: clamp(30px, 3.6vw, 46px);
+    --v10-stack: clamp(28px, 3vw, 44px);
+    --v10-frame-gutter: 20px;
+    --v10-map-side: 300px;
+  }
+  :root[data-layout="10"] .bar,
+  :root[data-layout="10"] .foot .inner { max-width: calc(var(--wide) + 2 * var(--pad)); margin-inline: auto; }
+  :root[data-layout="10"] .foot { border-top: 0; }
+
+  :root[data-layout="10"] .v10-sec { display: grid; gap: var(--v10-stack); padding: var(--section-space) var(--pad) 0; }
+  :root[data-layout="10"] .v10-sec:last-of-type { padding-bottom: var(--section-space); }
+  :root[data-layout="10"] .v10-doc { width: 100%; max-width: var(--doc); margin-inline: auto; display: grid; gap: 20px; min-width: 0; }
+  :root[data-layout="10"] .v10-wide { width: 100%; max-width: var(--wide); margin-inline: auto; min-width: 0; }
+
+  :root[data-layout="10"] .v10-doc h2 { font-size: var(--v10-h2); letter-spacing: -0.045em; line-height: 1.08; max-width: none; }
+  :root[data-layout="10"] .v10-doc h3 { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
+  :root[data-layout="10"] .v10-doc .lead { font-size: var(--fs-lead); line-height: 1.55; max-width: none; color: var(--clr-dark-purple-70); }
+  :root[data-layout="10"] .v10-doc > p:not(.lead) { font-size: var(--fs-body); max-width: none; }
+  :root[data-layout="10"] .v10-hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+
+  :root[data-layout="10"] .v10-hero { padding-top: clamp(40px, 7vw, 104px); text-align: center; }
+  :root[data-layout="10"] .v10-hero h1 { font-size: var(--v10-h1); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 20ch; margin-inline: auto; }
+  :root[data-layout="10"] .v10-hero .lead { text-align: left; }
+  :root[data-layout="10"] .v10-cta { display: flex; justify-content: center; margin-bottom: 8px; }
+  :root[data-layout="10"] .v10-hero .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; text-align: left; }
+  :root[data-layout="10"] .v10-hero .fact { border-top: var(--rule); }
+  :root[data-layout="10"] .v10-hero .fact dt { font-size: clamp(32px, 4vw, 48px); }
+  :root[data-layout="10"] .v10-hero .strip { grid-template-columns: 1fr; text-align: left; margin-top: 12px; }
+  :root[data-layout="10"] .v10-hero .logos { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  @media (max-width: 520px) { :root[data-layout="10"] .v10-hero .facts { grid-template-columns: 1fr; } }
+
+  /* visual frames: boxed, panel padding local to the frame */
+  :root[data-layout="10"] .v10-pf { --gutter: var(--v10-frame-gutter); text-align: left; }
+  :root[data-layout="10"] .v10-pf .nv-side > * { max-width: 72ch; }
+  :root[data-layout="10"] .v10-pf .vf { margin-inline: 0; border: var(--panel-border); }
+  :root[data-layout="10"] .v10-map { --side-width: var(--v10-map-side); }
+  :root[data-layout="10"] .v10-pf .nv-scroll-hint { padding-inline: var(--v10-frame-gutter); }
+
+  :root[data-layout="10"] .v10-shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; align-items: start; }
+  :root[data-layout="10"] .v10-shots .lead { grid-column: 1 / -1; }
+  @media (max-width: 700px) { :root[data-layout="10"] .v10-shots { grid-template-columns: 1fr; } }
+
+  :root[data-layout="10"] .v10-features .features { gap: 20px; }
+  :root[data-layout="10"] .v10-features .group-title { margin-top: 32px; }
+  :root[data-layout="10"] .v10-features .group-title:first-child { margin-top: 0; }
+  :root[data-layout="10"] .v10-doc .compare { margin-top: 0; }
+  :root[data-layout="10"] .v10-doc .compare table { font-size: var(--fs-small); }
+  :root[data-layout="10"] .v10-doc .options { grid-template-columns: 1fr; }
+  :root[data-layout="10"] .v10-doc .option .text { font-size: var(--fs-body); max-width: none; }
 </style>

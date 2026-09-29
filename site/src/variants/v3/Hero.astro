@@ -1,0 +1,35 @@
+---
+import { copy } from "../../content/copy.js";
+import BlockLink from "../../components/BlockLink.astro";
+import VisualFrame from "../../components/VisualFrame.astro";
+import LogoStrip from "../../components/LogoStrip.astro";
+import FactLine from "../../components/FactLine.astro";
+const c = copy;
+---
+<section class="hero">
+  <div class="inner">
+    <div class="intro">
+      <div class="pitch">
+        <h1>{c.hero.title}</h1>
+        <p class="lead">{c.hero.lead}</p>
+        <div class="cta">
+          <BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink>
+        </div>
+      </div>
+      <div class="figs"><FactLine figures={c.proof.figures} /></div>
+    </div>
+    <div class="proof-trace"><VisualFrame visual="chain" caption={c.captions.chain} /></div>
+    <LogoStrip label={c.proof.label} logos={c.proof.logos} />
+  </div>
+</section>
+<style>
+  .inner { display: grid; gap: clamp(32px, 4vw, 56px); padding-inline: var(--gutter); padding-block: clamp(28px, 4vw, 56px) var(--section-space); }
+  .intro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 26rem); column-gap: clamp(32px, 5vw, 80px); align-items: center; }
+  .pitch { display: grid; gap: 24px; justify-items: start; }
+  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 17ch; }
+  .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); }
+  .figs { background: var(--paper); border: var(--panel-border); padding-inline: clamp(20px, 2.4vw, 32px); }
+  .figs :global(.fact:first-child) { border-top: 0; }
+  .figs :global(dt) { font-size: clamp(40px, 3.6vw, 52px); }
+  @media (max-width: 900px) { .intro { grid-template-columns: 1fr; row-gap: 32px; } }
+</style>

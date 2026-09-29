@@ -1,0 +1,33 @@
+---
+// Variant 7 hero: copy left, figures as a boxed panel right, chain trace as a full-width panel below.
+import { copy as c } from "../../content/copy.js";
+import BlockLink from "../../components/BlockLink.astro";
+import VisualFrame from "../../components/VisualFrame.astro";
+import LogoStrip from "../../components/LogoStrip.astro";
+import FactLine from "../../components/FactLine.astro";
+---
+<section class="hero">
+  <div class="inner">
+    <div class="top">
+      <div class="copy">
+        <h1>{c.hero.title}</h1>
+        <p class="lead">{c.hero.lead}</p>
+        <div class="cta"><BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink></div>
+      </div>
+      <div class="panel"><FactLine figures={c.proof.figures} /></div>
+    </div>
+    <VisualFrame visual="chain" caption={c.captions.chain} />
+    <LogoStrip label={c.proof.label} logos={c.proof.logos} />
+  </div>
+</section>
+<style>
+  .inner { padding: clamp(32px, 5vw, 80px) var(--pad) var(--section-space); display: grid; gap: clamp(32px, 4vw, 56px); }
+  .top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); column-gap: var(--col-gap); row-gap: 32px; align-items: end; }
+  .copy { display: grid; gap: 28px; justify-items: start; }
+  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 15ch; }
+  .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); }
+  .panel { background: var(--paper); border: var(--panel-border); padding: 0 var(--cell-pad); }
+  .panel :global(.fact:first-child) { border-top: 0; }
+  .panel :global(.fact) { padding-block: 24px; }
+  @media (max-width: 860px) { .top { grid-template-columns: 1fr; } }
+</style>

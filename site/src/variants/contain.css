@@ -1,0 +1,11 @@
+/* Shared by variants 1 and 2 only: one centred container for header, sections, hero and footer; visuals boxed inside it.
+   Each variant sets --page-max on :root[data-layout]. --edge is the side padding that centres content at --page-max. */
+:root[data-layout="1"], :root[data-layout="2"] {
+  --edge: max(var(--gutter), calc((100vw - var(--page-max)) / 2));
+  --side-width: calc(clamp(260px, 20vw, 340px) + var(--viz-pad));
+}
+:is(:root[data-layout="1"], :root[data-layout="2"]) :is(.bar, .hero, .section > .inner, .foot > .inner) { padding-inline: var(--edge); }
+/* Footer: the rule above the links runs the container width, not the viewport. */
+:is(:root[data-layout="1"], :root[data-layout="2"]) .foot .row { margin-inline: 0; padding-inline: 0; }
+/* Boxed panels: full border, no bleed. Inside a panel the gutter token is the panel's own padding. */
+:is(:root[data-layout="1"], :root[data-layout="2"]) .vf { margin-inline: 0; border: var(--panel-border); --gutter: var(--viz-pad); }

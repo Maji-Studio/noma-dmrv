@@ -1,9 +1,10 @@
 ---
 // PROTOTYPE layout variant 3 (see src/variants/BRIEF.md). Starts as a copy of index.astro; the variant agent rewrites it.
 import BaseLayout from "../../layouts/BaseLayout.astro";
-import SiteHeader from "../../components/SiteHeader.astro";
+import SiteHeader from "../../variants/v3/Header.astro";
+import "../../variants/v3/v3.css";
 import SiteFooter from "../../components/SiteFooter.astro";
-import Hero from "../../components/Hero.astro";
+import Hero from "../../variants/v3/Hero.astro";
 import Section from "../../components/Section.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
 import ScreenshotFrame from "../../components/ScreenshotFrame.astro";
@@ -12,6 +13,7 @@ import ComparisonTable from "../../components/ComparisonTable.astro";
 import OpenSourceOptions from "../../components/OpenSourceOptions.astro";
 import WalkthroughForm from "../../components/WalkthroughForm.astro";
 import { copy as c } from "../../content/copy.js";
+import "../../variants/measure-cap.css";
 ---
 <BaseLayout layout="3"
   title="noma, open-source biochar dMRV by MAJI"

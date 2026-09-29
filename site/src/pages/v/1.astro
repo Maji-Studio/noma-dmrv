@@ -1,9 +1,10 @@
 ---
-// PROTOTYPE layout variant 1 (see src/variants/BRIEF.md). Starts as a copy of index.astro; the variant agent rewrites it.
+// PROTOTYPE variant 1, "Boring": one centred container, everything stacked, boxed visuals, side panels below.
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteHeader from "../../components/SiteHeader.astro";
 import SiteFooter from "../../components/SiteFooter.astro";
-import Hero from "../../components/Hero.astro";
+import Hero from "../../variants/v1/Hero.astro";
+import "../../variants/contain.css";
 import Section from "../../components/Section.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
 import ScreenshotFrame from "../../components/ScreenshotFrame.astro";
@@ -12,6 +13,7 @@ import ComparisonTable from "../../components/ComparisonTable.astro";
 import OpenSourceOptions from "../../components/OpenSourceOptions.astro";
 import WalkthroughForm from "../../components/WalkthroughForm.astro";
 import { copy as c } from "../../content/copy.js";
+import "../../variants/measure-cap.css";
 ---
 <BaseLayout layout="1"
   title="noma, open-source biochar dMRV by MAJI"
@@ -21,16 +23,16 @@ import { copy as c } from "../../content/copy.js";
   <main id="main">
     <Hero />
 
-    <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead} split>
-      <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
+    <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead}>
+      <VisualFrame visual="dense" attrs={{ "data-jump": "true", "data-side": "below" }} caption={c.captions.dense} />
       <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
     </Section>
 
-    <Section title={c.map.title} lead={c.map.lead} split>
-      <VisualFrame visual="map" caption={c.captions.map} />
+    <Section title={c.map.title} lead={c.map.lead}>
+      <VisualFrame visual="map" attrs={{ "data-side": "below" }} caption={c.captions.map} />
     </Section>
 
-    <Section id="features" band="rose" title={c.features.title} lead={c.features.lead} split>
+    <Section id="features" band="rose" title={c.features.title} lead={c.features.lead}>
       <VisualFrame visual="bins" caption={c.captions.bins}>
         <Fragment slot="side">
           <h3 class="feat-title">{c.features.bins.title}</h3>
@@ -45,7 +47,7 @@ import { copy as c } from "../../content/copy.js";
       <ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} />
     </Section>
 
-    <Section id="registry" title={c.registry.title} lead={c.registry.lead} aside>
+    <Section id="registry" title={c.registry.title} lead={c.registry.lead}>
       <VisualFrame visual="morph" caption={c.captions.morph} />
     </Section>
 
@@ -53,12 +55,16 @@ import { copy as c } from "../../content/copy.js";
       <OpenSourceOptions cards={c.openSource.cards} />
     </Section>
 
-    <Section id="walkthrough" title={c.walkthrough.title} lead={c.walkthrough.lead} aside>
+    <Section id="walkthrough" title={c.walkthrough.title} lead={c.walkthrough.lead}>
       <WalkthroughForm idPrefix="wt" />
     </Section>
   </main>
   <SiteFooter />
 </BaseLayout>
+<style is:global>
+  :root[data-layout="1"] { --page-max: 1200px; --fs-display: clamp(40px, 5.2vw, 72px); --fs-heading: clamp(30px, 3.4vw, 48px); --fs-subheading: clamp(22px, 2.2vw, 30px); --measure: 66ch; }
+  :root[data-layout="1"] .head h2 { max-width: 24ch; }
+</style>
 <style>
   .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); row-gap: clamp(24px, 3vw, 40px); align-items: start; }
   .shots > :global(.lead) { grid-row: 1 / span 2; }

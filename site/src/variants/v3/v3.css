@@ -1,0 +1,28 @@
+/* Variant 3, "Super user friendly": one 1240px container, boxed frames, sticky header, stacked section heads. */
+:root[data-layout="3"] {
+  --page-max: 1240px;
+  --gutter: clamp(20px, 4vw, 48px);
+  --section-space: clamp(48px, 5vw, 80px);
+  --col-gap: clamp(24px, 4vw, 64px);
+  --side-width: clamp(260px, 26vw, 340px);
+  --viz-max-h: 900px;
+  --measure: 65ch;
+  --frame-pad: clamp(16px, 2vw, 28px);
+  --fs-display: clamp(40px, 5.2vw, 72px);
+  --fs-heading: clamp(30px, 3.4vw, 48px);
+  scroll-padding-top: 88px;
+}
+:root[data-layout="3"] .inner { width: 100%; max-width: calc(var(--page-max) + var(--gutter) * 2); margin-inline: auto; }
+/* frames: boxed in the container, no bleed; inner padding comes from --frame-pad */
+:root[data-layout="3"] .vf { --gutter: var(--frame-pad); margin-inline: 0; border: var(--panel-border); }
+:root[data-layout="3"] .vf .nv-side { --sp-end: var(--frame-pad); }
+/* section heads stack: heading, then its lead, then the thing it explains */
+:root[data-layout="3"] .head.split { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+:root[data-layout="3"] .aside .head { top: 96px; }
+:root[data-layout="3"] .aside h2 { max-width: 16ch; }
+:root[data-layout="3"] .inner.aside { grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); }
+@media (max-width: 860px) { :root[data-layout="3"] .inner.aside { grid-template-columns: 1fr; } }
+:root[data-layout="3"] .band-rose .lead, :root[data-layout="3"] .band-purple .lead { color: var(--ink-2); }
+/* footer row spans the container */
+:root[data-layout="3"] footer .row { margin-inline: 0; padding-inline: 0; }
+:root[data-layout="3"] { scroll-behavior: auto; }

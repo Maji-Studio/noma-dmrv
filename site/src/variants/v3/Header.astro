@@ -1,0 +1,85 @@
+---
+import { copy } from "../../content/copy.js";
+import BlockLink from "../../components/BlockLink.astro";
+const c = copy;
+---
+<a class="skip" href="#main">{c.chrome.skip}</a>
+<header class="site-header" data-site-header>
+  <div class="bar">
+    <a class="brand" href="#top" aria-label={`${c.brand.name} ${c.brand.by}`}>
+      <img class="mark" src="/maji-logo.svg" alt="" width="40" height="40" /><span class="name">{c.brand.name}</span><span class="by">{c.brand.by}</span>
+    </a>
+    <div class="cta"><BlockLink href={c.cta.primaryHref} size="sm">{c.cta.primary}</BlockLink></div>
+    <button type="button" class="menu-btn" aria-expanded="false" aria-controls="site-menu"
+      data-open-label={c.chrome.menuOpen} data-close-label={c.chrome.menuClose}>{c.chrome.menuOpen}</button>
+    <div class="menu" id="site-menu">
+      <nav aria-label={c.chrome.navLabel}>
+        {c.nav.map((n) => <a href={n.href}>{n.label}</a>)}
+      </nav>
+    </div>
+  </div>
+</header>
+<style>
+  .skip { position: fixed; left: 12px; top: 12px; z-index: 100; padding: 14px 20px; background: var(--paper); border: var(--rule-strong); transform: translateY(-200%); }
+  .skip:focus { transform: none; }
+  .site-header { border-bottom: var(--panel-border); background: var(--paper); position: sticky; top: 0; z-index: 50; }
+  .bar { max-width: calc(var(--page-max) + var(--gutter) * 2); margin-inline: auto; padding-inline: var(--gutter); display: flex; align-items: center; gap: 12px 28px; padding-block: 10px; }
+  .mark { width: var(--mark-size); height: var(--mark-size); align-self: center; }
+  .brand { display: inline-flex; flex: none; align-items: baseline; gap: 12px; min-height: var(--tap); text-decoration: none; margin-right: auto; align-self: center; }
+  .cta { flex: none; }
+  .name { font-size: 32px; margin-left: 2px; letter-spacing: var(--track-heading); line-height: 1; }
+  .by { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  .menu { display: flex; align-items: center; gap: 24px 40px; }
+  @media (min-width: 761px) { .cta { order: 3; } }
+  nav { display: flex; gap: 0 32px; }
+  nav a { display: inline-flex; align-items: center; min-height: var(--tap); font-size: var(--fs-small); }
+  nav a { text-decoration: underline; text-decoration-color: transparent; text-decoration-thickness: 1px; text-underline-offset: 4px; transition: text-decoration-color 0.2s var(--ease), text-underline-offset 0.2s var(--ease); }
+  nav a:hover, nav a:focus-visible { text-decoration-color: currentColor; text-underline-offset: 8px; }
+  .menu-btn { display: none; min-height: var(--tap); padding: 0 20px; background: none; border: var(--rule-strong); cursor: pointer; font-size: var(--fs-small); }
+  nav a[aria-current="true"] { text-decoration-color: var(--clr-purple); text-underline-offset: 8px; text-decoration-thickness: 2px; }
+  @media (max-width: 760px) {
+    .bar { flex-wrap: wrap; gap: 8px 10px; }
+    .menu-btn { display: inline-flex; align-items: center; padding: 0 14px; }
+    .cta :global(a) { padding: 0 14px; gap: 8px; }
+    .cta :global(svg) { display: none; }
+    .menu { flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 8px; max-height: calc(100svh - 80px); overflow-y: auto; }
+    nav { flex-direction: column; }
+    nav a { font-size: var(--fs-body); border-top: var(--rule); }
+    :global(html.js) .menu { display: none; }
+    :global(html.js) .menu[data-open] { display: flex; }
+  }
+  @media (max-width: 560px) {
+    .by { display: none; } .name { font-size: 24px; margin-left: 0; } .brand { gap: 8px; }
+    .mark { width: 32px; height: 32px; }
+    .bar { gap: 8px; }
+    .cta :global(a), .menu-btn { padding: 0 10px; font-size: 14px; }
+  }
+</style>
+<script>
+  const header = document.querySelector<HTMLElement>("[data-site-header]");
+  const btn = header?.querySelector<HTMLButtonElement>(".menu-btn");
+  const menu = header?.querySelector<HTMLElement>("#site-menu");
+  if (btn && menu) {
+    const set = (open: boolean, refocus = false) => {
+      menu.toggleAttribute("data-open", open);
+      btn.setAttribute("aria-expanded", String(open));
+      btn.textContent = open ? btn.dataset.closeLabel! : btn.dataset.openLabel!;
+      if (!open && refocus) btn.focus();
+    };
+    btn.addEventListener("click", () => set(btn.getAttribute("aria-expanded") !== "true"));
+    menu.addEventListener("click", (e) => { if ((e.target as HTMLElement).closest("a")) set(false); });
+    header!.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && btn.getAttribute("aria-expanded") === "true") set(false, true);
+    });
+  }
+</script>
+<script>
+  const links = [...document.querySelectorAll<HTMLAnchorElement>("[data-site-header] nav a")];
+  const targets = links.map((a) => document.querySelector<HTMLElement>(a.getAttribute("href")!));
+  const mark = () => {
+    let cur = -1;
+    targets.forEach((t, i) => { if (t && t.getBoundingClientRect().top <= 140) cur = i; });
+    links.forEach((a, i) => { if (i === cur) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current"); });
+  };
+  addEventListener("scroll", mark, { passive: true }); mark();
+</script>

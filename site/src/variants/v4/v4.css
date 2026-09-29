@@ -1,0 +1,95 @@
+/* Variant 4, "Accessible": one reading column, DOM order = visual order, 20px body, 64ch measure,
+   7:1 text where the tokens allow, 44px targets, strong focus, nothing fixed or sticky. */
+:root[data-layout="4"] {
+  --page-max: 1160px;
+  --gutter: clamp(20px, 4vw, 48px);
+  --section-space: clamp(48px, 6vw, 88px);
+  --col-gap: clamp(24px, 4vw, 56px);
+  --side-width: 320px;
+  --viz-max-h: 900px;
+  --measure: 64ch;
+  --frame-pad: clamp(16px, 2.4vw, 32px);
+  /* type: larger and looser */
+  --fs-body: 20px;
+  --fs-lead: 22px;
+  --fs-desc: 19px;
+  --fs-small: 18px;
+  --fs-fine: 16px;
+  --fs-micro: 14px;
+  --fs-display: clamp(38px, 5.4vw, 72px);
+  --fs-heading: clamp(30px, 3.6vw, 48px);
+  --fs-subheading: clamp(24px, 2.4vw, 32px);
+  --track-display: -0.03em;
+  --track-heading: -0.02em;
+  --lh-display: 1.1;
+  --lh-heading: 1.15;
+  --track-micro: 0.06em;
+  --tap: 48px;
+  --block-height-sm: 48px;
+  /* page-scoped ink overrides so every secondary text colour reaches 7:1 on --bg, rose and purple wash */
+  --ink-2: rgba(15, 2, 26, 0.86);
+  --ink-3: rgba(15, 2, 26, 0.82);
+  --clr-dark-purple-70: rgba(15, 2, 26, 0.86);
+  --st-wait: #8a3210;
+  --st-wait-bg: rgba(188, 69, 25, 0.1);
+  --acc-dist-ink: #8a1a56;
+  scroll-padding-top: 24px;
+  scroll-padding-bottom: 96px; /* clear of the prototype switcher */
+  scroll-behavior: auto;
+}
+:root[data-layout="4"] body { line-height: 1.65; }
+:root[data-layout="4"] p, :root[data-layout="4"] li { line-height: 1.65; }
+:root[data-layout="4"] .inner { width: 100%; max-width: calc(var(--page-max) + var(--gutter) * 2); margin-inline: auto; }
+
+/* focus: unmissable, two-tone (dark ring, light gap) */
+:root[data-layout="4"] :focus-visible { outline: 4px solid var(--clr-dark-purple); outline-offset: 4px; }
+:root[data-layout="4"] .nv-node:focus-visible { outline: 3px solid var(--clr-dark-purple); outline-offset: 3px; }
+:root[data-layout="4"] .nv-node:focus-visible .nv-body { stroke: var(--clr-dark-purple); stroke-width: 5; }
+:root[data-layout="4"] .skip { padding: 16px 24px; font-size: var(--fs-body); border: 3px solid var(--clr-dark-purple); }
+
+/* frames: boxed in the column, inner padding from --frame-pad */
+:root[data-layout="4"] .vf { --gutter: var(--frame-pad); margin-inline: 0; border: var(--panel-border); }
+:root[data-layout="4"] .vf.has-side { grid-template-columns: 1fr; }
+:root[data-layout="4"] .vf.has-side .side { border-right: 0; border-bottom: var(--rule); }
+:root[data-layout="4"] .vf .nv-side { --sp-end: var(--frame-pad); }
+:root[data-layout="4"] .nv-side p, :root[data-layout="4"] .side p { max-width: var(--measure); }
+:root[data-layout="4"] .nv-code { font-size: 17px; }
+:root[data-layout="4"] .nv-m-chip .f { font-size: 15px; }
+:root[data-layout="4"] .nv-node text, :root[data-layout="4"] .nv-node text.nv-st { font-size: 12px; }
+:root[data-layout="4"] .nv-bin-lab, :root[data-layout="4"] .nv-bin-sub, :root[data-layout="4"] .nv-town { font-size: 13px; }
+:root[data-layout="4"] .nv-ba-box b { font-size: 28px; }
+
+/* one column: heads stack, aside sections stack, nothing sticky */
+:root[data-layout="4"] .head.split { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+:root[data-layout="4"] .inner.aside { grid-template-columns: minmax(0, 1fr); }
+:root[data-layout="4"] .aside .head { position: static; }
+:root[data-layout="4"] .aside h2 { max-width: 20ch; }
+:root[data-layout="4"] .lead { line-height: 1.6; }
+:root[data-layout="4"] .strip { grid-template-columns: minmax(0, 1fr); }
+:root[data-layout="4"] .logos { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+:root[data-layout="4"] .shipped { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+:root[data-layout="4"] .upcoming { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+:root[data-layout="4"] .feat-title + p, :root[data-layout="4"] .side p { max-width: var(--measure); }
+:root[data-layout="4"] .wt-form { max-width: 52rem; }
+:root[data-layout="4"] .option .text { max-width: var(--measure); }
+
+/* screenshots: lead full width, the other two share a row when there is room */
+:root[data-layout="4"] .shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(24px, 3vw, 40px); }
+:root[data-layout="4"] .shots > :first-child { grid-column: 1 / -1; }
+@media (max-width: 700px) { :root[data-layout="4"] .shots { grid-template-columns: minmax(0, 1fr); } }
+
+/* tap targets 44px or more (inline prose links are exempt) */
+:root[data-layout="4"] .links a, :root[data-layout="4"] .text-link { display: inline-flex; align-items: center; min-height: 48px; }
+:root[data-layout="4"] nav a { min-height: 48px; }
+:root[data-layout="4"] .nv-seg button { min-width: 48px; }
+:root[data-layout="4"] .nv-bin-ctrl input[type="range"] { min-height: 44px; }
+
+/* footer row spans the column */
+:root[data-layout="4"] footer .row { margin-inline: 0; padding-inline: 0; }
+/* 320px reflow: header wraps, nothing clips */
+@media (max-width: 400px) { :root[data-layout="4"] .name { font-size: 28px; } :root[data-layout="4"] .by { display: none; } }
+@media (max-width: 640px) {
+  :root[data-layout="4"] .nv-m-head, :root[data-layout="4"] .nv-m-row { grid-template-columns: minmax(0, 1fr); }
+  :root[data-layout="4"] .nv-morph, :root[data-layout="4"] .nv-morph-wrap { min-width: 0; }
+  :root[data-layout="4"] .nv-m-chip .f, :root[data-layout="4"] .nv-m-chip .v, :root[data-layout="4"] .nv-m-chip .e { overflow-wrap: anywhere; }
+}

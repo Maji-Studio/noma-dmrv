@@ -1,0 +1,27 @@
+---
+// Variant 1 hero: everything stacked in one column. Copy of components/Hero.astro with a stacked layout and the chain's side panel below.
+import { copy } from "../../content/copy.js";
+import BlockLink from "../../components/BlockLink.astro";
+import VisualFrame from "../../components/VisualFrame.astro";
+import LogoStrip from "../../components/LogoStrip.astro";
+import FactLine from "../../components/FactLine.astro";
+const c = copy;
+---
+<section class="hero">
+  <div class="inner">
+    <h1>{c.hero.title}</h1>
+    <p class="lead">{c.hero.lead}</p>
+    <div class="cta"><BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink></div>
+    <FactLine figures={c.proof.figures} />
+    <VisualFrame visual="chain" attrs={{ "data-side": "below" }} caption={c.captions.chain} />
+    <LogoStrip label={c.proof.label} logos={c.proof.logos} />
+  </div>
+</section>
+<style>
+  .inner { padding-block: clamp(32px, 4vw, 64px) var(--section-space); display: grid; gap: clamp(28px, 3vw, 44px); justify-items: start; }
+  .inner > :global(*) { justify-self: stretch; }
+  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 18ch; }
+  .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); }
+  .cta { display: flex; }
+  .inner > :global(.facts) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); column-gap: clamp(24px, 3vw, 48px); }
+</style>
