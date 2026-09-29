@@ -1,5 +1,5 @@
 import { getIngredientMoistureBasis } from '../ingredient-moisture-basis';
-import { getOutputBinStockView } from '../output-stock';
+import { getOutputBinStocks, getOutputBinStockView, type OutputBinStock } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
 
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -212,6 +212,11 @@ export function toFeedstockBinEntityOption(
 }
 
 /** Output bins read their stock from the dry-biochar FIFO layers only. */
+/** A bin missing from a batch read has no stock to show, like an unresolved one. */
+function outputStockView(stock: OutputBinStock | undefined) {
+  return { estimatedWetMassKg: stock?.estimatedWetMassKg ?? null, dryMassKg: stock?.availableDryKg ?? null };
+}
+
 function toOutputBinEntityOption(
   row: Pick<StorageLocationOptionRow, "id" | "code" | "name">,
   stock: { estimatedWetMassKg: number | null; dryMassKg: number | null },
@@ -376,8 +381,9 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     laneStocks.map((stock) => [stock.storageLocationId, stock]),
   );
 
+  const outputStocks = await getOutputBinStocks(ctx, results.filter(result => result.type !== 'feedstock_bin').map(result => result.id));
   return Promise.all(results.map(async result => {
-    if (result.type !== 'feedstock_bin') return toOutputBinEntityOption(result, await getOutputBinStockView(ctx, result.id));
+    if (result.type !== 'feedstock_bin') return toOutputBinEntityOption(result, outputStockView(outputStocks.get(result.id)));
     const option = toFeedstockBinEntityOption(result, laneStockById.get(result.id));
     return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id))?.moisturePercent ?? null } };
   }));
