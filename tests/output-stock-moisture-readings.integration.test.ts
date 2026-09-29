@@ -62,6 +62,15 @@ describe("moisture readings in PostgreSQL", () => {
     expect(await getOutputBinStockView(f.ctx, f.bin.id)).toMatchObject({ dryMassKg: 630, estimatedMoisturePercent: expect.closeTo(10, 9) });
   });
 
+  it("records a reading that matches the estimate without showing an unchanged block", async () => {
+    const f = await splitBin();
+    // P1 was recorded at 20%; a loss read at 20% changes nothing the operator can see.
+    const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 100, moisturePercent: 20 });
+    expect(loss.preview.moistureReset).toBeNull();
+    expect((await readingsOf(f.bin.id)).map(r => [r.biocharProductId, r.moisturePercent])).toEqual([[f.p1.id, 20]]);
+    expect((await getOutputStockHistory(f.ctx, f.bin.id)).some(entry => entry.kind === "moisture_update")).toBe(false);
+  });
+
   it("drops a corrected entry's reading and starts its correction from the stock before it", async () => {
     const f = await splitBin();
     // 100 kg wet at 50% loses 50 kg solids from P1, which the reading resets to 50%.

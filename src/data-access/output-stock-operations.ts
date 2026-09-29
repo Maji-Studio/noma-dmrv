@@ -4,7 +4,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, type OutputStockLayer, type OutputStockRequest, type Rational } from '@/lib/output-stock';
 import { estimateStock, planReadings, withReadings, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
-import { PERCENT_SCALE } from '@/lib/mass-moisture';
+import { formatMoisturePercent, PERCENT_SCALE } from '@/lib/mass-moisture';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
 import { orderedSourceSchema, outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
@@ -116,13 +116,15 @@ function layerWetKg(bases: readonly LayerMoistureBasis[], layer: OutputStockLaye
 /**
  * The stock a movement's readings reset, before and after: the same remaining
  * solids at their previous estimate, then at the reading. Null when nothing
- * the readings describe is left in the bin.
+ * the readings describe is left in the bin, or when the reading matches the
+ * estimate as shown: the reading is still saved, but an unchanged pair is noise.
  */
 function resetChange(drawn: readonly LayerMoistureBasis[], after: readonly LayerMoistureBasis[], readings: readonly PlannedReading[], at: string, codes: Map<string, string>): OutputStockPreview['moistureReset'] {
   const ids = new Set(readings.map(reading => reading.layerId));
   if (!ids.size) return null;
   const previous = estimateStock(drawn.filter(b => ids.has(b.layerId)), at);
   const next = estimateStock(after.filter(b => ids.has(b.layerId)), at);
+  if (previous.moisturePercent !== null && formatMoisturePercent(previous.moisturePercent) === formatMoisturePercent(next.moisturePercent)) return null;
   return {
     layerCodes: [...ids].map(id => codes.get(id) ?? id),
     before: { moisturePercent: previous.moisturePercent, wetKg: previous.wetKg },
