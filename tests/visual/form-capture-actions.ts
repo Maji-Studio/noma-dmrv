@@ -62,7 +62,7 @@ async function readThenEdit(page: Page, ctx: CaptureContext, route: string, code
 async function certificationPage(page: Page, ctx: CaptureContext, route: string): Promise<string | null> {
   await gotoRoute(page, ctx, route);
   if (new URL(page.url()).pathname.startsWith("/certification/settings")) {
-    return `${route} redirects to Certification settings: the facility has no Isometric project link (seed ran without ISOMETRIC_DEMO_FACILITY_ID)`;
+    return `${route} redirects to Certification settings: ${UNLINKED}`;
   }
   return null;
 }
@@ -102,7 +102,7 @@ const transportFeedstock: Surface[] = [
     skip: (ctx) => (ctx.supplier ? undefined : "no seeded supplier"),
     open: async (page, ctx) => {
       await gotoRoute(page, ctx, `suppliers/${ctx.supplier!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Add Location");
+      return openDialogFromButton(page.locator("main"), page, "Add location");
     },
   },
   {
@@ -125,7 +125,7 @@ const transportFeedstock: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "empty",
-    open: async (page, ctx) => openDialogFromButton(await createSheet(page, ctx, "suppliers", "New Supplier"), page, "Add Location"),
+    open: async (page, ctx) => openDialogFromButton(await createSheet(page, ctx, "suppliers", "New supplier"), page, "Add location"),
   },
   {
     id: "feedstock-type.import",
@@ -166,7 +166,7 @@ const transportFeedstock: Surface[] = [
     mode: "form",
     fill: "empty",
     errors: true,
-    open: async (page, ctx) => openQuickAdd(page, await createSheet(page, ctx, "feedstocks", "New Feedstock"), trigger),
+    open: async (page, ctx) => openQuickAdd(page, await createSheet(page, ctx, "feedstocks", "New feedstock"), trigger),
   })),
   {
     id: "quick-add.driver",
@@ -322,7 +322,7 @@ const stockSamples: Surface[] = [
     mode: "form",
     fill: "empty",
     errors: true,
-    open: async (page, ctx) => openQuickAdd(page, await createSheet(page, ctx, "biochar-products", "New Product"), "Select a product bin..."),
+    open: async (page, ctx) => openQuickAdd(page, await createSheet(page, ctx, "biochar-products", "New product"), "Select a product bin..."),
   },
   {
     id: "quick-add.blend-material",
@@ -332,7 +332,7 @@ const stockSamples: Surface[] = [
     mode: "form",
     fill: "empty",
     open: async (page, ctx) => {
-      const sheet = await createSheet(page, ctx, "formulations", "New Formulation");
+      const sheet = await createSheet(page, ctx, "formulations", "New formulation");
       await sheet.getByRole("button", { name: "Add ingredient", exact: true }).click();
       return openQuickAdd(page, sheet, "Select a blend material...");
     },
@@ -343,7 +343,7 @@ const productionSite: Surface[] = [
   ...(
     [
       ["measurement", "Add measurement"],
-      ["incident", "Add Incident"],
+      ["incident", "Add incident"],
     ] as const
   ).map(([key, button]): Surface => ({
     id: `production-run.${key}`,
@@ -394,7 +394,7 @@ const productionSite: Surface[] = [
     mode: "form",
     fill: "empty",
     skip: (ctx) => (ctx.operatorCount > 0 ? `the operator select offers quick-add only when no operator exists; the org has ${ctx.operatorCount}` : undefined),
-    open: async (page, ctx) => openQuickAdd(page, await createSheet(page, ctx, "production-runs", "New Production Run"), "Select operator..."),
+    open: async (page, ctx) => openQuickAdd(page, await createSheet(page, ctx, "production-runs", "New production run"), "Select operator..."),
   },
 ];
 
@@ -423,7 +423,7 @@ const downstream: Surface[] = [
     skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
     open: async (page, ctx) => {
       await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Add Location");
+      return openDialogFromButton(page.locator("main"), page, "Add location");
     },
   },
   {
@@ -447,7 +447,7 @@ const downstream: Surface[] = [
     mode: "form",
     fill: "empty",
     open: async (page, ctx) => {
-      const sheet = await createSheet(page, ctx, "applications", "New Application");
+      const sheet = await createSheet(page, ctx, "applications", "New application");
       await sheet.getByRole("radio", { name: /^GIS reference/ }).first().click();
       return openDialogFromButton(sheet, page, /Add GIS reference/);
     },
@@ -465,7 +465,7 @@ const downstream: Surface[] = [
         ? `Method B setup needs at least ${ctx.methodBMinimumSamples} Method A samples; the facility has ${ctx.facilitySampleCount}`
         : undefined),
     open: async (page, ctx) => {
-      const sheet = await createSheet(page, ctx, "credit-batches", "New Credit Batch");
+      const sheet = await createSheet(page, ctx, "credit-batches", "New credit batch");
       await sheet.getByRole("combobox", { name: "Select feedstock type...", exact: true }).first().click();
       await page.getByRole("option").first().click();
       await settle(page, sheet);
@@ -705,10 +705,30 @@ const settingsAuth: Surface[] = [
   })),
 ];
 
+/**
+ * The onboarding wizard and setup guide (dashboard-view.tsx) render only for
+ * an org owner or admin whose org has no facility or an unfinished required
+ * setup step. No route or query opens them, and reaching that state writes
+ * (a new org or facility), so each step is listed with its reason.
+ */
+const ONBOARDING_STEPS = ["welcome", "facility", "reactor", "registry", "setup-guide"] as const;
+const onboarding: Surface[] = ONBOARDING_STEPS.map((step): Surface => ({
+  id: `onboarding.${step}`,
+  family: "settings-auth-onboarding",
+  title: step === "setup-guide" ? "Onboarding setup guide" : `Onboarding wizard, ${step} step`,
+  kind: step === "setup-guide" ? "page" : "dialog",
+  mode: "form",
+  fill: "empty",
+  skip: (ctx) =>
+    `unreachable without writes: the org has a facility (${ctx.facility.code}); the wizard and guide render only for an org with no facility or an unfinished required setup step, and no route opens them`,
+  open: async () => "unreachable without writes",
+}));
+
 export const ACTION_SURFACES: Surface[] = [
   ...transportFeedstock,
   ...stockSamples,
   ...productionSite,
   ...downstream,
   ...settingsAuth,
+  ...onboarding,
 ];

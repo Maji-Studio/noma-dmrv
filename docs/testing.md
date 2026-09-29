@@ -39,9 +39,13 @@ inside them, is **silently never run**. Put it in the right directory.
 - `pnpm exec playwright test -c playwright.visual.config.ts` — the opt-in form
   capture harness in `tests/visual/` (skipped unless `FORM_CAPTURE=1`; Vitest
   excludes the folder). It needs a running, seeded dev server and does not use
-  the E2E user fixtures: it signs in as the existing local admin (one session
-  row, deleted at sign-out) and writes no entity rows. Knobs and output are
-  documented at the top of `tests/visual/form-capture.spec.ts`.
+  the E2E user fixtures: it signs in as the existing local admin
+  (`ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env.local`, overridable with
+  `FORM_CAPTURE_EMAIL` / `FORM_CAPTURE_PASSWORD`), which creates one session
+  row that sign-out deletes, and writes no entity rows. The other
+  `FORM_CAPTURE_*` knobs (label, output dir, family, surfaces, viewports,
+  facility) and the output are documented at the top of
+  `tests/visual/form-capture.spec.ts`.
 
 ## vitest specs are not all unit tests
 

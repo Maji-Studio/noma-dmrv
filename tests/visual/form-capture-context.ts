@@ -70,13 +70,27 @@ export async function loadCaptureContext(): Promise<CaptureContext> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const org = [DEC_ORG_ID];
-    const [facility] = await query<CaptureContext["facility"]>(
-      pool,
-      "facility",
-      "select id, code, name from facilities where organization_id = $1 and archived_at is null order by (code = $2) desc, created_at limit 1",
-      [DEC_ORG_ID, process.env.FORM_CAPTURE_FACILITY ?? DEFAULT_FACILITY_CODE],
-    );
-    if (!facility) throw new Error("Form capture context: no facility in the default organization. Run pnpm db:seed first.");
+    const requested = process.env.FORM_CAPTURE_FACILITY;
+    const [facility] = requested
+      ? await query<CaptureContext["facility"]>(
+          pool,
+          "facility",
+          "select id, code, name from facilities where organization_id = $1 and code = $2 and archived_at is null",
+          [DEC_ORG_ID, requested],
+        )
+      : await query<CaptureContext["facility"]>(
+          pool,
+          "facility",
+          "select id, code, name from facilities where organization_id = $1 and archived_at is null order by (code = $2) desc, created_at limit 1",
+          [DEC_ORG_ID, DEFAULT_FACILITY_CODE],
+        );
+    if (!facility) {
+      throw new Error(
+        requested
+          ? `Form capture context: FORM_CAPTURE_FACILITY=${requested} matches no active facility in the default organization.`
+          : "Form capture context: no facility in the default organization. Run pnpm db:seed first.",
+      );
+    }
     const scoped = [DEC_ORG_ID, facility.id];
     const firstCode: Record<string, string | undefined> = {};
     for (const [key, sql] of Object.entries(FIRST_CODE_QUERIES)) {

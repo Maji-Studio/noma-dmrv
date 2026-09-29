@@ -15,12 +15,14 @@
  *
  * Knobs: FORM_CAPTURE_OUT (output dir), FORM_CAPTURE_LABEL, FORM_CAPTURE_FAMILY
  * (one family), FORM_CAPTURE_SURFACES (comma-separated id prefixes),
- * FORM_CAPTURE_VIEWPORTS (e.g. "1440x900,390x844").
+ * FORM_CAPTURE_VIEWPORTS (e.g. "1440x900,390x844"), FORM_CAPTURE_FACILITY
+ * (facility code; must exist), FORM_CAPTURE_EMAIL / FORM_CAPTURE_PASSWORD
+ * (defaults: ADMIN_EMAIL / ADMIN_PASSWORD from .env.local).
  */
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type { Browser, Locator, Page } from "@playwright/test";
-import { test, expect } from "./form-capture-fixture";
+import { test, expect, type CaptureSession } from "./form-capture-fixture";
 import { measureFormGeometry, type Geometry } from "./form-geometry";
 import {
   diffR1,
@@ -162,7 +164,7 @@ async function showValidationErrors(page: Page, root: Locator): Promise<string |
   return invalid > 0 ? null : "the empty submit showed no field errors";
 }
 
-async function captureSurface(page: Page, browser: Browser, surface: Surface, ctx: CaptureContext, accountMask: () => Locator[]): Promise<SurfaceRecord> {
+async function captureSurface(session: CaptureSession, browser: Browser, surface: Surface, ctx: CaptureContext): Promise<SurfaceRecord> {
   const record: SurfaceRecord = {
     id: surface.id,
     family: surface.family,
@@ -176,16 +178,16 @@ async function captureSurface(page: Page, browser: Browser, surface: Surface, ct
   const skip = surface.skip?.(ctx);
   if (skip) return { ...record, status: "skipped", reason: skip };
 
-  let target = page;
+  let target = session.page;
   let anonymous: Awaited<ReturnType<Browser["newContext"]>> | null = null;
   if (surface.anonymous) {
-    anonymous = await browser.newContext({ baseURL: process.env.NEXT_PUBLIC_APP_URL, locale: ANONYMOUS_LOCALE });
+    anonymous = await browser.newContext({ baseURL: session.baseURL, locale: ANONYMOUS_LOCALE });
     target = await anonymous.newPage();
     target.setDefaultTimeout(ACTION_TIMEOUT_MS);
     target.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
     await hideDevOverlay(target);
   }
-  const mask = surface.anonymous ? [] : accountMask();
+  const mask = surface.anonymous ? [] : session.accountMask();
   try {
     await target.setViewportSize(viewports[0]);
     const opened = await surface.open(target, ctx);
@@ -213,9 +215,13 @@ async function captureSurface(page: Page, browser: Browser, surface: Surface, ct
       if (levels) await setLevel(root, "simple");
       const blocked = await showValidationErrors(target, root);
       if (!blocked) {
-        for (const viewport of viewports) {
-          await target.setViewportSize(viewport);
-          await captureState(target, surface, root, `${levels ? "simple" : "default"}-errors`, record, mask);
+        // Errors stay on screen through a level switch: capture Simple, then Detailed.
+        for (const level of levels ?? [null]) {
+          if (level) await setLevel(root, level);
+          for (const viewport of viewports) {
+            await target.setViewportSize(viewport);
+            await captureState(target, surface, root, `${level ?? "default"}-errors`, record, mask);
+          }
         }
       } else {
         record.skippedStates.push({ state: "errors", reason: blocked });
@@ -233,7 +239,7 @@ async function captureSurface(page: Page, browser: Browser, surface: Surface, ct
 }
 
 test("form capture", async ({ capture, browser }) => {
-  const { page, accountMask } = capture;
+  const { page } = capture;
   test.setTimeout(SURFACE_BUDGET_MS * Math.max(1, selected.length));
   page.setDefaultTimeout(ACTION_TIMEOUT_MS);
   page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT_MS);
@@ -242,14 +248,15 @@ test("form capture", async ({ capture, browser }) => {
   const ctx = await loadCaptureContext();
   const run: CaptureRun = {
     label,
-    baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "",
+    baseURL: capture.baseURL,
+    facility: ctx.facility.code,
     startedAt: new Date().toISOString(),
     viewports: viewports.map((viewport) => `${viewport.width}x${viewport.height}`),
     family: familyFilter,
     surfaces: [],
   };
   for (const surface of selected) {
-    const record = await captureSurface(page, browser, surface, ctx, accountMask);
+    const record = await captureSurface(capture, browser, surface, ctx);
     run.surfaces.push(record);
     console.log(`[form-capture] ${record.status.padEnd(8)} ${surface.id}${record.reason ? ` (${record.reason})` : ""}`);
     writeGeometry(outDir, run);

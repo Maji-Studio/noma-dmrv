@@ -15,8 +15,6 @@ const SPACING_SCALE = [6, 8, 12, 16, 20, 24];
 const SCALE_TOLERANCE_PX = 1;
 /** Levels judged against the scale; read label-to-value gaps are reported only. */
 const SCALED_LEVELS: GapItem["level"][] = ["section", "field", "label"];
-/** A Simple/Detailed difference that is an explanation affordance, not content. */
-const EXPLANATION_PATTERN = /^(show|hide) calculation|^more about|^about |^more info/i;
 const TOP_ISSUES_PER_FAMILY = 8;
 const SUMMARY_COLUMNS = 11;
 /** Distinct off-scale gaps listed per surface row. */
@@ -65,6 +63,8 @@ export interface SurfaceRecord {
 export interface CaptureRun {
   label: string;
   baseURL: string;
+  /** Code of the captured facility. */
+  facility: string;
   startedAt: string;
   finishedAt?: string;
   viewports: string[];
@@ -132,12 +132,12 @@ export function diffR1(simple: Geometry["r1"], detailed: Geometry["r1"]): R1Diff
     sectionTitles: minus(detailed.sectionTitles, simple.sectionTitles),
     actions: minus(detailed.actions, simple.actions),
   };
-  const everything = [
+  // Items inside a data-detail-explanation block are the only allowed difference.
+  const explanationOnly = [...minus(detailed.explanation, simple.explanation), ...minus(simple.explanation, detailed.explanation)];
+  const failures = [
     ...simpleOnly.labels, ...simpleOnly.sectionTitles, ...simpleOnly.actions,
     ...detailedOnly.labels, ...detailedOnly.sectionTitles, ...detailedOnly.actions,
   ];
-  const explanationOnly = everything.filter((item) => EXPLANATION_PATTERN.test(item));
-  const failures = everything.filter((item) => !EXPLANATION_PATTERN.test(item));
   return { simpleOnly, detailedOnly, explanationOnly, failures };
 }
 
@@ -190,9 +190,9 @@ export function writeSummary(outDir: string, run: CaptureRun) {
   const lines: string[] = [
     `# Form capture: ${run.label}`,
     "",
-    `Run ${run.startedAt} to ${run.finishedAt ?? "(unfinished)"} against ${run.baseURL}. Viewports: ${run.viewports.join(", ")}.${run.family ? ` Family filter: ${run.family}.` : ""}`,
+    `Run ${run.startedAt} to ${run.finishedAt ?? "(unfinished)"} against ${run.baseURL}, facility ${run.facility}. Viewports: ${run.viewports.join(", ")}.${run.family ? ` Family filter: ${run.family}.` : ""}`,
     "",
-    "Columns are the worst value across a surface's states and viewports. Styles = distinct text styles (forms fail above 4). Caps = uppercase or tracked runs. Lines = rules outside the allowed chrome. Off-scale = gaps off 6/8/12/16/20/24 (level:px). Mixed = levels with more than one gap value. Align = near-misaligned control edges, lone half-width fields, orphaned grid items, wrapped labels. Overflow = horizontal scroll, clipped text, elements wider than the body. Prose = visible helper captions plus paragraphs. R1 = Simple/Detailed differences that are not explanation.",
+    `Columns are the worst value across a surface's states and viewports. Styles = distinct text styles (forms fail above ${MAX_FORM_TEXT_STYLES}). Caps = uppercase or tracked runs. Lines = rules outside the allowed chrome. Off-scale = gaps off ${SPACING_SCALE.join("/")} (level:px). Mixed = levels with more than one gap value. Align = near-misaligned control edges, lone half-width fields, orphaned grid items, wrapped labels. Overflow = horizontal scroll, clipped text, elements wider than the body. Prose = visible helper captions plus paragraphs. R1 = Simple/Detailed differences outside data-detail-explanation blocks.`,
     "",
   ];
   for (const family of families) {
@@ -218,7 +218,7 @@ export function writeSummary(outDir: string, run: CaptureRun) {
       lines.push("", `R1 differences (Simple vs Detailed, ${run.viewports[0]}):`, "");
       for (const surface of r1) {
         const d = surface.r1!;
-        const fmt = (side: typeof d.simpleOnly) => [...side.labels, ...side.sectionTitles, ...side.actions].filter((item) => !EXPLANATION_PATTERN.test(item)).join("; ") || "none";
+        const fmt = (side: typeof d.simpleOnly) => [...side.labels, ...side.sectionTitles, ...side.actions].join("; ") || "none";
         lines.push(`- ${surface.id}: Detailed only: ${fmt(d.detailedOnly)}. Simple only: ${fmt(d.simpleOnly)}.`);
       }
     }

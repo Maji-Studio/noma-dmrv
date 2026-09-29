@@ -17,6 +17,8 @@ const LOCAL_ENV_FILE = ".env.local";
 
 export interface CaptureSession {
   page: Page;
+  /** The run's base URL, from Playwright's `baseURL` (NEXT_PUBLIC_APP_URL via the config). */
+  baseURL: string;
   /** Locators for the signed-in account's name and email, masked in page captures. */
   accountMask: () => Locator[];
 }
@@ -42,13 +44,14 @@ export const test = base.extend<{ capture: CaptureSession }>({
     if (!baseURL) throw new Error("Form capture needs a baseURL (NEXT_PUBLIC_APP_URL).");
     const { email, password } = adminCredentials();
     const context = await createDirectAuthContext(browser, { id: "form-capture-admin", email, password, name: "", role: "admin" }, baseURL);
-    const page = await context.newPage();
-    const session = (await (await page.request.get("/api/auth/get-session")).json()) as { user?: { name?: string } } | null;
-    const name = session?.user?.name;
     try {
+      const page = await context.newPage();
+      const session = (await (await page.request.get("/api/auth/get-session")).json()) as { user?: { name?: string } } | null;
+      const name = session?.user?.name;
       await enterDefaultOrganization(page);
       await use({
         page,
+        baseURL,
         accountMask: () => {
           // The name is matched only in the sidebar account row: it can equal ordinary copy ("Admin").
           const accountRow = page.locator("aside div").filter({ has: page.getByRole("button", { name: "Sign out", exact: true }) }).last();
@@ -57,7 +60,7 @@ export const test = base.extend<{ capture: CaptureSession }>({
       });
     } finally {
       // Better Auth only ends the session for a JSON body; without one it answers 200 and keeps the row.
-      const signOut = await page.request.post("/api/auth/sign-out", { headers: { Origin: baseURL }, data: {} }).catch(() => null);
+      const signOut = await context.request.post("/api/auth/sign-out", { headers: { Origin: baseURL }, data: {} }).catch(() => null);
       if (!signOut?.ok()) console.warn(`[form-capture] sign-out failed (${signOut?.status() ?? "no response"}); the capture session row remains.`);
       await context.close();
     }
