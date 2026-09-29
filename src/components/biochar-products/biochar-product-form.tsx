@@ -12,7 +12,7 @@ import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
-import { useSimplePresence } from "@/components/forms/form-detail-context";
+import { DetailedOnly } from "@/components/forms/form-detail-context";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -93,9 +93,11 @@ export function BiocharSourceMassFields({
 }
 
 /**
- * The product composition under the mix fields. Simple draws it once the
- * biochar or an ingredient has a mass; before that it would be a key of
- * "Not available" rows. Detailed always draws it, with the bin's stock history.
+ * The product composition under the mix fields, with the source bin's stock
+ * history, at both levels once the biochar or an ingredient has a mass or a
+ * source bin is chosen (its history is an action). Before that it is a key of
+ * "Not available" rows that only explains what will appear, so only Detailed
+ * shows it.
  */
 export function ProductCompositionBlock({
   composition,
@@ -110,15 +112,13 @@ export function ProductCompositionBlock({
   storageLocationId: string | null | undefined;
   facilityId: string;
 }) {
-  const { detailed } = useSimplePresence("picture");
   const started = massKg !== null || ingredientBins.some((ingredient) => typeof ingredient.massKg === "number");
-  if (!detailed && !started) return null;
-  return (
+  const preview = (
     <ProductCompositionPreview
       wetMassKg={composition.wetProductKg}
       components={composition.components}
       note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
-      actions={detailed && storageLocationId ? (
+      actions={storageLocationId ? (
         <OutputStockHistory
           compact
           storageLocationId={storageLocationId}
@@ -128,6 +128,7 @@ export function ProductCompositionBlock({
       ) : undefined}
     />
   );
+  return <DetailedOnly unless={started || Boolean(storageLocationId)}>{preview}</DetailedOnly>;
 }
 
 /**

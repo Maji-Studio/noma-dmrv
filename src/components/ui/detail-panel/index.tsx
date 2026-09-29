@@ -29,7 +29,7 @@
 "use client";
 
 
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { DetailedOnly } from "@/components/forms/form-detail-context";
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -42,6 +42,7 @@ import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import {
   isCertFieldValuePresent,
@@ -189,6 +190,24 @@ interface DetailFieldProps {
    * until the query settles.
    */
   pending?: boolean;
+  /**
+   * A second figure read under the value, such as the dry biochar under a wet
+   * mass. It is data, so both detail levels show it.
+   */
+  secondary?: DetailSecondaryValue;
+}
+
+/**
+ * A secondary line under a detail value: its own label and value, and its own
+ * CERT chip when the figure is a certification field in its own right.
+ */
+export interface DetailSecondaryValue {
+  label: string;
+  value: React.ReactNode;
+  certifyRequired?: boolean;
+  certifyStatus?: CertFieldStatus;
+  emptySituation?: MissingValueSituation;
+  valuePresent?: boolean;
 }
 
 /**
@@ -254,6 +273,7 @@ function DetailField({
   emptySituation,
   valuePresent,
   pending,
+  secondary,
 }: DetailFieldProps) {
   const { displayValue, isEmpty, present, valueClassName } =
     resolveDetailFieldValue({ value, emptySituation, valuePresent, pending });
@@ -276,17 +296,49 @@ function DetailField({
       >
         {displayValue}
       </span>
+      {secondary && <DetailSecondaryLine {...secondary} pending={pending} />}
     </div>
   );
 }
 DetailField.displayName = "DetailField";
 
+/** The secondary figure under a detail value: caption size, label first. */
+function DetailSecondaryLine({
+  label,
+  value,
+  certifyRequired,
+  certifyStatus,
+  emptySituation,
+  valuePresent,
+  pending,
+}: DetailSecondaryValue & { pending?: boolean }) {
+  const { displayValue, isEmpty, present } = resolveDetailFieldValue({
+    value,
+    emptySituation,
+    valuePresent,
+    pending,
+  });
+  const resolvedCertifyStatus =
+    certifyStatus ?? resolveCertFieldStatus(pending ? undefined : true, present);
+  return (
+    <SecondaryFigure
+      label={label}
+      value={displayValue}
+      empty={isEmpty}
+      trailing={certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
+    />
+  );
+}
+
 /* -------------------------------------------------------------------------------------------------
  * EntityDetailPanel - Generic slide-over detail panel rendered from config
  * -----------------------------------------------------------------------------------------------*/
 
+/**
+ * One read field. Simple and Detailed show the same fields, so there is
+ * no per-field level flag; explanation goes in the section's `explanation`.
+ */
 export interface DetailPanelField {
-  detailedOnly?: boolean;
   label: string;
   value: React.ReactNode;
   certifyRequired?: boolean;
@@ -297,15 +349,22 @@ export interface DetailPanelField {
   valuePresent?: boolean;
   /** The value is still loading, so the field shows a skeleton, not a token. */
   pending?: boolean;
+  /** A second figure under the value (dry biochar under a wet mass). Shown at both levels. */
+  secondary?: DetailSecondaryValue;
 }
 
+/** One read section. Both detail levels show every section and its fields. */
 export interface DetailPanelSection {
-  /** Optional derived section, excluded from Simple and its numbering. */
-  detailedOnly?: boolean;
   title: string;
   fields: DetailPanelField[];
   /** Optional extension content that belongs inside this mirrored section. */
   content?: React.ReactNode;
+  /**
+   * How the section's figures were computed: calculation rows, basis
+   * captions, formula or component provenance, raw versus capped values.
+   * Only Detailed renders it. Never put a field, action or decision info here.
+   */
+  explanation?: React.ReactNode;
 }
 
 interface DetailSpineProps {
@@ -316,22 +375,20 @@ interface DetailSpineProps {
 
 /** Shared section renderer for read-only entity details. */
 function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
-  const detailLevel = useFormDetailLevel();
-  const visibleSections = sections.filter(section => !section.detailedOnly || detailLevel === "detailed");
   return (
     <div className={cn("flex flex-col", !numbered && "gap-20")}>
-      {visibleSections.map((section, sectionIdx) => (
+      {sections.map((section, sectionIdx) => (
         <DetailSection
           key={section.title}
           title={section.title}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered
-              ? createSpineMeta(sectionIdx, visibleSections.length)
+              ? createSpineMeta(sectionIdx, sections.length)
               : undefined
           }
         >
-          {chunkFields(section.fields.filter(field => !field.detailedOnly || detailLevel === "detailed")).map((row, rowIdx) => (
+          {chunkFields(section.fields).map((row, rowIdx) => (
             <DetailRow key={rowIdx}>
               {row.map((field, fieldIdx) => (
                 <DetailField
@@ -343,10 +400,12 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
                   emptySituation={field.emptySituation}
                   valuePresent={field.valuePresent}
                   pending={field.pending}
+                  secondary={field.secondary}
                 />
               ))}
             </DetailRow>
           ))}
+          {section.explanation && <DetailedOnly>{section.explanation}</DetailedOnly>}
           {section.content}
         </DetailSection>
       ))}

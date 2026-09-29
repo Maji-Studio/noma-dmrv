@@ -1,6 +1,6 @@
 "use client";
 
-import { DetailedOnly, FormActions, FormField, FormSection, FormSpine, FormTextarea, ResolvedErrorRevalidator } from "@/components/forms";
+import { FormActions, FormField, FormSection, FormSpine, FormTextarea, ResolvedErrorRevalidator } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { MoistureField, WetMassField } from "@/components/forms/mass-moisture-fields";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
@@ -99,10 +99,10 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
         <p className="body-small">{outputStockEventLabel(original.kind)} on {formatFacilityDateTime(original.occurredAt, clock.timeZone)}.</p>
         {/* One aligned row set: the entry's own figures, nothing hidden behind
             a control and nothing restated as a sentence. */}
-        <DetailedOnly><StockRows label="Original entry figures" rows={[
+        <StockRows label="Original entry figures" rows={[
           ...(original.wetMassKg === null ? [] : [{ label: "Wet", value: formatWetAtMoisture(original.wetMassKg, original.moisturePercent) }]),
           { label: "Dry biochar", value: <InlineMassChange beforeKg={original.beforeDryKg} afterKg={original.afterDryKg} /> },
-        ]} /></DetailedOnly>
+        ]} />
       </FormSection>}
       <FormSection title={original ? "Proposed replacement" : kind === "count" ? "Reconcile stock" : "Record loss"} fields={["occurredAt", "wetMassKg", "moisturePercent"]}>
         <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message} helperText={clock.hint}>

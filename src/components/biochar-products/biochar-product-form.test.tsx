@@ -1,6 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { UseFormRegisterReturn } from "react-hook-form";
+
+vi.mock("@/components/storage-locations/output-stock-history", () => ({
+  OutputStockHistory: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button>,
+}));
 import {
   BiocharSourceMassFields,
   prepareBiocharProductSubmission,
@@ -56,7 +60,7 @@ describe("ProductCompositionBlock", () => {
   const simple = (node: ReturnType<typeof block>) =>
     renderToStaticMarkup(<FormDetailProvider scope="form">{node}</FormDetailProvider>);
 
-  it("stays out of Simple until the biochar or an ingredient has a mass", () => {
+  it("stays out of Simple until the biochar or an ingredient has a mass or a source bin is chosen", () => {
     expect(simple(block(null))).not.toContain("Product composition");
     expect(simple(block(null, [{ massKg: undefined }]))).not.toContain("Product composition");
   });
@@ -64,6 +68,12 @@ describe("ProductCompositionBlock", () => {
   it("draws in Simple once a mass is set", () => {
     expect(simple(block(100))).toContain("Product composition");
     expect(simple(block(null, [{ massKg: 20 }]))).toContain("Product composition");
+  });
+
+  it("draws in Simple with its stock history once a source bin is chosen", () => {
+    const html = simple(<ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId="bin" facilityId="facility" />);
+    expect(html).toContain("Product composition");
+    expect(html).toContain("Stock history");
   });
 
   it("always draws in Detailed", () => {

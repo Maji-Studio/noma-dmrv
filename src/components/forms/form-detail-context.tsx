@@ -49,33 +49,34 @@ export function FormDetailControl() {
 }
 
 /**
- * How much of a derived block Simple shows. Detailed, and any surface outside a
- * provider, shows the whole block.
- *
- * - `picture`: caption, headline and the picture (a bar and its key).
- * - `headline`: caption and the headline figure.
- * - `hidden`: nothing.
+ * Marks an explanation block: content only Detailed renders. The level parity
+ * guard (`form-detail-parity.test.tsx`) skips anything under this attribute
+ * when it compares Simple with Detailed.
  */
-export type SimplePresence = "hidden" | "headline" | "picture";
+export const DETAIL_EXPLANATION_ATTR = "data-detail-explanation";
 
-/** Which parts of a derived block show at the current level. */
-export function useSimplePresence(simple: SimplePresence): {
-  /** The block renders at all. */
-  block: boolean;
-  /** The picture under the headline renders. */
-  picture: boolean;
-  /** Detailed: detail rows, the action row and the calculation render too. */
-  detailed: boolean;
-} {
+/**
+ * Explanation that only Detailed shows: calculation rows, basis captions,
+ * formula or component provenance, raw versus capped values.
+ *
+ * Simple and Detailed show the same information: never wrap an input, a
+ * read field, a section, an action (history links, uploads, add buttons) or
+ * anything that informs a decision (available stock, before and after,
+ * matching bins, blockers, warnings). Those render at both levels.
+ *
+ * `unless` is for a block that is explanation only until something makes it
+ * data (the unresolved moisture split before any input): while `unless` is
+ * true both levels show the children and the explanation marker drops. The
+ * wrapper element always renders, empty in Simple, so the children keep their
+ * place in the tree and do not remount when `unless` flips: a live region
+ * inside is announced and an open disclosure stays open. `display: contents`
+ * means the empty wrapper adds no box.
+ */
+export function DetailedOnly({ children, unless = false }: { children: ReactNode; unless?: boolean }) {
   const detailed = useFormDetailLevel() === "detailed";
-  return {
-    block: detailed || simple !== "hidden",
-    picture: detailed || simple === "picture",
-    detailed,
-  };
-}
-
-/** Only wrap optional, stateless explanation; never fields, warnings or evidence editors. */
-export function DetailedOnly({ children }: { children: ReactNode }) {
-  return useFormDetailLevel() === "detailed" ? children : null;
+  return (
+    <div {...(unless ? {} : { [DETAIL_EXPLANATION_ATTR]: true })} className="contents">
+      {detailed || unless ? children : null}
+    </div>
+  );
 }

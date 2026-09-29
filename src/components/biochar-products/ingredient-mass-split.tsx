@@ -1,6 +1,5 @@
 "use client";
 
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { BinMovementHistoryModal } from "@/components/storage-locations/bin-movement-history-modal";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { parseWatchedNumber } from "@/lib/mass-moisture";
@@ -15,8 +14,8 @@ const HISTORY_LABEL = "Stock history";
  *
  * A saved product with a frozen allocation splits against the dry snapshot
  * recorded at creation, so the bar and the product composition below agree;
- * a new product splits at the entered moisture. Detailed adds the bin's
- * history as a quiet action under the bar.
+ * a new product splits at the entered moisture. The bin's history is a quiet
+ * action under the bar at both levels.
  */
 export function IngredientMassSplit({
   control,
@@ -34,7 +33,6 @@ export function IngredientMassSplit({
   const moisturePercent = useWatch({ control, name: `${prefix}.moistureContentPercent` });
   const massDryKg = useWatch({ control, name: `${prefix}.massDryKg` });
   const storageLocationId = useWatch({ control, name: `${prefix}.storageLocationId` });
-  const detailed = useFormDetailLevel() === "detailed";
   const binId = typeof storageLocationId === "string" && storageLocationId ? storageLocationId : null;
 
   return (
@@ -46,7 +44,7 @@ export function IngredientMassSplit({
         materialLabel={feedstockTypeName}
         dryLabel={ingredientSolidsLabel(feedstockTypeName)}
       />
-      {detailed && binId && (
+      {binId && (
         <div className="flex">
           <BinMovementHistoryModal
             compact

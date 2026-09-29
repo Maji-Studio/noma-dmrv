@@ -47,19 +47,15 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import {
-  FacilityCertifierLinkLoader,
-  FacilityCertifierSummary,
-} from "@/components/certification";
+import { FacilityCertifierLinkLoader } from "@/components/certification";
 import { FacilityForm } from "./facility-form";
 import { FacilityCard } from "./facility-card";
 import { ArchiveFacilityDialog } from "./archive-facility-dialog";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
 import type { FacilityWithRelations } from "@/data-access/facilities";
-import { formatTimezoneLabel } from "@/lib/date-utils";
-import { formatDurabilityOption } from "@/schemas/credit-batches";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { CardSkeleton } from "@/components/ui/loading-skeleton";
+import { facilitySheetSections } from "./facility-read-sections";
 
 /** Placeholder cards shown while the first page of facilities loads. */
 const LOADING_CARD_COUNT = 3;
@@ -264,75 +260,7 @@ export function FacilityList() {
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
 
   const sideSheetSections = sideSheetEntity
-    ? [
-        {
-          title: "Facility information",
-          fields: [
-            { label: "Facility name", value: sideSheetEntity.name },
-            { label: "Country", value: sideSheetEntity.country },
-            { label: "Timezone", value: formatTimezoneLabel(sideSheetEntity.timezone) },
-            { label: "Location", value: sideSheetEntity.location },
-            { label: "Address", value: sideSheetEntity.address },
-            { label: "Facility position latitude", value: sideSheetEntity.gpsLatitude },
-            { label: "Facility position longitude", value: sideSheetEntity.gpsLongitude },
-            { label: "Contact email", value: sideSheetEntity.contactEmail },
-            { label: "Contact phone", value: sideSheetEntity.contactPhone },
-            { label: "Durability tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
-          ],
-        },
-        {
-          title: "Infrastructure",
-          fields: [
-            {
-              label: "Reactors",
-              value: formatCount(sideSheetEntity.reactorCount, "reactor"),
-            },
-            {
-              label: "Feedstock bins",
-              value: formatCount(
-                sideSheetEntity.storageSummary.feedstockBinCount,
-                "bin",
-              ),
-            },
-            {
-              label: "Biochar bins",
-              value: formatCount(
-                sideSheetEntity.storageSummary.biocharBinCount,
-                "bin",
-              ),
-            },
-            {
-              label: "Product bins",
-              value: formatCount(
-                sideSheetEntity.storageSummary.productBinCount,
-                "bin",
-              ),
-            },
-          ],
-        },
-        {
-          title: "Inventory snapshot",
-          fields: [
-            {
-              label: "Feedstock on hand (wet)",
-              value: formatMass(sideSheetEntity.inventorySummary.feedstockWetKg),
-            },
-            {
-              label: "Biochar on hand",
-              value: formatMass(sideSheetEntity.inventorySummary.biocharKg),
-            },
-            {
-              label: "Product mass",
-              value: formatMass(sideSheetEntity.inventorySummary.productKg),
-            },
-          ],
-        },
-        {
-          title: "Registry connection",
-          fields: [],
-          content: <FacilityCertifierSummary facilityId={sideSheetEntity.id} />,
-        },
-      ]
+    ? facilitySheetSections(sideSheetEntity)
     : undefined;
 
   return (

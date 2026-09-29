@@ -12,7 +12,7 @@ import { useState, type ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { OutputStockAllocations } from "./output-stock-availability";
 import { InlineMassChange, StockBalanceChange, StockNotice, StockRows, type StockRow } from "./stock-figures";
-import { batchSegments, binLabel, capitalize, dryingNotice, movementDirection, SPLIT_MATERIAL_LABEL, splitWetMassKg, STOCK_SIMPLE_PRESENCE, stockCardHint } from "./stock-preview-shared";
+import { batchSegments, binLabel, capitalize, dryingNotice, movementDirection, SPLIT_MATERIAL_LABEL, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
 
 /**
  * What this movement does to one bin, on the surfaces that show several bins at
@@ -37,7 +37,6 @@ export function StockLoadCard({ preview, actions }: { preview: Preview; actions?
     <CompositionCard
       title={preview.binName}
       hint={stockCardHint(preview)}
-      simple={STOCK_SIMPLE_PRESENCE}
       actions={actions}
       calculation={rows.length > 0 || preview.allocations.length > 0 ? <>
         {rows.length > 0 && <StockRows label="Figures behind this movement" rows={rows} />}

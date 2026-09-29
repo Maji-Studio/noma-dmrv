@@ -8,7 +8,6 @@
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
-import { DetailedOnly } from "@/components/forms/form-detail-context";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -21,7 +20,7 @@ import type {
 } from "@/data-access/credit-batches";
 import { StockRows } from "@/components/storage-locations/stock-figures";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
-import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatWetDryMass, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -42,6 +41,8 @@ const CARBON_ESTIMATE_HINT =
 /** What the input rows are to the estimate above them. */
 const CARBON_ESTIMATE_BASIS =
   "These inputs are not in the estimate. Isometric turns them into project emissions at submission.";
+/** Durable fractions read as a percentage with one decimal. */
+const DURABILITY_PERCENT_DIGITS = 1;
 
 /**
  * Why the estimate is missing, as one caption under the empty figure. Setup
@@ -67,7 +68,7 @@ function formatInput(value: number | null, unit: string): string {
  *
  * It closes the Production runs section because the runs listed above it are
  * what it is computed from. The figure is the only thing an operator reads off
- * the block, so it is the one part Simple keeps. The physical inputs the
+ * the block, and both levels show it. The physical inputs the
  * registry turns into deductions are the arithmetic behind it, not a competing
  * list, so they sit under Show calculation as label and figure rows.
  *
@@ -110,7 +111,6 @@ function CreditBatchCarbonEstimate({
     <CompositionCard
       title={CARBON_ESTIMATE_TITLE}
       hint={CARBON_ESTIMATE_HINT}
-      simple="headline"
       headline={<DerivedHeadline
         value={estimate == null ? null : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
         sub={gap ?? undefined}
@@ -141,6 +141,11 @@ function CreditBatchCarbonEstimate({
   );
 }
 
+/** A durable fraction (0 to 1) as a percentage with one decimal. */
+function formatDurabilityPercent(fraction: number): string {
+  return `${(fraction * PERCENT_SCALE).toFixed(DURABILITY_PERCENT_DIGITS)}%`;
+}
+
 function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
   return value === "200_year" ? "200 years" : "1,000 years";
 }
@@ -165,12 +170,12 @@ function ProductionRunLink({
           {run.status !== COMPLETED_PRODUCTION_RUN_STATUS && (
             <StatusBadge status={run.status} size="small" />
           )}
-          <DetailedOnly><span className="body-caption tabular-nums text-[var(--color-text-tertiary)]">
+          <span className="body-caption tabular-nums text-[var(--color-text-tertiary)]">
             {formatWetDryMass({
               wetKg: run.biocharOutputKg,
               dryKg: run.biocharDryMassKg,
             })}
-          </span></DetailedOnly>
+          </span>
         </>
       }
     />
@@ -319,40 +324,25 @@ export function creditBatchSheetSections({
         { label: "End date", value: formatDate(creditBatch.endDate) },
         {
           label: "Applied biochar",
-          detailedOnly: true,
           value: formatTonnes(creditBatch.appliedWeightTons),
         },
-        ...(durabilityResult?.rawFDurable != null &&
-        durabilityResult.fDurable != null
-          ? [
-              {
-                label: "Raw durability estimate",
-                detailedOnly: true,
-                value: `${(durabilityResult.rawFDurable * 100).toFixed(1)}%`,
-              },
-              {
-                label: "Capped durability estimate",
-                detailedOnly: true,
-                value: `${(durabilityResult.fDurable * 100).toFixed(1)}%`,
-              },
-              {
-                label: "Durability cap applied",
-                detailedOnly: true,
-                value: durabilityResult.durabilityCapped ? "Yes" : "No",
-              },
-              {
-                label: "Preview component",
-                detailedOnly: true,
-                value: preview?.componentKey ?? MISSING_VALUE.notAvailable,
-              },
-              {
-                label: "Preview formula",
-                detailedOnly: true,
-                value: preview?.formulaVersion ?? MISSING_VALUE.notAvailable,
-              },
-            ]
+        ...(durabilityResult?.fDurable != null
+          ? [{ label: "Durability estimate", value: formatDurabilityPercent(durabilityResult.fDurable) }]
           : []),
       ],
+      // How the durability estimate was reached: the raw figure, the cap and
+      // the preview's provenance. Explanation, so Detailed only.
+      explanation: durabilityResult?.rawFDurable != null && durabilityResult.fDurable != null ? (
+        <StockRows
+          label="Durability estimate basis"
+          rows={[
+            { label: "Raw durability estimate", value: formatDurabilityPercent(durabilityResult.rawFDurable) },
+            { label: "Durability cap applied", value: durabilityResult.durabilityCapped ? "Yes" : "No" },
+            { label: "Preview component", value: preview?.componentKey ?? MISSING_VALUE.notAvailable },
+            { label: "Preview formula", value: preview?.formulaVersion ?? MISSING_VALUE.notAvailable },
+          ]}
+        />
+      ) : undefined,
     },
     {
       title: "Production runs",

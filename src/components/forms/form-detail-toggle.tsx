@@ -10,7 +10,7 @@ const OPTIONS = [
   { value: "detailed", label: "Detailed" },
 ] as const;
 
-/** Controls optional explanations and previews; never hide required fields or errors. */
+/** Switches explanation (calculations, basis, provenance) on and off; both levels show the same fields, sections and actions. */
 export function FormDetailToggle({ value, onChange }: {
   value: FormDetailLevel;
   onChange: (value: FormDetailLevel) => void;

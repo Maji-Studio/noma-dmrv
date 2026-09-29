@@ -25,8 +25,8 @@
  * `calculation={false}` drops that table where the host surface already owns a
  * disclosure for the arithmetic.
  *
- * Its Simple boundary is the picture: Simple keeps the bar and key line,
- * because those are what the two inputs mean, and Detailed adds the table.
+ * Both detail levels show the bar and key line, because those are what the
+ * two inputs mean; the table is explanation, so only Detailed adds it.
  * Without a form detail scope (unmanaged sheets) the level resolves to
  * Detailed and the table always shows.
  *
@@ -41,7 +41,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useSimplePresence } from "@/components/forms/form-detail-context";
+import { DETAIL_EXPLANATION_ATTR, useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { CompositionLedger } from "@/components/forms/composition-ledger";
 import {
   describeMassSplit,
@@ -408,7 +408,7 @@ export function MoistureSplit({
   note,
   className = "",
 }: MoistureSplitProps) {
-  const parts = useSimplePresence("picture");
+  const detailed = useFormDetailLevel() === "detailed";
   const display = resolveDisplaySplit(wetMassKg, moisturePercent, dryMassKg);
   const unresolvedDryLabel =
     dryLabel ?? (materialLabel ? `${materialLabel} dry mass` : "Dry mass");
@@ -491,9 +491,9 @@ export function MoistureSplit({
     );
   }
 
-  // The bar and its key are what the two inputs mean, so they stay in Simple.
-  // The table is the arithmetic behind them, which is what Detailed adds.
-  const showCalculation = calculation && parts.detailed;
+  // The bar and its key are what the two inputs mean, so both levels show
+  // them. The table is the arithmetic behind them: explanation, Detailed only.
+  const showCalculation = calculation && detailed;
 
   return (
     <div className={`flex flex-col gap-12 ${className}`}>
@@ -513,7 +513,7 @@ export function MoistureSplit({
       </div>
 
       {showCalculation && (
-        <div className="flex flex-col gap-8">
+        <div {...{ [DETAIL_EXPLANATION_ATTR]: true }} className="flex flex-col gap-8">
           <CompositionLedger
             label={`${materialLabel ?? "Material"} composition`}
             totalLabel={wetLabel ?? "Wet total"}

@@ -21,7 +21,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus, useFormDetailLevel } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import {
@@ -154,7 +154,6 @@ export function ApplicationForm({
   deferredAttachments,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
-  const detailLevel = useFormDetailLevel();
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
@@ -438,7 +437,7 @@ export function ApplicationForm({
             required
             helperText={
               selectedDelivery
-                ? detailLevel === "detailed" ? formatApplicationDeliveryHelperText(selectedDelivery) : undefined
+                ? formatApplicationDeliveryHelperText(selectedDelivery)
                 : "Choose a delivery by order, formulation, and kg."
             }
           >
@@ -463,7 +462,7 @@ export function ApplicationForm({
             certifyStatus={certStatus("biocharAppliedTons")}
             hint="As-received mass at delivery, water included."
             helperText={
-              detailLevel === "detailed" && availableKg !== null
+              availableKg !== null
                 ? `${formatStockLimitKg(availableKg)} available from this delivery`
                 : undefined
             }

@@ -33,12 +33,10 @@ import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
-import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
-import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
-import { SupplierLocationsReadState } from "./supplier-locations-read-state";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { supplierSheetSections } from "./supplier-read-sections";
 
 // ============================================
 // Column Definitions
@@ -144,7 +142,6 @@ export function SupplierList() {
     sideSheet?.entity?.id ?? "",
     !!sideSheet?.entity,
   );
-  const sideSheetLocations = sideSheetLocationsQuery.data ?? [];
   const createSupplier = useCreateSupplierWithLocations();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
@@ -350,59 +347,7 @@ export function SupplierList() {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Supplier"
-        sections={sideSheetEntity ? [
-          {
-            title: "Required information",
-            fields: [
-              { label: "Supplier name", value: sideSheetEntity.name },
-            ],
-          },
-          {
-            title: "Locations",
-            fields:
-              sideSheetLocationsQuery.data === undefined
-                ? []
-                : buildPartyLocationDetailFields(sideSheetLocations, {
-                    distanceLabel:
-                      "One-way distance to facility (per leg, km)",
-                    defaultLabel: "Default source location",
-                    positionLabel: "Source location position",
-                  }),
-            content: (
-              <SupplierLocationsReadState
-                isPending={sideSheetLocationsQuery.isPending}
-                isError={sideSheetLocationsQuery.isError}
-                isRetrying={sideSheetLocationsQuery.isFetching}
-                onRetry={() => void sideSheetLocationsQuery.refetch()}
-              />
-            ),
-          },
-          {
-            title: "Contact information",
-            fields: [
-              { label: "Contact name", value: sideSheetEntity.contactName },
-              { label: "Contact email", value: sideSheetEntity.contactEmail },
-              { label: "Contact phone", value: sideSheetEntity.contactPhone },
-            ],
-          },
-          {
-            title: "Sourcing information",
-            fields: [
-              { label: "Location", value: sideSheetEntity.location },
-              { label: "Source region", value: sideSheetEntity.sourceRegion },
-              { label: "Address", value: sideSheetEntity.address },
-              buildSupplierFallbackDistanceField({
-                defaultLocationDistanceKm:
-                  sideSheetLocations.find((location) => location.isDefault)
-                    ?.distanceFromFacilityKm ?? null,
-                legacySupplierDistanceKm:
-                  sideSheetEntity.distanceToFacilityKm,
-                locationsLoaded:
-                  sideSheetLocationsQuery.data !== undefined,
-              }),
-            ],
-          },
-        ] : undefined}
+        sections={sideSheetEntity ? supplierSheetSections(sideSheetEntity, sideSheetLocationsQuery) : undefined}
       >
         <SupplierForm
           key={sideSheetEntity?.id ?? "create"}

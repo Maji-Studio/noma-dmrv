@@ -21,17 +21,19 @@ function visible(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
 }
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
-it("keeps the bar and its history action in Simple, adds the figures in Detailed, and uses corrected saved quantities", async () => {
+it("shows the bar, the corrected wet mass and the history action at both levels, adds the ledger in Detailed, and uses corrected saved quantities", async () => {
   const original: OutputStockHistoryEntry = { id: "original", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [] };
   history.data = [original, { ...original, id: "reversal", kind: "reversal", correctsMovementId: original.id }, { ...original, id: "replacement", correctsMovementId: original.id, wetMassKg: 90, dryMassKg: 72, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 72, runs: [] }] }];
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FormDetailProvider scope="delivery"><FormDetailControl /><DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} /></FormDetailProvider>); });
-  // Simple is the bar and its key line: the batch drawn and its dry mass, plus
-  // the one action the block offers. The wet figure and the ledger are Detailed.
+  // Simple shows the bar and its key line, the corrected wet measurement and
+  // the block's action. Only the ledger (the explanation) is Detailed.
   const simple = visible(renderer.root);
   expect(simple).toContain("B-001");
   expect(simple).toContain("72 kg");
-  expect(simple).not.toContain("Wet mass");
+  expect(simple).toContain("Wet mass");
+  expect(simple).toContain("90 kg");
+  expect(simple).toContain("Stock history");
   expect(simple).not.toContain("Dry biochar");
   const select = async (value: string) => act(async () => renderer.root.findAllByType("input").find(node => node.props.value === value)!.props.onChange());
   await select("detailed");

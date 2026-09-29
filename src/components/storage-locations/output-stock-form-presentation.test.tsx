@@ -26,13 +26,15 @@ function visible(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
 }
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
-it("shows correction inputs and blockers without optional headings or allocations in Simple", async () => {
+it("shows correction inputs, the original figures, the stock preview and blockers at both levels, and keeps the calculation Detailed", async () => {
   const original: OutputStockHistoryEntry = { id: "00000000-0000-4000-8000-000000000001", deliveryId: null, kind: "count", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 0, moisturePercent: null, dryMassKg: 80, beforeDryKg: 80, afterDryKg: 0, allocations: [] };
   const form = () => <FormDetailProvider scope="correction"><FormDetailControl /><OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={vi.fn()} /></FormDetailProvider>;
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(form()); });
   const simple = visible(renderer.root);
-  for (const label of ["Stock history", "Source bin", "Dry biochar", "80 kg"]) expect(simple).not.toContain(label);
+  // The original entry's figures and the movement card are decision info.
+  for (const label of ["Stock history", "Source bin", "Dry biochar", "80 kg", "Wet stock in bin, estimate"]) expect(simple).toContain(label);
+  expect(simple).not.toContain("Dry biochar removed");
   expect(simple).toContain("Original entry");
   expect(simple).toContain("Date and time");
   expect(simple).toContain("Counted wet mass");
@@ -42,9 +44,8 @@ it("shows correction inputs and blockers without optional headings or allocation
   expect(visible(renderer.root)).toContain(state.blocker);
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   const detailed = visible(renderer.root);
-  // Detailed adds the original entry's own figures and the movement card: the
-  // wet estimate leads, the split bar and the dry pair follow, and the figures
-  // behind them sit in the card's single collapsed disclosure.
+  // Detailed keeps the same card and adds its explanation: the figures behind
+  // it sit in the card's single collapsed disclosure.
   expect(detailed).toContain("Wet stock in bin, estimate");
   expect(detailed).toContain("Dry biochar");
   expect(detailed).toContain("80 kg");

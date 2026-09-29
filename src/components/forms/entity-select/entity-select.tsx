@@ -26,7 +26,6 @@ import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { formatRemainingMass } from "./remaining-mass";
-import { useFormDetailLevel } from "../form-detail-context";
 
 // Icons
 function ChevronDown({ className }: { className?: string }) {
@@ -231,7 +230,6 @@ export function EntitySelect({
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: EntitySelectProps) {
-  const showRemainingMass = useFormDetailLevel() === "detailed";
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -311,7 +309,7 @@ export function EntitySelect({
   const triggerDescribedBy = [
     ariaDescribedBy,
     displayText ? selectedLabelId : undefined,
-    remainingMass && showRemainingMass ? remainingMassId : undefined,
+    remainingMass ? remainingMassId : undefined,
   ]
     .filter(Boolean)
     .join(" ") || undefined;
@@ -582,7 +580,7 @@ export function EntitySelect({
         )}
       </div>
 
-      {remainingMass && showRemainingMass && (
+      {remainingMass && (
         <p
           id={remainingMassId}
           className="body-caption text-[var(--color-text-tertiary)] mt-4"
