@@ -48,9 +48,9 @@ export default function VerifyEmailPage() {
   return (
     <div className="w-full max-w-[400px] mx-auto">
       <div className="mb-32 text-center">
-        <div className="w-16 h-16 mx-auto mb-24 bg-[var(--clr-dark-purple-10)] rounded-full flex items-center justify-center">
+        <div className="w-64 h-64 mx-auto mb-24 bg-[var(--clr-dark-purple-10)] rounded-full flex items-center justify-center">
           <svg
-            className="w-8 h-8 text-[var(--clr-dark-purple)]"
+            className="w-32 h-32 text-[var(--clr-dark-purple)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

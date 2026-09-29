@@ -783,6 +783,7 @@ export function SampleForm({
                   <FormField
                     id="randomReflectanceR0Percent"
                     label="Mean random reflectance R₀ (%)"
+                    required
                     error={errors.randomReflectanceR0Percent?.message}
                     certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
                     certifyStatus={certStatus("randomReflectanceR0Percent")}
@@ -803,6 +804,7 @@ export function SampleForm({
                   <FormField
                     id="sReflectanceFraction"
                     label="R₀ readings at or above 2% (%)"
+                    required
                     helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
                     error={errors.sReflectanceFraction?.message}
                     certifyRequired={isSampleCertifyField("sReflectanceFraction")}
@@ -900,6 +902,7 @@ export function SampleForm({
                   <FormField
                     id="residualCarbonPercent"
                     label="Residual (non-reactive) carbon (%)"
+                    helperText="Enter this or reactive carbon."
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}
