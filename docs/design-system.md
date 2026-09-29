@@ -136,6 +136,39 @@ specialized renderers (map pills, graph pills) must use that shared mapping.
 **Never pick an `--st-*` token in a feature component off an entity status.**
 The ramp stays available for non-status uses (charts, feedback, accents).
 
+### Notice
+
+`Notice` (`@/components/ui/notice`) is the one style for in-flow information,
+warnings and blockers. Never hand-roll a tinted box, a left-rule callout or a
+red bordered panel. It is a Phosphor icon, an optional `title`, one line of text
+and an optional `action` (a link or button); no eyebrow, no uppercase.
+
+| Tone | Use | Look | Role |
+| --- | --- | --- | --- |
+| `info` | Context the user may want, nothing to fix | grey icon, no tint | `status` |
+| `warning` | The user can continue, something needs review | orange icon, no tint | `status` |
+| `success` | An action completed and the page stays | green icon, no tint | `status` |
+| `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
+
+Only `error` is tinted, so one blocker stands out on a page of advisories. Keep
+`alert` for blocking errors; do not upgrade a warning to it. Field-level
+feedback stays in `FormField` (`error`, `warning`), not a Notice. `ServerError`
+renders through `Notice`. For loading failures with a retry, pass the button as
+`action`.
+
+### Flat controls
+
+Inputs, native selects, textareas, the entity select trigger and the date and
+time inputs share one look: a 1px `--color-border-secondary` border, a white
+fill, 40px height (textarea grows), the interaction-colour border and ring on
+focus, a red border on error and 50% opacity when disabled. There is no inset
+shadow. Do not add one to a control; elevation is border and paper (above).
+
+The entity select popover separates options with spacing, a hover fill and a
+selected fill, not per-row rules, and uses Phosphor icons. The search box and
+the "Add new" row are part of the same list, not boxed apart. Give the trigger
+the `FormField` id (`FormEntitySelect` does) so the field label names it.
+
 ---
 
 ## Typography
