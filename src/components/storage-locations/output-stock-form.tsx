@@ -5,7 +5,8 @@ import { EventTimeInput } from "@/components/forms/event-time-input";
 import { MoistureField, WetMassField } from "@/components/forms/mass-moisture-fields";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import { useOutputStockPreview, usePostOutputStock } from "@/hooks/use-output-stock";
-import { formatDateTime } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import { toNumberOrNull } from "@/schemas/helpers";
 import { outputStockPostSchema, outputStockPreviewSchema } from "@/schemas/output-stock";
 import type { OutputStockHistoryEntry, OutputStockPreviewInput } from "@/types/output-stock";
@@ -29,6 +30,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [serverError, setServerError] = useState<string>();
   const mutation = usePostOutputStock();
+  const clock = useFacilityClock(facilityId);
   const { control, register, handleSubmit, trigger, formState: { errors } } = useForm({
     resolver: zodResolver(outputStockPostSchema),
     mode: "onTouched",
@@ -65,7 +67,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     <ResolvedErrorRevalidator control={control} trigger={trigger} />
     <FormSpine control={control}>
       {original && <FormSection title="Original entry">
-        <p className="body-small">{outputStockEventLabel(original.kind)} on {formatDateTime(original.occurredAt)}.</p>
+        <p className="body-small">{outputStockEventLabel(original.kind)} on {formatFacilityDateTime(original.occurredAt, clock.timeZone)}.</p>
         {/* One aligned row set: the entry's own figures, nothing hidden behind
             a control and nothing restated as a sentence. */}
         <DetailedOnly><StockRows label="Original entry figures" rows={[
@@ -74,8 +76,8 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
         ]} /></DetailedOnly>
       </FormSection>}
       <FormSection title={original ? "Proposed replacement" : kind === "count" ? "Reconcile stock" : "Record loss"} fields={["occurredAt", "wetMassKg", "moisturePercent"]}>
-        <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message}>
-          <EventTimeInput control={control} name="occurredAt" id="occurredAt" disabled={mutation.isPending} />
+        <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message} helperText={clock.hint}>
+          <EventTimeInput control={control} name="occurredAt" id="occurredAt" timeZone={clock.timeZone} disabled={mutation.isPending} />
         </FormField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
           <WetMassField id="stock-wet" label={kind === "count" ? "Counted wet mass (kg)" : "Wet mass removed (kg)"} required disabled={mutation.isPending} error={errors.wetMassKg?.message} registration={register("wetMassKg", { setValueAs: toNumberOrNull })} />

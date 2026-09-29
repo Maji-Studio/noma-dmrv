@@ -78,6 +78,8 @@ describe('output stock event times in PostgreSQL', () => {
       const after = '2026-09-15T23:00:00.000Z';
       for (const zone of ['UTC', 'America/Los_Angeles']) {
         await tx.execute(sql`select set_config('TimeZone', ${zone}, true)`);
+        // 02:00 on Sep 15 in Dar es Salaam is still Sep 14 in UTC; the intake dated Sep 15 counts.
+        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-14T23:00:00.000Z', tx)).toEqual({ wetMassKg: 100, dryMassKg: 50 });
         expect(await getIngredientStockBasis(f.ctx, bin.id, before, tx)).toEqual({ wetMassKg: 100, dryMassKg: 50 });
         expect(await getIngredientStockBasis(f.ctx, bin.id, after, tx)).toEqual({ wetMassKg: 70, dryMassKg: 35 });
         await tx.update(binMovements).set({ occurredAt: new Date('2026-09-15T12:00:00.000Z') })

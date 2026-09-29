@@ -58,7 +58,9 @@ describe('remaining ingredient moisture', () => {
     await getIngredientMoistureBasis(ctx, 'bin', at, reader([{ wet: 100, dry: 50 }], [], [], [], conditions), 'excluded-product');
     const queries = conditions.map(condition => new PgDialect().sqlToQuery(condition));
     expect(queries[0].sql).toContain('"feedstocks"."archived_at" is null');
-    expect(queries[0].sql).toContain('"feedstocks"."delivery_date" <=');
+    // An intake's calendar day is compared with the facility day of the instant.
+    expect(queries[0].sql).toContain('"feedstocks"."delivery_date"::date <= (');
+    expect(queries[0].sql).toContain('at time zone "facilities"."timezone")::date');
     expect(queries[1].sql).toContain('"biochar_products"."placed_at" <=');
     expect(queries[1].params).toContain('excluded-product');
     expect(queries[2].sql).toContain('"production_runs"."start_time" <=');

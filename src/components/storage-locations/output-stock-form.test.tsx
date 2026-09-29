@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OutputStockPreviewInput, OutputStockHistoryEntry } from "@/types/output-stock";
 
 const mocks = vi.hoisted(() => ({ mutate: vi.fn(), refetch: vi.fn(), input: null as OutputStockPreviewInput | null }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/hooks/use-output-stock", () => ({
   usePostOutputStock: () => ({ mutateAsync: mocks.mutate, isPending: false }),
   useOutputStockPreview: (input: OutputStockPreviewInput | null) => {

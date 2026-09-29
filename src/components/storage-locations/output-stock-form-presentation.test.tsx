@@ -4,6 +4,7 @@ import { beforeAll, expect, it, vi } from "vitest";
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
 import type { OutputStockHistoryEntry, OutputStockPreview } from "@/types/output-stock";
 
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ children }: { children: ReactNode }) => children }));
 
 const state = vi.hoisted(() => ({ blocker: null as string | null }));

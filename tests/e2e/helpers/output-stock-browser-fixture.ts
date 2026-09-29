@@ -14,8 +14,8 @@ import { createDelivery } from "../../../src/data-access/delivery-output-writes"
 export const FIFO_BROWSER_DATE = "2026-09-14";
 /** Wall clock the browser specs type into date-and-time pickers. */
 export const FIFO_BROWSER_TIME = `${FIFO_BROWSER_DATE}T12:00`;
-/** The same moment as the server stores it: the browser and this process share the machine clock. */
-export const FIFO_BROWSER_INSTANT = new Date(FIFO_BROWSER_TIME).toISOString();
+/** The same moment as the server stores it: pickers read the fixture facility's clock, which is UTC. */
+export const FIFO_BROWSER_INSTANT = `${FIFO_BROWSER_TIME}:00.000Z`;
 export const FIFO_MATCHING_BIN_COUNT = 24;
 const FIELD_LATITUDE = -6.8;
 const FIELD_LONGITUDE = 39.2;
