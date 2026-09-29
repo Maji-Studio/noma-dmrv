@@ -37,10 +37,9 @@ interface TransportLegFormProps {
   errorMessage?: string;
 }
 
-const transportMethodOptions = selectableTransportMethods.map((m) => ({
-  value: m,
-  label: m.charAt(0).toUpperCase() + m.slice(1),
-}));
+const transportMethodLabel = selectableTransportMethods
+  .map((m) => m.charAt(0).toUpperCase() + m.slice(1))
+  .join(", ");
 
 const MIN_LOAD_MASS_KG = 0.000001;
 const isTransportLegCertifyField = (field: string) =>
@@ -257,19 +256,17 @@ export function TransportLegForm({
               {...register("distanceSource")}
             />
           </FormField>
-          <FormField
-            id="transportMethodType"
-            label="Transport method"
-            required
-            error={errors.transportMethodType?.message}
-          >
-            <FormSelect
-              id="transportMethodType"
-              options={transportMethodOptions}
-              error={!!errors.transportMethodType}
-              {...register("transportMethodType")}
-            />
-          </FormField>
+          {/* Road is the only method the registry accepts, so it is a fixed
+              value: shown as text, still submitted through the hidden input. */}
+          <div>
+            <p className="body-small font-medium text-[var(--color-text-secondary)] mb-6">
+              Transport method
+            </p>
+            <p className="body-medium" data-testid="transportMethodType-value">
+              {transportMethodLabel}
+            </p>
+            <input type="hidden" {...register("transportMethodType")} />
+          </div>
           <FormField
             id="tripType"
             label="Trip type"
