@@ -25,7 +25,7 @@ describe("IngredientMoistureField", () => {
     expect(part(renderer, "helper")).toBe("Estimated moisture: 6.7%");
     expect(part(renderer, "warning")).toBeUndefined();
     await act(async () => renderer.root.findByType("input").props.onChange({ target: { value: "18" } }));
-    expect(part(renderer, "warning")).toBe("This reading is 11.3 points from the estimated 6.7%. Check the reading before you save.");
+    expect(part(renderer, "warning")).toBe("18% is 11.3 points above the 6.7% estimate. Check the reading before you save.");
     state.moisture = 5;
     await act(async () => renderer.update(<Harness />));
     const values = renderer.root.findByType("button").props.onClick();

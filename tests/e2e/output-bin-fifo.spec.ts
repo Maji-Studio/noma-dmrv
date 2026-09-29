@@ -4,6 +4,7 @@ import {
   FIFO_BROWSER_DATE, FIFO_BROWSER_INSTANT, FIFO_BROWSER_TIME, FIFO_MATCHING_BIN_COUNT,
   seedOutputStockBrowserFixture, readOutputStockBrowserFixture, seedPureBrowserSource,
 } from "./helpers/output-stock-browser-fixture";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const FLOW_TIMEOUT_MS = 180_000;
 type Fixture = Awaited<ReturnType<typeof seedOutputStockBrowserFixture>>;
@@ -25,7 +26,7 @@ async function openBin(page: Page, f: Fixture) {
 async function fillStock(page: Page, wet: string, moisture: string, reason: string) {
   await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill(wet);
-  await page.locator("#stock-moisture").fill(moisture);
+  await fillStockMoisture(page, "stock", moisture);
   await page.locator("#stock-reason").fill(reason);
 }
 
@@ -43,7 +44,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await selectEntity(page, "Formulation", f.pure.id, f.pure.name);
     await selectEntity(page, "Product bin", f.emptyBins[0].id, f.emptyBins[0].name);
     await page.locator('input[name="massKg"]').fill("200");
-    await page.locator('input[name="moistureContentPercent"]').fill("50");
+    await fillStockMoisture(page, "product-source", "50");
     await page.locator("#waterAddedKg").fill("0");
     await page.getByRole("button", { name: "Create Product", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -101,7 +102,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.locator("#storageLocationId").selectOption(f.bin.id);
     await expect(page.getByRole("option", { name: /upcoming/i })).toHaveCount(0);
     await page.locator("#deliveredWetMassKg").fill("2500");
-    await page.locator("#moistureContentPercent").fill("15");
+    await fillStockMoisture(page, "delivery", "15");
     const preview = page.getByRole("region", { name: "Stock preview", exact: true });
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     await expect(page.getByRole("alert").filter({ hasText: /^Not enough dry biochar in the selected bin/ })).toHaveCount(1);
@@ -110,7 +111,7 @@ test.describe("Output-bin conserved FIFO", () => {
     expect((await readOutputStockBrowserFixture(f)).deliveries).toHaveLength(0);
 
     await page.locator("#deliveredWetMassKg").fill("2000");
-    await page.locator("#moistureContentPercent").fill("30");
+    await fillStockMoisture(page, "delivery", "30");
     await expect(preview.getByText("2,000 kg wet loaded at 30% moisture", { exact: true })).toBeHidden();
     await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toHaveCount(0);
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();

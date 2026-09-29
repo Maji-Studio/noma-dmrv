@@ -5,6 +5,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const COLD_COMPILE_TIMEOUT_MS = 30_000;
 const FIRST_BOUNDARY_FILE = "e2e-upload-boundary.geojson";
@@ -94,7 +95,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.locator("#deliveredWetMassKg").fill("100");
-  await page.locator("#moistureContentPercent").fill("10");
+  await fillStockMoisture(page, "delivery", "10");
   await page
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Create Delivery" })

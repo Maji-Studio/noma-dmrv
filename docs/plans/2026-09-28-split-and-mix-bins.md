@@ -49,8 +49,8 @@ Not found: a ban on mixing, a stockpile time limit, a required FIFO or pro-rata 
 10. **Picker.** Delivery and loss on product bins, and Create Biochar Product on biochar bins, show one collapsed line in both Simple and Detailed: "Oldest first · Change". Change opens a modal where the operator ticks sub-bins and drags them into the order they were emptied. Arrow buttons do the same for keyboard and touch users.
 11. **One load weight, one reading per sub-bin.** Every sub-bin in the draw except the last is emptied at its own reading. The last one takes the rest at its reading. If the weight never reaches a ticked sub-bin, the modal asks to untick it. If the ticked sub-bins can't cover the load, the save is blocked (rule 8).
 12. **Inline readings.** The per-sub-bin moisture fields sit under the collapsed line, one row per sub-bin the load reaches. A row appears as the weight grows past the previous sub-bin. The modal is only for choosing sub-bins and their order.
-13. **Counts stay whole-bin.** Corrections always reuse the original order and readings.
-14. **Sub-bin card.** Wet first: batch code, time added, wet estimate, estimated moisture. Switch to rows once a bin holds more than `SUB_BIN_CARD_LIMIT` (6) sub-bins.
+13. **Counts stay whole-bin.** A correction of a split draw starts from the original sub-bins, order and readings, prefilled, and the operator may change them, with the same preview and refusals. That holds only while no later movement, count, application or certification submission depends on the entry; after that it is locked. (Amended 2026-09-29.)
+14. **Sub-bin card.** Wet first: batch code, time added, wet estimate, estimated moisture. The cards sit on the bin's detail sheet, opened from its tile on the bin board, so the board keeps one figure per bin. Switch to rows once a bin holds more than `SUB_BIN_CARD_LIMIT` (6) sub-bins.
 15. **ⓘ tooltip** on each sub-bin card, opened by hover, focus or tap: dry biochar, solids, time added, last three movements. Clicking the card itself ticks it. Wording is "Added", "Removed", "Loss reported"; never "Placed". Full history stays in the existing history modal.
 
 ### Mix bins
@@ -101,7 +101,7 @@ B-0412 is emptied: 843.2 ÷ 0.70 = 1,204.6 kg wet. B-0419 takes the remaining 29
 | B · time | Timestamp columns, planner instants, native date-time inputs, house-style display. Staging reset notice. | A |
 | C · split engine | `stock_mode` column; planner operator order with per-layer readings, "untick" and overdraw errors; `basis_snapshot.policy`; correction replay of the saved order. Pure planner tests first. | B |
 | D · readings | Readings table; reset on save; estimated moisture; "Moisture updated" history row; before → after preview block; required, unprefilled moisture everywhere with the one-line hint and ⓘ; the 5-point warning; ingredient moisture without prefill. | C |
-| E · split UI | Collapsed line and inline per-sub-bin readings; Change modal with drag order and arrow buttons; ⓘ tooltips; sub-bin cards on the bin board, switching to rows past 6 sub-bins. Delivery, loss, Create Biochar Product. | D |
+| E · split UI | Collapsed line and inline per-sub-bin readings; Change modal with drag order and arrow buttons; ⓘ tooltips; sub-bin cards on the bin's detail sheet, switching to rows past 6 sub-bins. Delivery, loss, Create Biochar Product. | D |
 | F · mix | Mode on the bin form; timed merge; Mix → Split only when empty; pro-rata planner policy; one-box mix tile; pro-rata counts and losses; backdating warning. Mix removals must not feed credit batches until the PDD covers the mixing practice (ADR 0030). | E |
 
 Split is usable after E. Each PR runs `pnpm lint`, `pnpm typecheck` and the colocated tests. UI PRs also run the form gallery and a Playwright pass (`docs/testing.md`).

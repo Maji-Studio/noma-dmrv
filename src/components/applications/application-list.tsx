@@ -71,6 +71,7 @@ import { ApplicationForm } from "./application-form";
 import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
 import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
 import {
+  formatApplicationDeliveryDay,
   formatApplicationKgFromTons,
   formatFieldSizeHa,
   type ApplicationDeliveryOption,
@@ -731,7 +732,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                       sideSheetDelivery.productBinName ??
                       sideSheetDelivery.formulationName ??
                       "Biochar delivery"
-                    } · ${formatDate(sideSheetDelivery.deliveryDate)}`
+                    } · ${formatApplicationDeliveryDay(sideSheetDelivery)}`
                   : null,
               },
               {

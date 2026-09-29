@@ -8,8 +8,8 @@ type FixtureProductInput = Omit<CreateBiocharProductInput, "basisFingerprint"> &
 /** Convert the writer's pre-water blend mass to the public preview's source wet mass. */
 export async function withProductStockFingerprint(ctx: OrgContext, data: FixtureProductInput): Promise<CreateBiocharProductInput> {
   const massKg = deriveCompositionSourceBiocharMassKg(data.massKg, data.composition);
-  if (massKg == null || !data.sourceBiocharStorageLocationId || !data.storageLocationId || data.waterAddedKg == null || data.moistureContentPercent == null) {
-    throw new Error("Product fixture requires source mass, source and destination bins, added water, and source moisture");
+  if (massKg == null || !data.sourceBiocharStorageLocationId || !data.storageLocationId || data.waterAddedKg == null || (data.moistureContentPercent == null && !data.sources?.length)) {
+    throw new Error("Product fixture requires source mass, source and destination bins, added water, and source moisture or sub-bin readings");
   }
   const previews = await previewProductStock(ctx, {
     facilityId: data.facilityId,
@@ -18,7 +18,8 @@ export async function withProductStockFingerprint(ctx: OrgContext, data: Fixture
     sourceBiocharStorageLocationId: data.sourceBiocharStorageLocationId,
     storageLocationId: data.storageLocationId,
     massKg,
-    moistureContentPercent: data.moistureContentPercent,
+    moistureContentPercent: data.moistureContentPercent ?? undefined,
+    sources: data.sources,
     waterAddedKg: data.waterAddedKg,
     ingredientBins: data.composition?.ingredients as ProductStockPreviewInput["ingredientBins"],
   });

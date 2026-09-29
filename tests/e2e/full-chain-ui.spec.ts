@@ -27,6 +27,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eq, ilike, inArray } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 // ============================================
 // Full Chain Smoke Test
@@ -581,7 +582,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
-      await page.fill('input[name="moistureContentPercent"]', "10");
+      await fillStockMoisture(page, "delivery", "10");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
       await waitForSideSheetClose(page);

@@ -34,6 +34,8 @@ interface FormFieldProps {
    * neutral. Only meaningful when `certifyRequired` is set.
    */
   certifyStatus?: CertFieldStatus;
+  /** A short derived figure at the end of the label row, such as what a reading row draws. */
+  aside?: ReactNode;
   children: ReactNode;
 }
 
@@ -93,6 +95,7 @@ export function FormField({
   required,
   certifyRequired,
   certifyStatus,
+  aside,
   children,
 }: FormFieldProps) {
   const errorId = `${id}-error`;
@@ -116,33 +119,47 @@ export function FormField({
         ? helperId
         : undefined;
 
+  // Keep the info icon a sibling of the label, not a child — a button
+  // inside a <label> would forward its clicks to the field control.
+  // Top-align so a wrapped multi-line label keeps the CERT tag / ⓘ icon
+  // beside its first line instead of floating them in the vertical
+  // middle of the wrapped text.
+  const labelRow = (spacing: string) => (
+    <div className={`flex min-h-24 items-start gap-6 ${spacing}`}>
+      <label
+        htmlFor={id}
+        className="body-small font-medium text-[var(--color-text-secondary)]"
+      >
+        {label}
+        {required && (
+          <>
+            <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
+            <span className="sr-only">Required</span>
+          </>
+        )}
+      </label>
+      {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
+      {hintContent != null && (
+        <InfoHint side="top" label={`More about ${label}`}>
+          {hintContent}
+        </InfoHint>
+      )}
+    </div>
+  );
+
   return (
     <div>
-      {/* Keep the info icon a sibling of the label, not a child — a button
-          inside a <label> would forward its clicks to the field control.
-          Top-align so a wrapped multi-line label keeps the CERT tag / ⓘ icon
-          beside its first line instead of floating them in the vertical
-          middle of the wrapped text. */}
-      <div className="flex min-h-24 items-start gap-6 mb-6">
-        <label
-          htmlFor={id}
-          className="body-small font-medium text-[var(--color-text-secondary)]"
-        >
-          {label}
-          {required && (
-            <>
-              <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
-              <span className="sr-only">Required</span>
-            </>
-          )}
-        </label>
-        {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
-        {hintContent != null && (
-          <InfoHint side="top" label={`More about ${label}`}>
-            {hintContent}
-          </InfoHint>
-        )}
-      </div>
+      {/* With an aside the label group and the aside wrap as two units, so
+          the ⓘ stays beside the label. The margin sits on a wrapper div:
+          type classes beat margin utilities. */}
+      {aside != null ? (
+        <div className="flex flex-wrap items-start gap-x-6 mb-6">
+          {labelRow("")}
+          <div className="ml-auto whitespace-nowrap">
+            <span className="body-caption text-[var(--color-text-tertiary)] tabular-nums">{aside}</span>
+          </div>
+        </div>
+      ) : labelRow("mb-6")}
       {describeChild(children, describedBy, Boolean(error))}
       {showInlineHelper && (
         <p

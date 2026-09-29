@@ -14,7 +14,7 @@ import { requireOrgScope } from './utils';
 
 const PERCENT_SCALE = 100;
 const STOCK_CHANGED_MESSAGE = 'Stock changed since this preview. Refresh the preview and try again.';
-export type ProductStockPreviewInput = Pick<BiocharProductFormData, 'facilityId' | 'formulationId' | 'placedAt' | 'sourceBiocharStorageLocationId' | 'storageLocationId' | 'massKg' | 'moistureContentPercent' | 'waterAddedKg'> & { ingredientBins?: Record<string, unknown>[] };
+export type ProductStockPreviewInput = Pick<BiocharProductFormData, 'facilityId' | 'formulationId' | 'placedAt' | 'sourceBiocharStorageLocationId' | 'storageLocationId' | 'massKg' | 'moistureContentPercent' | 'waterAddedKg' | 'sources'> & { ingredientBins?: Record<string, unknown>[] };
 
 /** Read-only projection. Product creation still revalidates every stock draw under locks. */
 export async function previewProductStock(ctx: OrgContext, input: ProductStockPreviewInput): Promise<AffectedStockPreview[]> {
@@ -26,7 +26,9 @@ export async function previewProductStock(ctx: OrgContext, input: ProductStockPr
 export async function prepareProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction) {
     requireOrgScope(ctx);
     const base = { facilityId: input.facilityId, occurredAt: input.placedAt };
-    const source = await prepareOutputStock(ctx, { ...base, storageLocationId: input.sourceBiocharStorageLocationId, kind: 'production_draw', wetMassKg: input.massKg, moisturePercent: input.moistureContentPercent }, tx);
+    // A split biochar bin is read per sub-bin; the draw then has no single moisture.
+    const source = await prepareOutputStock(ctx, { ...base, storageLocationId: input.sourceBiocharStorageLocationId, kind: 'production_draw', wetMassKg: input.massKg,
+      ...(input.sources ? { sources: input.sources } : { moisturePercent: input.moistureContentPercent }) }, tx);
     const composition = await resolveCompositionIngredientMassBasis(ctx, tx, { ingredients: input.ingredientBins ?? [] }, undefined, undefined, input.placedAt);
     const ingredients = composition.ingredients as { formulationIngredientId: string; feedstockTypeId: string; storageLocationId?: string | null; massKg: number; massDryKg: number; moistureContentPercent: number | null; moistureEstimate?: unknown }[];
     const bins: AffectedStockPreview[] = [source.preview];
@@ -72,7 +74,7 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
       request: {
         facilityId: input.facilityId, formulationId: input.formulationId, occurredAt: input.placedAt,
         sourceStorageLocationId: input.sourceBiocharStorageLocationId, destinationStorageLocationId: input.storageLocationId,
-        wetMassKg: input.massKg, moisturePercent: input.moistureContentPercent, waterAddedKg: input.waterAddedKg,
+        wetMassKg: input.massKg, moisturePercent: input.sources ? null : input.moistureContentPercent, sources: input.sources ?? null, waterAddedKg: input.waterAddedKg,
         ingredients: ingredients.map(ingredient => ({
           formulationIngredientId: ingredient.formulationIngredientId, feedstockTypeId: ingredient.feedstockTypeId,
           storageLocationId: ingredient.storageLocationId ?? null, massKg: ingredient.massKg,
