@@ -21,7 +21,7 @@ function visible(node: ReactTestInstance | string): string {
 }
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 it("keeps the bar and its history action in Simple, adds the figures in Detailed, and uses corrected saved quantities", async () => {
-  const original: OutputStockHistoryEntry = { id: "original", deliveryId: "delivery", kind: "delivery", physicalDate: "2026-09-22", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [] };
+  const original: OutputStockHistoryEntry = { id: "original", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [] };
   history.data = [original, { ...original, id: "reversal", kind: "reversal", correctsMovementId: original.id }, { ...original, id: "replacement", correctsMovementId: original.id, wetMassKg: 90, dryMassKg: 72, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 72, runs: [] }] }];
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FormDetailProvider scope="delivery"><FormDetailControl /><DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} /></FormDetailProvider>); });
@@ -52,7 +52,7 @@ it("keeps the bar and its history action in Simple, adds the figures in Detailed
 });
 
 it("discloses the production runs behind each delivered batch and nothing else", async () => {
-  const entry: OutputStockHistoryEntry = { id: "entry", deliveryId: "delivery", kind: "delivery", physicalDate: "2026-09-22", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run-a", code: "PR-26-001", dryMassKg: 50 }, { productionRunId: "run-b", code: "PR-26-002", dryMassKg: 30 }] }] };
+  const entry: OutputStockHistoryEntry = { id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run-a", code: "PR-26-001", dryMassKg: 50 }, { productionRunId: "run-b", code: "PR-26-002", dryMassKg: 30 }] }] };
   history.data = [entry];
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FormDetailProvider scope="delivery"><FormDetailControl /><DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} /></FormDetailProvider>); });

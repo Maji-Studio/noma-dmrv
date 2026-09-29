@@ -11,7 +11,8 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from '@/lib/errors';
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { facilityTimestampDateExpr } from "../output-stock-dates";
+import { formatFacilityDateTime } from "@/lib/format-utils";
+import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { requireOrgScope } from "../utils";
 
 /**
@@ -26,18 +27,25 @@ export async function getProductionRunDependentProduct(
   productionRunId: string,
 ): Promise<{ id: string; code: string } | undefined> {
   requireOrgScope(ctx);
-  const [count] = await tx.select({ reason: binMovements.reason, date: binMovements.physicalDate }).from(binMovements)
+  // Refusals name the movement by its facility time; the zone is read only when one is found.
+  const at = async (value: Date | null) => {
+    if (!value) return '';
+    const [run] = await tx.select({ timezone: facilities.timezone }).from(productionRuns)
+      .innerJoin(facilities, and(eq(facilities.id, productionRuns.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId)));
+    return formatFacilityDateTime(value, run?.timezone ?? DEFAULT_FACILITY_TIMEZONE);
+  };
+  const [count] = await tx.select({ reason: binMovements.reason, at: binMovements.occurredAt }).from(binMovements)
     .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId), eq(productionRuns.biocharStorageLocationId, binMovements.storageLocationId)))
-    .innerJoin(facilities, and(eq(facilities.id, productionRuns.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), sql`(${binMovements.outputKind} = 'count' or ${binMovements.inputSnapshot}->>'kind' = 'count')`,
-      sql`(${productionRuns.endTime} is null or ${facilityTimestampDateExpr(productionRuns.endTime, facilities.timezone)}::date <= ${binMovements.physicalDate})`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
-  if (count) throw new SafeError(`Production stock is covered by count: ${count.reason} (${count.date}).`);
-  const [effect] = await tx.select({ kind: binMovements.outputKind, reason: binMovements.reason, date: binMovements.physicalDate })
+      sql`(${productionRuns.endTime} is null or (${productionRuns.endTime} at time zone 'UTC') <= ${binMovements.occurredAt})`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
+  if (count) throw new SafeError(`Production stock is covered by count: ${count.reason} (${await at(count.at)}).`);
+  const [effect] = await tx.select({ kind: binMovements.outputKind, reason: binMovements.reason, at: binMovements.occurredAt })
     .from(outputStockRunAllocations)
     .innerJoin(outputStockAllocations, and(eq(outputStockAllocations.organizationId, ctx.organizationId), eq(outputStockAllocations.id, outputStockRunAllocations.allocationId)))
     .innerJoin(binMovements, and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.id, outputStockAllocations.movementId)))
     .where(and(eq(outputStockRunAllocations.organizationId, ctx.organizationId), eq(outputStockRunAllocations.productionRunId, productionRunId))).limit(1);
-  if (effect) throw new SafeError(`Production stock is used by ${effect.kind}: ${effect.reason} (${effect.date}).`);
+  if (effect) throw new SafeError(`Production stock is used by ${effect.kind}: ${effect.reason} (${await at(effect.at)}).`);
   const [product] = await tx
     .select({ id: biocharProducts.id, code: biocharProducts.code })
     .from(biocharProducts)

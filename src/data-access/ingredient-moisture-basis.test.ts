@@ -52,22 +52,21 @@ describe('remaining ingredient moisture', () => {
       { ingredients: [{ ...ingredient, massKg: 15000000 }] });
     expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 14000000, moistureContentPercent: 6.666667 })]);
   });
-  it('limits every physical stock input to the requested day and excludes archived intakes', async () => {
+  it('limits every physical stock input to the requested instant and excludes archived intakes', async () => {
     const conditions: SQL[] = [];
-    await getIngredientMoistureBasis(ctx, 'bin', '2026-09-14', reader([{ wet: 100, dry: 50 }], [], [], [], conditions), 'excluded-product');
+    const at = '2026-09-14T12:00:00.000Z';
+    await getIngredientMoistureBasis(ctx, 'bin', at, reader([{ wet: 100, dry: 50 }], [], [], [], conditions), 'excluded-product');
     const queries = conditions.map(condition => new PgDialect().sqlToQuery(condition));
     expect(queries[0].sql).toContain('"feedstocks"."archived_at" is null');
     expect(queries[0].sql).toContain('"feedstocks"."delivery_date" <=');
     expect(queries[1].sql).toContain('"biochar_products"."placed_at" <=');
     expect(queries[1].params).toContain('excluded-product');
-    expect(queries[2].sql).toContain('("production_runs"."start_time" at time zone \'UTC\' at time zone "facilities"."timezone")::date::text <=');
+    expect(queries[2].sql).toContain('"production_runs"."start_time" <=');
     expect(queries[2].params).toContain('cancelled');
-    expect(queries[3].sql).toContain('coalesce("bin_movements"."physical_date", ("bin_movements"."created_at" at time zone \'UTC\' at time zone "facilities"."timezone")::date::text::date) <=');
+    // A timestamp without zone is read as UTC, never in the session zone.
+    expect(queries[3].sql).toContain('coalesce("bin_movements"."occurred_at", "bin_movements"."created_at" at time zone \'UTC\') <=');
     for (const query of queries) expect(query.params).toContain('org');
-    expect(queries[0].params).toContain('2026-09-14T23:59:59.999Z');
-    expect(queries[1].params).toContain('2026-09-14');
-    expect(queries[2].params).toContain('2026-09-14');
-    expect(queries[3].params).toContain('2026-09-14');
+    for (const query of queries) expect(query.params).toContain(at);
   });
   it('keeps the same basis when fractional intake rows are returned in a different order', async () => {
     const intakes = [{ wet: 0.1, dry: 0.05 }, { wet: 0.2, dry: 0.1 }, { wet: 0.3, dry: 0.15 }];

@@ -7,10 +7,16 @@ wet estimate always needs an explicit moisture basis.
 
 ## Physical order and mass basis
 
-Raw biochar uses the run completion date. Product stock uses its mixing and
-placement date, independently of when its source biochar was produced. Equal
-physical dates use the stable posting sequence. A draw cannot use a physically
-future layer. A late receipt does not change saved draws or applications.
+Every output stock event carries a date and time (seconds stored, not shown).
+Raw biochar uses the run end time. Product stock uses its mixing and placement
+time, independently of when its source biochar was produced. Layers and events
+compare as instants, so two events on the same day keep their real order; equal
+instants use the stable posting sequence. A draw cannot use a physically future
+layer. A late receipt does not change saved draws or applications.
+
+Forms take the time through the native date-time picker on the viewer's clock
+and submit an ISO 8601 UTC instant. Read surfaces show it in house style
+("Sep 15, 2026, 14:30"); server-built messages use the facility's clock.
 
 Each product freezes its source dry biochar and ingredient dry solids. Positive
 ingredient amounts use the oldest eligible intake moisture or an explicit
@@ -27,7 +33,7 @@ source's final gram.
 ## Orders, deliveries, and applications
 
 An order records a formulation and requested wet amount. It reserves no product
-or bin stock. A completed delivery records its actual source bin, physical date,
+or bin stock. A completed delivery records its actual source bin, physical time,
 measured wet mass, and moisture. Its immutable layer and run allocations determine
 its dry biochar total. Legacy storage-inventory rows are not a stock ledger.
 
@@ -44,7 +50,7 @@ creates no stock, and a zero count closes the exact remaining stock without a
 moisture reading.
 
 Corrections append a reversal of the original effects and a replacement. They
-retain actor, reason, physical and recorded dates, input basis, and before/after
+retain actor, reason, physical and recorded times, input basis, and before/after
 balances. A reduced loss restores its original source provenance even after a
 late older intake. An eligible, unapplied delivery correction can explicitly use
 newly recorded physically older stock. Later dependent draws, counts,

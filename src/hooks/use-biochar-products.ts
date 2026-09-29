@@ -180,6 +180,7 @@ export function useUpdateBiocharProduct(
               ? {
                   ...old,
                   ...variables,
+                  placedAt: variables.placedAt ? new Date(variables.placedAt) : old.placedAt,
                   updatedAt: new Date(),
                 }
               : old

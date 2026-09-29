@@ -45,11 +45,11 @@ export function planBiocharProductSourceAllocations(lots: AvailableBiocharSource
   if (requestedDryMassKg <= 0 || requestedDryMassKg > requestedWetMassKg) throw new SafeError('Source dry mass must be positive and no greater than wet mass.');
   const layers = lots.map((lot, index) => {
     if (lot.availableDryMassKg == null) throw new UnresolvedBiocharDryMassError(lot.productionRunId);
-    return { id: lot.productionRunId, physicalDate: lot.producedAt.toISOString().slice(0, 10), postingSequence: BigInt(index),
+    return { id: lot.productionRunId, placedAt: lot.producedAt.toISOString(), postingSequence: BigInt(index),
       establishedDryBiocharKg: lot.availableDryMassKg, ingredientDrySolidsKg: 0, remainingDryBiocharKg: lot.availableDryMassKg,
       runs: [{ productionRunId: lot.productionRunId, establishedDryKg: lot.availableDryMassKg, remainingDryKg: lot.availableDryMassKg }] };
   });
-  const plan = planOutputStock(layers, '9999-12-31', { kind: 'solids', solidsKg: requestedDryMassKg });
+  const plan = planOutputStock(layers, '9999-12-31T23:59:59.999Z', { kind: 'solids', solidsKg: requestedDryMassKg });
   let cumulative = BigInt(0), previous = BigInt(0);
   const allocations = plan.allocations.map(a => {
     cumulative += grams(a.dryKg);
@@ -60,11 +60,11 @@ export function planBiocharProductSourceAllocations(lots: AvailableBiocharSource
   return { allocations, productionDate: allocations[0]?.producedAt ?? null, availableWetMassKg: Number(kilograms(layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0)))) * requestedWetMassKg / requestedDryMassKg };
 }
 export async function buildBiocharProductSourceAllocationPlan(ctx: OrgContext, tx: DbTransaction, input: {
-  sourceStorageLocationId: string; facilityId: string; physicalDate: string; requestedWetMassKg: number; requestedDryMassKg: number;
+  sourceStorageLocationId: string; facilityId: string; occurredAt: string; requestedWetMassKg: number; requestedDryMassKg: number;
 }): Promise<BiocharProductSourceAllocationPlan> {
   requireOrgScope(ctx);
-  const state = await getBiocharOutputStockLayers(ctx, { storageLocationId: input.sourceStorageLocationId, facilityId: input.facilityId, physicalDate: input.physicalDate }, tx);
-  return planBiocharProductSourceAllocations(state.layers.filter(l => l.physicalDate <= input.physicalDate && grams(l.remainingDryBiocharKg) > BigInt(0)).map(l => ({ productionRunId: l.id, producedAt: new Date(l.physicalDate), availableDryMassKg: Number(l.remainingDryBiocharKg), availableWetMassKg: 0 })), input.requestedWetMassKg, 0, input.requestedDryMassKg);
+  const state = await getBiocharOutputStockLayers(ctx, { storageLocationId: input.sourceStorageLocationId, facilityId: input.facilityId, occurredAt: input.occurredAt }, tx);
+  return planBiocharProductSourceAllocations(state.layers.filter(l => l.placedAt <= input.occurredAt && grams(l.remainingDryBiocharKg) > BigInt(0)).map(l => ({ productionRunId: l.id, producedAt: new Date(l.placedAt), availableDryMassKg: Number(l.remainingDryBiocharKg), availableWetMassKg: 0 })), input.requestedWetMassKg, 0, input.requestedDryMassKg);
 }
 export async function insertBiocharProductSourceAllocations(
   ctx: OrgContext,

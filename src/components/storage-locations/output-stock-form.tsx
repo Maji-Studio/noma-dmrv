@@ -1,11 +1,11 @@
 "use client";
 
-import { DetailedOnly, FormActions, FormField, FormInput, FormSection, FormSpine, FormTextarea, ResolvedErrorRevalidator } from "@/components/forms";
+import { DetailedOnly, FormActions, FormField, FormSection, FormSpine, FormTextarea, ResolvedErrorRevalidator } from "@/components/forms";
+import { EventTimeInput } from "@/components/forms/event-time-input";
 import { MoistureField, WetMassField } from "@/components/forms/mass-moisture-fields";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import { useOutputStockPreview, usePostOutputStock } from "@/hooks/use-output-stock";
-import { formatLocalDate } from "@/lib/date-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatDateTime } from "@/lib/format-utils";
 import { toNumberOrNull } from "@/schemas/helpers";
 import { outputStockPostSchema, outputStockPreviewSchema } from "@/schemas/output-stock";
 import type { OutputStockHistoryEntry, OutputStockPreviewInput } from "@/types/output-stock";
@@ -35,7 +35,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     defaultValues: {
       storageLocationId, facilityId, kind, correctsMovementId: original?.id,
       basisFingerprint: "pending-preview", idempotencyKey,
-      physicalDate: original?.physicalDate.slice(0, 10) ?? formatLocalDate(new Date()),
+      occurredAt: original?.occurredAt ?? new Date().toISOString(),
       wetMassKg: original?.wetMassKg ?? undefined,
       moisturePercent: original?.moisturePercent ?? null,
       reason: "",
@@ -65,7 +65,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     <ResolvedErrorRevalidator control={control} trigger={trigger} />
     <FormSpine control={control}>
       {original && <FormSection title="Original entry">
-        <p className="body-small">{outputStockEventLabel(original.kind)} on {formatDate(original.physicalDate)}.</p>
+        <p className="body-small">{outputStockEventLabel(original.kind)} on {formatDateTime(original.occurredAt)}.</p>
         {/* One aligned row set: the entry's own figures, nothing hidden behind
             a control and nothing restated as a sentence. */}
         <DetailedOnly><StockRows label="Original entry figures" rows={[
@@ -73,9 +73,9 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
           { label: "Dry biochar", value: <InlineMassChange beforeKg={original.beforeDryKg} afterKg={original.afterDryKg} /> },
         ]} /></DetailedOnly>
       </FormSection>}
-      <FormSection title={original ? "Proposed replacement" : kind === "count" ? "Reconcile stock" : "Record loss"} fields={["physicalDate", "wetMassKg", "moisturePercent"]}>
-        <FormField id="physicalDate" label="Physical date" required error={errors.physicalDate?.message}>
-          <FormInput disabled={mutation.isPending} id="physicalDate" type="date" {...register("physicalDate", { required: "Enter the physical date." })} />
+      <FormSection title={original ? "Proposed replacement" : kind === "count" ? "Reconcile stock" : "Record loss"} fields={["occurredAt", "wetMassKg", "moisturePercent"]}>
+        <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message}>
+          <EventTimeInput control={control} name="occurredAt" id="occurredAt" disabled={mutation.isPending} />
         </FormField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
           <WetMassField id="stock-wet" label={kind === "count" ? "Counted wet mass (kg)" : "Wet mass removed (kg)"} required disabled={mutation.isPending} error={errors.wetMassKg?.message} registration={register("wetMassKg", { setValueAs: toNumberOrNull })} />

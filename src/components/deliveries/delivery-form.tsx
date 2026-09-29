@@ -7,11 +7,11 @@
 
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { toDateInputValue } from "@/lib/date-utils";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useState } from "react";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { EventTimeInput } from "@/components/forms/event-time-input";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
@@ -97,7 +97,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     idempotencyKey,
     basisFingerprint: "pending-preview",
     orderId: delivery?.orderId ?? "",
-    deliveryDate: toDateInputValue(delivery?.deliveryDate),
+    deliveryDate: (delivery?.deliveryDate ? new Date(delivery.deliveryDate) : new Date()).toISOString(),
     status: "delivered" as const,
     // Match the registered empty values so focusing the header is not an edit.
     deliveredWetMassKg: delivery?.deliveredWetMassKg ?? null,
@@ -242,7 +242,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const moisture = watchMoisture === "" || watchMoisture == null ? NaN : Number(watchMoisture);
   const stockPreview = useOutputStockPreview(!isEditMode && watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass) && Number.isFinite(moisture) && moisture >= 0 && moisture < 100 ? {
     storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery",
-    physicalDate: String(watchDate), wetMassKg: wetMass, moisturePercent: moisture,
+    occurredAt: String(watchDate), wetMassKg: wetMass, moisturePercent: moisture,
   } : null);
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
@@ -288,14 +288,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveryDate", "orderId", "storageLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery date" error={errors.deliveryDate?.message} required>
-            <FormInput
-              id="deliveryDate"
-              type="date"
-              disabled={isSubmitting || isEditMode}
-              error={!!errors.deliveryDate}
-              {...register("deliveryDate")}
-            />
+          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required>
+            <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" disabled={isSubmitting || isEditMode} />
           </FormField>
 
         </div>

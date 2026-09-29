@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate, formatDateTime } from "@/lib/format-utils";
+import { formatDateTime } from "@/lib/format-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { ClockCounterClockwiseIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
@@ -47,7 +47,7 @@ interface EntryProps {
  * belongs to, so one operator action reads as one entry.
  */
 function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, last, onCorrect }: EntryProps) {
-  const subject = `${kindLabel.toLowerCase()} on ${formatDate(entry.physicalDate)}`;
+  const subject = `${kindLabel.toLowerCase()} on ${formatDateTime(entry.occurredAt)}`;
   const rows = [
     ...(entry.wetMassKg === null ? [] : [{ label: "Wet", value: formatWetAtMoisture(entry.wetMassKg, entry.moisturePercent) }]),
     { label: "Dry biochar", value: <InlineMassChange beforeKg={entry.beforeDryKg} afterKg={entry.afterDryKg} /> },
@@ -64,12 +64,12 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
             <StockChip emphasis>{kindLabel}</StockChip>
             {reversed && <StockChip>Reversed</StockChip>}
           </h4>
-          <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatDate(entry.physicalDate)}</span>
+          <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatDateTime(entry.occurredAt)}</span>
         </div>
         <StockRows label={`${kindLabel} figures`} rows={rows} />
         {reversedEntry && (
           <p className="body-caption text-[var(--color-text-secondary)]">
-            Reverses the entry recorded {formatDate(reversedEntry.physicalDate)}.
+            Reverses the entry recorded {formatDateTime(reversedEntry.occurredAt)}.
           </p>
         )}
         {entry.reason && <p className="body-caption text-[var(--color-text-secondary)]">{entry.reason}</p>}
