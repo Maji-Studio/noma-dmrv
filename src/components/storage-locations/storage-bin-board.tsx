@@ -50,9 +50,10 @@ const SMALLEST_PAGE_SIZE = Math.min(...LIST_PAGE_SIZE_OPTIONS);
 const CONTROL_CLASSES =
   "h-36 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
+/** `onHandKg` is null when a bin in the lane has unresolved stock. */
 export type LaneSummary = Record<
   StorageLocationType,
-  { binCount: number; onHandKg: number }
+  { binCount: number; onHandKg: number | null }
 >;
 
 export interface StorageBinBoardProps {
@@ -132,7 +133,8 @@ function filterFigure(
     const bins = filterBinCount(summary, "all") ?? 0;
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;
   }
-  return formatMass(summary[filter].onHandKg);
+  const onHandKg = summary[filter].onHandKg;
+  return onHandKg == null ? MISSING_VALUE.notAvailable : formatMass(onHandKg);
 }
 
 /**
