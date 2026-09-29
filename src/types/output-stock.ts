@@ -1,3 +1,5 @@
+import type { z } from 'zod';
+import type { orderedSourceSchema } from '@/schemas/output-stock';
 /** Serializable operator read models; exact fractions remain inside the ledger. */
 export interface OutputStockAllocationView {
   layerId: string;
@@ -17,7 +19,7 @@ export interface OutputStockPreviewInput {
   moisturePercent?: number | null;
   correctsMovementId?: string;
   /** Split bins: sub-bins in the order they were emptied, each with its reading. */
-  sources?: { layerId: string; moisturePercent: number }[];
+  sources?: z.infer<typeof orderedSourceSchema>[];
 }
 
 export interface OutputStockPreview {

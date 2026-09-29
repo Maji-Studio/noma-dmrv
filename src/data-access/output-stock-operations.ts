@@ -3,6 +3,7 @@ import { binMovements, biocharProducts, formulations, productionRuns, storageLoc
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, SubBinOverdrawError, subtract, UntickSubBinError, type OutputStockLayer, type Rational } from '@/lib/output-stock';
+import { PERCENT_SCALE } from '@/lib/mass-moisture';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
 import { orderedSourceSchema, outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
@@ -32,8 +33,8 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const state = lane === 'biochar' ? await getBiocharOutputStockLayers(ctx, input, reader) : await getProductOutputStockLayers(ctx, input, reader);
   const correction = input.correctsMovementId ? await prepareOutputCorrection(ctx, input, state.layers, reader) : null;
   const layers = correction?.layers ?? state.layers;
-  // A correction reuses the original's sub-bin order and readings (plan rule 13).
-  const sources = correction ? savedSources(correction.original.inputSnapshot) : input.sources;
+  // A correction may name its own sub-bins and readings; otherwise it replays the original's.
+  const sources = input.sources ?? (correction ? savedSources(correction.original.inputSnapshot) : undefined);
   if (sources && bin.stockMode !== 'split') throw new SafeError('Only a split bin takes a sub-bin order.');
   if (!sources && input.moisturePercent == null && !(input.kind === 'count' && input.wetMassKg === 0)) throw new SafeError('Enter the measured moisture.');
   // Reducing a loss restores its own saved provenance, even after a late intake.
@@ -69,7 +70,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const removedSolids = plan?.allocations.reduce((sum, a) => add(sum, a.solidsKg), rational(BigInt(0))) ?? rational(BigInt(0));
   const afterSolidsKg = beforeSolidsKg - rationalNumber(removedSolids);
   // A draw from several sub-bins has no single reading; its overall moisture is 1 − solids ÷ wet.
-  const moisture = sources ? (plan ? (1 - rationalNumber(removedSolids) / input.wetMassKg) * PERCENT : null) : input.moisturePercent ?? null;
+  const moisture = sources ? (plan ? (1 - rationalNumber(removedSolids) / input.wetMassKg) * PERCENT_SCALE : null) : input.moisturePercent ?? null;
   const fraction = moisture === null ? null : 1 - moisture / 100;
   const layerViews = (viewLayers: OutputStockLayer[]) => viewLayers.filter(l => l.placedAt <= input.occurredAt).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.postingSequence < b.postingSequence ? -1 : 1)).map(l => ({
     layerId: l.id, code: codeMap.get(l.id) ?? l.id, dryMassKg: Number(l.remainingDryBiocharKg),
@@ -97,7 +98,6 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   return { input, bin, lane, layers, plan, preview, correction, sources };
 }
 
-const PERCENT = 100;
 const STORED_PERCENT_PRECISION = 1 / STORED_PERCENT_INPUT_STEP;
 
 /** A derived overall moisture at the precision a stored percent keeps. */
@@ -120,7 +120,7 @@ function subBinMessage(error: RangeError, codes: Map<string, string>): string | 
   }
   if (error instanceof SubBinOverdrawError) {
     const code = codes.get(error.layerId) ?? error.layerId;
-    return `This load holds more dry biochar than ${code} holds by the records. Record a count first.`;
+    return `This load holds more dry solids than ${code} holds by the records. Reconcile stock first.`;
   }
   return null;
 }
@@ -145,10 +145,11 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
     });
   } catch (error) {
     if (!(error instanceof ActionConflictError)) throw error;
-    // Only the current balance is shown, so read it as a zero count: a split-bin
-    // correction may carry neither a reading nor an order of its own.
-    const preview = (await prepareOutputStock(ctx, { ...input, correctsMovementId: undefined, sources: undefined, kind: 'count', wetMassKg: 0, moisturePercent: null })).preview;
-    return { ...preview, beforeRecordedWetKg: undefined, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? [error.conflict] };
+    // Only the current balance is shown. A correction that replays saved
+    // readings carries none of its own, so its balance is read as a zero count.
+    const balanceInput = input.moisturePercent == null ? { ...input, sources: undefined, kind: 'count' as const, wetMassKg: 0 } : { ...input, sources: undefined };
+    const preview = (await prepareOutputStock(ctx, { ...balanceInput, correctsMovementId: undefined })).preview;
+    return { ...preview, discrepancySolidsKg: 0, beforeRecordedWetKg: undefined, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? [error.conflict] };
   }
 }
 export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId: string; formulationId: string }): Promise<MatchingOutputBin[]> {

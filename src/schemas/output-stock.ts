@@ -17,6 +17,8 @@ export const outputStockPreviewSchema = z.object({
   /** Split bins: sub-bins in the order they were emptied. Absent means oldest first at one reading. */
   sources: z.array(orderedSourceSchema).min(1).optional(),
 }).superRefine((value, ctx) => {
+  if (value.sources && new Set(value.sources.map(source => source.layerId)).size !== value.sources.length)
+    ctx.addIssue({ code: 'custom', path: ['sources'], message: 'Choose each sub-bin once.' });
   if (value.kind !== 'count' && value.wetMassKg === 0)
     ctx.addIssue({ code: 'custom', path: ['wetMassKg'], message: 'Wet mass must be greater than zero.' });
   if (value.sources && value.kind === 'count')

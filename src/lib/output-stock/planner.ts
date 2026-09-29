@@ -35,6 +35,12 @@ export class SubBinOverdrawError extends RangeError {
   constructor(public readonly layerId: string) { super('Measured solids exceed the sub-bin'); }
 }
 
+/** Grid (per kg) a split draw's partial solids are floored to: one nanogram. */
+const ORDERED_SOLIDS_GRID_PER_KG = BigInt(1_000_000_000);
+function floorToGrid(value: Rational): Rational {
+  return rational(value.numerator * ORDERED_SOLIDS_GRID_PER_KG / value.denominator, ORDERED_SOLIDS_GRID_PER_KG);
+}
+
 /** Only canonical ISO 8601 UTC instants (`Date#toISOString`) are accepted, so string order is time order. */
 function canonicalInstant(value: string): string {
   const parsed = typeof value === 'string' ? Date.parse(value) : NaN;
@@ -117,11 +123,13 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     let wetLeft = decimal(request.wetKg);
     if (wetLeft.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
     const byId = new Map(eligible.map(p => [p.layer.id, p]));
-    const seen = new Set<string>();
+    if (!request.sources.length) throw new RangeError('Choose at least one sub-bin');
+    if (new Set(request.sources.map(source => source.layerId)).size !== request.sources.length ||
+      request.sources.some(source => !byId.has(source.layerId))) {
+      throw new RangeError('Choose each sub-bin once from stock present at this time');
+    }
     request.sources.forEach((source, index) => {
-      const p = byId.get(source.layerId);
-      if (!p || seen.has(source.layerId)) throw new RangeError('Choose each sub-bin once from stock present at this time');
-      seen.add(source.layerId);
+      const p = byId.get(source.layerId)!;
       if (p.capacity.numerator === BigInt(0)) throw new UntickSubBinError(source.layerId);
       const fraction = solidsFraction(source.moisturePercent);
       if (index < request.sources.length - 1) {
@@ -131,12 +139,14 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
         if (wetLeft.numerator <= BigInt(0)) throw new UntickSubBinError(request.sources[index + 1].layerId);
         draw(p, p.capacity, wetKg, source.moisturePercent);
       } else {
-        const solidsKg = multiply(wetLeft, fraction);
-        if (compare(solidsKg, p.capacity) > BigInt(0)) throw new SubBinOverdrawError(source.layerId);
+        const exactSolidsKg = multiply(wetLeft, fraction);
+        if (compare(exactSolidsKg, p.capacity) > BigInt(0)) throw new SubBinOverdrawError(source.layerId);
+        // Emptied sub-bins pass their readings into this remainder's denominator. Rounding
+        // the last partial draw down to a fixed grid keeps later exact balances bounded.
+        const solidsKg = compare(exactSolidsKg, p.capacity) === BigInt(0) ? p.capacity : floorToGrid(exactSolidsKg);
         draw(p, solidsKg, wetLeft, source.moisturePercent);
       }
     });
-    if (!request.sources.length) throw new RangeError('Choose at least one sub-bin');
   } else {
     let measured: Rational;
     if (request.kind === 'solids' || request.kind === 'count-solids') measured = decimal(request.solidsKg);

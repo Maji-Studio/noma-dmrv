@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { binMovements, deliveries, outputStockAllocations, storageLocations } from "@/db/schema";
+import { createApplication } from "@/data-access/applications";
+import { getDeliveryAllocationProvenance } from "@/data-access/delivery-allocation-provenance";
 import { createDelivery } from "@/data-access/delivery-output-writes";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { SafeError } from "@/lib/errors";
-import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
+import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct, STOCK_DATE, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
 afterEach(async () => { for (const f of fixtures.splice(0)) await cleanupPostedStock(f); });
@@ -50,20 +52,49 @@ describe("split bin draws in PostgreSQL", () => {
     const untick = await previewOutputStock(f.ctx, { ...base, wetMassKg: 300, sources: [{ layerId: f.p2.id, moisturePercent: 20 }, { layerId: f.p1.id, moisturePercent: 25 }] });
     expect(untick.blockingMessage).toBe(`This load is used up before it reaches ${f.p1.code}. Untick ${f.p1.code}.`);
     const overdraw = await previewOutputStock(f.ctx, { ...base, wetMassKg: 500, sources: [{ layerId: f.p1.id, moisturePercent: 0 }] });
-    expect(overdraw.blockingMessage).toBe(`This load holds more dry biochar than ${f.p1.code} holds by the records. Record a count first.`);
+    expect(overdraw.blockingMessage).toBe(`This load holds more dry solids than ${f.p1.code} holds by the records. Reconcile stock first.`);
   });
 
-  it("replays the saved order and readings when a split-bin loss is corrected", async () => {
+  it("starts a correction from the saved order and readings and lets the operator change them", async () => {
     const f = await splitBin();
     const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100, sources: [{ layerId: f.p2.id, moisturePercent: 50 }] });
     expect((await allocationsOf(original.movementId)).map(a => [a.biocharProductId, a.dryMassKg])).toEqual([[f.p2.id, "50.000"]]);
-    // The replacement names another sub-bin and reading; the saved P2 at 50% wins.
-    const replacement = await postMeasurement(f, { kind: "loss", wetMassKg: 200, correctsMovementId: original.movementId,
-      sources: [{ layerId: f.p1.id, moisturePercent: 0 }] });
-    const rows = await allocationsOf(replacement.movementId);
-    expect(rows.map(a => [a.biocharProductId, a.dryMassKg, a.basisSnapshot.readingPercent])).toEqual([[f.p2.id, "100.000", "50"]]);
-    const [movement] = await db.select().from(binMovements).where(eq(binMovements.id, replacement.movementId));
-    expect(movement.inputSnapshot?.sources).toEqual([{ layerId: f.p2.id, moisturePercent: 50 }]);
+    // Only the weight changes: the saved P2 at 50% is replayed.
+    const reweighed = await postMeasurement(f, { kind: "loss", wetMassKg: 200, correctsMovementId: original.movementId });
+    expect((await allocationsOf(reweighed.movementId)).map(a => [a.biocharProductId, a.dryMassKg, a.basisSnapshot.readingPercent])).toEqual([[f.p2.id, "100.000", "50"]]);
+    // The next correction fixes a mistyped reading and the sub-bin it came from.
+    const fixed = await postMeasurement(f, { kind: "loss", wetMassKg: 200, correctsMovementId: reweighed.movementId,
+      sources: [{ layerId: f.p1.id, moisturePercent: 40 }] });
+    expect((await allocationsOf(fixed.movementId)).map(a => [a.biocharProductId, a.dryMassKg, a.basisSnapshot.readingPercent])).toEqual([[f.p1.id, "120.000", "40"]]);
+    const [movement] = await db.select().from(binMovements).where(eq(binMovements.id, fixed.movementId));
+    expect(movement.inputSnapshot).toMatchObject({ sources: [{ layerId: f.p1.id, moisturePercent: 40 }], moisturePercent: 40 });
+  });
+
+  it("feeds applications from a split delivery and then locks its correction", async () => {
+    const f = await splitBin();
+    const sources = [{ layerId: f.p2.id, moisturePercent: 20 }, { layerId: f.p1.id, moisturePercent: 25 }];
+    const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 500, sources });
+    const delivery = await createDelivery(f.ctx, { code: `E2E-SPLIT-A-${f.tag}`, facilityId: f.facility.id, orderId: f.order.id, storageLocationId: f.bin.id,
+      deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 500, sources, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
+    const shares = await getDeliveryAllocationProvenance(f.ctx, [delivery.id]);
+    expect(shares.reduce((sum, share) => sum + share.dryMassKg, 0)).toBeCloseTo(393.75, 6);
+    await createApplication(f.ctx, { code: `E2E-SPLIT-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    const [allocation] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
+    const blocked = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 400,
+      correctsMovementId: allocation.movementId, sources });
+    expect(blocked.blockingMessage).toMatch(/Correction blocked by application/);
+  });
+
+  it("keeps provenance for a last sub-bin reached by less than half a gram of dry solids", async () => {
+    const f = await splitBin();
+    // P2 empties at 375 kg wet; the last gram of wet at 60% is 0.4 g of solids from P1.
+    const sources = [{ layerId: f.p2.id, moisturePercent: 20 }, { layerId: f.p1.id, moisturePercent: 60 }];
+    const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg: 375.001, sources });
+    expect(preview.blockingMessage).toBeNull();
+    const delivery = await createDelivery(f.ctx, { code: `E2E-SPLIT-T-${f.tag}`, facilityId: f.facility.id, orderId: f.order.id, storageLocationId: f.bin.id,
+      deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 375.001, sources, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
+    const shares = await getDeliveryAllocationProvenance(f.ctx, [delivery.id]);
+    expect(shares.reduce((sum, share) => sum + share.dryMassKg, 0)).toBeCloseTo(300, 6);
   });
 
   it("records oldest-first draws as FIFO with their one reading", async () => {

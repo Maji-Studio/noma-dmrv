@@ -214,6 +214,25 @@ describe('split bins: operator order with a reading per sub-bin', () => {
     expect(kilograms(drawnGrams)).toBe('1480.200');
     expect(close.remainingLayers.every(l => l.remainingDryBiocharKg === '0.000')).toBe(true);
   });
+  it('keeps exact solids bounded across many chained split draws', () => {
+    // Each load empties the part-drawn sub-bin and dips into the next, at readings with odd factors.
+    let layers: OutputStockLayer[] = Array.from({ length: 160 }, (_, i) => layer(`S${i}`, '100', '0', BigInt(i + 1)));
+    for (let i = 0; i < 150; i++) {
+      const first = 17.3 + (i % 7);
+      const bay = layers.find(l => l.id === `S${i}`)!;
+      const solidsKg = bay.remainingSolidsKg ? Number(bay.remainingSolidsKg.numerator) / Number(bay.remainingSolidsKg.denominator) : Number(bay.remainingDryBiocharKg);
+      // Enough wet to empty S{i} (rounded up to a gram) plus 30 kg taken from S{i+1}.
+      const wetKg = (Math.ceil(solidsKg / (1 - first / 100) * 1000) / 1000 + 30).toFixed(3);
+      layers = ordered(layers, Number(wetKg), [{ layerId: `S${i}`, moisturePercent: first }, { layerId: `S${i + 1}`, moisturePercent: 23.9 + (i % 11) }]).remainingLayers;
+    }
+    const denominators = layers.map(l => l.remainingSolidsKg?.denominator ?? BigInt(1));
+    expect(denominators.every(d => d.toString(2).length < 128)).toBe(true);
+    const total = planOutputStock(layers, DAY, { kind: 'count', wetKg: 0 }).expectedSolidsKg;
+    expect(Number.isFinite(Number(total.numerator) / Number(total.denominator))).toBe(true);
+  });
+  it('rejects a repeated sub-bin before judging where the load stops', () => {
+    expect(() => ordered(bays(), 10, [{ layerId: 'B-0412', moisturePercent: 30 }, { layerId: 'B-0412', moisturePercent: 10 }])).toThrow('Choose each sub-bin once');
+  });
   it('asks to untick an empty sub-bin', () => {
     const empty = { ...layer('empty', '10', '0', BigInt(3)), remainingDryBiocharKg: '0', runs: [{ productionRunId: 'empty', establishedDryKg: '10', remainingDryKg: '0' }] };
     expect(() => ordered([...bays(), empty], 5, [{ layerId: 'empty', moisturePercent: 0 }])).toThrow(UntickSubBinError);

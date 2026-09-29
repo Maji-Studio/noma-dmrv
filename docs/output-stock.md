@@ -37,9 +37,9 @@ source's final gram.
 
 Every output bin has a stock mode (`storage_locations.stock_mode`, default
 `split`); mix bins arrive with ADR 0030. In a split bin each layer is a
-physically separate sub-bin. A delivery, loss or product-creation draw may name
-the sub-bins it came from in the order they were emptied, each with its own
-moisture reading (`sources`). Every sub-bin but the last is emptied at its
+physically separate sub-bin. A delivery or loss may name the sub-bins it came
+from in the order they were emptied, each with its own moisture reading
+(`sources`); product creation follows with the sub-bin picker. Every sub-bin but the last is emptied at its
 reading; the last takes the rest of the one load weight at its reading. If the
 weight never reaches a named sub-bin the draw is refused with "Untick" advice,
 and if the last sub-bin would give more solids than its records hold the save
@@ -49,8 +49,12 @@ reading. Counts stay whole-bin.
 Each allocation's `basis_snapshot` records `policy` (`fifo` or
 `operator_order`), the operator's `order`, and the `readingPercent` used for
 that layer. A draw from several sub-bins stores its overall moisture as
-1 − solids ÷ wet. A correction reuses the original order and readings; only
-the load weight changes.
+1 − solids ÷ wet, which history also shows. A correction starts from the saved
+order and readings and may change them (Kenji, 2026-09-29), through the same
+preview and refusals as a new draw, and only while no later movement,
+application or certification submission depends on the original. The last
+sub-bin's partial solids are floored to a nanogram so exact balances stay
+bounded across many split draws.
 
 ## Orders, deliveries, and applications
 

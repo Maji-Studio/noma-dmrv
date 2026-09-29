@@ -98,7 +98,9 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
   const [movement] = await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, lane: prepared.lane,
     movementType: 'adjustment', massDeltaKg: -Number(plan.drawnDryKg), reason: input.reason, createdBy: ctx.userId,
     outputKind: correction ? 'replacement' : input.kind, occurredAt: new Date(input.occurredAt), idempotencyKey: input.idempotencyKey,
-    basisFingerprint: input.basisFingerprint, inputSnapshot: { ...input, sources: prepared.sources, actorId: ctx.userId, payloadHash, targetBiocharProductId: options.targetBiocharProductId, deliveryId: options.deliveryId ?? correction?.deliveryId, discrepancySolidsKg: storeRational(plan.discrepancySolidsKg), preview },
+    basisFingerprint: input.basisFingerprint, inputSnapshot: { ...input, sources: prepared.sources,
+      // A split draw has no single reading; history shows its overall moisture, 1 − solids ÷ wet.
+      moisturePercent: prepared.sources ? storedOverallMoisture(preview) : input.moisturePercent, actorId: ctx.userId, payloadHash, targetBiocharProductId: options.targetBiocharProductId, deliveryId: options.deliveryId ?? correction?.deliveryId, discrepancySolidsKg: storeRational(plan.discrepancySolidsKg), preview },
     outputDryDeltaKg: kilograms(-grams(plan.drawnDryKg)), balanceBeforeDryKg: kilograms(beforeGrams), balanceAfterDryKg: kilograms(beforeGrams - grams(plan.drawnDryKg)), correctsMovementId: correction?.original.id ?? null }).returning();
   // Every allocation records how it was drawn, so provenance never needs the planner again.
   const policy = prepared.sources ? 'operator_order' : 'fifo';
