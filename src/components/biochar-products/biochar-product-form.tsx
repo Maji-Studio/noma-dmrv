@@ -292,7 +292,7 @@ export function BiocharProductForm({
     }
   }, [selectedFormulationId, setValue]);
 
-  const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
+  const defaultSubmitLabel = isEditMode ? "Update product" : "Create product";
 
   // The entered mass IS the source draw: ingredients stack on top of it and
   // never reduce what leaves the biochar bin.

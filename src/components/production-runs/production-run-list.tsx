@@ -449,7 +449,7 @@ export function ProductionRunList() {
   const sideSheetMode = displaySideSheet?.mode ?? "create";
   const sideSheetEntity = displaySideSheet?.entity ?? null;
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Production Run" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create production run" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -467,16 +467,16 @@ export function ProductionRunList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Production Run
+            New production run
           </Button>
         }
       />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
+        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
         <StatCard
-          title="Biochar Output"
+          title="Biochar output"
           value={
             <MassPair
               wetKg={statsData?.totalBiocharKg ?? null}
@@ -590,7 +590,7 @@ export function ProductionRunList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
-        title="Delete Production Run"
+        title="Delete production run"
         message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
@@ -608,7 +608,7 @@ export function ProductionRunList() {
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Production Run"
+        editLabel="Edit production run"
         size="wide"
         sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
       >
@@ -619,7 +619,7 @@ export function ProductionRunList() {
           onCancel={attemptCloseSideSheet}
           isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Production Run"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
           deferredAttachments={deferredAttachments}
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (

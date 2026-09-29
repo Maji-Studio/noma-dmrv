@@ -27,7 +27,7 @@ async function createProductionRunForCreditBatch(
   await page.goto(`/production-runs?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
 
-  await page.click('button:has-text("New Production Run")');
+  await page.click('button:has-text("New production run")');
   await waitForSideSheet(page);
 
   await page.selectOption('select[name="status"]', "running");
@@ -58,7 +58,7 @@ async function createProductionRunForCreditBatch(
 
   await page
     .locator('[role="dialog"]')
-    .locator('button:has-text("Create Production Run")')
+    .locator('button:has-text("Create production run")')
     .click();
   await waitForSideSheetClose(page);
 
@@ -79,7 +79,7 @@ async function createProductionRunForCreditBatch(
   await page.selectOption('select[name="status"]', "complete");
   await page
     .locator('[role="dialog"]')
-    .getByRole("button", { name: "Save Changes" })
+    .getByRole("button", { name: "Save changes" })
     .click();
   await waitForSideSheetClose(page);
 }
@@ -97,7 +97,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // Step 1: Create an order
     await page.goto(ordersUrl);
     await page.waitForLoadState("networkidle");
-    await page.click('button:has-text("New Order")');
+    await page.click('button:has-text("New order")');
     await waitForSideSheet(page);
 
     const today = new Date().toISOString().split("T")[0];
@@ -122,13 +122,13 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="quantityKg"]', "10000");
 
     const dialog = page.locator('[role="dialog"]');
-    await dialog.locator('button:has-text("Create Order")').click();
+    await dialog.locator('button:has-text("Create order")').click();
     await waitForSideSheetClose(page);
 
     // Step 2: Create a delivery for this order
     await page.goto(deliveriesUrl);
     await page.waitForLoadState("networkidle");
-    await page.click('button:has-text("New Delivery")');
+    await page.click('button:has-text("New delivery")');
     await waitForSideSheet(page);
 
     // Applications require a delivered delivery (issue #284)
@@ -138,14 +138,14 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
     await fillStockMoisture(page, "delivery", "10");
 
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
     await waitForSideSheetClose(page);
 
     // Step 3: Create an application
     await page.goto(applicationsUrl);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Application")');
+    await page.click('button:has-text("New application")');
     await waitForSideSheet(page);
 
     await page.fill('input[name="applicationDate"]', today);
@@ -189,7 +189,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       ),
     ).toHaveCount(1);
 
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Create application")').click();
     await waitForSideSheetClose(page);
 
     // Verify application appears in list
@@ -213,7 +213,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="biocharAppliedTons"]', "4000");
     await page
       .locator('[role="dialog"]')
-      .getByRole("button", { name: "Update Application" })
+      .getByRole("button", { name: "Update application" })
       .click();
     await waitForSideSheetClose(page);
 
@@ -228,7 +228,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // Step 1: Create an order
     await page.goto(`/orders?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
-    await page.click('button:has-text("New Order")');
+    await page.click('button:has-text("New order")');
     await waitForSideSheet(page);
 
     await page.fill('input[name="orderDate"]', today);
@@ -248,17 +248,17 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.selectOption('select[name="packaging"]', "loose");
     await page.fill('input[name="quantityKg"]', "10000");
 
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Create order")').click();
     await waitForSideSheetClose(page);
 
     // An order reserves no stock and is not an application source. Without a
     // posted delivery, custody cannot advance to application.
     await page.goto(`/applications?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
-    await page.click('button:has-text("New Application")');
+    await page.click('button:has-text("New application")');
     await waitForSideSheet(page);
     await expect(page.locator('select[name="deliveryId"] option:not([value=""])')).toHaveCount(0);
-    await page.locator('[role="dialog"]').getByRole("button", { name: "Create Application", exact: true }).click();
+    await page.locator('[role="dialog"]').getByRole("button", { name: "Create application", exact: true }).click();
     await expect(page.locator("#deliveryId-error")).toBeVisible();
     await expect(page.locator('[role="dialog"]')).toBeVisible();
   });
@@ -276,7 +276,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Credit Batch")');
+    await page.click('button:has-text("New credit batch")');
     await waitForSideSheet(page);
 
     // Fill Overview section
@@ -288,7 +288,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     // Durability is snapshotted from the facility default and rendered read-only.
 
     // Submit
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Create credit batch")').click();
     await waitForSideSheetClose(page);
 
     // Verify credit batch appears in list

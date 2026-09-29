@@ -129,7 +129,7 @@ describe("ApplicationList without facility context", () => {
     expect(html).toContain(
       "Choose a facility from the sidebar to view its applications.",
     );
-    expect(html).not.toContain("New Application");
+    expect(html).not.toContain("New application");
     expect(html).not.toContain("data-testid=\"data-table\"");
     expect(html).not.toContain("<form");
   });

@@ -36,10 +36,10 @@ test.describe("Production Run + Sample UI CRUD", () => {
   async function createProductionRun(page: Page, seededData: SeededChainData) {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
     await expect(
-      page.getByRole("button", { name: "New Production Run" }),
+      page.getByRole("button", { name: "New production run" }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "New Production Run" }).click();
+    await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
     await page.selectOption('select[name="status"]', "draft");
@@ -71,7 +71,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     );
     await page.fill('input[name="biocharOutputKg"]', "10");
 
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Create production run")').click();
     await waitForSideSheetClose(page);
     await expect(page.getByRole("status")).toHaveText(
       "Production run created.",
@@ -135,7 +135,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
         page.locator("aside").getByText(seededData.facility.name, { exact: false }),
       ).toBeVisible();
       const existingCodes = await getListedActionCodes(page);
-      await page.getByRole("button", { name: "New Production Run" }).click();
+      await page.getByRole("button", { name: "New production run" }).click();
       await waitForSideSheet(page);
       await page.locator('select[name="status"]').selectOption("draft");
       await selectEntity(
@@ -193,7 +193,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       await expect(detail.getByText(`E2E Secondary Feedstock Bin ${tag}: 70 kg`)).toBeVisible();
       await expect(detail.getByText("120 kg")).toBeVisible();
 
-      await detail.getByRole("button", { name: "Edit Production Run" }).click();
+      await detail.getByRole("button", { name: "Edit production run" }).click();
       const drawRows = detail.locator('[data-testid^="feedstock-draw-row-"]');
       const primaryDrawRow = drawRows.filter({
         hasText: seededData.feedstockStorageLocation.name,
@@ -218,7 +218,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       ).toBeVisible();
       await expect(detail.getByText("60 kg", { exact: true })).toBeVisible();
       await detail
-        .getByRole("button", { name: "Edit Production Run" })
+        .getByRole("button", { name: "Edit production run" })
         .click();
       await page
         .locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR)
@@ -265,7 +265,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     // input must show an example instead so an empty CERT-critical field is
     // never mistaken for entered.
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Production Run" }).click();
+    await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
@@ -343,13 +343,13 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await expect(sampleDialog).toBeHidden();
     await expect(page.locator('[role="dialog"]')).toHaveCount(1);
 
-    await runSideSheet.getByRole("button", { name: "Add Incident" }).click();
+    await runSideSheet.getByRole("button", { name: "Add incident" }).click();
     const incidentDialog = page.getByTestId("production-incident-dialog");
     await expect(incidentDialog).toBeVisible();
     await expect(page.locator('[role="dialog"]')).toHaveCount(2);
     await expect(
       incidentDialog.getByRole("heading", {
-        name: "Add Production Incident",
+        name: "Add production incident",
       }),
     ).toBeVisible();
     await incidentDialog.getByRole("button", { name: "Cancel" }).click();
@@ -377,7 +377,7 @@ async function openRunForm(
   await expect(
     page.locator("aside").getByText(seededData.facility.name, { exact: false }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "New Production Run" }).click();
+  await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
   await page.selectOption('select[name="status"]', window.status ?? "running");
   await selectEntity(
@@ -395,7 +395,7 @@ async function openRunForm(
 async function submitCreate(page: Page) {
   await page
     .locator('[role="dialog"]')
-    .locator('button:has-text("Create Production Run")')
+    .locator('button:has-text("Create production run")')
     .click();
 }
 
@@ -422,7 +422,7 @@ async function editFirstRow(page: Page) {
 async function saveEdit(page: Page) {
   await page
     .locator('[role="dialog"]')
-    .locator('button:has-text("Save Changes")')
+    .locator('button:has-text("Save changes")')
     .click();
 }
 
@@ -435,7 +435,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(
       page.locator("aside").getByText(seededData.facility.name, { exact: false }),
     ).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "New Production Run" }).click();
+    await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
@@ -497,7 +497,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     await expect(
       page.locator("aside").getByText(seededData.facility.name, { exact: false }),
     ).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "New Production Run" }).click();
+    await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
@@ -538,7 +538,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     seededData,
   }) => {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Production Run" }).click();
+    await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
     await expect(
@@ -916,7 +916,7 @@ test.describe("Production Run end-time editing", () => {
     seededData,
   }) => {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Production Run" }).click();
+    await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');

@@ -439,7 +439,7 @@ export function DeliveryList() {
 
   const sideSheetTitle =
     sideSheetMode === "create"
-      ? "Create Delivery"
+      ? "Create delivery"
       : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
@@ -456,7 +456,7 @@ export function DeliveryList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Delivery
+            New delivery
           </Button>
         }
       />
@@ -464,13 +464,13 @@ export function DeliveryList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Deliveries"
+          title="Total deliveries"
           value={statsData?.totalDeliveries ?? 0}
           icon={<TruckIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
         <StatCard
-          title="Delivered Mass"
+          title="Delivered mass"
           value={
             <MassPair
               wetKg={statsData?.totalDeliveredWetMassKg ?? 0}
@@ -583,7 +583,7 @@ export function DeliveryList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Delivery"
+        editLabel="Edit delivery"
         sections={
           sideSheetEntity
             ? deliverySheetSections(sideSheetEntity, facilities)
@@ -597,7 +597,7 @@ export function DeliveryList() {
           onCancel={attemptCloseSideSheet}
           isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheetMode === "create" ? "Create Delivery" : "Save Changes"}
+          submitLabel={sideSheetMode === "create" ? "Create delivery" : "Save changes"}
           deferredAttachments={deferredAttachments}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
         />

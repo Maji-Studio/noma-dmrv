@@ -185,8 +185,8 @@ describe("CustomerLocationDialog submission", () => {
       />,
     );
 
-    expect(harness.titles).toContain("Edit Location");
-    expect(harness.customerSubmitLabel).toBe("Save Changes");
+    expect(harness.titles).toContain("Edit location");
+    expect(harness.customerSubmitLabel).toBe("Save changes");
 
     await harness.customerOnSubmit?.(customerFormData as never);
 
@@ -218,8 +218,8 @@ describe("CustomerLocationDialog submission", () => {
       />,
     );
 
-    expect(harness.titles).toContain("Add Location");
-    expect(harness.customerSubmitLabel).toBe("Add Location");
+    expect(harness.titles).toContain("Add location");
+    expect(harness.customerSubmitLabel).toBe("Add location");
 
     await harness.customerOnSubmit?.(customerFormData as never);
 
@@ -248,8 +248,8 @@ describe("SupplierLocationDialog submission", () => {
       />,
     );
 
-    expect(harness.titles).toContain("Edit Location");
-    expect(harness.supplierSubmitLabel).toBe("Save Changes");
+    expect(harness.titles).toContain("Edit location");
+    expect(harness.supplierSubmitLabel).toBe("Save changes");
 
     await harness.supplierOnSubmit?.(supplierFormData as never);
 
@@ -276,8 +276,8 @@ describe("SupplierLocationDialog submission", () => {
       />,
     );
 
-    expect(harness.titles).toContain("Add Location");
-    expect(harness.supplierSubmitLabel).toBe("Add Location");
+    expect(harness.titles).toContain("Add location");
+    expect(harness.supplierSubmitLabel).toBe("Add location");
 
     await harness.supplierOnSubmit?.(supplierFormData as never);
 

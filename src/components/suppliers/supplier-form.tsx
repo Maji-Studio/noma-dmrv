@@ -154,7 +154,7 @@ export function SupplierForm({
     },
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Supplier" : "Create Supplier";
+  const defaultSubmitLabel = isEditMode ? "Update supplier" : "Create supplier";
 
   // Locations are managed live (edit) only when we actually hold the supplier's
   // id; otherwise they are collected as a pending list to persist after create.
@@ -364,7 +364,7 @@ function CreateModeLocationsSection({
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
-          Add Location
+          Add location
         </Button>
       }
     >
@@ -422,7 +422,7 @@ function CreateModeLocationsSection({
       <QuickAddDialogShell
         isOpen={isLocationDialogOpen}
         onClose={() => setIsLocationDialogOpen(false)}
-        title="Add Location"
+        title="Add location"
         width="lg"
         testId="supplier-location-quick-add-dialog"
       >
@@ -480,7 +480,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
-          Add Location
+          Add location
         </Button>
       }
     >
@@ -553,7 +553,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
 
       <DeleteConfirmDialog
         isOpen={!!deletingLocationId}
-        title="Delete Location"
+        title="Delete location"
         message="Are you sure you want to delete this location? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingLocationId(null)}

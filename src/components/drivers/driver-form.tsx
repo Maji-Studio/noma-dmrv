@@ -95,7 +95,7 @@ export function DriverForm({
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
         submitLabel={submitLabel}
-        defaultSubmitLabel={isEditMode ? "Update Driver" : "Create Driver"}
+        defaultSubmitLabel={isEditMode ? "Update driver" : "Create driver"}
       />
     </form>
   );

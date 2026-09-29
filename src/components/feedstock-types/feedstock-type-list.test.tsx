@@ -142,7 +142,7 @@ describe("FeedstockTypeList", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
     expect(html).toContain("Import from Isometric");
-    expect(html).toContain("New Feedstock Type");
+    expect(html).toContain("New feedstock type");
   });
 
   it("withholds the Isometric import trigger without a registry connection", () => {
@@ -151,7 +151,7 @@ describe("FeedstockTypeList", () => {
       const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
       expect(html).not.toContain("Import from Isometric");
-      expect(html).toContain("New Feedstock Type");
+      expect(html).toContain("New feedstock type");
     } finally {
       certifier.mapping = { id: "mapping-1" };
     }
@@ -161,7 +161,7 @@ describe("FeedstockTypeList", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage={false} />);
 
     expect(html).not.toContain("Import from Isometric");
-    expect(html).not.toContain("New Feedstock Type");
+    expect(html).not.toContain("New feedstock type");
   });
 
   it("offers archive as the actionable delete-conflict resolution", () => {

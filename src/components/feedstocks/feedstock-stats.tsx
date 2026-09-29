@@ -61,7 +61,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">
         <StatCard
-          title="Total Feedstocks"
+          title="Total feedstocks"
           value={stats?.totalFeedstocks ?? 0}
           icon={<PackageIcon size={20} />}
           isLoading={isLoading}
@@ -72,7 +72,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
             missing-value token themselves, so a facility whose deliveries carry
             no moisture reading never claims it received zero dry mass. */}
         <StatCard
-          title="Total Dry Mass"
+          title="Total dry mass"
           value={formatMass(stats?.totalDryMassKg)}
           icon={<ScalesIcon size={20} />}
           isLoading={isLoading}
@@ -82,7 +82,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         {/* Weighted by wet mass, not a mean of the per delivery readings: one
             200 kg drop must not move the figure as far as a 20 t one. */}
         <StatCard
-          title="Weighted Avg. Moisture"
+          title="Weighted avg. moisture"
           value={formatMoisturePercent(stats?.avgMoisturePercent)}
           icon={<DropIcon size={20} />}
           isLoading={isLoading}
@@ -90,7 +90,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         />
 
         <StatCard
-          title="Data Status"
+          title="Data status"
           value={`${stats?.completeFeedstocks ?? 0} / ${stats?.totalFeedstocks ?? 0}`}
           icon={
             hasMissingData ? (

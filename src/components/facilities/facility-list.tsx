@@ -254,7 +254,7 @@ export function FacilityList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Facility" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create facility" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
@@ -272,28 +272,28 @@ export function FacilityList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Facility
+            New facility
           </Button>
         }
       />
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          title={showArchived ? "Archived Facilities" : "Active Facilities"}
+          title={showArchived ? "Archived facilities" : "Active facilities"}
           value={totalFacilities}
           icon={<FactoryIcon size={24} weight="bold" />}
           description="Facilities matching the current filters"
           isLoading={isLoading}
         />
         <StatCard
-          title="Total Reactors"
+          title="Total reactors"
           value={totalReactors}
           icon={<LightningIcon size={24} weight="bold" />}
           description="Installed across the visible facilities"
           isLoading={isLoading}
         />
         <StatCard
-          title="Wet Feedstock On Hand"
+          title="Wet feedstock on hand"
           value={formatMass(feedstockOnHandKg)}
           icon={<PackageIcon size={24} weight="bold" />}
           description={`${formatCount(totalStorageBins, "storage bin")} on this page`}
@@ -448,7 +448,7 @@ export function FacilityList() {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Facility"
+        editLabel="Edit facility"
         sections={sideSheetSections}
       >
         <FacilityForm
@@ -458,7 +458,7 @@ export function FacilityList() {
           onCancel={closeSideSheet}
           isSubmitting={createFacility.isPending || updateFacility.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Facility"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create facility"}
         />
       </EntitySideSheet>
 

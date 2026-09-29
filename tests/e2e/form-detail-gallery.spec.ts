@@ -198,7 +198,7 @@ async function fillStock(page: Page, wet: string, reason: string) {
 test("gallery delivery and application create read edit", async ({ adminPage: page, testUsers }) => {
   const f = await seedOutputStockBrowserFixture(testUsers.admin.id);
   await navigate(page, "deliveries", f.facility);
-  await page.getByRole("button", { name: "New Delivery", exact: true }).click();
+  await page.getByRole("button", { name: "New delivery", exact: true }).click();
   await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", f.order.id, f.order.code);
   await page.locator("#storageLocationId").selectOption(f.bin.id);
@@ -206,7 +206,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await fillStockMoisture(page, "delivery", "15");
   // The blocker renders once, under the wet-mass field, never a second time inside the preview.
   await expect(page.getByText(/Not enough dry biochar/)).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Create Delivery", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Create delivery", exact: true })).toBeDisabled();
   await capture(page, "delivery-create-1440-simple-blocker");
   await page.locator("#deliveredWetMassKg").fill("2000");
   await fillStockMoisture(page, "delivery", "30");
@@ -217,17 +217,17 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await expect(page.getByRole("heading", { name: "Discard unsaved changes?", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Keep editing", exact: true }).click();
   await expect(page.locator("#deliveredWetMassKg")).toHaveValue("2000");
-  await page.getByRole("button", { name: "Create Delivery", exact: true }).click();
+  await page.getByRole("button", { name: "Create delivery", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const delivery = (await readOutputStockBrowserFixture(f)).deliveries[0];
   await openRow(page, delivery.code);
   await pairs(page, "delivery-read", ["Mass and moisture"]);
-  await edit(page, "Delivery");
+  await edit(page, "delivery");
   await pairs(page, "delivery-edit", ["Mass and moisture"]);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Discard unsaved changes?", exact: true })).toHaveCount(0);
   await navigate(page, "applications", f.facility);
-  await page.getByRole("button", { name: "New Application", exact: true }).click();
+  await page.getByRole("button", { name: "New application", exact: true }).click();
   await page.locator("#applicationDate").fill(DATE);
   await page.locator("#deliveryId").selectOption(delivery.id);
   await page.locator("#biocharAppliedTons").fill("1000");
@@ -235,12 +235,12 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await page.locator("#fieldIdentifier").fill("E2E Demonstration plot A");
   await page.locator("#cropType").fill("Maize");
   await pairs(page, "application-create", ["Application details", "Field details"]);
-  await page.getByRole("button", { name: "Create Application", exact: true }).click();
+  await page.getByRole("button", { name: "Create application", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const application = (await readOutputStockBrowserFixture(f)).applications[0];
   await openRow(page, application.code);
   await pairs(page, "application-read", ["Application details", "Field details"]);
-  await edit(page, "Application");
+  await edit(page, "application");
   await pairs(page, "application-edit", ["Application details", "Field details"]);
 });
 
@@ -251,7 +251,7 @@ test("gallery feedstock create read edit", async ({ adminPage: page, seededData:
     await db.update(schema.feedstocks).set({ massWetKg: 1500, massDryKg: 1200, moistureContentPercent: 20, vehicleId: d.vehicle.id, notes: "E2E wood chips received, weighed and allocated to the covered feedstock bin." }).where(eq(schema.feedstocks.id, d.feedstock.id));
   } finally { await pool.end(); }
   await navigate(page, "feedstocks", d.facility);
-  await page.getByRole("button", { name: "New Feedstock", exact: true }).click();
+  await page.getByRole("button", { name: "New feedstock", exact: true }).click();
   await page.locator("#deliveryDate").fill(DATE);
   await selectEntity(page, "Supplier", d.supplier.id, d.supplier.name);
   await selectEntity(page, "Vehicle", d.vehicle.id, d.vehicle.name);
@@ -265,7 +265,7 @@ test("gallery feedstock create read edit", async ({ adminPage: page, seededData:
   await navigate(page, "feedstocks", d.facility);
   await openRow(page, d.feedstock.code);
   await pairs(page, "feedstock-read", ["Material"]);
-  await edit(page, "Feedstock");
+  await edit(page, "feedstock");
   await pairs(page, "feedstock-edit", ["Material", "Bin allocations"]);
 });
 
@@ -285,7 +285,7 @@ test("gallery production run create read edit credit batch and sample read", asy
     ]);
   } finally { await pool.end(); }
   await navigate(page, "production-runs", d.facility);
-  await page.getByRole("button", { name: "New Production Run", exact: true }).click();
+  await page.getByRole("button", { name: "New production run", exact: true }).click();
   await selectEntity(page, "Reactor", d.reactor.id, d.reactor.identifier);
   await page.locator("#startDate").fill(DATE);
   await page.locator("#startTime").fill("08:00");
@@ -305,7 +305,7 @@ test("gallery production run create read edit credit batch and sample read", asy
   await navigate(page, "production-runs", d.facility);
   await openRow(page, batch.creditBatchCode + "-PR1");
   await pairs(page, "production-run-read", ["Feedstock & processing", "Output"]);
-  await edit(page, "Production Run");
+  await edit(page, "production run");
   await pairs(page, "production-run-edit", ["Feedstock & processing", "Output", "Energy"]);
   await navigate(page, "credit-batches", d.facility);
   await page.getByText(batch.creditBatchCode, { exact: true }).first().click();
@@ -374,7 +374,7 @@ test("gallery biochar product create and read", async ({ adminPage: page, testUs
     await db.insert(schema.productionRuns).values({ organizationId: DEC_ORG_ID, facilityId: f.facility.id, reactorId: f.runs[0].reactorId, code: `E2E-GALLERY-PR-${f.tag}`, status: "complete", startTime: new Date("2026-09-13T08:00:00Z"), endTime: new Date("2026-09-13T12:00:00Z"), biocharStorageLocationId: f.source.id, biocharOutputKg: 1100, biocharMoisturePercent: 10, biocharDryMassKg: 990 });
   } finally { await pool.end(); }
   await navigate(page, "biochar-products", f.facility);
-  await page.getByRole("button", { name: "New Product", exact: true }).click();
+  await page.getByRole("button", { name: "New product", exact: true }).click();
   await page.locator("#placedAt").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Biochar bin", f.source.id, f.source.name);
   await page.locator('input[name="massKg"]').fill("300");
@@ -386,10 +386,10 @@ test("gallery biochar product create and read", async ({ adminPage: page, testUs
   await page.locator('[id="ingredientBins.0.moistureContentPercent"]').fill("40");
   await page.locator("#waterAddedKg").fill("20");
   await selectEntity(page, "Product bin", f.bin.id, f.bin.name);
-  await expect(page.getByRole("button", { name: "Create Product", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Create product", exact: true })).toBeEnabled();
   await pairs(page, "product-create", ["Source", "Formulation & ingredients", "Product"]);
   // Read the product just saved through the form: the fixture's direct writes omit the ingredient names the read view needs.
-  await page.getByRole("button", { name: "Create Product", exact: true }).click();
+  await page.getByRole("button", { name: "Create product", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const seeded = new Set(f.products.map(product => product.id));
   const created = (await readOutputStockBrowserFixture(f)).products.find(product => !seeded.has(product.id));
@@ -401,7 +401,7 @@ test("gallery biochar product create and read", async ({ adminPage: page, testUs
 test("gallery order create and read", async ({ adminPage: page, testUsers }) => {
   const f = await seedOutputStockBrowserFixture(testUsers.admin.id, true);
   await navigate(page, "orders", f.facility);
-  await page.getByRole("button", { name: "New Order", exact: true }).click();
+  await page.getByRole("button", { name: "New order", exact: true }).click();
   await page.locator("#orderDate").fill(FIFO_BROWSER_DATE);
   await selectEntity(page, "Customer", f.customer.id, f.customer.name);
   await selectEntity(page, "Formulation", f.recipe.id, f.recipe.name);
@@ -421,7 +421,7 @@ test("gallery formulation shares and sample derived ratios", async ({ adminPage:
     [blend] = await db.insert(schema.feedstockTypes).values({ organizationId: DEC_ORG_ID, code: `E2E-GALLERY-BLEND-${tag}`, name: `E2E Gallery compost ${tag}`, category: "compost", usage: "blend" }).returning();
   } finally { await pool.end(); }
   await navigate(page, "formulations", d.facility);
-  await page.getByRole("button", { name: "New Formulation", exact: true }).click();
+  await page.getByRole("button", { name: "New formulation", exact: true }).click();
   await page.locator("#name").fill("E2E Gallery compost blend");
   await page.locator("#biocharPercent").fill("60");
   await page.getByRole("button", { name: "Add ingredient", exact: true }).click();

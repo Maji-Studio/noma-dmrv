@@ -253,7 +253,7 @@ export function CustomerList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Customer" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create customer" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name || undefined;
@@ -267,7 +267,7 @@ export function CustomerList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Customer
+            New customer
           </Button>
         }
       />
@@ -275,14 +275,14 @@ export function CustomerList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Customers"
+          title="Total customers"
           value={totalCustomers}
           icon={<UsersIcon size={24} weight="bold" />}
           description="Biochar application customers"
           isLoading={isLoading}
         />
         <StatCard
-          title="Locations on This Page"
+          title="Locations on this page"
           value={totalLocations}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
           description="Application field locations on this page"
@@ -343,7 +343,7 @@ export function CustomerList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingCustomerId}
-        title="Delete Customer"
+        title="Delete customer"
         message="Are you sure you want to delete this customer? This action cannot be undone. Note: Customers with locations cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -361,7 +361,7 @@ export function CustomerList() {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Customer"
+        editLabel="Edit customer"
         sections={
           sideSheetEntity
             ? customerSheetSections(sideSheetEntity, sideSheetLocations)
@@ -376,7 +376,7 @@ export function CustomerList() {
           onCancel={closeSideSheet}
           isSubmitting={createCustomer.isPending || updateCustomer.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Customer"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create customer"}
         />
       </EntitySideSheet>
     </div>

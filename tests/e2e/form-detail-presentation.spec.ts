@@ -4,7 +4,7 @@ for (const width of [1440, 390]) {
   test(`form detail stays in the heading and preserves edits at ${width}px`, async ({ adminPage: page, seededData }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: /New Production Run/i }).click();
+    await page.getByRole("button", { name: /New production run/i }).click();
     await waitForSideSheet(page);
     const dialog = page.getByRole("dialog");
     const simple = dialog.getByRole("radio", { name: "Simple", exact: true });
@@ -28,7 +28,7 @@ for (const width of [1440, 390]) {
     await expect(page.getByText("Discard unsaved changes?", { exact: true })).toHaveCount(0);
     await expect(dialog).toHaveCount(0);
 
-    await page.getByRole("button", { name: /New Production Run/i }).click();
+    await page.getByRole("button", { name: /New production run/i }).click();
     await waitForSideSheet(page);
     await expect(simple).toBeChecked();
     const electricity = dialog.locator('input[name="electricityKwh"]');

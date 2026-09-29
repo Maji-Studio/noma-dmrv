@@ -269,7 +269,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     if (errorMessage && !isEditMode) void refreshStockPreview();
   }, [errorMessage, isEditMode, refreshStockPreview]);
 
-  const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
+  const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
   const submitDelivery = handleSubmit(async (data) => {
     if (!isEditMode && (!stockPreview.data || stockPreview.isFetching || stockPreview.data.blockingMessage)) return;
