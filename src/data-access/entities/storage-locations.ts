@@ -48,7 +48,7 @@ function outputBinStockSubtitle(stock: { estimatedWetMassKg: number | null; dryM
   });
 }
 /** Feedstock bin option subtitle: type, held feedstock, wet stock, pending intake. */
-export function formatFeedstockBinSubtitle(
+function formatFeedstockBinSubtitle(
   feedstockTypeName: string | null,
   feedstockTypeUsage: string | null,
   onHandWetKg: number,

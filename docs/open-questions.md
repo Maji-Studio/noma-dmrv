@@ -825,11 +825,12 @@ bound); these are the decisions it deliberately did not make.
   "Most/least on hand" is missing from that list, and it is the sort an operator
   asks for first when deciding where to put a delivery.
 - It is missing because on-hand mass is not a column. `binCurrentMassKg` reads
-  the enriched row, and that enrichment runs **after** pagination: feedstock and
-  biochar stock come from `deriveLaneStock` (several aggregates over feedstocks,
-  production runs, production-run feedstocks, biochar products and bin
-  movements), and product stock additionally subtracts delivered mass. Sorting
-  on it means replicating all of that inside the paginated query.
+  the enriched row, and that enrichment runs **after** pagination: feedstock
+  stock comes from `deriveLaneStock` (aggregates over feedstocks, production-run
+  draws, product ingredients and feedstock bin movements), and biochar and
+  product bin stock comes from the dry-biochar FIFO layers
+  (`getOutputBinStockView`, ADR 0029). Sorting on it means replicating both
+  inside the paginated query.
 - Sorting the page in the client is not a substitute: it would order the twenty
   rows already fetched, so a nearly-full bin on page 3 would never rise to
   page 1. The board deliberately does no client-side re-sort for this reason.
