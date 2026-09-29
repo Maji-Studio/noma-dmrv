@@ -11,7 +11,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
-import { useFormDetailLevel } from "@/components/forms/form-detail-context";
+import { useSimplePresence } from "@/components/forms/form-detail-context";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -341,7 +341,7 @@ export function BiocharProductForm({
     allocationFrozen: hasFrozenSourceAllocation,
     previews: productPreviewsAvailable ? affectedBins : undefined,
   });
-  const detailed = useFormDetailLevel() === "detailed";
+  const { detailed } = useSimplePresence("picture");
   // Simple draws the composition once the biochar or an ingredient has a mass;
   // before that it would be a key of "Not available" rows.
   const compositionStarted =
