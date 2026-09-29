@@ -1,6 +1,6 @@
 # noma landing page
 
-**Owner:** Kenji Nguyen · **Status:** approved (three grilling rounds, 2026-09-29), ready to build; logos, DEC figures, screenshots and the inbox address still to come from the owner · **Last reviewed:** 2026-09-29
+**Owner:** Kenji Nguyen · **Status:** in progress. Approved in three grilling rounds; five structural variants prototyped and **variant A chosen** (2026-09-29). Next: website styling and components. Logos, DEC figures, screenshots and the inbox address still to come from the owner · **Last reviewed:** 2026-09-29
 
 The decisions below came out of three grilling rounds recorded on the [noma landing page review](https://claude.ai/artifact/9fMhFy8wuMmHqLA64uVfwM). That page also has the research, five rejected alternatives and the approved draft. The draft's source is checked in as [`assets/2026-09-29-landing-page-prototype.html`](./assets/2026-09-29-landing-page-prototype.html). Open it in a browser: the **Draft page** tab is the page to build and the **Visuals** tab has the interactive pieces. Its code is a reference to port, not production code.
 
@@ -94,15 +94,31 @@ These don't block building. Leave clearly marked placeholders until they arrive.
 - DEC's written OK for the capacity figure and the current tonnes-traced figure.
 - The three screenshots, or approval to capture them from staging on the Mafinga seed data (`pnpm db:seed`).
 
+## Prototype verdict
+
+Branch `prototype/landing-variants` (throwaway, not for merge) holds an Astro site in `site/` with five structural variants on one route (`pnpm site:dev`, port 3120, `?variant=A..E`): A approved draft, B follow one tonne, C map first, D workbench, E removal dossier. **Variant A won** (owner, 2026-09-29): the long editorial page with the trace in the hero, in the order under "Page, top to bottom". The variants settle structure only; their styling is a placeholder (see Visual language).
+
+The prototype already contains reusable pieces: the five visuals ported to `site/src/visuals/` (API in `visuals/index.js`), all copy in `site/src/content/copy.js`, tokens and fonts in `site/src/styles/tokens.css`, the form markup with a honeypot, and the root config exclusions.
+
+## Visual language
+
+Use the MAJI website language from the earlier draft on `codex/public-website` (`src/components/marketing-pages/marketing-pages.module.css`, `website.module.css`), not the app's CRUD look:
+
+- Display and section headings in GT Flexa Light (300), tight tracking (about -0.045em to -0.06em), line height about 1.01 to 1.06. No bold headlines.
+- Editorial grids (1.2fr / 0.8fr and 1fr / 1fr), gutters `clamp(24px, 5vw, 88px)`, section spacing `clamp(64px, 7vw, 112px)`, body copy 18 to 20 px.
+- Hairline rules (`1px solid var(--clr-purple-20)`) instead of boxed cards; square edges.
+- Primary action as a solid purple (`--clr-purple`) block link; secondary as an underlined text link.
+- Section bands in `--clr-rose-20` and `--clr-purple-5`; the page ground stays light rose.
+- The interactive visuals keep their square node language but lose card chrome where a hairline frame does the job.
+
 ## Suggested slices
 
-1. **Scaffold.** `site/` with Astro, workspace and config exclusions, tokens, fonts, layout, all static sections and copy, placeholders for logos, figures and screenshots. Everything below builds on this.
-2. **Traces.** Visuals A, B and C (shared graph code).
-3. **Bins and registry.** Visuals D and E.
-4. **Form.** Endpoint, validation, Resend, success and error states.
-5. **Deploy.** Vercel project, env vars, domain. Needs the owner for Vercel and DNS access.
+1. **Promote A.** Start from `prototype/landing-variants`: make variant A the only page, delete the switcher, the other variants and the prototype helpers. Keep `site/` standalone (own pnpm workspace and lockfile): adding it to the root workspace moved the app's Vitest onto Vite 8. Join the root workspace only with proof the app's tests still pass.
+2. **Components and styling.** Build the page from a small component set in the visual language above: site header (brand, nav, block link, mobile menu), section with editorial heading and lead, block link and text link, logo strip (real SVGs when supplied), fact line, screenshot frame with caption, feature list with Upcoming chip, comparison table, the two open-source options, walkthrough form with idle, sending, sent and error states, footer, and a visual frame (caption, hairline, optional side panel) that wraps the five visuals.
+3. **Form.** Endpoint, validation, Resend, success and error states.
+4. **Deploy.** Vercel project, env vars, domain. Needs the owner for Vercel and DNS access.
 
-Slices 2, 3 and 4 can run in parallel once 1 is merged.
+Slice 3 can run in parallel with 2.
 
 ## Acceptance
 
@@ -119,4 +135,4 @@ Slices 2, 3 and 4 can run in parallel once 1 is merged.
 
 ## Prior work
 
-Branch `codex/public-website` (Codex worktree, last commit 2026-09-28, no PR) built a different website: several marketing routes inside the Next.js app, 3D landscape illustrations and `docs/website.md`. This plan replaces that approach (separate static site, one page). Don't merge or port its structure. Things worth reusing after checking: `public/landing/maji-logo.svg`, `public/landing/mafinga-field-trial.jpg` (confirm the photo rights with DEC), and the positioning research note `docs/archive/research/2026-09-23-dmrv-website-positioning.md` on that branch, which is the source of the Cula finding above. Whether to delete the branch is the owner's call.
+Branch `codex/public-website` (Codex worktree, last commit 2026-09-28, no PR) built a different website: several marketing routes inside the Next.js app, 3D landscape illustrations and `docs/website.md`. This plan replaces that approach (separate static site, one page). Don't merge or port its structure, but do take its visual language (see Visual language). Things worth reusing after checking: `public/landing/maji-logo.svg`, `public/landing/mafinga-field-trial.jpg` (confirm the photo rights with DEC), and the positioning research note `docs/archive/research/2026-09-23-dmrv-website-positioning.md` on that branch, which is the source of the Cula finding above. Whether to delete the branch is the owner's call.

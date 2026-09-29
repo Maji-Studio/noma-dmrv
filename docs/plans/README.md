@@ -25,4 +25,4 @@ Active plans:
 - [2026-09-07 Simplification rollout plan](./2026-09-07-simplification-rollout-plan.md), proposed, owner Kenji Nguyen. Review of the analysis plus the Phase A / Phase B split.
 - [2026-09-14 FIFO bin accounting](./2026-09-14-fifo-bin-accounting.md), approved, owner Kenji Nguyen. Implementation pending in [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
 - [2026-09-16 Loading speed plan](./2026-09-16-loading-speed-plan.md), proposed, owner Kenji Nguyen. Finish PRs #761-#763, then region move, auth dedupe, dashboard query budget, shell streaming.
-- [2026-09-29 noma landing page](./2026-09-29-landing-page.md), approved, owner Kenji Nguyen. Astro site in `site/` on noma.maji.studio; prototype in `assets/`.
+- [2026-09-29 noma landing page](./2026-09-29-landing-page.md), in progress, owner Kenji Nguyen. Variant A chosen; next is website styling and components in `site/`.
