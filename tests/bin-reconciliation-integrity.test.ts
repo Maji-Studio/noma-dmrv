@@ -86,7 +86,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FS-${f.tag}`,
       status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") });
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
-    const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30 }] } });
+    const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30, moistureContentPercent: 0 }] } });
     const [deletion, stockTake] = await Promise.allSettled([
       deleteBiocharProduct(f.ctx, product.id),
       recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" }),

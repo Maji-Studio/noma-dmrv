@@ -71,7 +71,6 @@ export interface StorageLocationWithFacility extends StorageLocation {
     productionRunCount: number;
     currentMassKg: number | null;
     dryMassKg?: number | null;
-    recordedWetMassKg?: number | null;
     allocatedToProductsKg: number;
     downstreamFormulations: string[];
   };
@@ -79,7 +78,6 @@ export interface StorageLocationWithFacility extends StorageLocation {
     batchCount: number;
     currentMassKg: number | null;
     dryMassKg?: number | null;
-    recordedWetMassKg?: number | null;
     biocharEquivalentKg: number | null;
     formulationNames: string[];
     appliedApplicationCount: number;
@@ -595,7 +593,6 @@ export async function enrichStorageLocationRows(
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
         currentMassKg: outputView?.estimatedWetMassKg ?? null,
         dryMassKg: outputView?.dryMassKg ?? null,
-        recordedWetMassKg: outputView?.recordedWetMassKg ?? null,
         biocharEquivalentKg: outputView?.dryMassKg ?? null,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null

@@ -41,6 +41,12 @@ function floorToGrid(value: Rational): Rational {
   return rational(value.numerator * ORDERED_SOLIDS_GRID_PER_KG / value.denominator, ORDERED_SOLIDS_GRID_PER_KG);
 }
 
+/** A layer's exact remaining solids: the retained balance, or its dry biochar at the layer's biochar share. */
+export function layerRemainingSolidsKg(layer: OutputStockLayer): Rational {
+  const established = grams(layer.establishedDryBiocharKg);
+  return layer.remainingSolidsKg ?? divide(rational(grams(layer.remainingDryBiocharKg), GRAMS_PER_KG), rational(established, established + grams(layer.ingredientDrySolidsKg)));
+}
+
 /** Only canonical ISO 8601 UTC instants (`Date#toISOString`) are accepted, so string order is time order. */
 function canonicalInstant(value: string): string {
   const parsed = typeof value === 'string' ? Date.parse(value) : NaN;
@@ -88,7 +94,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     });
     if (runs.reduce((sum, r) => sum + r.initial, BigInt(0)) !== established || runs.reduce((sum, r) => sum + r.balance, BigInt(0)) !== remaining) throw new RangeError('Run provenance must sum to layer');
     const fraction = rational(established, established + ingredients);
-    const capacity = layer.remainingSolidsKg ?? divide(rational(remaining, GRAMS_PER_KG), fraction);
+    const capacity = layerRemainingSolidsKg(layer);
     const exactRemainingGrams = multiply(multiply(capacity, fraction), rational(GRAMS_PER_KG));
     if (capacity.numerator < BigInt(0) || capacity.denominator <= BigInt(0) ||
       compare(capacity, rational(established + ingredients, GRAMS_PER_KG)) > BigInt(0) ||

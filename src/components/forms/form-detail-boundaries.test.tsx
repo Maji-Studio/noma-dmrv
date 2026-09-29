@@ -14,7 +14,7 @@ vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ fa
 vi.mock("@/hooks/use-entities", () => ({ useEntityOptions: () => ({ data: [] }) }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: () => <button type="button">Stock history</button> }));
 vi.mock("@/hooks/use-output-stock", () => ({
-  useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, recordedWetMassKg: null, estimatedWetMassKg: null }], isLoading: false, error: null }),
+  useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: null }], isLoading: false, error: null }),
   useOutputStockPreview: () => ({ data: undefined, isLoading: false, error: null }),
   useOutputStockBalance: () => ({ data: undefined, isLoading: false, error: null }),
   useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [] }] }], isLoading: false, error: null }),
@@ -56,7 +56,7 @@ beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 const preview: Preview = {
   basisFingerprint: "basis", storageLocationId: "bin", binName: "Product bin", binCode: "PB-001", formulationName: "Mix", lane: "product",
   beforeDryKg: 1500, afterDryKg: 350, beforeSolidsKg: 1820, afterSolidsKg: 420,
-  removedDryKg: 1150, removedWetKg: 2000, estimateMoisturePercent: 30,
+  removedDryKg: 1150, removedWetKg: 2000, movementMoisturePercent: 30,
   beforeEstimatedWetKg: 2600, afterEstimatedWetKg: 600, discrepancySolidsKg: 12, blockingMessage: "Correction blocked",
   blockers: [{ entity: "application", id: "app-id", code: "APP-001" }],
   allocations: [{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1150, runs: [{ productionRunId: "r1", code: "Run A", dryMassKg: 1150 }] }],

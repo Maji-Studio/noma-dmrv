@@ -6,6 +6,7 @@ import { MoistureField, WetMassField } from "@/components/forms/mass-moisture-fi
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import { useOutputStockPreview, usePostOutputStock } from "@/hooks/use-output-stock";
 import { useFacilityClock } from "@/hooks/use-facility-context";
+import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { toNumberOrNull } from "@/schemas/helpers";
 import { outputStockPostSchema, outputStockPreviewSchema } from "@/schemas/output-stock";
@@ -39,7 +40,9 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
       basisFingerprint: "pending-preview", idempotencyKey,
       occurredAt: original?.occurredAt ?? new Date().toISOString(),
       wetMassKg: original?.wetMassKg ?? undefined,
-      moisturePercent: original?.moisturePercent ?? null,
+      // A correction starts from the saved reading. A split draw replays its
+      // saved sub-bin readings on the server, so it has no single one here.
+      moisturePercent: original && !original.sources?.length ? original.moisturePercent : null,
       reason: "",
     },
   });
@@ -48,6 +51,9 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   const candidate = outputStockPreviewSchema.safeParse({ ...values, moisturePercent: kind === "count" && wetMassKg === 0 ? null : values.moisturePercent });
   const input = candidate.success ? candidate.data : null;
   const preview = useOutputStockPreview(input);
+  const splitOriginal = Boolean(original?.sources?.length);
+  // A correction's estimate must leave out the entry it replaces, which only its own preview does.
+  const estimate = useOutputMoistureEstimate(original ? null : storageLocationId, facilityId, values.occurredAt, preview.data?.moistureEstimate);
   // Names the entry in the preview's caption. A replaced loss or delivery is
   // still wet mass removed from the bin; a replaced count is still a count.
   const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";
@@ -81,7 +87,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
         </FormField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
           <WetMassField id="stock-wet" label={kind === "count" ? "Counted wet mass (kg)" : "Wet mass removed (kg)"} required disabled={mutation.isPending} error={errors.wetMassKg?.message} registration={register("wetMassKg", { setValueAs: toNumberOrNull })} />
-          <MoistureField id="stock-moisture" required={!(kind === "count" && wetMassKg === 0)} disabled={mutation.isPending} error={errors.moisturePercent?.message} helperText="Enter less than 100%. A zero count does not need moisture." registration={register("moisturePercent", { setValueAs: toNumberOrNull })} />
+          {!splitOriginal && <MoistureField id="stock-moisture" required={!(kind === "count" && wetMassKg === 0)} disabled={mutation.isPending} error={errors.moisturePercent?.message} helperText="Enter less than 100%. A zero count does not need moisture." estimate={estimate} reading={values.moisturePercent} registration={register("moisturePercent", { setValueAs: toNumberOrNull })} />}
         </div>
         {preview.isFetching && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Refreshing the stock preview</p>}
         {preview.error && <StockNotice tone="error" role="alert">{preview.error.message}</StockNotice>}

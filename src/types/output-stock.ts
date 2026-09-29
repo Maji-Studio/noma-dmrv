@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { MoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import type { orderedSourceSchema } from '@/schemas/output-stock';
 /** Serializable operator read models; exact fractions remain inside the ledger. */
 export interface OutputStockAllocationView {
@@ -37,15 +38,15 @@ export interface OutputStockPreview {
   afterSolidsKg: number;
   removedDryKg: number;
   removedWetKg: number | null;
-  estimateMoisturePercent: number | null;
+  /** The moisture this movement's wet figures are at: the reading, or a split draw's overall 1 − solids ÷ wet. */
+  movementMoisturePercent: number | null;
+  /** Wet stock estimated from each batch's latest reading, before and after this movement's readings. */
   beforeEstimatedWetKg: number | null;
   afterEstimatedWetKg: number | null;
-  /**
-   * Counts only: wet stock at each batch's recorded moisture, the figure bin
-   * tiles show. The estimates above use the entered moisture, so a count with
-   * no dry change always matches them; this is what reveals drying.
-   */
-  beforeRecordedWetKg?: number | null;
+  /** The bin's estimate before this movement: the hint beside a moisture field. */
+  moistureEstimate?: OutputMoistureEstimate | null;
+  /** What this movement's readings reset: the same remaining stock at its previous estimate, then at the reading. */
+  moistureReset?: OutputMoistureReset | null;
   discrepancySolidsKg: number;
   allocations: OutputStockAllocationView[];
   beforeAllocations?: OutputStockAllocationView[];
@@ -53,6 +54,20 @@ export interface OutputStockPreview {
   /** Validation failure, such as insufficient solids, leaves the full form visible. */
   blockingMessage: string | null;
   blockers?: { entity: string; id: string; code: string }[];
+}
+
+export interface OutputMoistureEstimate {
+  moisturePercent: number | null;
+  wetKg: number | null;
+  /** Where the estimate comes from: the latest reading, or the moisture recorded when the batch was added. */
+  basis: MoistureBasis | null;
+}
+
+export interface OutputMoistureReset {
+  /** The sub-bins the readings describe. */
+  layerCodes: string[];
+  before: { moisturePercent: number | null; wetKg: number | null };
+  after: { moisturePercent: number | null; wetKg: number | null };
 }
 
 export interface OutputStockPostInput extends OutputStockPreviewInput {
@@ -78,6 +93,11 @@ export interface OutputStockHistoryEntry {
   correctsMovementId: string | null;
   deliveryId: string | null;
   allocations: OutputStockAllocationView[];
+  /** Split draws: the sub-bins and readings the entry was posted with. */
+  sources?: { layerId: string; moisturePercent: number }[];
+  /** "Moisture updated" entries: the movement whose readings reset the estimate, and the change. */
+  measuredByMovementId?: string;
+  moistureReset?: OutputMoistureReset;
 }
 
 export interface MatchingOutputBin {
@@ -86,8 +106,7 @@ export interface MatchingOutputBin {
   name: string;
   /** Null when the bin's layers do not resolve. */
   dryMassKg: number | null;
-  recordedWetMassKg: number | null;
-  /** Wet stock at each batch's recorded moisture; null when the bin's layers do not resolve. */
+  /** Wet stock at each batch's latest reading; null when the bin's layers do not resolve. */
   estimatedWetMassKg: number | null;
 }
 

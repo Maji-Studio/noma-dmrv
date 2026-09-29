@@ -45,7 +45,7 @@ async function postedTruck() {
     massKg: 1500, moistureContentPercent: 10, waterAddedKg: 0,
     idempotencyKey: randomUUID(),
     composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id,
-      massKg: 500, moistureContentPercent: 60, moistureSource: 'operator_override' }] },
+      massKg: 500, moistureContentPercent: 60 }] },
   }));
   const order = await createOrder(f.ctx, {
     code: `E2E-RACE-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,

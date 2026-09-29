@@ -187,6 +187,14 @@ startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-l
 
 `toDateInputValue`, `parseLocalDateString`, and the facility-timezone display helpers (`formatFacilityTime`, `formatFacilityDate`, `formatTimezoneLabel` — all timestamps are stored UTC) also live in `src/lib/date-utils.ts`.
 
+**Output stock event times** (product placed, delivery, loss, count) are entered
+and shown on the facility clock, like production runs. Use `EventTimeInput`
+(`src/components/forms/event-time-input.tsx`): its value is an ISO instant, it
+takes the facility `timeZone`, and it refuses a time that falls in a DST gap or
+fold. `useFacilityClock(facilityId)` gives the zone and the "Facility time: …"
+cue for `helperText`; `stockEventInstantSchema()` validates the wire value; and
+`formatFacilityDateTime(value, timeZone)` displays it.
+
 ## Components
 
 All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — read it for the full surface; TypeScript carries the prop signatures. Only the non-obvious contracts are documented here.
@@ -456,19 +464,42 @@ stock family presents wet first. Only presentation changes.
   loss, count, delivery load). Headline "Wet stock in bin, estimate" as
   "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet removed at
   22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture", "1,190 kg wet
-  loaded at 16% moisture"). The picture is the entered wet mass split into
-  solids and water, then any notice. The dry biochar before and after pair is a
+  loaded at 16% moisture"). Before is each batch at its latest reading; after
+  applies this entry's readings. The picture is the entered wet mass split into
+  solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is a
   Detailed row; the entered figures and the FIFO batch draw sit behind Show
   calculation. Without a moisture there is no estimate, and the dry pair takes
   the headline. Ingredient bins track wet stock directly, so their headline is
   not labelled an estimate.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
-  estimate" at each batch's recorded moisture, since an order has no departure
-  moisture yet; the batch bar and key as the picture; available dry stock as a
+  estimate" at each batch's latest moisture reading, since an order has no
+  departure moisture yet; the batch bar and key as the picture; available dry stock as a
   Detailed row.
 - A wet estimate is computed at a moisture, not weighed: its label always says
   "estimate", and it reads in whole kilograms.
+
+### Stock moisture readings
+
+Every stock moisture field (delivery, loss, count, the product form's biochar
+draw, ingredient moisture) is required and starts empty. Corrections are the
+one exception: they start from the saved reading. The estimate is a hint and a
+check, never a value:
+
+- Pass `estimate` and the watched `reading` to `MoistureField` (or the
+  `moisture` props of `MassMoistureFields`). The field then shows "Estimated
+  moisture: 29.4%" under the input, the basis ("From the reading on …") behind
+  the ⓘ, and an advisory warning when the reading differs by more than
+  `MOISTURE_READING_WARNING_POINTS` (`@/config/output-stock`). It never blocks.
+- For an output bin, `useOutputMoistureEstimate(bin, facility, occurredAt,
+  preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time
+  from each batch's latest reading, or the live preview's own (which leaves out
+  the entry a correction replaces). Ingredient bins keep wet stock, so their
+  estimate is the weighted remaining intake basis.
+- A reading resets the estimate of the batch it was taken from. The movement
+  block shows that as `MoistureResetChange`: the remaining stock at its previous
+  estimate, an arrow, then at the reading, as two blocks rather than a sentence.
+  Stock history repeats it as its own "Moisture updated" row.
 
 ### Stock change in bin selectors
 

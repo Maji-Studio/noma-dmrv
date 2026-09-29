@@ -46,7 +46,8 @@ export const SAMPLE = {
 export const PRODUCT_DATES = ["2026-09-15", "2026-09-18"] as const;
 /** Facility wall clock the seeded products are mixed and placed at. */
 export const PRODUCT_TIME = "10:00";
-export const PRODUCT = { biocharWetKg: 300, ingredientWetKg: 300, moisturePercent: 10, waterAddedKg: 0 };
+/** The manure intake reads 30%; the operator measures the same for the ingredient added. */
+export const PRODUCT = { biocharWetKg: 300, ingredientWetKg: 300, ingredientMoisturePercent: 30, moisturePercent: 10, waterAddedKg: 0 };
 export const ORDER = { date: "2026-09-20", quantityKg: 1000, packaging: "loose", currency: "TZS" } as const;
 export const SHIPMENT = { date: "2026-09-22", time: "09:00", wetMassKg: 1000, moisturePercent: 20 };
 export const EQUIPMENT = {

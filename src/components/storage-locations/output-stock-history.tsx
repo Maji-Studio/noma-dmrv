@@ -14,6 +14,7 @@ import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { ClockCounterClockwiseIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
+import { MoistureResetChange } from "./moisture-reset-change";
 import { OutputStockForm } from "./output-stock-form";
 import {
   CalculationDisclosure,
@@ -69,7 +70,7 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
           </h4>
           <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatFacilityDateTime(entry.occurredAt, timeZone)}</span>
         </div>
-        <StockRows label={`${kindLabel} figures`} rows={rows} />
+        {entry.moistureReset ? <MoistureResetChange reset={entry.moistureReset} named={false} /> : <StockRows label={`${kindLabel} figures`} rows={rows} />}
         {reversedEntry && (
           <p className="body-caption text-[var(--color-text-secondary)]">
             Reverses the entry recorded {formatFacilityDateTime(reversedEntry.occurredAt, timeZone)}.
@@ -108,8 +109,11 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const history = useOutputStockHistory(storageLocationId, open);
   const entries = history.data ?? [];
   const correctedIds = new Set(entries.filter(entry => entry.kind === "reversal").map(entry => entry.correctsMovementId));
+  // A reading stops counting once the entry that measured it is corrected.
+  const isReversed = (entry: OutputStockHistoryEntry) => correctedIds.has(entry.measuredByMovementId ?? entry.id);
   const originalKind = (entry: OutputStockHistoryEntry): string => entry.eventKind ?? (entry.correctsMovementId ? originalKind(entries.find(item => item.id === entry.correctsMovementId) ?? { ...entry, correctsMovementId: null }) : entry.kind);
-  const shown = entries.toReversed().filter(entry => !movementId || entry.id === movementId);
+  // A movement opened on its own keeps the "Moisture updated" row its reading added.
+  const shown = entries.toReversed().filter(entry => !movementId || entry.id === movementId || entry.measuredByMovementId === movementId);
   // A correction posts a reversal plus a replacement against the same entry.
   // The replacement carries both, so a lone reversal row would double-count it.
   const foldedIntoReplacement = (entry: OutputStockHistoryEntry) =>
@@ -139,7 +143,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
                 entry={entry}
                 kindLabel={outputStockEventLabel(entry.correctsMovementId && entry.kind !== "reversal" ? "replacement" : entry.kind)}
                 reversedEntry={entry.correctsMovementId ? entries.find(item => item.id === entry.correctsMovementId) : undefined}
-                reversed={correctedIds.has(entry.id)}
+                reversed={isReversed(entry)}
                 correctable={entry.kind !== "reversal" && !correctedIds.has(entry.id) && CORRECTABLE_KINDS.includes(originalKind(entry))}
                 last={index === timeline.length - 1}
                 onCorrect={() => setOriginal(entry)}

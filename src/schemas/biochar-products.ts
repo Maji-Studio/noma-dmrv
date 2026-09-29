@@ -69,7 +69,6 @@ const ingredientBinBaseSchema = z.object({
   massDryKg: massKgSchema("Ingredient dry mass must be 0 or greater")
     .optional()
     .nullable(),
-  moistureSource: z.enum(["weighted_remaining", "operator_override"]).optional(),
   moistureContentPercent: storedPercentSchema()
     .min(MOISTURE_MIN)
     .max(MOISTURE_MAX)

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { AffectedStockPreview } from "@/types/output-stock";
 import {
   ingredientComponents,
   productCompositionComponents,
@@ -14,7 +13,6 @@ const ingredient = {
   massKg: 100,
   moistureContentPercent: 30,
   massDryKg: 80,
-  moistureSource: "operator_override" as const,
 };
 
 const masses = (components: { massKg: number | null }[]) => components.map((component) => component.massKg);
@@ -27,20 +25,9 @@ describe("ingredientComponents", () => {
     expect(ingredientComponents(ingredient)[1].label).toBe("Water in chicken manure");
   });
 
-  it("uses the unrounded stock ratio for weighted ingredients at large masses", () => {
-    const stock = { lane: "ingredient", beforeDryKg: 66666666.667, beforeEstimatedWetKg: 100000000 } as AffectedStockPreview;
-    const components = ingredientComponents(
-      { ...ingredient, massKg: 100000000, moistureContentPercent: 33.333333, moistureSource: "weighted_remaining" },
-      { stock },
-    );
-    expect(components[0].massKg).toBe(66666666.667);
-    expect(components[0].massKg).not.toBe(66666667);
-  });
-
-  it("does not fabricate a weighted split without the stock projection", () => {
-    expect(ingredientComponents({ ...ingredient, moistureSource: "weighted_remaining" })[0].massKg).toBeNull();
-    const productLane = { lane: "product", beforeDryKg: 50, beforeEstimatedWetKg: 100 } as AffectedStockPreview;
-    expect(ingredientComponents({ ...ingredient, moistureSource: "weighted_remaining" }, { stock: productLane })[0].massKg).toBeNull();
+  it("splits a new ingredient only at the moisture the operator measured", () => {
+    // The bin's weighted estimate is a hint beside the field, never a basis.
+    expect(masses(ingredientComponents({ ...ingredient, massKg: 100000000, moistureContentPercent: 33.333333 }))[0]).toBeCloseTo(66666667, 0);
   });
 
   it("does not fabricate missing or invalid dry mass, but accounts for zero additions", () => {
