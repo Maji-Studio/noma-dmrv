@@ -83,19 +83,17 @@ function createColumns(
       accessorKey: "deliveryCount",
       header: "Deliveries",
       cell: ({ row }) => {
-        const { deliveredCount, deliveryCount } = row.original;
+        const { deliveryCount } = row.original;
         return (
           <span
             className="inline-flex items-center justify-center min-w-[40px] px-8 py-2 bg-[var(--color-surface-light)] border border-[var(--color-border-tertiary)] text-[var(--text-s)] font-medium font-mono"
             title={
               deliveryCount > 0
-                ? `${deliveredCount} of ${deliveryCount} ${pluralize(deliveryCount, "delivery", "deliveries")} delivered`
+                ? `${deliveryCount} ${pluralize(deliveryCount, "delivery", "deliveries")}`
                 : "No deliveries scheduled"
             }
           >
-            {deliveryCount > 0
-              ? `${deliveredCount}/${deliveryCount}`
-              : MISSING_VALUE.none}
+            {deliveryCount > 0 ? deliveryCount : MISSING_VALUE.none}
           </span>
         );
       },

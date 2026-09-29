@@ -31,7 +31,6 @@ const order = {
   currency: "TZS",
   fulfillmentStatus: "no_deliveries",
   deliveryCount: 0,
-  deliveredCount: 0,
   deliveredWetMassKg: 0,
 } as unknown as OrderWithRelations;
 
@@ -79,14 +78,16 @@ describe("Order read view levels", () => {
   });
 
   it("keeps the delivered figure in Simple once deliveries exist", async () => {
-    const { renderer, switchTo } = await renderSheet({ ...order, fulfillmentStatus: "partial", deliveryCount: 2, deliveredCount: 1, deliveredWetMassKg: 60.5 } as OrderWithRelations);
+    const { renderer, switchTo } = await renderSheet({ ...order, fulfillmentStatus: "partial", deliveryCount: 2, deliveredWetMassKg: 60.5 } as OrderWithRelations);
     const simple = visibleText(renderer.root);
     expect(simple).toContain("Delivered");
     expect(simple).toContain("60.5 of 130.125 kg wet");
-    expect(simple).not.toContain("1 of 2 deliveries");
+    expect(simple).not.toContain("2 deliveries");
     expect(simple).not.toContain("Partial");
     await switchTo("detailed");
-    expect(visibleText(renderer.root)).toContain("1 of 2 deliveries");
+    const detailed = visibleText(renderer.root);
+    expect(detailed).toContain("2 deliveries");
+    expect(detailed).toContain("Partial");
     await act(async () => renderer.unmount());
   });
 });

@@ -85,7 +85,7 @@ describe("formatStorageLocationSubtitle", () => {
         null,
       ),
     ).toBe(
-      "Biochar bin · Wet biochar: 3,500kg | Dry biochar: 3,430kg available",
+      "Biochar bin · 3,500 kg wet, 3,430 kg dry biochar available",
     );
   });
 
@@ -111,7 +111,7 @@ describe("formatStorageLocationSubtitle", () => {
         null,
       ),
     ).toBe(
-      "Product bin · Pure biochar · Wet biochar product: 3,500kg | Dry biochar: 3,325kg stored · 3,500 kg biochar equivalent",
+      "Product bin · Pure biochar · 3,500 kg wet, 3,325 kg dry biochar stored · 3,500 kg biochar equivalent",
     );
   });
 });
@@ -171,7 +171,7 @@ describe("toStorageLocationEntityOption", () => {
 
     expect(option.remainingMass).toEqual({ wetKg: 3_100, dryKg: null });
     expect(option.subtitle).toContain(
-      "Wet biochar: 3,100kg | Dry biochar: Not recorded available",
+      "3,100 kg wet, dry biochar not available available",
     );
   });
 
@@ -202,7 +202,7 @@ describe("toStorageLocationEntityOption", () => {
 
     expect(option.remainingMass).toEqual({ wetKg: 2_900, dryKg: null });
     expect(option.subtitle).toContain(
-      "Wet biochar product: 2,900kg | Dry biochar: Not recorded stored",
+      "2,900 kg wet, dry biochar not available stored",
     );
   });
 });

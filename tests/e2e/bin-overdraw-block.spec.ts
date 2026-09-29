@@ -675,7 +675,7 @@ async function openDeliveryCorrection(page: Page, seededData: SeededChainData) {
   await waitForFacilityHydration(page, seededData.facility.name);
   await page.getByPlaceholder("Search by code or name…").fill(seededData.productStorageLocation.code);
   await page.getByText(seededData.productStorageLocation.name, { exact: true }).first().click();
-  await page.getByRole("button", { name: "More info", exact: true }).first().click();
+  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
   await history.locator("article").filter({ has: page.getByRole("heading", { name: "Delivery", exact: true }) }).getByRole("button", { name: "Correct entry" }).click();
   await history.locator("#stock-reason").fill("E2E corrected loading measurement");

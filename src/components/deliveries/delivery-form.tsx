@@ -360,8 +360,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           />
           {/* The composition cards belong to the same grid as the two inputs
               above them, so they align to the field columns and inherit the
-              row rhythm instead of stacking on a second spacing scale. */}
-          <div className="md:col-span-2 space-y-16">
+              row rhythm instead of stacking on a second spacing scale. The
+              wrapper drops out while every child is hidden (Simple hides the
+              stock preview), so it adds no empty grid row under the inputs. */}
+          <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
             {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
             {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
