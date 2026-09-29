@@ -21,8 +21,6 @@
  *    Read sheets are covered in `form-detail-parity-sheets.test.tsx` and sheet
  *    forms in `form-detail-parity-forms.test.tsx`.
  */
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
 import type { ReactElement, ReactNode } from "react";
 import { useForm, type Control, type FieldValues } from "react-hook-form";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -61,7 +59,7 @@ vi.mock("@/components/forms/entity-select", async (importOriginal) => ({
   FormEntitySelect: () => <span>Blend material</span>,
 }));
 
-import { renderBothLevels } from "./form-detail-parity-harness";
+import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
 import { MassMoistureFields } from "./mass-moisture-fields";
 import { EntitySelect } from "./entity-select/entity-select";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
@@ -81,7 +79,6 @@ import { IngredientMassSplit } from "@/components/biochar-products/ingredient-ma
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import type { OutputStockPreview as Preview } from "@/types/output-stock";
 
-const SRC = join(__dirname, "..", "..");
 
 /** Re-exports the context API without using it. */
 const BARREL = "components/forms/index.ts";
@@ -103,12 +100,6 @@ const DETAILED_ONLY_CALLERS = [
   // The empty composition before any input or source bin, likewise.
   "components/biochar-products/biochar-product-form.tsx",
 ];
-
-function sourceFiles(): { path: string; text: string }[] {
-  return (readdirSync(SRC, { recursive: true }) as string[])
-    .filter(file => /\.(ts|tsx)$/.test(file) && !/\.test\.tsx?$/.test(file))
-    .map(file => ({ path: relative(SRC, join(SRC, file)), text: readFileSync(join(SRC, file), "utf8") }));
-}
 
 describe("detail level source scan", () => {
   const files = sourceFiles();

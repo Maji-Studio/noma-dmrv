@@ -13,10 +13,8 @@
  * A builder is a file ending `-read-sections.tsx` or a function returning
  * `DetailPanelSection[]`; adding one without a case here fails the coverage check.
  */
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
 import type { ReactElement, ReactNode } from "react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 const { stub } = vi.hoisted(() => ({ stub: (name: string) => () => name }));
 vi.mock("@/components/ui/tooltip", () => ({
@@ -49,7 +47,7 @@ vi.mock("@/components/applications/application-supporting-evidence-panel", () =>
 vi.mock("@/components/samples/sample-documents-panel", () => ({ SampleDocumentsPanel: stub("Sample documents") }));
 vi.mock("@/components/certification/facility-certifier-summary", () => ({ FacilityCertifierSummary: stub("Registry connection") }));
 
-import { renderBothLevels } from "./form-detail-parity-harness";
+import { renderBothLevels, sourceFiles } from "./form-detail-parity-harness";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { orderSheetSections } from "@/components/orders/order-read-sections";
@@ -68,7 +66,6 @@ import { sampleSheetSections } from "@/components/samples/sample-read-sections";
 import { storageLocationSheetSections } from "@/components/storage-locations/storage-location-read-sections";
 import { supplierSheetSections } from "@/components/suppliers/supplier-read-sections";
 
-const SRC = join(__dirname, "..", "..");
 const FACILITIES = [{ id: "facility", timezone: "UTC" }];
 const noop = () => undefined;
 /** Fixtures carry only the fields each builder reads. */
@@ -153,14 +150,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   ) },
 ];
 
-function sourceFiles(): { path: string; text: string }[] {
-  return (readdirSync(SRC, { recursive: true }) as string[])
-    .filter(file => /\.(ts|tsx)$/.test(file) && !/\.test\.tsx?$/.test(file))
-    .map(file => ({ path: relative(SRC, join(SRC, file)), text: readFileSync(join(SRC, file), "utf8") }));
-}
-
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
-afterAll(() => { vi.unstubAllGlobals(); });
 
 describe("read sheet detail level parity", () => {
   it("covers every read-section builder", () => {

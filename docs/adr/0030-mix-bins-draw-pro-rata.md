@@ -12,6 +12,7 @@ Some yards keep biochar or product as one well-mixed pile rather than separate b
 - Every removal carries a measured moisture reading (required, never prefilled). The estimate is shown as a hint and triggers an advisory warning beyond a configured gap.
 - Event order within a day matters, so output stock events carry date and time. An entry timed before an already-posted removal leaves that removal's saved shares unchanged; the operator is warned which removals were calculated without it.
 - The UI shows the pile as one box; batch shares stay in the ledger and in Detailed views.
+  Superseded in part: batch shares are data and show at both detail levels; see [forms.md, "Simple and Detailed presentation"](../forms.md#simple-and-detailed-presentation).
 
 ## Consequences
 

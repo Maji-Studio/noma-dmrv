@@ -2,13 +2,15 @@
 import { TransportLegsSummary } from "@/components/transport-legs";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatDateTime, formatPercent } from "@/lib/format-utils";
-import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import { formatMoisturePercent, MOISTURE_FIELD_LABEL, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { formatDurabilityOption } from "@/schemas/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { SampleWithRelations } from "@/data-access/samples";
 
 const LAB_PERCENT_FRACTION_DIGITS = 2;
+/** Atomic ratios (H:C org, O:C org) read at four decimals. */
+const RATIO_DIGITS = 4;
 
 function formatLabPercent(value: number | null | undefined): string {
   return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
@@ -64,8 +66,8 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       title: "Stability ratios",
       fields: [
         { label: "Inherited durability", value: formatDurabilityOption(sample.durabilityOption) },
-        { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: sample.hToCOrgRatio?.toFixed(4) ?? null },
-        { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: sample.oToCOrgRatio?.toFixed(4) ?? null },
+        { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: sample.hToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
+        { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: sample.oToCOrgRatio?.toFixed(RATIO_DIGITS) ?? null },
       ],
     },
     ...(sample.durabilityOption === "1000_year" ? [
@@ -73,7 +75,7 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
         title: "1000-year durability · R₀ reflectance",
         fields: [
           { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(sample.randomReflectanceR0Percent) },
-          { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * 100) },
+          { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * PERCENT_SCALE) },
           { label: "Measurement count", value: sample.r0MeasurementCount },
           { label: "R₀ analysis date", value: formatDate(sample.r0AnalysisDate) },
         ],

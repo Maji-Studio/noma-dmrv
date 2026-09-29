@@ -465,6 +465,30 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
+### Should the credit batch durability field say "capped"? (`forms/durability-estimate-label`, opened 2026-09-29)
+
+- **Observed:** `src/components/credit-batches/credit-batch-view.tsx:creditBatchSheetSections`
+  shows the capped durable fraction at both detail levels as "Durability
+  estimate". The raw value, whether the cap applied, and the preview component
+  and formula sit in the section's Detailed-only explanation.
+- In Simple the reader sees the capped figure without the raw one beside it, so
+  "Capped durability estimate" could read as unexplained there, while plain
+  "Durability estimate" hides that a cap may have lowered it.
+- **Resolve via:** Kenji picks the label; change the one field label and the
+  credit batch tests (S).
+
+### Is the global Simple/Detailed toggle still worth its place? (`forms/detail-toggle-value`, opened 2026-09-29)
+
+- **Observed:** since Simple and Detailed differ only in explanation
+  ([`forms.md`](./forms.md#simple-and-detailed-presentation)), the toggle in
+  `src/components/forms/form-detail-context.tsx:FormDetailControl` only reveals
+  calculation rows, basis captions and provenance. Storage bin sheets
+  (`src/components/storage-locations/storage-location-list.tsx:StorageLocationList`)
+  already dropped it because it switched nothing there.
+- **Resolve via:** decide whether to keep the toggle per sheet, replace it with
+  inline "Show calculation" disclosures only, or remove it; the parity guards in
+  `src/components/forms/form-detail-parity*.test.tsx` hold either way (M).
+
 ### Only the GHG statement report PDF renders deterministic bytes (`certification/ledger-pdf-determinism`, opened 2026-08-06)
 
 - **Observed:** @react-pdf/pdfkit writes each compressed object when its own

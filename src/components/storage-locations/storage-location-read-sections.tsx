@@ -10,6 +10,8 @@ import { OutputStockHistory } from "./output-stock-history";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 
+const ACTION_ICON_PX = 18;
+
 function formatDateOrFallback(value: Date | null) {
   if (!value) return "No completed applications";
   return formatDate(value);
@@ -163,7 +165,7 @@ export function storageLocationSheetSections(bin: StorageLocationWithFacility, o
             variant="default"
             onClick={() => onReconcile(bin)}
           >
-            <ArrowsClockwiseIcon size={18} weight="bold" />
+            <ArrowsClockwiseIcon size={ACTION_ICON_PX} weight="bold" />
             Reconcile stock
           </Button>
           {bin.type === "feedstock_bin" ? <BinMovementHistoryModal compact triggerLabel="Stock history" storageLocationId={bin.id} /> : <><OutputBinBalance storageLocationId={bin.id} facilityId={bin.facilityId} /><OutputStockHistory compact triggerLabel="Stock history" storageLocationId={bin.id} facilityId={bin.facilityId} /></>}
