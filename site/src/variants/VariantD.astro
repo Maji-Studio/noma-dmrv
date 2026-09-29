@@ -1,0 +1,175 @@
+---
+// PROTOTYPE variant D, "Workbench": dense bento of live tiles; form and trace share the hero.
+import { copy } from "../content/copy.js";
+import { featIcon } from "../visuals/core.js";
+import WalkthroughForm from "../components/WalkthroughForm.astro";
+const c = copy;
+const first = (s) => s.split(/(?<=\.)\s/)[0];
+---
+<div class="vd">
+  <nav class="vd-nav" aria-label="Main">
+    <span class="vd-logo"><b>{c.brand.name}</b><span>{c.brand.by}</span></span>
+    <span class="vd-links">{c.nav.map((n) => <a href={n.href}>{n.label}</a>)}</span>
+    <a class="vd-btn vd-pri vd-sm" href={c.cta.primaryHref}>{c.cta.primary}</a>
+  </nav>
+
+  <header class="vd-hero">
+    <div class="vd-hl">
+      <h1>{c.hero.title}</h1>
+      <p class="vd-lead">{first(c.hero.lead)}</p>
+      <section class="vd-formbox" id="walkthrough" aria-labelledby="vd-wt">
+        <h2 id="vd-wt" class="vd-th">{c.walkthrough.title}</h2>
+        <WalkthroughForm idPrefix="vd" />
+      </section>
+    </div>
+    <div class="vd-hr">
+      <div class="vd-tile vd-flush">
+        <div data-visual="chain" data-side="below" data-legend="false"></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="vd-bento">
+    <div class="vd-colL">
+    <section class="vd-tile vd-dense" id="trace">
+      <h2 class="vd-th">{c.dense.title}</h2>
+      <div data-visual="dense" data-side="below" data-legend="false"></div>
+    </section>
+
+    <section class="vd-tile vd-map">
+      <h2 class="vd-th">{c.map.title}</h2>
+      <div data-visual="map" data-side="none"></div>
+    </section>
+
+    </div>
+    <div class="vd-colR">
+      <section class="vd-tile vd-bins">
+        <h2 class="vd-th">{c.features.bins.title}</h2>
+        <p class="vd-sm-p">{first(c.features.bins.text)}</p>
+        <div data-visual="bins"></div>
+      </section>
+      <div class="vd-up">{c.features.upcoming.map(([g, d, t, x]) => <div class="vd-tile vd-upc"><Fragment set:html={featIcon(g, d)} /><h3>{t}</h3><span class="vd-chip">{c.features.upcomingLabel}</span><p>{x}</p></div>)}</div>
+    </div>
+
+    <section class="vd-tile vd-reg" id="registry">
+      <h2 class="vd-th">{c.registry.title}</h2>
+      <div data-visual="morph"></div>
+    </section>
+    <div class="vd-colR2">
+      <section class="vd-tile vd-shipped" id="features">
+        <h2 class="vd-th">{c.features.title}</h2>
+        <div class="vd-cells">{c.features.shipped.map(([g, d, t, x]) => <div class="vd-cell"><Fragment set:html={featIcon(g, d)} /><h3>{t}</h3><p>{first(x)}</p></div>)}</div>
+      </section>
+      <section class="vd-tile vd-cmp">
+        <h2 class="vd-th">{c.compare.title}</h2>
+        <div class="vd-tbl"><table><thead><tr><th></th>{c.compare.columns.map((h) => <th>{h}</th>)}</tr></thead>
+          <tbody>{c.compare.rows.map(([a, b, d]) => <tr><td>{a}</td><td>{b}</td><td>{d}</td></tr>)}</tbody></table></div>
+      </section>
+    </div>
+
+    <section class="vd-tile vd-proof">
+      <span class="vd-hint">{c.proof.label}</span>
+      {c.proof.logos.map((l) => <span class="vd-logo-ph">{l}</span>)}
+      {c.proof.figures.map((f) => <span class="vd-fig"><b>{f.value}</b> {f.text}</span>)}
+    </section>
+
+    <section class="vd-os" id="open-source" aria-labelledby="vd-os-h">
+      <h2 id="vd-os-h" class="vd-th vd-os-h">{c.openSource.title}</h2>
+      {c.openSource.cards.map((k) => <div class="vd-tile vd-osc"><span class="vd-chip vd-chip-n">{k.chip}</span><h3>{k.title}</h3><p>{k.text}</p><div><a class="vd-btn" href={k.href}>{k.action}</a></div></div>)}
+    </section>
+  </main>
+
+  <footer class="vd-foot"><span>{c.footer.left}</span><span>{c.footer.right} <a href={c.cta.githubHref}>GitHub</a></span></footer>
+</div>
+
+<style>
+  .vd { max-width: 1360px; margin: 0 auto; padding: 0 16px; --gap: 12px; }
+  .vd-nav { display: flex; align-items: center; gap: 20px; padding-block: 12px; flex-wrap: wrap; }
+  .vd-logo { display: flex; align-items: baseline; gap: 7px; margin-right: auto; }
+  .vd-logo b { font-size: 22px; letter-spacing: -0.02em; }
+  .vd-logo span { font-size: 13px; color: var(--ink-3); }
+  .vd-links { display: flex; gap: 16px; }
+  .vd-links a { font-size: 14px; color: var(--ink-2); text-decoration: none; }
+  .vd-links a:hover { color: var(--ink); }
+  .vd a:focus-visible, .vd button:focus-visible, .vd input:focus-visible, .vd select:focus-visible, .vd textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .vd-btn { display: inline-block; border: 1.5px solid var(--ink); border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 14px; text-decoration: none; background: var(--paper); }
+  .vd-pri { background: var(--ink); color: var(--paper); }
+  .vd-sm { padding: 6px 11px; font-size: 13px; }
+
+  .vd-hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--gap); padding-block: 12px var(--gap); align-items: start; }
+  .vd-hl { display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .vd h1 { font-size: clamp(30px, 3.4vw, 46px); letter-spacing: -0.035em; line-height: 1.02; }
+  .vd-lead { color: var(--ink-2); font-size: 17px; max-width: 46ch; }
+  .vd-formbox { background: var(--paper); border: 1.5px solid var(--hair-strong); border-radius: 10px; padding: 14px; display: grid; gap: 10px; scroll-margin-top: 12px; }
+  .vd-formbox :global(.wt-form) { gap: 8px; }
+  .vd-formbox :global(.wt-form input), .vd-formbox :global(.wt-form select), .vd-formbox :global(.wt-form textarea) { padding: 7px 10px; font-size: 14px; }
+  .vd-formbox :global(.wt-form textarea) { min-height: 0; }
+  .vd-formbox :global(.wt-submit) { padding: 9px 16px; font-size: 15px; width: 100%; }
+  .vd-hr { min-width: 0; }
+
+  .vd-th { font-size: 13px; font-weight: 700; letter-spacing: 0; line-height: 1.25; text-wrap: balance; }
+  .vd-tile { background: var(--paper); border: 1.5px solid var(--hair-2); border-radius: 10px; padding: 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .vd-flush { padding: 0; border: 0; background: none; }
+  .vd-tile :global(.nv-viz) { border-width: 1px; }
+  .vd-sm-p { font-size: 13px; color: var(--ink-2); }
+
+  .vd-bento { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gap); padding-bottom: var(--gap); }
+  .vd-colL { grid-column: span 8; display: grid; gap: var(--gap); align-content: start; min-width: 0; }
+  .vd-colR { grid-column: span 4; display: grid; gap: var(--gap); align-content: start; min-width: 0; }
+  .vd-dense, .vd-reg { scroll-margin-top: 12px; }
+  .vd-reg { grid-column: span 6; }
+  .vd-colR2 { grid-column: span 6; display: grid; gap: var(--gap); align-content: start; min-width: 0; }
+  .vd-shipped { scroll-margin-top: 12px; }
+  .vd-cells { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--hair); border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .vd-cell { background: var(--paper); padding: 10px 12px; display: grid; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 2px; align-items: start; }
+  .vd-cell :global(svg), .vd-fh :global(svg) { width: 30px; height: 30px; }
+  .vd-cell :global(svg) { grid-row: span 2; }
+  .vd-cell:last-child:nth-child(odd) { grid-column: span 2; }
+  .vd-cell h3 { font-size: 14px; }
+  .vd-cell p { font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+
+  .vd-up { display: grid; gap: 8px; }
+  .vd-upc { background: var(--page); border-style: dashed; padding: 8px 12px; gap: 1px 10px; grid-template-columns: auto 1fr auto; align-items: center; }
+  .vd-upc :global(svg) { width: 26px; height: 26px; grid-row: span 2; }
+  .vd-upc p { grid-column: 2 / 4; }
+  .vd-upc h3 { font-size: 14px; }
+  .vd-upc p { font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+  .vd-fh { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .vd-chip { display: inline-flex; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 8px; background: var(--infra-bg); color: var(--infra); }
+  .vd-chip-n { justify-self: start; background: var(--sea); }
+
+  .vd-tbl { overflow-x: auto; border: 1px solid var(--hair); border-radius: 8px; }
+  .vd-tbl table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 13.5px; }
+  .vd-tbl th { text-align: left; font-size: 12px; color: var(--ink-3); padding: 7px 12px; border-bottom: 1.5px solid var(--hair-strong); }
+  .vd-tbl td { padding: 7px 12px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  .vd-tbl tr:last-child td { border-bottom: 0; }
+  .vd-tbl td:first-child { font-weight: 700; width: 34%; }
+  .vd-tbl td:nth-child(2) { color: var(--ink-3); }
+
+  .vd-proof { grid-column: span 12; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; }
+  .vd-hint { font-size: 12.5px; color: var(--ink-3); margin-right: 4px; }
+  .vd-logo-ph { border: 1.5px dashed var(--hair-2); border-radius: 6px; padding: 3px 10px; font-weight: 700; color: var(--ink-2); font-size: 13px; }
+  .vd-fig { font-size: 13px; color: var(--ink-2); }
+  .vd-fig:first-of-type { margin-left: auto; }
+  .vd-fig b { color: var(--ink); }
+
+  .vd-os { grid-column: span 12; display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+  .vd-os-h { grid-column: span 2; scroll-margin-top: 12px; margin-top: 4px; }
+  .vd-osc h3 { font-size: 18px; }
+  .vd-osc p { font-size: 14px; color: var(--ink-2); }
+  .vd-foot { padding-block: 16px 60px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; font-size: 13px; color: var(--ink-3); }
+
+  @media (max-width: 1000px) {
+    .vd-hero { grid-template-columns: 1fr; }
+    .vd-colL, .vd-colR, .vd-reg, .vd-colR2 { grid-column: span 12; }
+  }
+  @media (max-width: 640px) {
+    .vd { padding: 0 12px; }
+    .vd-links { display: none; }
+    .vd-cells { grid-template-columns: 1fr; }
+    .vd-cell:last-child:nth-child(odd) { grid-column: auto; }
+    .vd-os { grid-template-columns: 1fr; }
+    .vd-os-h { grid-column: auto; }
+    .vd-fig:first-of-type { margin-left: 0; }
+  }
+</style>
