@@ -15,6 +15,7 @@ vi.mock('./biochar-product-composition', () => ({
 }));
 vi.mock('./biochar-product-source-allocations', () => ({ insertBiocharProductSourceAllocations: mocks.sourceAllocations }));
 vi.mock('./output-stock-post', () => ({ withOutputStockPosting: mocks.posting }));
+vi.mock('./output-bin-stock-mode', () => ({ assertAdditionAfterSplit: vi.fn() }));
 import { createBiocharProduct } from './biochar-product-create';
 
 const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
