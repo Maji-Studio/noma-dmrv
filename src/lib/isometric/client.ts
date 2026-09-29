@@ -1,4 +1,5 @@
 import { env } from "@/config/env";
+import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import type { components } from "./generated/certify";
 
@@ -30,6 +31,11 @@ const BASE_DELAY_MS = 500;
 const MAX_DELAY_MS = 8000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_RETRY_WAIT_MS = 30_000;
+// Certify's list endpoints cap `first` at 50 (mrv.openapi.json).
+const MAX_PAGE_SIZE = 50;
+// 10,000 records at the maximum page size: a list read past this is a
+// runaway walk, not an organization's real registry footprint.
+const DEFAULT_MAX_PAGES = 200;
 
 export interface IsometricRequestOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
@@ -299,40 +305,93 @@ type Paginated<T> = {
 };
 
 export interface PaginateOptions extends IsometricRequestOptions {
+  /** Records per request. Certify caps `first` at 50. */
   pageSize?: number;
+  /** Pages to walk before refusing with IsometricPageLimitError. */
+  maxPages?: number;
 }
 
+/** A walk that still had pages left after `maxPages`. Safe to show operators. */
+export class IsometricPageLimitError extends SafeError {
+  constructor(recordCount: number) {
+    super(
+      `Isometric returned more than ${recordCount.toLocaleString("en-US")} records for this lookup. Contact support before retrying.`
+    );
+    this.name = "IsometricPageLimitError";
+  }
+}
+
+type IsometricTransport = <T>(
+  method: IsometricMethod,
+  path: string,
+  options?: IsometricRequestOptions
+) => Promise<T>;
+
+/**
+ * Walks Certify's cursor pages. Every list read goes through here, so the page
+ * cap, the page-size bound and the cursor checks hold for all of them: a
+ * reported next page must name a fresh cursor, or the walk stops with an error
+ * instead of looping or silently truncating.
+ */
 async function* paginate<T>(
-  credentials: IsometricCredentials | null,
+  request: IsometricTransport,
   path: string,
   options: PaginateOptions = {}
 ): AsyncGenerator<T> {
-  const { pageSize = 50, query, ...rest } = options;
+  const {
+    pageSize = MAX_PAGE_SIZE,
+    maxPages = DEFAULT_MAX_PAGES,
+    query,
+    ...rest
+  } = options;
+  if (!Number.isInteger(pageSize) || pageSize <= 0 || pageSize > MAX_PAGE_SIZE) {
+    throw new Error(
+      `Isometric pageSize must be an integer between 1 and ${MAX_PAGE_SIZE}`
+    );
+  }
+  if (!Number.isInteger(maxPages) || maxPages <= 0) {
+    throw new Error("Isometric maxPages must be a positive integer");
+  }
+
   let after: string | undefined;
-  while (true) {
-    const page = await isometricRequest<Paginated<T>>(credentials, "GET", path, {
+  const usedCursors = new Set<string>();
+  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
+    const page = await request<Paginated<T>>("GET", path, {
       ...rest,
       query: { ...query, first: pageSize, after },
     });
     for (const node of page.nodes ?? []) yield node;
-    if (!page.page_info?.has_next_page || !page.page_info.end_cursor) return;
-    after = page.page_info.end_cursor;
+    if (!page.page_info?.has_next_page) return;
+    const cursor = page.page_info.end_cursor;
+    if (!cursor) {
+      throw new Error(
+        `Isometric GET ${path} reported another page without a cursor`
+      );
+    }
+    if (usedCursors.has(cursor)) {
+      throw new Error(`Isometric GET ${path} repeated cursor ${cursor}`);
+    }
+    usedCursors.add(cursor);
+    after = cursor;
   }
+  throw new IsometricPageLimitError(pageSize * maxPages);
 }
 
 async function paginateAll<T>(
-  credentials: IsometricCredentials | null,
+  request: IsometricTransport,
   path: string,
   options: PaginateOptions = {}
 ): Promise<T[]> {
   const out: T[] = [];
-  for await (const node of paginate<T>(credentials, path, options)) out.push(node);
+  for await (const node of paginate<T>(request, path, options)) out.push(node);
   return out;
 }
 
+type IsometricMethod = "GET" | "POST" | "PATCH" | "DELETE" | "PUT";
+
 export interface IsometricClient {
   request: <T = unknown>(
-    method: "GET" | "POST" | "PATCH" | "DELETE" | "PUT",
+    method: IsometricMethod,
     path: string,
     options?: IsometricRequestOptions
   ) => Promise<T>;
@@ -352,14 +411,15 @@ export interface IsometricClient {
   paginateAll: <T>(path: string, options?: PaginateOptions) => Promise<T[]>;
 }
 
-function createIsometricClient(
-  credentials: IsometricCredentials | null
+/**
+ * Builds a client over any transport. The HTTP client and the test fake
+ * registry share it, so both walk pages with the same bounds.
+ */
+export function createIsometricClientFromTransport(
+  request: IsometricTransport
 ): IsometricClient {
-  const request: IsometricClient["request"] = (method, path, options) =>
-    isometricRequest(credentials, method, path, options);
-
   return {
-    request,
+    request: request as IsometricClient["request"],
     get: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
       request<T>("GET", path, options),
     post: <T = unknown>(
@@ -375,10 +435,20 @@ function createIsometricClient(
     delete: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
       request<T>("DELETE", path, options),
     paginate: <T>(path: string, options?: PaginateOptions) =>
-      paginate<T>(credentials, path, options),
+      paginate<T>(request, path, options),
     paginateAll: <T>(path: string, options?: PaginateOptions) =>
-      paginateAll<T>(credentials, path, options),
+      paginateAll<T>(request, path, options),
   };
+}
+
+function createIsometricClient(
+  credentials: IsometricCredentials | null
+): IsometricClient {
+  return createIsometricClientFromTransport(<T>(
+    method: IsometricMethod,
+    path: string,
+    options?: IsometricRequestOptions
+  ) => isometricRequest<T>(credentials, method, path, options));
 }
 
 export async function getIsometricClientForOrg(

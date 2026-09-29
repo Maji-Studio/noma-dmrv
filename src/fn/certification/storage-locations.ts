@@ -16,10 +16,8 @@ import {
 import type { CertifierStorageLocation } from "@/db/schema/certifier-storage-locations";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
-import {
-  getIsometricClientForOrg,
-  IsometricApiError,
-} from "@/lib/isometric/client";
+import { getIsometricClientForOrg } from "@/lib/isometric/client";
+import { isMissingIsometricResource } from "@/lib/isometric/error-utils";
 import {
   buildCreateStorageLocationRequest,
   buildStorageLocationReference,
@@ -477,7 +475,13 @@ async function reuseStorageLocationRegistration(
       ? "The registered Isometric Storage Location returned a different identity. Resolve the remote identity before retrying."
       : storageLocationMismatchMessage(remote, args.existing.submittedPayload);
   } catch (error) {
-    if (error instanceof IsometricApiError && error.status === 404) {
+    if (
+      isMissingIsometricResource(
+        error,
+        null,
+        args.existing.externalStorageLocationId,
+      )
+    ) {
       if (!localDrifted && args.body) {
         if (
           args.existing.supplierReference !== args.body.supplier_reference_id ||

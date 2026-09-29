@@ -1,4 +1,5 @@
 import { IsometricApiError, type IsometricClient } from "./client";
+import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 
 export type CreateDocumentSourceRequest =
@@ -52,17 +53,18 @@ export async function requestSignedUploadUrl(
   }
 }
 
-export async function findSourceBySupplierRef(
+export function findSourceBySupplierRef(
   client: IsometricClient,
   ref: string,
 ): Promise<Source | null> {
-  for await (const node of client.paginate<Source>("/sources", {
-    query: { supplier_reference_id: ref },
-    pageSize: SUPPLIER_REF_LOOKUP_PAGE_SIZE,
-  })) {
-    return node;
-  }
-  return null;
+  return findRegistryRecord<Source>(client, "/sources", {
+    match: "first",
+    where: () => true,
+    paginate: {
+      query: { supplier_reference_id: ref },
+      pageSize: SUPPLIER_REF_LOOKUP_PAGE_SIZE,
+    },
+  });
 }
 
 // Verified against the public Certify OpenAPI and the `how_to` MCP tool on
