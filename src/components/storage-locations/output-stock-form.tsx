@@ -52,7 +52,8 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   const input = candidate.success ? candidate.data : null;
   const preview = useOutputStockPreview(input);
   const splitOriginal = Boolean(original?.sources?.length);
-  const estimate = useOutputMoistureEstimate(storageLocationId, facilityId, values.occurredAt, preview.data?.moistureEstimate);
+  // A correction's estimate must leave out the entry it replaces, which only its own preview does.
+  const estimate = useOutputMoistureEstimate(original ? null : storageLocationId, facilityId, values.occurredAt, preview.data?.moistureEstimate);
   // Names the entry in the preview's caption. A replaced loss or delivery is
   // still wet mass removed from the bin; a replaced count is still a count.
   const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";

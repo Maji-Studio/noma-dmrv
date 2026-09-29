@@ -12,6 +12,8 @@ describe('moistureReadingGuidance', () => {
   it('warns, without blocking, when a reading is more than five points from the estimate', () => {
     const estimate = { moisturePercent: 29.4, basisText: null };
     expect(moistureReadingGuidance(estimate, 34.4).warning).toBeUndefined();
+    // 34.45 against 29.44 reads as 5.0 points, so it stays quiet like the figure it shows.
+    expect(moistureReadingGuidance({ moisturePercent: 29.44, basisText: null }, 34.45).warning).toBeUndefined();
     expect(moistureReadingGuidance(estimate, 22.1).warning).toBe('This reading is 7.3 points from the estimated 29.4%. Check the reading before you save.');
   });
 

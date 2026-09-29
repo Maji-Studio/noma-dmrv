@@ -1,4 +1,4 @@
-import { add, decimal, divide, rational, subtract, type Rational } from './exact';
+import { add, decimal, divide, rational, rationalToNumber, subtract, type Rational } from './exact';
 import { layerRemainingSolidsKg, type OutputStockLayer, type OutputStockRequest, type planOutputStock } from './planner';
 
 const PERCENT = 100;
@@ -33,7 +33,7 @@ export interface StockEstimate {
   basis: MoistureBasis | null;
 }
 
-const toNumber = (value: Rational) => Number(value.numerator) / Number(value.denominator);
+const toNumber = rationalToNumber;
 
 /** 1 − moisture, exact. Stored percents have at most six decimals, so the text form is exact. */
 function readingFraction(moisturePercent: number): Rational {

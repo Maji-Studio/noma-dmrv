@@ -84,14 +84,10 @@ export function binLabel(quantity: string): string {
 
 /**
  * A count that only changes moisture looks like a bug next to an unchanged
- * balance, so the one case that needs a sentence gets one, above the figures it
- * explains. Only an accepted count qualifies: a refused loss also arrives with
- * nothing removed, and its blocking message is the sentence that applies.
- */
-/**
- * Only a count below the estimated wet stock reads as lost material, so only
- * then does the block say drying removes none. A count at or above it needs no
- * explanation, and without an estimate there is nothing to compare with.
+ * balance, so that one case gets a sentence, above the figures it explains.
+ * Only an accepted count below the estimated wet stock reads as lost material:
+ * a refused loss also arrives with nothing removed (its blocking message is the
+ * sentence that applies), and without an estimate there is nothing to compare.
  */
 export function dryingNotice(preview: Preview, enteredWetKg: number | null): string | null {
   const dryLabel = preview.dryLabel ?? "dry biochar";

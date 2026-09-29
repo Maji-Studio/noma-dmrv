@@ -78,6 +78,11 @@ describe('remaining ingredient moisture', () => {
     expect(first).toEqual({ wetMassKg: 0.6, dryMassKg: 0.3, moisturePercent: 50 });
     expect(reordered).toEqual(first);
   });
+  it('rounds dry solids half up in exact decimals, as the snapshot check does', async () => {
+    // 1.005 × 0.7 is 0.7035 exactly (0.7034999… in floats); the database rounds it to 0.704.
+    const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [{ ...ingredient, massKg: 1.005, moistureContentPercent: 30 }] });
+    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 0.704 })]);
+  });
   it('freezes the measured basis on later reads', async () => {
     const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [{ ...ingredient, moistureContentPercent: 10 }] });
     expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 27, moistureContentPercent: 10 })]);
