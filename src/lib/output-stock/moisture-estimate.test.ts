@@ -37,6 +37,16 @@ describe('estimateStock', () => {
     expect(estimateStock([bay], NOW).wetKg).toBeCloseTo(796.25, 9);
   });
 
+  it('stays finite for a bin of many partly drawn batches with unrelated moisture bases', () => {
+    // Distinct prime denominators: the exact sum's numerator and denominator pass 1e308.
+    const primes: number[] = [];
+    for (let n = 1009; primes.length < 120; n += 2) if (primes.every(p => n % p !== 0) && [3, 5, 7, 11, 13, 17, 19, 23, 29, 31].every(p => n % p !== 0)) primes.push(n);
+    const layers = primes.map((p, i) => layer(`L${i}`, '1500', '997', T0, { remainingSolidsKg: { numerator: BigInt(p * 500 + 1), denominator: BigInt(p) } }));
+    const estimate = estimateStock(layers, NOW);
+    expect(estimate.wetKg).toBeCloseTo(120 * 1500 * 500 / 997, 0);
+    expect(estimate.moisturePercent).toBeCloseTo((1 - 997 / 1500) * 100, 6);
+  });
+
   it('leaves the wet estimate unknown when a batch holding stock has no moisture basis, and ignores spent batches', () => {
     const unknown = layer('B-0419', '980', '637', T0, { recorded: null });
     expect(estimateStock([layer('B-0412', '1240', '843.2'), unknown], NOW)).toMatchObject({ wetKg: null, moisturePercent: null, solidsKg: 1480.2 });

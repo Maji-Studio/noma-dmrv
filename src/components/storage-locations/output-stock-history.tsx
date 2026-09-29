@@ -112,7 +112,8 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   // A reading stops counting once the entry that measured it is corrected.
   const isReversed = (entry: OutputStockHistoryEntry) => correctedIds.has(entry.measuredByMovementId ?? entry.id);
   const originalKind = (entry: OutputStockHistoryEntry): string => entry.eventKind ?? (entry.correctsMovementId ? originalKind(entries.find(item => item.id === entry.correctsMovementId) ?? { ...entry, correctsMovementId: null }) : entry.kind);
-  const shown = entries.toReversed().filter(entry => !movementId || entry.id === movementId);
+  // A movement opened on its own keeps the "Moisture updated" row its reading added.
+  const shown = entries.toReversed().filter(entry => !movementId || entry.id === movementId || entry.measuredByMovementId === movementId);
   // A correction posts a reversal plus a replacement against the same entry.
   // The replacement carries both, so a lone reversal row would double-count it.
   const foldedIntoReplacement = (entry: OutputStockHistoryEntry) =>

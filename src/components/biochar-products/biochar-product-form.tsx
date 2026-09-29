@@ -27,6 +27,7 @@ import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error
 import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
 import { useOutputStockPreview } from "@/hooks/use-output-stock";
 import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
+import { MoistureResetChange } from "@/components/storage-locations/moisture-reset-change";
 import {
   deriveBlendMassKg,
   deriveSourceBiocharMassKg,
@@ -477,6 +478,10 @@ export function BiocharProductForm({
             )
           }
         />
+        {/* The biochar reading resets the sub-bin it was taken from. */}
+        {sourcePreviewFresh && sourcePreview.data && !sourcePreview.data.blockingMessage && sourcePreview.data.moistureReset && (
+          <MoistureResetChange reset={sourcePreview.data.moistureReset} />
+        )}
       </FormSection>
 
       <FormSection

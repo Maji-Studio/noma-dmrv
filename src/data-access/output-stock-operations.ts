@@ -2,7 +2,7 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
-import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, SubBinOverdrawError, subtract, UntickSubBinError, type OutputStockLayer, type OutputStockRequest, type Rational } from '@/lib/output-stock';
+import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, type OutputStockLayer, type OutputStockRequest, type Rational } from '@/lib/output-stock';
 import { estimateStock, planReadings, withReadings, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
 import { PERCENT_SCALE } from '@/lib/mass-moisture';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
@@ -16,7 +16,7 @@ import { prepareOutputCorrection } from './output-stock-corrections';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
-export const rationalNumber = (value: Rational) => Number(value.numerator) / Number(value.denominator);
+export const rationalNumber = rationalToNumber;
 /** Output-lane alias of the shared request digest. */
 export { requestFingerprint as stockFingerprint };
 

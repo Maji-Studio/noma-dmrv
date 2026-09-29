@@ -39,8 +39,8 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
       if (!stock) throw new SafeError('Ingredient stock not found.');
       const beforeWet = stock.wetMassKg;
       const beforeDry = stock.dryMassKg;
-      // Ingredient stock is withdrawn pro rata; an override describes the material
-      // mixed into the product, not a new measurement of the remaining bin.
+      // Ingredient stock is withdrawn pro rata; an ingredient reading describes the
+      // material mixed into the product, not a new measurement of the remaining bin.
       const dryDraw = beforeDry === null ? null : beforeWet > 0 ? beforeDry * wetDraw / beforeWet : 0;
       const afterDry = beforeDry === null || dryDraw === null ? null : beforeDry - dryDraw;
       const allocation = (wet: number, dry: number | null) => [{ layerId: id, code: bin.code, wetMassKg: wet, dryMassKg: dry, runs: [] }];

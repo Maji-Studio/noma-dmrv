@@ -36,7 +36,8 @@ export function outputMoistureFieldEstimate(estimate: OutputMoistureEstimate | n
  */
 export function moistureReadingGuidance(estimate: MoistureFieldEstimate | null, reading: number | null | undefined) {
   const estimated = estimate?.moisturePercent ?? null;
-  const gap = estimated !== null && typeof reading === 'number' && Number.isFinite(reading) ? Math.abs(reading - estimated) : null;
+  // Compared at the precision shown, so "5.0 points" never warns against a limit of 5.
+  const gap = estimated !== null && typeof reading === 'number' && Number.isFinite(reading) ? Number(Math.abs(reading - estimated).toFixed(POINT_DIGITS)) : null;
   return {
     helperText: estimated === null ? undefined : `Estimated moisture: ${formatMoisturePercent(estimated)}`,
     basisText: estimated === null ? undefined : estimate?.basisText ?? undefined,

@@ -18,11 +18,11 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import {
   deriveSourceBiocharMassKg,
-  GRAMS_PER_KILOGRAM,
   toPersistedMassGrams,
 } from "@/lib/biochar-composition/composition";
 import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
+import { solidsAtMoistureKg } from "@/lib/output-stock/exact";
 import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { assertFeedstockWetDrawWithinStock } from "./feedstock-wet-stock";
@@ -312,7 +312,8 @@ export async function resolveCompositionIngredientMassBasis(
       }
       return { ...ingredient, moistureContentPercent: moisture,
         moistureEstimate: basis ? { moisturePercent: basis.moisturePercent, wetMassKg: basis.wetMassKg, dryMassKg: basis.dryMassKg } : null,
-        massDryKg: Math.round(wetMassKg * (1 - moisture / 100) * GRAMS_PER_KILOGRAM) / GRAMS_PER_KILOGRAM };
+        // Exact, so the snapshot check round(wet × (1 − moisture ÷ 100), 3) agrees on half-gram ties.
+        massDryKg: Number(solidsAtMoistureKg(String(wetMassKg), String(moisture))) };
 
     }),
   };
