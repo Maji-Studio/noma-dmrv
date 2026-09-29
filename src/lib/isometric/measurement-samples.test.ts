@@ -22,7 +22,7 @@ describe("getMeasurementSample", () => {
     };
     expect(await getMeasurementSample(client as unknown as IsometricClient, sample.id))
       .toBe(sample);
-    expect(client.paginate).toHaveBeenCalledWith("/measurement_samples");
+    expect(client.paginate).toHaveBeenCalledWith("/measurement_samples", undefined);
     expect(client.get).not.toHaveBeenCalled();
   });
 

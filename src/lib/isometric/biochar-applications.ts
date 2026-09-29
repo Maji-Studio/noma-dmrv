@@ -1,8 +1,13 @@
 import { createHash } from "node:crypto";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { SafeError } from "@/lib/errors";
-import type { IsometricClient, IsometricEnvironment } from "./client";
+import type {
+  IsometricClient,
+  IsometricEnvironment,
+  PaginateOptions,
+} from "./client";
 export type { IsometricEnvironment } from "./client";
+import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 import {
   ISOMETRIC_KILOGRAM_UNIT,
@@ -22,9 +27,6 @@ export type IsometricBiocharApplication =
 export type CreateBiocharApplicationRequest =
   components["schemas"]["CreateBiocharApplicationRequest"];
 
-type BiocharApplicationPage =
-  components["schemas"]["PaginatedListResource_BiocharApplication_"];
-
 export const BIOCHAR_APPLICATION_RATE_UNIT = "t/ha";
 export const BIOCHAR_APPLICATION_TRUCK_MASS_UNIT = ISOMETRIC_KILOGRAM_UNIT;
 export const BIOCHAR_APPLICATION_DEPARTURE_MASS_KG = 0;
@@ -33,8 +35,7 @@ export const BIOCHAR_APPLICATION_REFERENCE_MAX_LENGTH = 100;
 export const FIRST_REMOVAL_SUBMISSION_VERSION = 1;
 
 const REFERENCE_HASH_LENGTH = 12;
-const MAX_LOOKUP_PAGE_SIZE = 50;
-const DEFAULT_LOOKUP_PAGE_SIZE = MAX_LOOKUP_PAGE_SIZE;
+// Reconciliation reads at most 1,000 records before refusing.
 const DEFAULT_LOOKUP_MAX_PAGES = 20;
 const QUANTITY_COMPARISON_EPSILON = 1e-9;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -208,61 +209,22 @@ export function deleteBiocharApplication(
   );
 }
 
-export async function findBiocharApplicationBySupplierReference(
+export function findBiocharApplicationBySupplierReference(
   client: IsometricClient,
   supplierReferenceId: string,
-  options: { pageSize?: number; maxPages?: number } = {},
+  options: Pick<PaginateOptions, "pageSize" | "maxPages"> = {},
 ): Promise<IsometricBiocharApplication | null> {
-  const pageSize = options.pageSize ?? DEFAULT_LOOKUP_PAGE_SIZE;
-  const maxPages = options.maxPages ?? DEFAULT_LOOKUP_MAX_PAGES;
-  if (
-    !Number.isInteger(pageSize) ||
-    pageSize <= 0 ||
-    pageSize > MAX_LOOKUP_PAGE_SIZE
-  ) {
-    throw new Error(
-      `Biochar Application lookup pageSize must be an integer between 1 and ${MAX_LOOKUP_PAGE_SIZE}`,
-    );
-  }
-  if (!Number.isInteger(maxPages) || maxPages <= 0) {
-    throw new Error(
-      "Biochar Application lookup maxPages must be a positive integer",
-    );
-  }
-
-  let after: string | undefined;
-  let match: IsometricBiocharApplication | null = null;
-  const usedCursors = new Set<string>();
-  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
-    const page = await client.get<BiocharApplicationPage>(
-      "/biochar_applications",
-      { query: { first: pageSize, after } },
-    );
-    for (const application of page.nodes ?? []) {
-      if (application.supplier_reference_id !== supplierReferenceId) continue;
-      if (match) {
-        throw new SafeError(
-          "Multiple Isometric Biochar Applications use this stable reference. Resolve the duplicate records before retrying.",
-        );
-      }
-      match = application;
-    }
-    if (!page.page_info.has_next_page) return match;
-    after = page.page_info.end_cursor ?? undefined;
-    if (!after) {
-      throw new Error(
-        "Isometric Biochar Application pagination reported another page without a cursor",
-      );
-    }
-    if (usedCursors.has(after)) {
-      throw new Error(
-        `Isometric Biochar Application pagination repeated cursor ${after}`,
-      );
-    }
-    usedCursors.add(after);
-  }
-  throw new SafeError(
-    `The Isometric Biochar Application lookup exceeded its safety limit after ${(pageSize * maxPages).toLocaleString("en-US")} records. Contact support before retrying.`,
+  return findRegistryRecord<IsometricBiocharApplication>(
+    client,
+    "/biochar_applications",
+    {
+      match: "unique",
+      duplicateMessage:
+        "Multiple Isometric Biochar Applications use this stable reference. Resolve the duplicate records before retrying.",
+      where: (application) =>
+        application.supplier_reference_id === supplierReferenceId,
+      paginate: { maxPages: DEFAULT_LOOKUP_MAX_PAGES, ...options },
+    },
   );
 }
 
