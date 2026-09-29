@@ -21,10 +21,8 @@ import {
   getBiocharApplication,
   type IsometricBiocharApplication,
 } from "@/lib/isometric/biochar-applications";
-import {
-  getIsometricClientForOrg,
-  IsometricApiError,
-} from "@/lib/isometric/client";
+import { getIsometricClientForOrg } from "@/lib/isometric/client";
+import { isMissingIsometricResource } from "@/lib/isometric/error-utils";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { Logger } from "@/lib/log";
 import {
@@ -276,7 +274,9 @@ async function ensureBiocharApplication(args: {
                 externalApplicationId,
               );
             } catch (error) {
-              if (!(error instanceof IsometricApiError) || error.status !== 404) {
+              if (
+                !isMissingIsometricResource(error, null, externalApplicationId)
+              ) {
                 throw error;
               }
               remote = null;

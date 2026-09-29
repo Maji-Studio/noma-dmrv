@@ -156,7 +156,7 @@ parallel to `certify.d.ts`.
 3. Search current call sites:
 
    ```bash
-   rg -n 'client\.(get|post|patch|delete)|client\.paginate(All)?' \
+   rg -n 'client\.(get|post|patch|delete)|client\.paginate(All)?|findRegistryRecord' \
      src/lib/isometric src/fn/certification/submit-telemetry.ts
    ```
 

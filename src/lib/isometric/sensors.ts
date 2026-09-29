@@ -7,6 +7,7 @@
 
 import { createHash } from "node:crypto";
 import type { IsometricClient } from "./client";
+import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 import {
   encodeMeasurementProperty,
@@ -18,6 +19,7 @@ export type CreateSensorRequest = components["schemas"]["CreateSensorRequest"];
 
 const REACTOR_REF_PREFIX_LEN = 12;
 const PROPERTY_SLUG_MAX = 24;
+const SENSOR_LOOKUP_PAGE_SIZE = 10;
 
 /**
  * Stable, noma-controlled sensor reference. The reactor short-hash
@@ -53,16 +55,15 @@ export async function createSensor(
  * even though the typical hit is one row — the API contract does not
  * guarantee a single result.
  */
-export async function findSensorByReference(
+export function findSensorByReference(
   client: IsometricClient,
   reference: string,
 ): Promise<IsometricSensor | null> {
-  const matches = await client.paginateAll<IsometricSensor>("/sensors", {
-    query: { reference },
-    pageSize: 10,
+  // The API filters server-side; the client-side check guards against a
+  // filter that stops applying.
+  return findRegistryRecord<IsometricSensor>(client, "/sensors", {
+    match: "first",
+    where: (sensor) => sensor.reference === reference,
+    paginate: { query: { reference }, pageSize: SENSOR_LOOKUP_PAGE_SIZE },
   });
-  // Defensive: the API filters server-side, but a future tightening
-  // could make this strict; assert the match.
-  const match = matches.find((s) => s.reference === reference);
-  return match ?? null;
 }

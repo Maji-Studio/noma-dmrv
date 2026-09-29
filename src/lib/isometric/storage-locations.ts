@@ -1,18 +1,15 @@
 import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
-import type { IsometricClient } from "./client";
+import type { IsometricClient, PaginateOptions } from "./client";
+import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 
 export type IsometricStorageLocation = components["schemas"]["StorageLocation"];
 export type CreateStorageLocationRequest =
   components["schemas"]["CreateStorageLocationRequest"];
 
-type StorageLocationPage =
-  components["schemas"]["PaginatedListResource_StorageLocation_"];
-
 const REFERENCE_HASH_LENGTH = 16;
-const MAX_LOOKUP_PAGE_SIZE = 50;
-const DEFAULT_LOOKUP_PAGE_SIZE = MAX_LOOKUP_PAGE_SIZE;
+// Reconciliation reads at most 1,000 records before refusing.
 const DEFAULT_LOOKUP_MAX_PAGES = 20;
 const UNDEFINED = { __typename: "Undefined" } as const;
 
@@ -123,63 +120,25 @@ export function getStorageLocation(
   );
 }
 
-export interface StorageLocationLookupOptions {
-  pageSize?: number;
-  maxPages?: number;
-}
-
 /**
  * Bounded full-list reconciliation because the endpoint exposes no supplier
  * reference filter. Duplicate matches and an exhausted bound both fail loudly.
  */
-export async function findStorageLocationBySupplierReference(
+export function findStorageLocationBySupplierReference(
   client: IsometricClient,
   externalProjectId: string,
   supplierReferenceId: string,
-  options: StorageLocationLookupOptions = {},
+  options: Pick<PaginateOptions, "pageSize" | "maxPages"> = {},
 ): Promise<IsometricStorageLocation | null> {
-  const pageSize = options.pageSize ?? DEFAULT_LOOKUP_PAGE_SIZE;
-  const maxPages = options.maxPages ?? DEFAULT_LOOKUP_MAX_PAGES;
-  if (
-    !Number.isInteger(pageSize) ||
-    pageSize <= 0 ||
-    pageSize > MAX_LOOKUP_PAGE_SIZE
-  ) {
-    throw new Error(
-      `Storage Location lookup pageSize must be an integer between 1 and ${MAX_LOOKUP_PAGE_SIZE}`,
-    );
-  }
-  if (!Number.isInteger(maxPages) || maxPages <= 0) {
-    throw new Error("Storage Location lookup maxPages must be a positive integer");
-  }
-
-  let after: string | undefined;
-  let match: IsometricStorageLocation | null = null;
-  for (let pageNumber = 1; pageNumber <= maxPages; pageNumber += 1) {
-    const page = await client.get<StorageLocationPage>(
-      storageLocationsPath(externalProjectId),
-      { query: { first: pageSize, after } },
-    );
-    for (const location of page.nodes ?? []) {
-      if (location.supplier_reference_id !== supplierReferenceId) continue;
-      if (match) {
-        throw new SafeError(
-          "Multiple Isometric Storage Locations use this application site's stable reference. Resolve the duplicate records before retrying.",
-        );
-      }
-      match = location;
-    }
-
-    if (!page.page_info.has_next_page) return match;
-    after = page.page_info.end_cursor ?? undefined;
-    if (!after) {
-      throw new Error(
-        "Isometric Storage Location pagination reported another page without a cursor",
-      );
-    }
-  }
-
-  throw new SafeError(
-    `The Isometric Storage Location lookup exceeded its safety limit after ${(pageSize * maxPages).toLocaleString("en-US")} records. Contact support to raise the reconciliation limit before retrying.`,
+  return findRegistryRecord<IsometricStorageLocation>(
+    client,
+    storageLocationsPath(externalProjectId),
+    {
+      match: "unique",
+      duplicateMessage:
+        "Multiple Isometric Storage Locations use this application site's stable reference. Resolve the duplicate records before retrying.",
+      where: (location) => location.supplier_reference_id === supplierReferenceId,
+      paginate: { maxPages: DEFAULT_LOOKUP_MAX_PAGES, ...options },
+    },
   );
 }

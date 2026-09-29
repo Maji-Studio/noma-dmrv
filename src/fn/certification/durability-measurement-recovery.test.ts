@@ -235,6 +235,7 @@ describe("measurement-sample journal recovery", () => {
     expect(mocks.client.get).not.toHaveBeenCalled();
     expect(mocks.client.paginate).toHaveBeenCalledWith(
       "/measurement_samples",
+      undefined,
     );
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.appendSubmissionJournal).not.toHaveBeenCalled();
@@ -290,6 +291,7 @@ describe("measurement-sample journal recovery", () => {
     expect(mocks.client.get).not.toHaveBeenCalled();
     expect(mocks.client.paginate).toHaveBeenCalledWith(
       "/measurement_samples",
+      undefined,
     );
     expect(mocks.client.post).not.toHaveBeenCalled();
     expect(mocks.appendSubmissionJournal).not.toHaveBeenCalled();
