@@ -109,6 +109,7 @@ export function ProductionSampleForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="sampledById"
                   entityType="operator"
                   value={field.value ?? ""}
                   onChange={field.onChange}

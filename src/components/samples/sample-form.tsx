@@ -351,6 +351,7 @@ export function SampleForm({
                   control={control}
                   render={({ field }) => (
                     <EntitySelect
+                      id="creditBatchId"
                       entityType="creditBatch"
                       value={field.value}
                       onChange={field.onChange}

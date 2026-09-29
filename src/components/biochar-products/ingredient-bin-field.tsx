@@ -182,6 +182,7 @@ export function IngredientBinField({
                   error={fieldState.error?.message}
                 >
                   <EntitySelect
+                    id={row.storageLocationFieldName}
                     entityType="storageLocation"
                     value={field.value || ""}
                     onChange={field.onChange}

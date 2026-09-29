@@ -463,6 +463,7 @@ export function BiocharProductForm({
             control={control}
             render={({ field, fieldState }) => (
               <EntitySelect
+                id="sourceBiocharStorageLocationId"
                 entityType="storageLocation"
                 value={field.value || ""}
                 onChange={field.onChange}
@@ -568,6 +569,7 @@ export function BiocharProductForm({
             control={control}
             render={({ field, fieldState }) => (
               <EntitySelect
+                id="formulationId"
                 entityType="formulation"
                 value={field.value || ""}
                 onChange={field.onChange}
@@ -646,6 +648,7 @@ export function BiocharProductForm({
             control={control}
             render={({ field, fieldState }) => (
               <EntitySelect
+                id="storageLocationId"
                 entityType="storageLocation"
                 value={field.value || ""}
                 onChange={field.onChange}

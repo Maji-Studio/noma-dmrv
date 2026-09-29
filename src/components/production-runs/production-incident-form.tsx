@@ -119,6 +119,7 @@ export function ProductionIncidentForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="operatorId"
                   entityType="operator"
                   value={field.value ?? ""}
                   onChange={field.onChange}
@@ -140,6 +141,7 @@ export function ProductionIncidentForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="reactorId"
                   entityType="reactor"
                   value={field.value ?? ""}
                   onChange={field.onChange}
