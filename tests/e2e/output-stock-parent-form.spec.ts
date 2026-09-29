@@ -37,8 +37,8 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await fillStockMoisture(page, "delivery", "30");
   const create = page.getByRole("button", { name: "Create Delivery", exact: true });
   await expect(create).toBeEnabled();
-  // The preview (and its history trigger) is a Detailed-only surface now.
-  await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
+  // The preview and its history trigger show at both levels (R1).
+  await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
   await page.getByRole("region", { name: "Stock preview", exact: true })
     .getByRole("button", { name: "Stock history", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
