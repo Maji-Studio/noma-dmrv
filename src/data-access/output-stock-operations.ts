@@ -6,7 +6,7 @@ import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStoc
 import { estimateStock, planReadings, withReadings, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
 import { formatMoisturePercent, PERCENT_SCALE } from '@/lib/mass-moisture';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
-import { orderedSourceSchema, outputStockPreviewSchema } from '@/schemas/output-stock';
+import { orderedSourcesSchema, outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
@@ -64,7 +64,10 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     plan = planOutputStock(planningLayers, input.occurredAt, request);
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
-    blockingMessage = subBinMessage(error, codeMap) ?? operatorStockMessage(error.message);
+    // A draw through every sub-bin the bin holds is short of the bin, not of its last sub-bin.
+    const held = planningLayers.filter(l => l.placedAt <= input.occurredAt && l.remainingSolidsKg && l.remainingSolidsKg.numerator > BigInt(0));
+    const drawsWholeBin = Boolean(sources) && held.every(l => sources!.some(s => s.layerId === l.id));
+    blockingMessage = (drawsWholeBin && error instanceof SubBinOverdrawError ? null : subBinMessage(error, codeMap)) ?? operatorStockMessage(error instanceof SubBinOverdrawError ? 'Insufficient exact dry solids' : error.message);
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
   const beforeDryKg = Number(kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
@@ -142,7 +145,7 @@ export function storedOverallMoisture(preview: OutputStockPreview): number | nul
 
 /** The order and readings an ordered draw was posted with, or undefined for a FIFO draw. */
 function savedSources(inputSnapshot: Record<string, unknown> | null) {
-  const parsed = orderedSourceSchema.array().min(1).safeParse(inputSnapshot?.sources);
+  const parsed = orderedSourcesSchema.safeParse(inputSnapshot?.sources);
   return parsed.success ? parsed.data : undefined;
 }
 

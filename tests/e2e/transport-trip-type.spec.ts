@@ -19,6 +19,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 // Sorts ahead of the seeded feedstock/delivery rows (deliveryDate desc), so
 // "first row" reopens the record this spec created.
@@ -145,7 +146,7 @@ test.describe("Transport trip type (#316)", () => {
     await selectEntityByText(page, "Order", seededData.customer.name);
     await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
-    await page.fill('input[name="moistureContentPercent"]', "10");
+    await fillStockMoisture(page, "delivery", "10");
     await tripType.selectOption("one_way");
     await page.click('button[type="submit"]:has-text("Create Delivery")');
     await waitForSideSheetClose(page);

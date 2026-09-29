@@ -12,6 +12,7 @@ import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { deliveryStatuses } from "../../src/schemas/deliveries";
 import { selectEntity, selectEntityByText } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 // ============================================
 // Test Constants
@@ -85,7 +86,7 @@ async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "95");
-  await page.fill('input[name="moistureContentPercent"]', "10");
+  await fillStockMoisture(page, "delivery", "10");
   await page.click('button[type="submit"]:has-text("Create Delivery")');
   await page.waitForSelector('[role="dialog"]', {
     state: "hidden",

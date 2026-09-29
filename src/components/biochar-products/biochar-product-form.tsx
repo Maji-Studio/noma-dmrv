@@ -27,6 +27,8 @@ import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error
 import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
 import { useOutputStockPreview } from "@/hooks/use-output-stock";
 import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
+import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
+import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import { MoistureResetChange } from "@/components/storage-locations/moisture-reset-change";
 import {
   deriveBlendMassKg,
@@ -42,7 +44,7 @@ import {
   binStockOverdrawMessage,
 } from "@/lib/stock-overdraw";
 import {
-  biocharProductFormSchema,
+  biocharProductEntrySchema,
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
@@ -164,7 +166,7 @@ export function BiocharProductForm({
   const storageLocationDialog = useQuickAddDialog();
 
   const form = useForm({
-    resolver: zodResolver(biocharProductFormSchema),
+    resolver: zodResolver(biocharProductEntrySchema),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues: {
@@ -189,6 +191,8 @@ export function BiocharProductForm({
       densityKgM3: product?.densityKgM3 ?? null,
       waterAddedKg: product?.waterAddedKg ?? null,
       ingredientBins: initialIngredientBins,
+      // Set on save for a split biochar bin, from the sub-bin reading rows.
+      sources: undefined as BiocharProductFormData["sources"],
     },
   });
   const {
@@ -255,22 +259,34 @@ export function BiocharProductForm({
   // never reduce what leaves the biochar bin.
   const massKgNum = typeof watchedMassKg === "number" ? watchedMassKg : null;
   const requestedBiocharKg = massKgNum;
-  const sourcePreview = useOutputStockPreview(!isEditMode && sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0 && watchedMoisture != null ? {
+  // A split biochar bin takes one reading per sub-bin the draw reaches.
+  const draw = useSubBinDraw({
+    bin: !isEditMode && sourceBiocharStorageLocationId && selectedFacilityId ? { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId } : null,
+    occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null, wetKg: requestedBiocharKg,
+  });
+  const [attempted, setAttempted] = useState(false);
+  const readingsReady = draw.active ? draw.sources !== null : draw.usesSingleMoisture && watchedMoisture != null;
+  // Create stays pressable while a reached row is empty, so pressing it names the missing reading.
+  const awaitingReadings = draw.active && draw.sources === null && !draw.untickCode && !draw.needsTick;
+  const sourcePreview = useOutputStockPreview(!isEditMode && sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0 && readingsReady ? {
     storageLocationId: sourceBiocharStorageLocationId,
     facilityId: selectedFacilityId,
     occurredAt: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
-    moisturePercent: Number(watchedMoisture),
+    ...(draw.active ? { sources: draw.sources! } : { moisturePercent: Number(watchedMoisture) }),
   } : null);
-  const sourceMoistureEstimate = useOutputMoistureEstimate(isEditMode ? null : sourceBiocharStorageLocationId, selectedFacilityId, watchedPlacedAt ? String(watchedPlacedAt) : null, sourcePreview.data?.moistureEstimate);
+  const sourceMoistureEstimate = useOutputMoistureEstimate(isEditMode || draw.active ? null : sourceBiocharStorageLocationId, selectedFacilityId, watchedPlacedAt ? String(watchedPlacedAt) : null, sourcePreview.data?.moistureEstimate);
+  // A split draw's biochar moisture is its overall 1 − solids ÷ wet, from the preview.
+  const biocharMoisture = draw.active ? sourcePreview.data?.movementMoisturePercent ?? null : watchedMoisture;
   const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
     (ingredient) =>
       typeof ingredient.massKg === "number" &&
       Number.isFinite(ingredient.massKg) &&
       ingredient.massKg >= 0,
   );
-  const productStockPreview = useProductStockPreview(!isEditMode && ingredientMassesComplete && sourceBiocharStorageLocationId && storageLocationId && selectedFormulationId && watchedPlacedAt && massKgNum !== null && watchedMoisture != null && watchedWaterAddedKg != null ? {
+  const productStockPreview = useProductStockPreview(!isEditMode && ingredientMassesComplete && sourceBiocharStorageLocationId && storageLocationId && selectedFormulationId && watchedPlacedAt && massKgNum !== null && readingsReady && watchedWaterAddedKg != null ? {
     facilityId: selectedFacilityId, formulationId: selectedFormulationId, placedAt: String(watchedPlacedAt),
-    sourceBiocharStorageLocationId, storageLocationId, massKg: massKgNum, moistureContentPercent: Number(watchedMoisture),
+    sourceBiocharStorageLocationId, storageLocationId, massKg: massKgNum,
+    ...(draw.active ? { sources: draw.sources! } : { moistureContentPercent: Number(watchedMoisture) }),
     waterAddedKg: Number(watchedWaterAddedKg), ingredientBins: watchedIngredientBins?.map(ingredient => ({ ...ingredient, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : Number.NaN })),
   } : null);
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
@@ -338,7 +354,7 @@ export function BiocharProductForm({
   const composition = formProductComposition({
     isEditMode,
     massKg: massKgNum,
-    moisturePercent: typeof watchedMoisture === "number" ? watchedMoisture : null,
+    moisturePercent: typeof biocharMoisture === "number" ? biocharMoisture : null,
     waterAddedKg: watchedWaterAddedKg,
     recordedSourceDryMassKg: product?.sourceAllocatedDryMassKg ?? null,
     ingredients: watchedIngredientBins ?? [],
@@ -371,7 +387,13 @@ export function BiocharProductForm({
           </Link>
         </ActionableFocusTarget>
       )}
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+      <form id={formId} onSubmit={(event) => {
+        setAttempted(true);
+        // A split draw saves its sub-bins and readings; the biochar moisture is derived on save.
+        setValue("sources", draw.active ? draw.sources ?? undefined : undefined);
+        if (draw.active) setValue("moistureContentPercent", undefined);
+        return handleFormSubmit(event);
+      }} className="space-y-20">
       <ZeroSourceBiocharWarning
         sourceBiocharMassKg={initialSourceBiocharMassKg}
       />
@@ -446,7 +468,14 @@ export function BiocharProductForm({
         <BiocharSourceMassFields
           materialLabel="Biochar"
           wetMassKg={watchedMassKg}
-          moisturePercent={watchedMoisture}
+          moisturePercent={biocharMoisture}
+          // Loading or failed sub-bins replace the single field too: a split bin is never drawn at one reading.
+          readings={!draw.usesSingleMoisture ? (
+            <>
+              {draw.active && <SubBinDrawField draw={draw} timeZone={placementClock.timeZone} idPrefix="product-source" disabled={isSubmitting} showErrors={attempted} />}
+              {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
+            </>
+          ) : undefined}
           wet={{
             id: "massKg",
             error: massKgError,
@@ -654,7 +683,7 @@ export function BiocharProductForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={routedServerError.footerError}
-        submitDisabled={hasZeroSourceBiochar || !isEditMode && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.data.blockingMessage || affectedBinsUnavailable)}
+        submitDisabled={hasZeroSourceBiochar || !isEditMode && !awaitingReadings && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.data.blockingMessage || affectedBinsUnavailable)}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

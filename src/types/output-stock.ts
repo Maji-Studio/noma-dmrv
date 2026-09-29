@@ -100,6 +100,47 @@ export interface OutputStockHistoryEntry {
   moistureReset?: OutputMoistureReset;
 }
 
+/** One entry in a sub-bin's short history, worded for the operator. */
+export interface SubBinMovement {
+  id: string;
+  kind: 'added' | 'removed' | 'loss' | 'count';
+  /** ISO 8601 UTC instant the event physically happened. */
+  occurredAt: string;
+  wetMassKg: number | null;
+  dryMassKg: number;
+}
+
+/** A batch or run still held in a split bin, as the picker and the bin's cards show it. */
+export interface OutputSubBin {
+  layerId: string;
+  code: string;
+  /** ISO 8601 UTC instant the batch or run entered the bin. */
+  placedAt: string;
+  dryMassKg: number;
+  solidsKg: number;
+  /** Wet stock at the sub-bin's latest moisture; null when nothing dates it. */
+  wetEstimateKg: number | null;
+  moisturePercent: number | null;
+  basis: MoistureBasis | null;
+  /** Newest first, at most `SUB_BIN_RECENT_MOVEMENTS`. */
+  recentMovements: SubBinMovement[];
+}
+
+export interface OutputSubBins {
+  stockMode: 'split' | 'mix';
+  /** Oldest first: the order a draw takes them in unless the operator changes it. */
+  subBins: OutputSubBin[];
+}
+
+export interface OutputSubBinsInput {
+  storageLocationId: string;
+  facilityId: string;
+  occurredAt: string;
+  /** A correction reads the sub-bins as they were before the entry it replaces. */
+  correctsMovementId?: string;
+  kind?: OutputStockPreviewInput['kind'];
+}
+
 export interface MatchingOutputBin {
   id: string;
   code: string;

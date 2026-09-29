@@ -787,30 +787,6 @@ bound); these are the decisions it deliberately did not make.
   concurrent per-site statements for the same period; if yes, replace the guard
   with per-facility period scoping, if no, keep it and say so in the copy (M).
 
-### `formatInTimeZone` is not process-zone independent (`dates/format-in-time-zone-gap`)
-
-- `formatFacilityTime` and `formatFacilityDate` (`src/lib/date-utils.ts`) render
-  through date-fns-tz's `formatInTimeZone`, which builds a `Date` whose **local**
-  components equal the target zone's wall clock. When the machine's own zone
-  skips that wall clock, the `Date` rolls forward and the reader lies —
-  empirically `formatInTimeZone(2026-03-07T23:30Z, "Africa/Dar_es_Salaam")`
-  returns `03:30` instead of `02:30` under `TZ=America/New_York`.
-- It only bites when the viewer's (or server's) zone skips the same wall clock on
-  the same date, so it is rare — but the affected readers are load-bearing: the
-  production-run edit read-back
-  (`src/components/production-runs/production-run-timing.ts:productionRunTimingDefaults`),
-  and the facility-local sampling day in `src/fn/samples`,
-  `src/fn/certification/durability-readiness`,
-  `src/lib/certification/durability-batch-summary` and
-  `src/lib/certification/evidence-ledger/durability-build-model`, which feeds
-  registry-facing durability gates.
-- `combineDateAndTime` in the same module already avoids this by reading the zone
-  with `Intl.DateTimeFormat.formatToParts` (`wallClockIn`) instead — the likely
-  fix shape.
-- **Resolve via:** re-implement `formatFacilityTime` / `formatFacilityDate` on
-  `wallClockIn`-style `formatToParts` output, then pin it with a regression test
-  run under a process zone that skips the rendered wall clock (S).
-
 ### Should CERT-field rules vary by pinned protocol version? (`certification/version-flexible-cert-fields`)
 
 - The project is pinned to Biochar Production and Storage **v1.1** + Isometric

@@ -271,6 +271,17 @@ bare `YYYY-MM-DD` calendar values straight in; `formatDate` and
 component, and never assemble a range by hand. Native date inputs and
 machine-facing API/export/PDF contracts keep their ISO formats.
 
+**Facility clock.** A physical event at a plant (a production run, and every
+output stock event: product placed, delivery, loss, count) reads on the
+facility's wall clock, never the viewer's, so everyone sees one time. Take the
+zone from `useFacilityClock(facilityId)` or `resolveFacilityTimezone`, then use
+`formatFacilityDateTime(value, timeZone)` (`Sep 15, 2026, 14:30`) or, for a
+day-only list column, `formatFacilityDay(value, timeZone)`. A server-computed
+facility day string (`YYYY-MM-DD`) goes through `formatDayString`. These read
+the zone through `Intl`, so a viewer inside their own daylight-saving change
+still sees the facility time; do not swap in `formatInTimeZone`. Input side:
+[forms.md](./forms.md#dates).
+
 ---
 
 ## Missing values

@@ -2,8 +2,9 @@
 
 import { getMatchingOutputBins, getOutputStockHistory, previewOutputStock } from '@/data-access/output-stock-operations';
 import { postOutputStock } from '@/data-access/output-stock-post';
-import { matchingOutputBinsSchema, outputStockPostSchema, outputStockPreviewSchema } from '@/schemas/output-stock';
-import type { OutputStockPostInput, OutputStockPreviewInput } from '@/types/output-stock';
+import { getOutputSubBins } from '@/data-access/output-sub-bins';
+import { matchingOutputBinsSchema, outputStockPostSchema, outputStockPreviewSchema, outputSubBinsSchema } from '@/schemas/output-stock';
+import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from '@/types/output-stock';
 import { z } from 'zod';
 import { withAction } from './with-action';
 
@@ -18,4 +19,7 @@ export async function getMatchingOutputBinsFn(input: { facilityId: string; formu
 }
 export async function postOutputStockFn(input: OutputStockPostInput) {
   return withAction(ctx => postOutputStock(ctx, outputStockPostSchema.parse(input)));
+}
+export async function getOutputSubBinsFn(input: OutputSubBinsInput) {
+  return withAction(ctx => getOutputSubBins(ctx, outputSubBinsSchema.parse(input)));
 }

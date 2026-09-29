@@ -14,7 +14,9 @@ import {
   requiredPositiveMassKgSchema,
   stockEventInstantSchema,
   storedPercentSchema,
+  toNumberOrUndefined,
 } from "./helpers";
+import { orderedSourcesSchema } from "./output-stock";
 
 // ============================================
 // Constants
@@ -27,12 +29,6 @@ export const DUPLICATE_FORMULATION_INGREDIENT_MESSAGE =
 
 const requiredNonNegativeNumber = (message: string) =>
   requiredMassKgSchema(message);
-
-const requiredPercent = requiredNumber().pipe(
-  storedPercentSchema()
-    .min(MOISTURE_MIN, "Must be 0-100")
-    .max(MOISTURE_MAX, "Must be 0-100")
-);
 
 // ============================================
 // Status Enum
@@ -182,12 +178,31 @@ export const biocharProductFormSchema = z.object({
     "Biochar wet mass must be a number",
     "Biochar wet mass must be greater than 0",
   ),
-  moistureContentPercent: requiredPercent,
+  // A split biochar bin takes one reading per sub-bin instead (`sources`);
+  // `biocharProductEntrySchema` requires one or the other.
+  moistureContentPercent: z.preprocess(toNumberOrUndefined, storedPercentSchema()
+    .min(MOISTURE_MIN, "Must be 0-100")
+    .max(MOISTURE_MAX, "Must be 0-100")
+    .optional()),
   densityKgM3: optionalPositiveNumber,
   waterAddedKg: requiredNonNegativeNumber("Water added must be 0 or greater"),
 
   // Ingredient bin mappings (formulation ingredient → physical bin)
   ingredientBins: ingredientBinsFormSchema.optional(),
+
+  /** Split biochar bins: the sub-bins drawn, in the order they were emptied, each with its reading. */
+  sources: orderedSourcesSchema.optional(),
+});
+
+/**
+ * The create form and action: the biochar draw needs its moisture, either as
+ * one reading or one per sub-bin. Kept apart from `biocharProductFormSchema`,
+ * which stays unrefined so the stock preview can pick fields from it.
+ */
+export const biocharProductEntrySchema = biocharProductFormSchema.superRefine((value, ctx) => {
+  if (!value.sources && value.moistureContentPercent == null) {
+    ctx.addIssue({ code: "custom", path: ["moistureContentPercent"], message: "Required" });
+  }
 });
 
 // ============================================
@@ -197,7 +212,7 @@ export const biocharProductFormSchema = z.object({
 /**
  * Schema for creating a biochar product (server action)
  */
-export const createBiocharProductSchema = biocharProductFormSchema;
+export const createBiocharProductSchema = biocharProductEntrySchema;
 
 /**
  * Schema for updating a biochar product (server action)
