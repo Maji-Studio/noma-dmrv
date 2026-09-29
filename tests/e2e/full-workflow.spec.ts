@@ -182,7 +182,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       modelYear: 2020,
     });
 
-    // 8. Create feedstock Delivery (links supplier, facility, feedstock type)
+    // 8. Create feedstock delivery (links supplier, facility, feedstock type)
     await tx.insert(schema.feedstockDeliveries).values({
         organizationId: DEC_ORG_ID,
       id: ids.feedstockDelivery,
@@ -283,7 +283,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       cropType: "Coffee",
     });
 
-    // 16. Create customer Location
+    // 16. Create customer location
     await tx.insert(schema.customerLocations).values({
         organizationId: DEC_ORG_ID,
       id: ids.customerLocation,

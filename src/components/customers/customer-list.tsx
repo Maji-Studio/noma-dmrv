@@ -282,7 +282,7 @@ export function CustomerList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Locations on This Page"
+          title="Locations on this page"
           value={totalLocations}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
           description="Application field locations on this page"

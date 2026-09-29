@@ -21,7 +21,7 @@ import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "../../src/lib/certification/a
 import { fillStockMoisture } from "./helpers/stock-moisture";
 
 /**
- * Create order → delivered Delivery → Application (all certify-relevant form
+ * Create order → delivered delivery → application (all certify-relevant form
  * fields filled, then switched to the legacy visual evidence method in the
  * fixture setup with NO photos uploaded) and return the
  * unique field identifier used to locate the row / DB record.

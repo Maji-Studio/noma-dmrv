@@ -63,7 +63,7 @@ async function blockExternalMapHosts(page: Page) {
  */
 async function openNewSupplierLocationEditor(page: Page, facilityId: string) {
   await page.goto(`/suppliers?facility=${facilityId}`);
-  await page.getByRole("button", { name: "New Supplier" }).click();
+  await page.getByRole("button", { name: "New supplier" }).click();
 
   const supplierSheet = page.getByRole("dialog", { name: "Create supplier" });
   await expect(supplierSheet).toBeVisible();
@@ -76,7 +76,7 @@ async function openNewSupplierLocationEditor(page: Page, facilityId: string) {
 
 async function openNewCustomerLocationEditor(page: Page, facilityId: string) {
   await page.goto(`/customers?facility=${facilityId}`);
-  await page.getByRole("button", { name: "New Customer" }).click();
+  await page.getByRole("button", { name: "New customer" }).click();
 
   const customerSheet = page.getByRole("dialog", { name: "Create customer" });
   await expect(customerSheet).toBeVisible();

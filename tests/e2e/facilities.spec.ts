@@ -58,7 +58,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
     });
 
     // Open the create side sheet
-    await page.getByRole("button", { name: /New Facility/i }).click();
+    await page.getByRole("button", { name: /New facility/i }).click();
 
     // Wait for the side sheet to be visible
     await page.waitForSelector('[role="dialog"]', { state: "visible" });
@@ -72,7 +72,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
     await facilityDialog.getByRole("button", { name: /Cancel/i }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    await page.getByRole("button", { name: /New Facility/i }).click();
+    await page.getByRole("button", { name: /New facility/i }).click();
     await expect(facilityDialog).toBeVisible();
     await expectDialogInsideViewport(facilityDialog, page.viewportSize());
 
@@ -299,7 +299,7 @@ test.describe("Facility durability tier", () => {
       timeout: 15000,
     });
 
-    await page.getByRole("button", { name: /New Facility/i }).click();
+    await page.getByRole("button", { name: /New facility/i }).click();
     const dialog = page
       .getByRole("dialog")
       .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });

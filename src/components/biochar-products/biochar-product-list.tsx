@@ -226,7 +226,7 @@ export function BiocharProductPageMassSummary({
 
   return (
     <StatCard
-      title="Mass on This Page"
+      title="Mass on this page"
       value={
         <MassPair
           wetKg={wetKg}
