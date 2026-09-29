@@ -16,4 +16,10 @@ describe("deriveOrderFulfillmentStatus", () => {
     expect(deriveOrderFulfillmentStatus(3, 5200, 5000)).toBe("fulfilled");
     expect(deriveOrderFulfillmentStatus(3, 4899, 5000)).toBe("partial");
   });
+
+  it("counts exactly the shortfall boundary as fulfilled on a non-round quantity", () => {
+    // 1234.5 * 0.98 = 1209.81 (float drift lands a hair above it without rounding)
+    expect(deriveOrderFulfillmentStatus(1, 1209.81, 1234.5)).toBe("fulfilled");
+    expect(deriveOrderFulfillmentStatus(1, 1209.809, 1234.5)).toBe("partial");
+  });
 });

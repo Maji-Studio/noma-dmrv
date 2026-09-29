@@ -9,6 +9,7 @@
  * used for filtering must mirror `deriveOrderFulfillmentStatus`), the filter
  * schema, and the list UI.
  */
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import type { StatusValue } from "@/components/ui/status-badge";
 
 /**
@@ -39,7 +40,11 @@ export function deriveOrderFulfillmentStatus(
   requestedWetMassKg: number,
 ): OrderFulfillmentStatus {
   if (deliveryCount <= 0) return "no_deliveries";
-  if (deliveredWetMassKg >= requestedWetMassKg * (1 - ORDER_FULFILLED_SHORTFALL_FRACTION)) {
+  // Compare at the storage scale so the list filter (SQL numeric) and this
+  // badge agree at the exact boundary.
+  const scale = 10 ** MASS_KG_STORAGE_DECIMALS;
+  const threshold = Math.round(requestedWetMassKg * (1 - ORDER_FULFILLED_SHORTFALL_FRACTION) * scale) / scale;
+  if (deliveredWetMassKg >= threshold) {
     return "fulfilled";
   }
   return "partial";

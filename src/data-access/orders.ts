@@ -4,6 +4,7 @@
  */
 
 import { db, type DbTransaction } from "@/db";
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { numericAggregate } from "@/db/aggregate";
 import {
   customerLocations,
@@ -110,10 +111,12 @@ export async function getOrders(
     .as("delivery_agg");
 
   // SQL mirror of deriveOrderFulfillmentStatus — keep the two thresholds in sync.
+  // orders.quantity_kg is a float4, so the threshold is computed in numeric and
+  // rounded to the mass storage scale, exactly as the TS side rounds it.
   const fulfillmentExpr = sql<OrderFulfillmentStatus>`
     case
       when coalesce(${deliveryAgg.total}, 0) = 0 then 'no_deliveries'
-      when coalesce(${deliveryAgg.deliveredWetKg}, 0) >= ${orders.quantityKg} * ${1 - ORDER_FULFILLED_SHORTFALL_FRACTION} then 'fulfilled'
+      when coalesce(${deliveryAgg.deliveredWetKg}, 0) >= round(${orders.quantityKg}::numeric * (${1 - ORDER_FULFILLED_SHORTFALL_FRACTION})::numeric, ${MASS_KG_STORAGE_DECIMALS}) then 'fulfilled'
       else 'partial'
     end
   `;

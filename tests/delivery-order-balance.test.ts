@@ -100,6 +100,13 @@ describe("completed delivery order balance", () => {
     expect(await idsWith("fulfilled")).toContain(f.order.id);
     expect(await idsWith("partial")).not.toContain(f.order.id);
   });
+  it("treats exactly 98% of a non-round quantity as fulfilled in the list and its filter", async () => {
+    const f = await fixture(1234.5, 5000); await postDelivery(f, 1209.81);
+    const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
+    expect(listed?.fulfillmentStatus).toBe("fulfilled");
+    const ids = (await getOrders(f.ctx, { facilityId: f.order.facilityId, status: "fulfilled", pageSize: 100 })).items.map(order => order.id);
+    expect(ids).toContain(f.order.id);
+  });
   it("re-credits the original truck only through explicit correction", async () => {
     const f = await fixture(); await postDelivery(f, 20); const current = await postDelivery(f, 60);
     await expect(correction(f, current.id, 81)).rejects.toThrow("80 kg");
