@@ -6,7 +6,6 @@ import {
   type ClaimBlockedReason,
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
-import { env } from "@/config/env";
 import { markRemovalSubmissionExternalMutationPossible } from "@/data-access/certifier-removals";
 import { reserveProductionEmissionsClaims } from "@/data-access/production-claim-reservations";
 import { SafeError } from "@/lib/errors";
@@ -27,9 +26,6 @@ import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-ent
 import {
   bindSequestrationDatapointsToTemplate,
 } from "@/lib/isometric/transformers/sequestration-binding";
-import {
-  isSequestrationBlueprintKey,
-} from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   assertSupportedDurabilityConfiguration,
@@ -57,6 +53,10 @@ import {
 } from "./removal-snapshot-readers";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
+import {
+  assertRemovalRegistryConnection,
+  requirePreparedRemovalSubmission,
+} from "./removal-submission-prepare";
 import {
   assertDefaultRemovalTemplateConfigured,
   finalizeRemovalSubmission,
@@ -210,14 +210,7 @@ async function submitRemovalCore(
   onProgress?.({ step: "removal.checking_data", state: "active" });
 
   const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
-  if (!ctx.mapping) {
-    throw new SafeError("Link a facility to an Isometric project first.");
-  }
-  if (!ctx.hasOrgCredentials) {
-    throw new SafeError(
-      "Configure organization Isometric credentials before submitting.",
-    );
-  }
+  assertRemovalRegistryConnection(ctx);
   if (
     ctx.latestSubmission?.status === "submitted" &&
     ctx.latestSubmission.externalId &&
@@ -265,34 +258,14 @@ async function submitRemovalCore(
   // The build layer repeats this assertion as a defensive seam for callers that
   // prepare a submission outside this orchestrator.
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
-  if (ctx.missingDefaultTemplateId) {
-    throw new SafeError(
-      "The facility's default Removal template was not found in Certify. Refresh the link in facility settings.",
-    );
-  }
-  if (!ctx.defaultTemplate) {
-    throw new SafeError("Set a default Removal template before submitting.");
-  }
-  // Pin the narrowed (non-null) template into a const — TS loses narrowing of
-  // a property access (`ctx.defaultTemplate`) inside async callbacks below.
-  const defaultTemplate = ctx.defaultTemplate;
-  // The save path validates this too, but the template lives on Isometric and
-  // can change credit_type after binding — a REDUCTION template must never mislabel a GHG entry.
-  if (defaultTemplate.credit_type !== "REMOVAL") {
-    throw new SafeError(
-      "The facility's default template is not a REMOVAL template. Rebind a REMOVAL template in facility settings before submitting.",
-    );
-  }
-  if (ctx.unresolvedBlueprintKeys.length > 0) {
-    throw new SafeError(
-      "The registry template is out of date. Refresh the facility link in settings before submitting.",
-    );
-  }
-  if (defaultTemplate.groups.length === 0) {
-    throw new SafeError(
-      "The default Removal template has no fields to submit. Choose another template in facility settings.",
-    );
-  }
+  // Template gates shared with Review and the claimed-draft freshness check.
+  const prepared = requirePreparedRemovalSubmission(ctx);
+  const {
+    defaultTemplate,
+    blueprintsByKey,
+    externalProjectId,
+    hasDurabilityComponents,
+  } = prepared;
 
   // Phase 4 template↔tier guard (ADR 0021): the removal template's sequestration
   // blueprint must match the facility's durability tier — a 200-year facility
@@ -312,15 +285,7 @@ async function submitRemovalCore(
 
   // Durability evidence comes through measurement samples; each binding then
   // declares whether its GHG input consumes a sample-response datapoint or an
-  // orchestrator-posted direct datapoint. Block while the sandbox-only flag is
-  // off: without the evidence step the required sources cannot be bound, and
-  // emitting an emissions-only GHG entry is forbidden.
-  const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
-    group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
-  );
-  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_ENABLED) {
-    throw new SafeError(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
-  }
+  // orchestrator-posted direct datapoint.
   if (hasDurabilityComponents) {
     assertSupportedDurabilityConfiguration(ctx.batchesWithSamples);
   }
@@ -342,10 +307,6 @@ async function submitRemovalCore(
     )
     .map((batch) => batch.creditBatchId);
 
-  const blueprintsByKey = new Map(
-    ctx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
-  );
-  const externalProjectId = ctx.mapping.externalProjectId;
   const mappingGuard: MappingClaimGuard = {
     facilityId: ctx.facilityId,
     provider: ISOMETRIC_PROVIDER,
@@ -353,13 +314,6 @@ async function submitRemovalCore(
     expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
     expectedDurabilityOption: facilityTier,
   };
-
-  // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a
-  // period-input tuple (e.g. pyrolyzer_direct concentration) emits a
-  // 0-magnitude stub instead of failing closed, so the pipeline can be
-  // exercised before the real LCA value lands. Production NEVER stubs — 0 is an
-  // over-claim for these positive emissions. See docs/open-questions.md.
-  const allowPeriodInputStub = env.ISOMETRIC_ENVIRONMENT === "sandbox";
 
   // Run the complete aggregation, durability, transport, reporting-window,
   // and template-input validation before generating or mirroring evidence.
@@ -369,11 +323,7 @@ async function submitRemovalCore(
     orgCtx,
     removalId,
     ctx,
-    defaultTemplate,
-    blueprintsByKey,
-    externalProjectId,
-    allowPeriodInputStub,
-    hasDurabilityComponents,
+    prepared,
     sourceIds: [],
   });
   onProgress?.({ step: "removal.checking_data", state: "complete" });
@@ -412,11 +362,7 @@ async function submitRemovalCore(
     orgCtx,
     removalId,
     ctx,
-    defaultTemplate,
-    blueprintsByKey,
-    externalProjectId,
-    allowPeriodInputStub,
-    hasDurabilityComponents,
+    prepared,
     log,
     allowPendingSources: true,
   });
@@ -440,11 +386,7 @@ async function submitRemovalCore(
     orgCtx,
     removalId,
     ctx,
-    defaultTemplate,
-    blueprintsByKey,
-    externalProjectId,
-    allowPeriodInputStub,
-    hasDurabilityComponents,
+    prepared,
     log,
   });
   if (!initialCompilation.transportPlan) {
@@ -510,11 +452,7 @@ async function submitRemovalCore(
         orgCtx,
         removalId,
         ctx,
-        defaultTemplate,
-        blueprintsByKey,
-        externalProjectId,
-        allowPeriodInputStub,
-        hasDurabilityComponents,
+        prepared,
         candidateDocumentIds,
         candidateSourceDocuments,
         sourceBindingCandidates: lockedSourceBindingCandidates,
@@ -619,7 +557,6 @@ async function submitRemovalCore(
           orgCtx,
           removalId,
           row: claimed.row,
-          allowPeriodInputStub,
           preserveForReconciliation: attempt.externalMutation !== "none",
         });
         await reserveProductionEmissionsClaims(orgCtx, {

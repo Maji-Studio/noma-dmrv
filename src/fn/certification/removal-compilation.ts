@@ -1,29 +1,23 @@
 "use server";
 
-import { env } from "@/config/env";
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batch-accounting";
 import { requireOrgFacility } from "@/data-access/utils";
 import { SafeError } from "@/lib/errors";
-import {
-  isSequestrationBlueprintKey,
-} from "@/lib/isometric/transformers/measurement-sample";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
-import {
-  DURABILITY_MEASUREMENT_SAMPLES_ENABLED,
-  DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE,
-} from "./durability-measurement-samples";
 import {
   compileRemovalSubmission,
   type CompiledRemovalSubmission,
   type RemovalSubmissionReview,
 } from "./removal-submission-build";
+import { prepareRemovalSubmission } from "./removal-submission-prepare";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 
 export interface RemovalCompilationView {
-  review: RemovalSubmissionReview;
+  /** Null when preparation is blocked before anything could be compiled. */
+  review: RemovalSubmissionReview | null;
   blockers: string[];
   warnings: string[];
   snapshot: CompiledRemovalSubmission["snapshot"];
@@ -44,36 +38,27 @@ export async function loadRemovalCompilation(
     }
 
     const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
-    if (!ctx.mapping || !ctx.defaultTemplate) {
-      throw new SafeError(
-        "Compilation unavailable until the facility has a project and default Removal template.",
-      );
-    }
-    if (!ctx.hasOrgCredentials) {
-      throw new SafeError(
-        "Compilation unavailable until organization Isometric credentials are configured.",
-      );
+    const preparation = prepareRemovalSubmission(ctx);
+    const preparationBlockers = preparation.blockers.map(
+      (blocker) => blocker.message,
+    );
+    if (!preparation.prepared) {
+      return {
+        review: null,
+        blockers: preparationBlockers,
+        warnings: [...(ctx.submissionWarnings ?? [])],
+        snapshot: null,
+        compilationHash: null,
+        estimatedStoredCo2eTonnes: null,
+        estimateMissingInputs: [],
+      };
     }
 
-    const hasDurabilityComponents = ctx.defaultTemplate.groups.some((group) =>
-      group.components.some((component) =>
-        isSequestrationBlueprintKey(component.blueprint_key),
-      ),
-    );
     const compiled = await compileRemovalSubmission({
       orgCtx,
       removalId,
       ctx,
-      defaultTemplate: ctx.defaultTemplate,
-      blueprintsByKey: new Map(
-        ctx.blueprintsForTemplate.map((blueprint) => [
-          blueprint.key,
-          blueprint,
-        ]),
-      ),
-      externalProjectId: ctx.mapping.externalProjectId,
-      allowPeriodInputStub: env.ISOMETRIC_ENVIRONMENT === "sandbox",
-      hasDurabilityComponents,
+      prepared: preparation.prepared,
       allowPendingSources: true,
     });
     const previews = await getCo2eStoredPreviews(
@@ -92,13 +77,7 @@ export async function loadRemovalCompilation(
         batchPreviews.flatMap((preview) => preview?.missingInputs ?? []),
       ),
     ];
-    const blockers = [...compiled.blockers];
-    if (
-      hasDurabilityComponents &&
-      !DURABILITY_MEASUREMENT_SAMPLES_ENABLED
-    ) {
-      blockers.push(DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE);
-    }
+    const blockers = [...preparationBlockers, ...compiled.blockers];
 
     return {
       review: compiled.review,

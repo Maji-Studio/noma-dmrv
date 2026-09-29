@@ -52,7 +52,9 @@ function registryTargetLabel(target: string): string {
 }
 
 function bindingSourceLabel(
-  binding: RemovalCompilationView["review"]["bindings"][number]["binding"],
+  binding: NonNullable<
+    RemovalCompilationView["review"]
+  >["bindings"][number]["binding"],
 ): string {
   if (binding === "fixed") return "Template value";
   if (binding === "measurement-sample") return "Durability measurement";
@@ -124,6 +126,22 @@ export function CompiledSubmissionReview({
   }
 
   const { review, blockers, warnings, snapshot } = compilation;
+  // Preparation stopped before anything compiled (no project link,
+  // credentials or usable template): the blockers are all there is to show.
+  if (!review) {
+    return (
+      <div className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-16">
+        <div className="flex flex-wrap items-start justify-between gap-12">
+          <h4 className="title-heading-3">Registry submission details</h4>
+          <Button variant="weak" onClick={onRetry}>
+            Refresh review
+          </Button>
+        </div>
+        <CompilationBlockers blockers={blockers} />
+        <CompilationWarnings warnings={warnings} />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-16">
       <div className="flex flex-wrap items-start justify-between gap-12">
