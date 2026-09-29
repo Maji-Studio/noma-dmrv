@@ -55,7 +55,9 @@ import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
   assertRemovalRegistryConnection,
-  requirePreparedRemovalSubmission,
+  prepareRemovalSubmission,
+  REMOVAL_PREPARATION_BLOCKERS,
+  type RemovalPreparationBlocker,
 } from "./removal-submission-prepare";
 import {
   assertDefaultRemovalTemplateConfigured,
@@ -187,6 +189,30 @@ export async function submitRemoval(
   }
 }
 
+/**
+ * Submit's blocker precedence: prepare's template-shape blockers (not a
+ * REMOVAL template, out of date, empty) win first, then the submit-only
+ * tier↔template guard, then prepare's durability-availability blocker last.
+ * The tier guard must never be masked by durability support being off,
+ * since a tier mismatch stays actionable once durability support ships
+ * while the availability message alone would not tell the operator to fix
+ * it (PR #840 review thread PRRT_kwDORRVpZc6nImrB).
+ */
+export function firstSubmitBlockerMessage(
+  preparationBlockers: RemovalPreparationBlocker[],
+  tierBlocker: string | null,
+): string | null {
+  const structuralBlocker = preparationBlockers.find(
+    (blocker) => blocker.code !== "durabilityUnavailable",
+  );
+  if (structuralBlocker) return structuralBlocker.message;
+  if (tierBlocker) return tierBlocker;
+  const durabilityBlocker = preparationBlockers.find(
+    (blocker) => blocker.code === "durabilityUnavailable",
+  );
+  return durabilityBlocker?.message ?? null;
+}
+
 async function submitRemovalCore(
   args: SubmitRemovalArgs,
   attempt: RemovalSubmitAttempt,
@@ -259,7 +285,17 @@ async function submitRemovalCore(
   // prepare a submission outside this orchestrator.
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   // Template gates shared with Review and the claimed-draft freshness check.
-  const prepared = requirePreparedRemovalSubmission(ctx);
+  // Read non-throwing so the submit-only tier guard below can run on the
+  // resolved template before prepare's own durability-availability blocker
+  // gets to refuse: see firstSubmitBlockerMessage.
+  const preparation = prepareRemovalSubmission(ctx);
+  if (!preparation.prepared) {
+    throw new SafeError(
+      preparation.blockers[0]?.message ??
+        REMOVAL_PREPARATION_BLOCKERS.noTemplate,
+    );
+  }
+  const prepared = preparation.prepared;
   const {
     defaultTemplate,
     blueprintsByKey,
@@ -276,12 +312,22 @@ async function submitRemovalCore(
   // generic staging gate below misdescribe a template↔tier misconfiguration as
   // "staged but not live". The tier is a single facility-scoped value (ADR 0021),
   // read here from the durability data plane.
+  //
+  // Checked ahead of prepare's durability-availability blocker: when a
+  // production template mismatches the facility tier AND durability support
+  // is off, the operator must still learn about the tier mismatch, which
+  // will keep blocking submission once durability support ships (PR #840
+  // review thread PRRT_kwDORRVpZc6nImrB).
   const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
   const tierBlocker = removalTemplateTierCompatibilityBlocker(
     ctx,
     defaultTemplate,
   );
-  if (tierBlocker) throw new SafeError(tierBlocker);
+  const submitBlockerMessage = firstSubmitBlockerMessage(
+    preparation.blockers,
+    tierBlocker,
+  );
+  if (submitBlockerMessage) throw new SafeError(submitBlockerMessage);
 
   // Durability evidence comes through measurement samples; each binding then
   // declares whether its GHG input consumes a sample-response datapoint or an
