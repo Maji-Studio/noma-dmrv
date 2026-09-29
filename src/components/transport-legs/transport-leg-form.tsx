@@ -261,15 +261,16 @@ export function TransportLegForm({
           </FormField>
           {/* Road is the only method the registry accepts, so it is a fixed
               value: shown as text, still submitted through the hidden input. */}
-          <div>
-            <p className="body-small font-medium text-[var(--color-text-secondary)] mb-6">
-              Transport method
-            </p>
-            <p className="body-medium" data-testid="transportMethodType-value">
+          <FormField id="transportMethodType-value" label="Transport method">
+            <output
+              id="transportMethodType-value"
+              className="block body-medium"
+              data-testid="transportMethodType-value"
+            >
               {formatTransportMethod(transportMethod)}
-            </p>
-            <input type="hidden" {...register("transportMethodType")} />
-          </div>
+            </output>
+          </FormField>
+          <input type="hidden" {...register("transportMethodType")} />
           <FormField
             id="tripType"
             label="Trip type"

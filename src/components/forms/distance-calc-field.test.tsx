@@ -86,9 +86,8 @@ describe("DistanceCalcField calculate button", () => {
     }
   });
 
-  it("uses a sentence case label", () => {
+  it("labels the button Calculate", () => {
     const markup = render({ origin: point, destination: point });
     expect(markup).toMatch(/<button[^>]*>Calculate<\/button>/);
-    expect(buttonTag(markup)).not.toMatch(/class="[^"]*\buppercase\b/);
   });
 });

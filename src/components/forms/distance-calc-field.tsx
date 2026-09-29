@@ -209,7 +209,7 @@ export function DistanceCalcField({
               <Button
                 type="button"
                 variant="default"
-                className="h-40 px-12 label-button"
+                className="h-40 px-12"
                 disabled={!canCalc}
                 busy={route.isPending}
                 aria-label={`Calculate road distance ${originLabel} to ${destinationLabel}`}
