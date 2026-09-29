@@ -33,12 +33,6 @@ describe('biochar layers', () => {
     expect(layer.remainingSolidsKg).toEqual(rational(BigInt(60)));
   });
 
-  it('counts an allocation split across runs once', () => {
-    const split = effect('a1', { productionRunId: run.id }, '20.000', BigInt(20));
-    const [layer] = projectBiocharLayers({ runs: [run], sources: [], effects: [split, { ...split, run: { productionRunId: run.id, dryMassKg: '20.000' } }] });
-    expect(layer.remainingDryBiocharKg).toBe('80.000');
-  });
-
   describe('repair exclusion', () => {
     const unresolved = { ...run, dryKg: null };
     const options = { excludeUnresolvedRunId: run.id };
@@ -88,7 +82,11 @@ describe('product layers', () => {
     expect(() => projectProductLayers({ products: [{ ...product, placedAt: null, composition: {} }], sources: [], ingredients: [], effects: [] })).toThrow(UnresolvedOutputStockError);
   });
 
-  it('reduces each source run by its share of saved draws', () => {
+  it('reduces each source run by its share of saved draws, counting the split allocation once', () => {
+    // The saved-row join fans one allocation out into one row per run it drew from: same
+    // allocation (id 'a1', total dryMassKg 25) paired with a different run.productionRunId
+    // each time, never a null run paired with a real one. Without uniqueAllocations dedup,
+    // the total below would double-count to 50.000 (100 - 25 - 25) instead of 75.000.
     const draw = effect('a1', { biocharProductId: 'product' }, '25.000', BigInt(25));
     const [layer] = projectProductLayers({ products: [{ ...product, composition: {} }], ingredients: [],
       sources: [{ productId: 'product', runId: 'r1', dryKg: '60.000' }, { productId: 'product', runId: 'r2', dryKg: '40.000' }],
