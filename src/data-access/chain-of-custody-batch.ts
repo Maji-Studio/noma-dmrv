@@ -155,17 +155,26 @@ export async function getCreditBatchChainData(
  * `ChainOfCustodyGeoData` — nodes and legs deduped by id (shared runs / lots /
  * feedstocks collapse), warnings deduped — so the Carbon Transit map consumes
  * the batch exactly like a single application.
+ *
+ * `productionRunId` narrows the roll-up to lineages flowing through that run,
+ * the same subset the page's Run filter shows in the DAG and Sankey.
  */
 export async function getCreditBatchChainGeoData(
   ctx: OrgContext,
   creditBatchId: string,
+  options: { productionRunId?: string | null } = {},
 ): Promise<ChainOfCustodyGeoData> {
   requireOrgScope(ctx);
 
-  const { batch, lineages } = await resolveBatchScope(
+  const { batch, lineages: batchLineages } = await resolveBatchScope(
     ctx,
     creditBatchId,
   );
+  const lineages = options.productionRunId
+    ? batchLineages.filter(
+        ({ chain }) => chain.productionRun?.id === options.productionRunId,
+      )
+    : batchLineages;
 
   const payloads = await Promise.all(
     lineages.map(({ chain }) => projectChainOfCustodyGeoData(ctx, chain)),
@@ -177,7 +186,11 @@ export async function getCreditBatchChainGeoData(
       facility,
       nodes: [],
       legs: [],
-      warnings: ["This credit batch has no member applications yet."],
+      warnings: [
+        options.productionRunId && batchLineages.length > 0
+          ? "No lineage in this batch flows through the selected production run."
+          : "This credit batch has no member applications yet.",
+      ],
     };
   }
 

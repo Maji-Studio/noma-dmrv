@@ -23,8 +23,13 @@ export const chainOfCustodyKeys = {
     [...chainOfCustodyKeys.all, "trail", applicationId] as const,
   batch: (creditBatchId: string) =>
     [...chainOfCustodyKeys.all, "batch", creditBatchId] as const,
-  batchGeo: (creditBatchId: string) =>
-    [...chainOfCustodyKeys.all, "batch-geo", creditBatchId] as const,
+  batchGeo: (creditBatchId: string, productionRunId: string | null = null) =>
+    [
+      ...chainOfCustodyKeys.all,
+      "batch-geo",
+      creditBatchId,
+      productionRunId,
+    ] as const,
 };
 
 export function useChainOfCustody(applicationId: string | null) {
@@ -87,11 +92,17 @@ export function useCreditBatchChain(creditBatchId: string | null) {
   });
 }
 
-export function useCreditBatchChainGeo(creditBatchId: string | null) {
+export function useCreditBatchChainGeo(
+  creditBatchId: string | null,
+  productionRunId: string | null = null
+) {
   return useQuery({
-    queryKey: chainOfCustodyKeys.batchGeo(creditBatchId ?? ""),
+    queryKey: chainOfCustodyKeys.batchGeo(creditBatchId ?? "", productionRunId),
     queryFn: async () => {
-      const result = await getCreditBatchChainGeoFn(creditBatchId!);
+      const result = await getCreditBatchChainGeoFn(
+        creditBatchId!,
+        productionRunId
+      );
       if (!result.success) {
         throw new Error(result.error);
       }

@@ -737,7 +737,11 @@ export function TraceabilityPage() {
     if (batchView === "map") {
       return (
         <CarbonTransitPanel
-          source={{ kind: "creditBatch", id: selectedBatchId }}
+          source={{
+            kind: "creditBatch",
+            id: selectedBatchId,
+            runId: selectedRunId,
+          }}
           lineages={batchLineages}
           view="map"
           highlight={selection}
