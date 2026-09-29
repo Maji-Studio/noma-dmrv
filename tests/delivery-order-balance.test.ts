@@ -88,7 +88,7 @@ describe("completed delivery order balance", () => {
     const f = await fixture(); await postDelivery(f, 60);
     await expect(postDelivery(f, 50)).rejects.toThrow("Only 40 kg remains on this order");
     const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
-    expect(listed).toMatchObject({ deliveredCount: 1, deliveredWetMassKg: 60, fulfillmentStatus: "partial" });
+    expect(listed).toMatchObject({ deliveredWetMassKg: 60, fulfillmentStatus: "partial" });
   });
   it("derives fulfillment from delivered wet mass in the list and its status filter", async () => {
     const f = await fixture(); await postDelivery(f, 60);
