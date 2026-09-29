@@ -577,8 +577,8 @@ export function SampleList({
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab Samples" isLoading={statsLoading} />
-        <StatCard title="Avg Carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notAvailable} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
+        <StatCard title="Total samples" value={statsData?.totalSamples ?? 0} icon={<FlaskIcon size={24} weight="bold" />} description="All lab Samples" isLoading={statsLoading} />
+        <StatCard title="Avg carbon %" value={statsData?.avgCarbonPercent?.toFixed(1) ?? MISSING_VALUE.notAvailable} icon={<LeafIcon size={24} weight="bold" />} description="Average total carbon" isLoading={statsLoading} />
         <StatCard title="200-Year" value={statsData?.samples200Year ?? 0} icon={<FireIcon size={24} weight="bold" />} description="Standard durability" isLoading={statsLoading} />
         <StatCard title="1000-Year" value={statsData?.samples1000Year ?? 0} icon={<CertificateIcon size={24} weight="bold" />} description="Enhanced durability" isLoading={statsLoading} />
       </div>
@@ -697,7 +697,7 @@ export function SampleList({
             onCancel={attemptCloseSideSheet}
             isSubmitting={isSubmitting}
             errorMessage={formError ?? undefined}
-            submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
+            submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create Sample"}
             deferredAttachments={deferredAttachments}
             onRetryDeferredAttachments={handleRetryDeferredAttachments}
             onRemoveDeferredAttachment={handleRemoveDeferredAttachment}

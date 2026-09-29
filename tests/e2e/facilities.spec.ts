@@ -53,7 +53,7 @@ test.describe("Facility + Reactor UI CRUD", () => {
     // Navigate to facilities list
     await page.goto("/facilities");
     await expect(page).toHaveURL(/\/facilities/);
-    await expect(page.getByText("Active Facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities")).toBeVisible({
       timeout: 15000,
     });
 
@@ -231,7 +231,7 @@ test.describe("Facility blank-name display fallback", () => {
     adminPage: page,
   }) => {
     await page.goto("/facilities");
-    await expect(page.getByText("Active Facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities")).toBeVisible({
       timeout: 15000,
     });
 
@@ -295,7 +295,7 @@ test.describe("Facility durability tier", () => {
     adminPage: page,
   }) => {
     await page.goto("/facilities");
-    await expect(page.getByText("Active Facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities")).toBeVisible({
       timeout: 15000,
     });
 

@@ -275,7 +275,7 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     await expect(page.locator("#startDate")).toHaveCount(0);
 
     // Footer edit swaps the sheet to the form; cancel closes the sheet.
-    await sheet.getByRole("button", { name: "Edit Credit Batch" }).click();
+    await sheet.getByRole("button", { name: "Edit credit batch" }).click();
     await expect(page.locator("#startDate")).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.locator("#startDate")).toHaveCount(0);

@@ -27,7 +27,7 @@ export default function Home() {
             size="default"
             onClick={() => router.push("/login")}
           >
-             Get Started
+             Get started
              <ArrowRightIcon size={20} weight="bold" />
           </Button>
           <Button

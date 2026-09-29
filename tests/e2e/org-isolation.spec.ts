@@ -174,7 +174,7 @@ test("organization domain data is isolated across lists, record URLs, and picker
   ).toHaveCount(0);
 
   await orgB.page.goto(`/feedstocks?facility=${orgB.facility.id}`);
-  await orgB.page.getByRole("button", { name: "New Feedstock" }).click();
+  await orgB.page.getByRole("button", { name: "New feedstock" }).click();
   const dialog = orgB.page.getByRole("dialog");
   const supplierTrigger = dialog
     .locator("label")

@@ -130,8 +130,8 @@ describe("ReactorList without facility context", () => {
     expect(html).toContain(
       "Choose a facility from the sidebar to view its reactors.",
     );
-    expect(html).not.toContain("New Reactor");
-    expect(html).not.toContain("Create Reactor");
+    expect(html).not.toContain("New reactor");
+    expect(html).not.toContain("Create reactor");
     expect(html).not.toContain("<form");
   });
 });

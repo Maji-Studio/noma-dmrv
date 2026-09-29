@@ -5,7 +5,7 @@
  * - the toolbar filter narrows the rows to one feedstock type;
  * - the stat cards move with it, so the cards and the rows always describe the
  *   same deliveries;
- * - the moisture card is named "Weighted Avg. Moisture", and the figure really
+ * - the moisture card is named "Weighted avg. moisture", and the figure really
  *   is weighted by wet mass rather than a mean of the readings.
  *
  * The second delivery is deliberately large and wet next to the seeded one, so
@@ -77,11 +77,11 @@ test.describe("Feedstock type filter", () => {
       ).toBeVisible({ timeout: 15000 });
 
       // Both deliveries are in scope before filtering.
-      await expect(statCardValue(page, "Total Feedstocks")).toHaveText("2", {
+      await expect(statCardValue(page, "Total feedstocks")).toHaveText("2", {
         timeout: 15000,
       });
       await expect(
-        statCardValue(page, "Weighted Avg. Moisture"),
+        statCardValue(page, "Weighted avg. moisture"),
       ).toHaveText(BOTH_TYPES_MOISTURE);
       await expect(
         page.getByText("Totals cover all feedstock types.", { exact: true }),
@@ -107,8 +107,8 @@ test.describe("Feedstock type filter", () => {
       ).toHaveCount(1);
 
       // … and the cards follow, naming the scope they now summarise.
-      await expect(statCardValue(page, "Total Feedstocks")).toHaveText("1");
-      await expect(statCardValue(page, "Weighted Avg. Moisture")).toHaveText(
+      await expect(statCardValue(page, "Total feedstocks")).toHaveText("1");
+      await expect(statCardValue(page, "Weighted avg. moisture")).toHaveText(
         ALT_TYPE_ONLY_MOISTURE,
       );
       await expect(
@@ -119,11 +119,11 @@ test.describe("Feedstock type filter", () => {
       await page
         .getByLabel("Filter feedstocks by feedstock type")
         .selectOption("");
-      await expect(statCardValue(page, "Total Feedstocks")).toHaveText("2", {
+      await expect(statCardValue(page, "Total feedstocks")).toHaveText("2", {
         timeout: 15000,
       });
       await expect(
-        statCardValue(page, "Weighted Avg. Moisture"),
+        statCardValue(page, "Weighted avg. moisture"),
       ).toHaveText(BOTH_TYPES_MOISTURE);
     } finally {
       try {

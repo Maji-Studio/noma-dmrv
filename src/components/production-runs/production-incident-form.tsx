@@ -205,7 +205,7 @@ export function ProductionIncidentForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitLabel={isEditMode ? "Save Changes" : "Add Incident"}
+        submitLabel={isEditMode ? "Save changes" : "Add incident"}
       />
     </form>
   );

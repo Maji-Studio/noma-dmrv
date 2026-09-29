@@ -92,7 +92,7 @@ export function SupplierLocationForm({
   });
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
-  const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
+  const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
   // Preprocessed Zod fields have `unknown` input types — narrow the watches.
   const gpsLatitude = watch("gpsLatitude") as number | null | undefined;

@@ -95,7 +95,7 @@ export function CustomerLocationForm({
   });
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
-  const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
+  const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
   const handleFormSubmit = form.handleSubmit((data) => {
     return onSubmit(data);

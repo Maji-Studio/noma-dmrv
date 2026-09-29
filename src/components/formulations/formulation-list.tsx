@@ -247,7 +247,7 @@ export function FormulationList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Formulation
+            New formulation
           </Button>
         }
       />
@@ -255,7 +255,7 @@ export function FormulationList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Formulations"
+          title="Total formulations"
           value={totalFormulations}
           icon={<ListChecksIcon size={24} weight="bold" />}
           description="Biochar product recipes"
@@ -320,7 +320,7 @@ export function FormulationList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingFormulationId}
-        title="Delete Formulation"
+        title="Delete formulation"
         message="Are you sure you want to delete this formulation? This action cannot be undone. Note: Formulations with associated biochar products cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -337,9 +337,9 @@ export function FormulationList() {
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
-        title={sideSheet?.mode === "create" ? "Create Formulation" : (sideSheet?.entity?.code ?? "")}
+        title={sideSheet?.mode === "create" ? "Create formulation" : (sideSheet?.entity?.code ?? "")}
         subtitle={sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name}
-        editLabel="Edit Formulation"
+        editLabel="Edit formulation"
         sections={viewSections}
       >
         <FormulationForm
@@ -349,7 +349,7 @@ export function FormulationList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Formulation"}
+          submitLabel={sideSheet?.mode === "edit" ? "Save changes" : "Create formulation"}
         />
       </EntitySideSheet>
     </div>

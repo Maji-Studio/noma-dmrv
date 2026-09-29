@@ -168,7 +168,7 @@ export function OrderForm({
     }
   }, [customerLocationsData, setValue, getValues]);
 
-  const defaultSubmitLabel = isEditMode ? "Update Order" : "Create Order";
+  const defaultSubmitLabel = isEditMode ? "Update order" : "Create order";
 
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as OrderFormData);

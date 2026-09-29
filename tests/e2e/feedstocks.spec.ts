@@ -42,7 +42,7 @@ test.describe("Feedstock UI CRUD", () => {
       await expect(
         page.locator("aside").getByText(seededData.facility.name, { exact: false }),
       ).toBeVisible({ timeout: 15000 });
-      await page.getByRole("button", { name: "New Feedstock" }).click();
+      await page.getByRole("button", { name: "New feedstock" }).click();
       await waitForSideSheet(page);
 
       const dialog = page.getByRole("dialog");
@@ -80,7 +80,7 @@ test.describe("Feedstock UI CRUD", () => {
     await page.waitForLoadState("networkidle");
 
     // Open the create side sheet
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
 
     // Fill delivery date (required)
@@ -120,7 +120,7 @@ test.describe("Feedstock UI CRUD", () => {
     );
 
     // Submit the form
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Feedstock")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
 
     // Verify feedstock appears in list
@@ -159,12 +159,12 @@ test.describe("Feedstock UI CRUD", () => {
           page.locator("aside").getByText(seededData.facility.name, { exact: false }),
         ).toBeVisible();
         await waitForSideSheet(page);
-        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        await page.getByRole("button", { name: "Edit feedstock" }).click();
         const dialog = page.getByRole("dialog");
         await dialog.locator('input[name="totalWetMassKg"]').fill(String(wetMass));
         await expect(dialog.locator('input[name="allocations.0.allocatedWetMassKg"]'))
           .toHaveValue(String(wetMass));
-        await dialog.getByRole("button", { name: "Save Changes", exact: true }).click();
+        await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
         await waitForSideSheetClose(page);
 
         const [saved] = await db.select().from(schema.feedstocks).where(eq(schema.feedstocks.id, id));
@@ -174,7 +174,7 @@ test.describe("Feedstock UI CRUD", () => {
         // Reload from persistence so query-cache state cannot hide a lost edit.
         await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
         await waitForSideSheet(page);
-        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        await page.getByRole("button", { name: "Edit feedstock" }).click();
         await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue(String(wetMass));
         await expect(page.locator('input[name="allocations.0.allocatedWetMassKg"]')).toHaveValue(String(wetMass));
       }
@@ -195,7 +195,7 @@ test.describe("Feedstock UI CRUD", () => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
@@ -227,7 +227,7 @@ test.describe("Feedstock UI CRUD", () => {
     await expect(
       page.locator("aside").getByText(seededData.facility.name, { exact: false }),
     ).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "New Feedstock" }).click();
+    await page.getByRole("button", { name: "New feedstock" }).click();
     await waitForSideSheet(page);
 
     await selectEntity(
@@ -239,7 +239,7 @@ test.describe("Feedstock UI CRUD", () => {
 
     const dialog = page.getByRole("dialog");
     await dialog.locator('input[name="totalWetMassKg"]').fill("1000");
-    await dialog.getByRole("button", { name: "Add Bin" }).click();
+    await dialog.getByRole("button", { name: "Add bin" }).click();
 
     const firstAllocation = dialog.locator(
       'input[name="allocations.0.allocatedWetMassKg"]',
@@ -286,7 +286,7 @@ test.describe("Feedstock UI CRUD", () => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
@@ -353,7 +353,7 @@ test.describe("Feedstock UI CRUD", () => {
 
     // Switch to edit mode: the same sheet swaps to the edit form, whose
     // trailing evidence section mounts one classified multi-file uploader.
-    await page.getByRole("button", { name: "Edit Feedstock" }).click();
+    await page.getByRole("button", { name: "Edit feedstock" }).click();
     await expect(dialog.locator('input[type="file"]')).toHaveCount(1, {
       timeout: 15000,
     });

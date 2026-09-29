@@ -79,7 +79,7 @@ export function FeedstockTypeSampling({
       <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
         <div className="flex flex-col gap-4">
           <span className="body-small text-[var(--color-text-secondary)]">
-            Eligible Samples
+            Eligible samples
           </span>
           <span className="body-medium font-medium tabular-nums text-[var(--color-text-primary)]">
             {status.eligibleSampleCount} / {status.agreedBaselineSize}

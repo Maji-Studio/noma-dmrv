@@ -182,7 +182,7 @@ export function ApplicationSupportingEvidencePanel({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deleteId}
-          title="Delete Supporting Evidence"
+          title="Delete supporting evidence"
           message="Are you sure you want to delete this supporting file?"
           onConfirm={handleDelete}
           onCancel={() => {

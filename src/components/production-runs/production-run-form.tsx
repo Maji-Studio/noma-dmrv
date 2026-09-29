@@ -300,7 +300,7 @@ export function ProductionRunForm({
     resetField,
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
+  const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
   const handleFormSubmit = handleSubmit(async (data) => {
     // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date

@@ -247,7 +247,7 @@ export function ReactorList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Reactor" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create reactor" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
@@ -261,7 +261,7 @@ export function ReactorList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Reactor
+            New reactor
           </Button>
         }
       />
@@ -269,7 +269,7 @@ export function ReactorList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
-          title="Total Reactors"
+          title="Total reactors"
           value={totalReactors}
           icon={<LightningIcon size={24} weight="bold" />}
           description="Pyrolysis equipment units"
@@ -339,7 +339,7 @@ export function ReactorList() {
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingReactorId}
-        title="Delete Reactor"
+        title="Delete reactor"
         message="Are you sure you want to delete this reactor? This action cannot be undone. Note: Reactors with associated production runs cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -357,7 +357,7 @@ export function ReactorList() {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Reactor"
+        editLabel="Edit reactor"
         sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
       >
         <ReactorForm
@@ -367,7 +367,7 @@ export function ReactorList() {
           onCancel={closeSideSheet}
           isSubmitting={createReactor.isPending || updateReactor.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Reactor"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create reactor"}
         />
       </EntitySideSheet>
     </div>

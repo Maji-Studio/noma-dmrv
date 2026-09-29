@@ -22,7 +22,7 @@ describe("StatCard", () => {
 
   it("preserves headline typography for a single value", () => {
     const html = renderToStaticMarkup(
-      <StatCard title="Total Products" value={12} />,
+      <StatCard title="Total products" value={12} />,
     );
 
     expect(html).toContain("title-heading-3");

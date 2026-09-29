@@ -252,7 +252,7 @@ describe("batchHealthFixLinkFor", () => {
     );
 
     expect(link).toEqual({
-      label: "Edit Feedstock Type",
+      label: "Edit feedstock type",
       href: `/feedstock-types?facility=${facilityId}&feedstockType=${feedstockTypeId}&mode=edit`,
     });
   });
