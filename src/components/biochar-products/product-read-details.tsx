@@ -9,10 +9,10 @@
  * and moisture.
  *
  * The composition is the form's `ProductCompositionPreview` fed the saved
- * parts, so one split rule serves both. Simple keeps every saved field and the
- * composition picture (the total, the bar and its key). Detailed adds the dry
- * figures as rows, the ledger and arithmetic behind Show calculation, and the
- * derived transport legs. Masses read at save precision.
+ * parts, so one split rule serves both. Both detail levels show every saved
+ * field, the dry figures as a secondary line under each wet mass, the
+ * composition picture and the derived transport legs. Detailed adds only the
+ * ledger and arithmetic behind Show calculation. Masses read at save precision.
  */
 "use client";
 
@@ -132,9 +132,12 @@ export function productSheetSections(product: BiocharProductWithRelations, timeZ
           label: "Source biochar bin",
           value: product.sourceBiocharStorageLocation?.name ?? product.linkedProductionRun?.biocharStorageLocationName,
         },
-        { label: "Source biochar wet mass (kg)", value: formatSavedMassKg(composition.sourceWetKg) },
+        {
+          label: "Source biochar wet mass (kg)",
+          value: formatSavedMassKg(composition.sourceWetKg),
+          secondary: { label: "Dry biochar", value: formatSavedMassKg(composition.sourceDryKg) },
+        },
         { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(product.moistureContentPercent) },
-        { label: "Dry biochar (kg)", detailedOnly: true, value: formatSavedMassKg(composition.sourceDryKg) },
         { label: "Water added (kg)", value: formatSavedMassKg(product.waterAddedKg) },
         { label: "Density (kg/m³)", value: product.densityKgM3 != null ? `${product.densityKgM3} kg/m³` : null },
       ],
@@ -145,9 +148,15 @@ export function productSheetSections(product: BiocharProductWithRelations, timeZ
       fields: [
         { label: "Formulation", value: product.formulation?.name ?? PURE_BIOCHAR_LABEL },
         ...composition.ingredients.flatMap(ingredient => [
-          { label: `${ingredient.feedstockTypeName} wet mass (kg)`, value: ingredient.massKg != null ? formatSavedMassKg(ingredient.massKg) : null },
+          {
+            label: `${ingredient.feedstockTypeName} wet mass (kg)`,
+            value: ingredient.massKg != null ? formatSavedMassKg(ingredient.massKg) : null,
+            secondary: {
+              label: "Dry solids",
+              value: ingredient.massKg === 0 ? formatSavedMassKg(0) : formatSavedMassKg(ingredient.massDryKg),
+            },
+          },
           { label: `${ingredient.feedstockTypeName} source bin`, value: <EntityDetailValue entityType="storageLocation" id={ingredient.storageLocationId} /> },
-          { label: `${ingredient.feedstockTypeName} dry solids (kg)`, detailedOnly: true, value: ingredient.massKg === 0 ? formatSavedMassKg(0) : formatSavedMassKg(ingredient.massDryKg) },
         ]),
       ],
     },
@@ -158,7 +167,6 @@ export function productSheetSections(product: BiocharProductWithRelations, timeZ
     },
     {
       title: "Derived transport",
-      detailedOnly: true,
       fields: [],
       content: <TransportLegsSummary entityType="biochar" entityId={product.id} emptyMessage={TRANSPORT_EMPTY} />,
     },

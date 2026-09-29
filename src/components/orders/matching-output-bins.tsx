@@ -1,5 +1,4 @@
 "use client";
-import { useSimplePresence } from "@/components/forms/form-detail-context";
 import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { StockNotice } from "@/components/storage-locations/stock-figures";
@@ -12,19 +11,16 @@ import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
 const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
 
 /**
- * Matching stock is context for an order, not one of its fields, so Simple
- * hides the block and Detailed shows it.
+ * Matching stock informs the order (R1 decision info), so both levels show it.
  *
  * Each bin leads with its wet stock. An order has no departure moisture yet
  * (the delivery measures it), so the estimate uses each batch's latest
  * moisture reading; a bin whose layers do not resolve falls back to its dry stock.
- * Simple renders nothing here, so it does not fetch the bins either.
  */
 export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: string; formulationId: string }) {
-  const parts = useSimplePresence("hidden");
-  const bins = useMatchingOutputBins(facilityId, formulationId, parts.block);
+  const bins = useMatchingOutputBins(facilityId, formulationId);
   if (!formulationId) return null;
-  return <section hidden={!parts.block} className="flex flex-col gap-16" aria-label="Matching storage bins">
+  return <section className="flex flex-col gap-16" aria-label="Matching storage bins">
     {bins.isLoading && <p role="status" className={STATUS_CLASS}>Loading matching bins</p>}
     {bins.error && <StockNotice tone="error" role="alert">{bins.error.message}</StockNotice>}
     {bins.data?.length === 0 && <EmptyState icon={<PackageIcon size={32} />} title="No matching stock" description="You can save this order now and record its delivery when stock is available." padding="sm" />}

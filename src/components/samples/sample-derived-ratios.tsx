@@ -8,8 +8,8 @@
  * whichever figure the eligibility check will actually use, so an operator can
  * see their entry take effect.
  *
- * The two figures are the block's headline, and Simple keeps the headline only.
- * Detailed adds the atomic formulas with this sample's own numbers behind
+ * The two figures are the block's headline, shown at both levels. Detailed
+ * adds the atomic formulas with this sample's own numbers behind
  * `Show calculation`, the same way the moisture split discloses its arithmetic.
  */
 "use client";
@@ -82,7 +82,6 @@ export function SampleDerivedRatios({
   return (
     <CompositionCard
       title="Derived ratios"
-      simple="headline"
       headline={<>
         {/* Bottom-aligned: the CERT tag makes the H:C label row taller than
             O:C's, and top alignment would drop one figure below the other. */}

@@ -1,12 +1,11 @@
 /**
  * A mix bin's stock as the one pile it is (plan rule 16): the pile's wet
  * estimate and estimated moisture, wet first like a sub-bin card. The batches
- * behind it are an accounting split, not separate heaps, so their shares show
- * in Detailed only.
+ * behind it are an accounting split, not separate heaps, so their shares sit
+ * under the pile's own figures as a quieter group.
  */
 "use client";
 
-import { DetailedOnly } from "@/components/forms";
 import type { MassSegment } from "@/components/forms/composition-ledger";
 import { InfoHint } from "@/components/ui/tooltip";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
@@ -43,14 +42,12 @@ export function MixPileCard({ binName, wetKg, moisturePercent, dryKg, batches }:
       </span>
       <span className="body-caption text-[var(--color-text-secondary)] tabular-nums">{formatMassKg(dryKg)} dry biochar</span>
       {segments.length > 0 && (
-        <DetailedOnly>
-          <div className="mt-8 flex flex-col gap-6">
-            <span className="body-caption">{SHARES_LABEL}</span>
-            {/* One batch is the whole pile; a full-width bar would say nothing. */}
-            {segments.length > 1 && <SegmentBar label={SHARES_LABEL} segments={segments} />}
-            <SegmentKey segments={segments} />
-          </div>
-        </DetailedOnly>
+        <div className="mt-8 flex flex-col gap-6">
+          <span className="body-caption">{SHARES_LABEL}</span>
+          {/* One batch is the whole pile; a full-width bar would say nothing. */}
+          {segments.length > 1 && <SegmentBar label={SHARES_LABEL} segments={segments} />}
+          <SegmentKey segments={segments} />
+        </div>
       )}
     </div>
   );

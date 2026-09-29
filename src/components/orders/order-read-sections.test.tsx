@@ -56,38 +56,33 @@ async function renderSheet(value: OrderWithRelations) {
 }
 
 describe("Order read view levels", () => {
-  it("shows the saved order in Simple and mounts current stock only in Detailed", async () => {
+  it("shows the saved order, matching stock and fulfillment at both levels", async () => {
     const { renderer, switchTo } = await renderSheet(order);
-    const simple = visibleText(renderer.root);
-    expect(simple).toContain("Saved formulation");
-    expect(simple).toContain("Requested wet mass (kg)");
-    // Save precision: three decimals, not the display default.
-    expect(simple).toContain("130.125 kg");
-    expect(simple).not.toContain("Matching stock");
-    expect(simple).not.toContain("Fulfillment");
-    expect(renderer.root.findAllByProps({ "data-stock-facility": "saved-facility" })).toHaveLength(0);
-
-    await switchTo("detailed");
-    const detailed = visibleText(renderer.root);
-    expect(renderer.root.findAllByProps({ "data-stock-facility": "saved-facility", "data-stock-formulation": "saved-formulation" })).toHaveLength(1);
-    expect(detailed).toContain("Matching stock");
-    expect(detailed).toContain("Fulfillment");
-    expect(detailed).not.toContain("Delivered");
-    expect(detailed).not.toContain("Current availability");
+    for (const level of ["simple", "detailed"] as const) {
+      await switchTo(level);
+      const shown = visibleText(renderer.root);
+      expect(shown).toContain("Saved formulation");
+      expect(shown).toContain("Requested wet mass (kg)");
+      // Save precision: three decimals, not the display default.
+      expect(shown).toContain("130.125 kg");
+      expect(shown).toContain("Matching stock");
+      expect(shown).toContain("Fulfillment");
+      expect(shown).toContain("No deliveries");
+      expect(shown).not.toContain("Delivered");
+      expect(renderer.root.findAllByProps({ "data-stock-facility": "saved-facility", "data-stock-formulation": "saved-formulation" })).toHaveLength(1);
+    }
     await act(async () => renderer.unmount());
   });
 
-  it("keeps the delivered figure in Simple once deliveries exist", async () => {
+  it("shows the delivered figure, delivery count and status at both levels once deliveries exist", async () => {
     const { renderer, switchTo } = await renderSheet({ ...order, fulfillmentStatus: "partial", deliveryCount: 2, deliveredWetMassKg: 60.5 } as OrderWithRelations);
-    const simple = visibleText(renderer.root);
-    expect(simple).toContain("Delivered");
-    expect(simple).toContain("60.5 of 130.125 kg wet");
-    expect(simple).not.toContain("2 deliveries");
-    expect(simple).not.toContain("Partial");
-    await switchTo("detailed");
-    const detailed = visibleText(renderer.root);
-    expect(detailed).toContain("2 deliveries");
-    expect(detailed).toContain("Partial");
+    for (const level of ["simple", "detailed"] as const) {
+      await switchTo(level);
+      const shown = visibleText(renderer.root);
+      expect(shown).toContain("60.5 of 130.125 kg wet");
+      expect(shown).toContain("2 deliveries");
+      expect(shown).toContain("Partial");
+    }
     await act(async () => renderer.unmount());
   });
 });

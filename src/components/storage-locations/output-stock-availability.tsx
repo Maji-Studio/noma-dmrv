@@ -54,8 +54,8 @@ function formatDryKeyMass(kg: number | null): string {
  * A bin's current stock, for surfaces that pick a bin rather than move material.
  *
  * Same shape as the movement blocks: caption, one headline figure, the batches
- * the bin holds as one bar and its key, then the tracked dry stock as a row in
- * Detailed, then one action row. There is no before and after because nothing
+ * the bin holds as one bar and its key, then the tracked dry stock as a row,
+ * then one action row. There is no before and after because nothing
  * is moving yet.
  *
  * Operators plan loads in wet mass, so the headline is the wet estimate when a
@@ -84,12 +84,13 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
       headline={wetEstimate
         ? <DerivedHeadline label="Available wet stock, estimate" value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`} sub={wetEstimate.basis} />
         : <DerivedHeadline label="Available dry stock" value={dry} />}
-      detail={wetEstimate ? <StockRows label="Tracked stock" rows={[{ label: "Available dry stock", value: dry }]} /> : undefined}
     >
       {segments.length > 0 && <div className="flex flex-col gap-6">
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />
         <SegmentKey segments={segments} format={formatDryKeyMass} />
       </div>}
+      {/* Dry stock is data (R1, Q1): under a wet headline it reads as a row at both levels. */}
+      {wetEstimate && <StockRows label="Tracked stock" rows={[{ label: "Available dry stock", value: dry }]} />}
     </CompositionCard>
   );
 }

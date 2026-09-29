@@ -1,0 +1,318 @@
+/**
+ * R1 guard: Simple and Detailed show the same information and differ only in
+ * explanation (docs/forms.md, "Simple and Detailed presentation").
+ *
+ * Two layers:
+ *
+ * 1. Source scan. A surface can only differ between the levels if it reads the
+ *    level. Reading it is reserved for a short list of explanation primitives
+ *    (`LEVEL_READERS`), and `DetailedOnly` for a short list of callers
+ *    (`DETAILED_ONLY_CALLERS`), so every form and read view that does not read
+ *    the level renders the same at both levels by construction. Adding a new
+ *    reader or caller fails here until it is reviewed and listed. The read
+ *    field and section types carry no level flag at all (`detailedOnly` is
+ *    gone), and the scan also rejects the word coming back.
+ *
+ * 2. Render parity. Every read-section builder and every surface built on a
+ *    level reader renders in a provider at Simple, then at Detailed. The field
+ *    labels, section and block titles, inputs, actions and links must match,
+ *    and so must the visible text once explanation blocks (marked with
+ *    `DETAIL_EXPLANATION_ATTR`) are skipped. A new read-section builder that is
+ *    not listed in `READ_SECTION_CASES` fails the coverage check.
+ */
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import type { ReactElement, ReactNode } from "react";
+import { useForm, type Control, type FieldValues } from "react-hook-form";
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/components/ui/tooltip", () => ({
+  InfoHint: ({ label }: { children: ReactNode; label: string }) => <span aria-label={label} />,
+  Tooltip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+}));
+vi.mock("next/link", () => ({ default: ({ children, href }: { children: ReactNode; href: string }) => <a href={href}>{children}</a> }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilities: [{ id: "facility", timezone: "UTC" }] }) }));
+vi.mock("@/hooks/use-entities", () => ({
+  useEntityOptions: () => ({ data: [], dataUpdatedAt: 0, isLoading: false, error: null }),
+  useEntityById: () => ({
+    data: { id: "bin", code: "BIN-01", name: "North product bin", remainingMass: { wetKg: 3000, dryKg: 2900 } },
+    dataUpdatedAt: 1, isPending: false, isError: false, error: null,
+  }),
+}));
+vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "Stock history"}</button> }));
+vi.mock("@/components/storage-locations/bin-movement-history-modal", () => ({ BinMovementHistoryModal: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button> }));
+// The bin picker's quick-add dialogs need a query client; none is under test.
+vi.mock("./entity-select/driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => null }));
+vi.mock("./entity-select/operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => null }));
+vi.mock("./entity-select/vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: () => null }));
+vi.mock("./entity-select/feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => null }));
+vi.mock("./entity-select/formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => null }));
+vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: () => <span>Transport legs</span> }));
+vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: () => <span>Manure store</span> }));
+vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/hooks/use-output-stock")>(),
+  useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: 1800 }], isLoading: false, error: null }),
+  useOutputStockBalance: () => ({ data: undefined, isLoading: false, error: null }),
+  useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [{ productionRunId: "run", code: "PR-001", dryMassKg: 80 }] }] }], isLoading: false, error: null }),
+}));
+// The formulation form's material selector needs a query client; the blend
+// block under it is what reads the level.
+vi.mock("@/components/forms/entity-select", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/components/forms/entity-select")>(),
+  FormEntitySelect: () => <span>Blend material</span>,
+}));
+
+import { DETAIL_EXPLANATION_ATTR, FormDetailControl, FormDetailProvider } from "./form-detail-context";
+import { CompositionCard } from "./composition-card";
+import { FormField } from "./form-field";
+import { FormSection } from "./form-section";
+import { MassMoistureFields } from "./mass-moisture-fields";
+import { EntitySelect } from "./entity-select/entity-select";
+import { DetailField, DetailSection } from "@/components/ui/detail-panel";
+import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
+import { MoistureSplit } from "@/components/ui/moisture-split";
+import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
+import { OutputStockAvailability, OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
+import { MixPileCard } from "@/components/storage-locations/mix-pile-card";
+import { ProcessFlowPreview } from "@/components/production-runs/production-run-process-flow-preview";
+import { ApplicationAllocationShares } from "@/components/applications/application-allocation-shares";
+import { SampleDerivedRatios } from "@/components/samples/sample-derived-ratios";
+import { FormulationForm } from "@/components/formulations/formulation-form";
+import { MatchingOutputBins } from "@/components/orders/matching-output-bins";
+import { orderSheetSections } from "@/components/orders/order-read-sections";
+import { DeliveryStockDetails } from "@/components/deliveries/delivery-stock-details";
+import { creditBatchSheetSections } from "@/components/credit-batches/credit-batch-view";
+import { productSheetSections } from "@/components/biochar-products/product-read-details";
+import { ProductCompositionBlock } from "@/components/biochar-products/biochar-product-form";
+import { formProductComposition } from "@/components/biochar-products/form-product-composition";
+import { IngredientMassSplit } from "@/components/biochar-products/ingredient-mass-split";
+import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
+import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
+import type { FormulationWithIngredients } from "@/data-access/formulations";
+import type { OrderWithRelations } from "@/data-access/orders";
+import type { OutputStockPreview as Preview } from "@/types/output-stock";
+
+const SRC = join(__dirname, "..", "..");
+
+/** Modules allowed to read the detail level. Each hides explanation only. */
+const LEVEL_READERS = [
+  "components/forms/form-detail-context.tsx",
+  "components/forms/composition-card.tsx",
+  "components/ui/moisture-split/moisture-split.tsx",
+];
+
+/** Modules allowed to render `DetailedOnly`, each for explanation only. */
+const DETAILED_ONLY_CALLERS = [
+  "components/forms/form-detail-context.tsx",
+  // A section's `explanation` slot.
+  "components/ui/detail-panel/index.tsx",
+  // The unresolved split before any input: what will appear, not data.
+  "components/forms/mass-moisture-fields.tsx",
+  // The empty composition before any input or source bin, likewise.
+  "components/biochar-products/biochar-product-form.tsx",
+];
+
+function sourceFiles(): { path: string; text: string }[] {
+  return (readdirSync(SRC, { recursive: true }) as string[])
+    .filter(file => /\.(ts|tsx)$/.test(file) && !/\.test\.tsx?$/.test(file))
+    .map(file => ({ path: relative(SRC, join(SRC, file)), text: readFileSync(join(SRC, file), "utf8") }));
+}
+
+describe("R1 source scan", () => {
+  const files = sourceFiles();
+
+  it("reads the detail level only in the explanation primitives", () => {
+    const readers = files.filter(file => /useFormDetailLevel\(|useContext\(FormDetailContext\)/.test(file.text)).map(file => file.path);
+    expect(readers.sort()).toEqual([...LEVEL_READERS].sort());
+  });
+
+  it("renders DetailedOnly only where it wraps explanation", () => {
+    const callers = files.filter(file => /<DetailedOnly>|function DetailedOnly/.test(file.text)).map(file => file.path);
+    expect(callers.sort()).toEqual([...DETAILED_ONLY_CALLERS].sort());
+  });
+
+  it("has no per-field or per-section level flag", () => {
+    expect(files.filter(file => /\bdetailedOnly\b|SimplePresence/.test(file.text)).map(file => file.path)).toEqual([]);
+  });
+});
+
+beforeAll(() => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  // The bin picker listens for outside clicks; this node suite has no DOM.
+  vi.stubGlobal("document", { addEventListener: () => undefined, removeEventListener: () => undefined });
+});
+
+afterAll(() => { vi.unstubAllGlobals(); });
+
+/** A host node Simple and Detailed may legitimately differ on. */
+function isSkipped(node: ReactTestInstance): boolean {
+  if (typeof node.type !== "string") return false;
+  const props = node.props;
+  return Boolean(props.hidden) || Boolean(props[DETAIL_EXPLANATION_ATTR]) || props["aria-hidden"] === true || props["aria-hidden"] === "true";
+}
+
+function textOf(node: ReactTestInstance | string): string {
+  if (typeof node === "string") return node;
+  if (isSkipped(node)) return "";
+  return node.children.map(textOf).join(" ");
+}
+
+const clean = (value: string) => value.replace(/\s+/g, " ").trim();
+
+/** What R1 compares: labels, titles, inputs, actions and links, in order, plus the visible text. */
+function inventory(root: ReactTestInstance): { items: string[]; text: string } {
+  const items: string[] = [];
+  const walk = (node: ReactTestInstance | string) => {
+    if (typeof node === "string" || isSkipped(node)) return;
+    const { props, type } = node;
+    if (type === DetailField) {
+      items.push(`field:${props.label}`);
+      if (props.secondary) items.push(`field:${props.secondary.label}`);
+    }
+    if (type === DetailSection || type === FormSection) items.push(`section:${props.title}`);
+    if (type === CompositionCard) items.push(`block:${props.title}`);
+    if (type === FormField) items.push(`field:${props.label}`);
+    if (type === "button") items.push(`action:${props["aria-label"] ?? clean(textOf(node))}`);
+    if (type === "a") items.push(`link:${props.href}:${clean(textOf(node))}`);
+    if (type === "input" || type === "select" || type === "textarea") items.push(`input:${props.id ?? props.name ?? props["aria-label"] ?? type}`);
+    if (typeof type === "string" && /^h[1-6]$|^legend$|^label$|^dt$/.test(type)) items.push(`${type}:${clean(textOf(node))}`);
+    node.children.forEach(walk);
+  };
+  walk(root);
+  return { items, text: clean(textOf(root)) };
+}
+
+/** Renders `element` at Simple, then at Detailed, and returns both inventories. */
+async function renderBothLevels(element: ReactElement) {
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(<FormDetailProvider scope="parity"><FormDetailControl /><div data-parity-subject>{element}</div></FormDetailProvider>);
+  });
+  const subject = () => renderer.root.find(node => node.props["data-parity-subject"] === true);
+  const simple = inventory(subject());
+  await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
+  const detailed = inventory(subject());
+  const detailedJson = JSON.stringify(renderer.toJSON());
+  await act(async () => renderer.unmount());
+  return { simple, detailed, detailedJson };
+}
+
+const product = {
+  id: "product", facilityId: "facility", placedAt: "2026-09-21T12:00:00.000Z", massKg: 350, waterAddedKg: 50,
+  moistureContentPercent: 5, sourceAllocatedDryMassKg: 200, densityKgM3: 300,
+  formulation: { id: "formulation", name: "Biochar with manure" },
+  storageLocation: { id: "destination", name: "Product store" },
+  sourceBiocharStorageLocation: { id: "source", name: "Biochar store" },
+  composition: { ingredients: [{ formulationIngredientId: "ingredient", feedstockTypeId: "feedstock", feedstockTypeName: "Chicken manure", feedstockTypeCategory: "manure", massKg: 100, massDryKg: 80, moistureContentPercent: 50 }] },
+} as unknown as BiocharProductWithRelations;
+
+const order = {
+  id: "order", facilityId: "facility", formulationId: "formulation", formulationName: "Mix",
+  customerName: "Customer", customerLocationName: "North field", orderDate: new Date("2026-09-21"),
+  quantityKg: 2000, packaging: "loose", value: 500, currency: "TZS",
+  fulfillmentStatus: "partial", deliveryCount: 1, deliveredWetMassKg: 1200,
+} as unknown as OrderWithRelations;
+
+const creditBatch = {
+  id: "batch", code: "CB-26-001", facilityId: "facility", feedstockTypeName: "Maize cobs", durabilityOption: "200_year",
+  startDate: "2026-01-01", endDate: "2026-03-31", appliedWeightTons: 12, productionRunCount: 1,
+  co2eStoredPreview: {
+    co2eStoredTonnes: 3.2, componentKey: "biochar_storage", formulaVersion: "v1", missingInputs: [], warnings: [],
+    applicationResults: [{ fDurable: 0.85, rawFDurable: 0.9, durabilityCapped: true }],
+  },
+} as unknown as CreditBatchWithRelations;
+
+/** Every read-section builder, rendered through the shared side-sheet spine. */
+const READ_SECTION_CASES: { file: string; name: string; element: ReactElement }[] = [
+  { file: "components/orders/order-read-sections.tsx", name: "order", element: <EntitySideSheetSections numbered sections={orderSheetSections(order)} /> },
+  { file: "components/biochar-products/product-read-details.tsx", name: "biochar product", element: <EntitySideSheetSections numbered sections={productSheetSections(product, "UTC")} /> },
+  {
+    file: "components/credit-batches/credit-batch-view.tsx",
+    name: "credit batch",
+    element: <EntitySideSheetSections numbered sections={creditBatchSheetSections({
+      creditBatch,
+      productionRuns: [{ id: "run", date: "2026-02-01", status: "completed", biocharStorageName: "Biochar store", biocharOutputKg: 1000, biocharDryMassKg: 800 }] as never,
+      isLoadingRuns: false, runsError: null, isRetryingRuns: false, onRetryRuns: () => undefined, isHealthLoading: false,
+    })} />,
+  },
+];
+
+const preview: Preview = {
+  basisFingerprint: "basis", storageLocationId: "bin", binName: "Product bin", binCode: "PB-001", formulationName: "Mix", lane: "product",
+  beforeDryKg: 1500, afterDryKg: 350, beforeSolidsKg: 1820, afterSolidsKg: 420,
+  removedDryKg: 1150, removedWetKg: 2000, movementMoisturePercent: 30,
+  beforeEstimatedWetKg: 2600, afterEstimatedWetKg: 600, discrepancySolidsKg: 12, blockingMessage: "Correction blocked",
+  blockers: [{ entity: "application", id: "app-id", code: "APP-001" }],
+  allocations: [{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1150, runs: [{ productionRunId: "r1", code: "Run A", dryMassKg: 1150 }] }],
+};
+const acceptedPreview: Preview = { ...preview, blockingMessage: null, blockers: [], discrepancySolidsKg: 0 };
+
+const registration = { name: "field", onChange: async () => undefined, onBlur: async () => undefined, ref: () => undefined };
+const massFields = (wetMassKg: unknown) => (
+  <MassMoistureFields wet={{ id: "wet", registration }} moisture={{ id: "moisture", registration }} wetMassKg={wetMassKg} moisturePercent={null} />
+);
+
+const composition = formProductComposition({
+  isEditMode: false, massKg: 100, moisturePercent: 10, waterAddedKg: 0,
+  recordedSourceDryMassKg: null, ingredients: [], allocationFrozen: false,
+});
+
+function IngredientHarness() {
+  const form = useForm({ defaultValues: { ingredientBins: [{ massKg: 240, moistureContentPercent: 20, storageLocationId: "bin-compost" }] } });
+  return <IngredientMassSplit control={form.control as unknown as Control<FieldValues>} index={0} feedstockTypeName="Compost" frozen={false} />;
+}
+
+const balanced = {
+  id: "formulation", name: "Mix", description: null, biocharRatio: 0.6,
+  ingredients: [{ feedstockTypeId: "manure", ratio: 0.4, feedstockType: { name: "Manure" } }],
+} as unknown as FormulationWithIngredients;
+
+/** Surfaces built on a level reader (forms, previews, derived blocks). */
+const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: boolean }[] = [
+  { name: "moisture split", element: <MoistureSplit wetMassKg={100} moisturePercent={20} materialLabel="Feedstock" /> },
+  { name: "wet mass and moisture, untouched", element: massFields(null) },
+  { name: "wet mass and moisture, started", element: massFields(100) },
+  { name: "product composition", element: <ProductCompositionPreview wetMassKg={100} dryBiocharKg={60} /> },
+  { name: "product form composition, untouched", blankInSimple: true, element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId={null} facilityId="facility" /> },
+  { name: "product form composition, source bin chosen", element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId="bin" facilityId="facility" /> },
+  { name: "ingredient split", element: <IngredientHarness /> },
+  { name: "bin picker remaining mass", element: <EntitySelect entityType="storageLocation" value="bin" onChange={() => undefined} /> },
+  { name: "formulation form, balanced", element: <FormulationForm formulation={balanced} onSubmit={() => undefined} /> },
+  { name: "process flow", element: <ProcessFlowPreview sourceBinName="Feedstock July" feedstockKg={100} feedstockMoisturePercent={10} feedstockDryKg={90} reactorName="Reactor 1" biocharKg={50} biocharMoisturePercent={10} biocharDryKg={45} destinationBinName="Biochar July" /> },
+  { name: "applied batches", element: <ApplicationAllocationShares shares={[{ applicationId: "application", deliveryId: "delivery", biocharProductId: "product", productCode: "BP-26-001", productionRunId: "run", productionRunCode: "PR-26-001", dryMassKg: 600, wetMassKg: 1200 }]} /> },
+  { name: "derived ratios", element: <SampleDerivedRatios hToCOrgRatio={0.42} oToCOrgRatio={0.15} hydrogenPercent={2.5} oxygenPercent={12} organicCarbonPercent={71.5} oToCFromLab={false} certifyRequired={() => false} certifyStatus={() => "neutral"} /> },
+  { name: "stock movement preview", element: <OutputStockPreview variant="movement" preview={acceptedPreview} /> },
+  { name: "stock movement preview, blocked", element: <OutputStockPreview variant="movement" preview={preview} /> },
+  { name: "stock load preview", element: <OutputStockPreview variant="load" preview={acceptedPreview} /> },
+  { name: "stock availability", element: <OutputStockAvailability binName="Product bin" dryKg={1500} wetEstimate={{ kg: 1800, basis: "At the latest moisture reading of each batch" }} allocations={[{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1500, runs: [] }] as never} /> },
+  { name: "matching stock", element: <MatchingOutputBins facilityId="facility" formulationId="formulation" /> },
+  { name: "delivery stock", element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} /> },
+  { name: "mix pile", element: <MixPileCard binName="Product bin" wetKg={1800} moisturePercent={20} dryKg={1440} batches={[{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] as never} /> },
+];
+
+describe("R1 render parity", () => {
+  it("covers every read-section builder", () => {
+    const builders = sourceFiles()
+      .filter(file => /\):\s*DetailPanelSection\[\]/.test(file.text) || file.path.endsWith("-read-sections.tsx"))
+      .map(file => file.path);
+    expect(builders.sort()).toEqual(READ_SECTION_CASES.map(entry => entry.file).sort());
+  });
+
+  it.each<{ name: string; element: ReactElement; blankInSimple?: boolean }>([...READ_SECTION_CASES, ...SURFACE_CASES])("$name shows the same fields, sections and actions at both levels", async ({ element, blankInSimple }) => {
+    const { simple, detailed } = await renderBothLevels(element);
+    // A case that renders nothing would pass vacuously.
+    expect(simple.text.length > 0).toBe(!blankInSimple);
+    expect(detailed.items).toEqual(simple.items);
+    expect(detailed.text).toEqual(simple.text);
+  });
+
+  it("lets Detailed add explanation, and only behind the explanation marker", async () => {
+    const { simple, detailed, detailedJson } = await renderBothLevels(
+      <EntitySideSheetSections sections={[{ title: "Definition", fields: [{ label: "Durability", value: "1,000 years" }], explanation: <p>Formula v1</p> }]} />,
+    );
+    expect(simple.text).not.toContain("Formula v1");
+    expect(detailedJson).toContain("Formula v1");
+    expect(detailed.text).toEqual(simple.text);
+  });
+});

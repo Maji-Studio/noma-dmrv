@@ -152,7 +152,7 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain('aria-invalid="true"');
   });
 
-  it("keeps the selected input and helper but omits derived stock captions in Simple", () => {
+  it("keeps the selected input, helper and remaining stock caption in Simple", () => {
     entityState.selected = {
       id: "bin-1", code: "BIN-01", name: "North product bin",
       remainingMass: { wetKg: 3000, dryKg: 2900 },
@@ -164,15 +164,12 @@ describe("EntitySelect selected-value display", () => {
       </FormDetailProvider>,
     );
     expect(html).toContain("North product bin");
-    // The aria-label names the field, so the selected label (which can carry
-    // a stock change) is announced as a description.
+    // Remaining stock informs the pick (R1), so Simple shows it too and the
+    // control is described by the helper, the stock caption and the label.
     const describedBy = html.match(/aria-describedby="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(describedBy[0]).toBe("field-helper");
-    expect(describedBy).toHaveLength(2);
-    expect(html).toContain(`id="${describedBy[1]}"`);
-    expect(html).toMatch(new RegExp(`id="${describedBy[1]}"[^>]*>North product bin<`));
-    expect(html).not.toContain("Remaining now");
-    expect(html).not.toContain("remaining-mass");
+    expect(describedBy).toHaveLength(3);
+    expect(html).toContain("Remaining now: 3,000 kg wet, 2,900 kg dry biochar");
   });
 
   it("qualifies a selected stock figure that excludes the edited order", () => {

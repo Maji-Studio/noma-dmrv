@@ -15,8 +15,7 @@
  * its box because it is a record with its own actions; a segment here is only
  * derived figures, so it sits flat on the rail.
  *
- * Simple keeps the yield headline only: the fields above already hold the two
- * masses, and the yield is what they add up to. Detailed adds the rail and the
+ * Both levels show the yield headline and the rail. Detailed adds only the
  * yield arithmetic behind Show calculation. Both bases
  * are honest: when either dry mass is missing the whole equation falls back to
  * wet mass and says so in the yield's own label, rather than mixing a dry
@@ -91,7 +90,6 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
     <CompositionCard
       title="Process flow"
       hint={PROCESS_FLOW_HINT}
-      simple="headline"
       headline={<DerivedHeadline
         label={yieldLabel}
         value={basis.yieldPercent === null ? null : formatPercent(basis.yieldPercent, { digits: YIELD_DIGITS })}

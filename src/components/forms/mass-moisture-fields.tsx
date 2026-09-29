@@ -25,7 +25,7 @@ import type { ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
-import { useSimplePresence } from "./form-detail-context";
+import { DetailedOnly } from "./form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { moistureReadingGuidance, type MoistureFieldEstimate } from "@/lib/output-stock/moisture-guidance";
@@ -209,9 +209,9 @@ interface MassMoistureFieldsProps {
  * The split is unframed on purpose: it is not a separate panel of output, it is
  * what the two inputs above it mean, so the bar and its key sit directly under
  * them and move as they change. `MoistureSplit` decides how much of the
- * calculation to show from the form detail level. Simple draws the split only
- * once wet mass or moisture has a value, so an untouched form shows no empty
- * picture; Detailed keeps the unresolved state visible.
+ * calculation to show from the form detail level. Both levels draw the split
+ * once wet mass or moisture has a value. Before that, the unresolved state is
+ * explanation of what will appear, so only Detailed shows it.
  */
 export function MassMoistureFields({
   wet,
@@ -227,10 +227,20 @@ export function MassMoistureFields({
   finalMoistureLabel,
   splitFooter,
 }: MassMoistureFieldsProps) {
-  const { detailed } = useSimplePresence("picture");
   const wetKg = parseWatchedNumber(wetMassKg);
   const moistureValue = parseWatchedNumber(moisturePercent);
-  const showSplit = detailed || wetKg !== null || moistureValue !== null;
+  const started = wetKg !== null || moistureValue !== null;
+  const split = (
+    <MoistureSplit
+      wetMassKg={wetKg}
+      moisturePercent={moistureValue}
+      addedWaterKg={parseWatchedNumber(addedWaterKg)}
+      materialLabel={materialLabel}
+      wetLabel={wetSplitLabel}
+      dryLabel={drySplitLabel}
+      finalMoistureLabel={finalMoistureLabel}
+    />
+  );
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
@@ -240,22 +250,10 @@ export function MassMoistureFields({
           {addedWaterField}
         </div>
       )}
-      {(showSplit || splitFooter) && (
-        <div data-testid="mass-moisture-split" className="md:col-span-2">
-          {showSplit && (
-            <MoistureSplit
-              wetMassKg={wetKg}
-              moisturePercent={moistureValue}
-              addedWaterKg={parseWatchedNumber(addedWaterKg)}
-              materialLabel={materialLabel}
-              wetLabel={wetSplitLabel}
-              dryLabel={drySplitLabel}
-              finalMoistureLabel={finalMoistureLabel}
-            />
-          )}
-          {splitFooter}
-        </div>
-      )}
+      <div data-testid="mass-moisture-split" className="md:col-span-2 empty:hidden">
+        {started ? split : <DetailedOnly>{split}</DetailedOnly>}
+        {splitFooter}
+      </div>
     </div>
   );
 }

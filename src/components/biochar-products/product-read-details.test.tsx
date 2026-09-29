@@ -50,7 +50,7 @@ function visibleText(node: ReactTestInstance | string): string {
 const text = (node: ReactTestInstance) => visibleText(node).replace(/\s+/g, " ");
 
 describe("Product read view levels", () => {
-  it("keeps saved fields and the composition picture in Simple, and adds dry rows, transport and the ledger behind Show calculation in Detailed", async () => {
+  it("shows saved fields, dry lines, the composition picture and transport at both levels, and adds the ledger behind Show calculation in Detailed", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     let renderer!: ReactTestRenderer;
     await act(async () => {
@@ -72,15 +72,17 @@ describe("Product read view levels", () => {
     expect(simple).toContain("Chicken manure solids 80 kg");
     expect(simple).toContain("Water 70 kg");
     expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(1);
-    for (const hidden of ["Dry biochar (kg)", "dry solids (kg)", "% of total", "Show calculation", "Derived transport", "Transport legs"]) {
+    // Dry figures are data (Q1): a secondary line under each wet mass.
+    expect(simple).toContain("Source biochar wet mass (kg) 250 kg Dry biochar 200 kg");
+    expect(simple).toContain("Chicken manure wet mass (kg) 100 kg Dry solids 80 kg");
+    expect(simple).toContain("Derived transport");
+    expect(simple).toContain("Transport legs");
+    for (const hidden of ["% of total", "Show calculation"]) {
       expect(simple).not.toContain(hidden);
     }
 
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
     const detailed = text(renderer.root);
-    expect(detailed).toContain("Dry biochar (kg)");
-    expect(detailed).toContain("Chicken manure dry solids (kg)");
-    expect(detailed).toContain("Derived transport");
     expect(detailed).toContain("Show calculation");
     const disclosure = renderer.root.findAllByType("button").find(node => node.props["aria-controls"])!;
     await act(async () => disclosure.props.onClick());

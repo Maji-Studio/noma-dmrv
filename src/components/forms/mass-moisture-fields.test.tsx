@@ -74,10 +74,11 @@ describe("MassMoistureFields", () => {
     // Variant E: the bar sits directly under the inputs, with no card, frame or
     // tinted panel, and Simple never hides it.
     expect(html).toContain(
-      '<div data-testid="mass-moisture-split" class="md:col-span-2">',
+      '<div data-testid="mass-moisture-split" class="md:col-span-2 empty:hidden">',
     );
     expect(html).not.toContain("border-l-2");
     expect(html).not.toContain("--color-background-medium");
-    expect(html).not.toContain("hidden");
+    expect(html).not.toContain('hidden=""');
+    expect(html).toContain('data-testid="captured-split"');
   });
 });

@@ -746,14 +746,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 value: sideSheetEntity.biocharAppliedTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
                   : null,
-              },
-              {
-                label: "Dry biochar applied (kg)",
-                detailedOnly: true,
-                ...certificationDetailField("application", "biocharAppliedDryTons"),
-                value: sideSheetEntity.biocharAppliedDryTons != null
-                  ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
-                  : null,
+                secondary: {
+                  label: "Dry biochar applied",
+                  ...certificationDetailField("application", "biocharAppliedDryTons"),
+                  value: sideSheetEntity.biocharAppliedDryTons != null
+                    ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
+                    : null,
+                },
               },
             ],
             content: sideSheetEntity.heldOutOfCredits
@@ -761,8 +760,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               : undefined,
           },
           ...(sideSheetEntity.allocationShares.length > 0 ? [{
-            // The bar and key line are Simple content; the block itself
-            // holds back its ledger and source runs until Detailed.
+            // The bar and key line show at both levels; the ledger and source
+            // runs are the block's explanation, so Detailed only.
             title: "Batch shares",
             fields: [],
             content: <ApplicationAllocationShares shares={sideSheetEntity.allocationShares} />,
