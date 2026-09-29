@@ -77,6 +77,12 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   const NEAR_MISALIGN_MAX_PX = 12;
   const PX_TOLERANCE = 1;
   const MIN_PARAGRAPH_CHARS = 1;
+  /** The FormSpine's gutter column (form-spine.tsx grid-cols-[24px_1fr]); not a layout grid. */
+  const FORM_SPINE_GUTTER_PX = 24;
+  /** How much of a grid's text identifies it in the report. */
+  const GRID_SNIPPET = 30;
+  /** How many class names identify an element in the report. */
+  const CLASS_SNIPPET = 4;
   /** An all-caps run this long is an uppercase label, not an acronym (GPS, TGA). */
   const LITERAL_CAPS_MIN_LETTERS = 4;
   /** SectionLabel, the FormSection/DetailSection title (section-label.tsx). */
@@ -144,7 +150,7 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   };
 
   const describe = (el: Element) => {
-    const cls = typeof el.className === "string" ? el.className.split(/\s+/).slice(0, 4).join(".") : "";
+    const cls = typeof el.className === "string" ? el.className.split(/\s+/).slice(0, CLASS_SNIPPET).join(".") : "";
     return `${el.tagName.toLowerCase()}${cls ? "." + cls : ""}`;
   };
 
@@ -293,9 +299,20 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   }
   const fields: Field[] = [];
   const sectionOf = (el: Element) => sectionRoots.find((section) => section.contains(el));
+  const FIELD_CONTROL = "input:not([type=hidden]), select, textarea, [role=combobox]";
+  const controlAfterLabel = (label: HTMLElement): Element | null => {
+    const labelRow = label.parentElement as HTMLElement;
+    for (let node = labelRow.parentElement; node && node !== body; node = node.parentElement) {
+      const found = Array.from(node.querySelectorAll(FIELD_CONTROL)).find((el) => !labelRow.contains(el) && isVisible(el));
+      if (found) return found;
+    }
+    return null;
+  };
   for (const label of Array.from(body.querySelectorAll("label[for]")) as HTMLLabelElement[]) {
     if (!isVisible(label) || label.closest("[data-presentation-control]")) continue;
-    const control = document.getElementById(label.htmlFor);
+    // EntitySelect's trigger carries no id, so its label's `for` resolves to
+    // nothing; fall back to the nearest control after the label row.
+    const control = document.getElementById(label.htmlFor) ?? controlAfterLabel(label);
     if (!control || label.contains(control)) continue;
     let fieldRoot: HTMLElement | null = label.parentElement;
     while (fieldRoot && fieldRoot !== body && !fieldRoot.contains(control)) fieldRoot = fieldRoot.parentElement;
@@ -374,12 +391,17 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   for (const field of formFields) {
     if (rowsSeen.has(field)) continue;
     const rect = field.root.getBoundingClientRect();
+    // The row is this field plus every unrelated field whose top lines up with it.
     const row = formFields.filter((other) => {
-      const otherRect = other.root.getBoundingClientRect();
-      return Math.abs(otherRect.top - rect.top) <= PX_TOLERANCE * 2 && !other.root.contains(field.root) && !field.root.contains(other.root);
+      if (other === field) return true;
+      if (other.root.contains(field.root) || field.root.contains(other.root)) return false;
+      return Math.abs(other.root.getBoundingClientRect().top - rect.top) <= PX_TOLERANCE * 2;
     });
     row.forEach((member) => rowsSeen.add(member));
-    const container = field.root.parentElement;
+    // Measure against the first ancestor wider than the field, so a grid cell
+    // wrapper around one field does not hide that it spans half the row.
+    let container = field.root.parentElement;
+    while (container && container !== body && container.getBoundingClientRect().width <= rect.width + PX_TOLERANCE) container = container.parentElement;
     const containerWidth = container?.getBoundingClientRect().width ?? bodyRect.width;
     if (row.length === 1 && containerWidth > 0 && rect.width / containerWidth < HALF_WIDTH_RATIO) {
       loneHalfWidth.push({ field: field.name, widthRatio: round(rect.width / containerWidth) });
@@ -402,10 +424,10 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     const columns = style.gridTemplateColumns.split(" ").filter((track) => /px$/.test(track)).length;
     if (columns < GRID_ORPHAN_MIN_COLUMNS) continue;
     const firstTrack = parseFloat(style.gridTemplateColumns);
-    if (Math.abs(firstTrack - 24) <= PX_TOLERANCE) continue; // FormSpine gutter grid.
+    if (Math.abs(firstTrack - FORM_SPINE_GUTTER_PX) <= PX_TOLERANCE) continue;
     const items = Array.from(el.children).filter(isVisible).length;
-    if (items > columns && items % columns !== 0) orphanedGridItems.push({ grid: `${describe(el)} ${clean((el as HTMLElement).innerText).slice(0, 30)}`, columns, items });
-    else if (items > 0 && items < columns) orphanedGridItems.push({ grid: `${describe(el)} ${clean((el as HTMLElement).innerText).slice(0, 30)}`, columns, items });
+    const orphaned = (items > columns && items % columns !== 0) || (items > 0 && items < columns);
+    if (orphaned) orphanedGridItems.push({ grid: `${describe(el)} ${clean((el as HTMLElement).innerText).slice(0, GRID_SNIPPET)}`, columns, items });
   }
 
   /* ------------------------------------------------------------ Overflow */

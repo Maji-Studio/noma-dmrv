@@ -19,6 +19,8 @@ const SCALED_LEVELS: GapItem["level"][] = ["section", "field", "label"];
 const EXPLANATION_PATTERN = /^(show|hide) calculation|^more about|^about |^more info/i;
 const TOP_ISSUES_PER_FAMILY = 8;
 const SUMMARY_COLUMNS = 11;
+/** Distinct off-scale gaps listed per surface row. */
+const OFF_SCALE_SHOWN = 6;
 
 export interface StateViolations {
   textStyles: number;
@@ -173,7 +175,7 @@ function surfaceRow(surface: SurfaceRecord): string {
     styleCounts.length ? `${Math.max(...styleCounts)}` : "",
     `${max((v) => v.uppercaseOrTracked)}`,
     `${max((v) => v.lines)}`,
-    offScale.size ? Array.from(offScale).slice(0, 6).join(" ") : "0",
+    offScale.size ? Array.from(offScale).slice(0, OFF_SCALE_SHOWN).join(" ") : "0",
     inconsistent.size ? Array.from(inconsistent).join("/") : "",
     `${max((v) => v.alignment)}`,
     `${max((v) => v.overflow)}`,

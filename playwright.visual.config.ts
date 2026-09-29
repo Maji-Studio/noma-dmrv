@@ -3,8 +3,10 @@ import base from "./playwright.config";
 
 /**
  * Opt-in visual capture (tests/visual). Reuses the E2E config's localhost
- * guard and base URL, but never starts or tears down anything: the capture
- * runs against an already running, seeded dev server and writes no records.
+ * guard and base URL, but never starts a server or runs the E2E teardown: the
+ * capture runs against an already running, seeded dev server. It signs in as
+ * the existing local admin (one session row, removed at sign-out) and writes
+ * no entity rows; see tests/visual/form-capture-fixture.ts.
  *
  * Headless Chromium on macOS has no WebGL2 (#801); SwiftShader gives the map
  * a software GL context so map surfaces render in the capture.

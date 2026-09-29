@@ -6,7 +6,9 @@
  */
 import { expect, type Locator, type Page } from "@playwright/test";
 import type { Surface } from "./form-capture-manifest";
+import { findBin, type CaptureContext, type SeededBin } from "./form-capture-context";
 import {
+  binMovementSheet,
   gotoRoute,
   lastDialog,
   lastSheet,
@@ -18,12 +20,15 @@ import {
   openRowSheet,
   openSheetFromButton,
   settle,
-  type CaptureContext,
+  waitForHydration,
+  withWritesBlocked,
 } from "./form-capture-helpers";
 
 /** A small loss that any seeded output bin can cover, to reveal the draw. */
 const PREVIEW_LOSS_KG = "1";
 const GHG_PERIOD_END = "2026-09-30";
+const GHG_CONTENTS_STEP = 2;
+const GHG_CONFIRM_STEP = 3;
 const DUMMY_TOKEN = "form-capture-token";
 const SETTINGS_PANES = [
   { key: "certifier", title: "Certifier" },
@@ -33,9 +38,11 @@ const SETTINGS_PANES = [
   { key: "template-mapping", title: "Template mapping" },
 ] as const;
 
-const bin = (ctx: CaptureContext, type: string) => ctx.bins.find((item) => item.type === type);
-const noBin = (type: string, label: string) => (ctx: CaptureContext) =>
-  bin(ctx, type) ? undefined : `no seeded ${label} bin`;
+const binName = (ctx: CaptureContext, type: SeededBin["type"]) => findBin(ctx, { type })!.name;
+const noBin = (type: SeededBin["type"], label: string) => (ctx: CaptureContext) =>
+  findBin(ctx, { type }) ? undefined : `no seeded ${label} bin`;
+const UNLINKED = "the facility has no Isometric project link (seed ran without ISOMETRIC_DEMO_FACILITY_ID)";
+const needsLink = (ctx: CaptureContext) => (ctx.registryLinked ? undefined : UNLINKED);
 
 async function createSheet(page: Page, ctx: CaptureContext, route: string, button: string) {
   await gotoRoute(page, ctx, route);
@@ -65,16 +72,8 @@ function paneRoot(page: Page): Locator {
   return page.locator("main nav[aria-label$='categories'] ~ section, main nav[aria-label$='categories'] ~ div").first();
 }
 
-async function outputMovementSheet(page: Page, ctx: CaptureContext, button: "Record loss" | "Reconcile stock") {
-  const sheet = await openBinSheet(page, ctx, bin(ctx, "biochar_bin")!.name);
-  await sheet.getByRole("button", { name: button, exact: true }).first().click();
-  const movement = lastSheet(page);
-  await expect(movement.getByRole("heading", { name: /^Reconcile / }).first()).toBeVisible();
-  return movement;
-}
-
-async function outputHistory(page: Page, ctx: CaptureContext, type: string) {
-  const sheet = await openBinSheet(page, ctx, bin(ctx, type)!.name);
+async function binHistory(page: Page, ctx: CaptureContext, type: SeededBin["type"]) {
+  const sheet = await openBinSheet(page, ctx, binName(ctx, type));
   return openDialogFromButton(sheet, page, "Stock history");
 }
 
@@ -135,10 +134,11 @@ const transportFeedstock: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "empty",
+    skip: needsLink,
     open: async (page, ctx) => {
       await gotoRoute(page, ctx, "feedstock-types");
       const button = page.getByRole("button", { name: "Import from Isometric", exact: true });
-      if ((await button.count()) === 0) return "Import from Isometric is hidden: the facility has no registry mapping";
+      if ((await button.count()) === 0) return "Import from Isometric is not offered to this viewer";
       return openDialogFromButton(page, page, "Import from Isometric");
     },
   },
@@ -189,7 +189,7 @@ const stockSamples: Surface[] = [
     mode: "read",
     fill: "none",
     skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => openBinSheet(page, ctx, bin(ctx, "biochar_bin")!.name),
+    open: (page, ctx) => openBinSheet(page, ctx, binName(ctx, "biochar_bin")),
   },
   {
     id: "bin.read-product",
@@ -199,7 +199,7 @@ const stockSamples: Surface[] = [
     mode: "read",
     fill: "none",
     skip: noBin("product_bin", "product"),
-    open: (page, ctx) => openBinSheet(page, ctx, bin(ctx, "product_bin")!.name),
+    open: (page, ctx) => openBinSheet(page, ctx, binName(ctx, "product_bin")),
   },
   {
     id: "bin.read-mix",
@@ -208,8 +208,8 @@ const stockSamples: Surface[] = [
     kind: "sheet",
     mode: "read",
     fill: "none",
-    skip: (ctx) => (ctx.bins.some((item) => item.stockMode === "mix") ? undefined : "no mix bin in the seed (every seeded bin is split); mix pile cards cannot be shown without writing"),
-    open: (page, ctx) => openBinSheet(page, ctx, ctx.bins.find((item) => item.stockMode === "mix")!.name),
+    skip: (ctx) => (findBin(ctx, { stockMode: "mix" }) ? undefined : "no mix bin in the seed (every seeded bin is split); mix pile cards cannot be shown without writing"),
+    open: (page, ctx) => openBinSheet(page, ctx, findBin(ctx, { stockMode: "mix" })!.name),
   },
   {
     id: "bin.loss-feedstock",
@@ -220,13 +220,8 @@ const stockSamples: Surface[] = [
     fill: "empty",
     errors: true,
     skip: noBin("feedstock_bin", "feedstock"),
-    open: async (page, ctx) => {
-      const sheet = await openBinSheet(page, ctx, bin(ctx, "feedstock_bin")!.name);
-      await sheet.getByRole("button", { name: "Reconcile stock", exact: true }).first().click();
-      const loss = lastSheet(page);
-      await expect(loss.getByRole("heading", { name: /^Reconcile / }).first()).toBeVisible();
-      return loss;
-    },
+    // A feedstock bin has no "Record loss" button; "Reconcile stock" opens its loss form.
+    open: (page, ctx) => binMovementSheet(page, ctx, "feedstock_bin", "Reconcile stock"),
   },
   {
     id: "bin.loss-output",
@@ -237,7 +232,7 @@ const stockSamples: Surface[] = [
     fill: "empty",
     errors: true,
     skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => outputMovementSheet(page, ctx, "Record loss"),
+    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Record loss"),
   },
   {
     id: "bin.count-output",
@@ -248,7 +243,7 @@ const stockSamples: Surface[] = [
     fill: "empty",
     errors: true,
     skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => outputMovementSheet(page, ctx, "Reconcile stock"),
+    open: (page, ctx) => binMovementSheet(page, ctx, "biochar_bin", "Reconcile stock"),
   },
   {
     id: "bin.split-order",
@@ -259,7 +254,7 @@ const stockSamples: Surface[] = [
     fill: "filled",
     skip: noBin("biochar_bin", "biochar"),
     open: async (page, ctx) => {
-      const sheet = await outputMovementSheet(page, ctx, "Record loss");
+      const sheet = await binMovementSheet(page, ctx, "biochar_bin", "Record loss");
       const wet = sheet.getByRole("textbox", { name: /^Wet mass removed/ }).or(sheet.getByLabel(/^Wet mass removed/)).first();
       await wet.fill(PREVIEW_LOSS_KG);
       await settle(page, sheet);
@@ -286,7 +281,7 @@ const stockSamples: Surface[] = [
     mode: "read",
     fill: "none",
     skip: noBin("feedstock_bin", "feedstock"),
-    open: (page, ctx) => outputHistory(page, ctx, "feedstock_bin"),
+    open: (page, ctx) => binHistory(page, ctx, "feedstock_bin"),
   },
   {
     id: "bin.history-output",
@@ -296,7 +291,7 @@ const stockSamples: Surface[] = [
     mode: "read",
     fill: "none",
     skip: noBin("biochar_bin", "biochar"),
-    open: (page, ctx) => outputHistory(page, ctx, "biochar_bin"),
+    open: (page, ctx) => binHistory(page, ctx, "biochar_bin"),
   },
   {
     id: "bin.correction",
@@ -307,9 +302,9 @@ const stockSamples: Surface[] = [
     fill: "filled",
     skip: noBin("product_bin", "product"),
     open: async (page, ctx) => {
-      for (const type of ["product_bin", "biochar_bin"]) {
-        if (!bin(ctx, type)) continue;
-        const history = await outputHistory(page, ctx, type);
+      for (const type of ["product_bin", "biochar_bin"] as const) {
+        if (!findBin(ctx, { type })) continue;
+        const history = await binHistory(page, ctx, type);
         const correct = history.getByRole("button", { name: /^Correct entry/ }).first();
         if ((await correct.count()) === 0) continue;
         await correct.click();
@@ -398,8 +393,8 @@ const productionSite: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "empty",
-    skip: () => "the operator select offers quick-add only when no operator exists; the seed has one",
-    open: async () => "unreachable",
+    skip: (ctx) => (ctx.operatorCount > 0 ? `the operator select offers quick-add only when no operator exists; the org has ${ctx.operatorCount}` : undefined),
+    open: async (page, ctx) => openQuickAdd(page, await createSheet(page, ctx, "production-runs", "New Production Run"), "Select operator..."),
   },
 ];
 
@@ -460,12 +455,25 @@ const downstream: Surface[] = [
   {
     id: "credit-batch.method-b",
     family: "downstream",
-    title: "Method B setup",
+    title: "Method B setup (credit batch create)",
     kind: "sheet",
     mode: "form",
     fill: "empty",
-    skip: () => "Method B setup needs a registry-mapped facility and at least 30 eligible Method A samples; the seed has 3 and no facility mapping",
-    open: async () => "unreachable",
+    skip: (ctx) =>
+      needsLink(ctx) ??
+      (ctx.facilitySampleCount < ctx.methodBMinimumSamples
+        ? `Method B setup needs at least ${ctx.methodBMinimumSamples} Method A samples; the facility has ${ctx.facilitySampleCount}`
+        : undefined),
+    open: async (page, ctx) => {
+      const sheet = await createSheet(page, ctx, "credit-batches", "New Credit Batch");
+      await sheet.getByRole("combobox", { name: "Select feedstock type...", exact: true }).first().click();
+      await page.getByRole("option").first().click();
+      await settle(page, sheet);
+      const setup = sheet.getByRole("button", { name: "Set up Method-B prerequisites", exact: true });
+      if ((await setup.count()) === 0) return "Method B setup is not offered for the first feedstock type (eligibility or prerequisites already recorded)";
+      await setup.click();
+      return sheet;
+    },
   },
   {
     id: "removal.list",
@@ -474,6 +482,7 @@ const downstream: Surface[] = [
     kind: "page",
     mode: "page",
     fill: "none",
+    skip: needsLink,
     open: async (page, ctx) => (await certificationPage(page, ctx, "certification/removals")) ?? page.locator("main"),
   },
   {
@@ -483,6 +492,7 @@ const downstream: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "empty",
+    skip: needsLink,
     open: async (page, ctx) => {
       const redirected = await certificationPage(page, ctx, "certification/removals");
       if (redirected) return redirected;
@@ -494,12 +504,22 @@ const downstream: Surface[] = [
   {
     id: "removal.wizard-confirm",
     family: "downstream",
-    title: "New removal wizard, step 2 (confirm and submit)",
+    title: "New removal wizard, step 2 (confirm and submit), resumed",
     kind: "dialog",
     mode: "form",
     fill: "filled",
-    skip: (ctx) => (ctx.counts.certifier_removals > 0 ? "resume flow not scripted yet" : "step 2 needs a draft removal, and Continue on step 1 writes one; no removal is seeded"),
-    open: async () => "unreachable",
+    skip: (ctx) => needsLink(ctx) ?? (ctx.removalId ? undefined : "step 2 resumes a draft removal, and no removal is seeded for the facility (Continue on step 1 would write one)"),
+    open: async (page, ctx) => {
+      // Resuming must not compile or save anything: block writes while it opens.
+      const { result, attempted } = await withWritesBlocked(page, async () => {
+        await gotoRoute(page, ctx, `certification/removals?resume=${ctx.removalId}`);
+        const dialog = lastDialog(page);
+        await expect(dialog).toBeVisible();
+        await settle(page, dialog);
+        return dialog;
+      });
+      return attempted > 0 ? "resuming the removal sent a write request while opening (aborted); not captured" : result;
+    },
   },
   {
     id: "removal.detail",
@@ -508,8 +528,13 @@ const downstream: Surface[] = [
     kind: "sheet",
     mode: "read",
     fill: "none",
-    skip: (ctx) => (ctx.counts.certifier_removals > 0 ? "removal detail not scripted yet" : "no removal is seeded"),
-    open: async () => "unreachable",
+    skip: (ctx) => needsLink(ctx) ?? (ctx.removalId ? undefined : "no removal is seeded for the facility"),
+    open: async (page, ctx) => {
+      await gotoRoute(page, ctx, `certification/removals?removal=${ctx.removalId}`);
+      const sheet = lastSheet(page);
+      await expect(sheet).toBeVisible();
+      return sheet;
+    },
   },
   {
     id: "ghg.list",
@@ -518,6 +543,7 @@ const downstream: Surface[] = [
     kind: "page",
     mode: "page",
     fill: "none",
+    skip: needsLink,
     open: async (page, ctx) => (await certificationPage(page, ctx, "certification/ghg-statements")) ?? page.locator("main"),
   },
   {
@@ -527,6 +553,7 @@ const downstream: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "empty",
+    skip: needsLink,
     open: (page, ctx) => openGhgCreate(page, ctx),
   },
   {
@@ -536,17 +563,8 @@ const downstream: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "filled",
-    open: async (page, ctx) => {
-      const dialog = await openGhgCreate(page, ctx);
-      if (typeof dialog === "string") return dialog;
-      await dialog.locator("#reportingPeriodEndOn, input[name='reportingPeriodEndOn']").first().fill(GHG_PERIOD_END);
-      const next = dialog.getByRole("button", { name: "Next", exact: true });
-      await settle(page, dialog);
-      if (await next.isDisabled()) return "Next stays disabled for the period (overlap or statements still loading)";
-      await next.click();
-      await settle(page, dialog);
-      return dialog;
-    },
+    skip: needsLink,
+    open: (page, ctx) => ghgCreateStep(page, ctx, GHG_CONTENTS_STEP),
   },
   {
     id: "ghg.create-confirm",
@@ -555,8 +573,8 @@ const downstream: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "filled",
-    skip: () => "step 3 needs submitted removals in the period; none are seeded, so Next is disabled on step 2",
-    open: async () => "unreachable",
+    skip: (ctx) => needsLink(ctx) ?? (ctx.removalId ? undefined : "step 3 needs submitted removals in the period; no removal is seeded for the facility"),
+    open: (page, ctx) => ghgCreateStep(page, ctx, GHG_CONFIRM_STEP),
   },
   {
     id: "ghg.submit",
@@ -565,10 +583,35 @@ const downstream: Surface[] = [
     kind: "dialog",
     mode: "form",
     fill: "filled",
-    skip: (ctx) => (ctx.counts.certifier_ghg_statements > 0 ? "submit flow not scripted yet" : "no GHG statement is seeded"),
-    open: async () => "unreachable",
+    skip: (ctx) => needsLink(ctx) ?? (ctx.ghgStatementId ? undefined : "no GHG statement is seeded for the facility"),
+    open: async (page, ctx) => {
+      await gotoRoute(page, ctx, `certification/ghg-statements?statement=${ctx.ghgStatementId}`);
+      const sheet = lastSheet(page);
+      await expect(sheet).toBeVisible();
+      const submit = sheet.getByRole("button", { name: /^(Submit|Resubmit)$/ }).first();
+      if ((await submit.count()) === 0) return "the seeded GHG statement offers no Submit or Resubmit";
+      await submit.click();
+      const dialog = lastDialog(page);
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
   },
 ];
+
+/** Walks the New GHG statement wizard forward to `step` (2 or 3), never past its last Next. */
+async function ghgCreateStep(page: Page, ctx: CaptureContext, step: number): Promise<Locator | string> {
+  const dialog = await openGhgCreate(page, ctx);
+  if (typeof dialog === "string") return dialog;
+  await dialog.locator("#reportingPeriodEndOn, input[name='reportingPeriodEndOn']").first().fill(GHG_PERIOD_END);
+  for (let current = 1; current < step; current += 1) {
+    const next = dialog.getByRole("button", { name: "Next", exact: true });
+    await settle(page, dialog);
+    if (await next.isDisabled()) return `Next stays disabled on step ${current} for the period ending ${GHG_PERIOD_END}`;
+    await next.click();
+  }
+  await settle(page, dialog);
+  return dialog;
+}
 
 async function openGhgCreate(page: Page, ctx: CaptureContext): Promise<Locator | string> {
   const redirected = await certificationPage(page, ctx, "certification/ghg-statements");
@@ -652,24 +695,14 @@ const settingsAuth: Surface[] = [
     anonymous: true,
     open: async (page) => {
       await page.goto(`/${route}`);
-      // Auth forms are server-rendered: wait for hydration before the empty submit.
-      await page.waitForLoadState("networkidle");
+      // Auth forms are server-rendered: wait for React hydration before the empty submit.
+      await waitForHydration(page);
       await settle(page, page.locator("body"));
       // The (auth) layout is a centred min-h-screen wrapper, not a <main>.
       const shell = page.locator("main, div.min-h-screen").first();
       return (await shell.count()) ? shell : page.locator("body");
     },
   })),
-  {
-    id: "onboarding.wizard",
-    family: "settings-auth-onboarding",
-    title: "Onboarding wizard",
-    kind: "dialog",
-    mode: "form",
-    fill: "empty",
-    skip: () => "the wizard and setup guide only render for an org with no facility or an incomplete required setup step; the seeded org is complete, and no route opens them",
-    open: async () => "unreachable",
-  },
 ];
 
 export const ACTION_SURFACES: Surface[] = [

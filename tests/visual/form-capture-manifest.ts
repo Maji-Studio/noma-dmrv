@@ -14,8 +14,8 @@ import {
   openEdit,
   openRowSheet,
   openSheetFromButton,
-  type CaptureContext,
 } from "./form-capture-helpers";
+import { findBin, type CaptureContext } from "./form-capture-context";
 
 export const FAMILIES = [
   "transport-feedstock",
@@ -121,9 +121,15 @@ async function openByHeading(page: Page, name: string | RegExp): Promise<Locator
   return sheet;
 }
 
-const firstBin = (ctx: CaptureContext, type: string) => ctx.bins.find((bin) => bin.type === type);
-
-/** The 15 entity list pages (the Feedstock page is the feedstock delivery). */
+/**
+ * Every entity page with a read/edit/create sheet: 15 list pages. The "16
+ * core entities" count comes from the EntitySelect entity types
+ * (entity-labels.ts): those 16 include driver, operator and vehicle, which
+ * have no page or sheet (only quick-add dialogs, captured in
+ * form-capture-actions.ts), and leave out Sample and Delivery, which do have
+ * pages. The Feedstock page is the feedstock delivery (Delivery information,
+ * Bin allocations); there is no separate feedstock delivery route.
+ */
 const ENTITIES: EntitySpec[] = [
   { key: "feedstock", family: "transport-feedstock", title: "Feedstock", route: "feedstocks", createButton: "New Feedstock", code: (ctx) => ctx.firstCode.feedstock },
   { key: "supplier", family: "transport-feedstock", title: "Supplier", route: "suppliers", createButton: "New Supplier", code: (ctx) => ctx.supplier?.code },
@@ -134,8 +140,8 @@ const ENTITIES: EntitySpec[] = [
     title: "Storage bin (feedstock)",
     route: "storage-locations",
     createButton: "New Storage Bin",
-    code: (ctx) => firstBin(ctx, "feedstock_bin")?.code,
-    openRead: (page, ctx) => openBinSheet(page, ctx, firstBin(ctx, "feedstock_bin")!.name),
+    code: (ctx) => findBin(ctx, { type: "feedstock_bin" })?.code,
+    openRead: (page, ctx) => openBinSheet(page, ctx, findBin(ctx, { type: "feedstock_bin" })!.name),
   },
   { key: "formulation", family: "stock-samples", title: "Formulation", route: "formulations", createButton: "New Formulation", code: (ctx) => ctx.firstCode.formulation },
   { key: "product", family: "stock-samples", title: "Biochar product", route: "biochar-products", createButton: "New Product", code: (ctx) => ctx.firstCode.product },

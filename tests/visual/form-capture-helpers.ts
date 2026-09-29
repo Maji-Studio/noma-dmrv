@@ -1,88 +1,16 @@
 /**
- * Page helpers and seeded-data lookup for the form capture harness. Nothing
- * here writes: helpers only navigate, open sheets and dialogs, and read the
- * database to find the seeded Mafinga records to open.
+ * Page helpers for the form capture harness. Nothing here writes: helpers
+ * only navigate and open sheets and dialogs.
  */
-import { expect, type Locator, type Page } from "@playwright/test";
-import { Pool } from "pg";
-import { DEC_ORG_ID } from "../../src/db/org-defaults";
+import { expect, type Locator, type Page, type Route } from "@playwright/test";
 import { waitForFacilityHydration } from "../e2e/fixtures/page-helpers";
+import { findBin, type CaptureContext, type SeededBin } from "./form-capture-context";
 
 const SETTLE_TIMEOUT_MS = 20_000;
 /** Sheet transitions run 300 ms; debounced previews start shortly after. */
 const SETTLE_PAUSE_MS = 400;
 const OPEN_TIMEOUT_MS = 30_000;
-const DEFAULT_FACILITY_CODE = "FAC-MAFINGA";
 const QUICK_ADD_OPTION_TIMEOUT_MS = 8_000;
-
-export interface SeededBin {
-  id: string;
-  code: string;
-  name: string;
-  type: "feedstock_bin" | "biochar_bin" | "product_bin";
-  stockMode: string;
-}
-
-export interface CaptureContext {
-  facility: { id: string; code: string; name: string };
-  firstCode: Record<string, string | undefined>;
-  supplier?: { id: string; code: string; name: string };
-  customer?: { id: string; code: string; name: string };
-  bins: SeededBin[];
-  counts: Record<string, number>;
-}
-
-async function one<T>(pool: Pool, sql: string, params: unknown[] = []): Promise<T | undefined> {
-  const result = await pool.query(sql, params);
-  return result.rows[0] as T | undefined;
-}
-
-/** Reads the seeded facility and the first record of each entity to open. */
-export async function loadCaptureContext(): Promise<CaptureContext> {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    const facility = await one<{ id: string; code: string; name: string }>(
-      pool,
-      "select id, code, name from facilities where organization_id = $1 and archived_at is null order by (code = $2) desc, created_at limit 1",
-      [DEC_ORG_ID, process.env.FORM_CAPTURE_FACILITY ?? DEFAULT_FACILITY_CODE],
-    );
-    if (!facility) throw new Error("No facility in the default organization. Run pnpm db:seed first.");
-    const codeQueries: Record<string, string> = {
-      feedstock: "select code from feedstocks where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-      productionRun: "select code from production_runs where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-      product: "select code from biochar_products where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-      order: "select code from orders where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-      delivery: "select d.code from deliveries d join orders o on o.id = d.order_id where d.organization_id = $1 and o.facility_id = $2 order by d.code desc limit 1",
-      application: "select a.code from applications a where a.organization_id = $1 order by a.code desc limit 1",
-      creditBatch: "select code from credit_batches where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-      sample: "select sample_code as code from samples where organization_id = $1 order by sample_code desc limit 1",
-      formulation: "select code from formulations where organization_id = $1 order by code limit 1",
-      feedstockType: "select code from feedstock_types where organization_id = $1 order by code limit 1",
-      reactor: "select code from reactors where organization_id = $1 and facility_id = $2 order by code limit 1",
-    };
-    const firstCode: Record<string, string | undefined> = {};
-    for (const [key, sql] of Object.entries(codeQueries)) {
-      const params = sql.includes("$2") ? [DEC_ORG_ID, facility.id] : [DEC_ORG_ID];
-      firstCode[key] = (await one<{ code: string }>(pool, sql, params).catch(() => undefined))?.code;
-    }
-    const supplier = await one<{ id: string; code: string; name: string }>(pool, "select id, code, name from suppliers where organization_id = $1 order by code limit 1", [DEC_ORG_ID]);
-    const customer = await one<{ id: string; code: string; name: string }>(pool, "select id, code, name from customers where organization_id = $1 order by code limit 1", [DEC_ORG_ID]);
-    const bins = (
-      await pool.query(
-        "select id, code, name, type, stock_mode as \"stockMode\" from storage_locations where organization_id = $1 and facility_id = $2 and archived_at is null order by code",
-        [DEC_ORG_ID, facility.id],
-      )
-    ).rows as SeededBin[];
-    const counts: Record<string, number> = {};
-    for (const table of ["certifier_removals", "certifier_ghg_statements", "applications", "invitations"]) {
-      const row = await one<{ n: string }>(pool, `select count(*) as n from ${table} where organization_id = $1`, [DEC_ORG_ID]).catch(() => undefined);
-      counts[table] = Number(row?.n ?? 0);
-    }
-    return { facility, firstCode, supplier, customer, bins, counts };
-  } finally {
-    await pool.end();
-  }
-}
 
 /** Hides the Next.js dev overlay badge so it never lands in a capture. */
 export async function hideDevOverlay(page: Page) {
@@ -191,4 +119,47 @@ export async function openQuickAdd(page: Page, scope: Locator, trigger: string):
   const dialog = lastDialog(page);
   await expect(dialog).toBeVisible({ timeout: OPEN_TIMEOUT_MS });
   return dialog;
+}
+
+/** Opens a bin's loss or count sheet from its read sheet. */
+export async function binMovementSheet(
+  page: Page,
+  ctx: CaptureContext,
+  type: SeededBin["type"],
+  button: "Record loss" | "Reconcile stock",
+): Promise<Locator> {
+  const sheet = await openBinSheet(page, ctx, findBin(ctx, { type })!.name);
+  await sheet.getByRole("button", { name: button, exact: true }).first().click();
+  const movement = lastSheet(page);
+  await expect(movement.getByRole("heading", { name: /^Reconcile / }).first()).toBeVisible();
+  return movement;
+}
+
+/**
+ * Runs `open` with every non-GET request aborted (server actions are POSTs;
+ * reads go through GET /api/reads). Returns how many writes were attempted.
+ */
+export async function withWritesBlocked<T>(page: Page, open: () => Promise<T>): Promise<{ result: T; attempted: number }> {
+  let attempted = 0;
+  const block = async (route: Route) => {
+    if (route.request().method() !== "GET") {
+      attempted += 1;
+      return route.abort();
+    }
+    return route.fallback();
+  };
+  await page.route("**/*", block);
+  try {
+    return { result: await open(), attempted };
+  } finally {
+    await page.unroute("**/*", block);
+  }
+}
+
+/** Waits until React has hydrated the page's first form, heading or main region. */
+export async function waitForHydration(page: Page) {
+  await page.waitForFunction(() => {
+    const target = document.querySelector("form, main, h1");
+    return Boolean(target && Object.keys(target).some((key) => key.startsWith("__react")));
+  });
 }
