@@ -525,9 +525,9 @@ evidence; never use it to recalculate a composition mass.
   (text only — table cells, option labels). The `detail` surface carries **no
   card, no frame and no tinted panel**: the bar sits directly under the wet-mass
   and moisture inputs it describes and moves as they change, with one key line
-  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). Its Simple presence
-  is `picture`: the bar and key line stay in **Simple**, because they are what
-  the two inputs mean, and **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
+  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). The bar and key line
+  show at both levels, because they are what the two inputs mean, and
+  **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
   words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
   is no "Show calculation" disclosure on this surface, and `calculation={false}`
   drops the table where the host surface owns one (the stock movement card: its
@@ -741,6 +741,14 @@ resolver, `FormSection` / `DetailSection`, the section rhythm, the Simple and
 Detailed levels and derived blocks, and the `@/schemas/helpers` numeric
 helpers. This doc owns only the form type set, lines and spacing
 ([above](#form-type-lines-and-spacing)).
+
+**Simple and Detailed show the same information.** Both levels render every
+input, field, section, action and piece of decision info (stock, before →
+after, blockers, warnings). Detailed adds only explanation: calculation rows,
+basis captions, provenance, raw versus capped values. Dry figures in a read
+view are a secondary line under the wet figure at both levels. When a sheet
+gets long, group and pair rather than hide. The rule and its guard test live
+in [forms.md](./forms.md#simple-and-detailed-presentation).
 
 ## Naming, file structure, React rules
 
