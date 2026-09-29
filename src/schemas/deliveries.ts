@@ -10,6 +10,7 @@ import {
   hasStorableDeliveredWetMass,
 } from "@/lib/delivery-wet-mass";
 import { z } from "zod";
+import { orderedSourceSchema } from "./output-stock";
 import {
   optionalDistanceSource,
   resolveDistanceSource,
@@ -160,7 +161,9 @@ export const createDeliverySchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("delivered"),
   deliveredWetMassKg: optionalWetMassKg,
-  moistureContentPercent: requiredProductMoisturePercent,
+  // A split-bin load carries a reading per sub-bin; its overall moisture is derived.
+  moistureContentPercent: requiredProductMoisturePercent.optional(),
+  sources: z.array(orderedSourceSchema).min(1).optional(),
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -168,6 +171,9 @@ export const createDeliverySchema = z.object({
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
   validateDeliveredWetMass(value, ctx);
+  if (!value.sources && value.moistureContentPercent == null) {
+    ctx.addIssue({ code: "custom", path: ["moistureContentPercent"], message: "Biochar product moisture is required" });
+  }
 });
 
 /**

@@ -21,7 +21,19 @@ export type OutputStockRequest =
   | { kind: 'wet'; wetKg: Decimal; moisturePercent: Decimal }
   | { kind: 'solids'; solidsKg: Decimal }
   | { kind: 'count'; wetKg: Decimal; moisturePercent?: Decimal }
-  | { kind: 'count-solids'; solidsKg: Decimal };
+  | { kind: 'count-solids'; solidsKg: Decimal }
+  /** Split bin: sub-bins in the order they were emptied, each with its own reading, and one load weight. */
+  | { kind: 'ordered'; wetKg: Decimal; sources: readonly OrderedSource[] };
+export interface OrderedSource { layerId: string; moisturePercent: Decimal }
+
+/** The load weight is used up before this sub-bin; the operator unticks it. */
+export class UntickSubBinError extends RangeError {
+  constructor(public readonly layerId: string) { super('Load never reaches this sub-bin; untick it'); }
+}
+/** The last sub-bin's measured solids exceed what its records hold; a count comes first. */
+export class SubBinOverdrawError extends RangeError {
+  constructor(public readonly layerId: string) { super('Measured solids exceed the sub-bin'); }
+}
 
 /** Only canonical ISO 8601 UTC instants (`Date#toISOString`) are accepted, so string order is time order. */
 function canonicalInstant(value: string): string {
@@ -29,10 +41,14 @@ function canonicalInstant(value: string): string {
   if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== value) throw new RangeError('Invalid physical time');
   return value;
 }
-function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Rational {
+/** The solids fraction (1 − moisture) of a reading. */
+function solidsFraction(moisturePercent: Decimal | undefined): Rational {
   const moisture = decimal(moisturePercent as Decimal);
   if (compare(moisture, rational(BigInt(100))) >= BigInt(0)) throw new RangeError('Moisture must be below 100 percent');
-  return multiply(decimal(wetKg), subtract(rational(BigInt(1)), divide(moisture, rational(BigInt(100)))));
+  return subtract(rational(BigInt(1)), divide(moisture, rational(BigInt(100))));
+}
+function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Rational {
+  return multiply(decimal(wetKg), solidsFraction(moisturePercent));
 }
 
 /**
@@ -77,21 +93,11 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
   }).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.layer.postingSequence < b.layer.postingSequence ? -1 : 1));
   const eligible = prepared.filter(p => p.placedAt <= at);
   const expectedSolidsKg = eligible.reduce((sum, p) => add(sum, p.capacity), rational(BigInt(0)));
-  const count = request.kind === 'count' || request.kind === 'count-solids';
-  let measured: Rational;
-  if (request.kind === 'solids' || request.kind === 'count-solids') measured = decimal(request.solidsKg);
-  else if (request.kind === 'count' && decimal(request.wetKg).numerator === BigInt(0)) measured = rational(BigInt(0));
-  else measured = wetSolids(request.wetKg, request.moisturePercent);
-  if (!count && measured.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
-  const discrepancySolidsKg = count ? subtract(measured, expectedSolidsKg) : rational(BigInt(0));
-  const requested = count ? subtract(expectedSolidsKg, measured) : measured;
-  if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new RangeError('Insufficient exact dry solids');
-  let left = requested.numerator > BigInt(0) ? requested : rational(BigInt(0));
-  const allocations = [];
-  const remainingLayers: OutputStockLayer[] = [];
-  for (const p of prepared) {
-    if (p.placedAt > at || left.numerator === BigInt(0) || p.capacity.numerator === BigInt(0)) { remainingLayers.push(p.layer); continue; }
-    const solidsKg = compare(left, p.capacity) >= BigInt(0) ? p.capacity : left;
+  type Prepared = (typeof prepared)[number];
+  const allocations: { layerId: string; dryKg: string; solidsKg: Rational; wetShareKg: Rational | null; readingPercent: Decimal | null; runs: { productionRunId: string; dryKg: string }[] }[] = [];
+  const drawn = new Map<string, OutputStockLayer>();
+  /** Takes exact solids from one layer, rounding dry grams cumulatively and closing run shares. */
+  const draw = (p: Prepared, solidsKg: Rational, wetShareKg: Rational | null, readingPercent: Decimal | null) => {
     const remainingSolidsKg = subtract(p.capacity, solidsKg);
     const exactRemainingDryGrams = multiply(multiply(remainingSolidsKg, p.fraction), rational(GRAMS_PER_KG));
     const remainingDryGrams = p.established - round(subtract(rational(p.established), exactRemainingDryGrams));
@@ -102,12 +108,55 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
       throw new RangeError('Run balance does not match frozen cumulative provenance');
     }
     const runs = p.layer.runs.map((run, i) => ({ productionRunId: run.productionRunId, dryKg: kilograms(shares[i]) }));
-    const wetShareKg = request.kind === 'wet' ? divide(solidsKg,
-      subtract(rational(BigInt(1)), divide(decimal(request.moisturePercent), rational(BigInt(100))))) : null;
-    allocations.push({ layerId: p.layer.id, dryKg: kilograms(dryGrams), solidsKg, wetShareKg, runs });
-    remainingLayers.push({ ...p.layer, remainingSolidsKg, remainingDryBiocharKg: kilograms(remainingDryGrams), runs: p.layer.runs.map((run, i) => ({ ...run, remainingDryKg: kilograms(p.runs[i].balance - shares[i]) })) });
-    left = subtract(left, solidsKg);
+    allocations.push({ layerId: p.layer.id, dryKg: kilograms(dryGrams), solidsKg, wetShareKg, readingPercent, runs });
+    drawn.set(p.layer.id, { ...p.layer, remainingSolidsKg, remainingDryBiocharKg: kilograms(remainingDryGrams), runs: p.layer.runs.map((run, i) => ({ ...run, remainingDryKg: kilograms(p.runs[i].balance - shares[i]) })) });
+  };
+  const count = request.kind === 'count' || request.kind === 'count-solids';
+  let discrepancySolidsKg = rational(BigInt(0));
+  if (request.kind === 'ordered') {
+    let wetLeft = decimal(request.wetKg);
+    if (wetLeft.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
+    const byId = new Map(eligible.map(p => [p.layer.id, p]));
+    const seen = new Set<string>();
+    request.sources.forEach((source, index) => {
+      const p = byId.get(source.layerId);
+      if (!p || seen.has(source.layerId)) throw new RangeError('Choose each sub-bin once from stock present at this time');
+      seen.add(source.layerId);
+      if (p.capacity.numerator === BigInt(0)) throw new UntickSubBinError(source.layerId);
+      const fraction = solidsFraction(source.moisturePercent);
+      if (index < request.sources.length - 1) {
+        // Emptied at its own reading; the load must still reach the next sub-bin.
+        const wetKg = divide(p.capacity, fraction);
+        wetLeft = subtract(wetLeft, wetKg);
+        if (wetLeft.numerator <= BigInt(0)) throw new UntickSubBinError(request.sources[index + 1].layerId);
+        draw(p, p.capacity, wetKg, source.moisturePercent);
+      } else {
+        const solidsKg = multiply(wetLeft, fraction);
+        if (compare(solidsKg, p.capacity) > BigInt(0)) throw new SubBinOverdrawError(source.layerId);
+        draw(p, solidsKg, wetLeft, source.moisturePercent);
+      }
+    });
+    if (!request.sources.length) throw new RangeError('Choose at least one sub-bin');
+  } else {
+    let measured: Rational;
+    if (request.kind === 'solids' || request.kind === 'count-solids') measured = decimal(request.solidsKg);
+    else if (request.kind === 'count' && decimal(request.wetKg).numerator === BigInt(0)) measured = rational(BigInt(0));
+    else measured = wetSolids(request.wetKg, request.moisturePercent);
+    if (!count && measured.numerator <= BigInt(0)) throw new RangeError('Draw must be positive');
+    discrepancySolidsKg = count ? subtract(measured, expectedSolidsKg) : rational(BigInt(0));
+    const requested = count ? subtract(expectedSolidsKg, measured) : measured;
+    if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new RangeError('Insufficient exact dry solids');
+    let left = requested.numerator > BigInt(0) ? requested : rational(BigInt(0));
+    const readingPercent = request.kind === 'wet' ? request.moisturePercent : null;
+    for (const p of eligible) {
+      if (left.numerator === BigInt(0)) break;
+      if (p.capacity.numerator === BigInt(0)) continue;
+      const solidsKg = compare(left, p.capacity) >= BigInt(0) ? p.capacity : left;
+      draw(p, solidsKg, request.kind === 'wet' ? divide(solidsKg, solidsFraction(request.moisturePercent)) : null, readingPercent);
+      left = subtract(left, solidsKg);
+    }
   }
+  const remainingLayers = prepared.map(p => drawn.get(p.layer.id) ?? p.layer);
   const drawnDryGrams = allocations.reduce((sum, allocation) => sum + grams(allocation.dryKg), BigInt(0));
   if (!count && drawnDryGrams === BigInt(0)) {
     throw new RangeError('Draw is below one gram of dry biochar; increase the measured mass');

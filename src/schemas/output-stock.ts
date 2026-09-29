@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { massKgSchema, stockEventInstantSchema, storedPercentSchema } from './helpers';
 
+/** One sub-bin of a split-bin draw with the moisture read as it was emptied. */
+export const orderedSourceSchema = z.object({
+  layerId: z.uuid(),
+  moisturePercent: storedPercentSchema().finite().min(0).lt(100),
+});
 export const outputStockPreviewSchema = z.object({
   storageLocationId: z.uuid(),
   facilityId: z.uuid(),
@@ -9,10 +14,15 @@ export const outputStockPreviewSchema = z.object({
   wetMassKg: massKgSchema().finite(),
   moisturePercent: storedPercentSchema().finite().min(0).lt(100).nullable().optional(),
   correctsMovementId: z.uuid().optional(),
+  /** Split bins: sub-bins in the order they were emptied. Absent means oldest first at one reading. */
+  sources: z.array(orderedSourceSchema).min(1).optional(),
 }).superRefine((value, ctx) => {
   if (value.kind !== 'count' && value.wetMassKg === 0)
     ctx.addIssue({ code: 'custom', path: ['wetMassKg'], message: 'Wet mass must be greater than zero.' });
-  if (!(value.kind === 'count' && value.wetMassKg === 0) && value.moisturePercent == null)
+  if (value.sources && value.kind === 'count')
+    ctx.addIssue({ code: 'custom', path: ['sources'], message: 'A count covers the whole bin.' });
+  // A correction of a split-bin draw reuses the original readings, so the server decides there.
+  if (!(value.kind === 'count' && value.wetMassKg === 0) && !value.sources && !value.correctsMovementId && value.moisturePercent == null)
     ctx.addIssue({ code: 'custom', path: ['moisturePercent'], message: 'Enter the measured moisture.' });
 });
 export const outputStockPostSchema = outputStockPreviewSchema.safeExtend({

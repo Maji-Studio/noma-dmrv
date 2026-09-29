@@ -46,6 +46,7 @@ const storageLocation: StorageLocationWithFacility = {
   organizationId: "00000000-0000-4000-8000-000000000002",
   code: "FB-001",
   name: "North hopper",
+  stockMode: "split",
   type: "feedstock_bin",
   capacityKg: null,
   storageMethod: null,

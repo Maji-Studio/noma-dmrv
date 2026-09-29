@@ -2,8 +2,9 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
-import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, subtract, type OutputStockLayer, type Rational } from '@/lib/output-stock';
-import { outputStockPreviewSchema } from '@/schemas/output-stock';
+import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, SubBinOverdrawError, subtract, UntickSubBinError, type OutputStockLayer, type Rational } from '@/lib/output-stock';
+import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
+import { orderedSourceSchema, outputStockPreviewSchema } from '@/schemas/output-stock';
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
@@ -31,10 +32,14 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const state = lane === 'biochar' ? await getBiocharOutputStockLayers(ctx, input, reader) : await getProductOutputStockLayers(ctx, input, reader);
   const correction = input.correctsMovementId ? await prepareOutputCorrection(ctx, input, state.layers, reader) : null;
   const layers = correction?.layers ?? state.layers;
+  // A correction reuses the original's sub-bin order and readings (plan rule 13).
+  const sources = correction ? savedSources(correction.original.inputSnapshot) : input.sources;
+  if (sources && bin.stockMode !== 'split') throw new SafeError('Only a split bin takes a sub-bin order.');
+  if (!sources && input.moisturePercent == null && !(input.kind === 'count' && input.wetMassKg === 0)) throw new SafeError('Enter the measured moisture.');
   // Reducing a loss restores its own saved provenance, even after a late intake.
   // An eligible delivery correction may intentionally use the newly known FIFO.
   const originalSolids = correction?.allocations.reduce((sum, a) => add(sum, readRational(a.basisSnapshot.solidsKg)), rational(BigInt(0)));
-  const replacementSolids = input.kind === 'loss' ? multiply(decimal(input.wetMassKg), subtract(rational(BigInt(1)), divide(decimal(input.moisturePercent!), rational(BigInt(100))))) : null;
+  const replacementSolids = input.kind === 'loss' && !sources ? multiply(decimal(input.wetMassKg), subtract(rational(BigInt(1)), divide(decimal(input.moisturePercent!), rational(BigInt(100))))) : null;
   const preserveLossSources = originalSolids && replacementSolids && compare(replacementSolids, originalSolids) <= BigInt(0);
   const planningLayers = preserveLossSources ? layers.filter(l => correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === l.id)) : layers;
   const events = await reader.select({ id: binMovements.id, sequence: binMovements.postingSequence })
@@ -52,17 +57,19 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   try {
     plan = planOutputStock(planningLayers, input.occurredAt, input.kind === 'count'
       ? { kind: 'count', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent ?? undefined }
-      : { kind: 'wet', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent! });
+      : sources ? { kind: 'ordered', wetKg: input.wetMassKg, sources }
+        : { kind: 'wet', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent! });
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
-    blockingMessage = operatorStockMessage(error.message);
+    blockingMessage = subBinMessage(error, codeMap) ?? operatorStockMessage(error.message);
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
   const beforeDryKg = Number(kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
   const beforeSolidsKg = rationalNumber(before.expectedSolidsKg);
   const removedSolids = plan?.allocations.reduce((sum, a) => add(sum, a.solidsKg), rational(BigInt(0))) ?? rational(BigInt(0));
   const afterSolidsKg = beforeSolidsKg - rationalNumber(removedSolids);
-  const moisture = input.moisturePercent ?? null;
+  // A draw from several sub-bins has no single reading; its overall moisture is 1 − solids ÷ wet.
+  const moisture = sources ? (plan ? (1 - rationalNumber(removedSolids) / input.wetMassKg) * PERCENT : null) : input.moisturePercent ?? null;
   const fraction = moisture === null ? null : 1 - moisture / 100;
   const layerViews = (viewLayers: OutputStockLayer[]) => viewLayers.filter(l => l.placedAt <= input.occurredAt).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.postingSequence < b.postingSequence ? -1 : 1)).map(l => ({
     layerId: l.id, code: codeMap.get(l.id) ?? l.id, dryMassKg: Number(l.remainingDryBiocharKg),
@@ -87,7 +94,35 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
       dryMassKg: Number(a.dryKg), wetMassKg: a.wetShareKg ? rationalNumber(a.wetShareKg) : null,
       runs: a.runs.map(r => ({ productionRunId: r.productionRunId, code: runMap.get(r.productionRunId) ?? r.productionRunId, dryMassKg: Number(r.dryKg) })) })) ?? [], blockingMessage,
   };
-  return { input, bin, lane, layers, plan, preview, correction };
+  return { input, bin, lane, layers, plan, preview, correction, sources };
+}
+
+const PERCENT = 100;
+const STORED_PERCENT_PRECISION = 1 / STORED_PERCENT_INPUT_STEP;
+
+/** A derived overall moisture at the precision a stored percent keeps. */
+export function storedOverallMoisture(preview: OutputStockPreview): number | null {
+  const moisture = preview.estimateMoisturePercent;
+  return moisture == null ? null : Math.round(moisture * STORED_PERCENT_PRECISION) / STORED_PERCENT_PRECISION;
+}
+
+/** The order and readings an ordered draw was posted with, or undefined for a FIFO draw. */
+function savedSources(inputSnapshot: Record<string, unknown> | null) {
+  const parsed = orderedSourceSchema.array().min(1).safeParse(inputSnapshot?.sources);
+  return parsed.success ? parsed.data : undefined;
+}
+
+/** Split-bin refusals name the sub-bin the operator has to act on. */
+function subBinMessage(error: RangeError, codes: Map<string, string>): string | null {
+  if (error instanceof UntickSubBinError) {
+    const code = codes.get(error.layerId) ?? error.layerId;
+    return `This load is used up before it reaches ${code}. Untick ${code}.`;
+  }
+  if (error instanceof SubBinOverdrawError) {
+    const code = codes.get(error.layerId) ?? error.layerId;
+    return `This load holds more dry biochar than ${code} holds by the records. Record a count first.`;
+  }
+  return null;
 }
 export async function previewOutputStock(ctx: OrgContext, input: OutputStockPreviewInput): Promise<OutputStockPreview> {
   requireOrgScope(ctx);
@@ -110,8 +145,10 @@ export async function previewOutputStock(ctx: OrgContext, input: OutputStockPrev
     });
   } catch (error) {
     if (!(error instanceof ActionConflictError)) throw error;
-    const preview = (await prepareOutputStock(ctx, { ...input, correctsMovementId: undefined })).preview;
-    return { ...preview, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? [error.conflict] };
+    // Only the current balance is shown, so read it as a zero count: a split-bin
+    // correction may carry neither a reading nor an order of its own.
+    const preview = (await prepareOutputStock(ctx, { ...input, correctsMovementId: undefined, sources: undefined, kind: 'count', wetMassKg: 0, moisturePercent: null })).preview;
+    return { ...preview, beforeRecordedWetKg: undefined, afterDryKg: preview.beforeDryKg, afterSolidsKg: preview.beforeSolidsKg, afterEstimatedWetKg: preview.beforeEstimatedWetKg, afterAllocations: preview.beforeAllocations, allocations: [], removedDryKg: 0, removedWetKg: null, blockingMessage: `${error.message} Replacement balances are unavailable until this dependency is resolved.`, blockers: error.blockers ?? [error.conflict] };
   }
 }
 export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId: string; formulationId: string }): Promise<MatchingOutputBin[]> {
