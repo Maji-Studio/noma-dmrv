@@ -8,7 +8,7 @@ import { createApplication } from "@/data-access/applications";
 import { createOrder, getOrders, updateOrder } from "@/data-access/orders";
 import { getOrderEntityById } from "@/data-access/entities/orders";
 import { getStockAvailability } from "@/data-access/stock-availability";
-import { getOutputBinDryBalance } from "@/data-access/output-stock";
+import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { createDeliverySchema } from "@/schemas/deliveries";
 import { postedStockFixture, postDelivery, deliveryInput, postMeasurement, cleanupPostedStock, STOCK_DATE, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
@@ -41,20 +41,20 @@ describe("completed delivery order balance", () => {
     const f = await fixture(1000); const delivery = await postDelivery(f, 1000, 40);
     expect(delivery.massDryKg).toBe(600);
     await expect(updateDelivery(f.ctx, delivery.id, { moistureContentPercent: 5 })).rejects.toThrow("Correct entry");
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(400);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(400);
   });
   it("closes the exact dry remainder across partial measured deliveries", async () => {
     const f = await fixture(2000);
     const first = await postDelivery(f, 333.333, 0);
     const last = await postDelivery(f, 1333.334, 50);
     expect(first.massDryKg).toBe(333.333); expect(last.massDryKg).toBe(666.667);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(0);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(0);
   });
   it("allows a wetter later truck without changing recorded product creation mass", async () => {
     const f = await fixture(2000); await postDelivery(f, 500);
     const wetter = await postDelivery(f, 1000, 50);
     expect(wetter.massDryKg).toBe(500); expect(f.product?.massKg).toBe(1000);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(0);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(0);
   });
   it("reports only commercial wet order remainder without guessing dry provenance", async () => {
     const f = await fixture(1000); await postDelivery(f, 250);
@@ -75,7 +75,7 @@ describe("completed delivery order balance", () => {
   it("allows competing orders without reserving or over-allocating physical stock", async () => {
     const f = await fixture(800);
     const other = await createOrder(f.ctx, { code: `E2E-OTHER-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id, formulationId: f.pure.id, orderDate: new Date(STOCK_DATE), quantityKg: 800, packaging: "loose" });
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(1000);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
     await postDelivery(f, 800);
     await expect(postDelivery({ ...f, order: other }, 300)).rejects.toThrow(/Not enough dry biochar/);
   });
@@ -126,7 +126,7 @@ describe("completed delivery order balance", () => {
   it("blocks correcting an earlier truck after a later movement used its source layer", async () => {
     const f = await fixture(); const first = await postDelivery(f, 60); const later = await postDelivery(f, 20);
     await expect(correction(f, first.id, 50)).rejects.toThrow(later.code);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(920);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(920);
   });
   it("reports live order availability for another completed truck", async () => {
     const f = await fixture(); const current = await postDelivery(f, 60); await postDelivery(f, 20);
@@ -138,7 +138,7 @@ describe("completed delivery order balance", () => {
     const results = await Promise.allSettled(inputs.map(input => createDelivery(f.ctx, input)));
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(940);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(940);
   });
   it("serializes an order shrink against a concurrent completed truck", async () => {
     const f = await fixture(); const input = await deliveryInput(f, 60);
