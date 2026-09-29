@@ -179,7 +179,6 @@ export function IngredientBinField({
                 <FormField
                   id={row.storageLocationFieldName}
                   label={`${row.feedstockTypeName} bin`}
-                  helperText={row.feedstockTypeCategory}
                   error={fieldState.error?.message}
                 >
                   <EntitySelect

@@ -508,7 +508,7 @@ export function StorageLocationList() {
                         <ArrowsClockwiseIcon size={18} weight="bold" />
                         Reconcile stock
                       </Button>
-                      {sideSheet.entity.type === "feedstock_bin" ? <BinMovementHistoryModal storageLocationId={sideSheet.entity.id} /> : <><OutputBinBalance storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /><OutputStockHistory storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /></>}
+                      {sideSheet.entity.type === "feedstock_bin" ? <BinMovementHistoryModal compact triggerLabel="Stock history" storageLocationId={sideSheet.entity.id} /> : <><OutputBinBalance storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /><OutputStockHistory compact triggerLabel="Stock history" storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /></>}
                     </div>
                   ),
                 },
