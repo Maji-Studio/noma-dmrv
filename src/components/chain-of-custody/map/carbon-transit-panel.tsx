@@ -89,10 +89,13 @@ const MAP_VIEW_STACK_VARS = {
   "--cv-record-panel-w": `${RECORD_PANEL_WIDTH_PX}px`,
 } as CSSProperties;
 
-/** Which anchor the panel plots: a single application or a batch roll-up. */
+/**
+ * Which anchor the panel plots: a single application or a batch roll-up,
+ * optionally narrowed to the lineages flowing through one production run.
+ */
 export type ChainGeoSource =
   | { kind: "application"; id: string }
-  | { kind: "creditBatch"; id: string };
+  | { kind: "creditBatch"; id: string; runId: string | null };
 
 export interface CarbonTransitPanelProps {
   source: ChainGeoSource;
@@ -181,7 +184,9 @@ export function CarbonTransitPanel({
   // from the previous application/batch points at a leg that no longer exists,
   // which would pin the whole map in isolation mode. Reset during render (the
   // React-recommended reset-on-prop-change) rather than via useEffect.
-  const sourceKey = `${source.kind}:${source.id}`;
+  const sourceKey = `${source.kind}:${source.id}:${
+    source.kind === "creditBatch" ? (source.runId ?? "") : ""
+  }`;
   const [hoverSourceKey, setHoverSourceKey] = useState(sourceKey);
   if (hoverSourceKey !== sourceKey) {
     setHoverSourceKey(sourceKey);
@@ -193,7 +198,8 @@ export function CarbonTransitPanel({
     source.kind === "application" ? source.id : null
   );
   const batchGeo = useCreditBatchChainGeo(
-    source.kind === "creditBatch" ? source.id : null
+    source.kind === "creditBatch" ? source.id : null,
+    source.kind === "creditBatch" ? source.runId : null
   );
   const { data: geo, isLoading, isError, error } =
     source.kind === "application" ? applicationGeo : batchGeo;
