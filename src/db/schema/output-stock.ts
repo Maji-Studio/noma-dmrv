@@ -16,10 +16,10 @@ export const productIngredientSnapshots = pgTable('product_ingredient_snapshots'
   formulationIngredientId: uuid('formulation_ingredient_id').notNull(),
   sourceStorageLocationId: uuid('source_storage_location_id'),
   wetMassKg: exactMassKg('wet_mass_kg').notNull(),
+  /** Always the operator's measurement of the material used. */
   moisturePercentUsed: percent('moisture_percent_used').notNull(),
-  moistureSource: text('moisture_source', { enum: ['weighted_remaining', 'operator_override'] }).notNull(),
-  /** Original intake identity/evidence, or override reason. */
-  moistureSourceSnapshot: jsonb('moisture_source_snapshot').$type<Record<string, unknown>>().notNull(),
+  /** The ingredient bin's estimate the operator saw beside the field; null when the bin had none or no bin was used. */
+  moistureEstimate: jsonb('moisture_estimate').$type<{ moisturePercent: number; wetMassKg: number; dryMassKg: number }>(),
   drySolidsKg: exactMassKg('dry_solids_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, t => [
@@ -85,6 +85,38 @@ export const outputStockRunAllocations = pgTable('output_stock_run_allocations',
   foreignKey({ columns: [t.productionRunId, t.organizationId], foreignColumns: [productionRuns.id, productionRuns.organizationId] }),
 ]);
 
+/**
+ * A measured moisture that resets the estimate of what it describes: a split
+ * bin's sub-bin (one layer column set). Both layer columns null is reserved for
+ * a mix bin's whole pile. Estimates use the latest reading that no correction
+ * has reversed; dry biochar and solids never change with a reading.
+ */
+export const outputStockMoistureReadings = pgTable('output_stock_moisture_readings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: text('organization_id').notNull().references(() => organizations.id),
+  storageLocationId: uuid('storage_location_id').notNull(),
+  /** The movement that measured it. */
+  movementId: uuid('movement_id').notNull(),
+  biocharProductId: uuid('biochar_product_id'),
+  productionRunId: uuid('production_run_id'),
+  moisturePercent: percent('moisture_percent').notNull(),
+  /** Exact rational solids the layer held right after the reading. */
+  solidsBasisKg: jsonb('solids_basis_kg').$type<{ numerator: string; denominator: string }>().notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, t => [
+  unique('output_stock_moisture_readings_movement_product_unique').on(t.movementId, t.biocharProductId),
+  unique('output_stock_moisture_readings_movement_run_unique').on(t.movementId, t.productionRunId),
+  index('output_stock_moisture_readings_org_bin_idx').on(t.organizationId, t.storageLocationId),
+  foreignKey({ columns: [t.movementId, t.organizationId], foreignColumns: [binMovements.id, binMovements.organizationId] }),
+  foreignKey({ columns: [t.storageLocationId, t.organizationId], foreignColumns: [storageLocations.id, storageLocations.organizationId] }),
+  foreignKey({ columns: [t.biocharProductId, t.organizationId], foreignColumns: [biocharProducts.id, biocharProducts.organizationId] }),
+  foreignKey({ columns: [t.productionRunId, t.organizationId], foreignColumns: [productionRuns.id, productionRuns.organizationId] }),
+  check('output_stock_moisture_readings_one_layer', sql`${t.biocharProductId} is null or ${t.productionRunId} is null`),
+  check('output_stock_moisture_readings_percent', sql`${t.moisturePercent} >= 0 and ${t.moisturePercent} < 100`),
+]);
+
+export type OutputStockMoistureReading = typeof outputStockMoistureReadings.$inferSelect;
 export type ProductIngredientSnapshot = typeof productIngredientSnapshots.$inferSelect;
 export type OutputStockAllocation = typeof outputStockAllocations.$inferSelect;
 export type OutputStockRunAllocation = typeof outputStockRunAllocations.$inferSelect;

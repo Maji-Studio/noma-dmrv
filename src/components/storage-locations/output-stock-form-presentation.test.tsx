@@ -9,11 +9,12 @@ vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ ch
 
 const state = vi.hoisted(() => ({ blocker: null as string | null }));
 vi.mock("@/hooks/use-output-stock", () => ({
+  useOutputStockBalance: () => ({ data: undefined }),
   usePostOutputStock: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useOutputStockPreview: () => ({ isFetching: false, refetch: vi.fn(), data: {
     basisFingerprint: "basis", storageLocationId: "bin", binName: "Source bin", lane: "biochar",
     beforeDryKg: 80, afterDryKg: 0, removedDryKg: 80, removedWetKg: 100,
-    beforeEstimatedWetKg: 100, afterEstimatedWetKg: 0, estimateMoisturePercent: 20,
+    beforeEstimatedWetKg: 100, afterEstimatedWetKg: 0, movementMoisturePercent: 20,
     discrepancySolidsKg: 0, allocations: [], blockingMessage: state.blocker,
   } satisfies Partial<OutputStockPreview> }),
 }));

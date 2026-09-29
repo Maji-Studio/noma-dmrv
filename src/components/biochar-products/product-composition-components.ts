@@ -8,9 +8,8 @@
  * available" rather than being filed as solids or water.
  */
 import type { ProductCompositionPart } from "@/components/ui/product-composition-preview";
-import { GRAMS_PER_KILOGRAM, type IngredientBin } from "@/lib/biochar-composition";
+import type { IngredientBin } from "@/lib/biochar-composition";
 import { MASS_MOISTURE_LABELS, splitWetMass } from "@/lib/mass-moisture";
-import type { AffectedStockPreview } from "@/types/output-stock";
 
 export type CompositionComponent = ProductCompositionPart;
 
@@ -31,35 +30,17 @@ function finiteMass(value: unknown): number | null {
 }
 
 /**
- * Dry solids for one ingredient, most authoritative first:
- * - a saved product (`frozen`) keeps the dry snapshot recorded at creation, so
- *   later bin moisture never rewrites it;
- * - moisture the operator measured splits the entered wet mass;
- * - otherwise the ingredient bin's own stock ratio from the server projection,
- *   unrounded, which is the basis the server posts (rounded to the gram only
- *   at the end, as stored).
- * A zero addition has zero solids whatever the moisture says.
+ * Dry solids for one ingredient: a saved product (`frozen`) keeps the dry
+ * snapshot recorded at creation, so later bin moisture never rewrites it; a new
+ * one splits the entered wet mass at the moisture the operator measured, which
+ * is the basis the server posts. A zero addition has zero solids whatever the
+ * moisture says.
  */
-export function ingredientDrySolidsKg(
-  ingredient: IngredientLike,
-  { frozen = false, stock }: { frozen?: boolean; stock?: AffectedStockPreview } = {},
-): number | null {
+export function ingredientDrySolidsKg(ingredient: IngredientLike, { frozen = false }: { frozen?: boolean } = {}): number | null {
   const wetKg = finiteMass(ingredient.massKg);
   if (wetKg === 0) return 0;
   if (frozen) return finiteMass(ingredient.massDryKg);
-  if (ingredient.moistureSource === "operator_override") {
-    return splitWetMass(wetKg, ingredient.moistureContentPercent)?.dryKg ?? null;
-  }
-  if (
-    wetKg === null ||
-    stock?.lane !== "ingredient" ||
-    stock.beforeDryKg === null ||
-    stock.beforeEstimatedWetKg === null ||
-    stock.beforeEstimatedWetKg <= 0
-  ) {
-    return null;
-  }
-  return Math.round((wetKg * stock.beforeDryKg / stock.beforeEstimatedWetKg) * GRAMS_PER_KILOGRAM) / GRAMS_PER_KILOGRAM;
+  return splitWetMass(wetKg, ingredient.moistureContentPercent)?.dryKg ?? null;
 }
 
 /**
@@ -68,7 +49,7 @@ export function ingredientDrySolidsKg(
  */
 export function ingredientComponents(
   ingredient: IngredientLike,
-  options: { frozen?: boolean; stock?: AffectedStockPreview } = {},
+  options: { frozen?: boolean } = {},
 ): CompositionComponent[] {
   const wetKg = finiteMass(ingredient.massKg);
   const dryKg = ingredientDrySolidsKg(ingredient, options);

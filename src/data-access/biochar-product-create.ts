@@ -1,4 +1,4 @@
-import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, storageLocations, type BiocharProduct } from '@/db/schema';
+import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { grams, kilograms } from '@/lib/output-stock';
@@ -80,8 +80,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
       await tx.insert(productIngredientSnapshots).values({ organizationId: ctx.organizationId, biocharProductId: product.id,
         formulationIngredientId: String(ingredient.formulationIngredientId), sourceStorageLocationId: typeof ingredient.storageLocationId === 'string' ? ingredient.storageLocationId : null,
         wetMassKg: kilograms(grams(Number(ingredient.massKg))), moisturePercentUsed: moisture,
-        moistureSource: ingredient.moistureSource === 'weighted_remaining' ? 'weighted_remaining' : 'operator_override',
-        moistureSourceSnapshot: ingredient.moistureSourceSnapshot as Record<string, unknown>, drySolidsKg: kilograms(grams(Number(ingredient.massDryKg))) });
+        moistureEstimate: (ingredient.moistureEstimate ?? null) as ProductIngredientSnapshot['moistureEstimate'], drySolidsKg: kilograms(grams(Number(ingredient.massDryKg))) });
     }
     if (!bin.formulationId) await tx.update(storageLocations).set({ formulationId: data.formulationId, updatedAt: new Date() }).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, bin.id)));
     return product;

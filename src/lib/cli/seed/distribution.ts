@@ -28,7 +28,7 @@ export async function seedDistribution(infra: Infrastructure, counts: SeedCounts
         formulationIngredientId: ingredient.id, feedstockTypeId: infra.manure.id,
         feedstockTypeName: MANURE.name, feedstockTypeCategory: MANURE.category,
         ratio: ingredient.ratio, storageLocationId: infra.manureBin.id,
-        massKg: PRODUCT.ingredientWetKg, moistureSource: "weighted_remaining" as const,
+        massKg: PRODUCT.ingredientWetKg, moistureContentPercent: PRODUCT.ingredientMoisturePercent,
       }],
     };
     const preview = await unwrap(`preview product stock ${placedAt}`, previewProductStockFn(form));

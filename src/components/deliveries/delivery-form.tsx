@@ -24,6 +24,7 @@ import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-conte
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
+import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
 import {
@@ -245,6 +246,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery",
     occurredAt: String(watchDate), wetMassKg: wetMass, moisturePercent: moisture,
   } : null);
+  const moistureEstimate = useOutputMoistureEstimate(isEditMode ? null : watchBinId, formFacilityId, watchDate ? String(watchDate) : null, stockPreview.data?.moistureEstimate);
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
 
@@ -351,6 +353,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             required
             disabled={isSubmitting || isEditMode}
             placeholder="e.g. 20"
+            estimate={isEditMode ? undefined : moistureEstimate}
+            reading={watchMoisture}
             registration={register("moistureContentPercent")}
           />
           {/* The composition cards belong to the same grid as the two inputs

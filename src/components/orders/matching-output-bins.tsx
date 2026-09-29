@@ -16,8 +16,8 @@ const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
  * hides the block and Detailed shows it.
  *
  * Each bin leads with its wet stock. An order has no departure moisture yet
- * (the delivery measures it), so the estimate uses each batch's recorded
- * moisture; a bin whose layers do not resolve falls back to its dry stock.
+ * (the delivery measures it), so the estimate uses each batch's latest
+ * moisture reading; a bin whose layers do not resolve falls back to its dry stock.
  * Simple renders nothing here, so it does not fetch the bins either.
  */
 export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: string; formulationId: string }) {
@@ -46,7 +46,7 @@ function MatchingOutputBinCard({ bin, facilityId }: {
     <OutputStockAvailability
       binName={preview?.binName ?? bin.name}
       dryKg={preview?.beforeDryKg ?? bin.dryMassKg}
-      wetEstimate={bin.estimatedWetMassKg == null ? null : { kg: bin.estimatedWetMassKg, basis: "At the moisture recorded for each batch" }}
+      wetEstimate={bin.estimatedWetMassKg == null ? null : { kg: bin.estimatedWetMassKg, basis: "At the latest moisture reading of each batch" }}
       allocations={preview?.beforeAllocations}
       actions={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={bin.id} facilityId={facilityId} />}
     />

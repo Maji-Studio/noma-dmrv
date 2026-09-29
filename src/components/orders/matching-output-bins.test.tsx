@@ -11,7 +11,7 @@ vi.mock("@/hooks/use-output-stock", () => ({
     const bin = state.bins.find(bin => bin.id === input?.storageLocationId);
     return { isLoading: state.loading, error: state.error ? new Error("Unavailable") : null, data: state.loading || state.error || !bin ? undefined : {
       binName: bin.name, binCode: bin.code, formulationName: "Pure biochar", lane: "product", beforeDryKg: 100, afterDryKg: 0,
-      beforeEstimatedWetKg: null, afterEstimatedWetKg: null, estimateMoisturePercent: null,
+      beforeEstimatedWetKg: null, afterEstimatedWetKg: null, movementMoisturePercent: null,
       beforeAllocations: [{ layerId: "batch", code: "BP-001", dryMassKg: 100, wetMassKg: null, runs: [] }], afterAllocations: [],
     } };
   },
@@ -21,7 +21,7 @@ import { MatchingOutputBins } from "./matching-output-bins";
 beforeEach(() => { state.loading = false; state.error = false; state.inputs = []; });
 describe("MatchingOutputBins", () => {
   it("renders every bin beyond the first page without selecting or reserving stock", () => {
-    state.bins = Array.from({ length: 25 }, (_, i) => ({ id: String(i), code: `B${i}`, name: `Bin ${i + 1}`, dryMassKg: 100, recordedWetMassKg: 150, estimatedWetMassKg: null }));
+    state.bins = Array.from({ length: 25 }, (_, i) => ({ id: String(i), code: `B${i}`, name: `Bin ${i + 1}`, dryMassKg: 100, estimatedWetMassKg: null }));
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(html.match(/role="article"/g)).toHaveLength(25);
     expect(html).toContain("Bin 25");
@@ -36,7 +36,7 @@ describe("MatchingOutputBins", () => {
     expect(html).toContain("You can save this order now");
   });
   it("shows current layers and history without a withdrawal", () => {
-    state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150, estimatedWetMassKg: null }];
+    state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, estimatedWetMassKg: null }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(state.inputs).toEqual([{ storageLocationId: "bin", facilityId: "facility" }]);
     // The bar names the batch on hand and its dry mass, in its own accent.
@@ -52,16 +52,16 @@ describe("MatchingOutputBins", () => {
     expect(html).not.toMatch(/Before loading|After loading|removed|>0 kg dry biochar|150 kg/);
   });
   it("leads with the bin's wet estimate and keeps dry stock as detail", () => {
-    state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150, estimatedWetMassKg: 118 }];
+    state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, estimatedWetMassKg: 118 }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(html).toContain("Available wet stock, estimate");
     expect(html).toContain("118 kg wet");
-    expect(html).toContain("At the moisture recorded for each batch");
+    expect(html).toContain("At the latest moisture reading of each batch");
     expect(html).toContain("100 kg dry biochar");
   });
   it.each(["loading", "error"] as const)("keeps stock informational when details are %s", status => {
     state[status] = true;
-    state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150, estimatedWetMassKg: null }];
+    state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, estimatedWetMassKg: null }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(html).toContain('role="status"');
     expect(html).toContain("100 kg dry biochar");

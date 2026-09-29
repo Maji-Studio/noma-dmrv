@@ -14,7 +14,7 @@ beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 const rain: Preview = {
   basisFingerprint: "basis", storageLocationId: "bin", binName: "Product bin", binCode: "PB-001", formulationName: "Mix", lane: "product",
   beforeDryKg: 1500, afterDryKg: 350, beforeSolidsKg: 1820, afterSolidsKg: 420,
-  removedDryKg: 1150, removedWetKg: 2000, estimateMoisturePercent: 30,
+  removedDryKg: 1150, removedWetKg: 2000, movementMoisturePercent: 30,
   beforeEstimatedWetKg: 2600, afterEstimatedWetKg: 600, discrepancySolidsKg: 0, blockingMessage: null,
   allocations: [
     { layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 900, runs: [{ productionRunId: "r1", code: "Run A", dryMassKg: 900 }] },
@@ -158,7 +158,7 @@ describe("StockMovementCard", () => {
   const loss: Preview = {
     basisFingerprint: "basis", storageLocationId: "bin", binName: "Biochar bin", binCode: "BB-001", lane: "biochar",
     beforeDryKg: 350, afterDryKg: 343, beforeSolidsKg: 350, afterSolidsKg: 343,
-    removedDryKg: 7, removedWetKg: 10, estimateMoisturePercent: 30,
+    removedDryKg: 7, removedWetKg: 10, movementMoisturePercent: 30,
     beforeEstimatedWetKg: 500, afterEstimatedWetKg: 490, discrepancySolidsKg: 0, blockingMessage: null,
     allocations: [{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 7, runs: [] }],
     afterAllocations: [
@@ -239,7 +239,7 @@ describe("StockMovementCard", () => {
   });
 
   it("falls back to the dry pair as the headline when no moisture gives a wet estimate", async () => {
-    const card = await render({ ...loss, removedWetKg: null, estimateMoisturePercent: null, beforeEstimatedWetKg: null, afterEstimatedWetKg: null }, { kind: "count", wetMassKg: 0 });
+    const card = await render({ ...loss, removedWetKg: null, movementMoisturePercent: null, beforeEstimatedWetKg: null, afterEstimatedWetKg: null }, { kind: "count", wetMassKg: 0 });
     expect(card.markup()).not.toContain("data-moisture-segment");
     expect(card.text()).not.toContain("Wet stock in bin");
     expect(card.text()).not.toContain("Not available");
@@ -252,9 +252,9 @@ describe("StockMovementCard", () => {
     await act(async () => card.renderer.unmount());
   });
 
-  it("explains a drying only count below the recorded wet stock above an unchanged pair", async () => {
+  it("explains a drying only count below the estimated wet stock above an unchanged pair", async () => {
     const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, beforeDryKg: 343, afterDryKg: 343,
-      beforeEstimatedWetKg: 428.75, beforeRecordedWetKg: 460, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
+      beforeEstimatedWetKg: 460, afterEstimatedWetKg: 428.75, movementMoisturePercent: 20, allocations: [] });
     const text = card.text();
     expect(text).toContain("Drying alone does not remove dry biochar.");
     expect(text).toContain("Unchanged");
@@ -268,11 +268,21 @@ describe("StockMovementCard", () => {
     await act(async () => card.renderer.unmount());
   });
 
-  it.each([["matches", 428.75], ["exceeds", 420], ["has no recorded figure for", null]])("says nothing about drying when the count %s the recorded wet stock", async (_case, beforeRecordedWetKg) => {
+  it.each([["matches", 428.75], ["exceeds", 420], ["has no estimate for", null]])("says nothing about drying when the count %s the estimated wet stock", async (_case, beforeEstimatedWetKg) => {
     const card = await render({ ...loss, removedWetKg: null, removedDryKg: 0, beforeDryKg: 343, afterDryKg: 343,
-      beforeEstimatedWetKg: 428.75, beforeRecordedWetKg, afterEstimatedWetKg: 428.75, estimateMoisturePercent: 20, allocations: [] });
+      beforeEstimatedWetKg, afterEstimatedWetKg: 428.75, movementMoisturePercent: 20, allocations: [] });
     expect(card.text()).not.toContain("Drying alone");
     await act(async () => card.renderer.unmount());
+  });
+
+  it("shows what a reading resets as an estimate block, an arrow and a reading block", async () => {
+    const moistureReset = { layerCodes: ["B-0419"], before: { moisturePercent: 35, wetKg: 675.48 }, after: { moisturePercent: 33, wetKg: 655.32 } };
+    const card = await render({ ...loss, moistureReset });
+    expect(card.text()).toMatch(/Moisture updated ·\s*B-0419\s*Estimate\s*35(\.0)?%\s*≈ 675 kg wet\s*Reading\s*33(\.0)?%\s*≈ 655 kg wet/);
+    await act(async () => card.renderer.unmount());
+    const refused = await render({ ...loss, moistureReset, blockingMessage: "Loss exceeds the dry biochar in this bin." });
+    expect(refused.text()).not.toContain("Moisture updated");
+    await act(async () => refused.renderer.unmount());
   });
 
   it("shows a refused movement at its current balance, without an after figure or a verb", async () => {

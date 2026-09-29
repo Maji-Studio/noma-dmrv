@@ -15,7 +15,7 @@ import { assertProductStockBasis, prepareProductStock, revalidateProductStock, p
 
 const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
 const input: ProductStockPreviewInput = { facilityId: 'facility', formulationId: 'recipe', placedAt: '2026-09-14T12:00:00.000Z', sourceBiocharStorageLocationId: 'source', storageLocationId: 'destination', massKg: 100, moistureContentPercent: 10, waterAddedKg: 20, ingredientBins: [] };
-const preview: OutputStockPreview = { storageLocationId: 'source', binName: 'Source', binCode: 'BC-1', lane: 'biochar', basisFingerprint: 'source-basis', beforeDryKg: 180, afterDryKg: 90, beforeSolidsKg: 180, afterSolidsKg: 90, removedDryKg: 90, removedWetKg: 100, estimateMoisturePercent: 10, beforeEstimatedWetKg: 200, afterEstimatedWetKg: 100, discrepancySolidsKg: 0, blockingMessage: null, allocations: [{ layerId: 'run', code: 'RUN-1', wetMassKg: 100, dryMassKg: 90, runs: [{ productionRunId: 'run', code: 'RUN-1', dryMassKg: 90 }] }] };
+const preview: OutputStockPreview = { storageLocationId: 'source', binName: 'Source', binCode: 'BC-1', lane: 'biochar', basisFingerprint: 'source-basis', beforeDryKg: 180, afterDryKg: 90, beforeSolidsKg: 180, afterSolidsKg: 90, removedDryKg: 90, removedWetKg: 100, movementMoisturePercent: 10, beforeEstimatedWetKg: 200, afterEstimatedWetKg: 100, discrepancySolidsKg: 0, blockingMessage: null, allocations: [{ layerId: 'run', code: 'RUN-1', wetMassKg: 100, dryMassKg: 90, runs: [{ productionRunId: 'run', code: 'RUN-1', dryMassKg: 90 }] }] };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -39,9 +39,11 @@ describe('product stock preview', () => {
     expect(bins[2]).toMatchObject({ beforeDryKg: 50, afterDryKg: 140, beforeSolidsKg: 60, afterSolidsKg: 194, removedWetKg: -175 });
     expect(bins[2].afterAllocations?.map(layer => layer.layerId)).toEqual(['existing', 'proposed-product']);
     expect(mocks.stock).toHaveBeenCalledTimes(1);
-    expect(bins[2].estimateMoisturePercent).toBeCloseTo((1 - 134 / 175) * 100);
-    expect(bins[2].beforeEstimatedWetKg).toBeCloseTo(60 * 175 / 134);
-    expect(bins[2].afterEstimatedWetKg).toBeCloseTo(60 * 175 / 134 + 175);
+    expect(bins[2].movementMoisturePercent).toBeCloseTo((1 - 134 / 175) * 100);
+    // The bin's batches stay at their own latest readings; the new batch adds its recorded wet mass.
+    expect(bins[2].beforeEstimatedWetKg).toBe(60);
+    expect(bins[2].afterEstimatedWetKg).toBe(235);
+    expect(bins[1]).toMatchObject({ moistureEstimate: null, moistureReset: null });
     // Derived fractions are not passed to the stored six-decimal input schema.
     const destinationInput = mocks.prepare.mock.calls[1][1];
     expect(destinationInput.moisturePercent).toBe(0);
@@ -55,7 +57,7 @@ describe('product stock preview', () => {
     const bins = await previewProductStock(ctx, input);
     expect(bins).toHaveLength(2);
     expect(bins[1].afterSolidsKg).toBe(150);
-    expect(bins[1].estimateMoisturePercent).toBe(25);
+    expect(bins[1].movementMoisturePercent).toBe(25);
   });
   it('keeps wet stock usable without inventing a dry estimate when operator moisture is retained', async () => {
     mocks.stock.mockResolvedValue({ wetMassKg: 150, dryMassKg: null });
