@@ -300,10 +300,12 @@ export async function updateReactor(
       await lockActiveFacilityReference(ctx, tx, data.facilityId);
     }
 
+    // Archived reactors (facility archive cascade) are not editable; filtering
+    // here also rejects a move that waited on its source facility's archive.
     const [existing] = await tx
       .select()
       .from(reactors)
-      .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
+      .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)))
       .for("update");
 
     if (!existing) {

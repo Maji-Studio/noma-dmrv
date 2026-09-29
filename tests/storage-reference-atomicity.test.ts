@@ -368,6 +368,7 @@ async function archiveBeforeReferenceWrite<T>(
 async function archiveFacilityBeforeReferenceWrite<T>(
   fixture: Fixture,
   write: () => Promise<T>,
+  options: { cascadeReactors?: boolean } = {},
 ): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> {
   let releaseArchive = () => {};
   let signalArchiveReady = () => {};
@@ -407,6 +408,12 @@ async function archiveFacilityBeforeReferenceWrite<T>(
       .update(productionRuns)
       .set({ archivedAt })
       .where(eq(productionRuns.facilityId, fixture.facilityId));
+    if (options.cascadeReactors) {
+      await tx
+        .update(reactors)
+        .set({ archivedAt })
+        .where(eq(reactors.facilityId, fixture.facilityId));
+    }
     const backend = await tx.execute<{ pid: number }>(
       sql`select pg_backend_pid() as pid`,
     );
@@ -739,6 +746,30 @@ describe(
         .from(reactors)
         .where(eq(reactors.identifier, identifier));
       expect(stranded).toBeUndefined();
+    });
+
+    it("rejects a reactor move after its source facility archive wins", async () => {
+      const fixture = await createFixture();
+
+      const outcome = await archiveFacilityBeforeReferenceWrite(
+        fixture,
+        () =>
+          updateReactor(ctx, fixture.reactorId, {
+            facilityId: fixture.targetFacilityId,
+          }),
+        { cascadeReactors: true },
+      );
+
+      expectArchivedReferenceRejected(outcome);
+      const [stored] = await db
+        .select({
+          facilityId: reactors.facilityId,
+          archivedAt: reactors.archivedAt,
+        })
+        .from(reactors)
+        .where(eq(reactors.id, fixture.reactorId));
+      expect(stored).toMatchObject({ facilityId: fixture.facilityId });
+      expect(stored.archivedAt).not.toBeNull();
     });
 
     it("translates a duplicate reactor code on update", async () => {
