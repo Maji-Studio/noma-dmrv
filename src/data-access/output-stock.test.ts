@@ -8,9 +8,9 @@ import { getBiocharOutputStockLayers, getOutputBinDryBalance, getOutputBinStockV
 import { assertProductionRunBiocharStockNotOverdrawn, deriveProductionRunUpdateBiocharStockState } from './production-run-stock-locks';
 
 const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
-const input = { storageLocationId: 'bin', facilityId: 'facility', physicalDate: '2026-09-14' };
+const input = { storageLocationId: 'bin', facilityId: 'facility', occurredAt: '2026-09-14T12:00:00.000Z' };
 const bin = { id: 'bin', facilityId: 'facility', type: 'biochar_bin', archivedAt: null };
-const run = { id: 'run', dryKg: '100.000', physicalDate: '2026-09-01', postingSequence: BigInt(1) };
+const run = { id: 'run', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
 function reader(results: unknown[][]) {
   const predicates: string[] = [];
   const executor = { select: vi.fn(() => {
@@ -67,7 +67,7 @@ describe('product ingredient snapshot completeness', () => {
   const positiveLine = { formulationIngredientId: 'positive', massKg: 50 };
   const snapshot = { biocharProductId: 'product', formulationIngredientId: 'positive', drySolidsKg: '40.000' };
   function productReader(lines: unknown[], snapshots: unknown[]) {
-    return reader([[bin], [{ id: 'product', placedAt: '2026-09-01', postingSequence: BigInt(1), composition: { ingredients: lines } }],
+    return reader([[bin], [{ id: 'product', placedAt: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1), composition: { ingredients: lines } }],
       [{ productId: 'product', runId: 'run', dryKg: '100.000' }], snapshots, []]).executor;
   }
   it('requires no snapshot for zero lines and sums only frozen positive solids', async () => {
@@ -90,18 +90,18 @@ describe('future stock conservation', () => {
     vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
     try {
       const rows = () => type === 'biochar_bin'
-        ? [[{ ...bin, type }], [bin], [{ ...run, physicalDate: '2026-09-16' }], [], []]
-        : [[{ ...bin, type }], [bin], [{ id: 'product', placedAt: '2026-09-16', postingSequence: BigInt(1), composition: {} }], [{ productId: 'product', runId: run.id, dryKg: '100.000' }], [], []];
+        ? [[{ ...bin, type }], [bin], [{ ...run, endTime: new Date('2026-09-16T12:00:00.000Z') }], [], []]
+        : [[{ ...bin, type }], [bin], [{ id: 'product', placedAt: new Date('2026-09-16T12:00:00.000Z'), postingSequence: BigInt(1), composition: {} }], [{ productId: 'product', runId: run.id, dryKg: '100.000' }], [], []];
       expect(await getOutputBinDryBalance(ctx, bin.id, reader(rows()).executor)).toBe(100);
       expect(await getOutputBinStockView(ctx, bin.id, reader([...rows(), []]).executor)).toEqual({ dryMassKg: 0, recordedWetMassKg: 0, estimatedWetMassKg: 0 });
     } finally { vi.useRealTimers(); }
   });
-  it('shows the new facility day before UTC midnight', async () => {
+  it.each([['2026-09-15T22:29:00.000Z', 100], ['2026-09-15T22:31:00.000Z', 0]] as const)('reads stock as of the current instant (run ended %s)', async (endTime, dryMassKg) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
     try {
-      const read = reader([[bin], [bin], [{ ...run, physicalDate: '2026-09-16' }], [], [], [{ id: run.id, wet: 125 }]]);
-      expect(await getOutputBinStockView(ctx, bin.id, read.executor)).toEqual({ dryMassKg: 100, recordedWetMassKg: 125, estimatedWetMassKg: 125 });
+      const read = reader([[bin], [bin], [{ ...run, endTime: new Date(endTime) }], [], [], [{ id: run.id, wet: 125 }]]);
+      expect(await getOutputBinStockView(ctx, bin.id, read.executor)).toMatchObject({ dryMassKg });
     } finally { vi.useRealTimers(); }
   });
 });

@@ -1,7 +1,7 @@
 import type { Page, TestInfo } from "@playwright/test";
 import { test, expect, selectEntity, waitForFacilityHydration } from "./fixtures";
 import {
-  FIFO_BROWSER_DATE, FIFO_MATCHING_BIN_COUNT,
+  FIFO_BROWSER_DATE, FIFO_BROWSER_INSTANT, FIFO_BROWSER_TIME, FIFO_MATCHING_BIN_COUNT,
   seedOutputStockBrowserFixture, readOutputStockBrowserFixture, seedPureBrowserSource,
 } from "./helpers/output-stock-browser-fixture";
 
@@ -23,7 +23,7 @@ async function openBin(page: Page, f: Fixture) {
 }
 
 async function fillStock(page: Page, wet: string, moisture: string, reason: string) {
-  await page.locator("#physicalDate").fill(FIFO_BROWSER_DATE);
+  await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill(wet);
   await page.locator("#stock-moisture").fill(moisture);
   await page.locator("#stock-reason").fill(reason);
@@ -38,7 +38,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.goto(`/biochar-products?facility=${f.facility.id}`);
     await waitForFacilityHydration(page, f.facility.name);
     await page.getByRole("button", { name: "New Product", exact: true }).click();
-    await page.locator("#placedAt").fill(FIFO_BROWSER_DATE);
+    await page.locator("#placedAt").fill(FIFO_BROWSER_TIME);
     await selectEntity(page, "Biochar bin", f.source.id, f.source.name);
     await selectEntity(page, "Formulation", f.pure.id, f.pure.name);
     await selectEntity(page, "Product bin", f.emptyBins[0].id, f.emptyBins[0].name);
@@ -50,7 +50,7 @@ test.describe("Output-bin conserved FIFO", () => {
     const pureFixture = { ...f, bin: f.emptyBins[0] };
     const saved = await readOutputStockBrowserFixture(pureFixture);
     expect(saved.products).toHaveLength(1);
-    expect(saved.products[0].placedAt).toBe(FIFO_BROWSER_DATE);
+    expect(saved.products[0].placedAt.toISOString()).toBe(FIFO_BROWSER_INSTANT);
     expect(saved.balance.beforeDryKg).toBe(100);
     await openBin(page, pureFixture);
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
@@ -96,7 +96,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.goto(`/deliveries?facility=${f.facility.id}`);
     await waitForFacilityHydration(page, f.facility.name);
     await page.getByRole("button", { name: "New Delivery", exact: true }).click();
-    await page.locator("#deliveryDate").fill(FIFO_BROWSER_DATE);
+    await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
     await selectEntity(page, "Order", f.order.id, f.order.code);
     await page.locator("#storageLocationId").selectOption(f.bin.id);
     await expect(page.getByRole("option", { name: /upcoming/i })).toHaveCount(0);

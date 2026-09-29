@@ -459,8 +459,8 @@ describe("derived transport-leg transaction boundaries", () => {
 
     const sources = await Promise.all([firstProduct, secondProduct].map(product => preparePureOutputProductFixture(db, product.id)));
     async function postDelivery(index: number, orderId: string) {
-      const preview = await previewOutputStock(ctx, { kind: "delivery", facilityId: facility.id, storageLocationId: sources[index].storageLocationId, physicalDate: "2026-07-19", wetMassKg: 100, moisturePercent: 0 });
-      const delivery = await createDelivery(ctx, { code: `DL-DIST-${index}-${tag}`, orderId, facilityId: facility.id, storageLocationId: sources[index].storageLocationId, deliveryDate: new Date("2026-07-19"), deliveredWetMassKg: 100, moistureContentPercent: 0, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID() });
+      const preview = await previewOutputStock(ctx, { kind: "delivery", facilityId: facility.id, storageLocationId: sources[index].storageLocationId, occurredAt: "2026-07-19T12:00:00.000Z", wetMassKg: 100, moisturePercent: 0 });
+      const delivery = await createDelivery(ctx, { code: `DL-DIST-${index}-${tag}`, orderId, facilityId: facility.id, storageLocationId: sources[index].storageLocationId, deliveryDate: new Date("2026-07-19T12:00:00.000Z"), deliveredWetMassKg: 100, moistureContentPercent: 0, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID() });
       created.deliveryIds.push(delivery.id);
       return delivery;
     }

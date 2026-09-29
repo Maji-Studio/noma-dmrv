@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OutputStockPreviewInput, OutputStockHistoryEntry } from "@/types/output-stock";
 
 const mocks = vi.hoisted(() => ({ mutate: vi.fn(), refetch: vi.fn(), input: null as OutputStockPreviewInput | null }));
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/hooks/use-output-stock", () => ({
   usePostOutputStock: () => ({ mutateAsync: mocks.mutate, isPending: false }),
   useOutputStockPreview: (input: OutputStockPreviewInput | null) => {
@@ -26,7 +27,7 @@ vi.mock("./output-stock-history", () => ({ OutputStockHistory: ({ storageLocatio
 import { OutputStockForm } from "./output-stock-form";
 
 const original: OutputStockHistoryEntry = {
-  id: "00000000-0000-4000-8000-000000000001", kind: "count", physicalDate: "2026-09-14", recordedAt: "2026-09-14T10:00:00Z", actorName: null,
+  id: "00000000-0000-4000-8000-000000000001", kind: "count", occurredAt: "2026-09-14T12:00:00.000Z", recordedAt: "2026-09-14T10:00:00Z", actorName: null,
   reason: "Original", wetMassKg: 0, moisturePercent: null, dryMassKg: 350, beforeDryKg: 350, afterDryKg: 0, correctsMovementId: null, deliveryId: null, allocations: [],
 };
 

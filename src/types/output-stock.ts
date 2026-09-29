@@ -10,7 +10,8 @@ export interface OutputStockAllocationView {
 export interface OutputStockPreviewInput {
   storageLocationId: string;
   facilityId: string;
-  physicalDate: string;
+  /** ISO 8601 UTC instant the event physically happened. */
+  occurredAt: string;
   kind: 'delivery' | 'loss' | 'count' | 'production_draw';
   wetMassKg: number;
   moisturePercent?: number | null;
@@ -60,7 +61,8 @@ export interface OutputStockHistoryEntry {
   id: string;
   kind: string;
   eventKind?: 'delivery' | 'loss' | 'count' | 'production_draw';
-  physicalDate: string;
+  /** ISO 8601 UTC instant the event physically happened. */
+  occurredAt: string;
   recordedAt: string;
   actorName: string | null;
   reason: string;

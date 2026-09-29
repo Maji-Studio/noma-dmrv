@@ -148,6 +148,24 @@ export function resolveFacilityTimezone(
   );
 }
 
+/**
+ * Always-visible cue naming the zone entered times are read in. A facility
+ * missing from the list falls back to {@link DEFAULT_FACILITY_TIMEZONE}, and the
+ * cue says so rather than applying the fallback silently (QA F-2).
+ */
+export function facilityTimeHelperText(
+  facilities: readonly { id: string; timezone: string }[],
+  facilityId: string | null | undefined,
+): string {
+  const resolved = facilityId
+    ? facilities.some((facility) => facility.id === facilityId)
+    : false;
+  const label = resolveFacilityTimezone(facilities, facilityId).replaceAll("_", " ");
+  return resolved
+    ? `Facility time: ${label}`
+    : `Facility time is not set. Using ${label}.`;
+}
+
 /** Format a Date as "YYYY-MM-DD" in local timezone. */
 export function formatLocalDate(date: Date): string {
   const y = date.getFullYear();

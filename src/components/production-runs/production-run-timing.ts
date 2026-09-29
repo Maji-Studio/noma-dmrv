@@ -16,7 +16,7 @@ import {
   combineDateAndTime,
   formatFacilityWallClock,
   NonexistentLocalTimeError,
-  resolveFacilityTimezone,
+  facilityTimeHelperText,
 } from "@/lib/date-utils";
 import { makeProductionRunFormSchema } from "@/schemas/production-runs";
 
@@ -173,14 +173,5 @@ export function productionRunTimezoneHelperText(
   facilities: readonly { id: string; timezone: string }[],
   facilityId: string | null | undefined,
 ): string {
-  const resolved = facilityId
-    ? facilities.some((facility) => facility.id === facilityId)
-    : false;
-  const label = resolveFacilityTimezone(facilities, facilityId).replaceAll(
-    "_",
-    " ",
-  );
-  return resolved
-    ? `Facility time: ${label}`
-    : `Facility time is not set. Using ${label}.`;
+  return facilityTimeHelperText(facilities, facilityId);
 }

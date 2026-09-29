@@ -16,6 +16,7 @@ import { dashboardOverviewKeys } from "./use-dashboard-overview";
 export const outputStockKeys = {
   all: ["outputStock"] as const,
   preview: (input: OutputStockPreviewInput | null) => ["outputStock", "preview", input] as const,
+  balance: (storageLocationId: string, facilityId: string) => ["outputStock", "balance", storageLocationId, facilityId] as const,
   history: (id: string) => ["outputStock", "history", id] as const,
   matching: (facilityId: string, formulationId: string) => ["outputStock", "matching", facilityId, formulationId] as const,
 };
@@ -27,6 +28,26 @@ export function useOutputStockPreview(input: OutputStockPreviewInput | null) {
     queryFn: async () => {
       if (!input) throw new Error("Choose a storage bin first.");
       const result = await previewOutputStockFn(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+/**
+ * A bin's stock as of each fetch. The instant is taken when the query runs,
+ * not when the component renders, so the key stays stable and a refetch after
+ * a new entry includes it.
+ */
+export function useOutputStockBalance(bin: { storageLocationId: string; facilityId: string } | null) {
+  return useQuery({
+    queryKey: outputStockKeys.balance(bin?.storageLocationId ?? "", bin?.facilityId ?? ""),
+    enabled: bin !== null,
+    queryFn: async () => {
+      if (!bin) throw new Error("Choose a storage bin first.");
+      const result = await previewOutputStockFn({ ...bin, occurredAt: new Date().toISOString(), kind: "count", wetMassKg: 0, moisturePercent: null });
       if (!result.success) throw new Error(result.error);
       return result.data;
     },

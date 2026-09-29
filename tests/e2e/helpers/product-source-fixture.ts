@@ -25,7 +25,7 @@ export async function setProductSourceFixture(
   });
   await tx.update(biocharProducts).set({
     linkedProductionRunId: runId, sourceBiocharStorageLocationId: run.biocharStorageLocationId,
-    massKg: wetKg, moistureContentPercent: 0, placedAt,
+    massKg: wetKg, moistureContentPercent: 0, placedAt: new Date(placedAt),
   }).where(eq(biocharProducts.id, productId));
 }
 

@@ -8,7 +8,8 @@ import { Modal } from "@/components/ui/modal";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate, formatDateTime } from "@/lib/format-utils";
+import { useFacilityClock } from "@/hooks/use-facility-context";
+import { formatFacilityDateTime } from "@/lib/format-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { ClockCounterClockwiseIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
@@ -36,6 +37,8 @@ interface EntryProps {
   reversed: boolean;
   correctable: boolean;
   last: boolean;
+  /** Facility zone every time on the timeline reads in. */
+  timeZone: string;
   onCorrect: () => void;
 }
 
@@ -46,8 +49,8 @@ interface EntryProps {
  * in aligned rows. A correction folds its reversal into the replacement it
  * belongs to, so one operator action reads as one entry.
  */
-function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, last, onCorrect }: EntryProps) {
-  const subject = `${kindLabel.toLowerCase()} on ${formatDate(entry.physicalDate)}`;
+function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, last, timeZone, onCorrect }: EntryProps) {
+  const subject = `${kindLabel.toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
   const rows = [
     ...(entry.wetMassKg === null ? [] : [{ label: "Wet", value: formatWetAtMoisture(entry.wetMassKg, entry.moisturePercent) }]),
     { label: "Dry biochar", value: <InlineMassChange beforeKg={entry.beforeDryKg} afterKg={entry.afterDryKg} /> },
@@ -64,17 +67,17 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
             <StockChip emphasis>{kindLabel}</StockChip>
             {reversed && <StockChip>Reversed</StockChip>}
           </h4>
-          <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatDate(entry.physicalDate)}</span>
+          <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatFacilityDateTime(entry.occurredAt, timeZone)}</span>
         </div>
         <StockRows label={`${kindLabel} figures`} rows={rows} />
         {reversedEntry && (
           <p className="body-caption text-[var(--color-text-secondary)]">
-            Reverses the entry recorded {formatDate(reversedEntry.physicalDate)}.
+            Reverses the entry recorded {formatFacilityDateTime(reversedEntry.occurredAt, timeZone)}.
           </p>
         )}
         {entry.reason && <p className="body-caption text-[var(--color-text-secondary)]">{entry.reason}</p>}
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Recorded {formatDateTime(entry.recordedAt)} by {entry.actorName ?? MISSING_VALUE.notRecorded}
+          Recorded {formatFacilityDateTime(entry.recordedAt, timeZone)} by {entry.actorName ?? MISSING_VALUE.notRecorded}
         </p>
         {entry.allocations.length > 0 && (
           <CalculationDisclosure subject={subject}>
@@ -99,6 +102,7 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
 }
 
 export function OutputStockHistory({ storageLocationId, facilityId, movementId, triggerLabel = "More info", compact = false }: { storageLocationId: string; facilityId: string; movementId?: string; triggerLabel?: string; compact?: boolean }) {
+  const clock = useFacilityClock(facilityId);
   const [open, setOpen] = useState(false);
   const [original, setOriginal] = useState<OutputStockHistoryEntry>();
   const history = useOutputStockHistory(storageLocationId, open);
@@ -130,6 +134,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
           {timeline.length > 0 && <ul>
             {timeline.map((entry, index) => (
               <HistoryEntry
+                timeZone={clock.timeZone}
                 key={entry.id}
                 entry={entry}
                 kindLabel={outputStockEventLabel(entry.correctsMovementId && entry.kind !== "reversal" ? "replacement" : entry.kind)}

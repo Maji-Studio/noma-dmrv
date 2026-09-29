@@ -88,6 +88,16 @@ export function formatDateTime(value: DateValue): string {
   return date ? format(date, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
+/**
+ * Format an instant in house style ("Sep 15, 2026, 14:30") on a facility's
+ * wall clock. Output stock event times always read on the facility clock.
+ */
+export function formatFacilityDateTime(value: Date | string | null | undefined, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+}
+
 /** Format an instant in a facility's timezone with its numeric UTC offset. */
 export function formatFacilityDateTimeWithOffset(
   value: Date,

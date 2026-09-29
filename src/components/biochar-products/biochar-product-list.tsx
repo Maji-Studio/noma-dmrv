@@ -28,6 +28,7 @@ import {
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   useListPagination,
   useReconcileListPage,
@@ -247,7 +248,7 @@ export function BiocharProductPageMassSummary({
 // ============================================
 
 export function BiocharProductList() {
-  const { facilityId: contextFacilityId } = useFacilityContext();
+  const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   const [focusedProductId, setFocusedProductId] = useQueryState(
     "biocharProduct",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -591,7 +592,7 @@ export function BiocharProductList() {
         title={displaySideSheet?.mode === "create" ? "Create Biochar Product" : (displaySideSheet?.entity?.code ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
         editLabel="Edit Product"
-        sections={viewedEntity ? productSheetSections(viewedEntity) : undefined}
+        sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
       >
         <BiocharProductForm
           key={editingEntity?.id ?? "create"}

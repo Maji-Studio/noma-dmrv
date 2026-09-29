@@ -130,7 +130,6 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.click('button:has-text("New Delivery")');
     await waitForSideSheet(page);
 
-    await page.fill('input[name="deliveryDate"]', today);
     // Applications require a delivered delivery (issue #284)
     // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
     await selectFirstEntity(page, "Order");

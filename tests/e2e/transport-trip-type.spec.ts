@@ -141,7 +141,7 @@ test.describe("Transport trip type (#316)", () => {
     const tripType = dialog.locator('select[name="tripType"]');
     await expect(tripType).toHaveValue("return");
 
-    await page.fill('input[name="deliveryDate"]', FUTURE_DATE);
+    await page.fill('input[name="deliveryDate"]', `${FUTURE_DATE}T12:00`);
     await selectEntityByText(page, "Order", seededData.customer.name);
     await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "45");

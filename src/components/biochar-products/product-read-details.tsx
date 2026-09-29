@@ -30,7 +30,7 @@ import {
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -117,12 +117,13 @@ function SavedProductComposition({ product, composition }: {
   );
 }
 
-export function productSheetSections(product: BiocharProductWithRelations): DetailPanelSection[] {
+/** `timeZone` is the product's facility zone; stock event times read on the facility clock. */
+export function productSheetSections(product: BiocharProductWithRelations, timeZone: string): DetailPanelSection[] {
   const composition = savedProductComposition(product);
   return [
     {
       title: "Placement",
-      fields: [{ label: "Mixing and placement date", value: formatDate(product.placedAt) }],
+      fields: [{ label: "Mixing and placement time", value: formatFacilityDateTime(product.placedAt, timeZone) }],
     },
     {
       title: "Source",

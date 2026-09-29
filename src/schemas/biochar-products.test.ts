@@ -12,7 +12,7 @@ const FORMULATION_INGREDIENT_ID = "55555555-5555-4555-8555-555555555555";
 const FORMULATION_ID = "77777777-7777-4777-8777-777777777777";
 const POSTING_FIELDS = {
   formulationId: FORMULATION_ID,
-  placedAt: "2026-09-01",
+  placedAt: "2026-09-01T12:00:00.000Z",
   idempotencyKey: "product-request",
   basisFingerprint: "product-preview",
 };

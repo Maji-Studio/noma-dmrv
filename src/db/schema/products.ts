@@ -2,7 +2,6 @@ import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import {
   bigserial,
   check,
-  date,
   foreignKey,
   index,
   integer,
@@ -100,8 +99,8 @@ export const biocharProducts = pgTable('biochar_products', {
   facilityId: uuid('facility_id')
     .notNull(),
   productionDate: timestamp('production_date').defaultNow().notNull(),
-  // Actual mixing/placement day; source productionDate is not a substitute.
-  placedAt: date('placed_at').notNull(),
+  // Actual mixing/placement instant; source productionDate is not a substitute.
+  placedAt: timestamp('placed_at', { withTimezone: true }).notNull(),
   stockPostingSequence: bigserial('stock_posting_sequence', { mode: 'bigint' }).notNull(),
   status: biocharProductStatus('status').default('testing').notNull(),
 

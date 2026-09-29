@@ -84,7 +84,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
     const restoredBalance = prepared.layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0));
     const [reversal] = await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, lane: prepared.lane,
       movementType: 'adjustment', massDeltaKg: Number(kilograms(restoreGrams)), reason: input.reason, createdBy: ctx.userId,
-      outputKind: 'reversal', physicalDate: input.physicalDate, idempotencyKey: `${input.idempotencyKey}:reversal`, basisFingerprint: input.basisFingerprint,
+      outputKind: 'reversal', occurredAt: new Date(input.occurredAt), idempotencyKey: `${input.idempotencyKey}:reversal`, basisFingerprint: input.basisFingerprint,
       inputSnapshot: { ...correction.original.inputSnapshot, actorId: ctx.userId, payloadHash }, outputDryDeltaKg: kilograms(restoreGrams), balanceBeforeDryKg: kilograms(restoredBalance - restoreGrams), balanceAfterDryKg: kilograms(restoredBalance), correctsMovementId: correction.original.id }).returning();
     for (const a of correction.allocations) {
       const solids = readRational(a.basisSnapshot.solidsKg);
@@ -97,7 +97,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
   const beforeGrams = prepared.layers.reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0));
   const [movement] = await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, lane: prepared.lane,
     movementType: 'adjustment', massDeltaKg: -Number(plan.drawnDryKg), reason: input.reason, createdBy: ctx.userId,
-    outputKind: correction ? 'replacement' : input.kind, physicalDate: input.physicalDate, idempotencyKey: input.idempotencyKey,
+    outputKind: correction ? 'replacement' : input.kind, occurredAt: new Date(input.occurredAt), idempotencyKey: input.idempotencyKey,
     basisFingerprint: input.basisFingerprint, inputSnapshot: { ...input, actorId: ctx.userId, payloadHash, targetBiocharProductId: options.targetBiocharProductId, deliveryId: options.deliveryId ?? correction?.deliveryId, discrepancySolidsKg: storeRational(plan.discrepancySolidsKg), preview },
     outputDryDeltaKg: kilograms(-grams(plan.drawnDryKg)), balanceBeforeDryKg: kilograms(beforeGrams), balanceAfterDryKg: kilograms(beforeGrams - grams(plan.drawnDryKg)), correctsMovementId: correction?.original.id ?? null }).returning();
   let cumulativeWet = rational(BigInt(0));
@@ -114,14 +114,14 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
       biocharProductId: prepared.lane === 'product' ? a.layerId : null, productionRunId: prepared.lane === 'biochar' ? a.layerId : null,
       deliveryId: options.deliveryId ?? correction?.deliveryId ?? null, targetBiocharProductId: options.targetBiocharProductId ?? null,
       dryMassKg: a.dryKg, wetMassKg, basisSnapshot: { solidsKg: storeRational(a.solidsKg), wetShareKg: a.wetShareKg ? storeRational(a.wetShareKg) : null,
-        establishedDryBiocharKg: layer.establishedDryBiocharKg, ingredientDrySolidsKg: layer.ingredientDrySolidsKg, physicalDate: layer.physicalDate, postingSequence: String(layer.postingSequence), code: preview.allocations[index].code } }).returning();
+        establishedDryBiocharKg: layer.establishedDryBiocharKg, ingredientDrySolidsKg: layer.ingredientDrySolidsKg, placedAt: layer.placedAt, postingSequence: String(layer.postingSequence), code: preview.allocations[index].code } }).returning();
     for (const run of a.runs) await tx.insert(outputStockRunAllocations).values({ organizationId: ctx.organizationId, allocationId: allocation.id, productionRunId: run.productionRunId, dryMassKg: run.dryKg });
   }
   if (correction?.deliveryId) {
     const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, correction.deliveryId))).for('update');
     if (!delivery || delivery.storageLocationId !== input.storageLocationId || delivery.facilityId !== input.facilityId) throw new SafeError('Delivery source changed. Refresh and retry.');
     await lockDeliveryOrderAndAssertBalance(ctx, tx, { orderId: delivery.orderId, requestedWetKg: input.wetMassKg, excludeDeliveryId: delivery.id });
-    await tx.update(deliveries).set({ deliveredWetMassKg: input.wetMassKg, moistureContentPercent: input.moisturePercent, massDryKg: Number(plan.drawnDryKg), deliveryDate: new Date(`${input.physicalDate}T00:00:00.000Z`), updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id)));
+    await tx.update(deliveries).set({ deliveredWetMassKg: input.wetMassKg, moistureContentPercent: input.moisturePercent, massDryKg: Number(plan.drawnDryKg), deliveryDate: new Date(input.occurredAt), updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id)));
     await syncBiocharProductTransportLegs(ctx, tx, [...productIds]);
   }
   return { movement, preview };

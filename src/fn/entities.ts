@@ -78,7 +78,7 @@ export async function searchEntitiesFn(
 const entityByIdFilterSchema = z
   .object({
     excludeOrderId: z.uuid().optional(),
-    physicalDate: z.iso.date().optional(),
+    occurredAt: z.iso.datetime().optional(),
   })
   .optional();
 

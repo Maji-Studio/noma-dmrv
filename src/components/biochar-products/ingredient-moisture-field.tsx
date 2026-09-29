@@ -13,7 +13,7 @@ export function IngredientMoistureField({ control, index, frozen, disabled }: { 
   const massKg = useWatch({ control, name: `${prefix}.massKg` });
   const previousBin = useRef(binId);
   const placedAt = useWatch({ control, name: "placedAt" });
-  const bin = useEntityById("storageLocation", frozen ? undefined : binId || undefined, placedAt ? { physicalDate: String(placedAt) } : undefined);
+  const bin = useEntityById("storageLocation", frozen ? undefined : binId || undefined, placedAt ? { occurredAt: String(placedAt) } : undefined);
   // The server shares this remaining-stock estimate with product posting.
   const estimatedMoisture = bin.data?.mass?.moisturePercent;
   useEffect(() => {

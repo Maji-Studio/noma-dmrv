@@ -18,7 +18,7 @@ import { createDeliveryFn } from "./deliveries";
 const id = "00000000-0000-4000-8000-000000000001";
 const ctx: OrgContext = { userId: "user", organizationId: "org", orgRole: "admin", isPlatformAdmin: false };
 const common = { facilityId: id, storageLocationId: id, idempotencyKey: "stable-key", basisFingerprint: "stale-basis", moistureContentPercent: 20 };
-const product = { ...common, formulationId: id, placedAt: "2026-09-15", sourceBiocharStorageLocationId: id, status: "testing" as const, massKg: 100, waterAddedKg: 0, densityKgM3: null };
+const product = { ...common, formulationId: id, placedAt: "2026-09-15T12:00:00.000Z", sourceBiocharStorageLocationId: id, status: "testing" as const, massKg: 100, waterAddedKg: 0, densityKgM3: null };
 const delivery = { ...common, code: "DL-001", orderId: id, deliveryDate: new Date("2026-09-15T00:00:00Z"), status: "delivered" as const, deliveredWetMassKg: 100 };
 
 beforeEach(() => {

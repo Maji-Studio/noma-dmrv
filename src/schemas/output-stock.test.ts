@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { outputStockPostSchema, outputStockPreviewSchema } from './output-stock';
-const input = { storageLocationId: '00000000-0000-4000-8000-000000000001', facilityId: '00000000-0000-4000-8000-000000000002', physicalDate: '2026-09-14', kind: 'loss' as const, wetMassKg: 120, moisturePercent: 30 };
+const input = { storageLocationId: '00000000-0000-4000-8000-000000000001', facilityId: '00000000-0000-4000-8000-000000000002', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss' as const, wetMassKg: 120, moisturePercent: 30 };
 describe('output operation boundary', () => {
   it.each([undefined, null, NaN, Infinity, -1, 100])('rejects invalid positive-draw moisture %s', moisturePercent => {
     expect(outputStockPreviewSchema.safeParse({ ...input, moisturePercent }).success).toBe(false);
@@ -20,6 +20,6 @@ describe('output operation boundary', () => {
     expect(outputStockPreviewSchema.safeParse({ ...input, wetMassKg: 0.001, moisturePercent: 30.000001 }).success).toBe(true);
   });
   it('rejects invalid calendar dates', () => {
-    expect(outputStockPreviewSchema.safeParse({ ...input, physicalDate: '2026-02-30' }).success).toBe(false);
+    expect(outputStockPreviewSchema.safeParse({ ...input, occurredAt: '2026-02-30T12:00:00.000Z' }).success).toBe(false);
   });
 });

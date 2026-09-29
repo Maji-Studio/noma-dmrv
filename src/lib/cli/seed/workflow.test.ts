@@ -135,7 +135,7 @@ describe("Mafinga operator-action seed", () => {
       expect(calls.inputs.get(name), name).toHaveLength(count);
     }
     expect(calls.inputs.get("product-preview")?.[0]).toMatchObject({ massKg: 300 });
-    expect(calls.inputs.get("product")?.[0]).toMatchObject({ massKg: 600, status: "testing", basisFingerprint: "live-product-basis", placedAt: "2026-09-15" });
+    expect(calls.inputs.get("product")?.[0]).toMatchObject({ massKg: 600, status: "testing", basisFingerprint: "live-product-basis", placedAt: "2026-09-15T07:00:00.000Z" });
     expect(calls.inputs.get("delivery")?.[0]).toMatchObject({ basisFingerprint: "live-delivery-basis", deliveredWetMassKg: 1000 });
     expect(calls.inputs.get("run")?.[0]).toMatchObject({ status: "complete", startTime: new Date("2026-09-08T05:00:00Z"), endTime: new Date("2026-09-08T13:00:00Z") });
     expect(calls.sequence.filter(name => ["request-upload", "upload-bytes", "confirm-upload", "import-readings"].includes(name))).toEqual(Array(3).fill(["request-upload", "upload-bytes", "confirm-upload", "import-readings"]).flat());

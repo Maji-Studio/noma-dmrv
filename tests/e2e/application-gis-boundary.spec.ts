@@ -91,7 +91,6 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "New Delivery" }).click();
   await waitForSideSheet(page);
-  await page.locator("#deliveryDate").fill(today);
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.locator("#deliveredWetMassKg").fill("100");

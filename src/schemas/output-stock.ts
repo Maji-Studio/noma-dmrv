@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { massKgSchema, storedPercentSchema } from './helpers';
+import { massKgSchema, stockEventInstantSchema, storedPercentSchema } from './helpers';
 
 export const outputStockPreviewSchema = z.object({
   storageLocationId: z.uuid(),
   facilityId: z.uuid(),
-  physicalDate: z.iso.date(),
+  occurredAt: stockEventInstantSchema(),
   kind: z.enum(['delivery', 'loss', 'count', 'production_draw']),
   wetMassKg: massKgSchema().finite(),
   moisturePercent: storedPercentSchema().finite().min(0).lt(100).nullable().optional(),

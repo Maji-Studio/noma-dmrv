@@ -5,8 +5,6 @@ import { SafeError } from '@/lib/errors';
 import type { OutputStockHistoryEntry } from '@/types/output-stock';
 import { and, asc, eq } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
-import { formatFacilityDate } from '@/lib/date-utils';
-import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
 /** Intake facts retain their recorded wet mass; movement facts remain immutable. */
@@ -14,7 +12,6 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   requireOrgScope(ctx);
   const [bin] = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
-  const timezone = await getOutputStockFacilityTimezone(ctx, bin.facilityId, db);
   const movements = await db.select({ movement: binMovements, actorName: users.name }).from(binMovements)
     .leftJoin(users, eq(users.id, binMovements.createdBy))
     .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId))).orderBy(asc(binMovements.postingSequence));
@@ -29,7 +26,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     const allocations = [...new Map(effects.map(e => [e.allocation.id, e.allocation])).values()];
     const kind = m.inputSnapshot?.kind;
     return { id: m.id, kind: m.outputKind!, eventKind: kind === 'loss' || kind === 'count' || kind === 'delivery' || kind === 'production_draw' ? kind : undefined,
-      physicalDate: m.physicalDate!, recordedAt: m.createdAt.toISOString(), actorName,
+      occurredAt: m.occurredAt!.toISOString(), recordedAt: m.createdAt.toISOString(), actorName,
       reason: m.reason, wetMassKg: typeof m.inputSnapshot?.wetMassKg === 'number' ? m.inputSnapshot.wetMassKg : null,
       moisturePercent: typeof m.inputSnapshot?.moisturePercent === 'number' ? m.inputSnapshot.moisturePercent : null,
       dryMassKg: -Number(m.outputDryDeltaKg), beforeDryKg: Number(m.balanceBeforeDryKg), afterDryKg: Number(m.balanceAfterDryKg),
@@ -41,16 +38,16 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   });
   const receipts = bin.type === 'product_bin' ? products.map(p => {
     const provenance = sources.filter(s => s.biocharProductId === p.id);
-    return { id: p.id, code: p.code, physicalDate: p.placedAt, createdAt: p.createdAt,
+    return { id: p.id, code: p.code, occurredAt: p.placedAt.toISOString(), createdAt: p.createdAt,
       wet: Number(p.massKg ?? 0) + Number(p.waterAddedKg ?? 0), moisture: p.moistureContentPercent,
       dry: provenance.reduce((sum, s) => sum + Number(s.allocatedDryMassKg), 0),
       runs: provenance.map(s => ({ productionRunId: s.productionRunId, code: runCode.get(s.productionRunId) ?? s.productionRunId, dryMassKg: Number(s.allocatedDryMassKg) })) };
   }) : runs.filter(r => r.biocharStorageLocationId === storageLocationId && r.status === 'complete' && r.endTime).map(r => ({
-    id: r.id, code: r.code, physicalDate: formatFacilityDate(r.endTime!, timezone), createdAt: r.createdAt,
+    id: r.id, code: r.code, occurredAt: r.endTime!.toISOString(), createdAt: r.createdAt,
     wet: Number(r.biocharOutputKg ?? 0), moisture: r.biocharMoisturePercent, dry: Number(r.biocharDryMassKg ?? 0),
     runs: [{ productionRunId: r.id, code: r.code, dryMassKg: Number(r.biocharDryMassKg ?? 0) }],
   }));
-  for (const r of receipts) history.push({ id: r.id, kind: 'intake', physicalDate: r.physicalDate, recordedAt: r.createdAt.toISOString(), actorName: null,
+  for (const r of receipts) history.push({ id: r.id, kind: 'intake', occurredAt: r.occurredAt, recordedAt: r.createdAt.toISOString(), actorName: null,
     reason: `Intake ${r.code}`, wetMassKg: r.wet, moisturePercent: r.moisture, dryMassKg: -r.dry, beforeDryKg: 0, afterDryKg: 0,
     correctsMovementId: null, deliveryId: null, allocations: [{ layerId: r.id, code: r.code, wetMassKg: r.wet, dryMassKg: r.dry, runs: r.runs }] });
   history.sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));

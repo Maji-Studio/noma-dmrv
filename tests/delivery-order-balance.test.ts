@@ -11,7 +11,7 @@ import { getStockAvailability } from "@/data-access/stock-availability";
 import { getOutputBinDryBalance } from "@/data-access/output-stock";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { createDeliverySchema } from "@/schemas/deliveries";
-import { postedStockFixture, postDelivery, deliveryInput, postMeasurement, cleanupPostedStock, STOCK_DATE } from "./helpers/posted-output-stock-fixture";
+import { postedStockFixture, postDelivery, deliveryInput, postMeasurement, cleanupPostedStock, STOCK_DATE, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
 async function fixture(quantityKg = 100, stockKg = 1000) {
@@ -158,7 +158,7 @@ describe("completed delivery order balance", () => {
   it("accepts unchanged stock fields on metadata edits but retains history on delete", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 60);
     await expect(updateDelivery(f.ctx, delivery.id, { code: `E2E-D-${randomUUID().toUpperCase()}`, orderId: f.order.id, facilityId: f.facility.id,
-      storageLocationId: f.bin.id, deliveryDate: new Date(STOCK_DATE), deliveredWetMassKg: 60, moistureContentPercent: 0 })).resolves.toMatchObject({ massDryKg: 60 });
+      storageLocationId: f.bin.id, deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 60, moistureContentPercent: 0 })).resolves.toMatchObject({ massDryKg: 60 });
     await expect(updateOrder(f.ctx, f.order.id, { quantityKg: 100, formulationId: f.pure.id })).resolves.toMatchObject({ quantityKg: 100 });
     await expect(deleteDelivery(f.ctx, delivery.id)).rejects.toThrow("history");
   });

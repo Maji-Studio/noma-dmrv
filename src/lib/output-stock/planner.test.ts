@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { grams, kilograms, splitGrams } from './exact';
 import { planOutputStock, type OutputStockLayer } from './planner';
-const DAY = '2026-09-14';
+const DAY = '2026-09-14T10:00:00.000Z';
 function layer(id: string, dry: string, ingredients = '0', sequence = BigInt(1)): OutputStockLayer {
-  return { id, physicalDate: DAY, postingSequence: sequence, establishedDryBiocharKg: dry, ingredientDrySolidsKg: ingredients, remainingDryBiocharKg: dry,
+  return { id, placedAt: DAY, postingSequence: sequence, establishedDryBiocharKg: dry, ingredientDrySolidsKg: ingredients, remainingDryBiocharKg: dry,
     runs: [{ productionRunId: id, establishedDryKg: dry, remainingDryKg: dry }] };
 }
 const mixes = () => [layer('A', '900', '200'), layer('B', '600', '120', BigInt(2))];
@@ -90,14 +90,20 @@ describe('issue 756 exact FIFO', () => {
     expect(kilograms(drawn + grams(final.drawnDryKg))).toBe('1.003');
     expect(final.remainingLayers[0].runs.every(r => grams(r.remainingDryKg) === BigInt(0))).toBe(true);
   });
-  it('physical dates exclude future and same-day order uses posting sequence', () => {
+  it('physical instants exclude future layers and equal instants order by posting sequence', () => {
     const a = layer('a', '1', '0', BigInt(2)); const b = layer('b', '1', '0', BigInt(1));
     expect(wet([a, b], 1, 0).allocations[0].layerId).toBe('b');
-    b.physicalDate = '2026-09-15';
+    b.placedAt = '2026-09-14T10:00:00.001Z';
     expect(wet([a, b], 1, 0).allocations[0].layerId).toBe('a');
     expect(() => wet([a, b], 2, 0)).toThrow('Insufficient');
-    b.physicalDate = '2026-09-13'; b.postingSequence = BigInt(3);
+    b.placedAt = '2026-09-14T09:59:59.000Z'; b.postingSequence = BigInt(3);
     expect(wet([a, b], 1, 0).allocations[0].layerId).toBe('b');
+  });
+  it('orders layers placed on the same day by time, not posting sequence', () => {
+    const afternoon = { ...layer('afternoon', '1', '0', BigInt(1)), placedAt: '2026-09-14T09:30:00.000Z' };
+    const morning = { ...layer('morning', '1', '0', BigInt(2)), placedAt: '2026-09-14T06:00:00.000Z' };
+    expect(wet([afternoon, morning], 1, 0).allocations[0].layerId).toBe('morning');
+    expect(planOutputStock([afternoon, morning], '2026-09-14T08:00:00.000Z', { kind: 'count', wetKg: 0 }).expectedSolidsKg).toEqual({ numerator: BigInt(1), denominator: BigInt(1) });
   });
   it.each([NaN, Infinity, -1, 100, undefined])('rejects moisture %s', m => {
     expect(() => wet(mixes(), 1, m as number)).toThrow();
@@ -107,7 +113,7 @@ describe('issue 756 exact FIFO', () => {
   });
   it('rejects invalid composition, dates, duplicate ids and inconsistent provenance', () => {
     const a = layer('a', '1');
-    for (const invalid of [{ ...a, ingredientDrySolidsKg: -1 }, { ...a, physicalDate: '2026-02-30' }, { ...a, remainingDryBiocharKg: 2 }, { ...a, runs: [] }, { ...a, establishedDryBiocharKg: 0 }]) {
+    for (const invalid of [{ ...a, ingredientDrySolidsKg: -1 }, { ...a, placedAt: '2026-02-30T00:00:00.000Z' }, { ...a, placedAt: '2026-09-14' }, { ...a, placedAt: '2026-09-14T10:00:00Z' }, { ...a, remainingDryBiocharKg: 2 }, { ...a, runs: [] }, { ...a, establishedDryBiocharKg: 0 }]) {
       expect(() => wet([invalid], 1, 0)).toThrow();
     }
     expect(() => wet([a, a], 1, 0)).toThrow();
@@ -129,7 +135,7 @@ it('exact wet shares sum to measured load without changing inputs', () => {
 });
 it('saved allocations stay unchanged after a late physical receipt', () => {
   const saved = rain();
-  const receipt = { ...layer('late', '100', '0', BigInt(3)), physicalDate: '2026-09-13' };
+  const receipt = { ...layer('late', '100', '0', BigInt(3)), placedAt: '2026-09-13T10:00:00.000Z' };
   expect(wet([...saved.remainingLayers, receipt], 100, 0).allocations[0].layerId).toBe('late');
   expect(saved.allocations.map(a => a.dryKg)).toEqual(['900.000', '250.000']);
 });

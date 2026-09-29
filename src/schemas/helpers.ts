@@ -416,6 +416,19 @@ export const optionalDateOnly = z
   .optional();
 
 // ============================================
+// Instant Helpers
+// ============================================
+
+/**
+ * A stock event's physical time on the wire: an ISO 8601 UTC instant,
+ * normalized to `Date#toISOString` so instants order correctly as strings.
+ * `EventTimeInput` resolves the facility wall clock to this instant.
+ */
+export function stockEventInstantSchema(message = "Enter the date and time.") {
+  return z.iso.datetime({ error: message }).transform((value) => new Date(value).toISOString());
+}
+
+// ============================================
 // Expected-version (optimistic concurrency)
 // ============================================
 

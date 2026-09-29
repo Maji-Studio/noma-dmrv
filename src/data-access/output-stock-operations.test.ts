@@ -19,13 +19,13 @@ import { getMatchingOutputBins, previewOutputStock } from './output-stock-operat
 
 it('returns certification artifact identities while checking both affected sources and the corrected delivery', async () => {
   const binId = '00000000-0000-4000-8000-000000000001';
-  const layers = [{ id: 'run', physicalDate: '2026-09-01', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
+  const layers = [{ id: 'run', placedAt: '2026-09-01T12:00:00.000Z', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
   mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }]];
   mocks.state.mockResolvedValue({ layers });
   mocks.correction.mockResolvedValue({ layers, allocations: [], deliveryId: 'delivery' });
   mocks.lineage.mockResolvedValueOnce([{ removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
   const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
-  const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', physicalDate: '2026-09-14', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
+  const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
   expect(result.blockingMessage).toContain('certification');
   expect(result.blockers).toEqual([{ entity: 'removal', id: 'removal', code: 'Removal' }, { entity: 'ghgStatement', id: 'statement', code: 'GHG Statement' }]);
   expect(mocks.lineage.mock.calls.map(call => call[2])).toEqual([{ entityType: 'productionRun', entityId: 'run' }, { entityType: 'delivery', entityId: 'delivery' }]);
@@ -35,7 +35,7 @@ it('returns certification artifact identities while checking both affected sourc
 
 it('passes the blocking movement through when a correction is refused', async () => {
   const binId = '00000000-0000-4000-8000-000000000001';
-  const layers = [{ id: 'run', physicalDate: '2026-09-01', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
+  const layers = [{ id: 'run', placedAt: '2026-09-01T12:00:00.000Z', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
   const bin = { id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null };
   // The refused pass reads only the bin before the correction throws; the
   // fallback pass then reads the bin, its events and both code lists.
@@ -45,7 +45,7 @@ it('passes the blocking movement through when a correction is refused', async ()
   const movement = { entity: 'binMovement', id: 'later', code: conflictCode('Later loss (2026-09-12)') };
   mocks.correction.mockRejectedValue(new ActionConflictError('Correction blocked by a later loss.', { entity: 'storageLocation', id: binId, code: conflictCode('BC-001') }, { blockers: [movement] }));
   const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
-  const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', physicalDate: '2026-09-14', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
+  const result = await previewOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss', wetMassKg: 10, moisturePercent: 10 });
   expect(result.blockingMessage).toContain('Correction blocked by a later loss.');
   expect(result.blockers).toEqual([movement]);
 });
