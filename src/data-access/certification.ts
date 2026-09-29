@@ -26,6 +26,7 @@ import {
   hasStorageLocationRegistrationForExternalProject,
 } from "./certifier-storage-locations";
 import { withCertifierProjectMappingLocks } from "./certifier-project-mapping-locks";
+import { rejectDraftSubmission } from "./submission-rejection";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
@@ -815,25 +816,7 @@ export async function markSubmissionRejected(
   id: string,
   args: { errorMessage: string; expectedLockedAt?: Date },
 ): Promise<void> {
-  requireOrgScope(ctx);
-  await db
-    .update(certificationSubmissions)
-    .set({
-      status: "rejected",
-      lockedAt: null,
-      updatedAt: sql`now()`,
-      metadata: sql`(coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text) || jsonb_build_object(${SUBMISSION_METADATA_KEYS.lastError}::text, ${args.errorMessage}::text)`,
-    })
-    .where(
-      and(
-        eq(certificationSubmissions.id, id),
-        eq(certificationSubmissions.status, "draft"),
-        args.expectedLockedAt
-          ? eq(certificationSubmissions.lockedAt, args.expectedLockedAt)
-          : undefined,
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-      ),
-    );
+  await rejectDraftSubmission(ctx, db, id, args);
 }
 
 // Accumulates per-step recovery IDs into `payload_snapshot.journaled`

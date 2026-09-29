@@ -16,7 +16,9 @@ import type {
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import {
+  getMetadataValue,
   SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_EXTERNAL_MUTATIONS,
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 
@@ -28,6 +30,10 @@ const INTERRUPTION_METADATA_KEYS = new Set<string>([
 const RETRY_CLEARED_METADATA_KEYS = new Set<string>([
   SUBMISSION_METADATA_KEYS.lastError,
   SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+]);
+const REJECTION_CLEARED_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+  SUBMISSION_METADATA_KEYS.externalMutation,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -832,11 +838,17 @@ beforeEach(() => {
         !args.expectedLockedAt ||
         row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
       if (row?.status === "draft" && ownsLock) {
+        // Mirrors rejectDraftSubmission: a definitive rejection leaves no
+        // registry write in doubt, so the attempt markers are cleared.
         row.status = "rejected";
         row.lockedAt = null;
         row.metadata = {
-          ...(row.metadata ?? {}),
-          lastError: args.errorMessage,
+          ...Object.fromEntries(
+            Object.entries(row.metadata ?? {}).filter(
+              ([key]) => !REJECTION_CLEARED_METADATA_KEYS.has(key),
+            ),
+          ),
+          [SUBMISSION_METADATA_KEYS.lastError]: args.errorMessage,
         };
       }
     },
@@ -847,6 +859,25 @@ beforeEach(() => {
   vi.mocked(
     productionClaimReservations.rejectSubmissionAndReleaseProductionClaims,
   ).mockImplementation(async (ctx, args) => {
+    // Mirrors the real reject+release: a possible external mutation keeps the
+    // row and its reservation untouched; an already-definitive row only
+    // releases (not modelled here); only the exact draft attempt is rejected.
+    const row = storedRows.find((candidate) => candidate.id === args.submissionId);
+    if (!row) return;
+    const mutation = getMetadataValue(
+      row.metadata,
+      SUBMISSION_METADATA_KEYS.externalMutation,
+    );
+    if (
+      mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible ||
+      mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed
+    ) {
+      return;
+    }
+    const exactDraftAttempt =
+      row.status === "draft" &&
+      row.lockedAt?.getTime() === args.expectedLockedAt.getTime();
+    if (!exactDraftAttempt) return;
     await ledger.markSubmissionRejected(ctx, args.submissionId, {
       errorMessage: args.errorMessage,
       expectedLockedAt: args.expectedLockedAt,
