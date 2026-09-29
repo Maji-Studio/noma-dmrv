@@ -139,7 +139,7 @@ pile it was taken from.
 
 **Estimated moisture**:
 A sub-bin's or mix pile's current water fraction by the records: the latest
-reading, carried forward through later additions. A hint beside moisture
+reading, recomputed from solids and wet mass after later additions. A hint beside moisture
 fields, never a prefilled value.
 
 **Biochar share of solids**:
