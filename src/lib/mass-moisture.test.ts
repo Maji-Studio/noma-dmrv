@@ -230,4 +230,8 @@ describe("formatWetDryStock", () => {
       "wet not available, 249.6 kg dry biochar",
     );
   });
+
+  it("shows a negative balance instead of calling it missing", () => {
+    expect(formatWetDryStock({ wetKg: -50, dryKg: -40 })).toBe("-50 kg wet, -40 kg dry biochar");
+  });
 });

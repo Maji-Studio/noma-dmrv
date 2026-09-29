@@ -294,7 +294,7 @@ export function formatWetDryStock({
 }): string {
   const gap = missing.toLowerCase();
   const recorded = (kg: number | null | undefined): kg is number =>
-    kg != null && Number.isFinite(kg) && kg >= 0;
+    kg != null && Number.isFinite(kg);
   const wet = recorded(wetKg)
     ? `${estimatedWet ? "≈ " : ""}${formatSplitMass(wetKg)} wet`
     : `wet ${gap}`;
