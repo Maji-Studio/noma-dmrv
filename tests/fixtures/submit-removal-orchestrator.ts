@@ -35,6 +35,10 @@ const REJECTION_CLEARED_METADATA_KEYS = new Set<string>([
   SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
   SUBMISSION_METADATA_KEYS.externalMutation,
 ]);
+const BLOCKING_EXTERNAL_MUTATIONS = new Set<unknown>([
+  SUBMISSION_EXTERNAL_MUTATIONS.possible,
+  SUBMISSION_EXTERNAL_MUTATIONS.confirmed,
+]);
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared before importing the system under test so the mocks
@@ -859,25 +863,12 @@ beforeEach(() => {
   vi.mocked(
     productionClaimReservations.rejectSubmissionAndReleaseProductionClaims,
   ).mockImplementation(async (ctx, args) => {
-    // Mirrors the real reject+release: a possible external mutation keeps the
-    // row and its reservation untouched; an already-definitive row only
-    // releases (not modelled here); only the exact draft attempt is rejected.
+    // Mirrors the real reject+release: a possible or confirmed external
+    // mutation leaves the row alone; otherwise only the exact draft attempt is
+    // rejected (the fake rejection checks draft status and lock ownership).
     const row = storedRows.find((candidate) => candidate.id === args.submissionId);
-    if (!row) return;
-    const mutation = getMetadataValue(
-      row.metadata,
-      SUBMISSION_METADATA_KEYS.externalMutation,
-    );
-    if (
-      mutation === SUBMISSION_EXTERNAL_MUTATIONS.possible ||
-      mutation === SUBMISSION_EXTERNAL_MUTATIONS.confirmed
-    ) {
-      return;
-    }
-    const exactDraftAttempt =
-      row.status === "draft" &&
-      row.lockedAt?.getTime() === args.expectedLockedAt.getTime();
-    if (!exactDraftAttempt) return;
+    const mutation = getMetadataValue(row?.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
+    if (BLOCKING_EXTERNAL_MUTATIONS.has(mutation)) return;
     await ledger.markSubmissionRejected(ctx, args.submissionId, {
       errorMessage: args.errorMessage,
       expectedLockedAt: args.expectedLockedAt,
