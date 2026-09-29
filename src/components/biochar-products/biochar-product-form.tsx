@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
@@ -199,6 +199,7 @@ export function BiocharProductForm({
   } = form;
 
   const selectedFacilityId = useWatch({ control, name: "facilityId" }) || contextFacilityId || "";
+  const placementClock = useFacilityClock(selectedFacilityId);
   const sourceBiocharStorageLocationId = useWatch({
     control,
     name: "sourceBiocharStorageLocationId",
@@ -374,8 +375,8 @@ export function BiocharProductForm({
       />
       <FormSpine control={control}>
       <FormSection title="Placement" icon={<CalendarIcon size={14} weight="bold" />} fields={["placedAt"]}>
-        <FormField id="placedAt" label="Mixing and placement time" required error={errors.placedAt?.message} helperText="When this product was physically mixed and placed in its bin.">
-          <EventTimeInput control={control} name="placedAt" id="placedAt" disabled={isSubmitting || isEditMode} />
+        <FormField id="placedAt" label="Mixing and placement time" required error={errors.placedAt?.message} helperText={placementClock.hint}>
+          <EventTimeInput control={control} name="placedAt" id="placedAt" timeZone={placementClock.timeZone} disabled={isSubmitting || isEditMode} />
         </FormField>
       </FormSection>
 

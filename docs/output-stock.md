@@ -14,9 +14,12 @@ compare as instants, so two events on the same day keep their real order; equal
 instants use the stable posting sequence. A draw cannot use a physically future
 layer. A late receipt does not change saved draws or applications.
 
-Forms take the time through the native date-time picker on the viewer's clock
-and submit an ISO 8601 UTC instant. Read surfaces show it in house style
-("Sep 15, 2026, 14:30"); server-built messages use the facility's clock.
+Stock event times are entered and shown on the facility's clock, the same
+clock production run times use, so every viewer reads one wall clock. Forms
+take the time through the native date-time picker with a "Facility time" hint
+and submit an ISO 8601 UTC instant; a wall clock skipped or repeated by
+daylight saving is refused, not shifted. Read surfaces and server messages show
+it in house style ("Sep 15, 2026, 14:30").
 
 Each product freezes its source dry biochar and ingredient dry solids. Positive
 ingredient amounts use the oldest eligible intake moisture or an explicit

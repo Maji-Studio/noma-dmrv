@@ -20,7 +20,7 @@ import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
@@ -79,6 +79,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
   const formFacilityId = delivery?.facilityId ?? contextFacilityId;
+  const deliveryClock = useFacilityClock(formFacilityId);
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
   // cache read rather than a round trip on open.
@@ -288,8 +289,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveryDate", "orderId", "storageLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required>
-            <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" disabled={isSubmitting || isEditMode} />
+          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required helperText={deliveryClock.hint}>
+            <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" timeZone={deliveryClock.timeZone} disabled={isSubmitting || isEditMode} />
           </FormField>
 
         </div>

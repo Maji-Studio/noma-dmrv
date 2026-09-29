@@ -1,5 +1,5 @@
 import { db, type DbTransaction } from '@/db';
-import { binMovements, biocharProducts, feedstocks, productionRunFeedstockDraws, productionRuns } from '@/db/schema';
+import { binMovements, biocharProducts, facilities, feedstocks, productionRunFeedstockDraws, productionRuns } from '@/db/schema';
 import { GRAMS_PER_KILOGRAM, toPersistedMassGrams } from '@/lib/biochar-composition/composition';
 import type { OrgContext } from '@/lib/auth/server';
 import { and, eq, isNull, lte, ne, sql } from 'drizzle-orm';
@@ -13,10 +13,13 @@ const PERCENT = 100;
 export async function getIngredientStockBasis(ctx: OrgContext, storageLocationId: string, occurredAt?: string, reader: Pick<DbTransaction, 'select'> = db, excludeProductId?: string) {
   requireOrgScope(ctx);
   const at = occurredAt ? new Date(z.iso.datetime().parse(occurredAt)) : undefined;
+  // An intake records a calendar day (UTC midnight), so it counts from the
+  // start of that day on the facility clock where the product is made.
   const intakes = await reader.select({ wet: feedstocks.massWetKg, dry: feedstocks.massDryKg }).from(feedstocks)
+    .innerJoin(facilities, and(eq(facilities.id, feedstocks.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.storageLocationId, storageLocationId),
       eq(feedstocks.status, 'complete'), isNull(feedstocks.archivedAt),
-      at ? lte(feedstocks.deliveryDate, at) : undefined));
+      at ? sql`${feedstocks.deliveryDate}::date <= (${at.toISOString()}::timestamptz at time zone ${facilities.timezone})::date` : undefined));
   const products = await reader.select({ composition: biocharProducts.composition }).from(biocharProducts)
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), excludeProductId ? ne(biocharProducts.id, excludeProductId) : undefined,
       at ? lte(biocharProducts.placedAt, at) : undefined,

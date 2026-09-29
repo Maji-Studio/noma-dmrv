@@ -12,8 +12,8 @@
 "use client";
 
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatLocalDate } from "@/lib/date-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatLocalDate, formatUtcDate } from "@/lib/date-utils";
+import { formatDayString } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect, useState } from "react";
@@ -370,16 +370,15 @@ export function ApplicationForm({
     }
 
     // Custody ordering (issue #284): the server rejects this too — surface a
-    // field error here instead of a generic server error. Day-string compare
-    // keeps both sides on local-date granularity.
+    // field error here instead of a generic server error. Both sides compare
+    // the typed day with the delivery's day on its facility clock.
     if (
-      selectedDelivery &&
-      formatLocalDate(data.applicationDate) <
-        formatLocalDate(new Date(selectedDelivery.deliveryDate))
+      selectedDelivery?.deliveryDay &&
+      formatUtcDate(data.applicationDate) < selectedDelivery.deliveryDay
     ) {
       setError("applicationDate", {
         type: "manual",
-        message: `Application date cannot be before the delivery date (${formatDate(selectedDelivery.deliveryDate)})`,
+        message: `Application date cannot be before the delivery date (${formatDayString(selectedDelivery.deliveryDay)})`,
       });
       return;
     }

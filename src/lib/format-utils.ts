@@ -90,10 +90,12 @@ export function formatDateTime(value: DateValue): string {
 
 /**
  * Format an instant in house style ("Sep 15, 2026, 14:30") on a facility's
- * wall clock. For server-built messages, which have no viewer timezone.
+ * wall clock. Output stock event times always read on the facility clock.
  */
-export function formatFacilityDateTime(value: Date, timeZone: string): string {
-  return formatFacilityTime(value, timeZone, DATE_TIME_FORMAT);
+export function formatFacilityDateTime(value: Date | string | null | undefined, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
 /** Format an instant in a facility's timezone with its numeric UTC offset. */

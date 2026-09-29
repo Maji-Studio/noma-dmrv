@@ -33,6 +33,7 @@ import {
   useUpdateDelivery,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   useListPagination,
   useReconcileListPage,
@@ -49,6 +50,7 @@ import {
   formatDate,
   formatDateRange,
   formatDistanceKm,
+  formatFacilityDateTime,
   formatMassKg,
 } from "@/lib/format-utils";
 import {
@@ -241,7 +243,7 @@ export function DeliveryList() {
   const [formError, setFormError] = useState<string | null>(null);
 
   // Global facility context
-  const { facilityId: contextFacilityId } = useFacilityContext();
+  const { facilityId: contextFacilityId, facilities } = useFacilityContext();
   const [searchQuery, setSearchQuery] = useState("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination(`${contextFacilityId ?? ""}:${creditBatchFilter}`);
@@ -603,7 +605,7 @@ export function DeliveryList() {
                 {
                   title: "Delivery information",
                   fields: [
-                    { label: "Delivery date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery time", value: formatFacilityDateTime(sideSheetEntity.deliveryDate, resolveFacilityTimezone(facilities, sideSheetEntity.facilityId)) },
                     { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
                     { label: "Order", value: sideSheetEntity.orderCode },
                   ],

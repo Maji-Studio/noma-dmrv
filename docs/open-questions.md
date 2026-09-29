@@ -767,6 +767,8 @@ bound); these are the decisions it deliberately did not make.
   `production-incident-form`, `production-sample-form` and
   `components/samples/sample-form` render in the browser zone (the
   production-run side sheet was moved to the facility zone on 2026-07-25).
+  Output stock events (placement, delivery, loss, count) follow the facility
+  zone since 2026-09-29 (`EventTimeInput`, `formatFacilityDateTime`).
 - **Resolve via:** decide one project-wide rule — instants are constructed and
   rendered in the facility zone, date-only values stay pinned to UTC (issue #46)
   — then apply it to the remaining sites and add a lint or test guard so a
