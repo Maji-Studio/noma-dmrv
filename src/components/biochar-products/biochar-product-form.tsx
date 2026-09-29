@@ -53,7 +53,7 @@ import { CalendarIcon, CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-i
 import Link from "next/link";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { AffectedBinNotices } from "./affected-bin-notices";
-import { formProductComposition } from "./form-product-composition";
+import { formProductComposition, type FormProductComposition } from "./form-product-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
 
@@ -84,6 +84,44 @@ export function BiocharSourceMassFields({
         label: qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel ?? "Biochar"),
         helperText: wet.helperText ?? "Wet biochar drawn from the source bin.",
       }}
+    />
+  );
+}
+
+/**
+ * The product composition under the mix fields. Simple draws it once the
+ * biochar or an ingredient has a mass; before that it would be a key of
+ * "Not available" rows. Detailed always draws it, with the bin's stock history.
+ */
+export function ProductCompositionBlock({
+  composition,
+  massKg,
+  ingredientBins,
+  storageLocationId,
+  facilityId,
+}: {
+  composition: FormProductComposition;
+  massKg: number | null;
+  ingredientBins: ReadonlyArray<{ massKg?: unknown }>;
+  storageLocationId: string | null | undefined;
+  facilityId: string;
+}) {
+  const { detailed } = useSimplePresence("picture");
+  const started = massKg !== null || ingredientBins.some((ingredient) => typeof ingredient.massKg === "number");
+  if (!detailed && !started) return null;
+  return (
+    <ProductCompositionPreview
+      wetMassKg={composition.wetProductKg}
+      components={composition.components}
+      note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
+      actions={detailed && storageLocationId ? (
+        <OutputStockHistory
+          compact
+          storageLocationId={storageLocationId}
+          facilityId={facilityId}
+          triggerLabel="Stock history"
+        />
+      ) : undefined}
     />
   );
 }
@@ -341,12 +379,6 @@ export function BiocharProductForm({
     allocationFrozen: hasFrozenSourceAllocation,
     previews: productPreviewsAvailable ? affectedBins : undefined,
   });
-  const { detailed } = useSimplePresence("picture");
-  // Simple draws the composition once the biochar or an ingredient has a mass;
-  // before that it would be a key of "Not available" rows.
-  const compositionStarted =
-    massKgNum !== null ||
-    (watchedIngredientBins ?? []).some((ingredient) => typeof ingredient.massKg === "number");
 
   return (
     <div className="space-y-20">
@@ -608,19 +640,13 @@ export function BiocharProductForm({
         )}
         {productStockPreview.isFetching && <p role="status" className="sr-only">Refreshing affected bins</p>}
 
-        {(detailed || compositionStarted) && <ProductCompositionPreview
-          wetMassKg={composition.wetProductKg}
-          components={composition.components}
-          note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
-          actions={detailed && storageLocationId ? (
-            <OutputStockHistory
-              compact
-              storageLocationId={storageLocationId}
-              facilityId={selectedFacilityId}
-              triggerLabel="Stock history"
-            />
-          ) : undefined}
-        />}
+        <ProductCompositionBlock
+          composition={composition}
+          massKg={massKgNum}
+          ingredientBins={watchedIngredientBins ?? []}
+          storageLocationId={storageLocationId}
+          facilityId={selectedFacilityId}
+        />
       </FormSection>
       </FormSpine>
 
