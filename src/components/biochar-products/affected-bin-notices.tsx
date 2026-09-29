@@ -11,6 +11,7 @@
 
 import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { formatMassKg } from "@/lib/format-utils";
+import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview } from "@/types/output-stock";
 
 type Blocker = NonNullable<AffectedStockPreview["blockers"]>[number];
@@ -34,7 +35,8 @@ export function binNeedsAttention(preview: AffectedStockPreview | undefined, hid
   if (!preview) return false;
   return (!hideBlockingMessage && Boolean(preview.blockingMessage))
     || Boolean(preview.blockers?.length)
-    || preview.discrepancySolidsKg > 0;
+    || preview.discrepancySolidsKg > 0
+    || backdatedNotice(preview) !== null;
 }
 
 export function AffectedBinNotices({
@@ -47,6 +49,7 @@ export function AffectedBinNotices({
 }) {
   if (!preview || !binNeedsAttention(preview, hideBlockingMessage)) return null;
   const blockers = preview.blockers ?? [];
+  const backdated = backdatedNotice(preview);
   return (
     <div className="flex flex-col gap-6" aria-live="polite">
       {preview.discrepancySolidsKg > 0 && (
@@ -54,6 +57,7 @@ export function AffectedBinNotices({
           Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.
         </StockNotice>
       )}
+      {backdated && <StockNotice>{backdated}</StockNotice>}
       {!hideBlockingMessage && preview.blockingMessage && (
         <StockNotice tone="error" role="alert">{preview.blockingMessage}</StockNotice>
       )}

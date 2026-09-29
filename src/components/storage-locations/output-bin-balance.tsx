@@ -4,6 +4,7 @@ import { useFacilityClock } from "@/hooks/use-facility-context";
 import { useOutputStockBalance, useOutputSubBins } from "@/hooks/use-output-stock";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatWetEstimate } from "./stock-preview-shared";
+import { MixPileCard } from "./mix-pile-card";
 import { SubBinList } from "./sub-bin-card";
 
 const WET_ESTIMATE_HINT = "Wet stock is an estimate from the latest moisture reading of each sub-bin. Every delivery, loss and count reading updates the sub-bin it was taken from.";
@@ -11,7 +12,7 @@ const WET_ESTIMATE_HINT = "Wet stock is an estimate from the latest moisture rea
 /**
  * An output bin's stock on its detail sheet, wet first: the wet estimate
  * operators plan loads by, the tracked dry biochar under it, then a split
- * bin's sub-bins oldest first.
+ * bin's sub-bins oldest first. A mix bin is one pile, shown as one box.
  */
 export function OutputBinBalance({ storageLocationId, facilityId }: { storageLocationId: string; facilityId: string }) {
   const preview = useOutputStockBalance({ storageLocationId, facilityId });
@@ -20,6 +21,12 @@ export function OutputBinBalance({ storageLocationId, facilityId }: { storageLoc
   const clock = useFacilityClock(facilityId);
   const split = subBins.data?.stockMode === "split" && subBins.data.subBins.length > 0 ? subBins.data.subBins : null;
   const wetKg = preview.data?.beforeEstimatedWetKg ?? null;
+  // Until the mode is known, show only the loading line, so the layout does not swap.
+  if (subBins.isLoading) return <p role="status" className="body-caption">Loading stock...</p>;
+  if (subBins.data?.stockMode === "mix" && preview.data) {
+    return <MixPileCard binName={preview.data.binName} wetKg={wetKg} moisturePercent={preview.data.moistureEstimate?.moisturePercent ?? null}
+      dryKg={preview.data.beforeDryKg} batches={subBins.data.subBins} />;
+  }
   return <div className="space-y-16">
     <div className="space-y-4">
       {preview.isLoading && <p role="status" className="body-caption">Loading stock...</p>}

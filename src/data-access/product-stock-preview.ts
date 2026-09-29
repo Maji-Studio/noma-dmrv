@@ -53,7 +53,8 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
         allocations: [], beforeAllocations: allocation(beforeWet, beforeDry), afterAllocations: allocation(beforeWet - wetDraw, afterDry),
         blockingMessage: wetDraw > beforeWet ? 'Ingredient withdrawal exceeds available wet stock.' : null, discrepancySolidsKg: 0,
         // Ingredient bins keep wet stock; an ingredient reading describes the material used, not the bin.
-        moistureEstimate: null, moistureReset: null });
+        // The spread source preview's mix facts belong to the biochar bin, not this ingredient bin.
+        moistureEstimate: null, moistureReset: null, calculatedWithout: [], stockMode: undefined });
     }
     const wetAdded = input.massKg + input.waterAddedKg + ingredients.reduce((sum, ingredient) => sum + ingredient.massKg, 0);
     const solidsAdded = source.preview.removedDryKg + ingredients.reduce((sum, ingredient) => sum + (ingredient.massKg > 0 ? ingredient.massDryKg : 0), 0);

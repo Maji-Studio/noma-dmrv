@@ -12,7 +12,7 @@ import { findMovementRequest, lockMovementRequest } from './bin-movement-request
 import { assertCanMutateCertifiedLineage } from './certification-lineage-guards';
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
 import { lockBinStocks } from './lock-bin-stocks';
-import { prepareOutputStock, stockFingerprint, storedOverallMoisture } from './output-stock-operations';
+import { postedMoisturePercent, prepareOutputStock, stockFingerprint } from './output-stock-operations';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
 
@@ -100,10 +100,10 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
     outputKind: correction ? 'replacement' : input.kind, occurredAt: new Date(input.occurredAt), idempotencyKey: input.idempotencyKey,
     basisFingerprint: input.basisFingerprint, inputSnapshot: { ...input, sources: prepared.sources,
       // A split draw has no single reading; history shows its overall moisture, 1 − solids ÷ wet.
-      moisturePercent: prepared.sources ? storedOverallMoisture(preview) : input.moisturePercent, actorId: ctx.userId, payloadHash, targetBiocharProductId: options.targetBiocharProductId, deliveryId: options.deliveryId ?? correction?.deliveryId, discrepancySolidsKg: storeRational(plan.discrepancySolidsKg), preview },
+      moisturePercent: postedMoisturePercent(prepared), actorId: ctx.userId, payloadHash, targetBiocharProductId: options.targetBiocharProductId, deliveryId: options.deliveryId ?? correction?.deliveryId, discrepancySolidsKg: storeRational(plan.discrepancySolidsKg), preview },
     outputDryDeltaKg: kilograms(-grams(plan.drawnDryKg)), balanceBeforeDryKg: kilograms(beforeGrams), balanceAfterDryKg: kilograms(beforeGrams - grams(plan.drawnDryKg)), correctsMovementId: correction?.original.id ?? null }).returning();
   // Every allocation records how it was drawn, so provenance never needs the planner again.
-  const policy = prepared.sources ? 'operator_order' : 'fifo';
+  const policy = prepared.sources ? 'operator_order' : prepared.policy;
   const order = prepared.sources?.map(source => source.layerId) ?? null;
   let cumulativeWet = rational(BigInt(0));
   let allocatedWetGrams = BigInt(0);
@@ -134,10 +134,10 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
     const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, correction.deliveryId))).for('update');
     if (!delivery || delivery.storageLocationId !== input.storageLocationId || delivery.facilityId !== input.facilityId) throw new SafeError('Delivery source changed. Refresh and retry.');
     await lockDeliveryOrderAndAssertBalance(ctx, tx, { orderId: delivery.orderId, requestedWetKg: input.wetMassKg, excludeDeliveryId: delivery.id });
-    await tx.update(deliveries).set({ deliveredWetMassKg: input.wetMassKg, moistureContentPercent: prepared.sources ? storedOverallMoisture(preview) : input.moisturePercent, massDryKg: Number(plan.drawnDryKg), deliveryDate: new Date(input.occurredAt), updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id)));
+    await tx.update(deliveries).set({ deliveredWetMassKg: input.wetMassKg, moistureContentPercent: postedMoisturePercent(prepared), massDryKg: Number(plan.drawnDryKg), deliveryDate: new Date(input.occurredAt), updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id)));
     await syncBiocharProductTransportLegs(ctx, tx, [...productIds]);
   }
-  return { movement, preview };
+  return { movement, preview, moisturePercent: postedMoisturePercent(prepared) };
 }
 export async function postOutputStock(ctx: OrgContext, raw: OutputStockPostInput) {
   requireOrgScope(ctx);

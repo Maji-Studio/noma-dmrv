@@ -39,6 +39,7 @@ import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import {
   formatStorageLocationType,
+  OUTPUT_STOCK_MODE_LABELS,
   type StorageLocationFilterData,
   type StorageLocationFormData,
 } from "@/schemas/storage-locations";
@@ -452,6 +453,9 @@ export function StorageLocationList() {
         }}
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
+        // A mix bin's batch shares are the sheet's only Detailed content.
+        detailToggle={sideSheet?.entity?.stockMode === "mix" ? "view" : false}
+        detailScope={sideSheet?.entity?.id ?? "create"}
         // Bins lead with their name, not their code — the one entity where the
         // house convention (code as the sheet title) puts an opaque lookup key
         // where the operator's own word for the thing belongs. The code stays,
@@ -491,6 +495,9 @@ export function StorageLocationList() {
                       : []),
                     ...(sideSheet.entity.type === "product_bin"
                       ? [{ label: "Formulation", value: sideSheet.entity.formulationName }]
+                      : []),
+                    ...(sideSheet.entity.type !== "feedstock_bin"
+                      ? [{ label: "Stock mode", value: OUTPUT_STOCK_MODE_LABELS[sideSheet.entity.stockMode] }]
                       : []),
                     { label: "Description", value: sideSheet.entity.storageDescription },
                   ],

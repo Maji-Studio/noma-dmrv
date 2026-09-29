@@ -1,6 +1,6 @@
 # Split and mix output bins
 
-**Owner:** Kenji Nguyen · **Status:** agreed in grilling (2026-09-28), not implemented · **Last reviewed:** 2026-09-28
+**Owner:** Kenji Nguyen · **Status:** agreed in grilling (2026-09-28); slices A to F implemented (F: mix bins, 2026-09-29) · **Last reviewed:** 2026-09-29
 
 Decisions: [ADR 0029 amendment (2026-09-28)](../adr/0029-output-bin-stock-is-dry-biochar-drawn-fifo.md) and [ADR 0030](../adr/0030-mix-bins-draw-pro-rata.md). Four grilling rounds (21 decisions, with diagrams) are recorded on the [Split and Mix Bins page](https://claude.ai/artifact/ARZrecVgBMHDPa3J91TKnM).
 
@@ -35,7 +35,7 @@ Not found: a ban on mixing, a stockpile time limit, a required FIFO or pro-rata 
 ### Both modes
 
 1. **Scope.** Biochar bins and product bins. Feedstock and ingredient bins keep wet stock and pro-rata withdrawal (ADR 0027).
-2. **Mode.** Chosen on the bin form when the bin is created; default Split, which is how every existing bin already behaves. Split to Mix is allowed at any time as a timed **merge** event: after it, every batch present is drawn pro-rata, and nothing already posted changes. Mix to Split is allowed only when the bin is empty. A draw uses the mode in force at its event time, so an entry timed before a merge is planned as Split.
+2. **Mode.** Chosen on the bin form when the bin is created; default Split, which is how every existing bin already behaves. Split to Mix is allowed at any time as a timed **merge** event: after it, every batch present is drawn pro-rata, and nothing already posted changes. The merge time must be later than the bin's last recorded movement, so entries already posted stay split and correctable (owner sign-off, 2026-09-29). Mix to Split is allowed only when the bin is empty, is recorded as a timed **split** event, and no correction or addition may be timed across it. A draw uses the mode in force at its event time, so an entry timed before a merge is planned as Split.
 3. **Time.** Every output stock event carries date and time (product added, delivery, loss, count, merge). Seconds are stored but not shown. Display uses house style ("Sep 15, 2026, 14:30"); input uses the native date-time picker, which follows the viewer's locale.
 4. **Moisture readings are required and never prefilled.** This covers delivery, loss, count, product creation (biochar draw) and ingredient moisture. Below each field, one short hint: "Estimated moisture: 29.4%", with the date of the reading it comes from in an ⓘ tooltip. Keep the hint to one figure. A reading must be at least 0% and below 100%, as delivery moisture already requires.
 5. **A reading resets what it describes.** A mix-bin reading sets the whole pile's estimated moisture. A split-bin reading sets the moisture of the sub-bin it was taken from. Dry biochar and solids never change; only the wet estimate does.
@@ -87,7 +87,7 @@ B-0412 is emptied: 843.2 ÷ 0.70 = 1,204.6 kg wet. B-0419 takes the remaining 29
 
 - `storage_locations.stock_mode` (`split` | `mix`), required for output bins, default `split`. A merge posts a `bin_movements` row (`output_kind = 'merge'`, no stock change) at its time and switches the mode in the same transaction.
 - **Time precision.** `biochar_products.placed_at` becomes `placed_at timestamptz`, `bin_movements.physical_date` becomes `occurred_at timestamptz`, deliveries store their actual time, and biochar layers use `production_runs.end_time` without truncation. `OutputStockLayer.physicalDate` becomes an instant; eligibility compares instants, and posting sequence still breaks ties.
-- **Moisture readings.** New `output_stock_moisture_readings`: organization, bin, layer (`biochar_product_id` or `production_run_id`; null for a whole mix pile), the movement that measured it, moisture percent, the solids basis at the reading (exact rational), and `occurred_at`. Estimated moisture and wet estimates come from the latest reading, not from `estimateWetAtRecordedMoisture`'s creation basis.
+- **Moisture readings.** New `output_stock_moisture_readings`: organization, bin, layer (`biochar_product_id` or `production_run_id`; the table allows null for a whole mix pile, but slice F saves a mix reading on every layer present instead, so a batch later backdated before that reading keeps its own recorded moisture), the movement that measured it, moisture percent, the solids basis at the reading (exact rational), and `occurred_at`. Estimated moisture and wet estimates come from the latest reading, not from `estimateWetAtRecordedMoisture`'s creation basis.
 - **Allocation basis.** `output_stock_allocations.basis_snapshot` gains `policy` (`fifo` | `operator_order` | `pro_rata`), the operator's order, and the reading used for that layer. A delivery drawn from several sub-bins stores its overall moisture as 1 − solids ÷ wet, derived from the per-layer readings.
 - **Ingredient snapshots.** `product_ingredient_snapshots.moisture_source` loses `weighted_remaining` / `operator_override`: the value is always measured, and the snapshot keeps the estimate the operator saw.
 - A count's moisture becomes required.

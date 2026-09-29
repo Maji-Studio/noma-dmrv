@@ -52,6 +52,7 @@ import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
+import { ProductionRunMixBinNotice } from "./production-run-mix-bin-notice";
 import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
 
 // ============================================
@@ -224,6 +225,8 @@ export function ProductionRunForm({
   const feedstockWetInput = summarizeFeedstockWetInput(watchedFeedstockDraws);
   const selectedFeedstockDrawCount = feedstockWetInput.binCount;
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
+  const watchedEndDate = useWatch({ control, name: "endDate" });
+  const watchedEndTime = useWatch({ control, name: "endTime" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
   const watchedBiocharMoisture = useWatch({ control, name: "biocharMoisturePercent" });
 
@@ -676,6 +679,7 @@ export function ProductionRunForm({
             )}
           />
         </FormField>
+        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={watchedStatus === "complete" && (productionRun?.status !== "complete" || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
 
         <MassMoistureFields
           materialLabel="Biochar"

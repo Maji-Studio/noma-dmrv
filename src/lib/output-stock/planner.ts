@@ -25,6 +25,14 @@ export type OutputStockRequest =
   /** Split bin: sub-bins in the order they were emptied, each with its own reading, and one load weight. */
   | { kind: 'ordered'; wetKg: Decimal; sources: readonly OrderedSource[] };
 export interface OrderedSource { layerId: string; moisturePercent: Decimal }
+/**
+ * How a removal is attributed to layers: oldest first, or, in a mix bin, from
+ * every layer present in proportion to its remaining solids (ADR 0030). A split
+ * bin's sub-bin order is the `ordered` request, not a policy.
+ */
+export type DrawPolicy = 'fifo' | 'pro_rata';
+/** The policy a mix draw's allocations are saved with; the credit hold matches on it. */
+export const PRO_RATA_POLICY = 'pro_rata' satisfies DrawPolicy;
 
 /** The load weight is used up before this sub-bin; the operator unticks it. */
 export class UntickSubBinError extends RangeError {
@@ -35,10 +43,11 @@ export class SubBinOverdrawError extends RangeError {
   constructor(public readonly layerId: string) { super('Measured solids exceed the sub-bin'); }
 }
 
-/** Grid (per kg) a split draw's partial solids are floored to: 1e-9 kg, one microgram. */
-const ORDERED_SOLIDS_GRID_PER_KG = BigInt(1_000_000_000);
+/** Grid (per kg) a split draw's partial solids and a mix draw's shares are floored to: 1e-9 kg, one microgram. */
+const SOLIDS_GRID_PER_KG = BigInt(1_000_000_000);
+const gridUnits = (value: Rational) => value.numerator * SOLIDS_GRID_PER_KG / value.denominator;
 function floorToGrid(value: Rational): Rational {
-  return rational(value.numerator * ORDERED_SOLIDS_GRID_PER_KG / value.denominator, ORDERED_SOLIDS_GRID_PER_KG);
+  return rational(gridUnits(value), SOLIDS_GRID_PER_KG);
 }
 
 /** A layer's exact remaining solids: the retained balance, or its dry biochar at the layer's biochar share. */
@@ -71,8 +80,9 @@ function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Ration
  * Returned layers can be passed into the next plan; callers persist allocations,
  * not a replay of this calculation. This function does not authorize a database write.
  */
-export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt: string, request: OutputStockRequest) {
+export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt: string, request: OutputStockRequest, policy: DrawPolicy = 'fifo') {
   const at = canonicalInstant(occurredAt);
+  if (request.kind === 'ordered' && policy !== 'fifo') throw new RangeError('A mix bin has no sub-bin order');
   const ids = new Set<string>();
   const sequences = new Set<bigint>();
   const prepared = layers.map(layer => {
@@ -164,12 +174,18 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new RangeError('Insufficient exact dry solids');
     let left = requested.numerator > BigInt(0) ? requested : rational(BigInt(0));
     const readingPercent = request.kind === 'wet' ? request.moisturePercent : null;
-    for (const p of eligible) {
-      if (left.numerator === BigInt(0)) break;
-      if (p.capacity.numerator === BigInt(0)) continue;
-      const solidsKg = compare(left, p.capacity) >= BigInt(0) ? p.capacity : left;
+    const take = (p: Prepared, solidsKg: Rational) =>
       draw(p, solidsKg, request.kind === 'wet' ? divide(solidsKg, solidsFraction(request.moisturePercent)) : null, readingPercent);
-      left = subtract(left, solidsKg);
+    if (policy === 'pro_rata') {
+      proRataShares(eligible.filter(p => p.capacity.numerator > BigInt(0)), left).forEach(([p, solidsKg]) => take(p, solidsKg));
+    } else {
+      for (const p of eligible) {
+        if (left.numerator === BigInt(0)) break;
+        if (p.capacity.numerator === BigInt(0)) continue;
+        const solidsKg = compare(left, p.capacity) >= BigInt(0) ? p.capacity : left;
+        take(p, solidsKg);
+        left = subtract(left, solidsKg);
+      }
     }
   }
   const remainingLayers = prepared.map(p => drawn.get(p.layer.id) ?? p.layer);
@@ -178,4 +194,65 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     throw new RangeError('Draw is below one gram of dry biochar; increase the measured mass');
   }
   return { allocations, remainingLayers, expectedSolidsKg, discrepancySolidsKg, drawnDryKg: kilograms(drawnDryGrams) };
+}
+
+/**
+ * A mix draw's solids per layer (ADR 0030). Every layer present gives in
+ * proportion to what it holds. The draw's exact dry, rounded half up to the
+ * gram, is apportioned as whole grams with the cumulative rule run shares use,
+ * capped at what each layer holds, and every layer but the one holding most
+ * takes exactly the solids of its grams at its own biochar share. That layer
+ * takes the rest of the measured solids (floored to the microgram grid), so the
+ * removal conserves the measured solids and its dry total is within a gram of
+ * exact, with no layer rounding on its own. A draw of the whole pile takes every layer exactly;
+ * layers given nothing are left out.
+ */
+function proRataShares<T extends { capacity: Rational; fraction: Rational; remaining: bigint }>(held: readonly T[], solidsKg: Rational): [T, Rational][] {
+  const total = held.reduce((sum, p) => add(sum, p.capacity), rational(BigInt(0)));
+  if (solidsKg.numerator === BigInt(0)) return [];
+  if (compare(solidsKg, total) === BigInt(0)) return held.map(p => [p, p.capacity]);
+  const gramsPerKg = rational(GRAMS_PER_KG);
+  const exactDryGrams = held.reduce((sum, p) => add(sum, multiply(multiply(divide(multiply(solidsKg, p.capacity), total), p.fraction), gramsPerKg)), rational(BigInt(0)));
+  // A layer gives at most its whole remaining grams, and never more solids than it holds.
+  const caps = held.map(p => { const exact = multiply(multiply(p.capacity, p.fraction), gramsPerKg); const floor = exact.numerator / exact.denominator; return floor < p.remaining ? floor : p.remaining; });
+  const capTotal = caps.reduce((sum, cap) => sum + cap, BigInt(0));
+  const target = round(exactDryGrams);
+  const grams = apportionCapped(target < capTotal ? target : capTotal, held.map(p => gridUnits(multiply(p.capacity, p.fraction))), caps);
+  const solids = held.map((p, index) => divide(rational(grams[index]), multiply(p.fraction, gramsPerKg)));
+  const rest = held.reduce((largest, p, index) => compare(p.capacity, held[largest].capacity) > BigInt(0) ? index : largest, 0);
+  const others = solids.reduce((sum, value, index) => index === rest ? sum : add(sum, value), rational(BigInt(0)));
+  // Floored to the grid like a split draw's last sub-bin, so the layers taking the rest keep bounded exact balances.
+  const restSolids = floorToGrid(subtract(solidsKg, others));
+  // The rest always fits in practice; if rounding ever leaves it out of range, fall back to exact solids shares on the grid.
+  if (restSolids.numerator < BigInt(0) || compare(restSolids, held[rest].capacity) > BigInt(0)) return proRataSolidsOnGrid(held, solidsKg);
+  solids[rest] = restSolids;
+  return held.flatMap((p, index): [T, Rational][] => solids[index].numerator > BigInt(0) ? [[p, solids[index]]] : []);
+}
+
+/** Exact solids shares on the microgram grid, in proportion to each layer's remaining solids. */
+function proRataSolidsOnGrid<T extends { capacity: Rational }>(held: readonly T[], solidsKg: Rational): [T, Rational][] {
+  const weights = held.map(p => gridUnits(p.capacity));
+  const available = weights.reduce((sum, weight) => sum + weight, BigInt(0));
+  const units = gridUnits(solidsKg);
+  const shares = splitCumulativeGrams(units < available ? units : available, weights);
+  return held.flatMap((p, index): [T, Rational][] => shares[index] > BigInt(0) ? [[p, rational(shares[index], SOLIDS_GRID_PER_KG)]] : []);
+}
+
+/** Cumulative proportional apportionment with a ceiling per part; what a full part cannot take goes to the others. */
+function apportionCapped(total: bigint, weights: readonly bigint[], caps: readonly bigint[]): bigint[] {
+  const shares = weights.map(() => BigInt(0));
+  let left = total;
+  let open = weights.flatMap((weight, index) => weight > BigInt(0) && caps[index] > BigInt(0) ? [index] : []);
+  while (left > BigInt(0) && open.length) {
+    const split = splitCumulativeGrams(left, open.map(index => weights[index]));
+    left = BigInt(0);
+    open = open.filter((index, k) => {
+      const room = caps[index] - shares[index];
+      const given = split[k] < room ? split[k] : room;
+      shares[index] += given;
+      left += split[k] - given;
+      return shares[index] < caps[index];
+    });
+  }
+  return shares;
 }

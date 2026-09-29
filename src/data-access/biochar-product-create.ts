@@ -6,8 +6,9 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, getCompositionIngredientDraws, validateCompositionIngredientBins } from './biochar-product-composition';
 import { insertBiocharProductSourceAllocations } from './biochar-product-source-allocations';
 import { revalidateProductStock } from './product-stock-preview';
+import { assertAdditionAfterSplit } from './output-bin-stock-mode';
 import { withOutputStockPosting } from './output-stock-post';
-import { storedOverallMoisture } from './output-stock-operations';
+import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
 
 export interface CreateBiocharProductInput {
@@ -57,6 +58,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
     if (!formulation) throw new SafeError('Formulation not found');
     const [bin] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, data.storageLocationId!), eq(storageLocations.facilityId, data.facilityId), eq(storageLocations.type, 'product_bin'), isNull(storageLocations.archivedAt))).for('update');
     if (!bin || (bin.formulationId && bin.formulationId !== data.formulationId)) throw new SafeError('Choose a product bin for this formulation.');
+    await assertAdditionAfterSplit(ctx, tx, bin, new Date(data.placedAt));
     await validateCompositionIngredientBins(ctx, tx, data.composition, data.formulationId, data.facilityId);
     const productBasis = await revalidateProductStock(ctx, {
       facilityId: data.facilityId, formulationId: data.formulationId, placedAt: data.placedAt,
@@ -75,7 +77,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
       productionDate: new Date(firstLayer.placedAt), status: data.status ?? 'testing',
       sourceBiocharStorageLocationId: input.storageLocationId, linkedProductionRunId: prepared.plan.allocations.length === 1 ? firstLayer.id : null,
       // A split draw's biochar moisture is its overall 1 − solids ÷ wet across the sub-bins read.
-      storageLocationId: data.storageLocationId, massKg: data.massKg, moistureContentPercent: data.sources?.length ? storedOverallMoisture(prepared.preview) : data.moistureContentPercent, densityKgM3: data.densityKgM3,
+      storageLocationId: data.storageLocationId, massKg: data.massKg, moistureContentPercent: postedMoisturePercent(prepared), densityKgM3: data.densityKgM3,
       waterAddedKg: data.waterAddedKg, composition }).returning();
     // Post before source snapshots, so the locked read cannot subtract the new product twice.
     const posted = await post({ targetBiocharProductId: product.id, basisFingerprint: prepared.preview.basisFingerprint });
