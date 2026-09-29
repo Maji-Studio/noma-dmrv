@@ -88,7 +88,33 @@ describe("completed delivery order balance", () => {
     const f = await fixture(); await postDelivery(f, 60);
     await expect(postDelivery(f, 50)).rejects.toThrow("Only 40 kg remains on this order");
     const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
-    expect(listed).toMatchObject({ deliveredCount: 1, deliveredWetMassKg: 60 });
+    expect(listed).toMatchObject({ deliveredWetMassKg: 60, fulfillmentStatus: "partial" });
+  });
+  it("derives fulfillment from delivered wet mass in the list and its status filter", async () => {
+    const f = await fixture(); await postDelivery(f, 60);
+    const idsWith = async (status: "partial" | "fulfilled") =>
+      (await getOrders(f.ctx, { facilityId: f.order.facilityId, status, pageSize: 100 })).items.map(order => order.id);
+    expect(await idsWith("partial")).toContain(f.order.id);
+    expect(await idsWith("fulfilled")).not.toContain(f.order.id);
+    await postDelivery(f, 40);
+    expect(await idsWith("fulfilled")).toContain(f.order.id);
+    expect(await idsWith("partial")).not.toContain(f.order.id);
+  });
+  // Exact 98% boundaries, including one (0.875 x 0.98 = 0.8575) where a float
+  // threshold rounded to 3 decimals lands on the other side of the numeric one.
+  it.each([
+    { quantityKg: 1234.5, deliveredKg: 1209.81, expected: "fulfilled" },
+    { quantityKg: 1234.5, deliveredKg: 1209.809, expected: "partial" },
+    { quantityKg: 0.875, deliveredKg: 0.858, expected: "fulfilled" },
+    { quantityKg: 0.875, deliveredKg: 0.857, expected: "partial" },
+  ] as const)("reads $deliveredKg kg of $quantityKg kg as $expected in the list row and its filter", async ({ quantityKg, deliveredKg, expected }) => {
+    const f = await fixture(quantityKg, 1300); await postDelivery(f, deliveredKg);
+    const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
+    expect(listed?.fulfillmentStatus).toBe(expected);
+    const idsWith = async (status: "partial" | "fulfilled") =>
+      (await getOrders(f.ctx, { facilityId: f.order.facilityId, status, pageSize: 100 })).items.map(order => order.id);
+    expect(await idsWith(expected)).toContain(f.order.id);
+    expect(await idsWith(expected === "fulfilled" ? "partial" : "fulfilled")).not.toContain(f.order.id);
   });
   it("re-credits the original truck only through explicit correction", async () => {
     const f = await fixture(); await postDelivery(f, 20); const current = await postDelivery(f, 60);
