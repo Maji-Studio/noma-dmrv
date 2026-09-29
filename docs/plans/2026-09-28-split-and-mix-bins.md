@@ -56,7 +56,7 @@ Not found: a ban on mixing, a stockpile time limit, a required FIFO or pro-rata 
 ### Mix bins
 
 16. **One pile on screen.** The bin shows one box (for example "BCF Mix") with its wet estimate and estimated moisture. Batch shares stay underneath in the ledger and in Detailed.
-17. **Pro-rata draws.** Every removal takes each batch present at that time in proportion to its remaining solids. Loss and count differences spread the same way.
+17. **Pro-rata draws.** Every removal takes each batch present at that time in proportion to its remaining solids. Loss and count shortfalls spread the same way. Positive count differences are unknown-origin additions, still an open question (`docs/open-questions.md`).
 18. **Estimated moisture timeline.** At a reading, the pile's wet estimate becomes solids ÷ (1 − reading). An addition adds its own recorded wet mass and solids. A removal shrinks every batch by the same fraction, which leaves the moisture unchanged. Estimated moisture = 1 − solids ÷ wet estimate.
 19. **Backdating is allowed.** An entry timed before an already-posted removal doesn't change that removal's saved shares. The operator is told which removals were calculated without it. This matches ADR 0029's late-intake rule.
 
