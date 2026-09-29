@@ -26,7 +26,7 @@ vi.mock("@/components/forms/entity-select", async (importOriginal) => ({
 }));
 import { SpineSectionStatic } from "./form-spine";
 import { MassMoistureFields } from "./mass-moisture-fields";
-import { FormDetailControl, FormDetailProvider } from "./form-detail-context";
+import { FormDetailControl, FormDetailProvider, useSimplePresence } from "./form-detail-context";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -144,6 +144,24 @@ it("draws the moisture split in a Simple form only once an input has a value", a
   await act(async () => renderer.update(<FormDetailProvider scope="form"><FormDetailControl />{fields(null)}</FormDetailProvider>));
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   expect(visibleText(renderer.root)).toMatch(/Wet mass\s+not recorded/);
+  await act(async () => renderer.unmount());
+});
+
+it("draws the product composition in a Simple form only once a mass is set", async () => {
+  // Mirrors the mount rule in BiocharProductForm: the documented hook, or a started input.
+  function Composition({ started }: { started: boolean }) {
+    const { detailed } = useSimplePresence("picture");
+    return (detailed || started) ? <ProductCompositionPreview wetMassKg={100} dryBiocharKg={60} /> : null;
+  }
+  const tree = (started: boolean) => <FormDetailProvider scope="form"><FormDetailControl /><Composition started={started} /></FormDetailProvider>;
+  let renderer!: ReactTestRenderer;
+  await act(async () => { renderer = create(tree(false)); });
+  expect(visibleText(renderer.root)).not.toContain("Product composition");
+  await act(async () => renderer.update(tree(true)));
+  expect(visibleText(renderer.root)).toContain("Product composition");
+  await act(async () => renderer.update(tree(false)));
+  await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
+  expect(visibleText(renderer.root)).toContain("Product composition");
   await act(async () => renderer.unmount());
 });
 

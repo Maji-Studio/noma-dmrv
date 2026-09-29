@@ -418,8 +418,8 @@ block):
 
 | Block | Simple |
 |---|---|
-| Moisture split | picture: bar and key; ledger and arithmetic are Detailed |
-| Product composition | picture |
+| Moisture split | picture, once an input has a value: bar and key; ledger and arithmetic are Detailed |
+| Product composition | picture, once an input has a value |
 | Blend by volume (formulation) | hidden, except the picture while the total is over 100% |
 | Process flow (production run) | headline: the dry yield; the rail is Detailed |
 | Applied batches (application) | picture |
