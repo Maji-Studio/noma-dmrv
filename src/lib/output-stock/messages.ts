@@ -22,3 +22,16 @@ const OPERATOR_MESSAGES: Record<string, string> = {
 export function operatorStockMessage(message: string): string {
   return OPERATOR_MESSAGES[message] ?? message;
 }
+
+/**
+ * A mix-bin entry timed before saved removals (plan rule 19): those removals
+ * keep the batch shares they were saved with, and the operator is told which.
+ */
+export function calculatedWithoutNotice(removals: readonly { label: string }[]): string | null {
+  if (!removals.length) return null;
+  const names = removals.map(removal => removal.label);
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return names.length === 1
+    ? `This entry is timed before a saved removal: ${list}. Its batch shares were calculated without this entry and stay as saved.`
+    : `This entry is timed before ${names.length} saved removals: ${list}. Their batch shares were calculated without this entry and stay as saved.`;
+}

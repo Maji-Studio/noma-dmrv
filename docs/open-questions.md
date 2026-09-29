@@ -566,6 +566,16 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   module requires it per Storage Batch), and the per-removal moisture-reading
   method. The module requires lab moisture per production batch and says nothing
   about removal readings.
+- **Mix-bin credit hold (2026-09-29):** until the PDD covers mixing,
+  `MIX_BIN_REMOVALS_CREDITABLE` (`src/config/output-stock.ts`) is `false`, and
+  `src/data-access/mix-bin-credit-hold.ts` keeps applications drawn pro-rata
+  from a mix bin (directly, or through a product made from a mix biochar bin)
+  out of credit-batch slices. The application sheet says why. Flip the switch
+  once the PDD is accepted.
+- **Backdated additions to a mix bin (2026-09-29):** delivery, loss, count and
+  product creation previews name the later mix removals an entry was not part of
+  (plan rule 19). Completing a production run into a mix biochar bin has no stock
+  preview, so a backdated run end shows no such warning yet.
 - **Deferred:** all whole and partial bin-to-bin transfers remain in
   [#34](https://github.com/Maji-Studio/noma-dmrv/issues/34). Transfers must preserve
   provenance and atomically update both bins; destination ordering is to be

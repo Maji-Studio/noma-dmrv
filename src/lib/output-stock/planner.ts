@@ -25,6 +25,12 @@ export type OutputStockRequest =
   /** Split bin: sub-bins in the order they were emptied, each with its own reading, and one load weight. */
   | { kind: 'ordered'; wetKg: Decimal; sources: readonly OrderedSource[] };
 export interface OrderedSource { layerId: string; moisturePercent: Decimal }
+/**
+ * How a removal is attributed to layers: oldest first, or, in a mix bin, from
+ * every layer present in proportion to its remaining solids (ADR 0030). A split
+ * bin's sub-bin order is the `ordered` request, not a policy.
+ */
+export type DrawPolicy = 'fifo' | 'pro_rata';
 
 /** The load weight is used up before this sub-bin; the operator unticks it. */
 export class UntickSubBinError extends RangeError {
@@ -35,10 +41,11 @@ export class SubBinOverdrawError extends RangeError {
   constructor(public readonly layerId: string) { super('Measured solids exceed the sub-bin'); }
 }
 
-/** Grid (per kg) a split draw's partial solids are floored to: 1e-9 kg, one microgram. */
-const ORDERED_SOLIDS_GRID_PER_KG = BigInt(1_000_000_000);
+/** Grid (per kg) a split draw's partial solids and a mix draw's shares are floored to: 1e-9 kg, one microgram. */
+const SOLIDS_GRID_PER_KG = BigInt(1_000_000_000);
+const gridUnits = (value: Rational) => value.numerator * SOLIDS_GRID_PER_KG / value.denominator;
 function floorToGrid(value: Rational): Rational {
-  return rational(value.numerator * ORDERED_SOLIDS_GRID_PER_KG / value.denominator, ORDERED_SOLIDS_GRID_PER_KG);
+  return rational(gridUnits(value), SOLIDS_GRID_PER_KG);
 }
 
 /** A layer's exact remaining solids: the retained balance, or its dry biochar at the layer's biochar share. */
@@ -71,8 +78,9 @@ function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Ration
  * Returned layers can be passed into the next plan; callers persist allocations,
  * not a replay of this calculation. This function does not authorize a database write.
  */
-export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt: string, request: OutputStockRequest) {
+export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt: string, request: OutputStockRequest, policy: DrawPolicy = 'fifo') {
   const at = canonicalInstant(occurredAt);
+  if (request.kind === 'ordered' && policy !== 'fifo') throw new RangeError('A mix bin has no sub-bin order');
   const ids = new Set<string>();
   const sequences = new Set<bigint>();
   const prepared = layers.map(layer => {
@@ -164,12 +172,18 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     if (compare(requested, expectedSolidsKg) > BigInt(0)) throw new RangeError('Insufficient exact dry solids');
     let left = requested.numerator > BigInt(0) ? requested : rational(BigInt(0));
     const readingPercent = request.kind === 'wet' ? request.moisturePercent : null;
-    for (const p of eligible) {
-      if (left.numerator === BigInt(0)) break;
-      if (p.capacity.numerator === BigInt(0)) continue;
-      const solidsKg = compare(left, p.capacity) >= BigInt(0) ? p.capacity : left;
+    const take = (p: Prepared, solidsKg: Rational) =>
       draw(p, solidsKg, request.kind === 'wet' ? divide(solidsKg, solidsFraction(request.moisturePercent)) : null, readingPercent);
-      left = subtract(left, solidsKg);
+    if (policy === 'pro_rata') {
+      proRataShares(eligible.filter(p => p.capacity.numerator > BigInt(0)), left).forEach(([p, solidsKg]) => take(p, solidsKg));
+    } else {
+      for (const p of eligible) {
+        if (left.numerator === BigInt(0)) break;
+        if (p.capacity.numerator === BigInt(0)) continue;
+        const solidsKg = compare(left, p.capacity) >= BigInt(0) ? p.capacity : left;
+        take(p, solidsKg);
+        left = subtract(left, solidsKg);
+      }
     }
   }
   const remainingLayers = prepared.map(p => drawn.get(p.layer.id) ?? p.layer);
@@ -178,4 +192,22 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
     throw new RangeError('Draw is below one gram of dry biochar; increase the measured mass');
   }
   return { allocations, remainingLayers, expectedSolidsKg, discrepancySolidsKg, drawnDryKg: kilograms(drawnDryGrams) };
+}
+
+/**
+ * A mix draw's solids per layer, in proportion to each layer's remaining
+ * solids. Shares close on the microgram grid with the cumulative apportionment
+ * run shares use, so they sum to the draw floored to the grid; a draw of the
+ * whole pile takes every layer exactly. Layers whose share is below the grid
+ * are left out.
+ */
+function proRataShares<T extends { capacity: Rational }>(held: readonly T[], solidsKg: Rational): [T, Rational][] {
+  const total = held.reduce((sum, p) => add(sum, p.capacity), rational(BigInt(0)));
+  if (solidsKg.numerator === BigInt(0)) return [];
+  if (compare(solidsKg, total) === BigInt(0)) return held.map(p => [p, p.capacity]);
+  const weights = held.map(p => gridUnits(p.capacity));
+  const units = gridUnits(solidsKg);
+  const available = weights.reduce((sum, weight) => sum + weight, BigInt(0));
+  const shares = splitCumulativeGrams(units < available ? units : available, weights);
+  return held.flatMap((p, index): [T, Rational][] => shares[index] > BigInt(0) ? [[p, rational(shares[index], SOLIDS_GRID_PER_KG)]] : []);
 }
