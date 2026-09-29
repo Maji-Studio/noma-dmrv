@@ -37,9 +37,8 @@ interface TransportLegFormProps {
   errorMessage?: string;
 }
 
-const transportMethodLabel = selectableTransportMethods
-  .map((m) => m.charAt(0).toUpperCase() + m.slice(1))
-  .join(", ");
+const formatTransportMethod = (method: string) =>
+  method.charAt(0).toUpperCase() + method.slice(1);
 
 const MIN_LOAD_MASS_KG = 0.000001;
 const isTransportLegCertifyField = (field: string) =>
@@ -127,6 +126,10 @@ export function TransportLegForm({
   const destinationLat = useWatch({ control, name: "destinationGpsLatitude" }) as number | null | undefined;
   const destinationLng = useWatch({ control, name: "destinationGpsLongitude" }) as number | null | undefined;
   const distanceKm = useWatch({ control, name: "distanceKm" }) as number | null | undefined;
+  // A saved leg keeps its own method; new legs default to the one selectable method.
+  const transportMethod =
+    (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
+    selectableTransportMethods[0];
 
   const originPoint =
     originLat != null && originLng != null ? { lat: originLat, lng: originLng } : null;
@@ -263,7 +266,7 @@ export function TransportLegForm({
               Transport method
             </p>
             <p className="body-medium" data-testid="transportMethodType-value">
-              {transportMethodLabel}
+              {formatTransportMethod(transportMethod)}
             </p>
             <input type="hidden" {...register("transportMethodType")} />
           </div>
