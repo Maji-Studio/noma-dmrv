@@ -10,6 +10,8 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "**/e2e/**",
+      // Opt-in Playwright capture specs (playwright.visual.config.ts).
+      "**/tests/visual/**",
       // Git worktrees live under `.claude/worktrees/` and carry a full copy of
       // `tests/`. Without this the parent repo collects and runs another
       // branch's suites — against this repo's database, so the two contend and

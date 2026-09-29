@@ -10,10 +10,11 @@ themselves. Related: [security.md](./security.md) (env inventory),
 
 ## Which runner picks up which file
 
-`vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**` and
-copied `.claude/worktrees/**`. A Playwright spec outside `tests/e2e/`, or a
-Vitest spec inside it, is **silently never run**. Put it in the right
-directory.
+`vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**`,
+`**/tests/visual/**` and copied `.claude/worktrees/**`. `playwright.config.ts`
+collects only `tests/e2e/`; `playwright.visual.config.ts` collects only
+`tests/visual/`. A Playwright spec outside those two folders, or a Vitest spec
+inside them, is **silently never run**. Put it in the right directory.
 
 - `pnpm test` — Vitest, both `tests/**/*.test.{ts,tsx}` and colocated
   `src/**/*.test.{ts,tsx}`. Put cross-module/database contracts in `tests/`;
@@ -35,6 +36,16 @@ directory.
   (`ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`),
   `ISOMETRIC_ENVIRONMENT=sandbox`, and `ISOMETRIC_DEMO_PROJECT_ID`. No DB required.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
+- `pnpm exec playwright test -c playwright.visual.config.ts` — the opt-in form
+  capture harness in `tests/visual/` (skipped unless `FORM_CAPTURE=1`; Vitest
+  excludes the folder). It needs a running, seeded dev server and does not use
+  the E2E user fixtures: it signs in as the existing local admin
+  (`ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env.local`, overridable with
+  `FORM_CAPTURE_EMAIL` / `FORM_CAPTURE_PASSWORD`), which creates one session
+  row that sign-out deletes, and writes no entity rows. The other
+  `FORM_CAPTURE_*` knobs (label, output dir, family, surfaces, viewports,
+  facility) and the output are documented at the top of
+  `tests/visual/form-capture.spec.ts`.
 
 ## vitest specs are not all unit tests
 
