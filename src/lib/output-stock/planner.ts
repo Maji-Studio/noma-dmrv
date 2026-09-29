@@ -35,7 +35,7 @@ export class SubBinOverdrawError extends RangeError {
   constructor(public readonly layerId: string) { super('Measured solids exceed the sub-bin'); }
 }
 
-/** Grid (per kg) a split draw's partial solids are floored to: one nanogram. */
+/** Grid (per kg) a split draw's partial solids are floored to: 1e-9 kg, one microgram. */
 const ORDERED_SOLIDS_GRID_PER_KG = BigInt(1_000_000_000);
 function floorToGrid(value: Rational): Rational {
   return rational(value.numerator * ORDERED_SOLIDS_GRID_PER_KG / value.denominator, ORDERED_SOLIDS_GRID_PER_KG);
