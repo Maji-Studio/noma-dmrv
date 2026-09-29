@@ -30,6 +30,10 @@ import {
 } from "./chain-of-custody-geo";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
+import {
+  EMPTY_CREDIT_BATCH_WARNING,
+  NO_LINEAGE_FOR_SELECTED_RUN,
+} from "@/lib/chain-of-custody/copy";
 
 export interface CreditBatchChainBatch {
   id: string;
@@ -129,7 +133,7 @@ export async function getCreditBatchChainData(
 
   const warnings = mergeLineageWarnings(lineages);
   if (lineages.length === 0) {
-    warnings.push("This credit batch has no member applications yet.");
+    warnings.push(EMPTY_CREDIT_BATCH_WARNING);
   }
 
   const sankey = buildBatchSankey(lineages.map(({ chain }) => chain));
@@ -188,8 +192,8 @@ export async function getCreditBatchChainGeoData(
       legs: [],
       warnings: [
         options.productionRunId && batchLineages.length > 0
-          ? "No lineage in this batch flows through the selected production run."
-          : "This credit batch has no member applications yet.",
+          ? NO_LINEAGE_FOR_SELECTED_RUN
+          : EMPTY_CREDIT_BATCH_WARNING,
       ],
     };
   }

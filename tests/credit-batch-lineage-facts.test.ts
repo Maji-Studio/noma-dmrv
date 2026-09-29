@@ -39,6 +39,7 @@ import {
   getCreditBatchChainGeoData,
 } from "@/data-access/chain-of-custody-batch";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { NO_LINEAGE_FOR_SELECTED_RUN } from "@/lib/chain-of-custody/copy";
 
 beforeAll(() => ensureTestOrg());
 
@@ -156,9 +157,7 @@ describe("credit batch accounting", () => {
       }
       const unrelatedRunGeo = await getCreditBatchChainGeoData(makeTestOrgContext(), batch.id, { productionRunId: crypto.randomUUID() });
       expect(unrelatedRunGeo.nodes).toEqual([]);
-      expect(unrelatedRunGeo.warnings).toEqual([
-        "No lineage in this batch flows through the selected production run.",
-      ]);
+      expect(unrelatedRunGeo.warnings).toEqual([NO_LINEAGE_FOR_SELECTED_RUN]);
 
       const ctx = makeTestOrgContext();
       const foreignCtx = {

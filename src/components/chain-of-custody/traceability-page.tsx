@@ -60,6 +60,7 @@ import {
   useChainGraph,
 } from "./use-chain-graph";
 import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
+import { NO_LINEAGE_FOR_SELECTED_RUN } from "@/lib/chain-of-custody/copy";
 
 const nodeTypes: NodeTypes = {
   chainNode: ChainNode,
@@ -717,9 +718,7 @@ export function TraceabilityPage() {
     }
     if (selectedRunId && (filteredBatchLineages?.length ?? 0) === 0) {
       return (
-        <CenteredMessage>
-          No lineage in this batch flows through the selected production run.
-        </CenteredMessage>
+        <CenteredMessage>{NO_LINEAGE_FOR_SELECTED_RUN}</CenteredMessage>
       );
     }
     if (batchView === "dag") {
