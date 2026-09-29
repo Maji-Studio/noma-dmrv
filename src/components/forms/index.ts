@@ -15,6 +15,9 @@ export {
 } from "./mass-moisture-fields";
 export { FormTextarea } from "./form-textarea";
 export { FormSelect } from "./form-select";
+export { ChoiceCardGroup, type ChoiceCardOption, type ChoiceCardGroupProps } from "./choice-card-group";
+export { SegmentedControl, type SegmentedOption, type SegmentedControlProps } from "./segmented-control";
+export { TripTypeChoice } from "./trip-type-choice";
 export {
   FormFileUpload,
   type DeferredFileEntry,
