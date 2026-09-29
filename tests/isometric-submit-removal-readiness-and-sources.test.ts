@@ -231,16 +231,18 @@ describe("submitRemoval — Source binding gate", () => {
       orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
       ctx,
-      defaultTemplate: ctx.defaultTemplate!,
-      blueprintsByKey: new Map(
-        ctx.blueprintsForTemplate.map((blueprint) => [
-          blueprint.key,
-          blueprint,
-        ]),
-      ),
-      externalProjectId: ctx.mapping!.externalProjectId,
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: ctx.defaultTemplate!,
+        blueprintsByKey: new Map(
+          ctx.blueprintsForTemplate.map((blueprint) => [
+            blueprint.key,
+            blueprint,
+          ]),
+        ),
+        externalProjectId: ctx.mapping!.externalProjectId,
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
     });
 
     expect(compiled.blockers).toEqual([]);
@@ -440,16 +442,18 @@ describe("submitRemoval — Source binding gate", () => {
       orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
       ctx,
-      defaultTemplate: ctx.defaultTemplate!,
-      blueprintsByKey: new Map(
-        ctx.blueprintsForTemplate.map((blueprint) => [
-          blueprint.key,
-          blueprint,
-        ]),
-      ),
-      externalProjectId: ctx.mapping!.externalProjectId,
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: ctx.defaultTemplate!,
+        blueprintsByKey: new Map(
+          ctx.blueprintsForTemplate.map((blueprint) => [
+            blueprint.key,
+            blueprint,
+          ]),
+        ),
+        externalProjectId: ctx.mapping!.externalProjectId,
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
       allowPendingSources: true,
     });
     expect(reviewed.snapshot).not.toBeNull();

@@ -130,14 +130,16 @@ describe("buildRemovalSubmissionBuild", () => {
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "rem-test-missing-readiness",
       ctx: {} as RemovalSubmissionContext,
-      defaultTemplate: {
-        id: "rvt-test",
-        display_name: "Test template",
-      } as never,
-      blueprintsByKey: new Map(),
-      externalProjectId: "prj-test",
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: {
+          id: "rvt-test",
+          display_name: "Test template",
+        } as never,
+        blueprintsByKey: new Map(),
+        externalProjectId: "prj-test",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
     });
 
     expect(compiled.blockers).toEqual([
@@ -155,15 +157,17 @@ describe("buildRemovalSubmissionBuild", () => {
         entityReadinessGaps: [],
         submissionWarnings: [],
       } as unknown as RemovalSubmissionContext,
-      defaultTemplate: {
-        id: "rvt-test",
-        display_name: "Emissions-only template",
-        groups: [],
-      } as never,
-      blueprintsByKey: new Map(),
-      externalProjectId: "prj-test",
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: {
+          id: "rvt-test",
+          display_name: "Emissions-only template",
+          groups: [],
+        } as never,
+        blueprintsByKey: new Map(),
+        externalProjectId: "prj-test",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
       sourceIds: ["src-test"],
       candidateDocumentIds: ["doc-test"],
     });
@@ -249,11 +253,13 @@ describe("buildRemovalSubmissionBuild", () => {
         orgCtx: TEST_ORG_CONTEXT,
         removalId: "rem-test-missing-readiness",
         ctx,
-        defaultTemplate: {} as never,
-        blueprintsByKey: new Map(),
-        externalProjectId: "prj-test-missing-readiness",
-        allowPeriodInputStub: false,
-        hasDurabilityComponents: false,
+        prepared: {
+          defaultTemplate: {} as never,
+          blueprintsByKey: new Map(),
+          externalProjectId: "prj-test-missing-readiness",
+          allowPeriodInputStub: false,
+          hasDurabilityComponents: false,
+        },
       }),
     ).rejects.toThrow(/Removal review did not finish/i);
 
@@ -275,11 +281,13 @@ describe("buildRemovalSubmissionBuild", () => {
         orgCtx: TEST_ORG_CONTEXT,
         removalId: "rem-test-1",
         ctx,
-        defaultTemplate: {} as never,
-        blueprintsByKey: new Map(),
-        externalProjectId: "prj-test-1",
-        allowPeriodInputStub: false,
-        hasDurabilityComponents: false,
+        prepared: {
+          defaultTemplate: {} as never,
+          blueprintsByKey: new Map(),
+          externalProjectId: "prj-test-1",
+          allowPeriodInputStub: false,
+          hasDurabilityComponents: false,
+        },
       }),
     ).rejects.toThrow(/Complete these fields before submitting the Removal/i);
 
@@ -443,11 +451,13 @@ describe("buildRemovalSubmissionBuild", () => {
       orgCtx: TEST_ORG_CONTEXT,
       removalId: "removal-1",
       ctx,
-      defaultTemplate: template,
-      blueprintsByKey,
-      externalProjectId: "project-1",
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: template,
+        blueprintsByKey,
+        externalProjectId: "project-1",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
       candidateSourceDocuments: [sourceCandidate],
       sourceBindingCandidates: [sourceCandidate],
     });
