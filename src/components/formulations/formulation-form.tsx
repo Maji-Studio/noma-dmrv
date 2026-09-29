@@ -419,15 +419,13 @@ export function FormulationForm({
           ))}
         </div>
 
-        {/* What the entered shares make, directly under the share fields.
-            Simple hides it while the shares make 100%, since the fields
-            already say it. Any other total is something to fix, so Simple
-            shows the picture and the Balance action with it. */}
+        {/* What the entered shares make, directly under the share fields,
+            at both levels. A total other than 100% is something to fix, so
+            the Balance action joins it. */}
         {(biocharNum > 0 || fields.length > 0) && (
           <CompositionCard
             title="Blend by volume"
             hint="Shares are percentages of the solid blend's volume. Water is recorded separately on the product."
-            simple={isBalanced ? "hidden" : "picture"}
             actions={showBalanceButton ? (
               <Button
                 type="button"

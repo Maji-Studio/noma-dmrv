@@ -7,9 +7,9 @@
  * rules. The bar sits flat under the inputs that produce it, inside the same
  * form section, with one key line of swatches beneath it. No card, no tint, no
  * frame: the hierarchy comes from the bar and its key, never from a background.
- * Simple keeps the bar and its key, because those are what the fields mean;
- * Detailed adds the composition ledger and the arithmetic behind `Show
- * calculation`.
+ * Both levels show the bar and its key, because those are what the fields
+ * mean; Detailed adds the explanation: the composition ledger and the
+ * arithmetic behind `Show calculation`.
  *
  * Three levels of knowledge, one component, most specific first:
  * - `components`: the surface already split every part into solids and water
@@ -276,7 +276,6 @@ export function ProductCompositionPreview({
       <CompositionCard
         title={BLOCK_TITLE}
         hint={note ?? COMPOSITION_HINT}
-        simple="picture"
         headline={headline}
         actions={actions}
         calculation={ledgerSegments ? (

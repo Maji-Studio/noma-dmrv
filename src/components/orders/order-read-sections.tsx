@@ -1,11 +1,9 @@
 /**
  * Order side-sheet view mode: the sections config for EntitySideSheet.
  *
- * Simple is the order as saved, in the edit form's section order, plus how
- * much of it has been delivered once deliveries exist. Detailed adds the
- * matching stock and the fulfilment status. Matching stock is today's
- * availability, not part of the order, so it waits for Detailed and its section
- * only mounts there: Simple never fetches it.
+ * The order as saved, in the edit form's section order, then today's matching
+ * stock and the fulfilment status with what has been delivered. Both detail
+ * levels show every section.
  */
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
@@ -59,24 +57,20 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
     ...(order.formulationId
       ? [{
           title: "Matching stock",
-          detailedOnly: true,
           fields: [],
           content: <MatchingOutputBins facilityId={order.facilityId} formulationId={order.formulationId} />,
         }]
       : []),
     {
       title: "Fulfillment",
-      // With nothing delivered yet the status is the only content, and that is Detailed.
-      detailedOnly: !hasDeliveries,
       fields: [
         {
           label: "Status",
-          detailedOnly: true,
           value: <StatusBadge status={fulfillment.badgeStatus} label={fulfillment.label} />,
         },
         ...(hasDeliveries ? [
           { label: "Delivered", value: formatDeliveredMass(order) },
-          { label: "Deliveries", detailedOnly: true, value: formatDeliveryCount(order) },
+          { label: "Deliveries", value: formatDeliveryCount(order) },
         ] : []),
       ],
     },

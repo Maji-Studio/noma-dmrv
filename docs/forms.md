@@ -391,59 +391,58 @@ fields. Presentation state is separate from RHF and payloads. The shared sheet
 excludes `data-presentation-control` events from its unsaved-change heuristic.
 A real input change must still trigger the discard guard.
 
-Simple shows inputs, or the saved field values in read mode, plus what each
-derived block declares as its Simple presence (below). Validation errors,
-shortage blockers, required controls, evidence and save actions stay visible at
-both levels. Detailed adds the rest of every block, optional read fields and
-optional read sections.
+**The contract: Simple and Detailed show the same information and differ
+only in explanation.** Neither level hides something you fill in or something
+you read.
+
+- **Forms:** every input, section and action (history links, uploads, add
+  buttons) renders at both levels, and so does everything that informs a
+  decision: available stock, stock after the movement, matching bins, before →
+  after previews, blockers and warnings.
+- **Read views:** both levels show the same fields and sections.
+  `DetailPanelField` and `DetailPanelSection` have no level flag.
+- **Detailed adds only explanation:** calculation rows, basis captions,
+  formula or component provenance, raw versus capped values. A read section
+  puts it in its `explanation` slot; a derived block in `detail` or
+  `calculation`; anything else in `DetailedOnly`. All three carry
+  `data-detail-explanation`.
+- **No "Add X" reveals** for fillable fields. A field may still appear when an
+  earlier answer makes it relevant (a cancellation reason, an over-allocation
+  justification). Keep long sheets calm by grouping, pairing and unit
+  suffixes, never by hiding.
+- **Dry figures are data.** A read view shows dry biochar or dry solids as a
+  `secondary` line under the wet figure (`DetailField`, `DerivedHeadline`,
+  both through `SecondaryFigure`), CERT chip included. A stock balance such as
+  available dry stock does the same. In a movement preview the dry before and
+  after pair stays part of the calculation.
+
+The `src/components/forms/form-detail-parity*.test.tsx` suites guard this.
+Only `form-detail-context`, `CompositionCard` and `MoistureSplit` may read the
+level, and `DetailedOnly` has a short list of callers. Every level-aware block,
+every read sheet and one create form per family render at both levels and must
+show identical labels, titles, inputs, actions and text outside explanation
+blocks. Read sheets build their sections in a named builder
+(`*-read-sections.tsx`, returning `DetailPanelSection[]`), never inline in the
+list; a new builder fails the coverage check until it has a case.
 
 ### Derived blocks
 
 A derived block is a `CompositionCard` (`@/components/forms`) that sits flat
 under the inputs that drive it, with no tint and no frame: a sentence case
 caption with its one-sentence definition behind an ⓘ `hint`, an optional
-`headline`, the picture as `children`, `detail` rows that Detailed shows in
-place, and one action row holding Show calculation and the block's own
-`actions` (a stock history, a fix such as "Balance to 100%"). `calculation` is
-arithmetic the block does not already show; omit it and no control renders. Do
+`headline`, the picture as `children`, and one action row holding the block's
+own `actions` (a stock history, a fix such as "Balance to 100%"). All of that
+shows at both levels. Detailed adds the `detail` rows (explanation such as a
+ledger, never decision info) and Show calculation, which opens `calculation`:
+arithmetic the block does not already show. Omit it and no control renders. Do
 not draw proportions from an incomplete or zero basis.
 
-`simple` declares the block's Simple boundary once:
-
-| `simple` | Simple keeps |
-|---|---|
-| `picture` (default) | caption, headline, picture and the block's `actions` |
-| `headline` | caption and headline |
-| `hidden` | nothing |
-
-In a form, Simple draws a picture only once one of its inputs has a value (the
-moisture split under wet mass and moisture, the product composition under the
-biochar and ingredient masses); Detailed keeps the unresolved state visible.
-
-`detail` rows, Show calculation and the calculation are Detailed only. Parts
-outside the boundary stay mounted behind `hidden`, so an open history dialog or
-a half-written correction survives a level switch. Blocks that are not a
-`CompositionCard` read the same rule through `useSimplePresence(simple)`
-(`MoistureSplit`, `MatchingOutputBins`, `OutputStockPreview`). Never branch a
-derived block on `useFormDetailLevel()` by hand.
-
-The boundaries in use, pinned row by row in
-`src/components/forms/form-detail-boundaries.test.tsx` (add a row with a new
-block):
-
-| Block | Simple |
-|---|---|
-| Moisture split | picture, once an input has a value: bar and key; ledger and arithmetic are Detailed |
-| Product composition | picture, once an input has a value |
-| Blend by volume (formulation) | hidden, except the picture while the total is over 100% |
-| Process flow (production run) | headline: the dry yield; the rail is Detailed |
-| Applied batches (application) | picture |
-| Derived ratios (sample) | headline |
-| Carbon estimate (credit batch, closing Production runs) | headline |
-| Delivery stock (delivery read) | picture and its stock history |
-| Original entry figures (stock correction) | hidden (`DetailedOnly`) |
-| Matching stock (order form and read) | hidden |
-| Stock movement preview | hidden, unless it has a blocker, refusal or count discrepancy, which show alone |
+Before any input, a form's moisture split and product composition are
+explanation of what will appear, so only Detailed draws their unresolved
+state (`<DetailedOnly unless={started}>`, which keeps one wrapper so the block
+never remounts when the first value arrives). The product composition also draws once a source bin is chosen,
+because its stock history is an action. Explanation parts stay mounted behind
+`hidden`, so an open disclosure survives a level switch.
 
 `DerivedHeadline` is the block's one figure, at most one per block: a caption
 label, the figure with its unit and approximation in the value ("≈ 1,110 kg",
@@ -454,13 +453,7 @@ one phrase.
 
 Disclosure state is separate from form state and must never submit or dirty the
 form. Keep stateful history/correction controls mounted while hiding their
-presentation, so switching modes does not reset an active correction. Use
-`DetailedOnly` only for optional stateless context. Read fields may use
-`detailedOnly` for optional technical metadata; never apply it to required values,
-validation messages or evidence. Optional read sections can also use `detailedOnly`;
-filter them before numbering so Simple has no empty headings or gaps in the rail.
-Saved allocations remain saved facts; today's stock on a saved record (the
-order's Matching stock) gets its own Detailed-only section.
+presentation, so switching levels does not reset an active correction.
 
 ### Stock blocks lead with wet mass
 
@@ -474,15 +467,15 @@ stock family presents wet first. Only presentation changes.
   loaded at 16% moisture"). Before is each batch at its latest reading; after
   applies this entry's readings. The picture is the entered wet mass split into
   solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is a
-  Detailed row; the entered figures and the FIFO batch draw sit behind Show
-  calculation. Without a moisture there is no estimate, and the dry pair takes
+  Detailed `detail` row (the calculation); the entered figures and the FIFO
+  batch draw sit behind Show calculation. Without a moisture there is no estimate, and the dry pair takes
   the headline. Ingredient bins track wet stock directly, so their headline is
   not labelled an estimate.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
   estimate" at each batch's latest moisture reading, since an order has no
-  departure moisture yet; the batch bar and key as the picture; available dry stock as a
-  Detailed row.
+  departure moisture yet, with available dry stock as a secondary line under it at
+  both levels; the batch bar and key as the picture.
 - A wet estimate is computed at a moisture, not weighed: its label always says
   "estimate", and it reads in whole kilograms.
 

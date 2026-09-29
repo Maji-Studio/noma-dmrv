@@ -62,7 +62,7 @@ describe("ProcessFlowPreview", () => {
     expect(html).toContain("Dry yield = biochar out / feedstock in. 45 kg / 90 kg = 50%.");
   });
 
-  it("keeps the yield headline only in Simple and adds the rail and calculation in Detailed", async () => {
+  it("shows the yield headline and the rail at both levels and adds the calculation in Detailed", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<FormDetailProvider scope="production-run"><FormDetailControl /><ProcessFlowPreview {...run} /></FormDetailProvider>);
@@ -70,8 +70,8 @@ describe("ProcessFlowPreview", () => {
     const simple = visible(renderer.root);
     expect(simple).toContain("Dry yield");
     expect(simple).toContain("50%");
-    expect(simple).not.toContain("Feedstock July");
-    expect(simple).not.toContain("Feedstock in");
+    expect(simple).toContain("Feedstock July");
+    expect(simple).toContain("Feedstock in");
     expect(simple).not.toContain("Show calculation");
 
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());

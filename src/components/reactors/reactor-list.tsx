@@ -39,6 +39,7 @@ import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { formatTotalThroughputTph } from "./reactor-throughput";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { reactorSheetSections } from "./reactor-read-sections";
 
 // ============================================
 // Column Definitions
@@ -357,21 +358,7 @@ export function ReactorList() {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Reactor"
-        sections={sideSheetEntity ? [
-          {
-            title: "Required information",
-            fields: [
-              { label: "Identifier", value: sideSheetEntity.identifier },
-            ],
-          },
-          {
-            title: "Reactor configuration",
-            fields: [
-              { label: "Reactor type", value: formatReactorType(sideSheetEntity.reactorType) },
-              { label: "Nominal throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
-            ],
-          },
-        ] : undefined}
+        sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
       >
         <ReactorForm
           key={sideSheetEntity?.id ?? "create"}

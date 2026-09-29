@@ -51,13 +51,13 @@ describe("MatchingOutputBins", () => {
     expect(html).not.toContain("wet");
     expect(html).not.toMatch(/Before loading|After loading|removed|>0 kg dry biochar|150 kg/);
   });
-  it("leads with the bin's wet estimate and keeps dry stock as detail", () => {
+  it("leads with the bin's wet estimate and reads dry stock as a secondary line", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, estimatedWetMassKg: 118 }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(html).toContain("Available wet stock, estimate");
     expect(html).toContain("118 kg wet");
     expect(html).toContain("At the latest moisture reading of each batch");
-    expect(html).toContain("100 kg dry biochar");
+    expect(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("Available dry stock 100 kg");
   });
   it.each(["loading", "error"] as const)("keeps stock informational when details are %s", status => {
     state[status] = true;

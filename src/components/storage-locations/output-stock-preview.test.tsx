@@ -119,22 +119,24 @@ describe("OutputStockAvailability", () => {
     expect(html).not.toMatch(/before|after/i);
   });
 
-  it("leads with the wet estimate at its basis and keeps the dry stock as a Detailed row", async () => {
+  it("leads with the wet estimate at its basis and reads the dry stock as a secondary line at both levels", async () => {
     let renderer!: ReactTestRenderer;
     const element = <FormDetailProvider scope="availability"><FormDetailControl /><OutputStockAvailability
       binName="Output bin B2" dryKg={2380} wetEstimate={{ kg: 2833.4, basis: "At 16% departure moisture" }} allocations={rain.allocations}
     /></FormDetailProvider>;
     await act(async () => { renderer = create(element); });
     const visible = (node: ReactTestInstance | string): string => typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
-    await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
-    const text = visible(renderer.root);
-    expect(text).toContain("Available wet stock, estimate");
-    expect(text).toContain("≈ 2,833 kg wet");
-    expect(text).toContain("At 16% departure moisture");
-    expect(text).toContain("Available dry stock");
-    expect(text).toContain("2,380 kg dry biochar");
-    expect(text.indexOf("≈ 2,833 kg wet")).toBeLessThan(text.indexOf("Batch A"));
-    expect(text.indexOf("Batch A")).toBeLessThan(text.indexOf("Available dry stock"));
+    for (const level of ["simple", "detailed"]) {
+      await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === level)!.props.onChange());
+      const text = visible(renderer.root).replace(/\s+/g, " ");
+      expect(text).toContain("Available wet stock, estimate");
+      expect(text).toContain("≈ 2,833 kg wet");
+      expect(text).toContain("Available dry stock 2,380 kg");
+      expect(text).toContain("At 16% departure moisture");
+      // The dry line sits under the headline, before the batch bar.
+      expect(text.indexOf("≈ 2,833 kg wet")).toBeLessThan(text.indexOf("Available dry stock"));
+      expect(text.indexOf("Available dry stock")).toBeLessThan(text.indexOf("Batch A"));
+    }
     await act(async () => renderer.unmount());
   });
 

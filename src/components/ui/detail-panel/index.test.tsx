@@ -292,3 +292,20 @@ describe("DetailSpine", () => {
     expect(markup).toContain("Extension content");
   });
 });
+
+describe("DetailField secondary line", () => {
+  it("reads a second figure under the value with its own CERT status", () => {
+    const present = renderToStaticMarkup(
+      <DetailField label="Biochar product applied (kg)" value="5,000 kg" secondary={{ label: "Dry biochar applied", value: "4,000 kg", certifyRequired: true }} />,
+    );
+    expect(present).toContain("Dry biochar applied");
+    expect(present).toContain("4,000 kg");
+    expect(present).toContain("--st-ok-border");
+
+    const missing = renderToStaticMarkup(
+      <DetailField label="Biochar product applied (kg)" value="5,000 kg" secondary={{ label: "Dry biochar applied", value: null, certifyRequired: true }} />,
+    );
+    expect(missing).toContain(MISSING_VALUE.notRecorded);
+    expect(missing).toContain("--st-wait-border");
+  });
+});

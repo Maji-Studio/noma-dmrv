@@ -34,20 +34,12 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { TransportLegsSummary } from "@/components/transport-legs";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import {
-  formatDate,
-  formatDateRange,
-  formatDateTime,
-  formatPercent,
-} from "@/lib/format-utils";
-import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import { formatDateRange, formatDateTime } from "@/lib/format-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -60,20 +52,14 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
+import { sampleSheetSections } from "./sample-read-sections";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
-import { SampleDocumentsPanel } from "./sample-documents-panel";
 import {
   leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
   SAMPLE_CREATE_CREDIT_BATCH_PARAM,
 } from "@/lib/sample-create-intent";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
-
-const LAB_PERCENT_FRACTION_DIGITS = 2;
-
-function formatLabPercent(value: number | null | undefined): string {
-  return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
-}
 
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
@@ -689,102 +675,7 @@ export function SampleList({
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : viewSubtitle}
         editLabel="Edit Sample"
-        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
-          {
-            title: "Sample information",
-            fields: [
-              { label: "Credit batch", value: displaySideSheet.entity.creditBatchCode },
-              { label: "Sampling time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
-              { label: "Analysis date", value: formatDate(displaySideSheet.entity.analysisDate) },
-              { label: "Lab name", value: displaySideSheet.entity.labName },
-              { label: "Lab accreditation", value: displaySideSheet.entity.labAccreditation },
-              { label: "Sample weight (g)", value: displaySideSheet.entity.weightGrams },
-              { label: "Sample volume (mL)", value: displaySideSheet.entity.volumeMl },
-            ],
-          },
-          {
-            title: "Carbon analysis",
-            fields: [
-              { label: "Total carbon (%)", value: formatLabPercent(displaySideSheet.entity.totalCarbonPercent) },
-              { label: "Organic carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.organicCarbonPercent) },
-              { label: "Inorganic carbon (%)", value: formatLabPercent(displaySideSheet.entity.inorganicCarbonPercent) },
-            ],
-          },
-          {
-            title: "Elemental analysis",
-            fields: [
-              { label: "Hydrogen (%)", value: formatLabPercent(displaySideSheet.entity.totalHydrogenPercent) },
-              { label: "Nitrogen (%)", value: formatLabPercent(displaySideSheet.entity.totalNitrogenPercent) },
-              { label: "Oxygen (%)", value: formatLabPercent(displaySideSheet.entity.totalOxygenPercent) },
-              { label: "Sulfur (%)", value: formatLabPercent(displaySideSheet.entity.totalSulfurPercent) },
-            ],
-          },
-          {
-            title: "Proximate analysis",
-            fields: [
-              { label: "Ash content (%)", value: formatLabPercent(displaySideSheet.entity.ashContentPercent) },
-              { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
-            ],
-          },
-          {
-            title: "Physical properties",
-            fields: [
-              { label: "Bulk density (kg/m³)", value: displaySideSheet.entity.bulkDensityKgPerM3 },
-              { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
-              { label: "Salt content (g/kg)", value: displaySideSheet.entity.saltContentGPerKg },
-            ],
-          },
-          {
-            title: "Stability ratios",
-            fields: [
-              { label: "Inherited durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
-              { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
-              { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
-            ],
-          },
-          ...(displaySideSheet.entity.durabilityOption === "1000_year" ? [
-            {
-              title: "1000-year durability · R₀ reflectance",
-              fields: [
-                { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
-                { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatLabPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
-                { label: "Measurement count", value: displaySideSheet.entity.r0MeasurementCount },
-                { label: "R₀ analysis date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
-              ],
-            },
-            {
-              title: "TGA non-reactive carbon",
-              fields: [
-                { label: "Reactive carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.reactiveCarbonPercent) },
-                { label: "Residual (non-reactive) carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.residualCarbonPercent) },
-                { label: "TGA analysis date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
-              ],
-            },
-          ] : []),
-          {
-            title: "Nutrient claims",
-            fields: [
-              { label: "Enable nutrient claims", value: displaySideSheet.entity.nutrientClaimEnabled ? "Yes" : "No" },
-              ...(displaySideSheet.entity.nutrientClaimEnabled ? [
-                { label: "Phosphorus (%)", value: formatLabPercent(displaySideSheet.entity.phosphorusPercent) },
-                { label: "Potassium (%)", value: formatLabPercent(displaySideSheet.entity.potassiumPercent) },
-                { label: "Magnesium (%)", value: formatLabPercent(displaySideSheet.entity.magnesiumPercent) },
-                { label: "Calcium (%)", value: formatLabPercent(displaySideSheet.entity.calciumPercent) },
-                { label: "Iron (%)", value: formatLabPercent(displaySideSheet.entity.ironPercent) },
-              ] : []),
-            ],
-          },
-          {
-            title: "Evidence & documents",
-            fields: [],
-            content: <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} readOnly />,
-          },
-          {
-            title: "Transport",
-            fields: [],
-            content: <TransportLegsSummary entityType="sample" entityId={displaySideSheet.entity.id} />,
-          },
-        ] : undefined}
+        sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? sampleSheetSections(displaySideSheet.entity) : undefined}
       >
         {isResolvingCreateContext ? (
           <div

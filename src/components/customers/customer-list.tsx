@@ -32,10 +32,10 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm, type PendingLocation } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
-import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { customerSheetSections } from "./customer-read-sections";
 
 // ============================================
 // Column Definitions
@@ -364,38 +364,7 @@ export function CustomerList() {
         editLabel="Edit Customer"
         sections={
           sideSheetEntity
-            ? [
-                {
-                  title: "Required information",
-                  fields: [
-                    { label: "Customer name", value: sideSheetEntity.name },
-                  ],
-                },
-                {
-                  title: "Locations",
-                  fields: buildPartyLocationDetailFields(sideSheetLocations, {
-                    distanceLabel: "One-way distance from facility (per leg, km)",
-                    defaultLabel: "Default destination",
-                    positionLabel: "Application site position",
-                    descriptionLabel: "Site description",
-                    includeSoilTemperature: true,
-                  }),
-                },
-                {
-                  title: "Contact information",
-                  fields: [
-                    { label: "Contact email", value: sideSheetEntity.contactEmail },
-                    { label: "Contact phone", value: sideSheetEntity.contactPhone },
-                  ],
-                },
-                {
-                  title: "Business information",
-                  fields: [
-                    { label: "Crop type", value: sideSheetEntity.cropType },
-                    { label: "Address", value: sideSheetEntity.address },
-                  ],
-                },
-              ]
+            ? customerSheetSections(sideSheetEntity, sideSheetLocations)
             : undefined
         }
       >
