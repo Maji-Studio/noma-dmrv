@@ -1,0 +1,1459 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Reference prototype for docs/plans/2026-09-29-landing-page.md. Not production code.
+     Published review page: https://claude.ai/artifact/9fMhFy8wuMmHqLA64uVfwM
+     Fonts: the published copy embeds GT Flexa from src/styles/fonts; this copy falls back to system fonts.
+     Saving answers uses the artifact runtime (window.claude); opened as a file it saves to localStorage only. -->
+</head><body>
+<title>noma landing page</title>
+<style>
+/* GT Flexa: load from src/styles/fonts (Light 300, Bold 700, Mono Medium 500) */
+/* Layout: one working document. Sticky tab bar, a 1180px column, wireframes as page-plus-margin-note pairs. */
+:root{
+  --bg:#fff9f7; --paper:#ffffff; --ink:#0f021a; --ink-2:rgba(15,2,26,.68); --ink-3:rgba(15,2,26,.46);
+  --hair:rgba(15,2,26,.12); --hair-2:rgba(15,2,26,.24); --hair-strong:rgba(15,2,26,.86); --sea:rgba(72,11,115,.045);
+  --prod:#bc4519; --prod-bg:#ffe8df; --infra:#480b73; --infra-bg:#efe4f7; --dist:#a6216e; --dist-bg:#fce3ef;
+  --ver:#17744a; --ver-bg:#dff0e7; --rose:#ffb2d2; --orange:#ff8359; --accent:#480b73; --accent-ink:#ffffff;
+  --wire:#f3ebee; --wire-2:#e5d9df; --wire-3:#d3c3cb; --map-land:#fbf1ee; --map-line:rgba(72,11,115,.13);
+  --warn:#bc4519; --warn-bg:rgba(188,69,25,.1); --ok:#17744a; --ok-bg:rgba(23,116,74,.1); --off-bg:rgba(15,2,26,.05);
+  --f-sans:"GT Flexa","Helvetica Neue",Arial,sans-serif; --f-mono:"GT Flexa Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:6px;
+  --lp-bg:#fff2f7; --l1:#bc4519; --l2:#ff8359; --l3:#ffb2d2;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#140a1b; --paper:#1d1226; --ink:#f7eef3; --ink-2:rgba(247,238,243,.72); --ink-3:rgba(247,238,243,.48);
+  --hair:rgba(247,238,243,.12); --hair-2:rgba(247,238,243,.24); --hair-strong:rgba(247,238,243,.86); --sea:rgba(255,178,210,.05);
+  --prod:#ff9c75; --prod-bg:#3b1c13; --infra:#cfa8f2; --infra-bg:#2b1841; --dist:#ff8fc8; --dist-bg:#3b132b;
+  --ver:#72d6a4; --ver-bg:#12311f; --accent:#ffb2d2; --accent-ink:#140a1b;
+  --wire:#241830; --wire-2:#33253f; --wire-3:#46364f; --map-land:#1b1023; --map-line:rgba(255,178,210,.12);
+  --warn:#ff9c75; --warn-bg:rgba(255,156,117,.12); --ok:#72d6a4; --ok-bg:rgba(114,214,164,.12); --off-bg:rgba(247,238,243,.06);
+  --lp-bg:#211021; --l1:#ff8359; --l2:#ffc3a8; --l3:#ff8fc8;
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#140a1b; --paper:#1d1226; --ink:#f7eef3; --ink-2:rgba(247,238,243,.72); --ink-3:rgba(247,238,243,.48);
+  --hair:rgba(247,238,243,.12); --hair-2:rgba(247,238,243,.24); --hair-strong:rgba(247,238,243,.86); --sea:rgba(255,178,210,.05);
+  --prod:#ff9c75; --prod-bg:#3b1c13; --infra:#cfa8f2; --infra-bg:#2b1841; --dist:#ff8fc8; --dist-bg:#3b132b;
+  --ver:#72d6a4; --ver-bg:#12311f; --accent:#ffb2d2; --accent-ink:#140a1b;
+  --wire:#241830; --wire-2:#33253f; --wire-3:#46364f; --map-land:#1b1023; --map-line:rgba(255,178,210,.12);
+  --warn:#ff9c75; --warn-bg:rgba(255,156,117,.12); --ok:#72d6a4; --ok-bg:rgba(114,214,164,.12); --off-bg:rgba(247,238,243,.06);
+  --lp-bg:#211021; --l1:#ff8359; --l2:#ffc3a8; --l3:#ff8fc8;
+  color-scheme:dark; }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-weight:300;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-weight:700;line-height:1.15;text-wrap:balance;margin:0}
+p{margin:0}
+b,strong{font-weight:700}
+a{color:inherit}
+button,input,select,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--f-mono);font-weight:500;font-size:.82em;letter-spacing:.01em}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1.5px solid var(--hair-strong)}
+.top .wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding-block:12px}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand b{font-size:20px;letter-spacing:-.01em}
+.brand span{color:var(--ink-3);font-size:13px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{border:1.5px solid transparent;background:none;border-radius:999px;padding:6px 13px;cursor:pointer;font-size:14px;color:var(--ink-2)}
+.tab:hover{background:var(--sea);color:var(--ink)}
+.tab[aria-selected="true"]{border-color:var(--hair-strong);color:var(--ink);font-weight:700}
+.save{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.save i{width:7px;height:7px;border-radius:50%;background:var(--ink-3);display:inline-block}
+.save[data-s="on"] i,.save[data-s="saved"] i{background:var(--ok)}
+.save[data-s="error"] i{background:var(--warn)}
+
+main{padding-block:36px 90px}
+section.panel{display:grid;gap:40px}
+.lede{display:grid;gap:14px;max-width:760px}
+.lede h1{font-size:clamp(28px,4vw,44px);letter-spacing:-.02em}
+.lede p{font-size:17px;color:var(--ink-2)}
+.h2{font-size:24px;letter-spacing:-.01em}
+.sub{color:var(--ink-2);max-width:68ch}
+.stack{display:grid;gap:14px}
+.label{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+
+/* cards/boxes */
+.box{background:var(--paper);border:1.5px solid var(--hair-2);border-radius:var(--r)}
+.box-pad{padding:22px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.grid2>*,.grid3>*{min-width:0}
+ul.clean{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+ul.clean li{padding-left:16px;position:relative}
+ul.clean li::before{content:"";position:absolute;left:0;top:.68em;width:6px;height:6px;background:var(--ink-3);border-radius:1px}
+.src{font-size:12.5px;color:var(--ink-3)}
+
+/* status chips */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap;letter-spacing:.01em}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.part{background:var(--warn-bg);color:var(--warn)}
+.chip.no{background:var(--off-bg);color:var(--ink-3)}
+.chip.rec{background:var(--infra-bg);color:var(--infra)}
+
+/* claims table */
+.tbl-wrap{overflow-x:auto}
+table.claims{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+table.claims th{text-align:left;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);font-weight:700;padding:8px 10px;border-bottom:1.5px solid var(--hair-strong)}
+table.claims td{padding:10px;border-bottom:1px solid var(--hair);vertical-align:top}
+table.claims td:first-child{font-weight:700;width:24%}
+
+/* graph visuals */
+.viz{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:0;overflow:hidden}
+@media (max-width:860px){.viz{grid-template-columns:1fr}}
+.viz-main{position:relative;min-width:0;border-right:1.5px solid var(--hair-2)}
+@media (max-width:860px){.viz-main{border-right:0;border-bottom:1.5px solid var(--hair-2)}}
+.viz-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--hair)}
+.viz-bar h3{font-size:16px;margin-right:auto}
+.scroll-x{overflow-x:auto;overscroll-behavior-x:contain}
+.viz svg{display:block;width:100%;height:auto}
+.viz-side{padding:18px;display:grid;gap:12px;align-content:start;font-size:14px;background:var(--sea)}
+.viz-side .code{font-family:var(--f-mono);font-weight:500;font-size:15px}
+.viz-side .stage{font-size:12px;color:var(--ink-3);letter-spacing:.05em;text-transform:uppercase;font-weight:700}
+.viz-side dl{margin:0;display:grid;gap:4px}
+.viz-side .counts{display:flex;flex-wrap:wrap;gap:5px}
+.viz-side .counts span{font-size:12px;border:1px solid var(--hair-2);border-radius:4px;padding:1px 6px;background:var(--paper)}
+.hint{font-size:12.5px;color:var(--ink-3)}
+.seg{display:inline-flex;border:1.5px solid var(--hair-2);border-radius:999px;padding:2px;gap:2px;background:var(--paper)}
+.seg button{border:0;background:none;border-radius:999px;padding:4px 11px;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);font-weight:700}
+select.jump{border:1.5px solid var(--hair-2);background:var(--paper);border-radius:6px;padding:4px 8px;font-size:13px;max-width:210px}
+
+/* svg graph styling */
+.g-edge{fill:none;stroke:var(--hair-2);stroke-width:1.2;vector-effect:non-scaling-stroke;transition:opacity .15s,stroke .15s}
+.g-node rect.body{stroke-width:1.5;transition:opacity .15s}
+.g-node .glyph{fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.g-node text{fill:var(--ink);font-family:var(--f-mono);font-weight:500;font-size:11px}
+.g-node text.st{fill:var(--ink-3);font-family:var(--f-sans);font-weight:300;font-size:10px}
+.g-node{cursor:pointer;outline:none}
+.g-node .hit{fill:transparent;stroke:none}
+.g-node:focus-visible rect.body{stroke:var(--accent);stroke-width:3}
+.d-prod rect.body{fill:var(--prod-bg);stroke:var(--prod)} .d-prod .glyph{stroke:var(--prod)}
+.d-infra rect.body{fill:var(--infra-bg);stroke:var(--infra)} .d-infra .glyph{stroke:var(--infra)}
+.d-dist rect.body{fill:var(--dist-bg);stroke:var(--dist)} .d-dist .glyph{stroke:var(--dist)}
+.d-ver rect.body{fill:var(--ver-bg);stroke:var(--ver)} .d-ver .glyph{stroke:var(--ver)}
+svg.hl .g-node:not(.on) {opacity:.16}
+svg.hl .g-edge{opacity:.12}
+svg.hl .g-edge.on{opacity:1;stroke:var(--ink);stroke-width:1.8}
+svg.hl .g-node.self rect.body{stroke:var(--ink);stroke-width:2.6}
+.map-land{fill:var(--map-land)} .map-contour{fill:none;stroke:var(--map-line);stroke-width:1}
+.map-road{fill:none;stroke:var(--hair-2);stroke-width:1.4;stroke-dasharray:2 4}
+.map-town{fill:var(--ink-3);font-size:12px;font-family:var(--f-sans)}
+.map-arc{fill:none;stroke:var(--dist);stroke-opacity:.28;stroke-width:1.3;transition:opacity .15s}
+.map-arc.up{stroke:var(--infra)}
+svg.hl .map-arc{opacity:.08}
+svg.hl .map-arc.on{opacity:1;stroke-opacity:.95;stroke-width:2}
+@media (prefers-reduced-motion:no-preference){ svg.hl .map-arc.on{stroke-dasharray:6 5;animation:flow 1.1s linear infinite} }
+@keyframes flow{to{stroke-dashoffset:-22}}
+.legend{display:flex;flex-wrap:wrap;gap:12px;padding:10px 16px;border-top:1px solid var(--hair);font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:11px;height:11px;border-radius:2px;border:1.5px solid}
+.lg-prod{background:var(--prod-bg);border-color:var(--prod)!important}
+.lg-infra{background:var(--infra-bg);border-color:var(--infra)!important}
+.lg-dist{background:var(--dist-bg);border-color:var(--dist)!important}
+.lg-ver{background:var(--ver-bg);border-color:var(--ver)!important}
+
+/* morph */
+.morph{padding:18px;display:grid;gap:10px}
+.m-row{display:grid;grid-template-columns:minmax(0,1fr) 86px minmax(0,1fr);align-items:center;gap:0}
+.m-chip{border:1.5px solid var(--hair-2);border-radius:6px;padding:8px 11px;background:var(--paper);min-width:0;transition:border-color .3s,background .3s,opacity .3s}
+.m-chip .e{font-size:11.5px;color:var(--ink-3)}
+.m-chip .f{font-family:var(--f-mono);font-weight:500;font-size:12.5px;overflow-wrap:anywhere}
+.m-chip .v{font-weight:700;font-size:13px}
+.m-left{border-left:4px solid var(--prod)}
+.m-right{border-left:4px solid var(--ver);opacity:.35}
+.m-row.done .m-right{opacity:1;background:var(--ver-bg)}
+.m-row.active .m-left{background:var(--prod-bg)}
+.m-link{height:24px;width:100%}
+.m-link path{fill:none;stroke:var(--hair-2);stroke-width:1.5;stroke-dasharray:4 4}
+.m-row.done .m-link path,.m-row.active .m-link path{stroke:var(--ink)}
+@media (prefers-reduced-motion:no-preference){.m-row.active .m-link path{animation:flow .6s linear infinite}}
+.m-head{display:grid;grid-template-columns:minmax(0,1fr) 86px minmax(0,1fr);font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.m-bundle{margin-top:6px;border:1.5px dashed var(--hair-2);border-radius:8px;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;transition:all .3s}
+.m-bundle.done{border-style:solid;border-color:var(--ver);background:var(--ver-bg)}
+@media (max-width:640px){ .m-row,.m-head{grid-template-columns:1fr} .m-link{height:22px;transform:rotate(90deg);width:22px;justify-self:center} .m-head div:nth-child(2){display:none} }
+
+/* bins */
+.bins{padding:18px;display:grid;gap:16px}
+.bin-ctrl{display:flex;flex-wrap:wrap;gap:18px;align-items:end}
+.bin-ctrl label{display:grid;gap:4px;font-size:13px;color:var(--ink-2)}
+.bin-ctrl input[type=range]{width:220px;accent-color:var(--prod)}
+.bin-ctrl input[type=number]{width:80px;border:1.5px solid var(--hair-2);border-radius:6px;padding:4px 8px;background:var(--paper)}
+.layer{display:grid;grid-template-columns:128px minmax(0,1fr) 150px;gap:12px;align-items:center;font-size:13px}
+.layer .bar{height:26px;border:1.5px solid var(--prod);border-radius:4px;background:var(--prod-bg);position:relative;overflow:hidden}
+.layer .bar .drawn{position:absolute;left:0;top:0;bottom:0;background:repeating-linear-gradient(135deg,var(--prod) 0 3px,transparent 3px 7px);opacity:.75;transition:width .25s}
+.layer .num{font-variant-numeric:tabular-nums;text-align:right}
+@media (max-width:600px){.layer{grid-template-columns:1fr}.layer .num{text-align:left}}
+.bin-out{display:flex;flex-wrap:wrap;gap:10px}
+.stat{border:1.5px solid var(--hair-2);border-radius:6px;padding:8px 12px;background:var(--paper);font-variant-numeric:tabular-nums}
+.stat b{display:block;font-size:19px}
+.stat span{font-size:12px;color:var(--ink-3)}
+
+/* versions */
+.vnav{display:flex;flex-wrap:wrap;gap:8px}
+.vpill{border:1.5px solid var(--hair-2);background:var(--paper);border-radius:8px;padding:9px 14px;cursor:pointer;text-align:left;display:grid;gap:1px;min-width:150px}
+.vpill small{color:var(--ink-3);font-size:12px}
+.vpill[aria-selected="true"]{border-color:var(--hair-strong);box-shadow:inset 0 0 0 1px var(--hair-strong)}
+.vpill .vd{font-size:11px;font-weight:700}
+.compare{overflow-x:auto}
+.compare table{border-collapse:collapse;min-width:760px;width:100%;font-size:13.5px}
+.compare th,.compare td{padding:9px 10px;border-bottom:1px solid var(--hair);text-align:left;vertical-align:top}
+.compare th{font-size:12px;color:var(--ink-3);letter-spacing:.05em;text-transform:uppercase}
+.vhead{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
+@media (max-width:900px){.vhead{grid-template-columns:1fr}}
+.vhead h2{font-size:30px;letter-spacing:-.015em}
+.verdict{display:grid;gap:10px;padding:16px}
+textarea{width:100%;min-height:74px;border:1.5px solid var(--hair-2);border-radius:6px;padding:8px 10px;background:var(--paper);resize:vertical;font-size:14px}
+.wf-list{display:grid;gap:18px;counter-reset:blk}
+.wf-block{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0;border:1.5px solid var(--hair-2);border-radius:var(--r);overflow:hidden;background:var(--paper)}
+@media (max-width:900px){.wf-block{grid-template-columns:1fr}}
+.wf-page{padding:26px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:26px;align-items:center;min-width:0}
+.wf-page.center{grid-template-columns:1fr;text-align:center;justify-items:center}
+.wf-page.stacked{grid-template-columns:1fr}
+@media (max-width:700px){.wf-page{grid-template-columns:1fr;padding:18px}}
+.wf-copy{display:grid;gap:10px;min-width:0}
+.wf-copy h3{font-size:22px;letter-spacing:-.01em}
+.wf-block.hero .wf-copy h3{font-size:clamp(26px,3.2vw,36px);letter-spacing:-.02em}
+.wf-copy p{color:var(--ink-2)}
+.wf-copy ul{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--ink-2);font-size:14px}
+.wf-copy ul b{color:var(--ink)}
+.wf-ctas{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.wf-page.center .wf-ctas{justify-content:center}
+.btn{display:inline-block;border-radius:6px;padding:8px 14px;font-size:14px;font-weight:700;border:1.5px solid var(--ink);cursor:pointer;background:none}
+.btn.pri{background:var(--ink);color:var(--bg)}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.wf-sketch{min-width:0}
+.wf-note{border-left:1.5px solid var(--hair-2);padding:18px;display:grid;gap:9px;align-content:start;font-size:13.5px;background:var(--sea)}
+@media (max-width:900px){.wf-note{border-left:0;border-top:1.5px solid var(--hair-2)}}
+.wf-note .n{display:flex;gap:8px;align-items:baseline}
+.wf-note .n::before{counter-increment:blk;content:counter(blk);font-family:var(--f-mono);font-weight:500;font-size:12px;color:var(--ink-3)}
+.wf-note .n b{font-size:14px}
+.wf-note p{color:var(--ink-2)}
+.wf-note .from{font-size:12.5px;color:var(--ink-3)}
+.keep{display:flex;gap:7px;align-items:center;font-size:13px;cursor:pointer}
+.keep input{accent-color:var(--infra);width:16px;height:16px}
+
+/* sketches */
+.sk{background:var(--wire);border-radius:6px;padding:14px;display:grid;gap:8px;min-height:120px;position:relative}
+.sk svg{width:100%;height:auto;display:block}
+.sk .ln{height:8px;background:var(--wire-3);border-radius:3px}
+.sk .ln.s{width:55%} .sk .ln.m{width:75%}
+.sk-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.sk-tile{background:var(--paper);border:1px solid var(--wire-2);border-radius:5px;padding:10px;display:grid;gap:5px;font-size:12.5px;min-width:0}
+.sk-tile b{font-size:13px}
+.sk-tile span{color:var(--ink-3);font-size:12px;line-height:1.35}
+.sk-ico{width:18px;height:18px;border-radius:3px;border:1.5px solid}
+.sk-table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--paper);border-radius:5px;overflow:hidden}
+.sk-table td,.sk-table th{padding:6px 8px;border-bottom:1px solid var(--wire-2);text-align:left}
+.sk-table th{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.yes{color:var(--ok);font-weight:700}.nop{color:var(--ink-3)}
+.sk-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;counter-reset:st}
+.sk-step{background:var(--paper);border:1px solid var(--wire-2);border-radius:5px;padding:9px;font-size:12px;display:grid;gap:3px}
+.sk-step::before{counter-increment:st;content:counter(st);font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
+.sk-step b{font-size:12.5px}
+.sk-code{background:var(--paper);border:1px solid var(--wire-2);border-radius:5px;padding:12px;font-family:var(--f-mono);font-weight:500;font-size:12px;line-height:1.6;overflow-x:auto;white-space:pre;color:var(--ink-2)}
+.sk-code .k{color:var(--infra)} .sk-code .c{color:var(--ink-3)} .sk-code .n{color:var(--prod)}
+.sk-road{display:grid;gap:6px}
+.sk-road div{display:flex;justify-content:space-between;gap:8px;align-items:center;background:var(--paper);border:1px solid var(--wire-2);border-radius:5px;padding:7px 10px;font-size:12.5px}
+.sk-proof{display:flex;flex-wrap:wrap;gap:8px}
+.sk-proof div{background:var(--paper);border:1px solid var(--wire-2);border-radius:5px;padding:10px 12px;display:grid;font-size:12px;color:var(--ink-3);flex:1 1 120px}
+.sk-proof b{font-size:17px;color:var(--ink)}
+.sk-faq div{display:flex;justify-content:space-between;background:var(--paper);border:1px solid var(--wire-2);border-radius:5px;padding:8px 10px;font-size:13px}
+.sk-faq{display:grid;gap:6px}
+.sk-live{position:absolute;right:10px;bottom:10px}
+.sk:has(.sk-live){padding-bottom:52px}
+.sk-meter{background:var(--paper);border:1px solid var(--wire-2);border-radius:5px;padding:12px;display:grid;gap:6px;font-size:12.5px}
+.sk-meter div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--wire-2);padding-bottom:4px;font-variant-numeric:tabular-nums}
+
+/* priorities */
+.prio{display:grid;gap:0}
+.p-row{display:grid;grid-template-columns:minmax(0,1.2fr) 110px minmax(0,1.5fr) auto;gap:14px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--hair)}
+.p-row:last-child{border-bottom:0}
+.p-row .t{font-weight:700;font-size:14.5px}
+.p-row .w{font-size:13px;color:var(--ink-2)}
+@media (max-width:980px){.p-row{grid-template-columns:1fr auto}.p-row .w{grid-column:1/-1}.p-row .seg{grid-column:1/-1;justify-self:start}}
+.p-group{padding:10px 16px;background:var(--sea);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700;border-bottom:1px solid var(--hair)}
+.p-sum{display:flex;flex-wrap:wrap;gap:8px}
+.p-sum span{border:1.5px solid var(--hair-2);border-radius:999px;padding:3px 11px;font-size:13px;background:var(--paper)}
+.seg.lv button{padding:4px 9px;font-size:12.5px}
+
+/* grill */
+.q{display:grid;gap:12px;padding:22px}
+.q-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.q-h .qn{font-family:var(--f-mono);font-weight:500;font-size:13px;color:var(--ink-3)}
+.q-h h3{font-size:18px}
+.q-body{color:var(--ink-2);max-width:74ch}
+.q-opts{display:grid;gap:7px}
+.q-opt{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--hair-2);border-radius:6px;padding:9px 12px;cursor:pointer;background:var(--paper)}
+.q-opt:hover{border-color:var(--hair-strong)}
+.q-opt input{margin-top:4px;accent-color:var(--infra)}
+.q-opt.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.q-opt .ot{display:grid;gap:1px}
+.q-opt .ot small{color:var(--ink-3);font-size:12.5px}
+.q-rec{font-size:13.5px;background:var(--infra-bg);color:var(--ink);border-radius:6px;padding:9px 12px}
+.q-rec b{color:var(--infra)}
+.progress{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.progress .track{flex:1 1 200px;height:6px;border-radius:3px;background:var(--wire-2);overflow:hidden;max-width:360px}
+.progress .fill{height:100%;background:var(--infra);transition:width .3s}
+.qgroup{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-top:10px}
+
+/* draft landing page */
+.lp{background:var(--lp-bg);border:1.5px solid var(--hair-strong);border-radius:12px;overflow:hidden}
+.lp-nav{display:flex;align-items:center;gap:22px;padding:16px 32px;border-bottom:1px solid var(--hair);flex-wrap:wrap}
+.lp-nav .logo{display:flex;align-items:baseline;gap:7px;margin-right:auto}
+.lp-nav .logo b{font-size:24px;letter-spacing:-.02em}
+.lp-nav .logo span{font-size:13px;color:var(--ink-3)}
+.lp-links{display:flex;gap:18px;flex-wrap:wrap}
+.lp-links a{font-size:14px;color:var(--ink-2);text-decoration:none}
+.lp-links a:hover{color:var(--ink)}
+.lp-sec{padding:72px 32px;display:grid;gap:28px;border-bottom:1px solid var(--hair);scroll-margin-top:80px}
+@media (max-width:700px){.lp-sec{padding:44px 16px}.lp-nav{padding:14px 16px}}
+.lp h1{font-size:clamp(38px,6.4vw,84px);letter-spacing:-.04em;line-height:1;max-width:15ch}
+.lp h2{font-size:clamp(28px,3.8vw,50px);letter-spacing:-.03em;line-height:1.04;max-width:18ch}
+.lp .lead{font-size:clamp(17px,1.6vw,21px);color:var(--ink-2);max-width:58ch}
+.lp .btn.lg{padding:12px 20px;font-size:16px;border-radius:8px}
+.lp .viz{background:var(--paper)}
+.tags{display:flex;gap:6px;flex-wrap:wrap}
+.tag{font-size:11.5px;font-weight:700;background:var(--dist-bg);color:var(--dist);border-radius:4px;padding:2px 8px;cursor:pointer;border:0;font-family:var(--f-sans)}
+.tag:hover{text-decoration:underline}
+.lp-logos{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.logo-ph{border:1.5px dashed var(--hair-2);border-radius:6px;padding:10px 16px;font-weight:700;color:var(--ink-2);font-size:14px;background:var(--paper)}
+.lp-fact{font-size:14px;color:var(--ink-2)}
+.lp-fact b{color:var(--ink)}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.5px;background:var(--hair-2);border:1.5px solid var(--hair-2);border-radius:10px;overflow:hidden}
+.feat{background:var(--paper);padding:22px;display:grid;gap:9px;align-content:start;min-width:0}
+.feat h3{font-size:17px}
+.feat p{font-size:14px;color:var(--ink-2)}
+.feat.up{background:var(--lp-bg)}
+.feat .fh{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fi{width:32px;height:32px;display:block}
+.fi .glyph{stroke-width:1}
+.chip.upc{background:var(--infra-bg);color:var(--infra)}
+.featured{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr);gap:28px;align-items:start;background:var(--paper);border:1.5px solid var(--hair-2);border-radius:10px;padding:26px}
+@media (max-width:900px){.featured{grid-template-columns:1fr;padding:18px}}
+.featured h3{font-size:26px;letter-spacing:-.02em}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.shot{border:1.5px solid var(--hair-2);border-radius:8px;background:var(--paper);overflow:hidden;display:grid;grid-template-rows:auto 1fr;aspect-ratio:16/10;max-width:100%}
+.shot .bar{display:flex;gap:5px;padding:8px 10px;border-bottom:1px solid var(--hair)}
+.shot .bar i{width:8px;height:8px;border-radius:50%;background:var(--wire-3)}
+.shot .ph{display:grid;place-items:center;text-align:center;color:var(--ink-3);font-size:13px;padding:16px;background:repeating-linear-gradient(135deg,var(--wire) 0 10px,transparent 10px 20px)}
+.lp-end{text-align:center;justify-items:center}
+.lp-foot{padding:26px 32px;display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;font-size:13px;color:var(--ink-3)}
+.banner{border-left:4px solid var(--infra)}
+.tag.todo{background:var(--warn-bg);color:var(--warn);cursor:default}
+.tag.todo:hover{text-decoration:none}
+.feat-grid.c3{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.feat-grid.c5{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+.feat-grid.c5 .feat{background:var(--lp-bg)}
+table.cmp{border-collapse:collapse;width:100%;min-width:620px;font-size:15px;background:var(--paper)}
+table.cmp th{text-align:left;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);padding:12px 16px;border-bottom:1.5px solid var(--hair-strong)}
+table.cmp td{padding:13px 16px;border-bottom:1px solid var(--hair);vertical-align:top}
+table.cmp td:first-child{font-weight:700;width:34%}
+table.cmp td:nth-child(2){color:var(--ink-3)}
+.lp-form{display:grid;gap:12px;min-width:0}
+.lp-form .row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.lp-form label{display:grid;gap:4px;font-size:13px;color:var(--ink-2)}
+.lp-form input,.lp-form select{border:1.5px solid var(--hair-2);border-radius:6px;padding:9px 11px;background:var(--paper);font-size:15px;width:100%}
+.lp-form textarea{min-height:90px}
+.lp-form .sent{font-size:13px;color:var(--warn)}
+/* bins v2 */
+.bins2{padding:18px;display:grid;gap:14px}
+.bins2 .bin-ctrl input[type=range]{width:180px;accent-color:var(--prod)}
+.sq.l0{fill:var(--l1)} .sq.l1{fill:var(--l2)} .sq.l2{fill:var(--l3)}
+.sq.w{fill:var(--infra-bg);stroke:var(--infra);stroke-width:1;stroke-dasharray:2 2}
+.bin-wall,.truck{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.wheel{fill:var(--paper);stroke:var(--ink);stroke-width:1.6}
+.bin-lab{font-size:12px;font-weight:700;fill:var(--ink);font-family:var(--f-sans)}
+.bin-sub{font-size:11px;fill:var(--ink-3);font-family:var(--f-sans)}
+.bin-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2)}
+.bin-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.bin-read{display:grid;gap:8px}
+.ba{display:grid;grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr);align-items:center;gap:6px}
+.ba-box{border:1.5px solid var(--hair-2);border-radius:6px;padding:8px 12px;background:var(--paper);display:grid;gap:1px;font-variant-numeric:tabular-nums;min-width:0}
+.ba-box b{font-size:19px}
+.ba-box small{font-size:12px;color:var(--ink-3)}
+.ba-arrow{text-align:center;font-size:18px;color:var(--ink-3)}
+.ba-layers{display:flex;flex-wrap:wrap;gap:6px}
+.ba-mini{display:flex;gap:6px;align-items:baseline;border:1px solid var(--hair);border-radius:5px;padding:3px 9px;font-size:12.5px;font-variant-numeric:tabular-nums;background:var(--paper)}
+.ba-mini i{font-style:normal;color:var(--ink-3)}
+.silo-fill{transition:none}
+details.r1{padding:0}
+details.r1>summary{cursor:pointer;padding:18px 22px;font-weight:700;font-size:16px}
+details.r1[open]>summary{border-bottom:1px solid var(--hair)}
+.r1-body{padding:18px 22px;display:grid;gap:16px}
+.r1-sum{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+.r1-sum td{padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+.r1-sum td:first-child{color:var(--ink-2);width:48%}
+.p-sug{font-size:11.5px;color:var(--ink-3)}
+.seg.lv button.sug{box-shadow:inset 0 0 0 1.5px var(--infra)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><b>noma</b><span>landing page, research and options</span></div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button class="tab" role="tab" data-tab="draft" aria-selected="true">Draft page</button>
+      <button class="tab" role="tab" data-tab="visuals" aria-selected="false">Visuals</button>
+      <button class="tab" role="tab" data-tab="grill" aria-selected="false">Grill me</button>
+      <button class="tab" role="tab" data-tab="priorities" aria-selected="false">Priorities</button>
+      <button class="tab" role="tab" data-tab="versions" aria-selected="false">5 versions</button>
+      <button class="tab" role="tab" data-tab="brief" aria-selected="false">Brief</button>
+    </nav>
+    <div class="save" id="save" data-s="off" aria-live="polite"><i></i><span>Connecting</span></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- DRAFT -->
+<section class="panel" id="p-draft" data-panel="draft">
+  <div class="lede">
+    <h1>Draft page: The trace</h1>
+    <p>Version 1 with rounds 1 and 2 applied: your headline, a walkthrough request form, all five upcoming features, all four logos, the spreadsheet comparison and the squares bin. Pink tags link to the round 3 question each spot depends on; orange tags are things I need from you. Everything that moves is live.</p>
+  </div>
+  <div class="lp">
+    <nav class="lp-nav" aria-label="Draft page navigation">
+      <span class="logo"><b>noma</b><span>by MAJI</span></span>
+      <span class="lp-links"><a href="#lp-trace">Trace</a><a href="#lp-features">Features</a><a href="#lp-registry">Registry</a><a href="#lp-oss">Open source</a></span>
+      <span class="btn pri sm">Book a walkthrough</span>
+    </nav>
+    <header class="lp-sec">
+      <h1>Trace every tonne of biochar, from feedstock to certification.</h1>
+      <p class="lead">noma records biochar production from feedstock delivery to field application, and builds your registry submission from the same records. Click any square to see what it came from and what it became.</p>
+      <div class="wf-ctas"><a class="btn pri lg" href="#lp-contact" style="text-decoration:none">Book a walkthrough</a><span class="btn lg">Open the demo</span><button type="button" class="tag" data-q="r3q7">Demo access: round 3, Q7</button><button type="button" class="tag" data-q="r3q8">Launch without it? Q8</button></div>
+      <div class="box viz">
+        <div class="viz-main"><div class="scroll-x"><svg id="lp-chain-svg" viewBox="0 0 1010 300" style="min-width:760px" role="group" aria-label="Chain of custody, one credit"></svg></div>
+        <div class="legend"><span><i class="lg-infra"></i>Supplier, ingredient</span><span><i class="lg-prod"></i>Production and stock</span><span><i class="lg-dist"></i>Product and distribution</span><span><i class="lg-ver"></i>Verification</span></div></div>
+        <aside class="viz-side" id="lp-chain-side" aria-live="polite"></aside>
+      </div>
+      <div class="lp-logos"><span class="hint">Built with and supported by</span><span class="logo-ph">Dark Earth Carbon</span><span class="logo-ph">REPIC</span><span class="logo-ph">FiBL</span><span class="logo-ph">Isometric</span><span class="tag todo">Logo files needed</span></div>
+      <p class="lp-fact"><b>1,800 t</b> of biochar a year at the first site in Mafinga, Tanzania. <b>[figure]</b> t traced in noma so far. <span class="tag todo">DEC's written OK</span><button type="button" class="tag" data-q="r3q6">Kept current how: Q6</button></p>
+    </header>
+    <section class="lp-sec" id="lp-trace">
+      <h2>Real plants are messy. The trace still holds.</h2>
+      <p class="lead">Split bins, mix bins, several deliveries per run. Hover a mix bin to see how far one merge reaches, or a field to walk it back to the sawmills.</p>
+      <div class="box viz">
+        <div class="viz-main"><div class="scroll-x"><svg id="lp-dense-svg" viewBox="0 0 1200 700" style="min-width:820px" role="group" aria-label="Chain of custody, six weeks of records"></svg></div></div>
+        <aside class="viz-side" id="lp-dense-side" aria-live="polite"></aside>
+      </div>
+      <div class="shots">
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><div class="ph">Screenshot: Traceability, DAG view</div></div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><div class="ph">Screenshot: bin history</div></div>
+        <div class="shot"><div class="bar"><i></i><i></i><i></i></div><div class="ph">Screenshot: removal readiness</div></div>
+      </div>
+    </section>
+    <section class="lp-sec">
+      <h2>Same records, on the map.</h2>
+      <p class="lead">Suppliers, the plant and every field where biochar went into the soil, with haul distances from the record.</p>
+      <div class="box viz">
+        <div class="viz-main"><div class="scroll-x"><svg id="lp-map-svg" viewBox="0 0 1000 680" style="min-width:680px" role="group" aria-label="Chain of custody on a map"></svg></div></div>
+        <aside class="viz-side" id="lp-map-side" aria-live="polite"></aside>
+      </div>
+    </section>
+    <section class="lp-sec" id="lp-features">
+      <h2>Everything a biochar plant records, linked.</h2>
+      <p class="lead">What's shipped today, and five things we're building next.</p>
+      <div class="featured">
+        <div class="stack">
+          <h3>Bins that do the arithmetic</h3>
+          <p class="sub">Split bins keep each batch separate and are drawn oldest first. Mix bins take every layer in proportion. Each draw is logged with mass, moisture, time and who did it.</p>
+          <p class="hint">Press play. One square is 10 kg of dry biochar; the dashed squares are the water that rides along at departure moisture.</p>
+        </div>
+        <div id="lp-bins" class="bins2" style="padding:0"></div>
+      </div>
+      <div class="feat-grid c3" id="lp-feats"></div>
+      <div class="stack" style="gap:12px"><div class="label">Upcoming</div><div class="tags"><button type="button" class="tag" data-q="r3q4">AI checks wording: Q4</button><button type="button" class="tag" data-q="r3q5">Telegram wording: Q5</button></div></div>
+      <div class="feat-grid c5" id="lp-up"></div>
+      <div class="stack" style="margin-top:28px">
+        <h3 style="font-size:clamp(22px,2.6vw,32px);letter-spacing:-.02em">What changes when you leave the spreadsheet</h3>
+        <div class="box tbl-wrap"><table class="cmp"><thead><tr><th></th><th>Spreadsheet</th><th>noma</th></tr></thead><tbody>
+          <tr><td>Where a field's biochar came from</td><td>Cross-reference tabs by hand</td><td>Click the field</td></tr>
+          <tr><td>Dry mass after a moisture change</td><td>Recalculate every sheet it touches</td><td>Calculated as you type</td></tr>
+          <tr><td>Oldest-first draws across sub-bins</td><td>Tracked in someone's head</td><td>Planned and logged with each draw</td></tr>
+          <tr><td>Evidence for each step</td><td>Folders and email attachments</td><td>Attached to the record it proves</td></tr>
+          <tr><td>Registry submission</td><td>Rebuilt for every removal</td><td>Bundled from the same records</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+    <section class="lp-sec" id="lp-registry">
+      <h2>Your records, in the registry's shape.</h2>
+      <p class="lead">noma is built on Isometric's data model. It maps production, transport and lab records onto it, checks what's missing, and bundles each removal into one submission. More registries later.</p>
+      <div class="box">
+        <div class="viz-bar"><h3>From one removal</h3><button class="btn sm pri" id="lp-morph-play" type="button">Map to Isometric</button></div>
+        <div class="morph" id="lp-morph"></div>
+      </div>
+    </section>
+    <section class="lp-sec" id="lp-oss">
+      <h2>Open source. Run it yourself, or let us.</h2>
+      <div class="two grid2">
+        <div class="box box-pad stack"><span class="chip ok">Free</span><h3 style="font-size:22px">Self-host</h3><p class="sub">MIT licence. Postgres and Next.js. Every calculation is in the repo, so your verifier can read the math.</p><div><span class="btn">View on GitHub</span></div></div>
+        <div class="box box-pad stack"><span class="chip upc">Talk to us</span><h3 style="font-size:22px">We run it for you</h3><p class="sub">Setup, hosting, and updates when protocols change. Same code, your data stays yours.</p><div><span class="btn pri">Book a walkthrough</span></div></div>
+      </div>
+    </section>
+    <section class="lp-sec" id="lp-contact">
+      <div class="featured">
+        <div class="stack">
+          <h2>Book a walkthrough.</h2>
+          <p class="lead">We'll walk through the trace, the bins and the registry mapping on a plant like yours. Tell us a little about it.</p>
+          <div class="tags"><button type="button" class="tag" data-q="r3q1">Where it's sent: Q1</button><button type="button" class="tag" data-q="r3q2">Which inbox: Q2</button><button type="button" class="tag" data-q="r3q3">Fields: Q3</button></div>
+        </div>
+        <form class="lp-form" id="lp-form" novalidate>
+          <div class="row2"><label for="lp-f-name">Name<input id="lp-f-name" autocomplete="name"></label><label for="lp-f-email">Work email<input id="lp-f-email" type="email" autocomplete="email"></label></div>
+          <div class="row2"><label for="lp-f-co">Company<input id="lp-f-co" autocomplete="organization"></label>
+          <label for="lp-f-size">Plant size<select id="lp-f-size"><option>Not producing yet</option><option>Under 500 t a year</option><option>500 to 2,000 t a year</option><option>Over 2,000 t a year</option></select></label></div>
+          <label for="lp-f-msg">Anything we should know (optional)<textarea id="lp-f-msg"></textarea></label>
+          <div class="wf-ctas"><button type="submit" class="btn pri lg">Request a walkthrough</button><span class="btn lg">Open the demo</span></div>
+          <p class="sent" id="lp-f-sent" hidden>Draft only: nothing was sent.</p>
+        </form>
+      </div>
+    </section>
+    <footer class="lp-foot"><span><b>noma</b> by MAJI, Zurich</span><span>MIT licence. Built with Dark Earth Carbon in Mafinga, Tanzania.</span></footer>
+  </div>
+</section>
+
+<!-- BRIEF -->
+<section class="panel" id="p-brief" data-panel="brief" hidden>
+  <div class="lede">
+    <h1>What the noma landing page should say, and how to show it</h1>
+    <p>Draft for review, 29 September 2026. Four research passes: carbon removal and biochar dMRV sites, landing pages from other industries, the noma codebase (what is actually built), and graph and map visual patterns. Pick versions, set priorities and answer the grilling round. Your choices save here and I read them back.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="box box-pad stack">
+      <h2 class="h2">In our industry</h2>
+      <p class="sub">Eleven sites checked, including Carbonfuture, Isometric, Puro.earth, Rainbow, Frontier, Sylvera, Mangrove, Biochar App, Planboo and TraceX.</p>
+      <ul class="clean">
+        <li>Almost every page runs the same order: claim, logo strip, buyer and supplier split, a 4 to 6 step process diagram, one case study, certification badges, contact.</li>
+        <li>Traceability is always a static icon row or a table. Nobody lets you click a batch and walk it back. Mangrove's sample batch "BC-2972" map is the closest, and it reads as a mock-up.</li>
+        <li>Trust is shown as numbers plus badges: "209 projects certified", "335 suppliers", ICVCM, SOC 2.</li>
+        <li>Nobody talks to the plant operator. Bins, moisture, FIFO and meter readings appear on no page we found.</li>
+        <li>Nobody is open source. The only "open" MRV site found is a forestry document library.</li>
+      </ul>
+      <p class="src">Weak spots to avoid: vague verbs ("streamlines", "de-risks") with no numbers, metric tiles that render empty, mailto-only CTAs.</p>
+    </div>
+    <div class="box box-pad stack">
+      <h2 class="h2">From other industries</h2>
+      <p class="sub">Supply-chain provenance (TrusTrace, Sourcemap, Provenance), open-source tools (Supabase, PostHog, Plausible, n8n, Cal.com, Dagster) and operations software (Katana, Cin7, Tulip, Pennylane).</p>
+      <ul class="clean">
+        <li><b>A public live demo</b> beats screenshots. Plausible links its own dashboard, Grafana has a no-signup sandbox.</li>
+        <li><b>Open source as proof.</b> Plausible: "The code is public and auditable. Verify exactly what we collect." For a verifier this is the strongest trust signal we have.</li>
+        <li><b>Self-host or hosted, side by side.</b> n8n: "Deploy on your infrastructure or ours."</li>
+        <li><b>Compare against spreadsheets</b>, not competitors. Katana does this well.</li>
+        <li><b>Doors by role.</b> Provenance: "I'm a Brand / I'm a Retailer".</li>
+        <li><b>Standards as structure.</b> Sourcemap and Tulip build sections around the rule being met.</li>
+      </ul>
+      <p class="src">Research read pages as extracted text, so animation and interactivity on those sites were not seen.</p>
+    </div>
+  </div>
+
+  <div class="stack">
+    <h2 class="h2">Where noma can stand alone</h2>
+    <div class="grid3">
+      <div class="box box-pad stack"><span class="chip rec">Unclaimed</span><h3 style="font-size:17px">A trace you can click</h3><p class="sub">An interactive chain from credit back to feedstock. Every competitor shows a static diagram.</p></div>
+      <div class="box box-pad stack"><span class="chip rec">Unclaimed</span><h3 style="font-size:17px">Open source, MIT</h3><p class="sub">No commercial biochar dMRV offers a public repo or self-hosting.</p></div>
+      <div class="box box-pad stack"><span class="chip rec">Unclaimed</span><h3 style="font-size:17px">Plant-floor tooling</h3><p class="sub">Bins, moisture and dry mass. Everyone else writes for buyers and registries.</p></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <h2 class="h2">What is true today</h2>
+    <p class="sub">Checked against the code on 29 September. The landing page should only say what this table supports. The red flags matter most: the registry claim, the "adapter", energy and every future feature.</p>
+    <div class="box tbl-wrap">
+      <table class="claims">
+        <thead><tr><th>Claim</th><th>Status</th><th>What we can say</th></tr></thead>
+        <tbody id="claims"></tbody>
+      </table>
+    </div>
+    <p class="src">README still says "under active development and is not yet a production system". Production registry submission is blocked, only the Isometric sandbox is tested. Avoid "production-ready", "live with Isometric" and "immutable ledger".</p>
+  </div>
+</section>
+
+<!-- VISUALS -->
+<section class="panel" id="p-visuals" data-panel="visuals" hidden>
+  <div class="lede">
+    <h1>Visual prototypes</h1>
+    <p>Working drafts of the visuals the wireframes refer to, all on made-up data shaped like the Mafinga seed. Hover or tap any square to light up everything it came from and everything it became. Click to pin it.</p>
+  </div>
+
+  <div class="box viz" id="viz-chain">
+    <div class="viz-main">
+      <div class="viz-bar"><h3>A. One credit, end to end</h3><span class="hint">Tab through the squares, or use the arrow keys</span></div>
+      <div class="scroll-x"><svg id="svg-chain" viewBox="0 0 1010 300" style="min-width:760px" role="group" aria-label="Chain of custody, simple example"></svg></div>
+      <div class="legend"><span><i class="lg-infra"></i>Supplier, ingredient</span><span><i class="lg-prod"></i>Production and stock</span><span><i class="lg-dist"></i>Product and distribution</span><span><i class="lg-ver"></i>Verification</span></div>
+    </div>
+    <aside class="viz-side" id="side-chain" aria-live="polite"></aside>
+  </div>
+
+  <div class="box viz" id="viz-dense">
+    <div class="viz-main">
+      <div class="viz-bar">
+        <h3 id="dense-title">B. Six weeks at a plant, 180 records</h3>
+        <div class="seg" role="group" aria-label="View">
+          <button type="button" data-view="graph" aria-pressed="true">Graph</button>
+          <button type="button" data-view="map" aria-pressed="false">Map</button>
+        </div>
+        <div class="seg" role="group" aria-label="Node style" id="dense-style">
+          <button type="button" data-style="dots" aria-pressed="false">Dots</button>
+          <button type="button" data-style="glyphs" aria-pressed="true">Symbols</button>
+        </div>
+        <select class="jump" id="dense-jump" aria-label="Trace from a record"><option value="">Trace from…</option></select>
+      </div>
+      <div class="scroll-x" id="dense-graph-wrap"><svg id="svg-dense" viewBox="0 0 1200 700" style="min-width:820px" role="group" aria-label="Chain of custody, dense example"></svg></div>
+      <div class="scroll-x" id="dense-map-wrap" hidden><svg id="svg-map" viewBox="0 0 1000 680" style="min-width:680px" role="group" aria-label="Chain of custody on a map"></svg></div>
+      <div class="legend" id="dense-legend"><span><i class="lg-infra"></i>Supplier, ingredient</span><span><i class="lg-prod"></i>Production and stock</span><span><i class="lg-dist"></i>Product and distribution</span><span><i class="lg-ver"></i>Credit batch, sample, removal</span><span class="hint">Columns: supplier, delivery, feedstock bin, run, biochar bin, product, dispatch, field, removal</span></div>
+    </div>
+    <aside class="viz-side" id="side-dense" aria-live="polite"></aside>
+  </div>
+
+  <div class="box">
+    <div class="viz-bar"><h3>C. Records in the registry's shape</h3><button class="btn sm pri" id="morph-play" type="button">Map to Isometric</button></div>
+    <div class="morph" id="morph"></div>
+    <p class="hint" style="padding:0 18px 16px">Field names are the real ones from noma and from the Isometric transformers. One adapter exists today (Isometric, sandbox-tested).</p>
+  </div>
+  <div class="stack">
+    <h2 class="h2">D. Bins, two new directions</h2>
+    <p class="sub">Both animate the same draw: pick split or mix, set how much dry biochar leaves and at what moisture, press play. The before and after sit below as two blocks with an arrow. Pick one in round 2, Q8.</p>
+  </div>
+  <div class="box">
+    <div class="viz-bar"><h3>D1. Squares</h3><span class="hint">Same square language as the trace. One square is 10 kg dry.</span></div>
+    <div class="bins2" id="bins-sq"></div>
+  </div>
+  <div class="box">
+    <div class="viz-bar"><h3>D2. Silo and truck</h3><span class="hint">More illustrative. Levels drop, material flows to the truck.</span></div>
+    <div class="bins2" id="bins-silo"></div>
+  </div>
+</section>
+
+<!-- VERSIONS -->
+<section class="panel" id="p-versions" data-panel="versions" hidden>
+  <div class="lede">
+    <h1>Five versions of the page</h1>
+    <p>Same product, five different first impressions. Every block has real draft copy, a sketch of its visual, and a note on why it's there. Tick the blocks you want to keep, then give each version a verdict. Mixing blocks across versions is expected.</p>
+  </div>
+  <div class="box box-pad banner"><b>Decided in round 1:</b> version 1, The trace, is the base. Blocks 1 to 6 and 8 stay; the roadmap block moves into the feature grid as "Upcoming". See the Draft page tab.</div>
+  <div class="box compare"><table>
+    <thead><tr><th>Version</th><th>Leads with</th><th>Written for</th><th>Hero visual</th><th>Main risk</th></tr></thead>
+    <tbody id="compare"></tbody>
+  </table></div>
+  <div class="vnav" role="tablist" id="vnav" aria-label="Versions"></div>
+  <div id="version"></div>
+</section>
+
+<!-- PRIORITIES -->
+<section class="panel" id="p-priorities" data-panel="priorities" hidden>
+  <div class="lede">
+    <h1>What goes where</h1>
+    <p>Everything you listed, plus what the codebase check found that you didn't mention. Set a level for each: <b>Hero</b> (above the fold), <b>Section</b> (its own block), <b>Mention</b> (a line in a grid), <b>Upcoming</b> (labelled as not built), or <b>Leave out</b>. Status comes from the code, not from plans. The outlined button is my suggestion, based on your round 1 answers and the Draft page.</p>
+  </div>
+  <div class="progress"><div class="p-sum" id="p-sum"></div><button type="button" class="btn sm pri" id="p-accept">Accept suggestions for rows not set yet</button></div>
+  <div class="box prio" id="prio"></div>
+</section>
+
+<!-- GRILL -->
+<section class="panel" id="p-grill" data-panel="grill" hidden>
+  <div class="lede">
+    <h1>Grill me, round 3</h1>
+    <p>Rounds 1 and 2 are settled (below, still editable). This round covers what the round 2 answers opened up: the form, two feature descriptions, the demo and how the site is built.</p>
+  </div>
+  <div class="progress"><span id="q3-count" class="mono">0 of 0 answered</span><div class="track"><div class="fill" id="q3-fill" style="width:0"></div></div></div>
+  <div id="questions3" class="stack" style="gap:16px"></div>
+  <div class="box q">
+    <div class="q-h"><h3>Anything I missed?</h3></div>
+    <p class="q-body">Features, audiences, constraints, people who need to sign off, pages you like. Anything goes.</p>
+    <textarea id="general-note" aria-label="Anything I missed"></textarea>
+  </div>
+  <details class="box r1">
+    <summary>Round 2 answers</summary>
+    <div class="r1-body">
+      <div class="tbl-wrap"><table class="r1-sum"><tbody id="r2-sum"></tbody></table></div>
+      <div class="progress"><span id="q2-count" class="mono">0 of 0 answered</span><div class="track"><div class="fill" id="q2-fill" style="width:0"></div></div></div>
+      <div id="questions2" class="stack" style="gap:16px"></div>
+    </div>
+  </details>
+  <details class="box r1">
+    <summary>Round 1 answers</summary>
+    <div class="r1-body">
+      <div class="tbl-wrap"><table class="r1-sum"><tbody id="r1-sum"></tbody></table></div>
+      <div class="progress"><span id="q-count" class="mono">0 of 0 answered</span><div class="track"><div class="fill" id="q-fill" style="width:0"></div></div></div>
+      <div id="questions" class="stack" style="gap:16px"></div>
+    </div>
+  </details>
+</section>
+</main>
+
+<script>
+(function(){
+"use strict";
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const NS="http://www.w3.org/2000/svg";
+const el=(tag,attrs={},parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=n=>Math.round(n).toLocaleString("en-US");
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const reduceMotion=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- tabs ---------- */
+function showTab(name){
+  $$(".tab").forEach(t=>t.setAttribute("aria-selected",String(t.dataset.tab===name)));
+  $$("[data-panel]").forEach(p=>p.hidden=p.dataset.panel!==name);
+  try{localStorage.setItem("noma-lp-tab2",name)}catch(e){}
+  window.scrollTo({top:0});
+}
+$$(".tab").forEach(t=>t.addEventListener("click",()=>showTab(t.dataset.tab)));
+function goVisual(id){showTab("visuals");const t=document.getElementById(id);if(t)setTimeout(()=>t.scrollIntoView({behavior:reduceMotion?"auto":"smooth",block:"start"}),30)}
+
+/* ---------- claims (codebase check) ---------- */
+const CLAIMS=[
+ ["End-to-end traceability","ok","Trace every kilogram from feedstock delivery to field application: as a lineage graph, on a map, as a dry-mass Sankey, or as a dated evidence trail per application."],
+ ["Map view","ok","Shipped (MapLibre). Needs MapTiler and OpenRouteService keys, otherwise it degrades. Routes cached; distances come from the record."],
+ ["Bins: FIFO, split, mix","ok","Split bins drawn oldest first, mix bins drawn pro-rata, every movement logged with mass, actor, time and moisture. FIFO applies to biochar and product bins only. Mix bins merged 29 September."],
+ ["Feedstock types, formulations","ok","Your own formulations (biochar plus compost, manure, lime or minerals). Pyrolysis feedstock types map to the Isometric catalogue; blend ingredients are never submitted."],
+ ["Dry and wet mass","ok","Wet and dry side by side at every step; dry biochar mass is carried from bin to delivery to field."],
+ ["Upstream records","ok","Deliveries per supplier with mass, moisture, GPS and haul distance, followed into production runs. Feedstock eligibility checks are not built."],
+ ["Energy readings","part","Manual entry per production run (electricity kWh, diesel litres). A telemetry CSV can be attached but is not read. Not live, not metered."],
+ ["Isometric submission","part","One action per Removal bundles sources, datapoints, GHG entry, applications and samples, with readiness checks first. Sandbox-tested; production submission is blocked."],
+ ["Registry adapter (multi-registry)","no","Not built. All submission code is Isometric-specific. Say \"built on Isometric's data model first\", not \"works with any registry\"."],
+ ["Open source","ok","MIT licence, public repo on GitHub (Maji-Studio/noma-dmrv)."],
+ ["Document recognition","no","Not built. Uploaded files are never read."],
+ ["Live pyrolysis readings","no","Not built. Old telemetry pipeline exists without a UI."],
+ ["MCP / public API","no","Not built. Internal read routes only, no documented API."],
+ ["Telegram data entry","no","Not built, nothing in plans."],
+ ["AI checks","no","Not built. Rule-based plausibility warnings and readiness gaps exist; they are not AI."]
+];
+const CHIP={ok:'<span class="chip ok">Shipped</span>',part:'<span class="chip part">Partial</span>',no:'<span class="chip no">Not built</span>'};
+$("#claims").innerHTML=CLAIMS.map(c=>`<tr><td>${esc(c[0])}</td><td>${CHIP[c[1]]}</td><td>${esc(c[2])}</td></tr>`).join("");
+
+/* ---------- stage model + glyphs ---------- */
+const STAGES={
+ sup:{label:"Supplier",plural:"suppliers",dom:"infra",g:"M8 2.5l5 7.5H3z M8 10v3.5"},
+ fd:{label:"Feedstock delivery",plural:"deliveries in",dom:"prod",g:"M1.8 5h7.4v6H1.8z M9.2 7.4h2.9l2.1 2.1V11H9.2 M4 13h.01 M11.5 13h.01"},
+ fbin:{label:"Feedstock bin",plural:"feedstock bins",dom:"prod",g:"M3 5h10l-1.2 8.5H4.2z M2.2 5h11.6"},
+ ing:{label:"Ingredient bin",plural:"ingredient bins",dom:"infra",g:"M3.5 12.5C3.5 6.5 7 3.5 12.5 3.5c0 5.5-3 9-9 9z M3.5 12.5l5-5"},
+ run:{label:"Production run",plural:"runs",dom:"prod",g:"M8 2.2c2 2.8 4 4.2 4 7a4 4 0 0 1-8 0c0-1.8 1-3 2-3.8.1 1.6.9 2.6 2 2.8-.3-2.1-.6-4 0-6z"},
+ bbin:{label:"Biochar bin",plural:"biochar bins",dom:"prod",g:"M2.5 4.5h11 M2.5 8h11 M2.5 11.5h11"},
+ prod:{label:"Biochar product",plural:"products",dom:"dist",g:"M8 2.8a5.2 5.2 0 1 0 .01 0z M8 2.8v10.4"},
+ del:{label:"Delivery out",plural:"deliveries out",dom:"dist",g:"M1.8 5h7.4v6H1.8z M9.2 7.4h2.9l2.1 2.1V11H9.2 M4 13h.01 M11.5 13h.01"},
+ app:{label:"Application",plural:"fields",dom:"dist",g:"M2 13h12 M3 10h10 M4.5 7h7 M6 4h4"},
+ cb:{label:"Credit batch",plural:"credit batches",dom:"ver",g:"M3 3h10v10H3z M5.4 8.2l1.9 1.9 3.3-4"},
+ smp:{label:"Lab sample",plural:"samples",dom:"ver",g:"M6 2.2h4 M7 2.2v4l-3.6 6.8h9.2L9 6.2v-4"},
+ rem:{label:"Removal",plural:"removals",dom:"ver",g:"M8 2l5.5 2.5v3.8c0 3-2.6 5-5.5 5.7-2.9-.7-5.5-2.7-5.5-5.7V4.5z M5.6 8.3l1.7 1.7 3-3.6"},
+ plant:{label:"Plant",plural:"plants",dom:"prod",g:"M2.5 13.5V7l3.5 2.2V7l3.5 2.2V3.5h4v10z"}
+};
+
+/* ---------- graph core ---------- */
+function makeGraph(nodes,edges){
+  const byId=new Map(nodes.map(n=>[n.id,n])),out=new Map(),inn=new Map();
+  nodes.forEach(n=>{out.set(n.id,[]);inn.set(n.id,[])});
+  edges.forEach(([a,b])=>{out.get(a).push(b);inn.get(b).push(a)});
+  return {nodes,edges,byId,out,inn};
+}
+function walk(g,start,dir){
+  const adj=dir==="up"?g.inn:g.out,seen=new Set([start]),q=[start];
+  while(q.length){const c=q.shift();for(const n of adj.get(c)||[])if(!seen.has(n)){seen.add(n);q.push(n)}}
+  seen.delete(start);return seen;
+}
+function countByStage(g,set){const c={};set.forEach(id=>{const s=g.byId.get(id).st;c[s]=(c[s]||0)+1});return c}
+function countsHtml(g,set){
+  const c=countByStage(g,set),order=["sup","fd","fbin","ing","run","bbin","cb","smp","prod","del","app","rem"];
+  const parts=order.filter(k=>c[k]).map(k=>`<span>${c[k]} ${STAGES[k].plural}</span>`);
+  return parts.length?`<div class="counts">${parts.join("")}</div>`:`<span class="hint">None</span>`;
+}
+function detailHtml(g,id,extra){
+  const n=g.byId.get(id),up=walk(g,id,"up"),dn=walk(g,id,"down");
+  return `<div><div class="stage">${esc(STAGES[n.st].label)}</div><div class="code">${esc(n.code)}</div></div>
+   <dl>${(n.meta||[]).map(m=>`<div>${esc(m)}</div>`).join("")}</dl>${extra||""}
+   <div class="stack" style="gap:6px"><div class="label">Came from</div>${countsHtml(g,up)}</div>
+   <div class="stack" style="gap:6px"><div class="label">Became</div>${countsHtml(g,dn)}</div>`;
+}
+
+function drawGraph(svg,g,opt){
+  svg.innerHTML="";
+  const eG=el("g",{},svg),nG=el("g",{},svg);
+  const s=opt.size;
+  g.edgeEls=g.edges.map(([a,b])=>{
+    const A=g.byId.get(a),B=g.byId.get(b);
+    const x1=A.x+s/2,y1=A.y,x2=B.x-s/2,y2=B.y,mx=(x1+x2)/2;
+    const p=el("path",{class:"g-edge",d:`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`},eG);
+    p._a=a;p._b=b;return p;
+  });
+  g.nodeEls=new Map();
+  g.nodes.forEach(n=>{
+    const st=STAGES[n.st];
+    const gg=el("g",{class:`g-node d-${st.dom}`,transform:`translate(${n.x-s/2},${n.y-s/2})`,"data-id":n.id,tabindex:opt.focusable?"0":"-1",role:"button","aria-label":`${st.label} ${n.code}`},nG);
+    el("rect",{class:"hit",x:-6,y:-6,width:s+12,height:s+12},gg);
+    el("rect",{class:"body",width:s,height:s,rx:Math.max(1.5,s*.12)},gg);
+    if(opt.glyphs){const k=(s-4)/16;el("path",{class:"glyph",d:st.g,transform:`translate(2,2) scale(${k})`,"stroke-width":1.4/k*Math.min(1,k*1.1)},gg)}
+    if(opt.labels){
+      const t=el("text",{x:s/2,y:s+14,"text-anchor":"middle"},gg);t.textContent=n.code;
+      const t2=el("text",{class:"st",x:s/2,y:s+26,"text-anchor":"middle"},gg);t2.textContent=n.short||st.label;
+    }
+    g.nodeEls.set(n.id,gg);
+  });
+}
+function highlight(svg,g,id){
+  if(!id){svg.classList.remove("hl");g.nodeEls.forEach(e=>e.classList.remove("on","self"));g.edgeEls.forEach(e=>e.classList.remove("on"));return}
+  const up=walk(g,id,"up"),dn=walk(g,id,"down");up.add(id);dn.add(id);
+  svg.classList.add("hl");
+  g.nodeEls.forEach((e,k)=>{e.classList.toggle("on",up.has(k)||dn.has(k));e.classList.toggle("self",k===id)});
+  g.edgeEls.forEach(e=>{const on=(up.has(e._a)&&up.has(e._b))||(dn.has(e._a)&&dn.has(e._b));e.classList.toggle("on",on);if(on)e.parentNode.appendChild(e)});
+}
+function wire(svg,g,side,idle,extraFor){
+  let pinned=null;
+  const show=id=>{highlight(svg,g,id);side.innerHTML=id?detailHtml(g,id,extraFor?extraFor(id):""):idle};
+  const idOf=t=>{const n=t.closest&&t.closest("[data-id]");return n?n.getAttribute("data-id"):null};
+  svg.addEventListener("pointerover",e=>{const id=idOf(e.target);if(id&&!pinned)show(id)});
+  svg.addEventListener("pointerout",e=>{const id=idOf(e.target);if(id&&!pinned&&!idOf(e.relatedTarget||document.body))show(null)});
+  svg.addEventListener("click",e=>{const id=idOf(e.target);if(!id){pinned=null;show(null);return}pinned=pinned===id?null:id;show(pinned||id)});
+  svg.addEventListener("focusin",e=>{const id=idOf(e.target);if(id&&e.target.matches(":focus-visible")){pinned=id;show(id)}});
+  svg.addEventListener("keydown",e=>{
+    const id=idOf(e.target);
+    if(e.key==="Escape"){pinned=null;show(null);e.target.blur&&e.target.blur();return}
+    if(!id)return;
+    let next=null;
+    if(e.key==="ArrowRight")next=(g.out.get(id)||[])[0];
+    if(e.key==="ArrowLeft")next=(g.inn.get(id)||[])[0];
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){const same=g.nodes.filter(n=>n.st===g.byId.get(id).st||Math.abs(n.x-g.byId.get(id).x)<4).sort((a,b)=>a.y-b.y);const i=same.findIndex(n=>n.id===id);next=(same[i+(e.key==="ArrowDown"?1:-1)]||{}).id}
+    if(next){e.preventDefault();const ne=g.nodeEls.get(next);if(ne.getAttribute("tabindex")==="0")ne.focus();else{pinned=next;show(next)}}
+  });
+  side.innerHTML=idle;
+  return {pin(id){pinned=id||null;show(pinned)}};
+}
+
+/* ---------- A. simple chain ---------- */
+const CHAIN_N=[
+ {id:"s1",st:"sup",x:40,y:150,code:"Sawmill A",short:"Supplier",meta:["Forestry waste","15 km from the plant"]},
+ {id:"f1",st:"fd",x:150,y:150,code:"FD-2026-001",short:"Delivery in",meta:["2,000 kg wet at 20% moisture","1,600 kg dry","Weighbridge ticket attached"]},
+ {id:"b1",st:"fbin",x:260,y:150,code:"Feedstock bin 1",short:"Feedstock bin",meta:["Wet-mass stock","Withdrawn pro-rata"]},
+ {id:"r1",st:"run",x:370,y:150,code:"PR-2026-043",short:"Production run",meta:["1,000 kg feedstock in at 20%","300 kg biochar out at 10%","270 kg dry biochar","24 kWh, 14 L diesel"]},
+ {id:"l1",st:"bbin",x:490,y:150,code:"Bin A, layer 3",short:"Biochar bin",meta:["270 kg dry biochar","Split bin: drawn oldest layer first"]},
+ {id:"p1",st:"prod",x:620,y:150,code:"BCF-01",short:"Product",meta:["Formulation: chicken manure 50/50","300 kg biochar + 300 kg manure","Dry biochar carried: 270 kg"]},
+ {id:"d1",st:"del",x:740,y:150,code:"DL-2026-012",short:"Delivery out",meta:["Mafinga to Mbeya, 240 km","Departure moisture 15%","Bill of lading attached"]},
+ {id:"a1",st:"app",x:855,y:150,code:"AP-2026-031",short:"Application",meta:["Coffee field near Mbeya","Field boundary recorded","Applied 21 Sep 2026"]},
+ {id:"rm",st:"rem",x:965,y:150,code:"RM-2026-004",short:"Removal",meta:["Submitted as one bundle","Sources, datapoints, GHG entry"]},
+ {id:"s2",st:"sup",x:260,y:45,code:"Poultry farm",short:"Supplier",meta:["Ingredient supplier","12 km from the plant"]},
+ {id:"f2",st:"fd",x:370,y:45,code:"FD-2026-002",short:"Delivery in",meta:["1,000 kg chicken manure","30% moisture"]},
+ {id:"i1",st:"ing",x:490,y:45,code:"Manure bin",short:"Ingredient bin",meta:["Blend ingredient","Never submitted to the registry"]},
+ {id:"cb",st:"cb",x:490,y:250,code:"CB-2026-043",short:"Credit batch",meta:["One feedstock, one month","3 production runs"]},
+ {id:"sm",st:"smp",x:620,y:250,code:"3 samples",short:"Lab samples",meta:["Organic carbon 76%","H/C org and R0 recorded"]}
+];
+const CHAIN_E=[["s1","f1"],["f1","b1"],["b1","r1"],["r1","l1"],["l1","p1"],["p1","d1"],["d1","a1"],["a1","rm"],["s2","f2"],["f2","i1"],["i1","p1"],["r1","cb"],["cb","sm"],["cb","rm"]];
+const CHAIN_IDLE=`<div class="stage">How to read it</div><p>Fourteen records behind one removal. Hover the field (AP-2026-031): the whole chain back to the sawmill lights up, plus the manure that went into the blend.</p><p class="hint">Numbers follow the Mafinga seed: 1,000 kg feedstock at 20% moisture gives 300 kg biochar at 10%, so 270 kg dry.</p>`;
+function mountChain(svg,side){const g=makeGraph(CHAIN_N.map(n=>Object.assign({},n)),CHAIN_E);drawGraph(svg,g,{size:30,glyphs:true,labels:true,focusable:true});return wire(svg,g,side,CHAIN_IDLE)}
+mountChain($("#svg-chain"),$("#side-chain"));
+
+/* ---------- B. dense graph ---------- */
+const CUSTOMERS=[
+ {name:"Coffee farm, Mbeya",lat:-8.91,lng:33.46},{name:"Tea estate, Njombe",lat:-9.33,lng:34.77},
+ {name:"Maize farm, Makambako",lat:-8.85,lng:34.83},{name:"Vegetable farm, Iringa",lat:-7.77,lng:35.69},
+ {name:"Avocado farm, Mafinga",lat:-8.42,lng:35.08}];
+const PLANT={lat:-8.30,lng:35.28};
+function km(a,b){const R=6371,t=Math.PI/180,dl=(b.lat-a.lat)*t,dg=(b.lng-a.lng)*t;const h=Math.sin(dl/2)**2+Math.cos(a.lat*t)*Math.cos(b.lat*t)*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
+function buildDense(){
+  const r=rng(20260929),bt=(a,b)=>a+r()*(b-a),N=[],E=[];
+  const add=n=>(N.push(n),n),link=(a,b)=>E.push([a.id,b.id]);
+  const pad=(n,w=3)=>String(n).padStart(w,"0");
+  const day=d=>{const dt=new Date(Date.UTC(2026,7,10+d));return dt.toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"UTC"})};
+  const sups=["A","B","C","D","E"].map((k,i)=>{const lat=PLANT.lat+bt(-.14,.14),lng=PLANT.lng+bt(-.16,.16);return add({id:"sup"+k,st:"sup",code:"Sawmill "+k,lat,lng,meta:["Forestry waste",Math.round(km(PLANT,{lat,lng})*1.25)+" km haul"]})});
+  const poultry=add({id:"supP",st:"sup",code:"Poultry farm",lat:PLANT.lat-.06,lng:PLANT.lng+.05,meta:["Chicken manure","12 km haul"]});
+  const compost=add({id:"supC",st:"sup",code:"Compost yard",lat:PLANT.lat+.09,lng:PLANT.lng-.04,meta:["Compost","14 km haul"]});
+  const fds=[];for(let i=0;i<22;i++){const s=sups[Math.floor(r()*5)],w=Math.round(bt(1500,3000)/50)*50,m=Math.round(bt(16,28));fds.push(add({id:"fd"+i,st:"fd",code:"FD-2026-"+pad(i+1),t:i*2,meta:[`${fmt(w)} kg wet at ${m}% moisture`,`${fmt(w*(1-m/100))} kg dry`,day(i*2)]}));link(s,fds[i])}
+  const fills=[];for(let i=0;i<6;i++){fills.push(add({id:"fb"+i,st:"fbin",code:`Feedstock bin ${i%3+1}, fill ${Math.floor(i/3)+1}`,meta:["Wet-mass stock, withdrawn pro-rata"]}))}
+  fds.forEach((f,i)=>link(f,fills[Math.min(5,Math.floor(i/3.7))]));
+  const ingF=[];for(let i=0;i<6;i++){const s=i<4?poultry:compost;const f=add({id:"fdi"+i,st:"fd",code:"FD-2026-"+pad(30+i),meta:[i<4?"1,000 kg chicken manure at 30%":"800 kg compost at 40%",day(i*6+1)]});link(s,f);ingF.push(f)}
+  const manure=add({id:"ingM",st:"ing",code:"Manure bin",meta:["Blend ingredient","Never submitted"]}),comp=add({id:"ingC",st:"ing",code:"Compost bin",meta:["Blend ingredient","Never submitted"]});
+  ingF.forEach((f,i)=>link(f,i<4?manure:comp));
+  const runs=[];for(let i=0;i<18;i++){const out=Math.round(bt(280,320)),m=Math.round(bt(8,12));const rn=add({id:"run"+i,st:"run",code:"PR-2026-"+pad(31+i),meta:[`1,000 kg feedstock in`,`${out} kg biochar at ${m}% moisture`,`${fmt(out*(1-m/100))} kg dry biochar`,`${Math.round(bt(20,28))} kWh, ${Math.round(bt(11,16))} L diesel`,day(i*2+3)]});runs.push(rn);link(fills[Math.floor(i/3)],rn);if(i%3===2&&i<17)link(fills[Math.min(5,Math.floor(i/3)+1)],rn)}
+  const binDefs=[["Bin A, sub-bin 1","split"],["Bin A, sub-bin 2","split"],["Bin A, sub-bin 3","split"],["Bin B","mix"],["Bin C, sub-bin 1","split"],["Bin C, sub-bin 2","split"],["Bin D","mix"],["Bin E","mix"]];
+  const binRuns=[[0,1],[2,3],[4,5],[6,7,8],[9,10],[11,12],[13,14,15],[16,17]];
+  const bins=binDefs.map((b,i)=>add({id:"bin"+i,st:"bbin",code:b[0],meta:[b[1]==="split"?"Split bin: drawn oldest layer first":"Mix bin: every layer drawn pro-rata",`${binRuns[i].length} layers`]}));
+  binRuns.forEach((rs,i)=>rs.forEach(k=>link(runs[k],bins[i])));
+  const forms=["BCF-01 chicken manure 50/50","BCF-02 compost 30/70","Pure biochar"];
+  const prods=[];for(let j=0;j<20;j++){const f=j%5===4?2:(j%3===1?1:(j%2?2:0));const p=add({id:"prod"+j,st:"prod",code:"BCF-"+pad(j+1,2),meta:["Formulation: "+forms[f],`${fmt(bt(250,300))} kg dry biochar carried`]});prods.push(p);const bi=Math.min(7,Math.floor(j*8/20));link(bins[bi],p);if(j%3===0&&bi<7)link(bins[bi+1],p);if(f===0)link(manure,p);if(f===1)link(comp,p)}
+  const dels=[];for(let k=0;k<28;k++){const c=CUSTOMERS[Math.floor(r()*CUSTOMERS.length)];const d=add({id:"del"+k,st:"del",code:"DL-2026-"+pad(k+1),cust:c,meta:["To "+c.name,`${Math.round(km(PLANT,c)*1.18/5)*5} km by road`,`Departure moisture ${Math.round(bt(12,22))}%`]});dels.push(d);const pi=Math.min(19,Math.floor(k*20/28));link(prods[pi],d);if(k%4===3&&pi<19)link(prods[pi+1],d)}
+  const apps=[];for(let m=0;m<45;m++){const d=dels[Math.min(27,Math.floor(m*28/45))],c=d.cust;const a=add({id:"app"+m,st:"app",code:"AP-2026-"+pad(m+1),lat:c.lat+bt(-.13,.13),lng:c.lng+bt(-.15,.15),cust:c.name,meta:[c.name,"Field boundary recorded",day(m+30)]});apps.push(a);link(d,a)}
+  const cbs=[[0,4],[5,9],[10,13],[14,17]].map((rg,i)=>{const cb=add({id:"cb"+i,st:"cb",code:"CB-2026-"+pad(41+i),meta:["Credit batch: one feedstock, one month",`${rg[1]-rg[0]+1} production runs`]});for(let k=rg[0];k<=rg[1];k++)link(runs[k],cb);return cb});
+  cbs.forEach((cb,i)=>{for(let k=0;k<3;k++){const s=add({id:`smp${i}_${k}`,st:"smp",code:`${cb.code} S${k+1}`,meta:[`Organic carbon ${Math.round(bt(72,80))}%`,"H/C org and R0 recorded"]});link(cb,s)}});
+  const g0=makeGraph(N,E.slice());
+  const rems=[];for(let q=0;q<5;q++){const rm=add({id:"rem"+q,st:"rem",code:"RM-2026-"+pad(q+1),meta:["Removal, one submission","Datapoints, sources, GHG entry"]});rems.push(rm);
+    const grp=apps.slice(q*9,q*9+9),cbSet=new Set();grp.forEach(a=>{link(a,rm);walk(g0,a.id,"up").forEach(u=>{if(g0.byId.get(u).st==="run")(g0.out.get(u)||[]).forEach(o=>{if(g0.byId.get(o).st==="cb")cbSet.add(o)})})});
+    cbSet.forEach(c=>E.push([c,rm.id]));rm.meta.push(`${grp.length} fields, ${cbSet.size} credit batch${cbSet.size>1?"es":""}`)}
+  return makeGraph(N,E);
+}
+const denseG=buildDense();
+function layoutDense(g){
+  const COLS={sup:40,fd:160,fbin:285,ing:285,run:405,bbin:530,prod:655,del:780,app:905,rem:1150,cb:470,smp:600};
+  const mainTop=24,mainBot=560,verTop=610,verBot=680;
+  const cols={};g.nodes.forEach(n=>{(cols[n.st]=cols[n.st]||[]).push(n)});
+  const place=(list,top,bot)=>{const h=bot-top,step=h/Math.max(1,list.length);list.forEach((n,i)=>{n.y=top+step*(i+.5)})};
+  const orderMain=["sup","fd","fbin","run","bbin","prod","del","app","rem"];
+  // initial
+  orderMain.forEach(k=>{const l=cols[k];if(k==="fbin")l.push(...cols.ing);if(k==="rem")place(l,mainTop+60,mainBot-60);else place(l,mainTop,mainBot)});
+  place(cols.cb,verTop,verBot);place(cols.smp,verTop-6,verBot+6);
+  const bary=(n,adj)=>{const ps=adj.get(n.id).map(id=>g.byId.get(id)).filter(p=>p.y!=null);return ps.length?ps.reduce((s,p)=>s+p.y,0)/ps.length:n.y};
+  for(let pass=0;pass<4;pass++){
+    const seq=pass%2?orderMain.slice().reverse():orderMain;
+    seq.forEach(k=>{const l=cols[k],adj=pass%2?g.out:g.inn;l.forEach(n=>n._b=bary(n,adj));l.sort((a,b)=>a._b-b._b);if(k==="rem")place(l,mainTop+60,mainBot-60);else place(l,mainTop,mainBot)});
+  }
+  cols.cb.sort((a,b)=>bary(a,g.inn)-bary(b,g.inn));place(cols.cb,verTop,verBot);
+  cols.smp.sort((a,b)=>bary(a,g.inn)-bary(b,g.inn));
+  cols.smp.forEach((n,i)=>{n.x=COLS.smp+(i%3)*22;});
+  const cbY=new Map(cols.cb.map(c=>[c.id,c.y]));cols.smp.forEach(n=>{n.y=cbY.get(g.inn.get(n.id)[0])});
+  g.nodes.forEach(n=>{if(n.st!=="smp")n.x=COLS[n.st];if(cols[n.st].length>24)n.x+=(cols[n.st].indexOf(n)%2?9:-9)});
+  cols.ing.forEach(n=>{n.x=COLS.ing});
+}
+layoutDense(denseG);
+const denseSvg=$("#svg-dense"),denseSide=$("#side-dense");
+let denseStyle="glyphs";
+const DENSE_IDLE=`<div class="stage">How to read it</div><p>One plant, six weeks: 7 suppliers, 28 deliveries in, 18 runs, 8 biochar bins, 20 products, 45 fields, 5 removals.</p><p>Hover a <b>mix bin</b> (Bin B, D or E) to see how far one merge reaches. Hover a <b>field</b> to walk it back to the sawmills.</p><p class="hint">Made-up data, fixed seed. Bottom row: credit batches and lab samples.</p>`;
+let denseCtl;
+function renderDense(){
+  const size=denseStyle==="glyphs"?15:8;
+  drawGraph(denseSvg,denseG,{size,glyphs:denseStyle==="glyphs",labels:false,focusable:false});
+  const vt=el("text",{x:470,y:598,class:"map-town"},denseSvg);vt.textContent="Credit batches and lab samples";
+  if(!denseCtl)denseCtl=wire(denseSvg,denseG,denseSide,DENSE_IDLE);else{denseSide.innerHTML=DENSE_IDLE}
+}
+renderDense();
+$$("#dense-style button").forEach(b=>b.addEventListener("click",()=>{denseStyle=b.dataset.style;$$("#dense-style button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));renderDense()}));
+const jump=$("#dense-jump");
+[["Removals","rem"],["Mix bins","bbin"],["Credit batches","cb"],["Fields","app"]].forEach(([lab,st])=>{const og=document.createElement("optgroup");og.label=lab;denseG.nodes.filter(n=>n.st===st&&(st!=="bbin"||!n.code.includes("sub-bin"))&&(st!=="app"||Number(n.id.slice(3))%5===0)).forEach(n=>{const o=document.createElement("option");o.value=n.id;o.textContent=n.code+(n.cust?", "+n.cust:"");og.appendChild(o)});jump.appendChild(og)});
+jump.addEventListener("change",()=>{if(viewMode==="map")mapCtl.pin(jump.value);else denseCtl.pin(jump.value)});
+
+/* ---------- map ---------- */
+const MAPB={lng0:33.1,lng1:36.2,lat0:-7.45,lat1:-9.55,W:1000,H:680};
+const P=(lat,lng)=>[ (lng-MAPB.lng0)/(MAPB.lng1-MAPB.lng0)*MAPB.W, (lat-MAPB.lat0)/(MAPB.lat1-MAPB.lat0)*MAPB.H ];
+const TOWNS=[["Iringa",-7.77,35.69],["Mafinga",-8.30,35.28],["Makambako",-8.85,34.83],["Mbeya",-8.91,33.46],["Njombe",-9.33,34.77]];
+let mapCtl,viewMode="graph";
+function renderMap(svg,side,IDLE){
+  svg.innerHTML="";
+  el("rect",{class:"map-land",x:0,y:0,width:1000,height:680,rx:0},svg);
+  const r=rng(7);const cg=el("g",{},svg);
+  [[-8.6,34.6,1],[-8.2,35.6,.8],[-9.1,33.9,.7]].forEach(([la,ln,sc])=>{const [cx,cy]=P(la,ln);for(let k=1;k<=6;k++){let d="";const R=k*34*sc,ph=r()*6;for(let a=0;a<=64;a++){const t=a/64*Math.PI*2,rr=R*(1+.18*Math.sin(3*t+ph)+.08*Math.sin(5*t+ph*2));d+=(a?"L":"M")+(cx+rr*Math.cos(t)*1.3).toFixed(1)+","+(cy+rr*Math.sin(t)).toFixed(1)}el("path",{class:"map-contour",d:d+"Z"},cg)}});
+  const road=pts=>el("path",{class:"map-road",d:pts.map((p,i)=>(i?"L":"M")+P(p[0],p[1]).join(",")).join("")},svg);
+  road([[-7.77,35.69],[-8.30,35.28],[-8.85,34.83],[-8.91,33.46]]);road([[-8.85,34.83],[-9.33,34.77]]);
+  TOWNS.forEach(([n,la,ln])=>{const [x,y]=P(la,ln);el("circle",{cx:x,cy:y,r:2.5,fill:"var(--ink-3)"},svg);const t=el("text",{x:x+7,y:y-7,class:"map-town"},svg);t.textContent=n});
+  const note=el("text",{x:16,y:664,class:"map-town","font-size":"11"},svg);note.textContent="Illustrative: Southern Highlands, Tanzania. Real towns, made-up suppliers and fields.";
+  // map graph: suppliers, plant, fields
+  const plant={id:"plant",st:"plant",code:"Mafinga plant",meta:["All production, bins and blending happen here","18 runs, 8 biochar bins"],lat:PLANT.lat,lng:PLANT.lng};
+  const sups=denseG.nodes.filter(n=>n.st==="sup"),apps=denseG.nodes.filter(n=>n.st==="app");
+  const nodes=[plant,...sups,...apps].map(n=>{const [x,y]=P(n.lat,n.lng);return Object.assign({},n,{x,y})});
+  const mg=makeGraph(nodes,[...sups.map(s=>[s.id,"plant"]),...apps.map(a=>["plant",a.id])]);
+  const arcG=el("g",{},svg),nG=el("g",{},svg);
+  const arcs=mg.edges.map(([a,b])=>{const A=mg.byId.get(a),B=mg.byId.get(b);const dx=B.x-A.x,dy=B.y-A.y,len=Math.hypot(dx,dy)||1;const cx=(A.x+B.x)/2-dy*.2,cy=(A.y+B.y)/2+dx*.2;const p=el("path",{class:"map-arc"+(a==="plant"?"":" up"),d:`M${A.x},${A.y} Q${cx},${cy} ${B.x},${B.y}`},arcG);p._a=a;p._b=b;return p});
+  const nEls=new Map();
+  mg.nodes.forEach(n=>{const st=STAGES[n.st],s=n.st==="plant"?26:n.st==="sup"?15:11;const g=el("g",{class:`g-node d-${st.dom}`,transform:`translate(${n.x-s/2},${n.y-s/2})`,"data-id":n.id,role:"button",tabindex:n.st==="app"?"-1":"0","aria-label":`${st.label} ${n.code}`},nG);el("rect",{class:"hit",x:-5,y:-5,width:s+10,height:s+10},g);el("rect",{class:"body",width:s,height:s,rx:2},g);if(s>=15){const k=(s-4)/16;el("path",{class:"glyph",d:st.g,transform:`translate(2,2) scale(${k})`,"stroke-width":1.4/k},g)}if(n.st==="plant"){const t=el("text",{x:s+6,y:s/2+4},g);t.textContent="Plant"}nEls.set(n.id,g)});
+  // lineage via dense graph
+  const lineage=id=>{
+    if(id==="plant")return {sups:new Set(sups.map(s=>s.id)),apps:new Set(apps.map(a=>a.id))};
+    const n=denseG.byId.get(id);
+    if(n.st==="sup"){const d=walk(denseG,id,"down");return {sups:new Set([id]),apps:new Set([...d].filter(x=>denseG.byId.get(x).st==="app"))}}
+    const u=walk(denseG,id,"up"),d=walk(denseG,id,"down");const all=new Set([...u,...d,id]);
+    return {sups:new Set([...all].filter(x=>denseG.byId.get(x).st==="sup")),apps:new Set([...all].filter(x=>denseG.byId.get(x).st==="app"))};
+  };
+  let pinned=null;
+  const show=id=>{
+    if(!id){svg.classList.remove("hl");nEls.forEach(e=>e.classList.remove("on","self"));arcs.forEach(a=>a.classList.remove("on"));side.innerHTML=IDLE;return}
+    const L=lineage(id);svg.classList.add("hl");
+    nEls.forEach((e,k)=>{e.classList.toggle("on",k==="plant"||L.sups.has(k)||L.apps.has(k));e.classList.toggle("self",k===id)});
+    arcs.forEach(a=>{const on=(L.sups.has(a._a)&&a._b==="plant")||(a._a==="plant"&&L.apps.has(a._b));a.classList.toggle("on",on)});
+    const n=mg.byId.get(id)||denseG.byId.get(id);
+    const supNames=[...L.sups].map(s=>denseG.byId.get(s).code);
+    const extra=id==="plant"?"":`<div class="stack" style="gap:6px"><div class="label">${n.st==="sup"?"Went to":"Biochar and blend from"}</div><div class="counts">${n.st==="sup"?`<span>${L.apps.size} fields</span>`:supNames.map(s=>`<span>${esc(s)}</span>`).join("")}</div></div>`;
+    side.innerHTML=`<div><div class="stage">${esc(STAGES[n.st].label)}</div><div class="code">${esc(n.code)}</div></div><dl>${(n.meta||[]).map(m=>`<div>${esc(m)}</div>`).join("")}</dl>${extra}`+(denseG.byId.get(id)?`<div class="stack" style="gap:6px"><div class="label">Full lineage</div>${countsHtml(denseG,new Set([...walk(denseG,id,"up"),...walk(denseG,id,"down")]))}</div>`:"");
+  };
+  const idOf=t=>{const n=t.closest&&t.closest("[data-id]");return n?n.getAttribute("data-id"):null};
+  svg.addEventListener("pointerover",e=>{const id=idOf(e.target);if(id&&!pinned)show(id)});
+  svg.addEventListener("pointerout",e=>{const id=idOf(e.target);if(id&&!pinned&&!idOf(e.relatedTarget||document.body))show(null)});
+  svg.addEventListener("click",e=>{const id=idOf(e.target);if(!id){pinned=null;show(null);return}pinned=pinned===id?null:id;show(pinned||id)});
+  svg.addEventListener("focusin",e=>{const id=idOf(e.target);if(id&&e.target.matches(":focus-visible")){pinned=id;show(id)}});
+  svg.addEventListener("keydown",e=>{if(e.key==="Escape"){pinned=null;show(null)}});
+  side.innerHTML=IDLE;
+  return {pin(id){if(id&&!mg.byId.get(id)&&!denseG.byId.get(id))return;const n=denseG.byId.get(id);let target=id;if(n&&!["sup","app"].includes(n.st)){pinned=null;show(null);side.innerHTML=IDLE+`<p class="hint">${esc(n.code)} sits inside the plant. Switch to Graph to trace it.</p>`;return}pinned=target||null;show(pinned)}};
+}
+const MAP_IDLE=`<div class="stage">How to read it</div><p>The same records, placed where they happened. Everything inside the plant collapses into one square.</p><p>Hover a <b>field</b> to see which sawmills its biochar came from. Hover a <b>sawmill</b> to see every field it ended up in.</p><p class="hint">The real product view uses MapLibre with road routes. This sketch needs no map tiles.</p>`;
+$$("#viz-dense .viz-bar [data-view]").forEach(b=>b.addEventListener("click",()=>{
+  viewMode=b.dataset.view;$$("#viz-dense [data-view]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+  $("#dense-graph-wrap").hidden=viewMode!=="graph";$("#dense-map-wrap").hidden=viewMode!=="map";$("#dense-style").hidden=viewMode!=="graph";
+  $("#dense-legend .hint").hidden=viewMode==="map";$("#dense-title").textContent=viewMode==="map"?"B. Same records, on the map":"B. Six weeks at a plant, 180 records";
+  if(viewMode==="map"){if(!mapCtl)mapCtl=renderMap($("#svg-map"),denseSide,MAP_IDLE);else denseSide.innerHTML=MAP_IDLE}else{denseSide.innerHTML=DENSE_IDLE;highlight(denseSvg,denseG,null)}
+}));
+
+/* ---------- C. morph ---------- */
+const MORPH=[
+ ["Production run","PR-2026-043.biocharDryMassKg","270 kg","Datapoint, carbon_rich_substance_sequestration","product_mass","270 kg"],
+ ["Lab sample","CB-2026-043 S1.organicCarbonPercent","76 %","Datapoint, carbon_rich_substance_sequestration","carbon_content","0.76"],
+ ["Production run","PR-2026-043.electricityKwh","24 kWh","Datapoint, grid_electricity_use","electricity_use","24 kWh"],
+ ["Production run","dieselGenset + preprocessing","6 L","Datapoint, fuel_usage_by_volume (Generator diesel usage)","volume_of_fuel","6 L"],
+ ["Delivery out","DL-2026-012 mass × distance","0.6 t × 240 km","Datapoint, mass_distance_based_ci_emissions","mass_distance","144 t·km"],
+ ["Application","AP-2026-031.gisBoundary","GeoJSON polygon","Biochar Application","location","polygon"],
+ ["Credit batch","CB-2026-043","3 runs, 1 feedstock","Production batch","feedstock type","Isometric catalogue id"]
+];
+function mountMorph(box,btn){
+  box.innerHTML=`<div class="m-head"><div>noma record</div><div></div><div>Isometric</div></div>`+MORPH.map((m,i)=>`<div class="m-row" data-i="${i}">
+ <div class="m-chip m-left"><div class="e">${esc(m[0])}</div><div class="f">${esc(m[1])}</div><div class="v">${esc(m[2])}</div></div>
+ <svg class="m-link" viewBox="0 0 86 24" preserveAspectRatio="none" aria-hidden="true"><path d="M2 12 C30 12 56 12 84 12"/></svg>
+ <div class="m-chip m-right"><div class="e">${esc(m[3])}</div><div class="f">${esc(m[4])}</div><div class="v">${esc(m[5])}</div></div></div>`).join("")+
+ `<div class="m-bundle"><span class="chip no m-state">Waiting</span><div><b>Removal RM-2026-004</b><div class="hint">Readiness check, then one submission: sources, production batch, datapoints, applications, samples, GHG entry.</div></div></div>`;
+  let timer=null;const bundle=box.querySelector(".m-bundle"),stateEl=box.querySelector(".m-state");
+  btn.addEventListener("click",()=>{
+    clearTimeout(timer);const rows=$$(".m-row",box);rows.forEach(r=>r.classList.remove("done","active"));bundle.classList.remove("done");stateEl.className="chip no m-state";stateEl.textContent="Mapping";
+    let i=0;const step=()=>{if(i>0)rows[i-1].classList.replace("active","done");if(i<rows.length){rows[i].classList.add("active");i++;timer=setTimeout(step,reduceMotion?10:520)}else{bundle.classList.add("done");stateEl.className="chip ok m-state";stateEl.textContent="Bundled"}};step();
+  });
+}
+mountMorph($("#morph"),$("#morph-play"));
+
+/* ---------- D. bins v2 ---------- */
+const BLAYERS=[{name:"Layer 1",run:"PR-2026-041",date:"8 Sep",dry:270,m:10},{name:"Layer 2",run:"PR-2026-042",date:"10 Sep",dry:300,m:12},{name:"Layer 3",run:"PR-2026-043",date:"12 Sep",dry:240,m:9}];
+const BTOTAL=BLAYERS.reduce((a,l)=>a+l.dry,0);
+function binPlan(D,mode){if(mode==="split"){let left=D;return BLAYERS.map(l=>{const t=Math.min(l.dry,left);left-=t;return t})}return BLAYERS.map(l=>l.dry*D/BTOTAL)}
+function allocSquares(n){const ex=BLAYERS.map(l=>l.dry/BTOTAL*n),fl=ex.map(Math.floor);let r=n-fl.reduce((a,b)=>a+b,0);ex.map((e,i)=>[e-fl[i],i]).sort((a,b)=>b[0]-a[0]).forEach(([,i])=>{if(r>0){fl[i]++;r--}});return fl}
+function binReadout(D,m,mode){
+  const drawn=binPlan(D,mode),wet=D/(1-m/100),water=wet-D;
+  const remWet=BLAYERS.reduce((s,l,i)=>s+(l.dry-drawn[i])/(1-l.m/100),0);
+  return `<div class="ba"><div class="ba-box"><span class="label">Bin before</span><b>${fmt(BTOTAL)} kg</b><small>dry biochar</small></div><div class="ba-arrow" aria-hidden="true">→</div><div class="ba-box"><span class="label">Bin after</span><b>${fmt(BTOTAL-D)} kg</b><small>dry, about ${fmt(remWet)} kg wet (estimate)</small></div></div>
+  <div class="ba"><div class="ba-box"><span class="label">Truck before</span><b>0 kg</b><small>empty</small></div><div class="ba-arrow" aria-hidden="true">→</div><div class="ba-box"><span class="label">Truck after</span><b>${fmt(wet)} kg</b><small>${fmt(D)} kg dry biochar and ${fmt(water)} kg water at ${m}%</small></div></div>
+  <div class="ba-layers">${BLAYERS.map((l,i)=>`<span class="ba-mini"><span>${mode==="split"?"Sub-bin "+(i+1):l.name}</span><b>${fmt(l.dry)}</b><i>→</i><b>${fmt(l.dry-drawn[i])}</b><span class="hint">kg dry</span></span>`).join("")}</div>`;
+}
+function binControls(p){return `<div class="bin-ctrl"><div class="seg" role="group" aria-label="Bin type"><button type="button" data-mode="split" aria-pressed="true">Split bin, FIFO</button><button type="button" data-mode="mix" aria-pressed="false">Mix bin, pro-rata</button></div>
+<label for="${p}-d">Draw dry biochar <span class="mono v-d">400 kg</span><input id="${p}-d" class="i-d" type="range" min="0" max="${BTOTAL}" step="10" value="400"></label>
+<label for="${p}-m">Departure moisture <span class="mono v-m">15%</span><input id="${p}-m" class="i-m" type="range" min="0" max="40" step="1" value="15"></label>
+<button type="button" class="btn sm pri b-play">Play the draw</button></div>`}
+const BIN_LEGEND=`<div class="bin-legend"><span><i style="background:var(--l1)"></i>Layer 1, 8 Sep</span><span><i style="background:var(--l2)"></i>Layer 2, 10 Sep</span><span><i style="background:var(--l3)"></i>Layer 3, 12 Sep</span><span><i style="background:var(--infra-bg);border:1px dashed var(--infra)"></i>Water at departure</span></div>`;
+function wireBinControls(root,onChange,onPlay){
+  const st={mode:"split",D:400,m:15};
+  const dIn=root.querySelector(".i-d"),mIn=root.querySelector(".i-m");
+  const sync=()=>{root.querySelector(".v-d").textContent=fmt(st.D)+" kg";root.querySelector(".v-m").textContent=st.m+"%"};
+  dIn.addEventListener("input",()=>{st.D=Number(dIn.value);sync();onChange(st)});
+  mIn.addEventListener("input",()=>{st.m=Number(mIn.value);sync();onChange(st)});
+  $$(".seg button",root).forEach(b=>b.addEventListener("click",()=>{st.mode=b.dataset.mode;$$(".seg button",root).forEach(x=>x.setAttribute("aria-pressed",String(x===b)));onChange(st,true)}));
+  root.querySelector(".b-play").addEventListener("click",()=>onPlay(st));
+  return st;
+}
+const ease=p=>p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+
+function mountBinSquares(root,pfx){
+  root.innerHTML=binControls(pfx)+`<div class="scroll-x"><svg viewBox="0 0 560 232" style="min-width:500px" role="img" aria-label="Bin and truck. One square is 10 kg of dry biochar."></svg></div>${BIN_LEGEND}<div class="bin-read"></div>`;
+  const svg=root.querySelector("svg"),frame=el("g",{},svg),sqG=el("g",{},svg),read=root.querySelector(".bin-read");
+  const PQ=16,SZ=13,BED=196,TX=262;
+  const squares=[];BLAYERS.forEach((l,i)=>{for(let k=0;k<l.dry/10;k++)squares.push({i,k,w:false,r:el("rect",{width:SZ,height:SZ,rx:2,class:"sq l"+i},sqG),x:0,y:0,o:1})});
+  const water=[];for(let k=0;k<60;k++)water.push({w:true,r:el("rect",{width:SZ,height:SZ,rx:2,class:"sq w",opacity:0},sqG),x:0,y:0,o:0});
+  let raf=0;
+  function drawFrame(mode){
+    frame.innerHTML="";
+    const lab=(x,a,b)=>{const t=el("text",{x,y:BED+16,"text-anchor":"middle",class:"bin-lab"},frame);t.textContent=a;const t2=el("text",{x,y:BED+29,"text-anchor":"middle",class:"bin-sub"},frame);t2.textContent=b};
+    if(mode==="split")BLAYERS.forEach((l,i)=>{const bx=16+i*72;el("path",{class:"bin-wall",d:`M${bx},${BED-170} V${BED} H${bx+52} V${BED-170}`},frame);lab(bx+26,"Sub-bin "+(i+1),l.date+", "+l.m+"%")});
+    else{el("path",{class:"bin-wall",d:`M16,${BED-170} V${BED} H164 V${BED-170}`},frame);lab(90,"Mix bin","3 layers, 8 to 12 Sep")}
+    const W=15*PQ;
+    el("path",{class:"truck",d:`M${TX-4},${BED-24} V${BED+2} H${TX+W+4} V${BED-24}`},frame);
+    el("path",{class:"truck",d:`M${TX+W+8},${BED+2} V${BED-42} H${TX+W+34} L${TX+W+46},${BED-22} V${BED+2} Z`},frame);
+    [TX+26,TX+W-26,TX+W+27].forEach(cx=>el("circle",{class:"wheel",cx,cy:BED+10,r:7},frame));
+    const t=el("text",{x:TX,y:BED+32,class:"bin-sub"},frame);t.textContent="On the truck";
+  }
+  function targets(st){
+    const n=Math.round(st.D/10),pos=new Map(),truck=[];
+    let take;if(st.mode==="split"){let left=n;take=BLAYERS.map(l=>{const t=Math.min(l.dry/10,left);left-=t;return t})}else take=allocSquares(n);
+    let j=0;
+    BLAYERS.forEach((l,i)=>{const c=l.dry/10;if(j%9)j+=9-j%9;squares.filter(q=>q.i===i).forEach(q=>{
+      if(q.k<c-take[i]){if(st.mode==="split"){pos.set(q,{x:16+i*72+2+(q.k%3)*PQ,y:BED-(Math.floor(q.k/3)+1)*PQ+1.5,bin:1})}else{pos.set(q,{x:18+(j%9)*PQ,y:BED-(Math.floor(j/9)+1)*PQ+1.5,bin:1});j++}}
+      else truck.push(q)})});
+    truck.forEach((q,idx)=>pos.set(q,{x:TX+(idx%15)*PQ+1.5,y:BED-(Math.floor(idx/15)+1)*PQ+1.5,bin:0,q:idx}));
+    const wn=Math.min(water.length,Math.round((st.D/(1-st.m/100)-st.D)/10));
+    water.forEach((w,q)=>{const idx=truck.length+q;pos.set(w,{x:TX+(idx%15)*PQ+1.5,y:BED-(Math.floor(idx/15)+1)*PQ+1.5,o:q<wn?1:0,q:idx,wq:q})});
+    return {pos,n:truck.length};
+  }
+  function apply(T,dur,stagger){
+    cancelAnimationFrame(raf);
+    const items=[...squares,...water],from=new Map(items.map(q=>[q,{x:q.x,y:q.y,o:q.o}])),start=performance.now();
+    if(reduceMotion)dur=0;
+    const delay=(q,t,f)=>{if(!stagger)return 0;if(q.w)return T.n*22+450+t.wq*14;if(t.bin===0&&f.x<TX-20)return t.q*22;return t.bin===1?120:0};
+    const tick=now=>{let done=true;items.forEach(q=>{const f=from.get(q),t=T.pos.get(q);let p=dur?(now-start-delay(q,t,f))/dur:1;if(p<1)done=false;p=Math.max(0,Math.min(1,p));const e=ease(p);
+      const lift=(stagger&&!q.w&&t.bin===0&&f.x<TX-20)?Math.sin(Math.PI*e)*70:0;const to=t.o==null?1:t.o;
+      q.x=f.x+(t.x-f.x)*e;q.y=f.y+(t.y-f.y)*e;q.o=q.w?(stagger?(p>0?f.o+(to-f.o)*e:0):f.o+(to-f.o)*e):1;
+      q.r.setAttribute("x",q.x.toFixed(1));q.r.setAttribute("y",(q.y-lift).toFixed(1));q.r.setAttribute("opacity",q.o.toFixed(2))});
+      if(!done)raf=requestAnimationFrame(tick)};
+    if(!dur)tick(start);else raf=requestAnimationFrame(tick);
+  }
+  const st=wireBinControls(root,(s,modeChanged)=>{if(modeChanged)drawFrame(s.mode);apply(targets(s),modeChanged?0:220,false);read.innerHTML=binReadout(s.D,s.m,s.mode)},
+    s=>{apply(targets({mode:s.mode,D:0,m:s.m}),0,false);apply(targets(s),700,true)});
+  drawFrame(st.mode);apply(targets(st),0,false);read.innerHTML=binReadout(st.D,st.m,st.mode);
+}
+
+function mountBinSilo(root,pfx){
+  root.innerHTML=binControls(pfx)+`<div class="scroll-x"><svg viewBox="0 0 560 250" style="min-width:500px" role="img" aria-label="Silos and truck"></svg></div>${BIN_LEGEND}<div class="bin-read"></div>`;
+  const svg=root.querySelector("svg"),read=root.querySelector(".bin-read");
+  const defs=el("defs",{},svg),pat=el("pattern",{id:pfx+"-hatch",width:6,height:6,patternUnits:"userSpaceOnUse",patternTransform:"rotate(45)"},defs);
+  el("rect",{width:6,height:6,fill:"var(--infra-bg)"},pat);el("line",{x1:0,y1:0,x2:0,y2:6,stroke:"var(--infra)","stroke-width":1.5},pat);
+  const g=el("g",{},svg),parts=el("g",{},svg);
+  const TOP=22,BODY=168,CONE=196,COL=["var(--l1)","var(--l2)","var(--l3)"];
+  const CAP_WET=BTOTAL/(1-.4),CX0=330,CX1=496,CY0=128,CY1=192;
+  let st,raf=0,particles=[],lastSpawn=0;
+  const silo=(x,w,i,clipId)=>{const c=x+w/2,path=`M${x},${TOP} V${BODY} L${c-7},${CONE} H${c+7} L${x+w},${BODY} V${TOP} Z`;const cp=el("clipPath",{id:clipId},defs);el("path",{d:path},cp);return {path,c}};
+  function outlets(){return st.mode==="split"?BLAYERS.map((l,i)=>20+i*82+30):[20+120]}
+  function draw(drawnNow){
+    g.innerHTML="";$$("clipPath",defs).forEach(c=>c.remove());
+    const per=binPlan(drawnNow,st.mode),H=CONE-TOP;
+    if(st.mode==="split"){BLAYERS.forEach((l,i)=>{const x=20+i*82,w=60,cid=`${pfx}-c${i}`,s=silo(x,w,i,cid);const rem=l.dry-per[i],h=rem/300*H;
+      el("rect",{x,y:CONE-h,width:w,height:h,fill:COL[i],"clip-path":`url(#${cid})`},g);el("path",{class:"bin-wall",d:s.path},g);
+      const t=el("text",{x:x+w/2,y:CONE+20,"text-anchor":"middle",class:"bin-lab"},g);t.textContent="Sub-bin "+(i+1);const t2=el("text",{x:x+w/2,y:CONE+34,"text-anchor":"middle",class:"bin-sub"},g);t2.textContent=fmt(rem)+" kg dry"})}
+    else{const x=20,w=240,cid=`${pfx}-cm`,s=silo(x,w,0,cid);let y=CONE;BLAYERS.forEach((l,i)=>{const h=(l.dry-per[i])/BTOTAL*H*.95;y-=h;el("rect",{x,y,width:w,height:h,fill:COL[i],"clip-path":`url(#${cid})`},g)});el("path",{class:"bin-wall",d:s.path},g);
+      const t=el("text",{x:x+w/2,y:CONE+20,"text-anchor":"middle",class:"bin-lab"},g);t.textContent="Mix bin";const t2=el("text",{x:x+w/2,y:CONE+34,"text-anchor":"middle",class:"bin-sub"},g);t2.textContent=fmt(BTOTAL-drawnNow)+" kg dry, bands shrink together"}
+    const wetNow=drawnNow/(1-st.m/100),hDry=drawnNow/CAP_WET*(CY1-CY0),hWat=(wetNow-drawnNow)/CAP_WET*(CY1-CY0);
+    el("rect",{x:CX0,y:CY1-hDry,width:CX1-CX0,height:hDry,fill:"var(--l1)"},g);
+    el("rect",{x:CX0,y:CY1-hDry-hWat,width:CX1-CX0,height:hWat,fill:`url(#${pfx}-hatch)`},g);
+    el("path",{class:"truck",d:`M${CX0},${CY0} V${CY1} H${CX1} V${CY0}`},g);
+    el("path",{class:"truck",d:`M${CX1+4},${CY1} V${CY1-40} H${CX1+30} L${CX1+42},${CY1-20} V${CY1} Z`},g);
+    [CX0+26,CX1-26,CX1+23].forEach(cx=>el("circle",{class:"wheel",cx,cy:CY1+9,r:7},g));
+    const t=el("text",{x:CX0,y:CY1+34,class:"bin-lab"},g);t.textContent=fmt(wetNow)+" kg on the truck";
+    const t2=el("text",{x:CX0,y:CY1+48,class:"bin-sub"},g);t2.textContent=`${fmt(drawnNow)} kg dry + ${fmt(wetNow-drawnNow)} kg water`;
+  }
+  function spawn(drawnNow){
+    const per=binPlan(drawnNow,st.mode),outs=outlets();let src,color;
+    if(st.mode==="split"){let i=per.findIndex((p,k)=>p<BLAYERS[k].dry);if(i<0)i=2;src=outs[i];color=COL[i]}
+    else{src=outs[0];const r=Math.random()*BTOTAL;color=r<270?COL[0]:r<570?COL[1]:COL[2]}
+    const r=el("rect",{width:6,height:6,rx:1,fill:color},parts);
+    particles.push({r,x0:src,y0:CONE+2,x1:CX0+14+Math.random()*(CX1-CX0-28),y1:CY0-2,t0:performance.now()});
+  }
+  function play(){
+    cancelAnimationFrame(raf);parts.innerHTML="";particles=[];
+    if(reduceMotion){draw(st.D);return}
+    const start=performance.now(),dur=2400,target=st.D;
+    const tick=now=>{const p=Math.min(1,(now-start)/dur),cur=target*ease(p);draw(cur);
+      if(p<1&&target>0&&now-lastSpawn>45){spawn(cur);lastSpawn=now}
+      particles=particles.filter(q=>{const u=(now-q.t0)/650;if(u>=1){q.r.remove();return false}const cx=(q.x0+q.x1)/2,cy=CONE+60;const x=(1-u)*(1-u)*q.x0+2*(1-u)*u*cx+u*u*q.x1,y=(1-u)*(1-u)*q.y0+2*(1-u)*u*cy+u*u*q.y1;q.r.setAttribute("x",x-3);q.r.setAttribute("y",y-3);return true});
+      if(p<1||particles.length)raf=requestAnimationFrame(tick)};
+    draw(0);raf=requestAnimationFrame(tick);
+  }
+  st=wireBinControls(root,s=>{cancelAnimationFrame(raf);parts.innerHTML="";particles=[];draw(s.D);read.innerHTML=binReadout(s.D,s.m,s.mode)},()=>play());
+  draw(st.D);read.innerHTML=binReadout(st.D,st.m,st.mode);
+}
+mountBinSquares($("#bins-sq"),"bsq");
+mountBinSilo($("#bins-silo"),"bsl");
+
+/* ---------- draft page ---------- */
+const XG={chat:"M2.5 3.5h11v7.5H7l-3.5 3v-3h-1z",spark:"M8 1.8l1.6 4.6 4.6 1.6-4.6 1.6L8 14.2l-1.6-4.6L1.8 8l4.6-1.6z",doc:"M4 2h6l3 3v9H4z M10 2v3h3 M6 8.5h5 M6 11h5",pulse:"M1.5 8.5h3l2-5 3 9 2-4h3",plug:"M6 2v3 M10 2v3 M4 5h8v2.5a4 4 0 0 1-8 0z M8 11.5V14"};
+const FEATS=[
+ ["bbin","prod","Dry and wet mass","Moisture at every step. Dry biochar is carried from bin to field, so the credit mass is never re-estimated."],
+ ["prod","dist","Feedstock and formulations","Your feedstock types, mapped to the registry catalogue. Blends with compost, manure or lime."],
+ ["fd","prod","Upstream records","Deliveries by supplier with mass, moisture, GPS and haul distance."],
+ ["run","prod","Energy per run","Electricity and diesel logged with each production run, mapped to the registry's energy components."],
+ ["smp","ver","Lab samples","Organic carbon, H/C org and R0 per credit batch, three replicates each."],
+ ["app","dist","Field boundaries","Every application carries its field boundary and evidence."],
+ ["cb","ver","Evidence on every step","Weighbridge tickets, bills of lading, lab reports and photos, attached where they belong."],
+ ["rem","ver","Readiness check","See what a removal is missing before you submit it."],
+ ["bbin","prod","Mass balance","Dry kilograms in, losses out, per credit batch."]
+];
+const UPCOMING=[
+ ["doc","infra","Document recognition","Read weighbridge tickets and lab reports straight into records."],
+ ["pulse","prod","Live reactor readings","Temperature and energy from the reactor, without typing them in."],
+ ["plug","infra","Open API and MCP","Connect other tools, and LLMs, to your plant's records."],
+ ["chat","dist","Telegram","Log deliveries, runs and readings from a Telegram chat."],
+ ["spark","ver","AI checks","Flags readings that don't fit before a verifier sees them."]
+];
+function featIcon(g,dom){const d=XG[g]||STAGES[g].g;return `<svg class="fi" viewBox="0 0 32 32" aria-hidden="true"><g class="g-node d-${dom}" style="cursor:default"><rect class="body" x="1" y="1" width="30" height="30" rx="4"/><path class="glyph" d="${d}" transform="translate(4,4) scale(1.5)"/></g></svg>`}
+function mountDenseCopy(svg,side){const g=makeGraph(denseG.nodes.map(n=>Object.assign({},n)),denseG.edges);drawGraph(svg,g,{size:15,glyphs:true,labels:false,focusable:false});const vt=el("text",{x:470,y:598,class:"map-town"},svg);vt.textContent="Credit batches and lab samples";return wire(svg,g,side,DENSE_IDLE)}
+function mountDraft(){
+  mountChain($("#lp-chain-svg"),$("#lp-chain-side"));
+  mountDenseCopy($("#lp-dense-svg"),$("#lp-dense-side"));
+  renderMap($("#lp-map-svg"),$("#lp-map-side"),MAP_IDLE);
+  mountMorph($("#lp-morph"),$("#lp-morph-play"));
+  mountBinSquares($("#lp-bins"),"lpb");
+  $("#lp-feats").innerHTML=FEATS.map(([g,dom,t,d])=>`<div class="feat"><div class="fh">${featIcon(g,dom)}</div><h3>${esc(t)}</h3><p>${esc(d)}</p></div>`).join("");
+  $("#lp-up").innerHTML=UPCOMING.map(([g,dom,t,d])=>`<div class="feat up"><div class="fh">${featIcon(g,dom)}<span class="chip upc">Upcoming</span></div><h3>${esc(t)}</h3><p>${esc(d)}</p></div>`).join("");
+  $("#lp-form").addEventListener("submit",e=>{e.preventDefault();$("#lp-f-sent").hidden=false});
+  document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-q]");if(!t)return;showTab("grill");const q=document.getElementById(t.dataset.q);if(q)setTimeout(()=>q.scrollIntoView({behavior:reduceMotion?"auto":"smooth",block:"start"}),30)});
+}
+
+/* ---------- sketches ---------- */
+function skChain(){let s='<svg viewBox="0 0 300 70" aria-hidden="true">';const xs=[12,48,84,120,156,192,228,264];xs.forEach((x,i)=>{if(i)s+=`<path d="M${xs[i-1]+10},35 L${x-10},35" stroke="var(--wire-3)" stroke-width="1.5"/>`});s+=`<path d="M156,22 C150,12 130,10 120,10" fill="none" stroke="var(--wire-3)" stroke-width="1.5"/><path d="M84,45 C90,58 110,60 120,60" fill="none" stroke="var(--wire-3)" stroke-width="1.5"/>`;const c=["infra","prod","prod","prod","prod","dist","dist","dist"];xs.forEach((x,i)=>s+=`<rect x="${x-9}" y="26" width="18" height="18" rx="2.5" fill="var(--${c[i]}-bg)" stroke="var(--${c[i]})" stroke-width="1.5"/>`);s+=`<rect x="111" y="1" width="18" height="18" rx="2.5" fill="var(--infra-bg)" stroke="var(--infra)" stroke-width="1.5"/><rect x="111" y="51" width="18" height="18" rx="2.5" fill="var(--ver-bg)" stroke="var(--ver)" stroke-width="1.5"/></svg>`;return s}
+function skDense(seed=3){const r=rng(seed);let s='<svg viewBox="0 0 300 120" aria-hidden="true">';const cols=[4,7,3,8,5,8,9,12,3],pts=cols.map((n,c)=>Array.from({length:n},(_,i)=>[14+c*34,10+(i+.5)*(100/n)+r()*3]));const dom=["infra","prod","prod","prod","prod","dist","dist","dist","ver"];for(let c=1;c<pts.length;c++)pts[c].forEach(p=>{const q=pts[c-1][Math.floor(r()*pts[c-1].length)];s+=`<path d="M${q[0]},${q[1]} C${q[0]+17},${q[1]} ${p[0]-17},${p[1]} ${p[0]},${p[1]}" fill="none" stroke="var(--wire-3)" stroke-width=".8"/>`});pts.forEach((col,c)=>col.forEach(p=>s+=`<rect x="${p[0]-3}" y="${p[1]-3}" width="6" height="6" rx="1" fill="var(--${dom[c]}-bg)" stroke="var(--${dom[c]})"/>`));return s+"</svg>"}
+function skMap(){let s='<svg viewBox="0 0 300 150" aria-hidden="true"><rect width="300" height="150" rx="4" fill="var(--paper)"/>';for(let k=1;k<5;k++)s+=`<ellipse cx="150" cy="80" rx="${k*34}" ry="${k*18}" fill="none" stroke="var(--wire-2)"/>`;const pl=[190,55],f=[[40,110],[55,100],[48,120],[150,125],[160,118],[250,30],[240,40],[120,90]],su=[[205,40],[178,48],[200,70]];su.forEach(p=>s+=`<path d="M${p[0]},${p[1]} Q${(p[0]+pl[0])/2+6},${(p[1]+pl[1])/2-8} ${pl[0]},${pl[1]}" fill="none" stroke="var(--infra)" stroke-opacity=".5"/>`);f.forEach(p=>s+=`<path d="M${pl[0]},${pl[1]} Q${(p[0]+pl[0])/2},${(p[1]+pl[1])/2-30} ${p[0]},${p[1]}" fill="none" stroke="var(--dist)" stroke-opacity=".5"/>`);su.forEach(p=>s+=`<rect x="${p[0]-3}" y="${p[1]-3}" width="6" height="6" fill="var(--infra-bg)" stroke="var(--infra)"/>`);f.forEach(p=>s+=`<rect x="${p[0]-3}" y="${p[1]-3}" width="6" height="6" fill="var(--dist-bg)" stroke="var(--dist)"/>`);s+=`<rect x="${pl[0]-7}" y="${pl[1]-7}" width="14" height="14" rx="2" fill="var(--prod-bg)" stroke="var(--prod)" stroke-width="1.5"/></svg>`;return s}
+function skMorph(){const L=["biocharDryMassKg","organicCarbonPercent","electricityKwh","gisBoundary"],R=["product_mass","carbon_content","electricity_use","Biochar Application"];return `<div style="display:grid;grid-template-columns:1fr 26px 1fr;gap:6px;align-items:center;font-family:var(--f-mono);font-size:11px">${L.map((l,i)=>`<div class="sk-tile" style="border-left:3px solid var(--prod)">${l}</div><div style="text-align:center;color:var(--ink-3)">→</div><div class="sk-tile" style="border-left:3px solid var(--ver)">${R[i]}</div>`).join("")}</div><div class="sk-tile" style="text-align:center;border:1.5px solid var(--ver)"><b>RM-2026-004, one submission</b></div>`}
+function skBins(){return `<div style="display:grid;gap:6px">${[["Sub-bin 1","100%"],["Sub-bin 2","48%"],["Sub-bin 3","0%"]].map(([n,w])=>`<div style="display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center;font-size:12px"><span>${n}</span><div style="height:18px;border:1.5px solid var(--prod);border-radius:3px;background:var(--prod-bg);position:relative;overflow:hidden"><div style="position:absolute;inset:0 auto 0 0;width:${w};background:repeating-linear-gradient(135deg,var(--prod) 0 3px,transparent 3px 7px);opacity:.7"></div></div></div>`).join("")}<div class="sk-proof"><div><b>400 kg</b>dry drawn</div><div><b>471 kg</b>on the truck at 15%</div></div></div>`}
+function skTiles(items){return `<div class="sk-tiles">${items.map(([t,d,c])=>`<div class="sk-tile"><i class="sk-ico" style="background:var(--${c||"prod"}-bg);border-color:var(--${c||"prod"})"></i><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join("")}</div>`}
+function skTable(rows,cols){return `<table class="sk-table"><thead><tr><th></th>${cols.map(c=>`<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r[0])}</td>${r.slice(1).map(v=>`<td class="${v?"yes":"nop"}">${v?"Yes":"By hand"}</td>`).join("")}</tr>`).join("")}</tbody></table>`}
+function skSteps(items){return `<div class="sk-steps">${items.map(([t,d])=>`<div class="sk-step"><b>${esc(t)}</b><span class="hint">${esc(d)}</span></div>`).join("")}</div>`}
+function skCode(){return `<div class="sk-code"><span class="c">// src/lib/mass-moisture.ts (simplified)</span>
+<span class="k">export function</span> dryMass(wetKg, moisturePct) {
+  <span class="k">return</span> wetKg * (<span class="n">1</span> - moisturePct / <span class="n">100</span>);
+}
+<span class="c">// 300 kg at 10% moisture</span>
+dryMass(<span class="n">300</span>, <span class="n">10</span>) <span class="c">// 270 kg dry biochar</span></div>`}
+function skRoad(items){return `<div class="sk-road">${items.map(([t,s])=>`<div><span>${esc(t)}</span><span class="chip ${s==="Shipped"?"ok":s==="Exploring"?"part":"no"}">${esc(s)}</span></div>`).join("")}</div>`}
+function skProof(items){return `<div class="sk-proof">${items.map(([b,t])=>`<div><b>${esc(b)}</b>${esc(t)}</div>`).join("")}</div>`}
+function skFaq(items){return `<div class="sk-faq">${items.map(t=>`<div><span>${esc(t)}</span><span>+</span></div>`).join("")}</div>`}
+function skMeter(){return `<div class="sk-meter"><b>PR-2026-043, 12 Sep</b><div><span>Grid electricity</span><span>24 kWh</span></div><div><span>Genset diesel</span><span>4 L</span></div><div><span>Startup and plant diesel</span><span>8 L</span></div><div><span>Preprocessing fuel</span><span>2 L</span></div><span class="hint">Maps to grid_electricity_use and fuel_usage_by_volume</span></div>`}
+function skCards(items){return `<div class="sk-tiles">${items.map(([t,d,c])=>`<div class="sk-tile" style="padding:14px;border-top:3px solid var(--${c||"infra"})"><b>${esc(t)}</b><span>${esc(d)}</span></div>`).join("")}</div>`}
+function skGaps(){return `<div class="sk-road">${[["Credit batch has 3 lab samples","Shipped"],["2 deliveries missing a bill of lading","Gap"],["Feedstock type mapped to Isometric catalogue","Shipped"],["Field boundary missing on AP-2026-044","Gap"]].map(([t,s])=>`<div><span>${esc(t)}</span><span class="chip ${s==="Shipped"?"ok":"part"}">${s==="Shipped"?"Ready":"Missing"}</span></div>`).join("")}</div>`}
+function skCta(){return `<div style="display:grid;gap:10px;justify-items:center;padding:12px"><div class="ln m" style="width:60%;height:14px"></div><div class="ln s" style="width:40%"></div><div style="display:flex;gap:8px"><span class="btn sm pri">Primary</span><span class="btn sm">Secondary</span></div></div>`}
+
+const LIVE={chain:["viz-chain","Open live trace"],dense:["viz-dense","Open live graph"],map:["viz-dense","Open live map"],morph:["viz-morph","Open live mapping"],bins:["bins","Open live calculator"]};
+function sketch(b){
+  let h="";
+  switch(b.sk){
+    case "chain":h=skChain();break;case "dense":h=skDense(b.seed||3);break;case "map":h=skMap();break;case "morph":h=skMorph();break;case "bins":h=skBins();break;
+    case "tiles":h=skTiles(b.tiles);break;case "table":h=skTable(b.rows,b.cols);break;case "steps":h=skSteps(b.steps);break;case "code":h=skCode();break;
+    case "road":h=skRoad(b.road);break;case "proof":h=skProof(b.proof);break;case "faq":h=skFaq(b.faq);break;case "meter":h=skMeter();break;case "cards":h=skCards(b.cards);break;case "gaps":h=skGaps();break;case "cta":h=skCta();break;
+    case "codegraph":h=skCode()+skChain();break;
+  }
+  const live=LIVE[b.sk==="codegraph"?"chain":b.sk];
+  return `<div class="sk">${h}${live?`<button type="button" class="btn sm sk-live" data-live="${live[0]}" data-view="${b.sk==="map"?"map":""}">${live[1]}</button>`:""}</div>`;
+}
+
+/* ---------- versions content ---------- */
+const FEATURES6=[["Bins and stock","FIFO split bins, pro-rata mix bins, full movement history","prod"],["Dry and wet mass","Moisture at every step; dry biochar carried downstream","prod"],["Feedstock and formulations","Your own feedstock types and blends with compost, manure or lime","infra"],["Upstream records","Deliveries by supplier with mass, moisture, GPS and haul distance","infra"],["Energy per run","Electricity and diesel, mapped to registry components","prod"],["Lab samples","Organic carbon, H/C org and R0 per credit batch","ver"]];
+const ROADMAP=[["Document recognition for weighbridge tickets and lab reports","Exploring"],["Live reactor readings","Exploring"],["Open API and MCP for other tools and LLMs","Exploring"]];
+const OSS_CTA={sk:"proof",proof:[["MIT","licence"],["Public","repo on GitHub"],["Self-host","or ask us to host"]]};
+const VERSIONS=[
+ {id:"v1",name:"The trace",lead:"The chain of custody you can click",reader:"Carbon managers, verifiers, buyers",visual:"Live end-to-end trace",risk:"Operators may not see themselves in it",
+  pitch:"Lead with the one thing nobody else shows: a credit you can walk back to the truck that brought the wood. Features come after the proof.",
+  blocks:[
+   {name:"Hero with live trace",hero:1,sk:"chain",h:"Every credit, traced back to the truck that brought the wood.",s:"noma records biochar production from feedstock delivery to field application. Click any record to see everything it came from and everything it became.",cta:["Trace a sample credit","View on GitHub"],why:"The strongest gap in the category. Competitors show static icon rows; Mangrove's batch map is the closest and it's a mock-up.",from:"PostHog (interactive demo on sample data), Mangrove (sample batch id in the hero)"},
+   {name:"Dense graph",sk:"dense",h:"Real plants are messy. The trace still holds.",s:"Split bins, mix bins, several deliveries per run. Hover any square and noma follows dry biochar through every split and merge.",why:"Answers the obvious doubt: does this work beyond a clean demo chain?",from:"dbt and Dagster lineage (focus on the neighbourhood)"},
+   {name:"Map",sk:"map",h:"Same records, on the map.",s:"Suppliers, the plant and every field where biochar went into the soil, with haul distances from the record.",why:"Makes transport and application tangible for non-technical readers.",from:"flowmap.blue (muted base, highlighted flows)"},
+   {name:"Feature grid",sk:"tiles",tiles:FEATURES6,h:"What noma keeps track of",s:"Six things a plant records every week. Each one feeds the trace above.",why:"Covers your feature list in one scannable block without a section each.",from:"Katana capability grid"},
+   {name:"Registry mapping",sk:"morph",h:"Your records, in the registry's shape.",s:"noma maps production, transport and lab data onto Isometric's data model and bundles each removal into one submission.",why:"Closes the story: trace, then submit.",from:"Integration visuals in n8n and Tulip"},
+   {name:"Open source",...OSS_CTA,h:"Open source, MIT licensed.",s:"Read how every number is calculated. Run it on your own server, or ask us to host it.",why:"Verifiers trust code they can read. Nobody else offers it.",from:"Plausible, n8n"},
+   {name:"Roadmap",sk:"road",road:ROADMAP,h:"What we're exploring next",s:"Not built yet. We'll say so until it is.",why:"Your future features, labelled honestly so they don't read as shipped.",from:"Public roadmaps (Cal.com, PostHog)"},
+   {name:"Closing call to action",center:1,sk:"cta",h:"See a full trace in the demo.",s:"A read-only demo plant with six weeks of made-up data.",cta:["Open the demo","Talk to us"],why:"Depends on Q2 and Q11: is there a public demo?",from:"Plausible (View live demo)"}]},
+ {id:"v2",name:"Plant floor",lead:"Operations first, credits follow",reader:"Plant operators and site managers",visual:"Bin and dry-mass calculator",risk:"Buyers and registries may bounce before the trace",
+  pitch:"Talk to the people who do the weighing. Nobody in the category does. Spreadsheets are the thing we replace, so name them.",
+  blocks:[
+   {name:"Hero with bin calculator",hero:1,sk:"bins",h:"Built for the people who weigh the biochar.",s:"Deliveries, bins, runs and dispatches, entered once on the plant floor. noma does the dry-mass accounting while you work.",cta:["Try the bin calculator","Book a walkthrough"],why:"Operator tooling is the second clear gap. A working calculator proves it faster than prose.",from:"Katana (\"Know your stock\"), Tulip (weigh and dispense scenario)"},
+   {name:"A day at the plant",sk:"steps",steps:[["Delivery in","Weigh, moisture, supplier"],["Production run","Feed, output, energy"],["Into the bin","Layer by layer"],["Blend a product","Your formulation"],["Dispatch","Departure moisture sets the draw"]],h:"A day at the plant, as noma sees it",s:"Five steps, each one a short form. The chain of custody builds itself from them.",why:"The real sequence of work, so numbering means something.",from:"Cal.com three steps, Sourcemap numbered method"},
+   {name:"Spreadsheet or noma",sk:"table",cols:["Spreadsheet","noma"],rows:[["Which delivery ended up in which field",0,1],["Dry mass after a moisture change",0,1],["Oldest-first draws across sub-bins",0,1],["Evidence attached to each step",0,1],["Registry format",0,1]],h:"What changes when you leave the spreadsheet",s:"Same records you keep today. noma links them and does the arithmetic.",why:"Names the real competitor without naming companies.",from:"Katana vs spreadsheets"},
+   {name:"Feedstock and formulations",sk:"cards",cards:[["Feedstock types","Forestry waste, crop residues, your own list. Each mapped to the registry's catalogue.","infra"],["Formulations","Biochar with compost, manure, lime or minerals. Ingredients tracked, never submitted.","dist"]],h:"Your feedstock, your recipes",s:"Set up the feedstock you buy and the products you make.",why:"Covers \"organize feedstock types and custom formulations\".",from:""},
+   {name:"Energy",sk:"meter",h:"Meter readings, filed with the run.",s:"Electricity and diesel per production run. noma maps them to the registry's energy and fuel components.",why:"Your \"easily read energy readings\". Today it is manual entry per run, so no \"live\" wording.",from:""},
+   {name:"Trace",sk:"dense",seed:5,h:"When the verifier asks where it came from",s:"Every draw and every blend is linked. Pick any bag in the field and walk it back.",why:"Brings the trace in as the payoff for good plant data.",from:""},
+   {name:"Registry",sk:"morph",h:"The submission comes from the same records.",s:"No second spreadsheet for the registry. noma bundles each removal for Isometric.",why:"Short, because the reader here is not the carbon manager.",from:""},
+   {name:"Open source and CTA",center:1,sk:"cta",h:"Free to run. Built with a working plant in Tanzania.",s:"MIT licensed. Self-host it or ask us to set it up.",cta:["Book a walkthrough","View on GitHub"],why:"DEC as the reference is the operator's proof. Needs DEC's OK (Q17).",from:"Biochar App (built by producers, for producers)"}]},
+ {id:"v3",name:"Open by default",lead:"Code you can read is the trust signal",reader:"Verifiers, technical buyers, funders",visual:"Code beside the trace",risk:"Sounds like a developer tool to operators",
+  pitch:"Open source is the position nobody holds. Make it the headline and let verifiability carry the trust that others buy with logos.",
+  blocks:[
+   {name:"Hero, code and trace",hero:1,sk:"codegraph",h:"Carbon removal data you can read, run and check.",s:"noma is an open-source dMRV for biochar. The code that turns kilograms into credits is public, so producers and verifiers can check every number.",cta:["Read the code","Open the demo"],why:"Plausible and n8n show that \"verify it yourself\" works as a hero.",from:"Plausible, n8n (\"Read the source that earned them\")"},
+   {name:"Read the math",sk:"code",h:"Every number has a line of code behind it.",s:"Dry mass, moisture, FIFO draws, transport tonne-km. Each calculation links to its source file.",why:"Turns open source from a badge into something a verifier uses.",from:"Supabase docs routing"},
+   {name:"Run it yourself or hosted",sk:"cards",cards:[["Run it yourself","Postgres and Next.js. Docs on GitHub. Free under MIT.","infra"],["We host it","Set up, updates when protocols change, support. Talk to us.","dist"]],h:"Your server or ours",s:"Same code either way. Your data stays yours.",why:"Only works once the business model is chosen (Q3). Hide the right card until then.",from:"n8n (\"on your infrastructure or ours\"), Supabase (no lock-in)"},
+   {name:"Trace",sk:"chain",h:"Every record linked, from delivery to removal",s:"Click through a sample chain.",why:"Still the best demo, one block down.",from:""},
+   {name:"Feature grid",sk:"tiles",tiles:FEATURES6,h:"What's in the box",s:"Built with and for a working biochar plant.",why:"",from:""},
+   {name:"Roadmap in the open",sk:"road",road:ROADMAP,h:"Roadmap in the open",s:"Every planned feature is a GitHub issue you can follow or comment on.",why:"Future features become an invitation instead of a promise.",from:"PostHog, Cal.com"},
+   {name:"Who's behind it",sk:"cards",cards:[["Built with a working plant","Dark Earth Carbon, Mafinga, Tanzania","prod"],["Checked against the protocols","Isometric Biochar, Energy Use, Transportation modules","ver"],["Made by MAJI","Design and engineering, Zurich","infra"]],h:"Who's behind noma",s:"",why:"Credibility without a logo wall. Needs DEC and REPIC sign-off (Q17).",from:""},
+   {name:"Closing call to action",center:1,sk:"cta",h:"Star it, fork it, or talk to us.",s:"",cta:["View on GitHub","Talk to us"],why:"",from:""}]},
+ {id:"v4",name:"Registry-ready",lead:"Plant records in, registry submission out",reader:"Carbon managers and project developers",visual:"Schema mapping animation",risk:"Overclaims while production submission is blocked",
+  pitch:"Sell the payoff. Carbon managers spend weeks assembling submissions; noma assembles them from records already kept. Strongest commercial story, weakest on today's facts.",
+  blocks:[
+   {name:"Hero with schema mapping",hero:1,sk:"morph",h:"From plant records to registry submission.",s:"noma maps your production, transport and lab records onto Isometric's data model, checks what's missing, and bundles each removal into one submission.",cta:["See the mapping","Talk to us"],why:"Your \"certifier connection\" idea as the lead. Only honest once a production submission has gone through (Q5, Q16).",from:"Tulip (machine data meets enterprise action)"},
+   {name:"Readiness check",sk:"gaps",h:"Know what's missing before you submit.",s:"noma checks each removal against the registry's rules and lists the gaps, record by record.",why:"The readiness gaps exist in the product; they make a strong, concrete block.",from:"Sourcemap (compliance as structure)"},
+   {name:"What goes into a submission",sk:"tiles",tiles:[["Sources and evidence","Weighbridge tickets, bills of lading, lab reports","ver"],["Production batches","From credit batches","prod"],["Datapoints","Mass, energy, fuel, transport tonne-km","prod"],["Biochar applications","With field boundaries","dist"],["Measurement samples","Replicates per credit batch","ver"],["GHG entry","Built per removal","ver"]],h:"What goes into a submission",s:"Everything Isometric asks for, from the records you already keep.",why:"Concrete list beats \"automated reporting\".",from:""},
+   {name:"Trace",sk:"chain",h:"Every datapoint points back to its record.",s:"Open a datapoint, see the run, the bin, the delivery and the ticket behind it.",why:"",from:""},
+   {name:"Transport on the map",sk:"map",h:"Transport emissions from real routes",s:"Haul distances come from the record and the route, with the source of each distance kept.",why:"Transport is a registry module; the map makes it visible.",from:""},
+   {name:"Adapter",sk:"cards",cards:[["Isometric","Built first. Tested in the Isometric sandbox.","ver"],["Other registries","Not started. The data model is registry-neutral.","infra"]],h:"One adapter today",s:"Built around Isometric's model. Other registries come when a producer needs them.",why:"The honest version of \"adapter\". Multi-registry is not built (see Brief).",from:""},
+   {name:"Open source",...OSS_CTA,h:"Open source, so your verifier can check the math.",s:"",why:"",from:""},
+   {name:"Closing call to action",center:1,sk:"cta",h:"Bring your next removal to noma.",s:"",cta:["Talk to us","View on GitHub"],why:"",from:""}]},
+ {id:"v5",name:"Three doors",lead:"Short page, one door per role",reader:"Everyone, routed by role",visual:"Map of one chain",risk:"Thin on proof; depends on the pages behind each door",
+  pitch:"The simplest, most precise version. One sentence, three doors, one visual, the facts. Everything else lives one click deeper.",
+  blocks:[
+   {name:"Hero with three doors",hero:1,sk:"cards",cards:[["I run a plant","Bins, moisture, dry mass, energy per run","prod"],["I manage credits","Trace, readiness check, Isometric submission","ver"],["I verify","Evidence per step, open code, full trail","infra"]],h:"Open-source dMRV for biochar.",s:"One record from feedstock delivery to carbon removal. Pick where you start.",why:"Three real audiences, three short paths. Keeps the home page short.",from:"Provenance (\"I'm a Brand / I'm a Retailer\"), Sylvera (persona routes)"},
+   {name:"One chain on the map",sk:"map",h:"From sawmill to coffee field",s:"Hover a field to see where its biochar came from.",why:"One strong visual instead of many small ones.",from:""},
+   {name:"Facts strip",sk:"proof",proof:[["Mafinga","Tanzania, first site"],["1,800 t","biochar per year capacity"],["MIT","open source"],["Isometric","protocols built in"]],h:"",s:"",why:"Real numbers need DEC's approval (Q8). No empty tiles.",from:"Provenance stats row, Puro.earth"},
+   {name:"Roadmap",sk:"road",road:ROADMAP,h:"Coming next",s:"",why:"",from:""},
+   {name:"FAQ",sk:"faq",faq:["Is noma a registry?","Who owns the data?","Can I host it myself?","Which registries does it support?","What does it cost?"],h:"Questions",s:"",why:"Answers the objections plainly. \"Is noma a registry\": no, registries certify credits, noma prepares the data.",from:"Cal.com FAQ"},
+   {name:"Closing call to action",center:1,sk:"cta",h:"Start with a walkthrough.",s:"",cta:["Book a walkthrough","View on GitHub"],why:"",from:""}]}
+];
+
+/* ---------- persistence ---------- */
+const state={answers:{},versions:{},priorities:{},notes:{}};
+let db=null;
+const saveEl=$("#save");
+function setSave(s,msg){saveEl.dataset.s=s;saveEl.querySelector("span").textContent=msg}
+try{const raw=localStorage.getItem("noma-lp-state");if(raw){const o=JSON.parse(raw);for(const k in state)Object.assign(state[k],o[k]||{})}}catch(e){}
+function local(){try{localStorage.setItem("noma-lp-state",JSON.stringify(state))}catch(e){}}
+const writing={},pending={};
+async function flush(col,id){
+  const key=col+"/"+id;
+  if(writing[key]){pending[key]=true;return}
+  writing[key]=true;
+  try{await db.doc(key).set(Object.assign({},state[col][id],{updatedAt:new Date().toISOString()}));setSave("saved","Saved "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}))}
+  catch(e){setSave("error",e&&e.code==="invalid_argument"?"You can't edit this copy":"Not saved, try again")}
+  writing[key]=false;
+  if(pending[key]){pending[key]=false;flush(col,id)}
+}
+const timers={};
+function save(col,id,patch,delay){
+  state[col][id]=Object.assign({},state[col][id]||{},patch);local();
+  if(!db)return;
+  clearTimeout(timers[col+id]);
+  if(delay)timers[col+id]=setTimeout(()=>flush(col,id),delay);else flush(col,id);
+}
+(async()=>{
+  let cap=null;
+  try{cap=window.claude&&window.claude.use?await window.claude.use("db"):null}catch(e){cap=null}
+  if(!cap){setSave("off","Saving in this browser only");return}
+  db=cap;setSave("on","Saving for Claude");
+  ["answers","versions","priorities","notes"].forEach(col=>{
+    db.collection(col).onSnapshot(snap=>{
+      snap.docs.forEach(d=>{if(d.exists){const v=Object.assign({},d.data());delete v.updatedAt;state[col][d.id]=v}});
+      local();refresh(col);
+    },()=>setSave("error","Live sync stopped"));
+  });
+})();
+function refresh(col){if(col==="answers")renderAllQuestions();if(col==="versions"){renderVersion();renderVnav()}if(col==="priorities")renderPrio();if(col==="notes"){const t=$("#general-note");if(document.activeElement!==t)t.value=(state.notes.general||{}).text||""}}
+
+/* ---------- versions render ---------- */
+let curV=VERSIONS[0].id;
+try{curV=localStorage.getItem("noma-lp-v")||curV}catch(e){}
+const VERD={base:"Use as base",parts:"Take parts",drop:"Drop"};
+$("#compare").innerHTML=VERSIONS.map((v,i)=>`<tr><td><b>${i+1}. ${esc(v.name)}</b></td><td>${esc(v.lead)}</td><td>${esc(v.reader)}</td><td>${esc(v.visual)}</td><td>${esc(v.risk)}</td></tr>`).join("");
+function renderVnav(){
+  $("#vnav").innerHTML=VERSIONS.map((v,i)=>{const st=state.versions[v.id]||{};const kept=(st.keep||[]).length;return `<button class="vpill" role="tab" aria-selected="${v.id===curV}" data-v="${v.id}"><span><b>${i+1}. ${esc(v.name)}</b></span><small>${esc(v.lead)}</small><span class="vd">${st.verdict?esc(VERD[st.verdict]):"No verdict yet"}${kept?`, ${kept} blocks kept`:""}</span></button>`}).join("");
+  $$("#vnav .vpill").forEach(b=>b.addEventListener("click",()=>{curV=b.dataset.v;try{localStorage.setItem("noma-lp-v",curV)}catch(e){}renderVnav();renderVersion()}));
+}
+function renderVersion(){
+  const v=VERSIONS.find(x=>x.id===curV)||VERSIONS[0],st=state.versions[v.id]||{},keep=new Set(st.keep||[]);
+  const noteFocused=document.activeElement&&document.activeElement.id==="v-note";
+  if(noteFocused)return;
+  const idx=VERSIONS.indexOf(v)+1;
+  $("#version").innerHTML=`<div class="vhead"><div class="stack"><div class="label">Version ${idx} of 5</div><h2>${esc(v.name)}</h2><p class="sub">${esc(v.pitch)}</p><p class="hint">Written for: ${esc(v.reader)}. Main risk: ${esc(v.risk)}.</p></div>
+   <div class="box verdict"><div class="label">Your verdict</div><div class="seg" role="group" aria-label="Verdict" id="v-verdict">${Object.entries(VERD).map(([k,l])=>`<button type="button" data-k="${k}" aria-pressed="${st.verdict===k}">${l}</button>`).join("")}</div>
+   <label for="v-note" class="hint">Notes on this version</label><textarea id="v-note">${esc(st.note||"")}</textarea></div></div>
+   <div class="wf-list" style="margin-top:22px">${v.blocks.map((b,i)=>{const bid=v.id+"-"+i;return `<div class="wf-block${b.hero?" hero":""}">
+     <div class="wf-page${b.center?" center":""}${(b.sk==="tiles"||b.sk==="cards"||b.sk==="steps"||b.sk==="table"||b.sk==="proof"||b.sk==="road"||b.sk==="faq")&&!b.hero?" stacked":""}">
+       ${b.h||b.s||b.cta?`<div class="wf-copy">${b.h?`<h3>${esc(b.h)}</h3>`:""}${b.s?`<p>${esc(b.s)}</p>`:""}${b.cta?`<div class="wf-ctas"><span class="btn pri">${esc(b.cta[0])}</span><span class="btn">${esc(b.cta[1])}</span></div>`:""}</div>`:""}
+       ${b.sk==="cta"?"":`<div class="wf-sketch">${sketch(b)}</div>`}
+     </div>
+     <aside class="wf-note"><div class="n"><b>${esc(b.name)}</b></div>${b.why?`<p>${esc(b.why)}</p>`:""}${b.from?`<p class="from">Borrowed from: ${esc(b.from)}</p>`:""}
+       <label class="keep"><input type="checkbox" data-bid="${bid}" ${keep.has(bid)?"checked":""}> Keep this block</label></aside></div>`}).join("")}</div>`;
+  $$("#v-verdict button").forEach(b=>b.addEventListener("click",()=>{const cur=(state.versions[v.id]||{}).verdict;save("versions",v.id,{verdict:cur===b.dataset.k?null:b.dataset.k});renderVersion();renderVnav()}));
+  $("#v-note").addEventListener("input",e=>save("versions",v.id,{note:e.target.value},800));
+  $$("#version .keep input").forEach(c=>c.addEventListener("change",()=>{const k=new Set((state.versions[v.id]||{}).keep||[]);c.checked?k.add(c.dataset.bid):k.delete(c.dataset.bid);save("versions",v.id,{keep:[...k]});renderVnav()}));
+  $$("#version [data-live]").forEach(b=>b.addEventListener("click",()=>{const tgt=b.dataset.live==="viz-morph"?"morph":b.dataset.live;goVisual(tgt==="bins"?"bins":tgt);if(b.dataset.view==="map"){const mb=$('#viz-dense [data-view="map"]');mb&&mb.click()}}));
+}
+renderVnav();renderVersion();
+
+/* ---------- priorities ---------- */
+const LEVELS=[["hero","Hero"],["section","Section"],["mention","Mention"],["roadmap","Upcoming"],["out","Leave out"]];
+const PRIO=[
+ ["Your list",[
+  ["trace","End-to-end traceability","ok","Graph, map, Sankey and per-application trail.","hero"],
+  ["map","Traceability on the map","ok","Needs map and routing keys to look good.","section"],
+  ["bins","Bins: FIFO, split and mix","ok","Mix bins landed today. FIFO for biochar and product bins.","section"],
+  ["formulations","Feedstock types and formulations","ok","Blend ingredients never go to the registry.","mention"],
+  ["mass","Live dry and wet mass","ok","Calculated as you type; dry mass carried downstream.","mention"],
+  ["upstream","Upstream feedstock and ingredients","ok","Supplier, mass, moisture, GPS, haul distance.","mention"],
+  ["energy","Energy readings","part","Manual per run. \"Easily read\" is fair, \"live\" is not.","mention"],
+  ["certifier","Certifier connection (Isometric)","part","Sandbox-tested. Production submission blocked.","section"],
+  ["adapter","Adapter for other registries","no","Only Isometric exists. \"More registries later.\"","mention"],
+  ["oss","Open source","ok","MIT, public repo.","section"]]],
+ ["Found in the code, not on your list",[
+  ["gis","Field boundaries per application","ok","GeoJSON boundary and evidence method per field.","mention"],
+  ["samples","Lab samples and durability","ok","Organic carbon, H/C org, R0; 200 and 1000 year tiers.","mention"],
+  ["evidence","Evidence on every step","ok","Weighbridge tickets, bills of lading, lab reports, geotagged photos.","mention"],
+  ["readiness","Readiness check before submit","ok","Lists registry gaps per removal.","mention"],
+  ["ledger","Submission journal","ok","Every outbound submission recorded, with drift checks.","out"],
+  ["sankey","Mass balance Sankey with losses","ok","Dry kg in, losses out, no CO2e.","mention"],
+  ["plausibility","Plausibility warnings","ok","Rule-based, advisory, acknowledged.","out"],
+  ["tenancy","Organisations, facilities and roles","ok","Owner, Admin, Member; data scoped per organisation.","out"],
+  ["ghgpdf","GHG statement report (PDF)","part","One generated report; no general export.","out"]]],
+ ["Future, not built",[
+  ["ocr","Document recognition","no","Files are stored, never read.","roadmap"],
+  ["pyro","Live pyrolysis readings","no","CSV can be attached; nothing streams.","roadmap"],
+  ["mcp","MCP and open API for LLMs","no","No public API exists yet.","roadmap"],
+  ["telegram","Telegram data entry","no","Nothing planned in the repo.","out"],
+  ["ai","AI-assisted checks","no","Rule-based warnings exist, no AI.","out"],
+  ["offline","Offline and mobile field app","no","No offline support today.","out"],
+  ["i18n","Other languages (Swahili, German)","no","English only at launch (round 1).","out"]]]
+];
+const LVNAME=Object.fromEntries(LEVELS);
+function prioLevels(){return Object.assign({},(state.priorities.board||{}).levels||{})}
+function setLevels(L){save("priorities","board",{levels:L});renderPrio()}
+function renderPrio(){
+  const L=prioLevels(),counts={};LEVELS.forEach(([k])=>counts[k]=0);let set=0,total=0;
+  PRIO.forEach(([,rows])=>rows.forEach(r=>{total++;if(L[r[0]]){counts[L[r[0]]]++;set++}}));
+  $("#p-sum").innerHTML=`<span><b>${set}</b> of ${total} set</span>`+LEVELS.map(([k,l])=>`<span>${l}: <b>${counts[k]}</b></span>`).join("");
+  $("#p-accept").hidden=set===total;
+  $("#prio").innerHTML=PRIO.map(([g,rows])=>`<div class="p-group">${esc(g)}</div>`+rows.map(([id,t,s,w,sug])=>{const cur=L[id];return `<div class="p-row"><div><div class="t">${esc(t)}</div><div class="p-sug">Suggested: ${esc(LVNAME[sug])}</div></div><div>${CHIP[s]}</div><div class="w">${esc(w)}</div><div class="seg lv" role="group" aria-label="Level for ${esc(t)}">${LEVELS.map(([k,l])=>`<button type="button" class="${k===sug?"sug":""}" data-id="${id}" data-k="${k}" aria-pressed="${cur===k}">${l}</button>`).join("")}</div></div>`}).join("")).join("");
+  $$("#prio .seg button").forEach(b=>b.addEventListener("click",()=>{const L2=prioLevels();if(L2[b.dataset.id]===b.dataset.k)delete L2[b.dataset.id];else L2[b.dataset.id]=b.dataset.k;setLevels(L2)}));
+}
+$("#p-accept").addEventListener("click",()=>{const L=prioLevels();PRIO.forEach(([,rows])=>rows.forEach(r=>{if(!L[r[0]])L[r[0]]=r[4]}));setLevels(L)});
+renderPrio();
+
+/* ---------- grill ---------- */
+const QS=[
+ {g:"Who and why",id:"q1",t:"Who is the one reader the page is written for?",b:"Every other decision bends around this. A page for operators and a page for verifiers share almost no copy.",o:["Plant operators and site managers","Carbon managers and project developers at biochar producers","Verifiers and registries","Funders and partners (REPIC, FiBL, investors)"],r:1,rw:"The producer's carbon manager decides to adopt a dMRV, and operators come with it. Verifiers get their own door."},
+ {g:"Who and why",id:"q2",t:"What is the one action the page should drive?",b:"The primary button. Secondary actions can exist but must not compete.",o:["Open a public read-only demo","Book a walkthrough with us","Go to GitHub and read the code","Join a waitlist or newsletter"],r:1,rw:"A walkthrough is the fastest path to a second producer. A public demo needs work first (Q11); make it primary once it exists."},
+ {g:"Who and why",id:"q3",t:"Does the page show how noma makes money?",b:"The business model is still open (dMRV Cloud, Compliance Partner, NewCo). A \"We host it\" card or pricing commits to one.",o:["Say nothing about price or hosting yet","Offer \"self-host free, or talk to us\" without prices","Show hosted plans with prices","Wait: decide the business model before the page"],r:1,rw:"Keeps every option open while telling producers they won't be left alone with a server."},
+ {g:"Who and why",id:"q4",t:"Whose name is on it?",b:"Credibility comes from a working plant, but DEC is also a producer others compete with.",o:["noma, standing alone","noma by MAJI","noma, built by MAJI with Dark Earth Carbon","noma, a Dark Earth Carbon project"],r:2,rw:"The working plant is the proof no competitor has. Keep MAJI as the maker so other producers aren't loading data into a rival's tool."},
+ {g:"Claims",id:"q5",t:"How do we describe the Isometric connection while production submission is blocked?",b:"Today: sandbox-tested, one submission per removal, readiness checks. Not yet: a production submission.",o:["\"Built on Isometric's data model\" with no live claim","\"Tested with the Isometric sandbox\" stated openly","\"Integrated with Isometric\" (reads as live)","Hold the registry section until production works"],r:0,rw:"True today and still strong. Upgrade the wording the day the first production submission goes through."},
+ {g:"Claims",id:"q6",t:"How do we show the \"adapter\" idea when only Isometric exists?",b:"Your brief wants a visual of our schema morphing into the certifier's. Multi-registry is not built.",o:["Show the Isometric mapping only, say more registries later","Show Isometric plus greyed-out Puro and Verra","Drop the adapter framing, just say \"Isometric\"","Build a second adapter before launch"],r:0,rw:"The mapping visual works with one registry. Greyed logos imply partnerships we don't have."},
+ {g:"Claims",id:"q7",t:"How do future features appear?",b:"Document recognition, live pyrolysis, MCP, Telegram and AI checks are all unbuilt. You flagged MCP and Telegram as uncertain.",o:["Undated \"what we're exploring\" list, three items max","Dated roadmap with quarters","Link to GitHub issues only","Leave them off the page"],r:0,rw:"Shows direction without promising dates. Keep MCP and Telegram off until you've checked they're wanted and feasible."},
+ {g:"Claims",id:"q8",t:"Can the page use real DEC numbers?",b:"For example the 1,800 t per year Mafinga capacity, or tonnes traced so far. Project data is client-confidential today.",o:["Yes, with DEC's written OK","Only capacity, no production figures","No real numbers, sample data only"],r:0,rw:"A real number from a real plant is the strongest proof on the page. Ask DEC once, for a fixed list of figures."},
+ {g:"Visuals",id:"q9",t:"What are the trace visuals built from?",b:"The Visuals tab uses purpose-built drawings. The product already has DAG, Map, Sankey and Trail views.",o:["Purpose-built interactive drawings on sample data","Real product screenshots","Embedded live product views from a demo org","Drawings in the hero, screenshots further down"],r:3,rw:"Drawings stay legible at hero size; screenshots lower down prove the product is real."},
+ {g:"Visuals",id:"q10",t:"Real geography on the map, or abstract?",b:"The sketch uses real towns (Mafinga, Mbeya, Njombe) with made-up suppliers and fields.",o:["Real region, made-up points, labelled illustrative","Real region and real DEC points (needs approval)","Abstract map with no real places"],r:0,rw:"Feels grounded without exposing supplier or customer locations."},
+ {g:"Visuals",id:"q11",t:"Will there be a public read-only demo organisation?",b:"Plausible and Grafana show that a live demo beats any screenshot. It needs a seeded org, public read access and upkeep.",o:["Yes, before launch","Yes, after launch","No, walkthroughs only"],r:1,rw:"Worth it, but not on the critical path. The Mafinga seed dataset is a head start."},
+ {g:"Visuals",id:"q12",t:"Same look as the app, or a separate marketing look?",b:"The app has its own system (GT Flexa, purple, rose, orange, warm paper). This artifact uses it.",o:["Same design system as the app","App system, louder: bigger type, more colour","New marketing identity"],r:0,rw:"The product is the proof; the page should look like the thing you'll use."},
+ {g:"Scope",id:"q13",t:"Name competitors?",b:"Katana compares itself to spreadsheets; others build tables against named rivals (Mangrove, Carbonfuture).",o:["Compare against spreadsheets only","Name competitors in a table","No comparison at all"],r:0,rw:"Spreadsheets are what most small producers actually use, and it avoids fights we don't need."},
+ {g:"Scope",id:"q14",t:"Which languages at launch?",b:"The app is English only. Operators in Tanzania may prefer Swahili; funders and MAJI's network read German.",o:["English only","English and Swahili","English and German"],r:0,rw:"One language done well. Revisit when the app itself is translated."},
+ {g:"Scope",id:"q15",t:"One page, or a small site?",b:"Three doors (version 5) needs pages behind each door. Docs could live on GitHub.",o:["One long page, docs on GitHub","Home plus three role pages","Home plus docs site"],r:0,rw:"Ship one precise page first. Role pages come when there's traffic to route."},
+ {g:"Scope",id:"q16",t:"When does the page go live?",b:"Before or after the first production Isometric submission changes what we can claim.",o:["Soon, with honest status wording","After the first production submission","After the first credits are issued"],r:0,rw:"Open source benefits from being visible early. The claims in Q5 keep it honest."},
+ {g:"Scope",id:"q17",t:"Who has to approve names and logos?",b:"DEC, REPIC, FiBL and Isometric could all appear. Each needs a yes.",o:["Ask all four before launch","Text mentions only, no logos","Only DEC, nobody else"],r:1,rw:"Text mentions are accurate and need lighter approval. Add logos as permissions arrive."}
+];
+const QS2=[
+ {g:"Hero",id:"r2q1",t:"Which headline?",b:"The hero sits above the live trace. For carbon managers it should name the outcome they need: a credit they can defend back to its source.",o:["Every credit, traced back to the truck that brought the wood.","Trace every tonne of biochar, from feedstock to credit.","From feedstock delivery to carbon removal, in one record.","Know where every kilogram of biochar came from."],r:0,rw:"A concrete picture only a traceability product can say. The others could sit on any competitor's page."},
+ {g:"Hero",id:"r2q2",t:"What sits next to \"Book a walkthrough\"?",b:"You chose a public demo before launch, so it can be the second button. GitHub is already in the open source block.",o:["Open the demo","View on GitHub","Nothing, one button only"],r:0,rw:"The demo lets a carbon manager check the claim before talking to anyone."},
+ {g:"Hero",id:"r2q3",t:"How do people book the walkthrough?",b:"The page has no backend. A form needs somewhere to send submissions; a booking link does not.",o:["Cal.com booking link","Calendly link","Short contact form (name, company, plant size)","Email address to copy"],r:0,rw:"Open source like noma, no backend to build, and the calendar is the real next step anyway."},
+ {g:"Features",id:"r2q4",t:"Which upcoming features appear in the grid?",b:"The draft shows three. You flagged Telegram and MCP as uncertain in the brief.",o:["Document recognition, live reactor readings, open API and MCP","Those three plus AI checks","All five, including Telegram","Only document recognition and live readings"],r:0,rw:"Three concrete ones. \"AI checks\" needs a sentence on what it checks before it can go on a page."},
+ {g:"Features",id:"r2q8",t:"Which bin visual?",b:"Two new directions in the Visuals tab (D1 and D2). The draft uses the squares.",o:["Squares, matching the trace","Silo and truck","Squares on the page, silo in the demo or docs","Neither, try another direction"],r:0,rw:"One visual language across the page: every square is a record or 10 kg of biochar."},
+ {g:"Features",id:"r2q9",t:"Add the spreadsheet comparison?",b:"From version 2 (Plant floor): five rows, spreadsheet vs noma. You chose spreadsheets as the only comparison in round 1.",o:["Yes, after the feature grid","Yes, but shorter (three rows)","No"],r:0,rw:"It answers \"why not keep our sheet\", which a carbon manager will ask."},
+ {g:"Proof",id:"r2q5",t:"Which logos, and how are they labelled?",b:"You said logos are fine. An Isometric logo next to \"built with\" can read as a partnership or endorsement.",o:["DEC, REPIC, FiBL and Isometric, all as logos","DEC, REPIC and FiBL as logos; Isometric as text (\"Built on Isometric's data model\")","DEC only"],r:1,rw:"Keeps the registry claim exact without borrowing Isometric's brand."},
+ {g:"Proof",id:"r2q10",t:"Which DEC figures do we ask to use?",b:"You chose real numbers with DEC's written OK. Asking once for a fixed list is easier for them.",o:["Capacity (1,800 t a year) and tonnes traced in noma","Capacity only","Capacity, tonnes traced, fields reached, first credits issued"],r:0,rw:"Two figures that are true today. Credits issued can be added the day it happens."},
+ {g:"Proof",id:"r2q7",t:"Which product screenshots sit under the drawings?",b:"The draft has three placeholders.",o:["Traceability DAG, bin history, removal readiness","All four trace views (DAG, Map, Sankey, Trail)","Dashboard, production run form, removal"],r:0,rw:"One screenshot per story beat: trace, bins, registry."},
+ {g:"Proof",id:"r2q6",t:"What goes into the public demo organisation?",b:"It needs data anyone can see.",o:["A made-up plant based on the Mafinga seed","Real DEC data, anonymised","Real DEC data"],r:0,rw:"The seed already runs through real server actions, and nothing confidential leaks."},
+ {g:"Build",id:"r2q11",t:"Where does the page live?",b:"Staging runs on staging.noma.maji.studio. The page and the app need different addresses.",o:["noma.maji.studio, with the app on app.noma.maji.studio","maji.studio/noma","Its own domain"],r:0,rw:"Matches \"noma by MAJI\" and keeps the product name in the address. Check the app's production URL before deciding."},
+ {g:"Build",id:"r2q12",t:"How is it built?",b:"The app is Next.js with the design tokens and GT Flexa already in place.",o:["A public route inside the noma app","A separate small static site reusing noma's tokens and fonts","On MAJI's website CMS"],r:1,rw:"No auth or database coupling, deploys on its own, and the demo stays in the app where it belongs."}
+];
+function renderRound(QS,box,countEl,fillEl){
+  let n=0;QS.forEach(q=>{const a=state.answers[q.id];if(a&&(a.choice!=null||(a.note||"").trim()))n++});
+  countEl.textContent=`${n} of ${QS.length} answered`;fillEl.style.width=(n/QS.length*100)+"%";
+  let lastG="";
+  box.innerHTML=QS.map((q,qi)=>{const a=state.answers[q.id]||{};const gh=q.g!==lastG?`<div class="qgroup">${esc(q.g)}</div>`:"";lastG=q.g;
+   return gh+`<div class="box q" id="${q.id}" style="scroll-margin-top:80px"><div class="q-h"><span class="qn">Q${qi+1}</span><h3>${esc(q.t)}</h3></div><p class="q-body">${esc(q.b)}</p>
+    <div class="q-opts" role="radiogroup" aria-label="${esc(q.t)}">${q.o.map((o,i)=>`<label class="q-opt${a.choice===i?" sel":""}"><input type="radio" name="${q.id}" value="${i}" ${a.choice===i?"checked":""}><span class="ot"><span>${esc(o)}</span>${i===q.r?`<small>Recommended</small>`:""}</span></label>`).join("")}</div>
+    <p class="q-rec"><b>My recommendation:</b> ${esc(q.o[q.r])} ${esc(q.rw)}</p>
+    <label class="hint" for="${q.id}-n">Your own answer or a caveat</label><textarea class="q-note" id="${q.id}-n" data-q="${q.id}">${esc(a.note||"")}</textarea></div>`}).join("");
+  $$("input[type=radio]",box).forEach(r=>r.addEventListener("change",()=>{const q=QS.find(x=>x.id===r.name);save("answers",r.name,{choice:Number(r.value),question:q.t,label:q.o[Number(r.value)]});renderAllQuestions()}));
+  $$(".q-note",box).forEach(t=>{t.addEventListener("input",()=>save("answers",t.dataset.q,{note:t.value,question:QS.find(x=>x.id===t.dataset.q).t},800));t.addEventListener("blur",()=>setTimeout(renderAllQuestions,0))});
+}
+const QS3=[
+ {g:"Walkthrough form",id:"r3q1",t:"Where do form submissions go?",b:"The site is static, so the form needs something to receive it. The app already sends mail through Resend.",o:["A small serverless function on the site that emails the request via Resend","A hosted form service (Formspree, Tally)","An API route inside the noma app"],r:0,rw:"One function, no new vendor, and the landing site stays independent of the app."},
+ {g:"Walkthrough form",id:"r3q2",t:"Which inbox receives the requests?",b:"Write the address in the note if you have one in mind.",o:["A new shared address for noma","An existing MAJI address","Your own address"],r:0,rw:"Survives people changing roles, and DEC can be added to it later."},
+ {g:"Walkthrough form",id:"r3q3",t:"Which fields?",b:"You listed name, company and plant size. Without an email we can't reply, so the draft adds work email.",o:["Name, work email, company, plant size","Those plus an optional message","Those plus which registry they certify with"],r:1,rw:"The optional message catches the context a dropdown can't, and costs nothing if empty."},
+ {g:"Upcoming features",id:"r3q4",t:"What does \"AI checks\" do, in one line?",b:"It needs a concrete sentence to go on the page. Rule-based plausibility warnings already exist; an AI version would extend them.",o:["Flags readings that don't fit before a verifier sees them","Checks uploaded documents against the records they belong to","Answers questions about your plant's data in plain language"],r:0,rw:"Builds on what exists, and it's the check a carbon manager wants most."},
+ {g:"Upcoming features",id:"r3q5",t:"What does the Telegram feature do, in one line?",b:"You weren't sure it's easy to build. The wording should promise as little as possible.",o:["Log deliveries, runs and readings from a Telegram chat","Send a photo of a weighbridge ticket to a Telegram bot","Get alerts in Telegram when something needs attention"],r:0,rw:"The plainest version of what operators would use it for. Photo intake depends on document recognition existing first."},
+ {g:"Proof",id:"r3q6",t:"How is \"tonnes traced\" kept current?",b:"The site is static and separate from the app.",o:["A fixed number, updated by hand when DEC approves a new one","Pulled from the app when the site is built","Pulled live from the app on every visit"],r:0,rw:"DEC signs off each published figure, so a hand-updated number matches the approval step."},
+ {g:"Demo",id:"r3q7",t:"How do visitors get into the demo?",b:"The app has Owner, Admin and Member roles. None is read-only, so a public demo either needs a read-only role or lets visitors edit.",o:["One click into a read-only demo account (build a read-only role first)","A shared Member login on the page, demo data reset every night","Each visitor gets a personal sandbox organisation seeded with the Mafinga data"],r:0,rw:"Safest. A public login that can edit invites junk, and a sandbox per visitor needs sign-up plumbing."},
+ {g:"Demo",id:"r3q8",t:"Launch soon, or wait for the demo?",b:"Round 1 said go live soon, and also that the demo exists before launch. The demo needs Q7's work first, so the two pull apart.",o:["Launch soon without the demo button, add it when the demo is ready","Wait until the demo is ready","Launch soon with the demo button pointing to a \"coming soon\" note"],r:0,rw:"The walkthrough form carries the page on its own. A dead demo button hurts more than a missing one."},
+ {g:"Build",id:"r3q9",t:"Where does the production app run today?",b:"The repo only mentions staging.noma.maji.studio. Moving the app to app.noma.maji.studio changes auth origins and email links.",o:["Not in production yet","Already on noma.maji.studio","Somewhere else (note it)"],r:0,rw:"If it's not live yet, give production app.noma.maji.studio from day one and nothing has to move later."},
+ {g:"Build",id:"r3q10",t:"Where does the site's code live?",b:"A separate static site, reusing noma's tokens and GT Flexa.",o:["A site/ folder in the noma-dmrv repo, deployed as its own Vercel project","A new repo, Maji-Studio/noma-site"],r:0,rw:"Tokens and fonts come from one source, and the open-source repo shows the site too."},
+ {g:"Build",id:"r3q11",t:"Which framework?",b:"The visuals in this page are plain JavaScript and move over as they are.",o:["Astro","Next.js static export","Plain HTML, CSS and JavaScript"],r:0,rw:"Static by default, components for the sections, and no React needed for scripts that are already plain."}
+];
+const SUMMARY=(QS,el)=>{el.innerHTML=QS.map(q=>{const a=state.answers[q.id]||{};const ans=[a.label,a.note].filter(Boolean).join(". ");return `<tr><td>${esc(q.t)}</td><td>${ans?esc(ans):'<span class="hint">Not answered</span>'}</td></tr>`}).join("")};
+function renderAllQuestions(){
+  const act=document.activeElement;if(act&&act.classList&&act.classList.contains("q-note"))return;
+  renderRound(QS3,$("#questions3"),$("#q3-count"),$("#q3-fill"));
+  renderRound(QS2,$("#questions2"),$("#q2-count"),$("#q2-fill"));
+  renderRound(QS,$("#questions"),$("#q-count"),$("#q-fill"));
+  SUMMARY(QS2,$("#r2-sum"));SUMMARY(QS,$("#r1-sum"));
+}
+renderAllQuestions();
+const gn=$("#general-note");gn.value=(state.notes.general||{}).text||"";
+gn.addEventListener("input",()=>save("notes","general",{text:gn.value},800));
+
+/* restore tab */
+mountDraft();
+try{const t=localStorage.getItem("noma-lp-tab2");if(t&&$(`[data-tab="${t}"]`))showTab(t)}catch(e){}
+})();
+</script>
+
+</body></html>
