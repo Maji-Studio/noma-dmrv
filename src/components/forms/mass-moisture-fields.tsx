@@ -186,6 +186,11 @@ interface MassMoistureFieldsProps {
   addedWaterKg?: unknown;
   /** Added-water input (and any companion fields) rendered after the base measurements and before the chart. */
   addedWaterField?: ReactNode;
+  /**
+   * Replaces the moisture input with per-sub-bin readings (a split-bin draw).
+   * `moisturePercent` then carries the draw's overall moisture for the split.
+   */
+  readings?: ReactNode;
   /** Qualifies both labels and the split's dry-mass label ("Biochar", "Feedstock"). */
   materialLabel?: string;
   /** Overrides the wet figure label without changing the input label. */
@@ -215,6 +220,7 @@ export function MassMoistureFields({
   moisturePercent,
   addedWaterKg,
   addedWaterField,
+  readings,
   materialLabel,
   wetSplitLabel,
   drySplitLabel,
@@ -228,7 +234,7 @@ export function MassMoistureFields({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
-      <MoistureField {...moisture} materialLabel={materialLabel} />
+      {readings ? <div className="md:col-span-2">{readings}</div> : <MoistureField {...moisture} materialLabel={materialLabel} />}
       {addedWaterField && (
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-16">
           {addedWaterField}

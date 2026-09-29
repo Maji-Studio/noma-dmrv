@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import {
   formatApplicationDeliveryHelperText,
@@ -68,5 +68,30 @@ describe("application delivery option mass", () => {
     expect(formatApplicationDeliveryHelperText(option)).toBe(
       "Remaining now: 800 kg wet, 775 kg dry biochar",
     );
+  });
+});
+
+describe("application delivery option day", () => {
+  const originalTz = process.env.TZ;
+  afterEach(() => {
+    process.env.TZ = originalTz;
+  });
+
+  it("names the delivery's day on its facility clock, not the viewer's", () => {
+    // 01:30 on May 17 in Dar es Salaam is still May 16 for a New York viewer.
+    process.env.TZ = "America/New_York";
+    const label = formatApplicationDeliveryOptionLabel(
+      delivery({ deliveryDate: new Date("2026-05-16T22:30:00.000Z"), deliveryDay: "2026-05-17" }),
+    );
+    expect(label).toContain("May 17, 2026");
+    expect(label).not.toContain("May 16, 2026");
+  });
+
+  it("falls back to the default facility zone without a facility day", () => {
+    process.env.TZ = "America/New_York";
+    const label = formatApplicationDeliveryOptionLabel(
+      delivery({ deliveryDate: new Date("2026-05-17T02:00:00.000Z"), deliveryDay: null }),
+    );
+    expect(label).toContain("May 17, 2026");
   });
 });

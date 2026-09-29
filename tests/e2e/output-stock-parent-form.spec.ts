@@ -4,6 +4,7 @@ import {
   readOutputStockBrowserFixture,
   seedOutputStockBrowserFixture,
 } from "./helpers/output-stock-browser-fixture";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const FLOW_TIMEOUT_MS = 180_000;
 const LOSS_REASON = "E2E parent form spill";
@@ -19,7 +20,7 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await page.getByRole("button", { name: "Record loss", exact: true }).click();
   await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill("120");
-  await page.locator("#stock-moisture").fill("30");
+  await fillStockMoisture(page, "stock", "30");
   await page.locator("#stock-reason").fill(LOSS_REASON);
   await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -33,7 +34,7 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await selectEntity(page, "Order", fixture.order.id, fixture.order.code);
   await page.locator("#storageLocationId").selectOption(fixture.bin.id);
   await page.locator("#deliveredWetMassKg").fill("10");
-  await page.locator("#moistureContentPercent").fill("30");
+  await fillStockMoisture(page, "delivery", "30");
   const create = page.getByRole("button", { name: "Create Delivery", exact: true });
   await expect(create).toBeEnabled();
   // The preview (and its history trigger) is a Detailed-only surface now.

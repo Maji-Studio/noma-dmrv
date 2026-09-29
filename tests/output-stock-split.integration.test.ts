@@ -6,6 +6,7 @@ import { binMovements, deliveries, outputStockAllocations, storageLocations } fr
 import { createApplication } from "@/data-access/applications";
 import { getDeliveryAllocationProvenance } from "@/data-access/delivery-allocation-provenance";
 import { createDelivery } from "@/data-access/delivery-output-writes";
+import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { SafeError } from "@/lib/errors";
 import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct, STOCK_DATE, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
@@ -95,6 +96,26 @@ describe("split bin draws in PostgreSQL", () => {
       deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: 375.001, sources, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
     const shares = await getDeliveryAllocationProvenance(f.ctx, [delivery.id]);
     expect(shares.reduce((sum, share) => sum + share.dryMassKg, 0)).toBeCloseTo(300, 6);
+    // P1's solids round to zero grams, but its wet gram and reading are still saved and traced.
+    const p1Rows = (await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id)))
+      .filter(row => row.biocharProductId === f.p1.id);
+    expect(p1Rows).toHaveLength(1);
+    expect(Number(p1Rows[0].wetMassKg)).toBeCloseTo(0.001, 6);
+    expect(p1Rows[0].basisSnapshot).toMatchObject({ policy: "operator_order", order: [f.p2.id, f.p1.id], readingPercent: "60" });
+    const p1Shares = shares.filter(share => share.biocharProductId === f.p1.id);
+    expect(p1Shares.length).toBeGreaterThan(0);
+    expect(p1Shares.reduce((sum, share) => sum + share.wetMassKg, 0)).toBeCloseTo(0.001, 6);
+  });
+
+  it("shows a split draw's saved sub-bins and readings in the bin history", async () => {
+    const f = await splitBin();
+    const sources = [{ layerId: f.p2.id, moisturePercent: 20 }, { layerId: f.p1.id, moisturePercent: 25 }];
+    const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 500, sources });
+    const entry = (await getOutputStockHistory(f.ctx, f.bin.id)).find(h => h.id === loss.movementId);
+    expect(entry?.sources).toEqual(sources);
+    // The entry's one moisture is the draw's overall 1 − solids ÷ wet = 1 − 393.75 ÷ 500.
+    expect(entry?.moisturePercent).toBe(21.25);
+    expect(entry?.allocations.map(a => [a.layerId, a.dryMassKg]).sort()).toEqual([[f.p1.id, 93.75], [f.p2.id, 300]].sort());
   });
 
   it("records oldest-first draws as FIFO with their one reading", async () => {

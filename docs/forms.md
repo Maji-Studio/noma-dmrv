@@ -188,12 +188,19 @@ startTime: formatLocalDateTime(new Date()), // "2026-03-03T14:30" → datetime-l
 `toDateInputValue`, `parseLocalDateString`, and the facility-timezone display helpers (`formatFacilityTime`, `formatFacilityDate`, `formatTimezoneLabel` — all timestamps are stored UTC) also live in `src/lib/date-utils.ts`.
 
 **Output stock event times** (product placed, delivery, loss, count) are entered
-and shown on the facility clock, like production runs. Use `EventTimeInput`
-(`src/components/forms/event-time-input.tsx`): its value is an ISO instant, it
-takes the facility `timeZone`, and it refuses a time that falls in a DST gap or
-fold. `useFacilityClock(facilityId)` gives the zone and the "Facility time: …"
-cue for `helperText`; `stockEventInstantSchema()` validates the wire value; and
-`formatFacilityDateTime(value, timeZone)` displays it.
+and shown on the facility clock, like production runs
+([output-stock.md](./output-stock.md)). The contract:
+
+- `EventTimeInput` (`src/components/forms/event-time-input.tsx`) is the only
+  picker. Its RHF value is an ISO 8601 UTC instant and it takes the facility
+  `timeZone`. A time skipped or repeated by a daylight-saving change is refused,
+  not shifted: the field value stays empty, the typed time stays visible, and
+  the input says why under itself (`eventTimeRefusal`).
+- `useFacilityClock(facilityId)` (`src/hooks/use-facility-context.ts`) gives
+  `{ timeZone, hint }`; pass `hint` as the `FormField` `helperText`.
+- `stockEventInstantSchema()` (`@/schemas/helpers`) validates the wire value.
+- Read surfaces format it on the same clock; see
+  [design-system.md](./design-system.md#date-and-time-display).
 
 ## Components
 

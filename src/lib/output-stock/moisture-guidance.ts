@@ -41,8 +41,9 @@ export function moistureReadingGuidance(estimate: MoistureFieldEstimate | null, 
   return {
     helperText: estimated === null ? undefined : `Estimated moisture: ${formatMoisturePercent(estimated)}`,
     basisText: estimated === null ? undefined : estimate?.basisText ?? undefined,
+    // Says which way the reading is off, in points shown like the figures ("12", not "12.0").
     warning: gap !== null && gap > MOISTURE_READING_WARNING_POINTS
-      ? `This reading is ${gap.toFixed(POINT_DIGITS)} points from the estimated ${formatMoisturePercent(estimated)}. Check the reading before you save.`
+      ? `${formatMoisturePercent(reading as number)} is ${String(gap)} points ${(reading as number) > estimated! ? 'above' : 'below'} the ${formatMoisturePercent(estimated)} estimate. Check the reading before you save.`
       : undefined,
   };
 }

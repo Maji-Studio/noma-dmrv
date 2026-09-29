@@ -12,7 +12,7 @@
 
 import { format, isValid, parseISO } from "date-fns";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatFacilityTime, parseLocalDateString } from "@/lib/date-utils";
+import { formatFacilityTime, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
@@ -55,11 +55,6 @@ export function formatDate(value: DateValue): string {
   return date ? format(date, DATE_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
-const SHORT_MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-] as const;
-
 /**
  * Format an already-resolved `YYYY-MM-DD` day string for display ("Aug 1, 2026")
  * WITHOUT reparsing it into an instant — the parts are read directly, so a
@@ -96,6 +91,16 @@ export function formatFacilityDateTime(value: Date | string | null | undefined, 
   if (!value) return MISSING_VALUE.notRecorded;
   const date = typeof value === "string" ? new Date(value) : value;
   return isValid(date) ? formatFacilityTime(date, timeZone, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+}
+
+/**
+ * Format an instant's calendar day ("Sep 15, 2026") on a facility's wall
+ * clock, for a list column that shows a stock event's day without its time.
+ */
+export function formatFacilityDay(value: Date | string | null | undefined, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
 /** Format an instant in a facility's timezone with its numeric UTC offset. */

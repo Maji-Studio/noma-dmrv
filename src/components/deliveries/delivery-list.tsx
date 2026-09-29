@@ -47,10 +47,10 @@ import {
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
 import {
-  formatDate,
   formatDateRange,
   formatDistanceKm,
   formatFacilityDateTime,
+  formatFacilityDay,
   formatMassKg,
 } from "@/lib/format-utils";
 import {
@@ -104,6 +104,7 @@ function deliveryDetailToRelations(
 
 function createColumns(
   onEdit: (delivery: DeliveryWithRelations) => void,
+  facilities: readonly { id: string; timezone: string }[],
 ): ColumnDef<DeliveryWithRelations>[] {
   return [
     {
@@ -121,7 +122,7 @@ function createColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatDate(row.original.deliveryDate)}</span>
+          <span>{formatFacilityDay(row.original.deliveryDate, resolveFacilityTimezone(facilities, row.original.facilityId))}</span>
         </div>
       ),
     },
@@ -408,7 +409,7 @@ export function DeliveryList() {
     }
   };
 
-  const columns = createColumns(openEdit);
+  const columns = createColumns(openEdit, facilities);
 
   const deliveries = deliveriesData?.items ?? [];
   const totalPages = deliveriesData?.totalPages ?? 0;
@@ -605,7 +606,7 @@ export function DeliveryList() {
                 {
                   title: "Delivery information",
                   fields: [
-                    { label: "Delivery time", value: formatFacilityDateTime(sideSheetEntity.deliveryDate, resolveFacilityTimezone(facilities, sideSheetEntity.facilityId)) },
+                    { label: "Delivery date and time", value: formatFacilityDateTime(sideSheetEntity.deliveryDate, resolveFacilityTimezone(facilities, sideSheetEntity.facilityId)) },
                     { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
                     { label: "Order", value: sideSheetEntity.orderCode },
                   ],
