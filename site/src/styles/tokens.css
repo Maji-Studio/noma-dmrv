@@ -1,0 +1,62 @@
+/* noma landing tokens. Values mirror src/app/globals.css (the app's design system); the
+   landing page adds --page (light rose). Fonts are the app's own GT Flexa files. Light only, like the app. */
+@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Light.woff2") format("woff2"); font-weight: 300; font-display: swap; }
+@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "GT Flexa"; src: url("../../../src/styles/fonts/GT-Flexa-Standard-Thin.woff2") format("woff2"); font-weight: 100; font-display: swap; }
+@font-face { font-family: "GT Flexa Mono"; src: url("../../../src/styles/fonts/GT-Flexa-Mono-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+
+:root {
+  /* app palette (globals.css) */
+  --clr-dark-purple: #0f021a;
+  --clr-purple: #480b73;
+  --clr-pink: #a6216e;
+  --clr-rose: #ffb2d2;
+  --clr-orange: #ff8359;
+  --clr-red: #e54552;
+  --bg-app: #fff9f7;
+
+  /* landing */
+  --page: #fff2f7;
+  --paper: #ffffff;
+  --ink: #0f021a;
+  --ink-2: rgba(15, 2, 26, 0.68);
+  --ink-3: rgba(15, 2, 26, 0.46);
+  --hair: rgba(15, 2, 26, 0.12);
+  --hair-2: rgba(15, 2, 26, 0.24);
+  --hair-strong: rgba(15, 2, 26, 0.86);
+  --sea: rgba(72, 11, 115, 0.045);
+  --accent: #480b73;
+
+  /* domain colours (acc-prod / acc-infra / acc-dist in the app) */
+  --prod: #bc4519; --prod-bg: #ffe8df;
+  --infra: #480b73; --infra-bg: #efe4f7;
+  --dist: #a6216e; --dist-bg: #fce3ef;
+  --ver: #17744a; --ver-bg: #dff0e7;
+  --ok: #17744a; --ok-bg: rgba(23, 116, 74, 0.1);
+  --warn: #bc4519; --warn-bg: rgba(188, 69, 25, 0.1);
+  --off-bg: rgba(15, 2, 26, 0.05);
+
+  /* bin layers */
+  --l1: #bc4519; --l2: #ff8359; --l3: #ffb2d2;
+
+  /* map */
+  --map-land: #fbf1ee; --map-line: rgba(72, 11, 115, 0.13);
+
+  --f-sans: "GT Flexa", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "GT Flexa Mono", ui-monospace, Menlo, Consolas, monospace;
+  --r: 6px;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--f-sans); font-weight: 300; font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.1; text-wrap: balance; margin: 0; }
+p { margin: 0; }
+b, strong { font-weight: 700; }
+img, svg { max-width: 100%; }
+a { color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }

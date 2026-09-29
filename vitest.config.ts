@@ -15,6 +15,8 @@ export default defineConfig({
       // branch's suites — against this repo's database, so the two contend and
       // fail each other. Each worktree runs its own vitest.
       "**/.claude/worktrees/**",
+      // The landing site is a separate package (site/).
+      "site/**",
     ],
   },
   resolve: {
