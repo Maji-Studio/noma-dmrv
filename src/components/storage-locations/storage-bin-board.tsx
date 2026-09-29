@@ -16,10 +16,10 @@
 import { Button, EmptyState, ListPagination } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
+import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMass } from "@/lib/format-utils";
-import type { StorageLocationType } from "@/schemas/storage-locations";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -50,11 +50,7 @@ const SMALLEST_PAGE_SIZE = Math.min(...LIST_PAGE_SIZE_OPTIONS);
 const CONTROL_CLASSES =
   "h-36 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
-/** `onHandKg` is null when a bin in the lane has unresolved stock. */
-export type LaneSummary = Record<
-  StorageLocationType,
-  { binCount: number; onHandKg: number | null }
->;
+export type LaneSummary = StorageLocationLaneSummary;
 
 export interface StorageBinBoardProps {
   bins: StorageLocationWithFacility[];
