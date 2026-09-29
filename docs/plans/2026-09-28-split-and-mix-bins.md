@@ -102,7 +102,7 @@ B-0412 is emptied: 843.2 ÷ 0.70 = 1,204.6 kg wet. B-0419 takes the remaining 29
 | C · split engine | `stock_mode` column; planner operator order with per-layer readings, "untick" and overdraw errors; `basis_snapshot.policy`; correction replay of the saved order. Pure planner tests first. | B |
 | D · readings | Readings table; reset on save; estimated moisture; "Moisture updated" history row; before → after preview block; required, unprefilled moisture everywhere with the one-line hint and ⓘ; the 5-point warning; ingredient moisture without prefill. | C |
 | E · split UI | Collapsed line and inline per-sub-bin readings; Change modal with drag order and arrow buttons; ⓘ tooltips; sub-bin cards on the bin board, switching to rows past 6 sub-bins. Delivery, loss, Create Biochar Product. | D |
-| F · mix | Mode on the bin form; timed merge; Mix → Split only when empty; pro-rata planner policy; one-box mix tile; pro-rata counts and losses; backdating warning. | E |
+| F · mix | Mode on the bin form; timed merge; Mix → Split only when empty; pro-rata planner policy; one-box mix tile; pro-rata counts and losses; backdating warning. Mix removals must not feed credit batches until the PDD covers the mixing practice (ADR 0030). | E |
 
 Split is usable after E. Each PR runs `pnpm lint`, `pnpm typecheck` and the colocated tests. UI PRs also run the form gallery and a Playwright pass (`docs/testing.md`).
 
