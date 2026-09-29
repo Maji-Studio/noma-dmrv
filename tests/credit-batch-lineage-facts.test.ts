@@ -34,8 +34,12 @@ import {
   listProductionClaimDraftContenders,
 } from "@/data-access/certifier-removals";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "@/data-access/credit-batch-application-slices";
-import { getCreditBatchChainData } from "@/data-access/chain-of-custody-batch";
+import {
+  getCreditBatchChainData,
+  getCreditBatchChainGeoData,
+} from "@/data-access/chain-of-custody-batch";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { NO_LINEAGE_FOR_SELECTED_RUN } from "@/lib/chain-of-custody/copy";
 
 beforeAll(() => ensureTestOrg());
 
@@ -134,6 +138,26 @@ describe("credit batch accounting", () => {
         ).map((lineage) => lineage.chain.productionRun?.id).sort(),
       ).toEqual(runs.map((run) => run.id).sort());
       expect(chain.sankey.columns.length).toBeGreaterThan(0);
+
+      // The map's Run filter narrows the geo roll-up to the same lineages the
+      // DAG and Sankey show, instead of plotting the whole batch.
+      const geoEntityIds = (
+        geo: Awaited<ReturnType<typeof getCreditBatchChainGeoData>>,
+        kind: string,
+      ) =>
+        [...new Set(geo.nodes.filter((node) => node.kind === kind).map((node) => node.entityId))].sort();
+      const wholeBatchGeo = await getCreditBatchChainGeoData(makeTestOrgContext(), batch.id);
+      expect(geoEntityIds(wholeBatchGeo, "productionRun")).toEqual(runs.map((run) => run.id).sort());
+      for (const run of runs) {
+        const runGeo = await getCreditBatchChainGeoData(makeTestOrgContext(), batch.id, { productionRunId: run.id });
+        expect(geoEntityIds(runGeo, "productionRun")).toEqual([run.id]);
+        expect(geoEntityIds(runGeo, "application")).toEqual(
+          [...new Set(chain.lineages.filter((lineage) => lineage.chain.productionRun?.id === run.id).map((lineage) => lineage.applicationId))].sort(),
+        );
+      }
+      const unrelatedRunGeo = await getCreditBatchChainGeoData(makeTestOrgContext(), batch.id, { productionRunId: crypto.randomUUID() });
+      expect(unrelatedRunGeo.nodes).toEqual([]);
+      expect(unrelatedRunGeo.warnings).toEqual([NO_LINEAGE_FOR_SELECTED_RUN]);
 
       const ctx = makeTestOrgContext();
       const foreignCtx = {
