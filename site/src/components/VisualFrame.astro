@@ -14,8 +14,8 @@ const hasSide = Astro.slots.has("side");
   </div>
 </figure>
 <style>
-  .vf { margin: 0 calc(var(--gutter) * -1); display: grid; background: var(--paper); border-block: var(--rule-strong); }
-  .vf.has-side { margin-inline: 0; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr); align-items: stretch; border: var(--rule-strong); }
+  .vf { margin: 0 calc(var(--gutter) * -1); display: grid; background: var(--paper); border-block: var(--panel-border); }
+  .vf.has-side { margin-inline: 0; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr); align-items: stretch; border: var(--panel-border); }
   .stage { min-width: 0; }
   figcaption { padding: 12px var(--gutter); font-size: var(--fs-fine); line-height: 1.5; color: var(--ink-2); background: var(--sea); border-top: var(--rule); }
   .has-side figcaption { padding-inline: var(--viz-pad); }

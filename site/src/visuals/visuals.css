@@ -13,12 +13,12 @@
 .nv-scroll.can-left.can-right { mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
 .nv-scroll-hint { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); padding: 10px var(--gutter); }
 .nv-scroll-hint::after { content: ""; display: inline-block; width: 14px; height: 1px; background: currentColor; margin-left: 8px; vertical-align: middle; }
-.nv-side { padding: 0 var(--side-pad) var(--side-pad); display: grid; gap: 12px; align-content: start; font-size: var(--fs-small); line-height: 1.5; background: var(--paper); border-left: var(--rule); }
-.nv-side-below .nv-side { border-left: 0; border-top: var(--rule); }
-@media (max-width: 860px) { .nv-side { border-left: 0; border-top: var(--rule); } }
+.nv-side { --sp-start: var(--side-pad); --sp-end: var(--gutter); padding: 0 var(--sp-end) var(--side-pad) var(--sp-start); display: grid; gap: 12px; align-content: start; font-size: var(--fs-small); line-height: 1.5; background: var(--paper); border-left: var(--rule); }
+.nv-side-below .nv-side { --sp-start: var(--gutter); border-left: 0; border-top: var(--rule); }
+@media (max-width: 860px) { .nv-side { --sp-start: var(--gutter); border-left: 0; border-top: var(--rule); } }
 .nv-label { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 /* Header row of the side panel: the app's label-micro on the --sea wash, running the panel's full width. */
-.nv-stage { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); line-height: var(--lh-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); background: var(--sea); border-bottom: var(--rule); margin: 0 calc(var(--side-pad) * -1) 12px; padding: 14px var(--side-pad); }
+.nv-stage { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); line-height: var(--lh-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); background: var(--sea); border-bottom: var(--rule); margin: 0 calc(var(--sp-end) * -1) 12px calc(var(--sp-start) * -1); padding: 14px var(--sp-end) 14px var(--sp-start); }
 .nv-code { font-family: var(--f-mono); font-weight: 500; font-size: 15px; }
 .nv-meta { display: grid; gap: 3px; }
 .nv-group { display: grid; gap: 6px; }
@@ -76,6 +76,7 @@ svg.nv-hl .nv-arc.on { opacity: 1; stroke-opacity: 0.95; stroke-width: 2; }
 .nv-chip-off { background: var(--st-wait-bg); color: var(--st-wait); border: 1px solid var(--st-wait-border); }
 
 .nv-morph-wrap { display: grid; gap: 16px; padding: 24px var(--gutter) 24px var(--viz-pad); }
+@media (max-width: 860px) { .nv-morph-wrap { padding-inline-start: var(--gutter); } }
 .nv-morph-bar { display: flex; justify-content: flex-end; }
 .nv-morph { display: grid; gap: 10px; }
 .nv-m-head, .nv-m-row { display: grid; grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr); align-items: center; }

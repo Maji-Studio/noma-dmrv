@@ -24,7 +24,7 @@ const { id, title, lead, band, split = false, aside = false } = Astro.props;
   .inner.aside { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); column-gap: var(--col-gap); align-items: start; }
   .head { display: grid; gap: 24px; }
   /* Bled visuals in the aside column run to the right viewport edge only. */
-  .aside :global(.vf) { margin-inline-start: 0; }
+  @media (min-width: 861px) { .aside :global(.vf) { margin-inline-start: 0; } .aside :global(.vf figcaption) { padding-inline-start: var(--viz-pad); } }
   .aside .head { position: sticky; top: 24px; align-self: start; }
   .head.split { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); column-gap: var(--col-gap); align-items: end; }
   h2 { font-size: var(--fs-heading); letter-spacing: var(--track-heading); max-width: 20ch; }

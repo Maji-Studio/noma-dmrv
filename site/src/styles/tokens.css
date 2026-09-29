@@ -10,7 +10,7 @@
   --gutter: clamp(24px, 5vw, 88px);
   --section-space: clamp(64px, 7vw, 112px);
   --col-gap: clamp(24px, 5vw, 88px);
-  --side-width: clamp(260px, 22vw, 340px);
+  --side-width: calc(clamp(250px, 20vw, 340px) + var(--gutter)); /* text column plus the gutter it ends on */
   --viz-max-h: 820px;
   --viz-pad: clamp(16px, 2.2vw, 40px);
   --mark-size: 40px;
@@ -20,6 +20,10 @@
   --measure: 62ch;
   --rule: 1px solid var(--clr-purple-20);
   --rule-strong: 1px solid var(--clr-purple-40);
+  /* the app's panel recipe (globals.css --panel-border, --row-divider = --hair-3) */
+  --panel-border: 1.5px solid rgba(15, 2, 26, 0.4);
+  --divider-color: rgba(15, 2, 26, 0.1);
+  --row-divider: 1px solid var(--divider-color);
   --fs-display: clamp(46px, 8.2vw, 128px);
   --fs-heading: clamp(34px, 4.6vw, 68px);
   --fs-subheading: clamp(24px, 2.6vw, 36px);
