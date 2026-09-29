@@ -126,30 +126,16 @@ export function CompiledSubmissionReview({
   }
 
   const { review, blockers, warnings, snapshot } = compilation;
-  // Preparation stopped before anything compiled (no project link,
-  // credentials or usable template): the blockers are all there is to show.
-  if (!review) {
-    return (
-      <div className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-16">
-        <div className="flex flex-wrap items-start justify-between gap-12">
-          <h4 className="title-heading-3">Registry submission details</h4>
-          <Button variant="weak" onClick={onRetry}>
-            Refresh review
-          </Button>
-        </div>
-        <CompilationBlockers blockers={blockers} />
-        <CompilationWarnings warnings={warnings} />
-      </div>
-    );
-  }
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-16 py-16">
       <div className="flex flex-wrap items-start justify-between gap-12">
         <div className="flex flex-col gap-2">
           <h4 className="title-heading-3">Registry submission details</h4>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Template {review.template.displayName}
-          </p>
+          {review && (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Template {review.template.displayName}
+            </p>
+          )}
         </div>
         <Button variant="weak" onClick={onRetry}>
           Refresh review
@@ -158,6 +144,32 @@ export function CompiledSubmissionReview({
 
       <CompilationBlockers blockers={blockers} />
 
+      {/* Preparation stopped before anything compiled (no project link,
+          credentials or usable template): the blockers are all there is. */}
+      {review ? (
+        <CompiledReviewSections
+          review={review}
+          snapshot={snapshot}
+          warnings={warnings}
+        />
+      ) : (
+        <CompilationWarnings warnings={warnings} />
+      )}
+    </div>
+  );
+}
+
+function CompiledReviewSections({
+  review,
+  snapshot,
+  warnings,
+}: {
+  review: NonNullable<RemovalCompilationView["review"]>;
+  snapshot: RemovalCompilationView["snapshot"];
+  warnings: string[];
+}) {
+  return (
+    <>
       <ReviewSection title="Registry plan">
         <p className="body-small text-[var(--color-text-secondary)]">
           {review.reportingWindow.startedOn || MISSING_VALUE.notRecorded} to{" "}
@@ -303,6 +315,6 @@ export function CompiledSubmissionReview({
       <ReviewSection title="Submission notes">
         <CompilationWarnings warnings={warnings} showEmpty />
       </ReviewSection>
-    </div>
+    </>
   );
 }
