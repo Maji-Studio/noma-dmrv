@@ -119,6 +119,9 @@ describe("Storage Location reconciliation through the fake registry", () => {
     ({ supplier_reference_id: ref }) as unknown as CreateStorageLocationRequest;
 
   it("finds a location whose create response was lost, within its project only", async () => {
+    for (let index = 0; index < FILLER_RECORDS; index += 1) {
+      await createStorageLocation(client(), PROJECT_ID, body(`filler-${index}`));
+    }
     await createStorageLocation(client(), OTHER_PROJECT_ID, body("nm-slc-lost"));
     registry.failNext(
       `POST /projects/${PROJECT_ID}/storage_locations`,
@@ -134,6 +137,9 @@ describe("Storage Location reconciliation through the fake registry", () => {
       "nm-slc-lost",
     );
     expect(found).toMatchObject({ project_id: PROJECT_ID });
+    expect(
+      registry.requestCount("GET", `/projects/${PROJECT_ID}/storage_locations`),
+    ).toBe(2);
     await expect(
       getStorageLocation(client(), PROJECT_ID, found!.id),
     ).resolves.toMatchObject({ id: found!.id });

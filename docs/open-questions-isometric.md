@@ -219,7 +219,10 @@ uses it.
   `src/lib/isometric/client.ts`) with `IsometricPageLimitError`.
 - **Resolve via:** ask Isometric for a supplier-reference filter (report via
   MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a project or
-  credential/account approaches its respective bound.
+  credential/account approaches its respective bound. The account-wide
+  Production Batch and measurement-sample lists hit the client default first;
+  raise `DEFAULT_MAX_PAGES` for them, since exceeding it also blocks Removal
+  deletion.
 
 ### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
 
