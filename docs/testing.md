@@ -35,6 +35,11 @@ directory.
   (`ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`),
   `ISOMETRIC_ENVIRONMENT=sandbox`, and `ISOMETRIC_DEMO_PROJECT_ID`. No DB required.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
+- `pnpm exec playwright test -c playwright.visual.config.ts` — the opt-in form
+  capture harness in `tests/visual/` (skipped unless `FORM_CAPTURE=1`; Vitest
+  excludes the folder). It needs a running, seeded dev server and never
+  writes; knobs and output are documented at the top of
+  `tests/visual/form-capture.spec.ts`.
 
 ## vitest specs are not all unit tests
 
