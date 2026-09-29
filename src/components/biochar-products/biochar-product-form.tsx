@@ -11,6 +11,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useRef, useState, type ComponentProps } from "react";
 
 import { EntitySelect, FormActions, FormField, FormInput, FormSection, FormSpine, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
+import { EventTimeInput } from "@/components/forms/event-time-input";
 import { useFormDetailLevel } from "@/components/forms/form-detail-context";
 import {
   StorageLocationQuickAddDialog,
@@ -33,7 +34,6 @@ import {
   useBiocharComposition,
   ZERO_SOURCE_BIOCHAR_ERROR,
 } from "@/lib/biochar-composition";
-import { formatLocalDate } from "@/lib/date-utils";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { MASS_MOISTURE_LABELS, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import {
@@ -170,7 +170,7 @@ export function BiocharProductForm({
       basisFingerprint: "pending-preview",
       facilityId: product?.facility?.id ?? contextFacilityId ?? "",
       formulationId: initialFormulationId ?? "",
-      placedAt: product?.placedAt ?? formatLocalDate(new Date()),
+      placedAt: (product?.placedAt ? new Date(product.placedAt) : new Date()).toISOString(),
       sourceBiocharStorageLocationId:
         product?.sourceBiocharStorageLocation?.id ??
         product?.sourceBiocharStorageLocationId ??
@@ -255,7 +255,7 @@ export function BiocharProductForm({
   const sourcePreview = useOutputStockPreview(!isEditMode && sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0 && watchedMoisture != null ? {
     storageLocationId: sourceBiocharStorageLocationId,
     facilityId: selectedFacilityId,
-    physicalDate: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
+    occurredAt: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
     moisturePercent: Number(watchedMoisture),
   } : null);
   const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
@@ -374,8 +374,8 @@ export function BiocharProductForm({
       />
       <FormSpine control={control}>
       <FormSection title="Placement" icon={<CalendarIcon size={14} weight="bold" />} fields={["placedAt"]}>
-        <FormField id="placedAt" label="Mixing and placement date" required error={errors.placedAt?.message} helperText="The date this product was physically mixed and placed in its bin.">
-          <FormInput id="placedAt" type="date" disabled={isSubmitting || isEditMode} {...register("placedAt")} />
+        <FormField id="placedAt" label="Mixing and placement time" required error={errors.placedAt?.message} helperText="When this product was physically mixed and placed in its bin.">
+          <EventTimeInput control={control} name="placedAt" id="placedAt" disabled={isSubmitting || isEditMode} />
         </FormField>
       </FormSection>
 

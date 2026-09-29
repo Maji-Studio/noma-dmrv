@@ -30,7 +30,7 @@ import {
   fromCompositionJsonb,
 } from "@/lib/biochar-composition";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatDateTime, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -122,7 +122,7 @@ export function productSheetSections(product: BiocharProductWithRelations): Deta
   return [
     {
       title: "Placement",
-      fields: [{ label: "Mixing and placement date", value: formatDate(product.placedAt) }],
+      fields: [{ label: "Mixing and placement time", value: formatDateTime(product.placedAt) }],
     },
     {
       title: "Source",

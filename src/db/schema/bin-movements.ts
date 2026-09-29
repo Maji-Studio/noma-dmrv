@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { bigserial, check, date, foreignKey, index, jsonb, pgTable, text, timestamp, unique, uuid, type AnyPgColumn, type PgTableExtraConfigValue } from 'drizzle-orm/pg-core';
+import { bigserial, check, foreignKey, index, jsonb, pgTable, text, timestamp, unique, uuid, type AnyPgColumn, type PgTableExtraConfigValue } from 'drizzle-orm/pg-core';
 import { organizations, users } from './auth';
 import { binMovementLane, binMovementType } from './common';
 import { storageLocations } from './facilities';
@@ -45,7 +45,7 @@ export const binMovements = pgTable(
     moistureRatioUsed: fraction('moisture_ratio_used'),
     // Output events carry exact dry effects and an immutable measurement basis.
     outputKind: text('output_kind', { enum: ['production_draw', 'product_draw', 'delivery', 'loss', 'count', 'reversal', 'replacement'] }),
-    physicalDate: date('physical_date'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }),
     postingSequence: bigserial('posting_sequence', { mode: 'bigint' }).notNull(),
     idempotencyKey: text('idempotency_key'),
     basisFingerprint: text('basis_fingerprint'),
@@ -62,7 +62,7 @@ export const binMovements = pgTable(
     foreignKey({ columns: [table.storageLocationId, table.organizationId], foreignColumns: [storageLocations.id, storageLocations.organizationId] }),
     foreignKey({ columns: [table.correctsMovementId, table.organizationId], foreignColumns: [binMovements.id as AnyPgColumn, binMovements.organizationId as AnyPgColumn] }),
     check('bin_movements_output_contract', sql`${table.outputKind} is null or (
-      ${table.lane} in ('biochar', 'product') and ${table.physicalDate} is not null
+      ${table.lane} in ('biochar', 'product') and ${table.occurredAt} is not null
       and ${table.idempotencyKey} is not null and length(${table.idempotencyKey}) > 0
       and ${table.basisFingerprint} is not null and ${table.inputSnapshot} is not null
       and ${table.balanceBeforeDryKg} >= 0 and ${table.balanceAfterDryKg} >= 0

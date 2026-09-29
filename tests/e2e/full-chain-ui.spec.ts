@@ -574,7 +574,6 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("New Delivery")');
       await waitForSideSheet(page);
 
-      await page.fill('input[name="deliveryDate"]', today);
       // Applications require a delivered delivery (issue #284)
 
       // Select the first available order (FormEntitySelect, not a native <select>)

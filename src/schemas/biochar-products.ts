@@ -12,6 +12,7 @@ import {
   requiredMassKgSchema,
   requiredNumber,
   requiredPositiveMassKgSchema,
+  stockEventInstantSchema,
   storedPercentSchema,
 } from "./helpers";
 
@@ -154,7 +155,7 @@ export const biocharProductFormSchema = z.object({
   facilityId: z.string().min(1, "Select a facility.").uuid("Choose a valid facility."),
   // Optional: empty = pure-biochar product (no amendment blend)
   formulationId: z.uuid("Choose a valid formulation."),
-  placedAt: z.iso.date(),
+  placedAt: stockEventInstantSchema("Enter the mixing and placement time."),
   idempotencyKey: z.string().min(1),
   basisFingerprint: z.string().min(1),
 
@@ -213,7 +214,7 @@ export const updateBiocharProductSchema = z.object({
     .optional(),
   facilityId: z.string().uuid().optional(),
   formulationId: z.uuid().optional(),
-  placedAt: z.iso.date().optional(),
+  placedAt: stockEventInstantSchema().optional(),
   status: z.enum(biocharProductStatusValues).optional(),
   sourceBiocharStorageLocationId: z
     .string()

@@ -199,6 +199,15 @@ export const optionalPercent = z.preprocess(
 // Exact Numeric Storage Precision
 // ============================================
 
+/**
+ * A stock event's physical time on the wire: an ISO 8601 UTC instant,
+ * normalized to `Date#toISOString` so instants order correctly as strings.
+ * Forms resolve the facility wall clock to this instant before submitting.
+ */
+export function stockEventInstantSchema(message = "Enter the date and time.") {
+  return z.iso.datetime({ error: message }).transform((value) => new Date(value).toISOString());
+}
+
 /** HTML/Zod increment for values stored through the `numeric(14,3)` family. */
 export const MASS_KG_INPUT_STEP = MASS_KG_STORAGE_INCREMENT;
 /** HTML/Zod increment for values stored through the `numeric(14,6)` tonnes family. */

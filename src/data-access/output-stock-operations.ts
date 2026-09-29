@@ -39,18 +39,18 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const planningLayers = preserveLossSources ? layers.filter(l => correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === l.id)) : layers;
   const events = await reader.select({ id: binMovements.id, sequence: binMovements.postingSequence })
     .from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, bin.id))).orderBy(asc(binMovements.postingSequence));
-  const basisFingerprint = requestFingerprint({ layers, events, formulationId: bin.formulationId, physicalDate: input.physicalDate, correctsMovementId: input.correctsMovementId });
+  const basisFingerprint = requestFingerprint({ layers, events, formulationId: bin.formulationId, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
   const codes = lane === 'product'
     ? await reader.select({ id: biocharProducts.id, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
     : await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, bin.id)));
   const codeMap = new Map(codes.map(row => [row.id, row.code]));
   const runCodes = await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, input.facilityId)));
   const runMap = new Map(runCodes.map(row => [row.id, row.code]));
-  const before = planOutputStock(layers, input.physicalDate, { kind: 'count', wetKg: 0 });
+  const before = planOutputStock(layers, input.occurredAt, { kind: 'count', wetKg: 0 });
   let plan: ReturnType<typeof planOutputStock> | null = null;
   let blockingMessage: string | null = null;
   try {
-    plan = planOutputStock(planningLayers, input.physicalDate, input.kind === 'count'
+    plan = planOutputStock(planningLayers, input.occurredAt, input.kind === 'count'
       ? { kind: 'count', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent ?? undefined }
       : { kind: 'wet', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent! });
   } catch (error) {
@@ -58,13 +58,13 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     blockingMessage = operatorStockMessage(error.message);
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
-  const beforeDryKg = Number(kilograms(layers.filter(l => l.physicalDate <= input.physicalDate).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
+  const beforeDryKg = Number(kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
   const beforeSolidsKg = rationalNumber(before.expectedSolidsKg);
   const removedSolids = plan?.allocations.reduce((sum, a) => add(sum, a.solidsKg), rational(BigInt(0))) ?? rational(BigInt(0));
   const afterSolidsKg = beforeSolidsKg - rationalNumber(removedSolids);
   const moisture = input.moisturePercent ?? null;
   const fraction = moisture === null ? null : 1 - moisture / 100;
-  const layerViews = (viewLayers: OutputStockLayer[]) => viewLayers.filter(l => l.physicalDate <= input.physicalDate).sort((a, b) => a.physicalDate.localeCompare(b.physicalDate) || (a.postingSequence < b.postingSequence ? -1 : 1)).map(l => ({
+  const layerViews = (viewLayers: OutputStockLayer[]) => viewLayers.filter(l => l.placedAt <= input.occurredAt).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.postingSequence < b.postingSequence ? -1 : 1)).map(l => ({
     layerId: l.id, code: codeMap.get(l.id) ?? l.id, dryMassKg: Number(l.remainingDryBiocharKg),
     wetMassKg: fraction ? rationalNumber(l.remainingSolidsKg!) / fraction : null,
     runs: l.runs.map(r => ({ productionRunId: r.productionRunId, code: runMap.get(r.productionRunId) ?? r.productionRunId, dryMassKg: Number(r.remainingDryKg) })),
@@ -73,7 +73,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const afterLayers = layers.map(l => plan?.remainingLayers.find(a => a.id === l.id) ?? l);
   // A count is judged against what the records say the bin holds, not against
   // its own moisture: only there does drying show as a lower wet figure.
-  const recordedWet = input.kind === 'count' ? await estimateWetAtRecordedMoisture(ctx, bin, layers, input.physicalDate, reader) : null;
+  const recordedWet = input.kind === 'count' ? await estimateWetAtRecordedMoisture(ctx, bin, layers, input.occurredAt, reader) : null;
   const preview: OutputStockPreview = {
     basisFingerprint, storageLocationId: bin.id, binName: bin.name, binCode: bin.code, formulationName: formulation?.name ?? null, lane, beforeDryKg,
     beforeAllocations: layerViews(layers), afterAllocations: layerViews(afterLayers),

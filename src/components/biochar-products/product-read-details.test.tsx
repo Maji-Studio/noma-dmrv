@@ -15,7 +15,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 import { productSheetSections, savedProductComposition } from "./product-read-details";
 
 const product = {
-  id: "product", facilityId: "facility", placedAt: "2026-09-21", massKg: 350, waterAddedKg: 50,
+  id: "product", facilityId: "facility", placedAt: "2026-09-21T12:00:00.000Z", massKg: 350, waterAddedKg: 50,
   moistureContentPercent: 5, sourceAllocatedDryMassKg: 200, densityKgM3: 300,
   formulation: { id: "formulation", name: "Biochar with manure" },
   storageLocation: { id: "destination", name: "Product store" },

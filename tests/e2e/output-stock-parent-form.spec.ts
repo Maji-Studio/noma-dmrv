@@ -1,6 +1,6 @@
 import { test, expect, selectEntity, waitForFacilityHydration } from "./fixtures";
 import {
-  FIFO_BROWSER_DATE,
+  FIFO_BROWSER_TIME,
   readOutputStockBrowserFixture,
   seedOutputStockBrowserFixture,
 } from "./helpers/output-stock-browser-fixture";
@@ -17,7 +17,7 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await page.getByPlaceholder("Search by code or name…").fill(fixture.bin.code);
   await page.getByText(fixture.bin.name, { exact: true }).first().click();
   await page.getByRole("button", { name: "Record loss", exact: true }).click();
-  await page.locator("#physicalDate").fill(FIFO_BROWSER_DATE);
+  await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill("120");
   await page.locator("#stock-moisture").fill("30");
   await page.locator("#stock-reason").fill(LOSS_REASON);
@@ -29,7 +29,7 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await page.goto(`/deliveries?facility=${fixture.facility.id}`);
   await waitForFacilityHydration(page, fixture.facility.name);
   await page.getByRole("button", { name: "New Delivery", exact: true }).click();
-  await page.locator("#deliveryDate").fill(FIFO_BROWSER_DATE);
+  await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", fixture.order.id, fixture.order.code);
   await page.locator("#storageLocationId").selectOption(fixture.bin.id);
   await page.locator("#deliveredWetMassKg").fill("10");

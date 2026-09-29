@@ -533,8 +533,9 @@ export async function updateBiocharProduct(ctx: OrgContext, productId: string, d
     if (!product) throw new SafeError('Biochar product not found');
     await lockBinStocks(ctx, tx, [product.storageLocationId, product.sourceBiocharStorageLocationId]);
     await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'update');
-    for (const key of ['facilityId', 'formulationId', 'placedAt', 'linkedProductionRunId', 'storageLocationId', 'massKg', 'moistureContentPercent', 'waterAddedKg'] as const) {
-      if (data[key] !== undefined && data[key] !== product[key]) throw new SafeError('Posted product source, composition, placement, and bin are immutable. Use an explicit stock correction.');
+    const placementChanged = data.placedAt !== undefined && new Date(data.placedAt).getTime() !== product.placedAt.getTime();
+    if (placementChanged || (['facilityId', 'formulationId', 'linkedProductionRunId', 'storageLocationId', 'massKg', 'moistureContentPercent', 'waterAddedKg'] as const).some(key => data[key] !== undefined && data[key] !== product[key])) {
+      throw new SafeError('Posted product source, composition, placement, and bin are immutable. Use an explicit stock correction.');
     }
     if (data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition)) throw new SafeError('Posted ingredient moisture and dry solids are immutable.');
     const [saved] = await tx.update(biocharProducts).set({ code: data.code, status: data.status, densityKgM3: data.densityKgM3, updatedAt: new Date() }).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).returning();

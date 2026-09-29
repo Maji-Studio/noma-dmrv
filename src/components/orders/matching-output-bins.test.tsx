@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { MatchingOutputBin, OutputStockPreviewInput } from "@/types/output-stock";
-const state = vi.hoisted(() => ({ bins: [] as MatchingOutputBin[], loading: false, error: false, timezone: "Pacific/Kiritimati" as string | undefined, inputs: [] as (OutputStockPreviewInput | null)[] }));
-vi.mock("@/hooks/use-facility-context", () => ({ useFacilityContext: () => ({ facilities: [{ id: "facility", timezone: state.timezone }] }) }));
+import type { MatchingOutputBin } from "@/types/output-stock";
+type BalanceBin = { storageLocationId: string; facilityId: string } | null;
+const state = vi.hoisted(() => ({ bins: [] as MatchingOutputBin[], loading: false, error: false, inputs: [] as BalanceBin[] }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ storageLocationId, facilityId }: { storageLocationId: string; facilityId: string }) => <button data-history-bin={storageLocationId} data-facility={facilityId}>More info</button> }));
 vi.mock("@/hooks/use-output-stock", () => ({
   useMatchingOutputBins: () => ({ data: state.bins, isLoading: false, error: null }),
-  useOutputStockPreview: (input: OutputStockPreviewInput | null) => {
+  useOutputStockBalance: (input: BalanceBin) => {
     state.inputs.push(input);
     const bin = state.bins.find(bin => bin.id === input?.storageLocationId);
     return { isLoading: state.loading, error: state.error ? new Error("Unavailable") : null, data: state.loading || state.error || !bin ? undefined : {
@@ -18,7 +18,7 @@ vi.mock("@/hooks/use-output-stock", () => ({
 }));
 import { MatchingOutputBins } from "./matching-output-bins";
 
-beforeEach(() => { state.loading = false; state.error = false; state.timezone = "Pacific/Kiritimati"; state.inputs = []; vi.useRealTimers(); });
+beforeEach(() => { state.loading = false; state.error = false; state.inputs = []; });
 describe("MatchingOutputBins", () => {
   it("renders every bin beyond the first page without selecting or reserving stock", () => {
     state.bins = Array.from({ length: 25 }, (_, i) => ({ id: String(i), code: `B${i}`, name: `Bin ${i + 1}`, dryMassKg: 100, recordedWetMassKg: 150, estimatedWetMassKg: null }));
@@ -35,12 +35,10 @@ describe("MatchingOutputBins", () => {
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(html).toContain("You can save this order now");
   });
-  it("shows current layers and history using the facility date without a withdrawal", () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-09-15T12:00:00Z"));
+  it("shows current layers and history without a withdrawal", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150, estimatedWetMassKg: null }];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
-    expect(state.inputs).toEqual([{ storageLocationId: "bin", facilityId: "facility", physicalDate: "2026-09-16", kind: "count", wetMassKg: 0, moisturePercent: null }]);
+    expect(state.inputs).toEqual([{ storageLocationId: "bin", facilityId: "facility" }]);
     // The bar names the batch on hand and its dry mass, in its own accent.
     expect(html).toContain('aria-label="Batches in Bin: BP-001 100 kg"');
     expect(html).toContain("BP-001 100 kg dry");
@@ -52,7 +50,6 @@ describe("MatchingOutputBins", () => {
     expect(html).toContain("100 kg dry biochar");
     expect(html).not.toContain("wet");
     expect(html).not.toMatch(/Before loading|After loading|removed|>0 kg dry biochar|150 kg/);
-    vi.useRealTimers();
   });
   it("leads with the bin's wet estimate and keeps dry stock as detail", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: 150, estimatedWetMassKg: 118 }];
@@ -71,11 +68,4 @@ describe("MatchingOutputBins", () => {
     expect(html).toContain("More info");
     expect(html).not.toContain("150 kg");
   });
-  it("waits for facility timezone before requesting a dated preview", () => {
-    state.timezone = undefined;
-    state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, recordedWetMassKg: null, estimatedWetMassKg: null }];
-    renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
-    expect(state.inputs).toEqual([null]);
-  });
-
 });

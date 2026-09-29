@@ -24,14 +24,14 @@ function visible(node: ReactTestInstance | string): string {
 }
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 it("shows correction inputs and blockers without optional headings or allocations in Simple", async () => {
-  const original: OutputStockHistoryEntry = { id: "00000000-0000-4000-8000-000000000001", deliveryId: null, kind: "count", physicalDate: "2026-09-22", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 0, moisturePercent: null, dryMassKg: 80, beforeDryKg: 80, afterDryKg: 0, allocations: [] };
+  const original: OutputStockHistoryEntry = { id: "00000000-0000-4000-8000-000000000001", deliveryId: null, kind: "count", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 0, moisturePercent: null, dryMassKg: 80, beforeDryKg: 80, afterDryKg: 0, allocations: [] };
   const form = () => <FormDetailProvider scope="correction"><FormDetailControl /><OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={vi.fn()} /></FormDetailProvider>;
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(form()); });
   const simple = visible(renderer.root);
   for (const label of ["Stock history", "Source bin", "Dry biochar", "80 kg"]) expect(simple).not.toContain(label);
   expect(simple).toContain("Original entry");
-  expect(simple).toContain("Physical date");
+  expect(simple).toContain("Date and time");
   expect(simple).toContain("Counted wet mass");
   expect(simple).toContain("Save correction");
   state.blocker = "Correction is blocked by a saved application";

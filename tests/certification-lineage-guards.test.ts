@@ -770,7 +770,7 @@ describe("certification lineage guards", () => {
           makeTestOrgContext(TEST_USER_ID),
           await withProductStockFingerprint(makeTestOrgContext(TEST_USER_ID), {
             code: `BP-LOCKED-${tag}`,
-            placedAt: "2026-07-01",
+            placedAt: "2026-07-01T12:00:00.000Z",
             formulationId,
             facilityId: fixture.facilityId,
             sourceBiocharStorageLocationId: sourceBin.id,

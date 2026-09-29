@@ -10,10 +10,11 @@ describe('unresolved production repair dependencies', () => {
   it('blocks a balance-dependent count even when the old completion date is missing', async () => {
     let predicate = '';
     const query = { from: () => query, innerJoin: () => query,
-      where: (sql: SQL) => { predicate = new PgDialect().sqlToQuery(sql).sql; return query; },
-      limit: async () => [{ reason: 'Recorded count', date: '2026-09-12' }] };
+      where: (sql: SQL) => { predicate ||= new PgDialect().sqlToQuery(sql).sql; return query; },
+      limit: async () => [{ reason: 'Recorded count', at: new Date('2026-09-12T12:00:00.000Z') }],
+      then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve([{ timezone: 'UTC' }]).then(resolve) };
     const tx = { select: () => query } as unknown as DbTransaction;
-    await expect(assertProductionRunOutputBasisChange(ctx, tx, 'run', { endTime: null }, { endTime: new Date('2026-09-01') })).rejects.toThrow('covered by count');
+    await expect(assertProductionRunOutputBasisChange(ctx, tx, 'run', { endTime: null }, { endTime: new Date('2026-09-01') })).rejects.toThrow('covered by count: Recorded count (Sep 12, 2026, 12:00)');
     expect(predicate).toContain('"end_time" is null or');
     expect(predicate).toContain('"organization_id"');
   });
