@@ -89,7 +89,7 @@ test.describe("Product bin ↔ formulation filtering", () => {
   async function openCreateForm(page: Page) {
     await page.goto(`/biochar-products?facility=${facility.id}`);
     await page.waitForLoadState("networkidle");
-    await page.click('button:has-text("New Product")');
+    await page.click('button:has-text("New product")');
     await waitForSideSheet(page);
   }
 
@@ -148,7 +148,7 @@ test.describe("Product bin ↔ formulation filtering", () => {
     try {
       await page.goto(`/biochar-products?facility=${emptyFacility.id}`);
       await page.waitForLoadState("networkidle");
-      await page.click('button:has-text("New Product")');
+      await page.click('button:has-text("New product")');
       await waitForSideSheet(page);
 
       await openProductBinDropdown(page);

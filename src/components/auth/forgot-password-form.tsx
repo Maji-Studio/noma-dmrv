@@ -94,7 +94,7 @@ export function ForgotPasswordForm() {
             width="full"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Sending..." : "Send Reset Link"}
+            {isSubmitting ? "Sending..." : "Send reset link"}
           </Button>
 
           <div className="text-center">

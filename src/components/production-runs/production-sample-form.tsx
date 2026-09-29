@@ -309,7 +309,7 @@ export function ProductionSampleForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitLabel={isEditMode ? "Save Changes" : "Add Sample"}
+        submitLabel={isEditMode ? "Save changes" : "Add Sample"}
       />
     </form>
   );

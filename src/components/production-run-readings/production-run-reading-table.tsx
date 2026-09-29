@@ -2,7 +2,7 @@
  * ProductionRunReadingTable component
  * Read-only table of imported production run readings. Telemetry is sourced
  * from readings CSV imports — there is no manual add/edit. The only
- * mutation is "Delete All", which clears the run so a corrected CSV can be
+ * mutation is "Delete all", which clears the run so a corrected CSV can be
  * re-uploaded and imported.
  */
 "use client";
@@ -100,7 +100,7 @@ export function ProductionRunReadingTable({
             onClick={() => setConfirmingDeleteAll(true)}
           >
             <TrashIcon size={16} />
-            Delete All
+            Delete all
           </Button>
         )}
       </div>
@@ -158,7 +158,7 @@ export function ProductionRunReadingTable({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={confirmingDeleteAll}
-          title="Delete All Readings"
+          title="Delete all readings"
           message={`This permanently deletes all ${readingCount} reading${readingCount === 1 ? "" : "s"} for this production run. To restore them, re-upload a readings CSV and import it. This cannot be undone.`}
           onConfirm={handleDeleteAllConfirm}
           onCancel={() => setConfirmingDeleteAll(false)}

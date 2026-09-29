@@ -239,7 +239,7 @@ export function SupplierList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Supplier" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create supplier" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name || undefined;
@@ -253,7 +253,7 @@ export function SupplierList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Supplier
+            New supplier
           </Button>
         }
       />
@@ -261,7 +261,7 @@ export function SupplierList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Suppliers"
+          title="Total suppliers"
           value={totalSuppliers}
           icon={<UsersIcon size={24} weight="bold" />}
           description="Biomass feedstock providers"
@@ -328,7 +328,7 @@ export function SupplierList() {
       {/* Delete Confirm Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingSupplierId}
-        title="Delete Supplier"
+        title="Delete supplier"
         message="Are you sure you want to delete this supplier? This action cannot be undone. Note: Suppliers with associated feedstock deliveries cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -346,7 +346,7 @@ export function SupplierList() {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Supplier"
+        editLabel="Edit supplier"
         sections={sideSheetEntity ? supplierSheetSections(sideSheetEntity, sideSheetLocationsQuery) : undefined}
       >
         <SupplierForm
@@ -357,7 +357,7 @@ export function SupplierList() {
           onCancel={closeSideSheet}
           isSubmitting={createSupplier.isPending || updateSupplier.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Supplier"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create supplier"}
         />
       </EntitySideSheet>
     </div>

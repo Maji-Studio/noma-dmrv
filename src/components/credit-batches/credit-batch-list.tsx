@@ -500,7 +500,7 @@ export function CreditBatchList({
   const sideSheetEntity = viewEntity;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Credit Batch" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create credit batch" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" || !sideSheetEntity
@@ -524,7 +524,7 @@ export function CreditBatchList({
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Credit Batch
+            New credit batch
           </Button>
         }
       />
@@ -670,7 +670,7 @@ export function CreditBatchList({
         isOpen={!!deletingBatchId}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingBatchId(null)}
-        title="Delete Credit Batch"
+        title="Delete credit batch"
         message={CREDIT_BATCH_DELETE_MESSAGE}
         isPending={deleteCreditBatch.isPending}
       />
@@ -685,7 +685,7 @@ export function CreditBatchList({
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Credit Batch"
+        editLabel="Edit credit batch"
         canEdit={!sideSheetLocked}
         size="wide"
         sections={

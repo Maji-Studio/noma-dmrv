@@ -204,7 +204,7 @@ export function SampleDocumentsPanel({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
-          title="Delete Document"
+          title="Delete document"
           message="Are you sure you want to delete this document? The file will be removed from storage."
           onConfirm={handleDeleteConfirm}
           onCancel={() => {

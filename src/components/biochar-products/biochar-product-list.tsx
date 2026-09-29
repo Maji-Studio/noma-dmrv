@@ -226,7 +226,7 @@ export function BiocharProductPageMassSummary({
 
   return (
     <StatCard
-      title="Mass on This Page"
+      title="Mass on this page"
       value={
         <MassPair
           wetKg={wetKg}
@@ -468,7 +468,7 @@ export function BiocharProductList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Product
+            New product
           </Button>
         }
       />
@@ -476,7 +476,7 @@ export function BiocharProductList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Products"
+          title="Total products"
           value={totalProducts}
           icon={<CubeIcon size={24} weight="bold" />}
           description="Finished product batches"
@@ -572,7 +572,7 @@ export function BiocharProductList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingProductId}
-        title="Delete Biochar Product"
+        title="Delete biochar product"
         message="Are you sure you want to delete this biochar product? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -589,9 +589,9 @@ export function BiocharProductList() {
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
-        title={displaySideSheet?.mode === "create" ? "Create Biochar Product" : (displaySideSheet?.entity?.code ?? "")}
+        title={displaySideSheet?.mode === "create" ? "Create biochar product" : (displaySideSheet?.entity?.code ?? "")}
         subtitle={displaySideSheet?.mode === "create" ? undefined : (displaySideSheet?.entity ? formatDate(displaySideSheet.entity.productionDate) : undefined)}
-        editLabel="Edit Product"
+        editLabel="Edit product"
         sections={viewedEntity ? productSheetSections(viewedEntity, resolveFacilityTimezone(facilities, viewedEntity.facilityId)) : undefined}
       >
         <BiocharProductForm
@@ -601,7 +601,7 @@ export function BiocharProductList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           errorMessage={formError ?? undefined}
-          submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Product"}
+          submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create product"}
           focusTarget={
             displaySideSheet?.mode === "edit" ? activeFocusTarget : null
           }

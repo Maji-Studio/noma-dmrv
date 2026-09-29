@@ -103,7 +103,7 @@ export function ReactorForm({
     }
   }, [contextFacilityId, reactor?.facilityId, setValue, getValues]);
 
-  const defaultSubmitLabel = isEditMode ? "Update Reactor" : "Create Reactor";
+  const defaultSubmitLabel = isEditMode ? "Update reactor" : "Create reactor";
 
   const handleFormSubmit = handleSubmit((data) => {
     const { capacityTph, ...rest } = data as ReactorFormData;

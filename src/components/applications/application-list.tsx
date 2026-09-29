@@ -496,7 +496,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     : null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Application" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create application" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -517,7 +517,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Application
+            New application
           </Button>
         }
       />
@@ -525,14 +525,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
-          title="Total Applications"
+          title="Total applications"
           value={totalApplications}
           icon={<MapPinIcon size={24} weight="bold" />}
           description="Field applications"
           isLoading={isLoading}
         />
         <StatCard
-          title="Biochar Applied"
+          title="Biochar applied"
           value={formatApplicationKgFromTons(totalBiochar)}
           icon={<LeafIcon size={24} weight="bold" />}
           description="Biochar applied on this page"
@@ -668,7 +668,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingApplicationId}
-        title="Delete Application"
+        title="Delete application"
         message="Are you sure you want to delete this application? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -691,7 +691,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         canEdit={fieldsEditable}
-        editLabel="Edit Application"
+        editLabel="Edit application"
         size="wide"
         sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
       >

@@ -267,7 +267,7 @@ export function StorageLocationList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Storage Bin
+            New storage bin
           </Button>
         }
       />
@@ -318,7 +318,7 @@ export function StorageLocationList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingStorageLocationId}
-        title="Delete Storage Bin"
+        title="Delete storage bin"
         message="Permanently delete this unused storage bin? Bins with stock or operational history must be archived instead."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -342,11 +342,11 @@ export function StorageLocationList() {
         // house convention (code as the sheet title) puts an opaque lookup key
         // where the operator's own word for the thing belongs. The code stays,
         // small, on the line beneath.
-        title={sideSheet?.mode === "create" ? "Create Storage Bin" : sideSheet?.entity?.name ?? ""}
+        title={sideSheet?.mode === "create" ? "Create storage bin" : sideSheet?.entity?.name ?? ""}
         subtitle={
           sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.code
         }
-        editLabel="Edit Storage Bin"
+        editLabel="Edit storage bin"
         canEdit={sideSheet?.entity?.archivedAt == null}
         sections={
           sideSheet?.mode === "view" && sideSheet.entity
@@ -361,7 +361,7 @@ export function StorageLocationList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Storage Bin"}
+          submitLabel={sideSheet?.mode === "edit" ? "Save changes" : "Create storage bin"}
         />
       </EntitySideSheet>
 

@@ -518,7 +518,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Feedstock" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create feedstock" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -542,7 +542,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Feedstock
+            New feedstock
           </Button>
         }
       />
@@ -629,7 +629,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       {/* Delete Confirmation */}
       <DeleteConfirmDialog
         isOpen={!!deletingId}
-        title="Delete Feedstock"
+        title="Delete feedstock"
         message="Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingId(null); setDeleteError(null); }}
@@ -652,7 +652,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Feedstock"
+        editLabel="Edit feedstock"
         sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}
       >
         <FeedstockForm
@@ -661,7 +661,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createFeedstock.isPending || updateFeedstock.isPending || isFlushing}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Feedstock"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create feedstock"}
           serverError={createError || updateError || undefined}
           serverErrorAction={
             updateError && updateBlockers.length > 0 ? (

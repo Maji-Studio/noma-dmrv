@@ -102,7 +102,7 @@ test.describe("Deferred create attachments", () => {
     );
     const existingFeedstockCodes = await getListedFeedstockCodes(page);
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
@@ -116,7 +116,7 @@ test.describe("Deferred create attachments", () => {
     await expect(dialog.getByText("bol-deferred.pdf")).toBeVisible();
 
     // One Save: create + flush, then the sheet closes like any other create.
-    await dialog.locator('button:has-text("Create Feedstock")').click();
+    await dialog.locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
 
     // Reopen the feedstock created by this test. Delivery-date sorting can put
@@ -220,7 +220,7 @@ test.describe("Deferred create attachments", () => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
@@ -241,7 +241,7 @@ test.describe("Deferred create attachments", () => {
       route.request().method() === "PUT" ? route.abort() : route.continue(),
     );
 
-    await dialog.locator('button:has-text("Create Feedstock")').click();
+    await dialog.locator('button:has-text("Create feedstock")').click();
 
     // Entity created, flush failed → sheet stays open in edit mode with the
     // failed item and an explanatory error.

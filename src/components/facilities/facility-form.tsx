@@ -103,7 +103,7 @@ export function FacilityForm({
     },
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Facility" : "Create Facility";
+  const defaultSubmitLabel = isEditMode ? "Update facility" : "Create facility";
 
   const gpsLatitude = watch("gpsLatitude");
   const gpsLongitude = watch("gpsLongitude");

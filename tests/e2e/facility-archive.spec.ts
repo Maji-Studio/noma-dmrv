@@ -65,7 +65,7 @@ test.describe("Facility cascading archive", () => {
 
     // --- Facility is visible in the active list ---
     await page.goto("/facilities");
-    await expect(page.getByText("Active Facilities")).toBeVisible({
+    await expect(page.getByText("Active facilities")).toBeVisible({
       timeout: 15000,
     });
     await page.getByLabel("Search facilities").fill(facility.name);
@@ -118,7 +118,7 @@ test.describe("Facility cascading archive", () => {
     await expect(facilityCard.getByRole("heading", { name: facility.name })).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByText("Archived Facilities")).toBeVisible();
+    await expect(page.getByText("Archived facilities")).toBeVisible();
 
     // --- Restore brings facility + children back ---
     await facilityCard

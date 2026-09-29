@@ -193,7 +193,7 @@ export function FormulationForm({
     name: "ingredients",
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Formulation" : "Create Formulation";
+  const defaultSubmitLabel = isEditMode ? "Update formulation" : "Create formulation";
 
   const handleFormSubmit = handleSubmit((data) => {
     return onSubmit(percentFormToRatioPayload(data as FormulationPercentFormData));

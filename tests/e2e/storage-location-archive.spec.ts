@@ -88,7 +88,7 @@ test.describe("Storage-bin archive", () => {
     }).toPass({ timeout: 30_000 });
 
     const deleteDialog = page.getByRole("dialog", {
-      name: "Delete Storage Bin",
+      name: "Delete storage bin",
     });
     await deleteDialog
       .getByRole("button", { name: "Delete", exact: true })

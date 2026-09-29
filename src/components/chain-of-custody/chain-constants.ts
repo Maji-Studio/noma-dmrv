@@ -93,13 +93,13 @@ export const LINEAGE_NODE_STYLES: Record<LineageNodeKind, LineageNodeStyle> = {
     accentInk: "var(--acc-dist-ink)",
   },
   biocharProduct: {
-    label: "Biochar Product",
+    label: "Biochar product",
     icon: CubeIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",
   },
   productionRun: {
-    label: "Production Run",
+    label: "Production run",
     icon: FactoryIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",

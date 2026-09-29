@@ -57,7 +57,7 @@ test.describe("Certification — New-Removal wizard", () => {
       await expect(
         page
           .getByRole("dialog")
-          .getByRole("heading", { name: "Create Credit Batch", exact: true }),
+          .getByRole("heading", { name: "Create credit batch", exact: true }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(page).not.toHaveURL(/(?:\?|&)create=/);
 

@@ -280,8 +280,8 @@ export function CreditBatchForm({
   ]);
 
   const defaultSubmitLabel = isEditMode
-    ? "Update Credit Batch"
-    : "Create Credit Batch";
+    ? "Update credit batch"
+    : "Create credit batch";
 
   const handleFormSubmit = handleSubmit((data) => {
     const sampling =

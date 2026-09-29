@@ -219,8 +219,8 @@ export function FeedstockTypeForm({
     });
   };
   const defaultSubmitLabel = isEditMode
-    ? "Update Feedstock Type"
-    : "Create Feedstock Type";
+    ? "Update feedstock type"
+    : "Create feedstock type";
   const selectedIsometricSummary = selectedIsometricFeedstock && (
     <div className="flex gap-10 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-12 py-10">
       <SealCheckIcon

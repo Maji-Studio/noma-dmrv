@@ -129,8 +129,8 @@ export function StorageLocationForm({
     : "Restricts this bin to one feedstock type. For certified production, choose a Pyrolysis type that matches Isometric.";
 
   const defaultSubmitLabel = isEditMode
-    ? "Update Storage Bin"
-    : "Create Storage Bin";
+    ? "Update storage bin"
+    : "Create storage bin";
 
   const handleFormSubmit = handleSubmit((data) => {
     const normalized = { ...data } as StorageLocationFormData;

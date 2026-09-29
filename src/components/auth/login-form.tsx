@@ -163,7 +163,7 @@ export function LoginForm() {
         width="full"
         disabled={isSubmitting}
       >
-        {isSubmitting ? "Signing in..." : "Sign In"}
+        {isSubmitting ? "Signing in..." : "Sign in"}
       </Button>
     </form>
   );

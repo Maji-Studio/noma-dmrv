@@ -423,7 +423,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
               )}
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
-                New Feedstock Type
+                New feedstock type
               </Button>
             </div>
           ) : undefined
@@ -432,14 +432,14 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-3">
         <StatCard
-          title="Total Types"
+          title="Total types"
           value={feedstockTypes.length}
           icon={<DatabaseIcon size={24} weight="bold" />}
           description="Pyrolysis and blend catalogue entries"
           isLoading={feedstockTypesQuery.isLoading}
         />
         <StatCard
-          title="Pyrolysis Types"
+          title="Pyrolysis types"
           value={pyrolysisCount}
           icon={<LeafIcon size={24} weight="bold" />}
           description="Eligible for production feedstock selection"
@@ -524,7 +524,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
       <DeleteConfirmDialog
         isOpen={!!deletingType}
-        title="Delete Feedstock Type"
+        title="Delete feedstock type"
         message="Delete this feedstock type permanently? Types referenced by operational records cannot be deleted and should be archived instead."
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingType(null)}
@@ -543,7 +543,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
             setSideSheet({ ...displaySideSheet, mode });
           }
         }}
-        title={displaySideSheet?.mode === "create" ? "Create Feedstock Type" : sideSheetEntity?.code ?? ""}
+        title={displaySideSheet?.mode === "create" ? "Create feedstock type" : sideSheetEntity?.code ?? ""}
         subtitle={displaySideSheet?.mode === "create" ? undefined : sideSheetEntity?.name}
         sections={displaySideSheet?.mode === "view" ? detailSections : undefined}
         editLabel={FEEDSTOCK_TYPE_EDIT_LABEL}
@@ -556,7 +556,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
           onCancel={closeSideSheet}
           isSubmitting={createFeedstockType.isPending || updateFeedstockType.isPending}
           errorMessage={formError ?? undefined}
-          submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Feedstock Type"}
+          submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create feedstock type"}
         />
       </EntitySideSheet>
 

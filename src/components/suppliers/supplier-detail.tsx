@@ -171,7 +171,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                 setIsLocationDialogOpen(true);
               }}
             >
-              Add Location
+              Add location
             </Button>
           )}
         </div>
@@ -299,7 +299,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
 
       <DeleteConfirmDialog
         isOpen={!!deletingLocationId}
-        title="Delete Location"
+        title="Delete location"
         message="Are you sure you want to delete this location? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {

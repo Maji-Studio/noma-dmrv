@@ -29,13 +29,13 @@ test("saving a history correction keeps the containing delivery form unsaved", a
 
   await page.goto(`/deliveries?facility=${fixture.facility.id}`);
   await waitForFacilityHydration(page, fixture.facility.name);
-  await page.getByRole("button", { name: "New Delivery", exact: true }).click();
+  await page.getByRole("button", { name: "New delivery", exact: true }).click();
   await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", fixture.order.id, fixture.order.code);
   await page.locator("#storageLocationId").selectOption(fixture.bin.id);
   await page.locator("#deliveredWetMassKg").fill("10");
   await fillStockMoisture(page, "delivery", "30");
-  const create = page.getByRole("button", { name: "Create Delivery", exact: true });
+  const create = page.getByRole("button", { name: "Create delivery", exact: true });
   await expect(create).toBeEnabled();
   // The preview and its history trigger show at both levels.
   await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();

@@ -374,7 +374,7 @@ export function FeedstockForm({
     deliveredWetMassKg != null &&
     exceedsMassWithTolerance(allocatedTotalWetKg, deliveredWetMassKg);
 
-  const defaultSubmitLabel = isEditMode ? "Update Feedstock" : "Create Feedstock";
+  const defaultSubmitLabel = isEditMode ? "Update feedstock" : "Create feedstock";
 
   // A single bin holds the whole delivery, so its allocated wet mass mirrors the
   // total automatically in create and edit mode. Mirroring stops
@@ -703,7 +703,7 @@ export function FeedstockForm({
                   disabled={isSubmitting}
                 >
                   <PlusIcon size={16} weight="bold" />
-                  Add Bin
+                  Add bin
                 </Button>
               )
             }

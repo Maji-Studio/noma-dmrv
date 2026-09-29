@@ -6,10 +6,10 @@ import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 
 const FORM_SURFACES = [
-  { route: "deliveries", create: "New Delivery" },
-  { route: "applications", create: "New Application" },
-  { route: "production-runs", create: "New Production Run" },
-  { route: "feedstocks", create: "New Feedstock" },
+  { route: "deliveries", create: "New delivery" },
+  { route: "applications", create: "New application" },
+  { route: "production-runs", create: "New production run" },
+  { route: "feedstocks", create: "New feedstock" },
 ];
 const VIEWPORTS = [
   { width: 1440, height: 1100 },
@@ -88,7 +88,7 @@ test("feedstock read and edit reset detail without discarding field changes", as
   await expect(simple).toBeChecked();
   await detailed.locator("..").click();
   await page.screenshot({ path: testInfo.outputPath("feedstock-read-detailed.png") });
-  await sheet.getByRole("button", { name: "Edit Feedstock", exact: true }).click();
+  await sheet.getByRole("button", { name: "Edit feedstock", exact: true }).click();
   await expect(simple).toBeChecked();
   const notes = sheet.getByLabel("Notes", { exact: true });
   await notes.fill("E2E detail toggle preserves this edit");
@@ -99,11 +99,11 @@ test("feedstock read and edit reset detail without discarding field changes", as
   await expect(page.getByText("Discard unsaved changes?", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Keep editing", exact: true }).click();
   await expect(notes).toHaveValue("E2E detail toggle preserves this edit");
-  await sheet.getByRole("button", { name: "Save Changes", exact: true }).click();
+  await sheet.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(sheet).not.toBeVisible();
   await page.locator("table tbody tr", { hasText: seededData.feedstock.code }).first().click();
   await waitForSideSheet(page);
-  await expect(page.getByRole("button", { name: "Edit Feedstock", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit feedstock", exact: true })).toBeVisible();
   await expect(simple).toBeChecked();
   await expect(sheet.getByText("E2E detail toggle preserves this edit", { exact: true })).toBeVisible();
 });

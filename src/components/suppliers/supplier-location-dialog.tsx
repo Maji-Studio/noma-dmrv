@@ -84,7 +84,7 @@ export function SupplierLocationDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={handleClose}
-      title={isEditing ? "Edit Location" : "Add Location"}
+      title={isEditing ? "Edit location" : "Add location"}
       width="lg"
       testId={
         isEditing
@@ -101,7 +101,7 @@ export function SupplierLocationDialog({
           isEditing ? updateLocation.isPending : createLocation.isPending
         }
         errorMessage={error ?? undefined}
-        submitLabel={isEditing ? "Save Changes" : "Add Location"}
+        submitLabel={isEditing ? "Save changes" : "Add location"}
       />
     </QuickAddDialogShell>
   );

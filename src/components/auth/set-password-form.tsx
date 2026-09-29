@@ -120,7 +120,7 @@ function SetPasswordFormContent() {
         <>
           <div className="mb-24">
             <h2 className="body-large-bold text-[var(--color-text-primary)]">
-              Set Your Password
+              Set your password
             </h2>
             <p className="body-small text-[var(--color-text-secondary)] mt-16">
               Create a secure password for your account
@@ -168,7 +168,7 @@ function SetPasswordFormContent() {
             width="full"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Setting password..." : "Set Password"}
+            {isSubmitting ? "Setting password..." : "Set password"}
           </Button>
         </>
       )}
