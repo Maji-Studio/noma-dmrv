@@ -55,7 +55,17 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
   if (next.type !== existing.type) return target;
   const layers = await readAllLayers(ctx, tx, existing);
   const balance = kilograms(layers.reduce((sum, layer) => sum + grams(layer.remainingDryBiocharKg), BigInt(0)));
+  const [last] = await tx.select({ occurredAt: binMovements.occurredAt }).from(binMovements)
+    .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, existing.id), isNotNull(binMovements.outputKind)))
+    .orderBy(desc(binMovements.occurredAt)).limit(1);
+  // A bin that never held stock has no history to keep in its mode; a movement would only block deleting it.
+  if (!layers.length && !last) return target;
+  const facilityTime = async (at: Date) => formatFacilityDateTime(at, await getOutputStockFacilityTimezone(ctx, existing.facilityId, tx));
   if (target === 'split') {
+    // Emptiness is judged now; a removal timed later would still draw from the pile.
+    if (last?.occurredAt && last.occurredAt.getTime() > Date.now()) {
+      throw new SafeError(`This bin has a movement recorded for ${await facilityTime(last.occurredAt)}. Switch it to split after that time.`);
+    }
     if (layers.some(layer => grams(layer.remainingDryBiocharKg) > BigInt(0) || (layer.remainingSolidsKg?.numerator ?? BigInt(0)) > BigInt(0))) {
       throw new SafeError('Empty this bin before switching it to split. If nothing is left, record a stock count of zero first. A mixed pile cannot be sorted back into batches.');
     }
@@ -64,12 +74,9 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
   }
   const mergedAt = next.mergedAt ?? new Date();
   if (mergedAt.getTime() > Date.now()) throw new SafeError('Merged at cannot be in the future.');
-  const [last] = await tx.select({ occurredAt: binMovements.occurredAt }).from(binMovements)
-    .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, existing.id), isNotNull(binMovements.outputKind)))
-    .orderBy(desc(binMovements.occurredAt)).limit(1);
   // Strictly after: a merge at the same instant would pull that split entry into the mix period.
   if (last?.occurredAt && mergedAt.getTime() <= last.occurredAt.getTime()) {
-    const at = formatFacilityDateTime(last.occurredAt, await getOutputStockFacilityTimezone(ctx, existing.facilityId, tx));
+    const at = await facilityTime(last.occurredAt);
     throw new SafeError(`Set Merged at later than the bin's last recorded movement (${at}). Movements already recorded stay split.`);
   }
   await postModeChange(ctx, tx, existing, 'merge', mergedAt, balance);
@@ -83,6 +90,34 @@ async function postModeChange(ctx: OrgContext, tx: DbTransaction, bin: StorageLo
     movementType: 'adjustment', massDeltaKg: 0, reason: outputStockEventLabel(kind), createdBy: ctx.userId, outputKind: kind, occurredAt: at,
     idempotencyKey: `${kind}:${randomUUID()}`, basisFingerprint: requestFingerprint({ binId: bin.id, kind, occurredAt, balance }),
     inputSnapshot: { kind, to: kind === 'merge' ? 'mix' : 'split', actorId: ctx.userId }, outputDryDeltaKg: '0.000', balanceBeforeDryKg: balance, balanceAfterDryKg: balance });
+}
+
+/**
+ * An addition (a product placed, a run completed) timed before a later switch
+ * to split would put stock from the mix period into a bin now kept as
+ * separate sub-bins, where later draws would treat it as unmixed. Requires the
+ * bin's stock lock.
+ */
+export async function assertAdditionAfterSplit(ctx: OrgContext, tx: DbTransaction, bin: { id: string; facilityId: string }, at: Date): Promise<void> {
+  requireOrgScope(ctx);
+  const split = (await getStockModeChanges(ctx, bin.id, tx)).filter(change => change.to === 'split' && change.at > at.toISOString()).at(-1);
+  if (!split) return;
+  const when = formatFacilityDateTime(new Date(split.at), await getOutputStockFacilityTimezone(ctx, bin.facilityId, tx));
+  throw new SafeError(`This bin was switched to split at ${when}, after this time. Record the addition at or after ${when}.`);
+}
+
+type RunPlacement = { status: string; biocharStorageLocationId: string | null; facilityId: string; endTime: Date | null };
+
+/**
+ * A production run adds its biochar to its bin when it completes, or again
+ * when a completed run moves bin or changes its end time; that addition can't
+ * be timed before a later switch to split. Requires the bin's stock lock.
+ */
+export async function assertRunAdditionAfterSplit(ctx: OrgContext, tx: DbTransaction, next: RunPlacement, previous?: Omit<RunPlacement, 'facilityId'>): Promise<void> {
+  requireOrgScope(ctx);
+  if (next.status !== 'complete' || !next.biocharStorageLocationId || !next.endTime) return;
+  const unchanged = previous?.status === 'complete' && previous.biocharStorageLocationId === next.biocharStorageLocationId && previous.endTime?.getTime() === next.endTime.getTime();
+  if (!unchanged) await assertAdditionAfterSplit(ctx, tx, { id: next.biocharStorageLocationId, facilityId: next.facilityId }, next.endTime);
 }
 
 /** Every layer the bin has held, including ones placed later than now. */

@@ -6,6 +6,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBiocharMassKg, getCompositionIngredientDraws, validateCompositionIngredientBins } from './biochar-product-composition';
 import { insertBiocharProductSourceAllocations } from './biochar-product-source-allocations';
 import { revalidateProductStock } from './product-stock-preview';
+import { assertAdditionAfterSplit } from './output-bin-stock-mode';
 import { withOutputStockPosting } from './output-stock-post';
 import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
@@ -57,6 +58,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
     if (!formulation) throw new SafeError('Formulation not found');
     const [bin] = await tx.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, data.storageLocationId!), eq(storageLocations.facilityId, data.facilityId), eq(storageLocations.type, 'product_bin'), isNull(storageLocations.archivedAt))).for('update');
     if (!bin || (bin.formulationId && bin.formulationId !== data.formulationId)) throw new SafeError('Choose a product bin for this formulation.');
+    await assertAdditionAfterSplit(ctx, tx, bin, new Date(data.placedAt));
     await validateCompositionIngredientBins(ctx, tx, data.composition, data.formulationId, data.facilityId);
     const productBasis = await revalidateProductStock(ctx, {
       facilityId: data.facilityId, formulationId: data.formulationId, placedAt: data.placedAt,

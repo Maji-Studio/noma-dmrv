@@ -99,6 +99,29 @@ describe("mix bin draws in PostgreSQL", () => {
     expect((await setMode(f, "mix", new Date("2026-09-14T12:00:01.000Z"))).stockMode).toBe("mix");
   });
 
+  it("refuses an addition timed before a later switch to split", async () => {
+    const f = await twoBatches();
+    await setMode(f, "mix", new Date("2026-09-14T00:00:00.000Z"));
+    await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null });
+    await setMode(f, "split");
+    await expect(postProduct(f, { massKg: 10, placedAt: "2026-09-14T13:00:00.000Z" })).rejects.toThrow(/^This bin was switched to split at /);
+    expect((await postProduct(f, { massKg: 10, placedAt: new Date().toISOString() })).id).toBeTruthy();
+  });
+
+  it("refuses to switch to split while a movement is recorded for later than now", async () => {
+    const f = await twoBatches();
+    await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
+    await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null, occurredAt: new Date(Date.now() + 86_400_000).toISOString() });
+    await expect(setMode(f, "split")).rejects.toThrow(/^This bin has a movement recorded for .*Switch it to split after that time\.$/);
+  });
+
+  it("changes a never-stocked bin's mode without leaving a movement", async () => {
+    const f = await postedStockFixture({ stockKg: 0 });
+    fixtures.push(f);
+    expect((await updateStorageLocation(f.ctx, f.bin.id, { stockMode: "mix", mergedAt: new Date() })).stockMode).toBe("mix");
+    expect(await db.select().from(binMovements).where(eq(binMovements.storageLocationId, f.bin.id))).toEqual([]);
+  });
+
   it("refuses a merge in the future", async () => {
     const f = await twoBatches();
     await expect(setMode(f, "mix", new Date(Date.now() + 60_000))).rejects.toThrow("Merged at cannot be in the future.");
