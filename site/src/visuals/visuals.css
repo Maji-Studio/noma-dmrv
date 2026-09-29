@@ -27,8 +27,8 @@
 .nv-hint { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-mono { font-family: var(--f-mono); font-weight: 500; font-size: 0.85em; }
 .nv-tools { padding: 8px var(--gutter); border-bottom: var(--rule); background: var(--sea); }
-.nv-tools label { display: inline-flex; align-items: center; gap: 12px; font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); max-width: 100%; }
-.nv-jump { min-height: var(--tap); border: var(--rule-strong); background: var(--paper); border-radius: 0; padding: 4px 12px; font-size: var(--fs-small); color: var(--ink); min-width: 0; max-width: 260px; }
+.nv-tools label { display: inline-flex; align-items: center; gap: 12px; font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); max-width: 100%; white-space: nowrap; }
+.nv-jump { min-height: var(--tap); border: var(--rule-strong); background: var(--paper); border-radius: 0; padding: 4px 12px; font-family: var(--f-sans); font-weight: 300; font-size: var(--fs-small); letter-spacing: normal; text-transform: none; color: var(--ink); min-width: 0; max-width: 260px; }
 .nv-jump:hover { border-color: var(--clr-purple); }
 .nv-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 14px var(--gutter); border-top: var(--rule); font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -85,7 +85,7 @@ svg.nv-hl .nv-arc.on { opacity: 1; stroke-opacity: 0.95; stroke-width: 2; }
 .nv-m-chip .f { font-family: var(--f-mono); font-weight: 500; font-size: 12.5px; overflow-wrap: anywhere; }
 .nv-m-chip .v { font-weight: 300; font-size: var(--fs-small); }
 .nv-m-left { border-left: 3px solid var(--prod); }
-.nv-m-right { border-left: 3px dashed var(--ver); border-top: 1px dashed var(--clr-purple-40); background: var(--off-bg); }
+.nv-m-right { border-left: 3px dashed var(--ver); border-top: 1px dashed var(--clr-purple-40); background: var(--sea); }
 .nv-m-row.done .nv-m-right { border-left-style: solid; border-top: var(--rule); background: var(--ver-bg); }
 .nv-m-row.active .nv-m-left { background: var(--prod-bg); }
 .nv-m-link { height: 24px; width: 100%; }
