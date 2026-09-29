@@ -4,7 +4,9 @@ import type { UseFormRegisterReturn } from "react-hook-form";
 import {
   BiocharSourceMassFields,
   prepareBiocharProductSubmission,
+  ProductCompositionBlock,
 } from "./biochar-product-form";
+import { FormDetailProvider } from "@/components/forms/form-detail-context";
 import { formProductComposition } from "./form-product-composition";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 
@@ -39,6 +41,33 @@ describe("BiocharSourceMassFields", () => {
     expect(text).toContain("Wet biochar drawn from the source bin.");
     expect(text).toContain("Biochar + water final moisture");
     expect(text).not.toContain("Blend wet mass");
+  });
+});
+
+describe("ProductCompositionBlock", () => {
+  const composition = formProductComposition({
+    isEditMode: false, massKg: 100, moisturePercent: 10, waterAddedKg: 0,
+    recordedSourceDryMassKg: null, ingredients: [], allocationFrozen: false,
+  });
+  const block = (massKg: number | null, ingredientBins: Array<{ massKg?: unknown }> = []) => (
+    <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} storageLocationId={null} facilityId="facility" />
+  );
+  // A provider starts in Simple; outside one the form reads as Detailed.
+  const simple = (node: ReturnType<typeof block>) =>
+    renderToStaticMarkup(<FormDetailProvider scope="form">{node}</FormDetailProvider>);
+
+  it("stays out of Simple until the biochar or an ingredient has a mass", () => {
+    expect(simple(block(null))).not.toContain("Product composition");
+    expect(simple(block(null, [{ massKg: undefined }]))).not.toContain("Product composition");
+  });
+
+  it("draws in Simple once a mass is set", () => {
+    expect(simple(block(100))).toContain("Product composition");
+    expect(simple(block(null, [{ massKg: 20 }]))).toContain("Product composition");
+  });
+
+  it("always draws in Detailed", () => {
+    expect(renderToStaticMarkup(block(null))).toContain("Product composition");
   });
 });
 
