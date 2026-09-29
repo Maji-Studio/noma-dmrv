@@ -119,16 +119,18 @@ describe("submitRemoval — happy path", () => {
       orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
       ctx,
-      defaultTemplate: ctx.defaultTemplate!,
-      blueprintsByKey: new Map(
-        ctx.blueprintsForTemplate.map((blueprint) => [
-          blueprint.key,
-          blueprint,
-        ]),
-      ),
-      externalProjectId: ctx.mapping!.externalProjectId,
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: ctx.defaultTemplate!,
+        blueprintsByKey: new Map(
+          ctx.blueprintsForTemplate.map((blueprint) => [
+            blueprint.key,
+            blueprint,
+          ]),
+        ),
+        externalProjectId: ctx.mapping!.externalProjectId,
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
     });
     expect(reviewed.snapshot).not.toBeNull();
     // What the operator reviews and re-asserts at submit: Source-ID independent.
@@ -143,16 +145,18 @@ describe("submitRemoval — happy path", () => {
       orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
       ctx,
-      defaultTemplate: ctx.defaultTemplate!,
-      blueprintsByKey: new Map(
-        ctx.blueprintsForTemplate.map((blueprint) => [
-          blueprint.key,
-          blueprint,
-        ]),
-      ),
-      externalProjectId: "prj-repointed",
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: ctx.defaultTemplate!,
+        blueprintsByKey: new Map(
+          ctx.blueprintsForTemplate.map((blueprint) => [
+            blueprint.key,
+            blueprint,
+          ]),
+        ),
+        externalProjectId: "prj-repointed",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
     });
     expect(
       reviewPayloadHash(repointed.snapshot!.semanticPayload),
