@@ -47,7 +47,7 @@ import {
   FEEDSTOCK_TYPE_QUERY_PARAM,
 } from "@/lib/entity-deep-link";
 import { FeedstockTypeForm } from "./feedstock-type-form";
-import { FeedstockTypeSampling } from "./feedstock-type-sampling";
+import { feedstockTypeSheetSections, titleCase } from "./feedstock-type-read-sections";
 import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
 
 type ArchiveFilter = "all" | "active" | "archived";
@@ -61,12 +61,6 @@ interface SideSheetState {
   mode: SideSheetMode;
 }
 
-function titleCase(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
 
 export function shouldShowFeedstockTypeSampling(params: {
   feedstockType: FeedstockType | null;
@@ -409,39 +403,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     facilityId,
   });
   const detailSections = sideSheetEntity
-    ? [
-        {
-          title: "Catalogue",
-          fields: [
-            { label: "Name", value: sideSheetEntity.name },
-            { label: "Code", value: sideSheetEntity.code },
-            { label: "Category", value: titleCase(sideSheetEntity.category) },
-            { label: "Usage", value: sideSheetEntity.usage === "blend" ? "Blend" : "Pyrolysis" },
-            { label: "State", value: sideSheetEntity.archivedAt ? "Archived" : "Active" },
-            {
-              label: "Isometric feedstock ID",
-              value: sideSheetEntity.isometricFeedstockTypeId,
-            },
-            { label: "Registry URL", value: sideSheetEntity.registryUrl },
-            { label: "Description", value: sideSheetEntity.description },
-          ],
-        },
-        ...(showSampling && facilityId
-          ? [
-              {
-                title: "Sampling",
-                fields: [],
-                content: (
-                  <FeedstockTypeSampling
-                    facilityId={facilityId}
-                    feedstockTypeId={sideSheetEntity.id}
-                    canManage={canManage}
-                  />
-                ),
-              },
-            ]
-          : []),
-      ]
+    ? feedstockTypeSheetSections(sideSheetEntity, showSampling && facilityId ? { facilityId, canManage } : null)
     : undefined;
 
   return (

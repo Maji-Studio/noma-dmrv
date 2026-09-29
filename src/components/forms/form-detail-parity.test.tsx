@@ -13,18 +13,18 @@
  *    field and section types carry no level flag at all (`detailedOnly` is
  *    gone), and the scan also rejects the word coming back.
  *
- * 2. Render parity. Every read-section builder and every surface built on a
- *    level reader renders in a provider at Simple, then at Detailed. The field
- *    labels, section and block titles, inputs, actions and links must match,
- *    and so must the visible text once explanation blocks (marked with
- *    `DETAIL_EXPLANATION_ATTR`) are skipped. A new read-section builder that is
- *    not listed in `READ_SECTION_CASES` fails the coverage check.
+ * 2. Render parity. Every surface built on a level reader (derived blocks,
+ *    stock previews, bin pickers, the pre-input split) renders in a provider at
+ *    Simple, then at Detailed. The field labels, section and block titles,
+ *    inputs, actions and links must match, and so must the visible text once
+ *    explanation blocks (marked with `DETAIL_EXPLANATION_ATTR`) are skipped.
+ *    Read sheets are covered in `form-detail-parity-sheets.test.tsx` and sheet
+ *    forms in `form-detail-parity-forms.test.tsx`.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import type { ReactElement, ReactNode } from "react";
 import { useForm, type Control, type FieldValues } from "react-hook-form";
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from "react-test-renderer";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/ui/tooltip", () => ({
@@ -48,8 +48,6 @@ vi.mock("./entity-select/operator-quick-add-dialog", () => ({ OperatorQuickAddDi
 vi.mock("./entity-select/vehicle-quick-add-dialog", () => ({ VehicleQuickAddDialog: () => null }));
 vi.mock("./entity-select/feedstock-type-quick-add-dialog", () => ({ FeedstockTypeQuickAddDialog: () => null }));
 vi.mock("./entity-select/formulation-quick-add-dialog", () => ({ FormulationQuickAddDialog: () => null }));
-vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: () => <span>Transport legs</span> }));
-vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: () => <span>Manure store</span> }));
 vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/hooks/use-output-stock")>(),
   useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, estimatedWetMassKg: 1800 }], isLoading: false, error: null }),
@@ -63,13 +61,9 @@ vi.mock("@/components/forms/entity-select", async (importOriginal) => ({
   FormEntitySelect: () => <span>Blend material</span>,
 }));
 
-import { DETAIL_EXPLANATION_ATTR, FormDetailControl, FormDetailProvider } from "./form-detail-context";
-import { CompositionCard } from "./composition-card";
-import { FormField } from "./form-field";
-import { FormSection } from "./form-section";
+import { renderBothLevels } from "./form-detail-parity-harness";
 import { MassMoistureFields } from "./mass-moisture-fields";
 import { EntitySelect } from "./entity-select/entity-select";
-import { DetailField, DetailSection } from "@/components/ui/detail-panel";
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -80,20 +74,17 @@ import { ApplicationAllocationShares } from "@/components/applications/applicati
 import { SampleDerivedRatios } from "@/components/samples/sample-derived-ratios";
 import { FormulationForm } from "@/components/formulations/formulation-form";
 import { MatchingOutputBins } from "@/components/orders/matching-output-bins";
-import { orderSheetSections } from "@/components/orders/order-read-sections";
 import { DeliveryStockDetails } from "@/components/deliveries/delivery-stock-details";
-import { creditBatchSheetSections } from "@/components/credit-batches/credit-batch-view";
-import { productSheetSections } from "@/components/biochar-products/product-read-details";
 import { ProductCompositionBlock } from "@/components/biochar-products/biochar-product-form";
 import { formProductComposition } from "@/components/biochar-products/form-product-composition";
 import { IngredientMassSplit } from "@/components/biochar-products/ingredient-mass-split";
-import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
-import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
-import type { OrderWithRelations } from "@/data-access/orders";
 import type { OutputStockPreview as Preview } from "@/types/output-stock";
 
 const SRC = join(__dirname, "..", "..");
+
+/** Re-exports the context API without using it. */
+const BARREL = "components/forms/index.ts";
 
 /** Modules allowed to read the detail level. Each hides explanation only. */
 const LEVEL_READERS = [
@@ -123,12 +114,17 @@ describe("detail level source scan", () => {
   const files = sourceFiles();
 
   it("reads the detail level only in the explanation primitives", () => {
-    const readers = files.filter(file => /useFormDetailLevel\(|useContext\(FormDetailContext\)/.test(file.text)).map(file => file.path);
+    // Any mention counts, so an aliased import cannot slip past; the barrel only re-exports.
+    const readers = files
+      .filter(file => file.path !== BARREL && /\buseFormDetailLevel\b|\bFormDetailContext\b/.test(file.text))
+      .map(file => file.path);
     expect(readers.sort()).toEqual([...LEVEL_READERS].sort());
   });
 
   it("renders DetailedOnly only where it wraps explanation", () => {
-    const callers = files.filter(file => /<DetailedOnly[\s>]|function DetailedOnly/.test(file.text)).map(file => file.path);
+    const callers = files
+      .filter(file => file.path !== BARREL && /\bDetailedOnly\b/.test(file.text))
+      .map(file => file.path);
     expect(callers.sort()).toEqual([...DETAILED_ONLY_CALLERS].sort());
   });
 
@@ -144,99 +140,6 @@ beforeAll(() => {
 });
 
 afterAll(() => { vi.unstubAllGlobals(); });
-
-/** A host node Simple and Detailed may legitimately differ on. */
-function isSkipped(node: ReactTestInstance): boolean {
-  if (typeof node.type !== "string") return false;
-  const props = node.props;
-  return Boolean(props.hidden) || Boolean(props[DETAIL_EXPLANATION_ATTR]) || props["aria-hidden"] === true || props["aria-hidden"] === "true";
-}
-
-function textOf(node: ReactTestInstance | string): string {
-  if (typeof node === "string") return node;
-  if (isSkipped(node)) return "";
-  return node.children.map(textOf).join(" ");
-}
-
-const clean = (value: string) => value.replace(/\s+/g, " ").trim();
-
-/** What the parity check compares: labels, titles, inputs, actions and links, in order, plus the visible text. */
-function inventory(root: ReactTestInstance): { items: string[]; text: string } {
-  const items: string[] = [];
-  const walk = (node: ReactTestInstance | string) => {
-    if (typeof node === "string" || isSkipped(node)) return;
-    const { props, type } = node;
-    if (type === DetailField) {
-      items.push(`field:${props.label}`);
-      if (props.secondary) items.push(`field:${props.secondary.label}`);
-    }
-    if (type === DetailSection || type === FormSection) items.push(`section:${props.title}`);
-    if (type === CompositionCard) items.push(`block:${props.title}`);
-    if (type === FormField) items.push(`field:${props.label}`);
-    if (type === "button") items.push(`action:${props["aria-label"] ?? clean(textOf(node))}`);
-    if (type === "a") items.push(`link:${props.href}:${clean(textOf(node))}`);
-    if (type === "input" || type === "select" || type === "textarea") items.push(`input:${props.id ?? props.name ?? props["aria-label"] ?? type}`);
-    if (typeof type === "string" && /^h[1-6]$|^legend$|^label$|^dt$/.test(type)) items.push(`${type}:${clean(textOf(node))}`);
-    node.children.forEach(walk);
-  };
-  walk(root);
-  return { items, text: clean(textOf(root)) };
-}
-
-/** Renders `element` at Simple, then at Detailed, and returns both inventories. */
-async function renderBothLevels(element: ReactElement) {
-  let renderer!: ReactTestRenderer;
-  await act(async () => {
-    renderer = create(<FormDetailProvider scope="parity"><FormDetailControl /><div data-parity-subject>{element}</div></FormDetailProvider>);
-  });
-  const subject = () => renderer.root.find(node => node.props["data-parity-subject"] === true);
-  const simple = inventory(subject());
-  await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
-  const detailed = inventory(subject());
-  const detailedJson = JSON.stringify(renderer.toJSON());
-  await act(async () => renderer.unmount());
-  return { simple, detailed, detailedJson };
-}
-
-const product = {
-  id: "product", facilityId: "facility", placedAt: "2026-09-21T12:00:00.000Z", massKg: 350, waterAddedKg: 50,
-  moistureContentPercent: 5, sourceAllocatedDryMassKg: 200, densityKgM3: 300,
-  formulation: { id: "formulation", name: "Biochar with manure" },
-  storageLocation: { id: "destination", name: "Product store" },
-  sourceBiocharStorageLocation: { id: "source", name: "Biochar store" },
-  composition: { ingredients: [{ formulationIngredientId: "ingredient", feedstockTypeId: "feedstock", feedstockTypeName: "Chicken manure", feedstockTypeCategory: "manure", massKg: 100, massDryKg: 80, moistureContentPercent: 50 }] },
-} as unknown as BiocharProductWithRelations;
-
-const order = {
-  id: "order", facilityId: "facility", formulationId: "formulation", formulationName: "Mix",
-  customerName: "Customer", customerLocationName: "North field", orderDate: new Date("2026-09-21"),
-  quantityKg: 2000, packaging: "loose", value: 500, currency: "TZS",
-  fulfillmentStatus: "partial", deliveryCount: 1, deliveredWetMassKg: 1200,
-} as unknown as OrderWithRelations;
-
-const creditBatch = {
-  id: "batch", code: "CB-26-001", facilityId: "facility", feedstockTypeName: "Maize cobs", durabilityOption: "200_year",
-  startDate: "2026-01-01", endDate: "2026-03-31", appliedWeightTons: 12, productionRunCount: 1,
-  co2eStoredPreview: {
-    co2eStoredTonnes: 3.2, componentKey: "biochar_storage", formulaVersion: "v1", missingInputs: [], warnings: [],
-    applicationResults: [{ fDurable: 0.85, rawFDurable: 0.9, durabilityCapped: true }],
-  },
-} as unknown as CreditBatchWithRelations;
-
-/** Every read-section builder, rendered through the shared side-sheet spine. */
-const READ_SECTION_CASES: { file: string; name: string; element: ReactElement }[] = [
-  { file: "components/orders/order-read-sections.tsx", name: "order", element: <EntitySideSheetSections numbered sections={orderSheetSections(order)} /> },
-  { file: "components/biochar-products/product-read-details.tsx", name: "biochar product", element: <EntitySideSheetSections numbered sections={productSheetSections(product, "UTC")} /> },
-  {
-    file: "components/credit-batches/credit-batch-view.tsx",
-    name: "credit batch",
-    element: <EntitySideSheetSections numbered sections={creditBatchSheetSections({
-      creditBatch,
-      productionRuns: [{ id: "run", date: "2026-02-01", status: "completed", biocharStorageName: "Biochar store", biocharOutputKg: 1000, biocharDryMassKg: 800 }] as never,
-      isLoadingRuns: false, runsError: null, isRetryingRuns: false, onRetryRuns: () => undefined, isHealthLoading: false,
-    })} />,
-  },
-];
 
 const preview: Preview = {
   basisFingerprint: "basis", storageLocationId: "bin", binName: "Product bin", binCode: "PB-001", formulationName: "Mix", lane: "product",
@@ -292,14 +195,7 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
 ];
 
 describe("detail level render parity", () => {
-  it("covers every read-section builder", () => {
-    const builders = sourceFiles()
-      .filter(file => /\):\s*DetailPanelSection\[\]/.test(file.text) || file.path.endsWith("-read-sections.tsx"))
-      .map(file => file.path);
-    expect(builders.sort()).toEqual(READ_SECTION_CASES.map(entry => entry.file).sort());
-  });
-
-  it.each<{ name: string; element: ReactElement; blankInSimple?: boolean }>([...READ_SECTION_CASES, ...SURFACE_CASES])("$name shows the same fields, sections and actions at both levels", async ({ element, blankInSimple }) => {
+  it.each<{ name: string; element: ReactElement; blankInSimple?: boolean }>(SURFACE_CASES)("$name shows the same fields, sections and actions at both levels", async ({ element, blankInSimple }) => {
     const { simple, detailed } = await renderBothLevels(element);
     // A case that renders nothing would pass vacuously.
     expect(simple.text.length > 0).toBe(!blankInSimple);

@@ -416,13 +416,14 @@ you read.
   available dry stock does the same. In a movement preview the dry before and
   after pair stays part of the calculation.
 
-`src/components/forms/form-detail-parity.test.tsx` guards this. Only
-`form-detail-context`, `CompositionCard` and `MoistureSplit` may read the level,
-and `DetailedOnly` has a short list of callers; every read-section builder and
-every level-aware block renders at both levels and must show identical labels,
-titles, inputs, actions and text outside explanation blocks. A new builder
-(`*-read-sections.tsx` or a function returning `DetailPanelSection[]`) must be
-added to its cases.
+The `src/components/forms/form-detail-parity*.test.tsx` suites guard this.
+Only `form-detail-context`, `CompositionCard` and `MoistureSplit` may read the
+level, and `DetailedOnly` has a short list of callers. Every level-aware block,
+every read sheet and one create form per family render at both levels and must
+show identical labels, titles, inputs, actions and text outside explanation
+blocks. Read sheets build their sections in a named builder
+(`*-read-sections.tsx`, returning `DetailPanelSection[]`), never inline in the
+list; a new builder fails the coverage check until it has a case.
 
 ### Derived blocks
 

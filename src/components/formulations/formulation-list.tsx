@@ -26,7 +26,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
-import { FormulationForm, PURE_BIOCHAR_CUE } from "./formulation-form";
+import { FormulationForm } from "./formulation-form";
+import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -35,11 +36,6 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 // ============================================
 // Helpers
 // ============================================
-
-function formatRatio(ratio: number | null): string {
-  if (ratio === null || ratio === undefined) return MISSING_VALUE.notRecorded;
-  return `${(ratio * 100).toFixed(0)}%`;
-}
 
 function formatIngredientsSummary(
   ingredients: FormulationWithIngredients["ingredients"]
@@ -238,56 +234,9 @@ export function FormulationList() {
     );
   }
 
-  // Build view sections for side sheet
-  const viewSections = (() => {
-    if (sideSheet?.mode !== "view" || !sideSheet.entity) return undefined;
-    const entity = sideSheet.entity;
-
-    const ingredientCount = entity.ingredients?.length ?? 0;
-    const ingredientFields = ingredientCount > 0
-      ? entity.ingredients.flatMap((ingredient, index) => {
-          const prefix = ingredientCount > 1 ? `Ingredient ${index + 1}` : "Ingredient";
-          return [
-            {
-              label: `${prefix} · Blend material`,
-              value: ingredient.feedstockType.name,
-            },
-            {
-              label: `${prefix} · volume share (%)`,
-              value: formatRatio(ingredient.ratio),
-            },
-          ];
-        })
-      : [];
-
-    return [
-      {
-        title: "Required information",
-        fields: [
-          { label: "Formulation name", value: entity.name },
-        ],
-      },
-      {
-        title: "Blend composition by volume",
-        fields: [
-          {
-            label: "Biochar · volume share (%)",
-            value: formatRatio(entity.biocharRatio),
-          },
-          ...ingredientFields,
-        ],
-        content: ingredientCount === 0 ? (
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            {PURE_BIOCHAR_CUE}
-          </p>
-        ) : undefined,
-      },
-      {
-        title: "Additional information",
-        fields: [{ label: "Description", value: entity.description }],
-      },
-    ];
-  })();
+  const viewSections = sideSheet?.mode === "view" && sideSheet.entity
+    ? formulationSheetSections(sideSheet.entity)
+    : undefined;
 
   return (
     <div className="container-max page-shell">
