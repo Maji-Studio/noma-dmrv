@@ -32,26 +32,27 @@ async function fixture(endTime = new Date('2026-09-15T22:30:00Z')) {
   return f;
 }
 
-describe('output stock facility dates in PostgreSQL', () => {
-  it('uses the facility date for SQL layers, FIFO eligibility and receipt history under different session zones', async () => {
+describe('output stock event times in PostgreSQL', () => {
+  it('places biochar layers at the run end instant under any session zone', async () => {
     const f = await fixture();
     for (const zone of ['UTC', 'America/Los_Angeles']) {
       await db.transaction(async tx => {
         await tx.execute(sql`select set_config('TimeZone', ${zone}, true)`);
-        const state = await getBiocharOutputStockLayers(f.ctx, { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: '2026-09-15' }, tx);
-        expect(state.layers.map(l => l.physicalDate)).toEqual(['2026-09-16', '2026-09-16']);
-        expect(state.remainingDryKg).toBe('0.000');
+        const state = await getBiocharOutputStockLayers(f.ctx, { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt: '2026-09-15T23:00:00.000Z' }, tx);
+        expect(state.layers.map(l => l.placedAt).sort()).toEqual(['2026-09-15T22:30:00.000Z', '2026-09-15T23:30:00.000Z']);
+        expect(state.remainingDryKg).toBe('900.000');
       });
     }
-    const input = { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: '2026-09-15', kind: 'production_draw' as const, wetMassKg: 100, moisturePercent: 0 };
+    const input = { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt: '2026-09-15T22:29:00.000Z', kind: 'production_draw' as const, wetMassKg: 100, moisturePercent: 0 };
     expect((await previewOutputStock(f.ctx, input)).blockingMessage).toMatch(/Not enough dry biochar/);
-    const nextDay = await previewOutputStock(f.ctx, { ...input, physicalDate: '2026-09-16' });
-    expect(nextDay.blockingMessage).toBeFalsy();
-    expect(nextDay.removedDryKg).toBe(100);
-    expect((await getOutputStockHistory(f.ctx, f.source.id)).filter(e => e.kind === 'intake').map(e => e.physicalDate)).toEqual(['2026-09-16', '2026-09-16']);
+    const atRunEnd = await previewOutputStock(f.ctx, { ...input, occurredAt: '2026-09-15T22:30:00.000Z' });
+    expect(atRunEnd.blockingMessage).toBeFalsy();
+    expect(atRunEnd.removedDryKg).toBe(100);
+    expect((await getOutputStockHistory(f.ctx, f.source.id)).filter(e => e.kind === 'intake').map(e => e.occurredAt).sort())
+      .toEqual(['2026-09-15T22:30:00.000Z', '2026-09-15T23:30:00.000Z']);
   });
 
-  it('uses facility dates for ingredient draws and movement fallbacks while explicit movement dates win', async () => {
+  it('compares ingredient draws and movement fallbacks as instants while explicit movement times win', async () => {
     const f = await fixture();
     await db.transaction(async tx => {
       const organizationId = f.ctx.organizationId;
@@ -64,26 +65,30 @@ describe('output stock facility dates in PostgreSQL', () => {
         feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, status: 'complete',
         deliveryDate: new Date('2026-09-15T00:00:00Z'), massWetKg: 100, massDryKg: 50,
       });
-      // Keep the fixture's distinct run starts; its second run starts at this boundary.
+      // The second run starts at 22:30 UTC, the same instant the movement was recorded.
       expect(f.runs[1].id).not.toBe(f.runs[0].id);
       await tx.insert(productionRunFeedstockDraws).values({
         organizationId, productionRunId: f.runs[1].id, storageLocationId: bin.id, wetMassKg: 20,
       });
       const [movement] = await tx.insert(binMovements).values({
         organizationId, storageLocationId: bin.id, lane: 'feedstock', movementType: 'loss',
-        massDeltaKg: -10, reason: 'E2E ingredient date boundary', createdAt: new Date('2026-09-15T22:30:00Z'),
+        massDeltaKg: -10, reason: 'E2E ingredient time boundary', createdAt: new Date('2026-09-15T22:30:00Z'),
       }).returning();
+      const before = '2026-09-15T22:00:00.000Z';
+      const after = '2026-09-15T23:00:00.000Z';
       for (const zone of ['UTC', 'America/Los_Angeles']) {
         await tx.execute(sql`select set_config('TimeZone', ${zone}, true)`);
-        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-15', tx)).toEqual({ wetMassKg: 100, dryMassKg: 50 });
-        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-16', tx)).toEqual({ wetMassKg: 70, dryMassKg: 35 });
-        await tx.update(binMovements).set({ physicalDate: '2026-09-15' })
+        // 02:00 on Sep 15 in Dar es Salaam is still Sep 14 in UTC; the intake dated Sep 15 counts.
+        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-14T23:00:00.000Z', tx)).toEqual({ wetMassKg: 100, dryMassKg: 50 });
+        expect(await getIngredientStockBasis(f.ctx, bin.id, before, tx)).toEqual({ wetMassKg: 100, dryMassKg: 50 });
+        expect(await getIngredientStockBasis(f.ctx, bin.id, after, tx)).toEqual({ wetMassKg: 70, dryMassKg: 35 });
+        await tx.update(binMovements).set({ occurredAt: new Date('2026-09-15T12:00:00.000Z') })
           .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
-        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-15', tx)).toEqual({ wetMassKg: 90, dryMassKg: 45 });
-        await tx.update(binMovements).set({ physicalDate: '2026-09-17' })
+        expect(await getIngredientStockBasis(f.ctx, bin.id, before, tx)).toEqual({ wetMassKg: 90, dryMassKg: 45 });
+        await tx.update(binMovements).set({ occurredAt: new Date('2026-09-17T12:00:00.000Z') })
           .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
-        expect(await getIngredientStockBasis(f.ctx, bin.id, '2026-09-16', tx)).toEqual({ wetMassKg: 80, dryMassKg: 40 });
-        await tx.update(binMovements).set({ physicalDate: null })
+        expect(await getIngredientStockBasis(f.ctx, bin.id, after, tx)).toEqual({ wetMassKg: 80, dryMassKg: 40 });
+        await tx.update(binMovements).set({ occurredAt: null })
           .where(and(eq(binMovements.id, movement.id), eq(binMovements.organizationId, organizationId)));
       }
       // These ingredient-only children are outside the shared output fixture cleanup.
@@ -92,21 +97,21 @@ describe('output stock facility dates in PostgreSQL', () => {
     });
   });
 
-  it('only treats counts on or after the facility receipt date as dependencies', async () => {
+  it('only treats counts at or after the run end as dependencies', async () => {
     const f = await fixture();
-    for (const physicalDate of ['2026-09-15', '2026-09-16']) {
-      const input = { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate, kind: 'count' as const, wetMassKg: 2000, moisturePercent: 0 };
+    for (const occurredAt of ['2026-09-15T22:00:00.000Z', '2026-09-15T23:00:00.000Z']) {
+      const input = { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt, kind: 'count' as const, wetMassKg: 2000, moisturePercent: 0 };
       const preview = await previewOutputStock(f.ctx, input);
-      await postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E date chronology count' });
+      await postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E time chronology count' });
       const dependency = db.transaction(tx => getProductionRunDependentProduct(f.ctx, tx, f.runs[0].id));
-      if (physicalDate === '2026-09-15') await expect(dependency).resolves.toBeUndefined();
+      if (occurredAt === '2026-09-15T22:00:00.000Z') await expect(dependency).resolves.toBeUndefined();
       else await expect(dependency).rejects.toThrow('covered by count');
     }
   });
 
   it('refuses actual archive for future production and product stock while retaining date-filtered previews', async () => {
-    const future = '2099-09-16';
-    const f = await fixture(new Date(`${future}T00:00:00Z`));
+    const future = '2099-09-16T12:00:00.000Z';
+    const f = await fixture(new Date('2099-09-16T00:00:00Z'));
     await expect(archiveStorageLocation(f.ctx, f.source.id)).rejects.toThrow('Cannot archive');
     const input: ProductStockPreviewInput = { facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,

@@ -25,7 +25,7 @@ export async function previewProductStock(ctx: OrgContext, input: ProductStockPr
 /** The same request projection is recomputed under all bin locks before writes. */
 export async function prepareProductStock(ctx: OrgContext, input: ProductStockPreviewInput, tx: DbTransaction) {
     requireOrgScope(ctx);
-    const base = { facilityId: input.facilityId, physicalDate: input.placedAt };
+    const base = { facilityId: input.facilityId, occurredAt: input.placedAt };
     const source = await prepareOutputStock(ctx, { ...base, storageLocationId: input.sourceBiocharStorageLocationId, kind: 'production_draw', wetMassKg: input.massKg, moisturePercent: input.moistureContentPercent }, tx);
     const composition = await resolveCompositionIngredientMassBasis(ctx, tx, { ingredients: input.ingredientBins ?? [] }, undefined, undefined, input.placedAt);
     const ingredients = composition.ingredients as { formulationIngredientId: string; feedstockTypeId: string; storageLocationId?: string | null; massKg: number; massDryKg: number; moistureContentPercent: number | null; moistureSource: string; moistureSourceSnapshot?: unknown }[];
@@ -71,7 +71,7 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
       removedWetKg: -wetAdded, discrepancySolidsKg: 0, blockingMessage: source.preview.blockingMessage });
     const basisFingerprint = stockFingerprint({
       request: {
-        facilityId: input.facilityId, formulationId: input.formulationId, physicalDate: input.placedAt,
+        facilityId: input.facilityId, formulationId: input.formulationId, occurredAt: input.placedAt,
         sourceStorageLocationId: input.sourceBiocharStorageLocationId, destinationStorageLocationId: input.storageLocationId,
         wetMassKg: input.massKg, moisturePercent: input.moistureContentPercent, waterAddedKg: input.waterAddedKg,
         ingredients: ingredients.map(ingredient => ({

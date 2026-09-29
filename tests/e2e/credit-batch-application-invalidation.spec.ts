@@ -69,7 +69,6 @@ async function createApplicationForLineage(
   await page.click('button:has-text("New Delivery")');
   await waitForSideSheet(page);
 
-  await page.fill('input[name="deliveryDate"]', today);
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");

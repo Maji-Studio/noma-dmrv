@@ -7,7 +7,7 @@ import {
 // productionDate is intentionally absent: a biochar product's production date is
 // the selected source bin's oldest allocated run date, derived server-side.
 const validBiocharProductInput = {
-  placedAt: "2026-09-01",
+  placedAt: "2026-09-01T12:00:00.000Z",
   idempotencyKey: "product-request",
   basisFingerprint: "product-preview",
   facilityId: "11111111-1111-4111-8111-111111111111",
@@ -36,7 +36,7 @@ describe("biocharProductFormSchema", () => {
   });
 
   it("rejects an invalid calendar placement date", () => {
-    const result = biocharProductFormSchema.safeParse({ ...validBiocharProductInput, placedAt: "2026-02-30" });
+    const result = biocharProductFormSchema.safeParse({ ...validBiocharProductInput, placedAt: "2026-02-30T12:00:00.000Z" });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues).toEqual(

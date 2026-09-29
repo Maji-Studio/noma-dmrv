@@ -215,7 +215,7 @@ describe("storage location archive", () => {
     const binId = lane === "biochar" ? fixture.source.id : fixture.bin.id;
     try {
       await expect(archiveStorageLocation(fixture.ctx, binId)).rejects.toThrow(/on hand/);
-      const input = { facilityId: fixture.facility.id, storageLocationId: binId, physicalDate: "2026-09-14", kind: "count" as const, wetMassKg: 0 };
+      const input = { facilityId: fixture.facility.id, storageLocationId: binId, occurredAt: "2026-09-14T12:00:00.000Z", kind: "count" as const, wetMassKg: 0 };
       const preview = await previewOutputStock(fixture.ctx, input);
       await postOutputStock(fixture.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E archive empty bin" });
       await expect(archiveStorageLocation(fixture.ctx, binId)).resolves.toMatchObject({ archivedAt: expect.any(Date) });

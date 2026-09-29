@@ -7,8 +7,8 @@ export interface OutputStockRun {
 }
 export interface OutputStockLayer {
   id: string;
-  /** Physical calendar date, independently of recorded time. */
-  physicalDate: string;
+  /** Instant the layer physically entered the bin (canonical ISO 8601 UTC), independently of recorded time. */
+  placedAt: string;
   postingSequence: bigint;
   establishedDryBiocharKg: Decimal;
   ingredientDrySolidsKg: Decimal;
@@ -23,10 +23,11 @@ export type OutputStockRequest =
   | { kind: 'count'; wetKg: Decimal; moisturePercent?: Decimal }
   | { kind: 'count-solids'; solidsKg: Decimal };
 
-function validateDate(value: string): void {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) {
-    throw new RangeError('Invalid physical date');
-  }
+/** Only canonical ISO 8601 UTC instants (`Date#toISOString`) are accepted, so string order is time order. */
+function canonicalInstant(value: string): string {
+  const parsed = typeof value === 'string' ? Date.parse(value) : NaN;
+  if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== value) throw new RangeError('Invalid physical time');
+  return value;
 }
 function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Rational {
   const moisture = decimal(moisturePercent as Decimal);
@@ -42,12 +43,12 @@ function wetSolids(wetKg: Decimal, moisturePercent: Decimal | undefined): Ration
  * Returned layers can be passed into the next plan; callers persist allocations,
  * not a replay of this calculation. This function does not authorize a database write.
  */
-export function planOutputStock(layers: readonly OutputStockLayer[], physicalDate: string, request: OutputStockRequest) {
-  validateDate(physicalDate);
+export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt: string, request: OutputStockRequest) {
+  const at = canonicalInstant(occurredAt);
   const ids = new Set<string>();
   const sequences = new Set<bigint>();
   const prepared = layers.map(layer => {
-    validateDate(layer.physicalDate);
+    const placedAt = canonicalInstant(layer.placedAt);
     if (!layer.id || ids.has(layer.id) || typeof layer.postingSequence !== 'bigint' || layer.postingSequence < BigInt(0) || sequences.has(layer.postingSequence)) throw new RangeError('Invalid or duplicate layer identity/order');
     ids.add(layer.id); sequences.add(layer.postingSequence);
     const established = grams(layer.establishedDryBiocharKg);
@@ -72,9 +73,9 @@ export function planOutputStock(layers: readonly OutputStockLayer[], physicalDat
       established - round(subtract(rational(established), exactRemainingGrams)) !== remaining) {
       throw new RangeError('Exact solids balance does not match conserved dry stock');
     }
-    return { layer, established, remaining, fraction, capacity, runs };
-  }).sort((a, b) => a.layer.physicalDate.localeCompare(b.layer.physicalDate) || (a.layer.postingSequence < b.layer.postingSequence ? -1 : 1));
-  const eligible = prepared.filter(p => p.layer.physicalDate <= physicalDate);
+    return { layer, placedAt, established, remaining, fraction, capacity, runs };
+  }).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.layer.postingSequence < b.layer.postingSequence ? -1 : 1));
+  const eligible = prepared.filter(p => p.placedAt <= at);
   const expectedSolidsKg = eligible.reduce((sum, p) => add(sum, p.capacity), rational(BigInt(0)));
   const count = request.kind === 'count' || request.kind === 'count-solids';
   let measured: Rational;
@@ -89,7 +90,7 @@ export function planOutputStock(layers: readonly OutputStockLayer[], physicalDat
   const allocations = [];
   const remainingLayers: OutputStockLayer[] = [];
   for (const p of prepared) {
-    if (p.layer.physicalDate > physicalDate || left.numerator === BigInt(0) || p.capacity.numerator === BigInt(0)) { remainingLayers.push(p.layer); continue; }
+    if (p.placedAt > at || left.numerator === BigInt(0) || p.capacity.numerator === BigInt(0)) { remainingLayers.push(p.layer); continue; }
     const solidsKg = compare(left, p.capacity) >= BigInt(0) ? p.capacity : left;
     const remainingSolidsKg = subtract(p.capacity, solidsKg);
     const exactRemainingDryGrams = multiply(multiply(remainingSolidsKg, p.fraction), rational(GRAMS_PER_KG));

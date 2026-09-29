@@ -380,7 +380,7 @@ async function openDeliveredDeliveryForm(
   await newDeliveryButton.click();
   await waitForSideSheet(page);
 
-  await page.fill('input[name="deliveryDate"]', DELIVERY_DATE);
+  await page.fill('input[name="deliveryDate"]', `${DELIVERY_DATE}T12:00`);
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', wetMassKg);

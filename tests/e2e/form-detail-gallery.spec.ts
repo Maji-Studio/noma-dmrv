@@ -6,7 +6,7 @@ import { eq, inArray } from "drizzle-orm";
 import { test, expect, selectEntity, waitForFacilityHydration } from "./fixtures";
 import { seedDurabilityBatch, seedCreditBatch } from "./fixtures/seed-chain-data";
 import { createDbConnection } from "./fixtures/db";
-import { seedOutputStockBrowserFixture, readOutputStockBrowserFixture, FIFO_BROWSER_DATE } from "./helpers/output-stock-browser-fixture";
+import { seedOutputStockBrowserFixture, readOutputStockBrowserFixture, FIFO_BROWSER_DATE, FIFO_BROWSER_TIME } from "./helpers/output-stock-browser-fixture";
 import { createApplication } from "../../src/data-access/applications";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
@@ -189,7 +189,7 @@ async function bin(page: Page, f: StockFixture) {
   await page.getByText(f.bin.name, { exact: true }).first().click();
 }
 async function fillStock(page: Page, wet: string, reason: string) {
-  await page.locator("#physicalDate").fill(FIFO_BROWSER_DATE);
+  await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill(wet);
   await page.locator("#stock-moisture").fill("30");
   await page.locator("#stock-reason").fill(reason);
@@ -199,7 +199,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   const f = await seedOutputStockBrowserFixture(testUsers.admin.id);
   await navigate(page, "deliveries", f.facility);
   await page.getByRole("button", { name: "New Delivery", exact: true }).click();
-  await page.locator("#deliveryDate").fill(DATE);
+  await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", f.order.id, f.order.code);
   await page.locator("#storageLocationId").selectOption(f.bin.id);
   await page.locator("#deliveredWetMassKg").fill("2500");
@@ -375,7 +375,7 @@ test("gallery biochar product create and read", async ({ adminPage: page, testUs
   } finally { await pool.end(); }
   await navigate(page, "biochar-products", f.facility);
   await page.getByRole("button", { name: "New Product", exact: true }).click();
-  await page.locator("#placedAt").fill(FIFO_BROWSER_DATE);
+  await page.locator("#placedAt").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Biochar bin", f.source.id, f.source.name);
   await page.locator('input[name="massKg"]').fill("300");
   await page.locator('input[name="moistureContentPercent"]').fill("10");

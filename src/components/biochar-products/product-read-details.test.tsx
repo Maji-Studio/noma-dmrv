@@ -15,7 +15,7 @@ vi.mock("@/components/ui/tooltip", () => ({
 import { productSheetSections, savedProductComposition } from "./product-read-details";
 
 const product = {
-  id: "product", facilityId: "facility", placedAt: "2026-09-21", massKg: 350, waterAddedKg: 50,
+  id: "product", facilityId: "facility", placedAt: "2026-09-21T12:00:00.000Z", massKg: 350, waterAddedKg: 50,
   moistureContentPercent: 5, sourceAllocatedDryMassKg: 200, densityKgM3: 300,
   formulation: { id: "formulation", name: "Biochar with manure" },
   storageLocation: { id: "destination", name: "Product store" },
@@ -57,7 +57,7 @@ describe("Product read view levels", () => {
       renderer = create(
         <FormDetailProvider scope="product">
           <FormDetailControl />
-          <EntitySideSheetSections numbered sections={productSheetSections(product)} />
+          <EntitySideSheetSections numbered sections={productSheetSections(product, "UTC")} />
         </FormDetailProvider>,
       );
     });
@@ -97,7 +97,7 @@ describe("Product read view levels", () => {
     const precise = { ...product, waterAddedKg: 50.125, composition: { ingredients: [{ ...(product.composition as { ingredients: Record<string, unknown>[] }).ingredients[0], massDryKg: null }] } } as unknown as BiocharProductWithRelations;
     let renderer!: ReactTestRenderer;
     await act(async () => {
-      renderer = create(<EntitySideSheetSections sections={productSheetSections(precise)} />);
+      renderer = create(<EntitySideSheetSections sections={productSheetSections(precise, "UTC")} />);
     });
     const shown = text(renderer.root);
     expect(shown).toContain("50.125 kg");

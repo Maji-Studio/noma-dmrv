@@ -249,7 +249,7 @@ export async function resolveCompositionIngredientMassBasis(
   composition: Record<string, unknown> | null | undefined,
   previousComposition?: Record<string, unknown> | null,
   excludeProductId?: string,
-  physicalDate?: string,
+  occurredAt?: string,
 ): Promise<Record<string, unknown>> {
   requireOrgScope(ctx);
   const ingredients = getCompositionIngredientObjects(composition);
@@ -272,7 +272,7 @@ export async function resolveCompositionIngredientMassBasis(
   ];
 
   const basisByBin = new Map(await Promise.all(storageLocationIds.map(async id =>
-    [id, await getIngredientMoistureBasis(ctx, id, physicalDate, tx, excludeProductId)] as const,
+    [id, await getIngredientMoistureBasis(ctx, id, occurredAt, tx, excludeProductId)] as const,
   )));
 
   return {

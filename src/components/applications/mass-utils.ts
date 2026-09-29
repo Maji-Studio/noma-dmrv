@@ -15,6 +15,8 @@ export interface ApplicationDeliveryOption {
   code: string;
   status: DeliveryStatus;
   deliveryDate: Date | string;
+  /** The delivery's calendar day on its facility clock ("YYYY-MM-DD"). */
+  deliveryDay?: string | null;
   orderCode: string | null;
   formulationName: string | null;
   productBinName: string | null;

@@ -12,6 +12,10 @@ import { previewOutputStock } from "../../../src/data-access/output-stock-operat
 import { createDelivery } from "../../../src/data-access/delivery-output-writes";
 
 export const FIFO_BROWSER_DATE = "2026-09-14";
+/** Wall clock the browser specs type into date-and-time pickers. */
+export const FIFO_BROWSER_TIME = `${FIFO_BROWSER_DATE}T12:00`;
+/** The same moment as the server stores it: pickers read the fixture facility's clock, which is UTC. */
+export const FIFO_BROWSER_INSTANT = `${FIFO_BROWSER_TIME}:00.000Z`;
 export const FIFO_MATCHING_BIN_COUNT = 24;
 const FIELD_LATITUDE = -6.8;
 const FIELD_LONGITUDE = 39.2;
@@ -26,8 +30,8 @@ export async function seedOutputStockBrowserFixture(userId: string, shipped = fa
   }).returning();
   const products = [];
   for (const [index, wet, moisture, ingredientWet, ingredientMoisture, placedAt] of [
-    [0, 1000, 10, 500, 60, "2026-09-10"],
-    [1, 750, 20, 250, 52, "2026-09-12"],
+    [0, 1000, 10, 500, 60, "2026-09-10T12:00:00.000Z"],
+    [1, 750, 20, 250, 52, "2026-09-12T12:00:00.000Z"],
   ] as const) {
     products.push(await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, {
       code: `E2E-FIFO-${index}-${f.tag}`, facilityId: f.facility.id,
@@ -55,12 +59,12 @@ export async function seedOutputStockBrowserFixture(userId: string, shipped = fa
   let delivery: Awaited<ReturnType<typeof createDelivery>> | undefined;
   if (shipped) {
     const preview = await previewOutputStock(f.ctx, {
-      storageLocationId: f.bin.id, facilityId: f.facility.id, physicalDate: FIFO_BROWSER_DATE,
+      storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: FIFO_BROWSER_INSTANT,
       kind: "delivery", wetMassKg: 2000, moisturePercent: 30,
     });
     delivery = await createDelivery(f.ctx, {
       code: `E2E-FIFO-D-${f.tag}`, orderId: order.id, facilityId: f.facility.id,
-      deliveryDate: new Date(FIFO_BROWSER_DATE), storageLocationId: f.bin.id,
+      deliveryDate: new Date(FIFO_BROWSER_INSTANT), storageLocationId: f.bin.id,
       deliveredWetMassKg: 2000, moistureContentPercent: 30,
       idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint,
     });
@@ -77,7 +81,7 @@ export async function readOutputStockBrowserFixture(f: Awaited<ReturnType<typeof
     products: await db.select().from(biocharProducts).where(eq(biocharProducts.storageLocationId, f.bin.id)),
     orders: await db.select().from(orders).where(eq(orders.facilityId, f.facility.id)),
     balance: await previewOutputStock(f.ctx, {
-      storageLocationId: f.bin.id, facilityId: f.facility.id, physicalDate: FIFO_BROWSER_DATE,
+      storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: FIFO_BROWSER_INSTANT,
       kind: "count", wetMassKg: 0,
     }),
   };

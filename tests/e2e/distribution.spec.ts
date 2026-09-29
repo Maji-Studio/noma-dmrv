@@ -81,7 +81,7 @@ async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
   await page.click('button:has-text("New Delivery")');
   await page.waitForSelector('[role="dialog"]', { timeout: 8000 });
 
-  await page.fill('input[name="deliveryDate"]', "2026-03-02");
+  await page.fill('input[name="deliveryDate"]', "2026-03-02T12:00");
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "95");

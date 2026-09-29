@@ -16,7 +16,8 @@ vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputSt
 vi.mock("@/hooks/use-output-stock", () => ({
   useMatchingOutputBins: () => ({ data: [{ id: "bin", code: "PB-001", name: "Product bin", dryMassKg: 1500, recordedWetMassKg: null, estimatedWetMassKg: null }], isLoading: false, error: null }),
   useOutputStockPreview: () => ({ data: undefined, isLoading: false, error: null }),
-  useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", physicalDate: "2026-09-22", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [] }] }], isLoading: false, error: null }),
+  useOutputStockBalance: () => ({ data: undefined, isLoading: false, error: null }),
+  useOutputStockHistory: () => ({ data: [{ id: "entry", deliveryId: "delivery", kind: "delivery", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded", correctsMovementId: null, wetMassKg: 100, moisturePercent: 20, dryMassKg: 80, beforeDryKg: 200, afterDryKg: 120, allocations: [{ layerId: "batch", code: "B-001", wetMassKg: null, dryMassKg: 80, runs: [] }] }], isLoading: false, error: null }),
 }));
 // Only the blend block is under test on the formulation form; the material
 // selector needs a query client this suite does not provide.
