@@ -36,6 +36,7 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { customerSheetSections } from "./customer-read-sections";
+import { Notice } from "@/components/ui/notice";
 
 // ============================================
 // Column Definitions
@@ -238,11 +239,9 @@ export function CustomerList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <div className="border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10 p-16 flex items-center gap-12" role="alert">
-          <span className="text-[var(--color-signal-red)] body-small font-medium">
-            Customers could not be loaded. Refresh the page and try again.
-          </span>
-        </div>
+        <Notice tone="error">
+          Customers could not be loaded. Refresh the page and try again.
+        </Notice>
       </div>
     );
   }

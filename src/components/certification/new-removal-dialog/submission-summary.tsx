@@ -31,6 +31,7 @@ import {
   type SubmitState,
 } from "./submission-facts";
 import { SubmissionChecks } from "./submission-checks";
+import { Notice } from "@/components/ui/notice";
 
 const STATE_ICON_SIZE = 20;
 const BATCH_LINK_ICON_SIZE = 12;
@@ -172,11 +173,13 @@ export function SubmissionSummary({
       </div>
 
       {facts.blockers.length > 0 && (
-        <ul className="list-disc border border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] py-8 pr-16 pl-32 body-small text-[var(--color-text-primary)]">
-          {facts.blockers.map((blocker) => (
-            <li key={blocker}>{blocker}</li>
-          ))}
-        </ul>
+        <Notice tone="error">
+          <ul className="list-disc pl-16">
+            {facts.blockers.map((blocker) => (
+              <li key={blocker}>{blocker}</li>
+            ))}
+          </ul>
+        </Notice>
       )}
 
       <section className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
@@ -278,12 +281,9 @@ export function SubmissionSummary({
       )}
 
       {facts.warnings.length > 0 && (
-        <div className="flex flex-col gap-4 border-l-2 border-[var(--st-wait)] pl-12">
-          <span className="body-small font-medium text-[var(--color-text-primary)]">
-            Submission notes
-          </span>
+        <Notice tone="warning" title="Submission notes">
           <CompilationWarnings warnings={facts.warnings} />
-        </div>
+        </Notice>
       )}
 
       {facts.isProduction && <EnvBanner isProduction variant="inline" />}

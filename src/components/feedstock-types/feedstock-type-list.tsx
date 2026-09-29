@@ -49,6 +49,7 @@ import {
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { feedstockTypeSheetSections, titleCase } from "./feedstock-type-read-sections";
 import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
+import { Notice } from "@/components/ui/notice";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -104,23 +105,18 @@ export function FeedstockDeleteConflictNotice({
   isPending: boolean;
 }) {
   return (
-    <div
-      role="alert"
-      className="flex flex-col gap-12 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] p-16 sm:flex-row sm:items-center sm:justify-between"
+    <Notice
+      tone="warning"
+      title={`${name} is in use and cannot be deleted.`}
+      action={
+        <Button variant="default" onClick={onArchive} busy={isPending}>
+          <ArchiveIcon size={16} weight="bold" />
+          Archive instead
+        </Button>
+      }
     >
-      <div className="flex flex-col gap-2">
-        <p className="body-medium font-medium text-[var(--color-text-primary)]">
-          {name} is in use and cannot be deleted.
-        </p>
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Archive it instead. Historical records keep the type, while active pickers hide it.
-        </p>
-      </div>
-      <Button variant="default" onClick={onArchive} busy={isPending}>
-        <ArchiveIcon size={16} weight="bold" />
-        Archive instead
-      </Button>
-    </div>
+      Archive it instead. Historical records keep the type, while active pickers hide it.
+    </Notice>
   );
 }
 

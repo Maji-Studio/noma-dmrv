@@ -13,7 +13,6 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -46,6 +45,7 @@ import {
   type RemovalListRow,
 } from "./removal-list-state";
 import { removalDeletionCopy } from "./removal-deletion-copy";
+import { Notice } from "@/components/ui/notice";
 
 interface RemovalDetailSheetProps {
   summary: RemovalListRow;
@@ -112,21 +112,13 @@ function SubmissionStatusPanel({
       </div>
 
       {status.reasons.length > 0 && (
-        <ul className="mt-10 flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12">
-          {status.reasons.map((reason) => (
-            <li key={reason} className="flex items-start gap-6">
-              <WarningIcon
-                size={14}
-                weight="fill"
-                aria-hidden
-                className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
-              />
-              <span className="body-small text-[var(--color-text-secondary)]">
-                {reason}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <Notice tone="warning" className="mt-10">
+          <ul className="flex flex-col gap-6">
+            {status.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </Notice>
       )}
 
       {status.canRetry && (

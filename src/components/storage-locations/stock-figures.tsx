@@ -18,7 +18,6 @@ import {
   ArrowRightIcon,
   CaretDownIcon,
   CaretUpIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -168,36 +167,6 @@ export function StockChip({
     >
       {children}
     </span>
-  );
-}
-
-/**
- * One line, one icon. Blocking refusals are errors; everything else is a status
- * the operator can read and keep working.
- */
-export function StockNotice({
-  children,
-  tone = "warning",
-  role = "status",
-}: {
-  children: ReactNode;
-  tone?: "warning" | "error";
-  role?: "status" | "alert";
-}) {
-  return (
-    <p
-      role={role}
-      className={`flex items-start gap-8 body-caption ${
-        tone === "error" ? "text-[var(--st-bad)]" : "text-[var(--st-wait)]"
-      }`}
-    >
-      <WarningCircleIcon
-        size={16}
-        aria-hidden="true"
-        className="mt-2 shrink-0"
-      />
-      <span>{children}</span>
-    </p>
   );
 }
 

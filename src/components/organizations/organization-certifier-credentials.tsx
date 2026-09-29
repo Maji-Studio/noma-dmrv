@@ -25,8 +25,6 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  CheckCircleIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
 import { FormActions, FormField, FormInput } from "@/components/forms";
@@ -44,6 +42,7 @@ import {
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
 import { formatDateTime } from "@/lib/format-utils";
+import { Notice } from "@/components/ui/notice";
 
 interface OrganizationCertifierCredentialsProps {
   organizationId: string;
@@ -229,36 +228,10 @@ function VerificationNotice({
 }: {
   verification: CertifierCredentialsVerification;
 }) {
-  // Written out per branch, never interpolated: Tailwind resolves class names
-  // by scanning source text, so a composed `bg-[var(${tone}-bg)]` generates no
-  // rule at all.
-  const { Icon, container, icon } = verification.ok
-    ? {
-        Icon: CheckCircleIcon,
-        container: "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)]",
-        icon: "text-[var(--st-ok)]",
-      }
-    : {
-        Icon: WarningCircleIcon,
-        container: "border-[var(--st-wait-border)] bg-[var(--st-wait-bg)]",
-        icon: "text-[var(--st-wait)]",
-      };
-
   return (
-    <div
-      role="status"
-      className={`flex items-start gap-8 border p-12 ${container}`}
-    >
-      <Icon
-        size={16}
-        weight="fill"
-        aria-hidden
-        className={`mt-2 shrink-0 ${icon}`}
-      />
-      <p className="body-small text-[var(--color-text-primary)]">
-        {verification.message}
-      </p>
-    </div>
+    <Notice tone={verification.ok ? "success" : "warning"}>
+      {verification.message}
+    </Notice>
   );
 }
 

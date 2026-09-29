@@ -466,7 +466,7 @@ const downstream: Surface[] = [
         : undefined),
     open: async (page, ctx) => {
       const sheet = await createSheet(page, ctx, "credit-batches", "New credit batch");
-      await sheet.getByRole("combobox", { name: "Select feedstock type...", exact: true }).first().click();
+      await sheet.getByTestId("entity-select-trigger").filter({ hasText: "Select feedstock type..." }).first().click();
       await page.getByRole("option").first().click();
       await settle(page, sheet);
       const setup = sheet.getByRole("button", { name: "Set up Method-B prerequisites", exact: true });

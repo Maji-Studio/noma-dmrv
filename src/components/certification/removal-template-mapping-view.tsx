@@ -14,6 +14,7 @@ import {
   REMOVAL_TEMPLATE_TONE_COLORS,
   RemovalTemplateDiagnosticStatusBadge,
 } from "./removal-template-diagnostic-status";
+import { Notice } from "@/components/ui/notice";
 
 function RawIdentifiers({
   summary,
@@ -230,11 +231,13 @@ export function RemovalTemplateMappingView({
       </div>
 
       {model.templateIssues.length > 0 && (
-        <ul className="border-l-2 border-[var(--st-wait)] pl-12 body-small text-[var(--color-text-secondary)]">
-          {model.templateIssues.map((issue) => (
-            <li key={issue}>{issue}</li>
-          ))}
-        </ul>
+        <Notice tone="warning">
+          <ul>
+            {model.templateIssues.map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        </Notice>
       )}
 
       {model.groups.map((group) => (

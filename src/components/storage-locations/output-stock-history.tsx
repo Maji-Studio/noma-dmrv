@@ -21,9 +21,9 @@ import {
   formatWetAtMoisture,
   InlineMassChange,
   StockChip,
-  StockNotice,
   StockRows,
 } from "./stock-figures";
+import { Notice } from "@/components/ui/notice";
 
 const CORRECTABLE_KINDS = ["loss", "count", "delivery"];
 
@@ -141,7 +141,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
         </div>
         {original ? <OutputStockForm storageLocationId={storageLocationId} facilityId={facilityId} kind={originalKind(original) === "count" ? "count" : originalKind(original) === "delivery" ? "delivery" : "loss"} original={original} onCancel={() => setOriginal(undefined)} onRecorded={() => setOriginal(undefined)} /> : <>
           {history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the stock history</p>}
-          {history.error && <StockNotice tone="error" role="alert">{history.error.message}</StockNotice>}
+          {history.error && <Notice tone="error">{history.error.message}</Notice>}
           {history.data?.length === 0 && <EmptyState icon={<ClockCounterClockwiseIcon size={32} />} title="No stock history" description="Recorded movements will appear here." padding="sm" />}
           {timeline.length > 0 && <ul>
             {timeline.map((entry, index) => (

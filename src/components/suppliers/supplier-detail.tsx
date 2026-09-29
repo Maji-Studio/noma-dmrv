@@ -29,6 +29,7 @@ import {
   buildSupplierFallbackDistanceField,
   buildSupplierLocationField,
 } from "./supplier-detail-fields";
+import { Notice } from "@/components/ui/notice";
 
 interface SupplierDetailProps {
   supplierId: string;
@@ -98,11 +99,9 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
 
   if (supplierError || !supplier) {
     return (
-      <div className="p-32 border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10">
-        <p className="body-medium text-[var(--color-signal-red)]">
-          {supplierError instanceof Error ? supplierError.message : "The supplier could not be loaded. Refresh the page and try again."}
-        </p>
-      </div>
+      <Notice tone="error">
+        {supplierError instanceof Error ? supplierError.message : "The supplier could not be loaded. Refresh the page and try again."}
+      </Notice>
     );
   }
 
