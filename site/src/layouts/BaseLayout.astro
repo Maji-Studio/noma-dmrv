@@ -1,10 +1,12 @@
 ---
 import "../styles/tokens.css";
 import "../visuals/visuals.css";
-const { title, description } = Astro.props;
+import PrototypeSwitcher from "../components/prototype/PrototypeSwitcher.astro";
+// `layout` (PROTOTYPE ONLY): the variant key; sets data-layout on <html> and renders the switcher.
+const { title, description, layout = "0" } = Astro.props;
 ---
 <!doctype html>
-<html lang="en">
+<html lang="en" data-layout={layout}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -14,6 +16,7 @@ const { title, description } = Astro.props;
   </head>
   <body id="top">
     <slot />
+    <PrototypeSwitcher current={layout} />
     <script>
       import { mountVisuals } from "../visuals/index.js";
       mountVisuals();
