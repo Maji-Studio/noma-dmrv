@@ -74,6 +74,28 @@ describe("mix bin draws in PostgreSQL", () => {
     await postMeasurement(f, { kind: "count", wetMassKg: 0, moisturePercent: null });
     const saved = await setMode(f, "split");
     expect(saved.stockMode).toBe("split");
+    const history = await getOutputStockHistory(f.ctx, f.bin.id);
+    expect(history.filter(entry => entry.kind === "merge" || entry.kind === "split").map(entry => entry.kind).sort()).toEqual(["merge", "split"]);
+  });
+
+  it("keeps a mix-era entry pro-rata when it is corrected after the bin went back to split", async () => {
+    const f = await twoBatches();
+    await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
+    // A 700 kg delivery at 0% empties the pile, so the bin may switch back to split.
+    const delivery = await mixDelivery(f, 700, 0);
+    await setMode(f, "split");
+    const [original] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
+    const replacement = await postMeasurement(f, { kind: "delivery", wetMassKg: 350, moisturePercent: 0, correctsMovementId: original.movementId });
+    expect((await allocationsOf(replacement.movementId)).map(a => [a.layer, a.dry, a.policy]).sort()).toEqual([[f.p1.id, "200.000", "pro_rata"], [f.p2.id, "150.000", "pro_rata"]].sort());
+    const app = await createApplication(f.ctx, { code: `E2E-MIX-AP-C-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_DATE), biocharAppliedTons: 0.1, fieldSizeHa: 1, evidenceMethod: "location" });
+    expect(await getMixBinHeldApplicationIds(f.ctx, db, [app.id])).toEqual(new Set([app.id]));
+  });
+
+  it("refuses a merge timed before the bin's last recorded movement", async () => {
+    const f = await twoBatches();
+    await postMeasurement(f, { kind: "loss", wetMassKg: 10, moisturePercent: 0 });
+    await expect(setMode(f, "mix", new Date("2026-09-14T06:00:00.000Z"))).rejects.toThrow("Enter a merge time at or after the bin's last recorded movement");
+    expect((await setMode(f, "mix", new Date(STOCK_TIME))).stockMode).toBe("mix");
   });
 
   it("refuses a merge in the future and a mix feedstock bin", async () => {
@@ -89,9 +111,18 @@ describe("mix bin draws in PostgreSQL", () => {
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
     const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 10, moisturePercent: 0 });
     const backdated = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T06:00:00.000Z", kind: "loss", wetMassKg: 5, moisturePercent: 0 });
-    expect(backdated.calculatedWithout).toEqual([{ id: loss.movementId, occurredAt: STOCK_TIME, label: expect.stringMatching(/^E2E stock contract measurement \(Sep 14, 2026, /) }]);
+    expect(backdated.calculatedWithout).toEqual([{ id: loss.movementId, occurredAt: STOCK_TIME, label: expect.stringMatching(/^Stock loss \(Sep 14, 2026, /) }]);
     const later = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T18:00:00.000Z", kind: "loss", wetMassKg: 5, moisturePercent: 0 });
     expect(later.calculatedWithout).toEqual([]);
+  });
+
+  it("warns an entry timed while the bin was split that a later mix removal drew without it", async () => {
+    const f = await twoBatches();
+    await setMode(f, "mix", new Date("2026-09-14T00:00:00.000Z"));
+    const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 10, moisturePercent: 0 });
+    const early = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-13T18:00:00.000Z", kind: "loss", wetMassKg: 5, moisturePercent: 0 });
+    expect(early.stockMode).toBe("split");
+    expect(early.calculatedWithout?.map(e => e.id)).toEqual([loss.movementId]);
   });
 });
 

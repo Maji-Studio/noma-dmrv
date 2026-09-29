@@ -4,7 +4,7 @@ import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, type DrawPolicy, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
 import { mixPileName, outputStockEventLabel } from '@/lib/output-stock/labels';
-import { stockModeAt, type OutputStockMode } from '@/lib/output-stock/stock-mode';
+import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
 import { estimateStock, planReadings, withReadings, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
 import { formatFacilityDateTime } from '@/lib/format-utils';
 import { formatMoisturePercent, PERCENT_SCALE } from '@/lib/mass-moisture';
@@ -15,7 +15,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getLayerMoistureBases, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
-import { getLatestMergeAt } from './output-bin-stock-mode';
+import { getStockModeChanges } from './output-bin-stock-mode';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { prepareOutputCorrection } from './output-stock-corrections';
 import { requireOrgScope } from './utils';
@@ -42,8 +42,8 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   // A correction may name its own sub-bins and readings; otherwise it replays the original's.
   const sources = input.sources ?? (correction ? savedSources(correction.original.inputSnapshot) : undefined);
   // A merged bin stays split before its merge, so an entry timed before it is planned as split.
-  const latestMergeAt = bin.stockMode === 'mix' ? await getLatestMergeAt(ctx, bin.id, reader) : null;
-  const stockMode = stockModeAt(bin.stockMode, latestMergeAt, input.occurredAt);
+  const modeChanges = await getStockModeChanges(ctx, bin.id, reader);
+  const stockMode = stockModeAt(bin.stockMode, modeChanges, input.occurredAt);
   const policy: DrawPolicy = stockMode === 'mix' ? 'pro_rata' : 'fifo';
   if (sources && stockMode !== 'split') throw new SafeError('Only a split bin takes a sub-bin order.');
   if (!sources && input.moisturePercent == null && !(input.kind === 'count' && input.wetMassKg === 0)) throw new SafeError('Enter the measured moisture.');
@@ -88,7 +88,9 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   // A reading resets the estimate of the sub-bin it was taken from; the wet
   // estimates before and after come from each layer's latest reading.
   const bases = await getLayerMoistureBases(ctx, bin, layers, reader, { ignoreMovementId: input.correctsMovementId });
-  const readings = plan ? planReadings(request, plan, input.occurredAt, policy) : [];
+  // Every layer after the draw, not only the planning subset a reduced loss restores: a pile reading describes them all.
+  const afterLayers = layers.map(l => plan?.remainingLayers.find(a => a.id === l.id) ?? l);
+  const readings = plan ? planReadings(request, { allocations: plan.allocations, remainingLayers: afterLayers }, input.occurredAt, policy) : [];
   const drawnBases = plan ? bases.map(basis => ({ ...basis, remainingSolidsKg: plan!.remainingLayers.find(l => l.id === basis.layerId)?.remainingSolidsKg ?? basis.remainingSolidsKg })) : bases;
   const nextSequence = (events.at(-1)?.sequence ?? BigInt(0)) + BigInt(1);
   const afterBases = withReadings(drawnBases, readings, input.occurredAt, nextSequence);
@@ -103,13 +105,13 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   }));
   // Rule 19: a backdated mix entry leaves later removals' saved shares alone; name them, at facility time.
   const calculatedWithout = async () => {
-    const later = stockMode === 'mix' ? laterMixRemovals(events, input, bin.stockMode, latestMergeAt) : [];
+    // Any entry, even one timed while the bin was split, changes the pile later mix removals drew from.
+    const later = laterMixRemovals(events, input, bin.stockMode, modeChanges);
     if (!later.length) return [];
     const zone = await getOutputStockFacilityTimezone(ctx, input.facilityId, reader);
     return later.map(e => ({ id: e.id, occurredAt: e.occurredAt, label: `${e.label} (${formatFacilityDateTime(e.occurredAt, zone)})` }));
   };
   const [formulation] = bin.formulationId ? await reader.select({ name: formulations.name }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, bin.formulationId))) : [];
-  const afterLayers = layers.map(l => plan?.remainingLayers.find(a => a.id === l.id) ?? l);
   const preview: OutputStockPreview = {
     basisFingerprint, storageLocationId: bin.id, binName: bin.name, binCode: bin.code, formulationName: formulation?.name ?? null, lane, beforeDryKg,
     beforeAllocations: layerViews(layers, bases), afterAllocations: layerViews(afterLayers, afterBases),
@@ -129,6 +131,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
 }
 
 const REMOVAL_KINDS: ReadonlySet<string> = new Set(['delivery', 'loss', 'count', 'production_draw', 'product_draw', 'replacement']);
+const CODED_REASON_KINDS: ReadonlySet<string> = new Set(['delivery', 'production_draw']);
 
 /**
  * Posted mix-pile removals timed after this entry. Their saved shares were
@@ -136,12 +139,13 @@ const REMOVAL_KINDS: ReadonlySet<string> = new Set(['delivery', 'loss', 'count',
  * which ones. A reversed removal and the entry being corrected no longer count.
  */
 function laterMixRemovals(events: readonly { id: string; kind: string | null; occurredAt: Date | null; reason: string; correctsMovementId: string | null }[],
-  input: OutputStockPreviewInput, mode: OutputStockMode, latestMergeAt: string | null): { id: string; label: string; occurredAt: string }[] {
+  input: OutputStockPreviewInput, mode: OutputStockMode, changes: readonly StockModeChange[]): { id: string; label: string; occurredAt: string }[] {
   const reversed = new Set(events.filter(e => e.kind === 'reversal').map(e => e.correctsMovementId));
   return events.filter(e => e.kind && REMOVAL_KINDS.has(e.kind) && e.occurredAt && e.id !== input.correctsMovementId && !reversed.has(e.id))
     .map(e => ({ id: e.id, kind: e.kind!, reason: e.reason, occurredAt: e.occurredAt!.toISOString() }))
-    .filter(e => e.occurredAt > input.occurredAt && stockModeAt(mode, latestMergeAt, e.occurredAt) === 'mix')
-    .map(e => ({ id: e.id, label: e.reason || outputStockEventLabel(e.kind), occurredAt: e.occurredAt }));
+    .filter(e => e.occurredAt > input.occurredAt && stockModeAt(mode, changes, e.occurredAt) === 'mix')
+    // Deliveries and product draws name their record ("Delivery D-0012"); other reasons are free text.
+    .map(e => ({ id: e.id, label: CODED_REASON_KINDS.has(e.kind) && e.reason ? e.reason : outputStockEventLabel(e.kind), occurredAt: e.occurredAt }));
 }
 
 /** One layer's wet estimate at its latest moisture, or null when it has none. */

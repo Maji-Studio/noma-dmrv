@@ -46,7 +46,8 @@ export function MixPileCard({ binName, wetKg, moisturePercent, dryKg, batches }:
         <DetailedOnly>
           <div className="mt-8 flex flex-col gap-6">
             <span className="body-caption">{SHARES_LABEL}</span>
-            <SegmentBar label={SHARES_LABEL} segments={segments} />
+            {/* One batch is the whole pile; a full-width bar would say nothing. */}
+            {segments.length > 1 && <SegmentBar label={SHARES_LABEL} segments={segments} />}
             <SegmentKey segments={segments} />
           </div>
         </DetailedOnly>

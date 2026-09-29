@@ -79,7 +79,7 @@ import {
 } from "./mass-utils";
 
 /** Mix-bin biochar is recorded as usual but feeds no credit batch until the PDD covers mixing (ADR 0030). */
-const MIX_BIN_CREDIT_HOLD_NOTICE = "Not in a credit batch: this biochar was drawn from a mix bin. It joins a credit batch once the PDD covers mixing.";
+const MIX_BIN_CREDIT_HOLD_NOTICE = "Not in a credit batch: this biochar was drawn from a mix bin. Mix-bin biochar is held out of credit batches until the project design document (PDD) covers mixing.";
 
 // ============================================
 // Column Definitions

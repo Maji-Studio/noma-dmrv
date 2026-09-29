@@ -21,6 +21,8 @@ import {
   formatStorageLocationType,
   isFeedstockBinType,
   isOutputBinType,
+  OUTPUT_STOCK_MODE_LABELS,
+  outputStockModes,
   STORAGE_LOCATION_TYPE_DESCRIPTIONS,
   type StorageLocationFormData,
   type StorageLocationType,
@@ -28,10 +30,7 @@ import {
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 
-const STOCK_MODE_OPTIONS = [
-  { value: "split", label: "Split: batches kept apart" },
-  { value: "mix", label: "Mix: one blended pile" },
-] as const;
+const STOCK_MODE_OPTIONS = outputStockModes.map((mode) => ({ value: mode, label: OUTPUT_STOCK_MODE_LABELS[mode] }));
 
 const STOCK_MODE_HINT =
   "Split keeps every batch in its own bay, bag or heap, and each removal records which batches it came from. Mix is one blended pile: every removal takes each batch in proportion to what it holds.";
@@ -223,7 +222,7 @@ export function StorageLocationForm({
             label="Stock mode"
             hint={STOCK_MODE_HINT}
             error={errors.stockMode?.message}
-            helperText={unmixing ? "Only an empty bin can switch to split." : undefined}
+            helperText={unmixing ? "Only an empty bin can switch to split." : merging ? "Switching back to split needs an empty bin." : undefined}
             required
           >
             <FormSelect

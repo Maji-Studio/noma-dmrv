@@ -3,39 +3,46 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, type StorageLocation } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
+import { formatFacilityDateTime } from '@/lib/format-utils';
 import { grams, kilograms } from '@/lib/output-stock';
-import { stockModeAt, type OutputStockMode } from '@/lib/output-stock/stock-mode';
+import { outputStockEventLabel } from '@/lib/output-stock/labels';
+import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
 import { isOutputBinType, type StorageLocationType } from '@/schemas/storage-locations';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
 import { getBiocharOutputStockLayers, getProductOutputStockLayers } from './output-stock';
+import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
 type Reader = Pick<DbTransaction, 'select'>;
 
-const MERGE_REASON = 'Merged into one pile';
+/** Movements that switch a bin's mode: a merge into one pile, or a switch back to split once empty. */
+const MODE_CHANGE_KINDS = ['merge', 'split'] as const;
 
-/** When the bin's latest merge happened, or null when it was never merged. */
-export async function getLatestMergeAt(ctx: OrgContext, storageLocationId: string, reader: Reader = db): Promise<string | null> {
+/** Every timed mode change the bin has had, in posting order. */
+export async function getStockModeChanges(ctx: OrgContext, storageLocationId: string, reader: Reader = db): Promise<StockModeChange[]> {
   requireOrgScope(ctx);
-  const [merge] = await reader.select({ occurredAt: binMovements.occurredAt }).from(binMovements)
-    .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId), eq(binMovements.outputKind, 'merge')))
-    .orderBy(desc(binMovements.postingSequence)).limit(1);
-  return merge?.occurredAt?.toISOString() ?? null;
+  const rows = await reader.select({ kind: binMovements.outputKind, occurredAt: binMovements.occurredAt, sequence: binMovements.postingSequence }).from(binMovements)
+    .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, storageLocationId), inArray(binMovements.outputKind, [...MODE_CHANGE_KINDS])))
+    .orderBy(binMovements.postingSequence);
+  return rows.map(row => ({ to: row.kind === 'merge' ? 'mix' : 'split', at: row.occurredAt!.toISOString(), sequence: row.sequence }));
 }
 
-/** The bin's stock mode at `at`: a draw timed before a merge is planned as split. */
+/** The bin's stock mode at `at`: an entry is planned in the mode in force at its own time. */
 export async function getStockModeAt(ctx: OrgContext, bin: Pick<StorageLocation, 'id' | 'stockMode'>, at: string, reader: Reader = db): Promise<OutputStockMode> {
   requireOrgScope(ctx);
-  return stockModeAt(bin.stockMode, bin.stockMode === 'mix' ? await getLatestMergeAt(ctx, bin.id, reader) : null, at);
+  return stockModeAt(bin.stockMode, await getStockModeChanges(ctx, bin.id, reader), at);
 }
 
 /**
  * Applies a stock-mode change from the bin form, under the bin's stock lock and
- * row lock the edit already holds. Split to mix posts a timed merge event:
- * every batch present is drawn pro-rata after it, and nothing already posted
- * changes. Mix to split needs an empty bin, since a mixed pile can't be sorted
- * back into batches. Returns the mode to save.
+ * row lock the edit already holds. Both directions post a timed movement, so an
+ * entry keeps the mode in force at its own time when it is corrected later.
+ * Split to mix is a merge at the operator's time: every batch present is drawn
+ * pro-rata after it. It can't precede the bin's last recorded movement, which
+ * was posted as split. Mix to split needs an empty bin, because a mixed pile
+ * can't be sorted back into batches, and takes effect now. Returns the mode
+ * to save.
  */
 export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, existing: StorageLocation,
   next: { type: StorageLocationType; stockMode?: OutputStockMode; mergedAt?: Date }): Promise<OutputStockMode> {
@@ -47,21 +54,34 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
   // that), so there is no pile to merge or sort.
   if (next.type !== existing.type) return target;
   const layers = await readAllLayers(ctx, tx, existing);
+  const balance = kilograms(layers.reduce((sum, layer) => sum + grams(layer.remainingDryBiocharKg), BigInt(0)));
   if (target === 'split') {
     if (layers.some(layer => grams(layer.remainingDryBiocharKg) > BigInt(0) || (layer.remainingSolidsKg?.numerator ?? BigInt(0)) > BigInt(0))) {
-      throw new SafeError('Empty this bin before switching it to split. A mixed pile cannot be sorted back into batches.');
+      throw new SafeError('Empty this bin before switching it to split. If nothing is left, record a stock count of zero first. A mixed pile cannot be sorted back into batches.');
     }
+    await postModeChange(ctx, tx, existing, 'split', new Date(), balance);
     return 'split';
   }
   const mergedAt = next.mergedAt ?? new Date();
   if (mergedAt.getTime() > Date.now()) throw new SafeError('The merge time cannot be in the future.');
-  const balance = kilograms(layers.reduce((sum, layer) => sum + grams(layer.remainingDryBiocharKg), BigInt(0)));
-  const occurredAt = mergedAt.toISOString();
-  await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: existing.id, lane: existing.type === 'biochar_bin' ? 'biochar' : 'product',
-    movementType: 'adjustment', massDeltaKg: 0, reason: MERGE_REASON, createdBy: ctx.userId, outputKind: 'merge', occurredAt: mergedAt,
-    idempotencyKey: `merge:${randomUUID()}`, basisFingerprint: requestFingerprint({ binId: existing.id, occurredAt, balance }),
-    inputSnapshot: { kind: 'merge', from: 'split', to: 'mix', actorId: ctx.userId }, outputDryDeltaKg: '0.000', balanceBeforeDryKg: balance, balanceAfterDryKg: balance });
+  const [last] = await tx.select({ occurredAt: binMovements.occurredAt }).from(binMovements)
+    .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, existing.id), isNotNull(binMovements.outputKind)))
+    .orderBy(desc(binMovements.occurredAt)).limit(1);
+  if (last?.occurredAt && mergedAt.getTime() < last.occurredAt.getTime()) {
+    const at = formatFacilityDateTime(last.occurredAt, await getOutputStockFacilityTimezone(ctx, existing.facilityId, tx));
+    throw new SafeError(`Enter a merge time at or after the bin's last recorded movement (${at}). Movements already recorded stay split.`);
+  }
+  await postModeChange(ctx, tx, existing, 'merge', mergedAt, balance);
   return 'mix';
+}
+
+/** A mode change moves no stock; it records when later removals change how they draw. */
+async function postModeChange(ctx: OrgContext, tx: DbTransaction, bin: StorageLocation, kind: (typeof MODE_CHANGE_KINDS)[number], at: Date, balance: string) {
+  const occurredAt = at.toISOString();
+  await tx.insert(binMovements).values({ organizationId: ctx.organizationId, storageLocationId: bin.id, lane: bin.type === 'biochar_bin' ? 'biochar' : 'product',
+    movementType: 'adjustment', massDeltaKg: 0, reason: outputStockEventLabel(kind), createdBy: ctx.userId, outputKind: kind, occurredAt: at,
+    idempotencyKey: `${kind}:${randomUUID()}`, basisFingerprint: requestFingerprint({ binId: bin.id, kind, occurredAt, balance }),
+    inputSnapshot: { kind, to: kind === 'merge' ? 'mix' : 'split', actorId: ctx.userId }, outputDryDeltaKg: '0.000', balanceBeforeDryKg: balance, balanceAfterDryKg: balance });
 }
 
 /** Every layer the bin has held, including ones placed later than now. */
