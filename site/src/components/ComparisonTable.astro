@@ -14,23 +14,26 @@ const { title, columns, rows } = Astro.props;
 </div>
 <style>
   .compare { display: grid; gap: 24px; margin-top: 24px; }
+  .scroll { background: var(--paper); border: var(--rule-strong); }
   h3 { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
   table { border-collapse: collapse; width: 100%; font-size: var(--fs-body); text-align: left; }
-  thead th { font-size: var(--fs-small); font-weight: 300; color: var(--clr-dark-purple-70); padding: 12px 24px 12px 0; border-bottom: var(--rule-strong); }
+  thead th { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); line-height: var(--lh-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); background: var(--sea); padding: 14px var(--table-pad); border-bottom: var(--rule-strong); }
   thead th:last-child { color: var(--clr-purple); }
-  tbody th, td { padding: 20px 24px 20px 0; border-bottom: var(--rule); vertical-align: top; font-weight: 300; line-height: 1.4; }
+  tbody th, td { padding: 20px var(--table-pad); border-bottom: var(--rule); vertical-align: top; font-weight: 300; line-height: 1.4; }
   tbody th { width: 34%; }
   .from { color: var(--clr-dark-purple-70); }
   .to { color: var(--clr-purple); }
+  tbody tr:last-child > * { border-bottom: 0; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   @media (max-width: 700px) {
     table, tbody, tr, th, td { display: block; }
     thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-    tr { border-bottom: var(--rule-strong); padding-block: 20px; display: grid; gap: 10px; }
+    tr { border-bottom: var(--rule); padding: 20px var(--table-pad); display: grid; gap: 10px; }
+    tbody tr:last-child { border-bottom: 0; }
     tbody th, td { width: auto; padding: 0; border: 0; }
     tbody th { font-size: var(--fs-lead); letter-spacing: -0.02em; }
     td { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); column-gap: 12px; }
-    td::before { content: attr(data-label); font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+    td::before { content: attr(data-label); font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); line-height: 1.5; letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); }
     .to::before { color: var(--clr-purple); }
   }
 </style>

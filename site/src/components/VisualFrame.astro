@@ -1,5 +1,6 @@
 ---
-// Wraps one interactive visual: hairline frame, optional caption, optional `side` slot (text beside the visual).
+// Wraps one interactive visual as a paper panel: hairline rules run edge to edge (the frame bleeds through the section gutter),
+// a caption strip on the --sea wash at the bottom, optional `side` slot (text beside the visual, boxed frame).
 // `attrs` become data-* attributes on the mount node (e.g. { "data-jump": "true" }).
 interface Props { visual: string; caption?: string; attrs?: Record<string, string> }
 const { visual, caption, attrs = {} } = Astro.props;
@@ -9,14 +10,15 @@ const hasSide = Astro.slots.has("side");
   {hasSide && <div class="side"><slot name="side" /></div>}
   <div class="stage">
     <div data-visual={visual} {...attrs}></div>
-    {caption && <figcaption>{caption}</figcaption>}
+    {caption && <figcaption class="label-micro">{caption}</figcaption>}
   </div>
 </figure>
 <style>
-  .vf { margin: 0; display: grid; gap: 32px var(--col-gap); }
-  .vf.has-side { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr); align-items: start; }
-  .stage { min-width: 0; border-top: var(--rule-strong); border-bottom: var(--rule); }
-  figcaption { padding: 14px 0; font-size: var(--fs-small); color: var(--clr-dark-purple-70); border-top: var(--rule); }
-  .side { display: grid; gap: 16px; align-content: start; }
-  @media (max-width: 900px) { .vf.has-side { grid-template-columns: 1fr; } }
+  .vf { margin: 0 calc(var(--gutter) * -1); display: grid; background: var(--paper); border-block: var(--rule-strong); }
+  .vf.has-side { margin-inline: 0; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr); align-items: stretch; border: var(--rule-strong); }
+  .stage { min-width: 0; }
+  figcaption { padding: 12px var(--gutter); color: var(--ink-2); background: var(--sea); border-top: var(--rule); }
+  .has-side figcaption { padding-inline: var(--viz-pad); }
+  .side { display: grid; gap: 16px; align-content: start; padding: clamp(24px, 3vw, 40px); border-right: var(--rule); }
+  @media (max-width: 900px) { .vf.has-side { grid-template-columns: 1fr; } .side { border-right: 0; border-bottom: var(--rule); } }
 </style>

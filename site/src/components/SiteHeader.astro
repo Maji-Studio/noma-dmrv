@@ -7,7 +7,7 @@ const c = copy;
 <header class="site-header" data-site-header>
   <div class="bar">
     <a class="brand" href="#top" aria-label={`${c.brand.name} ${c.brand.by}`}>
-      <span class="name">{c.brand.name}</span><span class="by">{c.brand.by}</span>
+      <img class="mark" src="/maji-logo.svg" alt="" width="40" height="40" /><span class="name">{c.brand.name}</span><span class="by">{c.brand.by}</span>
     </a>
     <button type="button" class="menu-btn" aria-expanded="false" aria-controls="site-menu"
       data-open-label={c.chrome.menuOpen} data-close-label={c.chrome.menuClose}>{c.chrome.menuOpen}</button>
@@ -22,11 +22,12 @@ const c = copy;
 <style>
   .skip { position: fixed; left: 12px; top: 12px; z-index: 100; padding: 14px 20px; background: var(--paper); border: var(--rule-strong); transform: translateY(-200%); }
   .skip:focus { transform: none; }
-  .site-header { padding-inline: var(--gutter); }
-  .bar { max-width: var(--max-width); margin-inline: auto; display: flex; align-items: center; gap: 24px var(--col-gap); padding-block: 14px; flex-wrap: wrap; }
-  .brand { display: inline-flex; align-items: baseline; gap: 10px; min-height: var(--tap); text-decoration: none; margin-right: auto; align-self: center; }
-  .name { font-size: 32px; letter-spacing: var(--track-heading); line-height: 1; }
-  .by { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  .site-header { border-bottom: var(--rule); background: var(--paper); }
+  .bar { padding-inline: var(--gutter); display: flex; align-items: center; gap: 24px var(--col-gap); padding-block: 14px; flex-wrap: wrap; }
+  .mark { width: var(--mark-size); height: var(--mark-size); align-self: center; }
+  .brand { display: inline-flex; align-items: center; gap: 12px; min-height: var(--tap); text-decoration: none; margin-right: auto; align-self: center; }
+  .name { font-size: 32px; margin-left: 2px; letter-spacing: var(--track-heading); line-height: 1; }
+  .by { font-size: var(--fs-small); color: var(--clr-dark-purple-70); align-self: flex-end; padding-bottom: 12px; }
   .menu { display: flex; align-items: center; gap: 24px 40px; }
   nav { display: flex; gap: 0 32px; }
   nav a { display: inline-flex; align-items: center; min-height: var(--tap); font-size: var(--fs-small); }

@@ -1,21 +1,24 @@
 /* Styles for the shared visuals (nv- prefix). Hairlines and square edges, no card chrome; colours from tokens only. */
-.nv-viz { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+.nv-viz { display: grid; grid-template-columns: minmax(0, 1fr) var(--side-width); }
 .nv-viz.nv-side-below, .nv-viz.nv-side-none { grid-template-columns: 1fr; }
 @media (max-width: 860px) { .nv-viz { grid-template-columns: 1fr; } }
 .nv-main { position: relative; min-width: 0; }
-.nv-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
-.nv-scroll svg { display: block; width: 100%; height: auto; min-width: var(--nv-min, 0); }
+.nv-scroll { overflow-x: auto; overscroll-behavior-x: contain; padding-inline: var(--viz-pad); }
+.nv-scroll svg { display: block; width: 100%; height: auto; max-height: var(--viz-max-h); min-width: var(--nv-min, 0); }
+[data-visual="map"] .nv-scroll { background: var(--map-land); padding-inline: 0; }
 @media (max-width: 860px) { .nv-scroll svg { min-width: var(--nv-min-narrow, var(--nv-min, 0)); } }
 /* Overflow cue: edge fades while there is more to scroll to, plus a short hint line (script toggles both). */
 .nv-scroll.can-right { mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
 .nv-scroll.can-left { mask-image: linear-gradient(90deg, transparent, #000 40px); }
 .nv-scroll.can-left.can-right { mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
-.nv-scroll-hint { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); padding: 10px 0; }
+.nv-scroll-hint { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); padding: 10px var(--gutter); }
 .nv-scroll-hint::after { content: ""; display: inline-block; width: 14px; height: 1px; background: currentColor; margin-left: 8px; vertical-align: middle; }
-.nv-side { padding: 24px; display: grid; gap: 12px; align-content: start; font-size: var(--fs-small); line-height: 1.5; background: var(--clr-purple-5); border-left: var(--rule); }
+.nv-side { padding: 0 var(--side-pad) var(--side-pad); display: grid; gap: 12px; align-content: start; font-size: var(--fs-small); line-height: 1.5; background: var(--paper); border-left: var(--rule); }
 .nv-side-below .nv-side { border-left: 0; border-top: var(--rule); }
 @media (max-width: 860px) { .nv-side { border-left: 0; border-top: var(--rule); } }
-.nv-stage, .nv-label { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
+.nv-label { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
+/* Header row of the side panel: the app's label-micro on the --sea wash, running the panel's full width. */
+.nv-stage { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); line-height: var(--lh-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); background: var(--sea); border-bottom: var(--rule); margin: 0 calc(var(--side-pad) * -1) 12px; padding: 14px var(--side-pad); }
 .nv-code { font-family: var(--f-mono); font-weight: 500; font-size: 15px; }
 .nv-meta { display: grid; gap: 3px; }
 .nv-group { display: grid; gap: 6px; }
@@ -23,11 +26,11 @@
 .nv-counts span { font-size: var(--fs-fine); border: var(--rule); padding: 1px 8px; background: var(--paper); }
 .nv-hint { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-mono { font-family: var(--f-mono); font-weight: 500; font-size: 0.85em; }
-.nv-tools { padding: 14px 0; border-bottom: var(--rule); }
-.nv-tools label { display: inline-flex; align-items: center; gap: 12px; font-size: var(--fs-small); color: var(--clr-dark-purple-70); max-width: 100%; }
+.nv-tools { padding: 8px var(--gutter); border-bottom: var(--rule); background: var(--sea); }
+.nv-tools label { display: inline-flex; align-items: center; gap: 12px; font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); max-width: 100%; }
 .nv-jump { min-height: var(--tap); border: var(--rule-strong); background: var(--paper); border-radius: 0; padding: 4px 12px; font-size: var(--fs-small); color: var(--ink); min-width: 0; max-width: 260px; }
 .nv-jump:hover { border-color: var(--clr-purple); }
-.nv-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 14px 0; border-top: var(--rule); font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
+.nv-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 14px var(--gutter); border-top: var(--rule); font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .nv-legend i { width: 12px; height: 12px; border: 1.5px solid; }
 .lg-prod { background: var(--prod-bg); border-color: var(--prod) !important; }
@@ -70,13 +73,13 @@ svg.nv-hl .nv-arc.on { opacity: 1; stroke-opacity: 0.95; stroke-width: 2; }
 .nv-btn:hover { background: var(--clr-dark-purple); }
 .nv-chip { display: inline-flex; font-size: var(--fs-fine); font-weight: 300; border-radius: 0; padding: 2px 10px; white-space: nowrap; }
 .nv-chip-ok { background: var(--ok-bg); color: var(--ok); }
-.nv-chip-off { background: var(--off-bg); color: var(--ink-3); }
+.nv-chip-off { background: var(--st-wait-bg); color: var(--st-wait); border: 1px solid var(--st-wait-border); }
 
-.nv-morph-wrap { display: grid; gap: 16px; padding-block: 24px; }
+.nv-morph-wrap { display: grid; gap: 16px; padding: 24px var(--gutter) 24px var(--viz-pad); }
 .nv-morph-bar { display: flex; justify-content: flex-end; }
 .nv-morph { display: grid; gap: 10px; }
 .nv-m-head, .nv-m-row { display: grid; grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr); align-items: center; }
-.nv-m-head { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+.nv-m-head { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); letter-spacing: var(--track-micro); text-transform: uppercase; color: var(--ink-2); }
 .nv-m-chip { border-top: var(--rule); padding: 10px 12px; min-width: 0; transition: background 0.3s; }
 .nv-m-chip .e { font-size: var(--fs-fine); color: var(--clr-dark-purple-70); }
 .nv-m-chip .f { font-family: var(--f-mono); font-weight: 500; font-size: 12.5px; overflow-wrap: anywhere; }
@@ -93,7 +96,7 @@ svg.nv-hl .nv-arc.on { opacity: 1; stroke-opacity: 0.95; stroke-width: 2; }
 .nv-m-bundle.done { border-style: solid; border-color: var(--ver); background: var(--ver-bg); }
 @media (max-width: 640px) { .nv-m-head, .nv-m-row { grid-template-columns: 1fr; } .nv-m-link { transform: rotate(90deg); width: 22px; justify-self: center; } .nv-m-head { display: none; } .nv-m-chip::before { content: attr(data-label); display: block; font-size: var(--fs-fine); color: var(--clr-purple); margin-bottom: 2px; } }
 
-.nv-bins { display: grid; gap: 20px; padding-block: 24px; }
+.nv-bins { display: grid; gap: 20px; padding: 24px var(--viz-pad); }
 .nv-bin-ctrl { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
 .nv-bin-ctrl label { display: grid; gap: 4px; font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
 .nv-bin-ctrl input[type="range"] { width: 180px; min-height: 24px; accent-color: var(--clr-purple); }

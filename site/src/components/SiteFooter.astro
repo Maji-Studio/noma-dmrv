@@ -11,16 +11,16 @@ const c = copy;
       <p class="note">{c.footer.right}</p>
       <nav class="links">
         <TextLink href={c.cta.githubHref}>{c.chrome.githubLabel}</TextLink>
-        <TextLink href="#top">{c.chrome.backToTop}</TextLink>
+        <TextLink href="#top" arrow={false}>{c.chrome.backToTop}</TextLink>
       </nav>
     </div>
   </div>
 </footer>
 <style>
-  .foot { padding-inline: var(--gutter); overflow: hidden; }
-  .inner { max-width: var(--max-width); margin-inline: auto; border-top: var(--rule-strong); padding-block: clamp(0px, 1vw, 16px) 40px; display: grid; gap: clamp(24px, 3vw, 40px); }
+  .foot { overflow: hidden; border-top: var(--rule-strong); }
+  .inner { padding: clamp(0px, 1vw, 16px) var(--gutter) 40px; display: grid; gap: clamp(24px, 3vw, 40px); }
   .mark { font-size: clamp(120px, 34vw, 480px); line-height: 0.66; letter-spacing: var(--track-display); margin: 0 0 0 -0.04em; padding-top: 0.04em; color: var(--clr-purple); user-select: none; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px var(--col-gap); align-items: center; font-size: var(--fs-small); border-top: var(--rule); padding-top: 24px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px var(--col-gap); align-items: center; font-size: var(--fs-small); border-top: var(--rule); margin-inline: calc(var(--gutter) * -1); padding: 24px var(--gutter) 0; }
   .brand { font-size: 20px; letter-spacing: -0.03em; }
   .note { color: var(--clr-dark-purple-70); max-width: 60ch; margin-right: auto; }
   .links { display: flex; gap: 8px 28px; }

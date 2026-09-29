@@ -1,10 +1,11 @@
 ---
 // Secondary action: underlined text link. The underline thickens and lifts on hover.
-interface Props { href: string; [attr: string]: unknown }
-const { href, ...rest } = Astro.props;
+interface Props { href: string; arrow?: boolean; [attr: string]: unknown }
+const { href, arrow = true, ...rest } = Astro.props;
 ---
-<a class="text-link" href={href} {...rest}><slot /></a>
+<a class="text-link" href={href} {...rest}><slot />{arrow && <svg viewBox="0 0 16 10" aria-hidden="true"><path d="M0 5h14 M10 1l4 4-4 4" /></svg>}</a>
 <style>
-  .text-link { display: inline-flex; align-items: center; min-height: var(--tap); color: var(--acc-dist-ink); text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 1px; transition: text-underline-offset 0.2s var(--ease), text-decoration-thickness 0.2s var(--ease); }
+  .text-link { display: inline-flex; align-items: center; gap: 10px; min-height: var(--tap); color: var(--acc-dist-ink); text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 1px; transition: text-underline-offset 0.2s var(--ease), text-decoration-thickness 0.2s var(--ease); }
   .text-link:hover, .text-link:focus-visible { text-decoration-thickness: 2px; text-underline-offset: 9px; }
+  svg { width: 16px; height: 10px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; }
 </style>

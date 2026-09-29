@@ -15,17 +15,19 @@ const { id, title, lead, band, split = false, aside = false } = Astro.props;
   </div>
 </section>
 <style>
-  .section { padding-inline: var(--gutter); scroll-margin-top: 0; }
+  .section { scroll-margin-top: 0; }
+  .section:not([class*="band-"]) { border-top: var(--rule); }
+  .section[class*="band-"] + .section { border-top: 0; }
   .band-rose { background: var(--clr-rose-20); }
   .band-purple { background: var(--clr-purple-5); }
-  .inner { max-width: var(--max-width); margin-inline: auto; padding-block: var(--section-space); display: grid; gap: clamp(32px, 4vw, 56px); }
-  .section:not([class*="band-"]) .inner { border-top: var(--rule); }
-  .section[class*="band-"] + .section .inner { border-top: 0; }
+  .inner { padding: var(--section-space) var(--gutter); display: grid; gap: clamp(32px, 4vw, 56px); }
   .inner.aside { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); column-gap: var(--col-gap); align-items: start; }
   .head { display: grid; gap: 24px; }
+  /* Bled visuals in the aside column run to the right viewport edge only. */
+  .aside :global(.vf) { margin-inline-start: 0; }
   .aside .head { position: sticky; top: 24px; align-self: start; }
   .head.split { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); column-gap: var(--col-gap); align-items: end; }
-  h2 { font-size: var(--fs-heading); letter-spacing: var(--track-heading); max-width: 15ch; }
+  h2 { font-size: var(--fs-heading); letter-spacing: var(--track-heading); max-width: 20ch; }
   .aside h2 { max-width: 13ch; }
   .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); color: var(--clr-dark-purple-70); }
   @media (max-width: 860px) { .head.split { grid-template-columns: 1fr; } .inner.aside { grid-template-columns: 1fr; } .aside .head { position: static; } }

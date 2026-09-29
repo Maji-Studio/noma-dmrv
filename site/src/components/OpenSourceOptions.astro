@@ -7,7 +7,7 @@ const { cards } = Astro.props;
 <div class="options">
   {cards.map((k) => (
     <div class="option">
-      <p class="tag">{k.chip}</p>
+      <p class="tag label-micro">{k.chip}</p>
       <h3>{k.title}</h3>
       <p class="text">{k.text}</p>
       <TextLink href={k.href}>{k.action}</TextLink>
@@ -15,9 +15,9 @@ const { cards } = Astro.props;
   ))}
 </div>
 <style>
-  .options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--col-gap); row-gap: 40px; }
-  .option { border-top: var(--rule-strong); padding-top: 24px; display: grid; gap: 14px; align-content: start; justify-items: start; }
-  .tag { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  .options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2vw, 32px); }
+  .option { background: var(--paper); border: var(--rule-strong); padding: clamp(24px, 3vw, 48px); display: grid; gap: 14px; align-content: start; justify-items: start; }
+  .tag { color: var(--ink-2); }
   h3 { font-size: var(--fs-heading); letter-spacing: var(--track-heading); line-height: 1.02; }
   .text { font-size: var(--fs-lead); max-width: 40ch; }
   @media (max-width: 700px) { .options { grid-template-columns: 1fr; } }

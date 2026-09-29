@@ -10,7 +10,13 @@
   --gutter: clamp(24px, 5vw, 88px);
   --section-space: clamp(64px, 7vw, 112px);
   --col-gap: clamp(24px, 5vw, 88px);
-  --max-width: 1440px;
+  --side-width: clamp(260px, 22vw, 340px);
+  --viz-max-h: 820px;
+  --viz-pad: clamp(16px, 2.2vw, 40px);
+  --mark-size: 40px;
+  --table-pad: clamp(16px, 2vw, 32px);
+  --side-pad: 20px;
+  --cell-pad: clamp(20px, 2.4vw, 40px);
   --measure: 62ch;
   --rule: 1px solid var(--clr-purple-20);
   --rule-strong: 1px solid var(--clr-purple-40);
@@ -22,6 +28,9 @@
   --fs-small: 15px;
   --fs-desc: 17px;
   --fs-fine: 13px;
+  --fs-micro: 12px;
+  --track-micro: 0.08em;
+  --lh-micro: 1.2;
   --track-display: -0.06em;
   --track-heading: -0.045em;
   --lh-display: 1.01;
@@ -38,7 +47,6 @@
   --clr-rose: #ffb2d2;
   --clr-orange: #ff8359;
   --clr-red: #e54552;
-  --bg-app: #fff9f7;
   --clr-purple-5: rgba(72, 11, 115, 0.05);
   --clr-purple-10: rgba(72, 11, 115, 0.1);
   --clr-purple-20: rgba(72, 11, 115, 0.2);
@@ -50,10 +58,11 @@
   --acc-prod-ink: #bc4519;
 
   /* landing */
-  --page: #fff2f7;
+  --bg: #fff9f7;
+  --page: var(--bg);
   --paper: #ffffff;
   --ink: #0f021a;
-  --ink-2: rgba(15, 2, 26, 0.68);
+  --ink-2: rgba(15, 2, 26, 0.7);
   --ink-3: rgba(15, 2, 26, 0.62); /* 5.3:1 or better on the page, rose-20 and purple-5 grounds (computed) */
   --hair: rgba(15, 2, 26, 0.12);
   --hair-2: rgba(15, 2, 26, 0.24);
@@ -69,6 +78,8 @@
   --ok: #126340; --ok-bg: rgba(23, 116, 74, 0.1);
   --warn: #bc4519; --warn-bg: rgba(188, 69, 25, 0.1);
   --off-bg: rgba(15, 2, 26, 0.05);
+  /* warning status ramp (app --st-wait) */
+  --st-wait: #bc4519; --st-wait-bg: rgba(188, 69, 25, 0.1); --st-wait-border: rgba(188, 69, 25, 0.4);
 
   /* bin layers */
   --l1: #bc4519; --l2: #ff8359; --l3: #ffb2d2;
@@ -94,3 +105,6 @@ a { color: inherit; }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--clr-purple); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+
+/* The app's .label-micro (src/styles/typography.css): mono, uppercase, tracked. Header rows sit on --sea. */
+.label-micro { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); line-height: var(--lh-micro); letter-spacing: var(--track-micro); text-transform: uppercase; margin: 0; }
