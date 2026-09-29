@@ -332,7 +332,7 @@ test("gallery output bin reconciliation loss and correction", async ({ adminPage
   await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await bin(page, f);
-  await page.getByRole("button", { name: "More info", exact: true }).first().click();
+  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
   await history.locator("article").filter({ hasText: "E2E spill during loading." }).getByRole("button", { name: "Correct entry" }).click();
   await fillStock(page, "12", "E2E corrected spill after scale ticket review.");
