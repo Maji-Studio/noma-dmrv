@@ -1,15 +1,15 @@
 "use client";
 
 /**
- * DistanceCalcField — distance number input with an inline CALC button that
+ * DistanceCalcField — distance number input with an inline Calculate button that
  * estimates the road distance between two resolved endpoints via the geo
  * server actions (map integration plan, Phase 1 §7).
  *
  * Provenance rules (plan decision 2):
- * - CALC fill            → distanceSource = "map_estimate"
+ * - Calculate fill       → distanceSource = "map_estimate"
  * - hand-typed value     → distanceSource = "manual"
  * - cleared              → distanceSource = null
- * CALC is enabled only when both endpoints have coordinates AND routing is
+ * Calculate is enabled only when both endpoints have coordinates AND routing is
  * configured server-side; when disabled, the tooltip names what's missing.
  */
 
@@ -43,7 +43,7 @@ interface DistanceCalcFieldProps {
   distanceKm: number | null | undefined;
   distanceSource: DistanceSourceValue | null | undefined;
   onDistanceChange: (km: number | null, source: DistanceSourceValue | null) => void;
-  /** Resolved CALC endpoints — null while the endpoint has no coordinates. */
+  /** Resolved Calculate endpoints — null while the endpoint has no coordinates. */
   origin: GeoPoint | null;
   destination: GeoPoint | null;
   /** Human endpoint names for the disabled explanation (e.g. "supplier position"). */
@@ -124,7 +124,7 @@ export function DistanceCalcField({
   const route = useRouteDistance();
 
   // Text draft so in-flight typing survives; resync when the value changes
-  // from outside (CALC fill) — adjust-state-during-render pattern.
+  // from outside (Calculate fill) — adjust-state-during-render pattern.
   const [draft, setDraft] = useState(formatDistance(value));
   const [syncedValue, setSyncedValue] = useState(value);
   if (value !== syncedValue) {
@@ -133,7 +133,7 @@ export function DistanceCalcField({
   }
 
   const handleManualChange = (raw: string) => {
-    // A failed CALC keeps isError until reset(), so the red message would sit
+    // A failed Calculate keeps isError until reset(), so the red message would sit
     // next to a hand-typed value the operator just fixed. Clear the mutation
     // itself, not only its rendering.
     if (route.isError) route.reset();
@@ -211,10 +211,11 @@ export function DistanceCalcField({
                 variant="default"
                 className="h-40 px-12 label-button"
                 disabled={!canCalc}
+                busy={route.isPending}
                 aria-label={`Calculate road distance ${originLabel} to ${destinationLabel}`}
                 onClick={handleCalc}
               >
-                {route.isPending ? "…" : "Calculate"}
+                Calculate
               </Button>
             </span>
           </Tooltip>
