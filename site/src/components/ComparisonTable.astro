@@ -1,0 +1,25 @@
+---
+// Spreadsheet vs noma. Own horizontal scroll container so the page itself never scrolls sideways.
+const { title, columns, rows } = Astro.props;
+---
+<div class="compare">
+  <h3>{title}</h3>
+  <div class="scroll" tabindex="0" role="region" aria-label={title}>
+    <table>
+      <thead><tr><th scope="col"><span class="sr">{title}</span></th>{columns.map((h) => <th scope="col">{h}</th>)}</tr></thead>
+      <tbody>{rows.map(([a, b, d]) => <tr><th scope="row">{a}</th><td class="from">{b}</td><td class="to">{d}</td></tr>)}</tbody>
+    </table>
+  </div>
+</div>
+<style>
+  .compare { display: grid; gap: 24px; margin-top: 24px; }
+  h3 { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: var(--fs-body); text-align: left; }
+  thead th { font-size: var(--fs-small); font-weight: 300; color: var(--clr-dark-purple-70); padding: 12px 24px 12px 0; border-bottom: var(--rule-strong); }
+  tbody th, td { padding: 20px 24px 20px 0; border-bottom: var(--rule); vertical-align: top; font-weight: 300; line-height: 1.4; }
+  tbody th { width: 34%; }
+  .from { color: var(--clr-dark-purple-70); }
+  .to { color: var(--clr-purple); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+</style>

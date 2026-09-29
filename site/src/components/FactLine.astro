@@ -1,0 +1,17 @@
+---
+// The figures line. A value containing "[" is an unconfirmed placeholder and is marked as one.
+import { copy } from "../content/copy.js";
+const { figures } = Astro.props;
+---
+<p class="facts">
+  {figures.map((f) => (
+    <span class="fact">
+      {f.value.includes("[") ? <mark title={copy.chrome.figurePlaceholder}>{f.value}</mark> : <strong>{f.value}</strong>} {f.text}.{" "}
+    </span>
+  ))}
+</p>
+<style>
+  .facts { font-size: var(--fs-subheading); line-height: 1.3; letter-spacing: -0.03em; max-width: 34ch; text-wrap: pretty; }
+  strong { font-weight: 300; color: var(--clr-purple); }
+  mark { background: var(--clr-purple-10); color: var(--clr-purple); border-bottom: 2px dashed var(--clr-purple-40); padding: 0 4px; }
+</style>

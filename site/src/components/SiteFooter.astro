@@ -1,0 +1,18 @@
+---
+import { copy } from "../content/copy.js";
+import TextLink from "./TextLink.astro";
+const c = copy;
+---
+<footer class="foot">
+  <div class="inner">
+    <p class="brand">{c.footer.left}</p>
+    <p class="note">{c.footer.right}</p>
+    <TextLink href={c.cta.githubHref}>{c.chrome.githubLabel}</TextLink>
+  </div>
+</footer>
+<style>
+  .foot { padding-inline: var(--gutter); }
+  .inner { max-width: var(--max-width); margin-inline: auto; border-top: var(--rule); padding-block: 32px 48px; display: flex; flex-wrap: wrap; gap: 8px var(--col-gap); align-items: center; justify-content: space-between; font-size: var(--fs-small); }
+  .brand { font-size: 20px; letter-spacing: -0.03em; }
+  .note { color: var(--clr-dark-purple-70); max-width: 60ch; margin-right: auto; }
+</style>

@@ -1,0 +1,10 @@
+---
+// Primary action: solid purple block link.
+const { href, ...rest } = Astro.props;
+---
+<a class="block-link" href={href} {...rest}><slot /></a>
+<style>
+  .block-link { display: inline-flex; align-items: center; justify-content: center; min-height: var(--block-height); padding: 0 32px; background: var(--clr-purple); color: var(--paper); font-size: var(--fs-body); text-decoration: none; text-align: center; transition: background-color 0.15s; }
+  .block-link:hover { background: var(--clr-dark-purple); }
+  .block-link:focus-visible { outline-color: var(--clr-dark-purple); }
+</style>

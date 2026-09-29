@@ -1,0 +1,62 @@
+---
+import { copy } from "../content/copy.js";
+import BlockLink from "./BlockLink.astro";
+const c = copy;
+---
+<a class="skip" href="#main">{c.chrome.skip}</a>
+<header class="site-header" data-site-header>
+  <div class="bar">
+    <a class="brand" href="#top" aria-label={`${c.brand.name} ${c.brand.by}`}>
+      <span class="name">{c.brand.name}</span><span class="by">{c.brand.by}</span>
+    </a>
+    <button type="button" class="menu-btn" aria-expanded="false" aria-controls="site-menu"
+      data-open-label={c.chrome.menuOpen} data-close-label={c.chrome.menuClose}>{c.chrome.menuOpen}</button>
+    <div class="menu" id="site-menu">
+      <nav aria-label={c.chrome.navLabel}>
+        {c.nav.map((n) => <a href={n.href}>{n.label}</a>)}
+      </nav>
+      <BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink>
+    </div>
+  </div>
+</header>
+<style>
+  .skip { position: fixed; left: 12px; top: 12px; z-index: 100; padding: 14px 20px; background: var(--paper); border: var(--rule-strong); transform: translateY(-200%); }
+  .skip:focus { transform: none; }
+  .site-header { padding-inline: var(--gutter); }
+  .bar { max-width: var(--max-width); margin-inline: auto; display: flex; align-items: center; gap: 24px var(--col-gap); padding-block: 16px; flex-wrap: wrap; }
+  .brand { display: inline-flex; align-items: baseline; gap: 10px; min-height: var(--tap); text-decoration: none; margin-right: auto; align-self: center; }
+  .name { font-size: 34px; letter-spacing: var(--track-heading); line-height: 1; }
+  .by { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  .menu { display: flex; align-items: center; gap: 24px 40px; }
+  nav { display: flex; gap: 0 32px; }
+  nav a { display: inline-flex; align-items: center; min-height: var(--tap); font-size: var(--fs-small); text-decoration: none; }
+  nav a:hover { text-decoration: underline; text-underline-offset: 6px; }
+  .menu-btn { display: none; min-height: var(--tap); padding: 0 20px; background: none; border: var(--rule-strong); cursor: pointer; font-size: var(--fs-small); }
+  @media (max-width: 760px) {
+    .bar { flex-wrap: wrap; }
+    .menu-btn { display: inline-flex; align-items: center; }
+    .menu { flex-basis: 100%; flex-direction: column; align-items: stretch; gap: 8px; padding-bottom: 16px; }
+    nav { flex-direction: column; }
+    nav a { font-size: var(--fs-body); border-top: var(--rule); }
+    :global(html.js) .menu { display: none; }
+    :global(html.js) .menu[data-open] { display: flex; }
+  }
+</style>
+<script>
+  const header = document.querySelector<HTMLElement>("[data-site-header]");
+  const btn = header?.querySelector<HTMLButtonElement>(".menu-btn");
+  const menu = header?.querySelector<HTMLElement>("#site-menu");
+  if (btn && menu) {
+    const set = (open: boolean, refocus = false) => {
+      menu.toggleAttribute("data-open", open);
+      btn.setAttribute("aria-expanded", String(open));
+      btn.textContent = open ? btn.dataset.closeLabel! : btn.dataset.openLabel!;
+      if (!open && refocus) btn.focus();
+    };
+    btn.addEventListener("click", () => set(btn.getAttribute("aria-expanded") !== "true"));
+    menu.addEventListener("click", (e) => { if ((e.target as HTMLElement).closest("a")) set(false); });
+    header!.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && btn.getAttribute("aria-expanded") === "true") set(false, true);
+    });
+  }
+</script>

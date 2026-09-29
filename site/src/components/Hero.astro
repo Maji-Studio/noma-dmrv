@@ -1,0 +1,32 @@
+---
+import { copy } from "../content/copy.js";
+import BlockLink from "./BlockLink.astro";
+import VisualFrame from "./VisualFrame.astro";
+import LogoStrip from "./LogoStrip.astro";
+import FactLine from "./FactLine.astro";
+const c = copy;
+---
+<section class="hero">
+  <div class="inner">
+    <h1>{c.hero.title}</h1>
+    <div class="intro">
+      <p class="lead">{c.hero.lead}</p>
+      <div class="cta"><BlockLink href={c.cta.primaryHref}>{c.cta.primary}</BlockLink></div>
+    </div>
+    <VisualFrame visual="chain" caption={c.captions.chain} />
+    <div class="proof">
+      <LogoStrip label={c.proof.label} logos={c.proof.logos} />
+      <FactLine figures={c.proof.figures} />
+    </div>
+  </div>
+</section>
+<style>
+  .hero { padding-inline: var(--gutter); }
+  .inner { max-width: var(--max-width); margin-inline: auto; padding-block: clamp(32px, 4vw, 64px) var(--section-space); display: grid; gap: clamp(32px, 4vw, 56px); }
+  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 17ch; }
+  .intro { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); column-gap: var(--col-gap); row-gap: 32px; align-items: end; }
+  .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); }
+  .cta { display: flex; justify-content: flex-start; }
+  .proof { display: grid; gap: clamp(32px, 4vw, 56px); margin-top: clamp(16px, 3vw, 40px); }
+  @media (max-width: 860px) { .intro { grid-template-columns: 1fr; } }
+</style>

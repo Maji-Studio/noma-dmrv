@@ -9,6 +9,24 @@ export const copy = {
     { label: "Registry", href: "#registry" },
     { label: "Open source", href: "#open-source" },
   ],
+  // Chrome strings added in slice 2 (header, menu, skip link, captions, placeholders).
+  chrome: {
+    skip: "Skip to main content",
+    menuOpen: "Menu",
+    menuClose: "Close menu",
+    navLabel: "Main",
+    githubLabel: "GitHub",
+    logoPlaceholder: "Logo to come",
+    figurePlaceholder: "Placeholder until the figure is confirmed",
+    screenshotPlaceholder: "Screenshot placeholder",
+  },
+  captions: {
+    chain: "Illustrative: made-up records, real record types.",
+    dense: "Illustrative: about 180 made-up records over six weeks.",
+    map: "Illustrative: Southern Highlands, Tanzania. Real towns, made-up suppliers and fields.",
+    bins: "Illustrative: made-up bin, made-up masses.",
+    morph: "Illustrative: real field names, made-up values.",
+  },
   cta: { primary: "Book a walkthrough", primaryHref: "#walkthrough", github: "View on GitHub", githubHref: "https://github.com/Maji-Studio/noma-dmrv" },
   hero: {
     title: "Trace every tonne of biochar, from feedstock to certification.",
@@ -52,6 +70,8 @@ export const copy = {
       ["rem", "ver", "Readiness check", "See what a removal is missing before you submit it."],
       ["bbin", "prod", "Mass balance", "Dry kilograms in, losses out, per credit batch."],
     ],
+    shippedHeading: "Shipped today",
+    upcomingHeading: "Building next",
     upcomingLabel: "Upcoming",
     upcoming: [
       ["doc", "infra", "Document recognition", "Read weighbridge tickets and lab reports straight into records."],
@@ -90,6 +110,16 @@ export const copy = {
     sizes: ["Not producing yet", "Under 500 t a year", "500 to 2,000 t a year", "Over 2,000 t a year"],
     submit: "Request a walkthrough",
     sent: "Thanks. We'll be in touch.",
+    sending: "Sending your request.",
+    prototypeNote: "(Prototype: nothing was sent.)",
+    // No inbox address yet: the address is added when the owner supplies it (plan: Inputs from the owner).
+    error: "That didn't go through. Try again, or email us.",
+    errors: {
+      name: "Enter your name.",
+      email: "Enter your work email.",
+      emailInvalid: "That email doesn't look right. Check it and try again.",
+      company: "Enter your company.",
+    },
   },
   footer: { left: "noma by MAJI, Zurich", right: "MIT licence. Built with Dark Earth Carbon in Mafinga, Tanzania." },
 };

@@ -1,36 +1,120 @@
 ---
-// Shared walkthrough request form. PROTOTYPE: submit is stubbed; the real endpoint is plan slice 4
-// (site/src/pages/api/walkthrough.ts, Zod + honeypot + Resend). Style it from the page via the class hooks.
+// Walkthrough request form. `data-state` on the form is one of idle | sending | sent | error.
+// Submission goes through submitWalkthrough (src/lib/walkthrough.js), a stub until the endpoint slice.
 import { copy } from "../content/copy.js";
-const { idPrefix } = Astro.props;
+const { idPrefix = "wt" } = Astro.props;
 const w = copy.walkthrough;
+const field = (k) => `${idPrefix}-${k}`;
 ---
-<form class="wt-form" data-walkthrough novalidate>
-  <div class="wt-row">
-    <label for={`${idPrefix}-name`}>{w.fields.name}<input id={`${idPrefix}-name`} name="name" autocomplete="name" required /></label>
-    <label for={`${idPrefix}-email`}>{w.fields.email}<input id={`${idPrefix}-email`} name="email" type="email" autocomplete="email" required /></label>
+<form class="wt-form" data-walkthrough data-state="idle" novalidate
+  data-msg-sending={w.sending} data-msg-sent={`${w.sent} ${w.prototypeNote}`} data-msg-error={w.error}
+  data-err-name={w.errors.name} data-err-email={w.errors.email} data-err-email-invalid={w.errors.emailInvalid} data-err-company={w.errors.company}>
+  <div class="fields">
+    <div class="row">
+      <div class="field">
+        <label for={field("name")}>{w.fields.name}</label>
+        <input id={field("name")} name="name" autocomplete="name" required aria-describedby={field("name-err")} />
+        <p class="err" id={field("name-err")} hidden></p>
+      </div>
+      <div class="field">
+        <label for={field("email")}>{w.fields.email}</label>
+        <input id={field("email")} name="email" type="email" autocomplete="email" required aria-describedby={field("email-err")} />
+        <p class="err" id={field("email-err")} hidden></p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for={field("company")}>{w.fields.company}</label>
+        <input id={field("company")} name="company" autocomplete="organization" required aria-describedby={field("company-err")} />
+        <p class="err" id={field("company-err")} hidden></p>
+      </div>
+      <div class="field">
+        <label for={field("size")}>{w.fields.size}</label>
+        <select id={field("size")} name="size">{w.sizes.map((s) => <option>{s}</option>)}</select>
+      </div>
+    </div>
+    <div class="field">
+      <label for={field("msg")}>{w.fields.message}</label>
+      <textarea id={field("msg")} name="message" rows="4"></textarea>
+    </div>
+    <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+    <div class="actions"><button type="submit" class="submit">{w.submit}</button></div>
   </div>
-  <div class="wt-row">
-    <label for={`${idPrefix}-company`}>{w.fields.company}<input id={`${idPrefix}-company`} name="company" autocomplete="organization" required /></label>
-    <label for={`${idPrefix}-size`}>{w.fields.size}<select id={`${idPrefix}-size`} name="size">{w.sizes.map((s) => <option>{s}</option>)}</select></label>
-  </div>
-  <label for={`${idPrefix}-msg`}>{w.fields.message}<textarea id={`${idPrefix}-msg`} name="message" rows="3"></textarea></label>
-  <input class="wt-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
-  <div class="wt-actions"><button type="submit" class="wt-submit">{w.submit}</button></div>
-  <p class="wt-sent" hidden>{w.sent} <span class="wt-proto">(Prototype: nothing was sent.)</span></p>
+  <p class="status" role="status" aria-live="polite" data-status></p>
 </form>
 <style>
-  .wt-form { display: grid; gap: 12px; min-width: 0; }
-  .wt-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-  .wt-form label { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
-  .wt-form input, .wt-form select, .wt-form textarea { border: 1.5px solid var(--hair-2); border-radius: 6px; padding: 10px 12px; background: var(--paper); font-size: 15px; width: 100%; }
-  .wt-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
-  .wt-submit { border: 1.5px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 8px; padding: 12px 20px; font-size: 16px; font-weight: 700; cursor: pointer; }
-  .wt-sent { font-size: 14px; color: var(--ok); }
-  .wt-proto { color: var(--ink-3); }
+  .wt-form { display: grid; gap: 20px; min-width: 0; }
+  .fields { display: grid; gap: 24px; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 24px; }
+  .field { display: grid; gap: 8px; align-content: start; min-width: 0; }
+  label { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  input, select, textarea { width: 100%; min-height: var(--block-height); padding: 12px 16px; background: var(--paper); border: var(--rule-strong); border-radius: 0; font-size: var(--fs-body); font-weight: 300; }
+  textarea { min-height: 120px; resize: vertical; }
+  input:hover, select:hover, textarea:hover { border-color: var(--clr-purple); }
+  input[aria-invalid="true"] { border-color: var(--acc-dist-ink); border-width: 2px; padding: 11px 15px; }
+  .err { font-size: var(--fs-small); color: var(--acc-dist-ink); }
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+  .submit { min-height: var(--block-height); padding: 0 32px; border: 0; border-radius: 0; background: var(--clr-purple); color: var(--paper); font-size: var(--fs-body); font-weight: 300; cursor: pointer; transition: background-color 0.15s; }
+  .submit:hover { background: var(--clr-dark-purple); }
+  .submit:disabled { background: var(--clr-purple-40); cursor: progress; }
+  .status { font-size: var(--fs-lead); min-height: 0; }
+  .status:empty { display: none; }
+  .wt-form[data-state="error"] .status { color: var(--acc-dist-ink); border-top: 2px solid var(--acc-dist-ink); padding-top: 12px; }
+  .wt-form[data-state="sent"] .status { border-top: var(--rule-strong); padding-top: 16px; font-size: var(--fs-subheading); letter-spacing: -0.03em; }
+  .wt-form[data-state="sent"] .fields { display: none; }
 </style>
 <script>
-  document.querySelectorAll("form[data-walkthrough]").forEach((f) => {
-    f.addEventListener("submit", (e) => { e.preventDefault(); (f.querySelector(".wt-sent") as HTMLElement).hidden = false; });
+  import { submitWalkthrough } from "../lib/walkthrough.js";
+
+  const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  document.querySelectorAll<HTMLFormElement>("form[data-walkthrough]").forEach((form) => {
+    const status = form.querySelector<HTMLElement>("[data-status]")!;
+    const submit = form.querySelector<HTMLButtonElement>(".submit")!;
+    const d = form.dataset;
+
+    const setState = (state: string, message = "") => {
+      form.dataset.state = state;
+      status.textContent = message;
+      submit.disabled = state === "sending";
+    };
+    const setError = (input: HTMLInputElement, message: string) => {
+      const err = form.querySelector<HTMLElement>(`#${input.id}-err`)!;
+      err.textContent = message;
+      err.hidden = !message;
+      if (message) input.setAttribute("aria-invalid", "true"); else input.removeAttribute("aria-invalid");
+    };
+    const validate = () => {
+      const bad: HTMLInputElement[] = [];
+      const check = (name: string, message: string | null) => {
+        const input = form.elements.namedItem(name) as HTMLInputElement;
+        setError(input, message ?? "");
+        if (message) bad.push(input);
+      };
+      const val = (n: string) => (form.elements.namedItem(n) as HTMLInputElement).value.trim();
+      check("name", val("name") ? null : d.errName!);
+      check("email", !val("email") ? d.errEmail! : EMAIL_PATTERN.test(val("email")) ? null : d.errEmailInvalid!);
+      check("company", val("company") ? null : d.errCompany!);
+      return bad;
+    };
+
+    form.addEventListener("input", (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.getAttribute("aria-invalid")) setError(t, "");
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (form.dataset.state === "sending") return;
+      const bad = validate();
+      if (bad.length) { setState("idle"); bad[0].focus(); return; }
+      setState("sending", d.msgSending!);
+      try {
+        await submitWalkthrough(Object.fromEntries(new FormData(form)));
+        setState("sent", d.msgSent!);
+      } catch {
+        setState("error", d.msgError!);
+      }
+    });
   });
 </script>

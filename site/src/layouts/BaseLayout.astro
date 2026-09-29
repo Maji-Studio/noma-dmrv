@@ -1,0 +1,22 @@
+---
+import "../styles/tokens.css";
+import "../visuals/visuals.css";
+const { title, description } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <script is:inline>document.documentElement.classList.add("js");</script>
+  </head>
+  <body id="top">
+    <slot />
+    <script>
+      import { mountVisuals } from "../visuals/index.js";
+      mountVisuals();
+    </script>
+  </body>
+</html>

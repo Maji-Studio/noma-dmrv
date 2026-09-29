@@ -1,0 +1,29 @@
+---
+// Editorial section: h2 + lead (side by side on the 1.2fr / 0.8fr grid when `split`), optional band and id.
+const { id, title, lead, band, split = false, aside = false } = Astro.props;
+---
+<section class:list={["section", band && `band-${band}`]} id={id}>
+  <div class:list={["inner", { aside }]}>
+    {title && (
+      <header class:list={["head", { split }]}>
+        <h2>{title}</h2>
+        {lead && <p class="lead">{lead}</p>}
+      </header>
+    )}
+    <slot />
+  </div>
+</section>
+<style>
+  .section { padding-inline: var(--gutter); scroll-margin-top: 0; }
+  .band-rose { background: var(--clr-rose-20); }
+  .band-purple { background: var(--clr-purple-5); }
+  .inner { max-width: var(--max-width); margin-inline: auto; padding-block: var(--section-space); display: grid; gap: clamp(32px, 4vw, 56px); }
+  .section:not([class*="band-"]) .inner { border-top: var(--rule); }
+  .section[class*="band-"] + .section .inner { border-top: 0; }
+  .inner.aside { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); column-gap: var(--col-gap); align-items: start; }
+  .head { display: grid; gap: 24px; }
+  .head.split { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); column-gap: var(--col-gap); align-items: end; }
+  h2 { font-size: var(--fs-heading); letter-spacing: var(--track-heading); max-width: 15ch; }
+  .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); color: var(--clr-dark-purple-70); }
+  @media (max-width: 860px) { .head.split { grid-template-columns: 1fr; } .inner.aside { grid-template-columns: 1fr; } }
+</style>

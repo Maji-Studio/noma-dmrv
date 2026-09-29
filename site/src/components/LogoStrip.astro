@@ -1,0 +1,26 @@
+---
+// Proof logos. PLACEHOLDERS: each item renders its name in a dashed hairline box.
+// To swap in a real logo, give the item a `src` (an <img> is rendered) or replace the <span class="ph"> with inline SVG.
+import { copy } from "../content/copy.js";
+const { label, logos } = Astro.props;
+const items = logos.map((l) => (typeof l === "string" ? { name: l } : l));
+---
+<div class="strip">
+  <p class="label">{label}</p>
+  <ul class="logos">
+    {items.map((l) => (
+      <li>
+        {l.src ? <img src={l.src} alt={l.name} height="32" /> : <span class="ph" data-placeholder>{l.name}<small>{copy.chrome.logoPlaceholder}</small></span>}
+      </li>
+    ))}
+  </ul>
+</div>
+<style>
+  .strip { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 2.4fr); column-gap: var(--col-gap); row-gap: 16px; align-items: center; }
+  .label { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  .logos { list-style: none; margin: 0; padding: 0; display: grid; align-items: stretch; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+  .ph { display: grid; align-content: center; gap: 2px; height: 100%; min-height: 88px; padding: 12px 16px; border: 1px dashed var(--clr-purple-40); font-size: 18px; line-height: 1.2; letter-spacing: -0.02em; }
+  .ph small { font-size: var(--fs-fine); letter-spacing: 0; color: var(--clr-dark-purple-70); }
+  img { display: block; height: 32px; width: auto; }
+  @media (max-width: 860px) { .strip { grid-template-columns: 1fr; } }
+</style>

@@ -1,0 +1,22 @@
+---
+import TextLink from "./TextLink.astro";
+const { cards } = Astro.props;
+---
+<div class="options">
+  {cards.map((k) => (
+    <div class="option">
+      <p class="tag">{k.chip}</p>
+      <h3>{k.title}</h3>
+      <p class="text">{k.text}</p>
+      <TextLink href={k.href}>{k.action}</TextLink>
+    </div>
+  ))}
+</div>
+<style>
+  .options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--col-gap); row-gap: 40px; }
+  .option { border-top: var(--rule-strong); padding-top: 24px; display: grid; gap: 14px; align-content: start; justify-items: start; }
+  .tag { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  h3 { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
+  .text { font-size: var(--fs-body); max-width: 44ch; }
+  @media (max-width: 700px) { .options { grid-template-columns: 1fr; } }
+</style>

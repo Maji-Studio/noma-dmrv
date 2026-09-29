@@ -66,7 +66,6 @@ export function mountMap(root) {
   const road = (pts) => el("path", { class: "nv-road", d: pts.map((p, i) => (i ? "L" : "M") + P(p[0], p[1]).join(",")).join("") }, svg);
   road([[-7.77, 35.69], [-8.3, 35.28], [-8.85, 34.83], [-8.91, 33.46]]); road([[-8.85, 34.83], [-9.33, 34.77]]);
   TOWNS.forEach(([n, la, ln]) => { const [x, y] = P(la, ln); el("circle", { cx: x, cy: y, r: 2.5, class: "nv-town-dot" }, svg); const t = el("text", { x: x + 7, y: y - 7, class: "nv-town" }, svg); t.textContent = n; });
-  const note = el("text", { x: 16, y: 664, class: "nv-town", "font-size": "11" }, svg); note.textContent = "Illustrative: Southern Highlands, Tanzania. Real towns, made-up suppliers and fields.";
   const plant = { id: "plant", st: "plant", code: "Mafinga plant", meta: ["All production, bins and blending happen here", "18 runs, 8 biochar bins"], lat: PLANT.lat, lng: PLANT.lng };
   const sups = dense.nodes.filter((n) => n.st === "sup"), apps = dense.nodes.filter((n) => n.st === "app");
   const nodes = [plant, ...sups, ...apps].map((n) => { const [x, y] = P(n.lat, n.lng); return { ...n, x, y }; });
