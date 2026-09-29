@@ -9,7 +9,6 @@
  */
 import type { IngredientBin } from "@/lib/biochar-composition";
 import { splitWetMass } from "@/lib/mass-moisture";
-import type { AffectedStockPreview } from "@/types/output-stock";
 import {
   ingredientComponents,
   productCompositionComponents,
@@ -43,7 +42,6 @@ export function formProductComposition({
   recordedSourceDryMassKg,
   ingredients,
   allocationFrozen,
-  previews,
 }: {
   isEditMode: boolean;
   /** Wet biochar drawn from the source bin. */
@@ -54,8 +52,6 @@ export function formProductComposition({
   recordedSourceDryMassKg: number | null;
   ingredients: readonly IngredientLike[];
   allocationFrozen: boolean;
-  /** The product's stock projection, only while it is fresh and unblocked. */
-  previews?: readonly AffectedStockPreview[];
 }): FormProductComposition {
   const measuredDryKg = splitWetMass(massKg, moisturePercent)?.dryKg ?? null;
   const sourceDryKg = isEditMode
@@ -74,14 +70,7 @@ export function formProductComposition({
 
   const source = sourceComponents({ wetKg: massKg, dryKg: sourceDryKg, addedWaterKg });
   const parts = ingredients.flatMap((ingredient) =>
-    ingredientComponents(ingredient, {
-      frozen: allocationFrozen,
-      stock: previews?.find(
-        (preview) =>
-          preview.lane === "ingredient" &&
-          preview.storageLocationId === ingredient.storageLocationId,
-      ),
-    }),
+    ingredientComponents(ingredient, { frozen: allocationFrozen }),
   );
 
   return {

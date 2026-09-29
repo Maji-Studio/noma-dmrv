@@ -30,8 +30,10 @@ async function intake(f: Fixture, binId: string, wetKg: number, moisture: number
     massWetKg: wetKg, massDryKg: wetKg * (1 - moisture / 100), moistureContentPercent: moisture, deliveryDate: new Date(date) }).returning();
   return row;
 }
+/** The operator measures every ingredient; 20% matches the default intake below. */
+const MEASURED_INGREDIENT_MOISTURE = 20;
 function composition(f: Fixture, massKg = 0, binId: string | null = null, extra: Record<string, unknown> = {}) {
-  return { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg, storageLocationId: binId, ...extra }] };
+  return { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg, storageLocationId: binId, moistureContentPercent: MEASURED_INGREDIENT_MOISTURE, ...extra }] };
 }
 async function blend(f: Fixture, input: { massKg?: number; composition?: Record<string, unknown>; storageLocationId?: string } = {}) {
   return postProduct(f, { massKg: 100, formulationId: f.recipe.id, composition: composition(f), ...input });
@@ -88,15 +90,16 @@ describe("posted product bin and formulation contract", () => {
     expect(product.composition).toMatchObject({ ingredients: [{ massKg: 0, massDryKg: 0, moistureContentPercent: null }] });
     expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(100);
   });
-  it("requires moisture for a positive ingredient without a usable intake", async () => {
-    const f = await fixture(); const bin = await ingredientBin(f, 0);
-    await expect(blend(f, { composition: composition(f, 1, bin.id) })).rejects.toThrow("Every positive ingredient requires moisture");
-    await expect(submitInvalidBlend(f, { composition: composition(f, 1, bin.id) })).rejects.toBeInstanceOf(ActionConflictError);
+  it("requires a measured moisture for a positive ingredient, even when the bin has an estimate", async () => {
+    const f = await fixture(); const bin = await ingredientBin(f);
+    const unmeasured = composition(f, 1, bin.id, { moistureContentPercent: null });
+    await expect(blend(f, { composition: unmeasured })).rejects.toThrow("Enter the measured moisture");
+    await expect(submitInvalidBlend(f, { composition: unmeasured })).rejects.toBeInstanceOf(ActionConflictError);
     expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
   });
   it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
-    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureSource: "weighted_remaining" });
+    expect(await snapshot(product.id)).toMatchObject({ wetMassKg: "50.000", drySolidsKg: "40.000", moisturePercentUsed: 20, moistureEstimate: { moisturePercent: 20, wetMassKg: 100, dryMassKg: 80 } });
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
   });
   it("keeps posted ingredient moisture unchanged after a later dry intake", async () => {
@@ -106,16 +109,14 @@ describe("posted product bin and formulation contract", () => {
     expect(await snapshot(product.id)).toEqual(before);
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(150);
   });
-  it("prefills from weighted remaining stock, with an explicit operator override for a new blend", async () => {
+  it("posts the measured moisture and keeps the weighted remaining estimate the operator saw", async () => {
     const f = await fixture(); const bin = await ingredientBin(f);
     await blend(f, { composition: composition(f, 50, bin.id) }); await intake(f, bin.id, 100, 0, "2026-09-02");
-    const product = await blend(f, { composition: composition(f, 30, bin.id) });
-    // The canonical remaining-bin estimate is pro-rata over all eligible intakes:
+    const product = await blend(f, { composition: composition(f, 30, bin.id, { moistureContentPercent: 12 }) });
+    // The remaining-bin estimate is pro-rata over all eligible intakes:
     // 200 kg wet / 180 kg dry keeps a 90% solids ratio after wet withdrawals.
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory).toMatchObject({ currentWetMassKg: 120, estimatedDryMassKg: 108 });
-    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "27.000", moisturePercentUsed: 10 });
-    const override = await blend(f, { composition: composition(f, 30, bin.id, { moistureContentPercent: 10, moistureSource: "operator_override" }) });
-    expect(await snapshot(override.id)).toMatchObject({ drySolidsKg: "27.000", moisturePercentUsed: 10, moistureSource: "operator_override" });
+    expect(await snapshot(product.id)).toMatchObject({ drySolidsKg: "26.400", moisturePercentUsed: 12, moistureEstimate: { moisturePercent: 10 } });
   });
   it("rejects changing a posted ingredient draw even when later stock is available", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 60, bin.id) });
@@ -133,7 +134,7 @@ describe("posted product bin and formulation contract", () => {
   });
   it("withdraws saved source dry mass, freezes source shares and rejects dry overdraw", async () => {
     const f = await fixture();
-    const product = await blend(f, { massKg: 1600, composition: composition(f, 100, null, { moistureContentPercent: 0, moistureSource: "operator_override" }) });
+    const product = await blend(f, { massKg: 1600, composition: composition(f, 100, null, { moistureContentPercent: 0 }) });
     const shares = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
     expect(shares.reduce((sum, row) => sum + row.allocatedDryMassKg, 0)).toBe(1500);
     expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(0);
@@ -147,7 +148,7 @@ describe("posted product bin and formulation contract", () => {
     await expect(submitInvalidBlend(f, { composition: composition(f, 100, null, { moistureContentPercent: 0 }) })).rejects.toThrow("positive source biochar");
   });
   it("allows manual ingredient moisture without a bin while keeping posted mass immutable", async () => {
-    const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10, moistureSource: "operator_override" }) });
+    const f = await fixture(); const product = await blend(f, { composition: composition(f, 20, null, { moistureContentPercent: 10 }) });
     expect(await snapshot(product.id)).toMatchObject({ sourceStorageLocationId: null, drySolidsKg: "18.000" });
     await expect(updateBiocharProduct(f.ctx, product.id, { massKg: 110 })).rejects.toThrow("immutable");
   });

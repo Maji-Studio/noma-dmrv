@@ -41,7 +41,7 @@ export async function seedOutputStockBrowserFixture(userId: string, shipped = fa
       idempotencyKey: randomUUID(),
       composition: { ingredients: [{ formulationIngredientId: f.ingredient.id,
         feedstockTypeId: f.ingredientType.id, massKg: ingredientWet,
-        moistureContentPercent: ingredientMoisture, moistureSource: "operator_override" }] },
+        moistureContentPercent: ingredientMoisture }] },
     })));
   }
   const emptyBins = await db.insert(storageLocations).values(

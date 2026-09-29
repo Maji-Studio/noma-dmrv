@@ -11,7 +11,8 @@ vi.mock('@/db', () => {
   } };
   return { db: { ...tx, transaction: (run: (reader: unknown) => unknown) => run(tx) } };
 });
-vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStockView: mocks.view, estimateWetAtRecordedMoisture: async () => ({ recordedWetMassKg: null, estimatedWetMassKg: null }) }));
+vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStockView: mocks.view, getLayerMoistureBases: async (_ctx: unknown, _bin: unknown, layers: { id: string; placedAt: string; remainingSolidsKg: unknown }[]) =>
+  layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [] })) }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
@@ -54,12 +55,12 @@ it('reads each matching bin from its stock view and keeps an unresolved bin in t
   mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }, { id: 'broken', code: 'BIN-2', name: 'Unresolved bin' }]];
   mocks.state.mockClear();
   mocks.view.mockImplementation(async (_ctx: unknown, id: string) => id === 'bin'
-    ? { dryMassKg: 100, recordedWetMassKg: 130, estimatedWetMassKg: 118 }
-    : { dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null });
+    ? { dryMassKg: 100, estimatedWetMassKg: 118, estimatedMoisturePercent: 15.3 }
+    : { dryMassKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null });
   const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
   expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toEqual([
-    { id: 'bin', code: 'BIN', name: 'E2E bin', dryMassKg: 100, recordedWetMassKg: null, estimatedWetMassKg: 118 },
-    { id: 'broken', code: 'BIN-2', name: 'Unresolved bin', dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null },
+    { id: 'bin', code: 'BIN', name: 'E2E bin', dryMassKg: 100, estimatedWetMassKg: 118 },
+    { id: 'broken', code: 'BIN-2', name: 'Unresolved bin', dryMassKg: null, estimatedWetMassKg: null },
   ]);
   // The stock view owns the facility-local date; the list no longer computes layers itself.
   expect(mocks.state).not.toHaveBeenCalled();

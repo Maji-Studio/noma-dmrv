@@ -27,7 +27,7 @@ async function fixture() {
     const productInput = await withProductStockFingerprint(f.ctx, { code: `E2E-FIFO-${index}-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: date,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: wet + ingredientWet, moistureContentPercent: moisture, waterAddedKg: 0,
       idempotencyKey: randomUUID(),
-      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: ingredientWet, moistureContentPercent: ingredientMoisture, moistureSource: 'operator_override' }] } });
+      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: ingredientWet, moistureContentPercent: ingredientMoisture }] } });
     const product = await createBiocharProduct(f.ctx, productInput);
     expect((await createBiocharProduct(f.ctx, productInput)).id).toBe(product.id);
   }
@@ -79,10 +79,10 @@ describe('output FIFO transactions', () => {
     const f = await fixture();
     await createDelivery(f.ctx, f.deliveryInput);
     const base = { ...f.input, kind: 'count' as const, wetMassKg: 600 };
-    // A count is compared with the recorded wet stock: product 1 (1,000 kg wet,
-    // 720 kg solids) keeps the 420 kg of solids the delivery did not draw.
-    expect((await previewOutputStock(f.ctx, base)).beforeRecordedWetKg).toBeCloseTo(1000 * 420 / 720, 1);
-    expect((await previewOutputStock(f.ctx, { ...base, kind: 'loss', wetMassKg: 10 })).beforeRecordedWetKg).toBeNull();
+    // A count is compared with the estimated wet stock: product 1 keeps the 420 kg
+    // of solids the delivery did not draw, at the delivery's 30% reading.
+    expect((await previewOutputStock(f.ctx, base)).beforeEstimatedWetKg).toBeCloseTo(420 / 0.7, 6);
+    expect((await previewOutputStock(f.ctx, { ...base, kind: 'loss', wetMassKg: 10 })).moistureEstimate).toMatchObject({ moisturePercent: 30, basis: { source: 'reading' } });
     expect((await post(f, base)).preview.removedDryKg).toBe(0);
     expect((await post(f, { ...base, wetMassKg: 700 })).preview.removedDryKg).toBe(0);
     const loss = await post(f, { ...base, kind: 'loss', wetMassKg: 120 });
@@ -133,7 +133,7 @@ describe('output FIFO transactions', () => {
     const product = await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, { code: `E2E-FIFO-LATE-P-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: source.occurredAt,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
       idempotencyKey: randomUUID(),
-      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: 0, moistureContentPercent: 0, moistureSource: 'operator_override' }] } }));
+      composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, massKg: 0, moistureContentPercent: 0 }] } }));
     const originals = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     expect(originals.map(a => Number(a.dryMassKg)).sort((a,b) => b-a)).toEqual([900, 250]);
     const corrected = await post(f, { ...f.input, occurredAt: '2026-09-15T12:00:00.000Z', correctsMovementId: originals[0].movementId });

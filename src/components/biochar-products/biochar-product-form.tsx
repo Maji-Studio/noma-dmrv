@@ -26,6 +26,7 @@ import type { BiocharProductWithRelations } from "@/data-access/biochar-products
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
 import { useOutputStockPreview } from "@/hooks/use-output-stock";
+import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
 import {
   deriveBlendMassKg,
   deriveSourceBiocharMassKg,
@@ -259,6 +260,7 @@ export function BiocharProductForm({
     occurredAt: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
     moisturePercent: Number(watchedMoisture),
   } : null);
+  const sourceMoistureEstimate = useOutputMoistureEstimate(isEditMode ? null : sourceBiocharStorageLocationId, selectedFacilityId, watchedPlacedAt ? String(watchedPlacedAt) : null, sourcePreview.data?.moistureEstimate);
   const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
     (ingredient) =>
       typeof ingredient.massKg === "number" &&
@@ -340,7 +342,6 @@ export function BiocharProductForm({
     recordedSourceDryMassKg: product?.sourceAllocatedDryMassKg ?? null,
     ingredients: watchedIngredientBins ?? [],
     allocationFrozen: hasFrozenSourceAllocation,
-    previews: productPreviewsAvailable ? affectedBins : undefined,
   });
   const detailed = useFormDetailLevel() === "detailed";
 
@@ -463,6 +464,8 @@ export function BiocharProductForm({
             disabled: isSubmitting,
             placeholder: "e.g. 2",
             helperText: "Typically 1 to 2% for biochar",
+            estimate: isEditMode ? undefined : sourceMoistureEstimate,
+            reading: watchedMoisture,
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
           splitFooter={

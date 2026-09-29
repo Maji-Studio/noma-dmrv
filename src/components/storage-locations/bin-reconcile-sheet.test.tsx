@@ -139,6 +139,7 @@ describe("BinReconcileSheet", () => {
 });
 
 vi.mock("@/hooks/use-output-stock", () => ({
+  useOutputStockBalance: () => ({ data: undefined }),
   useOutputStockPreview: () => ({ data: undefined, isFetching: false, refetch: vi.fn() }),
   usePostOutputStock: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));

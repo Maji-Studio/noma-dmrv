@@ -9,7 +9,8 @@ import type { OutputStockHistoryEntry } from "@/types/output-stock";
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
 
 const history = vi.hoisted(() => ({ data: [] as OutputStockHistoryEntry[] }));
-vi.mock("@/hooks/use-output-stock", () => ({ useOutputStockHistory: () => ({ data: history.data }) }));
+vi.mock("@/hooks/use-output-stock", () => ({
+  useOutputStockBalance: () => ({ data: undefined }), useOutputStockHistory: () => ({ data: history.data }) }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: function History() {
   const [draft, setDraft] = useState(false);
   return <button type="button" onClick={() => setDraft(true)}>{draft ? "Correction draft" : "Stock history"}</button>;
