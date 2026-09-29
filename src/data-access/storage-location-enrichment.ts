@@ -113,6 +113,7 @@ export type BaseStorageLocationRow = {
   supplierReferenceId: string | null;
   feedstockTypeId: string | null;
   formulationId: string | null;
+  stockMode: StorageLocation["stockMode"];
   facilityId: string;
   archivedAt: Date | null;
   createdAt: Date;
