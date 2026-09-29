@@ -12,7 +12,7 @@
  * the block's other controls (a history dialog, a link) so they never scatter
  * across the block.
  *
- * Simple and Detailed show the same block (R1): caption, headline, picture
+ * Simple and Detailed show the same block: caption, headline, picture
  * and the block's own `actions` (a stock history, a fix like "Balance to
  * 100%") render at both levels. Detailed adds only explanation: the `detail`
  * rows and Show calculation, both marked with `DETAIL_EXPLANATION_ATTR`.

@@ -391,7 +391,7 @@ fields. Presentation state is separate from RHF and payloads. The shared sheet
 excludes `data-presentation-control` events from its unsaved-change heuristic.
 A real input change must still trigger the discard guard.
 
-**The contract (R1): Simple and Detailed show the same information and differ
+**The contract: Simple and Detailed show the same information and differ
 only in explanation.** Neither level hides something you fill in or something
 you read.
 
@@ -411,8 +411,10 @@ you read.
   justification). Keep long sheets calm by grouping, pairing and unit
   suffixes, never by hiding.
 - **Dry figures are data.** A read view shows dry biochar or dry solids as a
-  `secondary` line under the wet figure (`DetailField`), CERT chip included.
-  In a form preview the dry pair stays part of the calculation.
+  `secondary` line under the wet figure (`DetailField`, `DerivedHeadline`,
+  both through `SecondaryFigure`), CERT chip included. A stock balance such as
+  available dry stock does the same. In a movement preview the dry before and
+  after pair stays part of the calculation.
 
 `src/components/forms/form-detail-parity.test.tsx` guards this. Only
 `form-detail-context`, `CompositionCard` and `MoistureSplit` may read the level,
@@ -436,7 +438,8 @@ not draw proportions from an incomplete or zero basis.
 
 Before any input, a form's moisture split and product composition are
 explanation of what will appear, so only Detailed draws their unresolved
-state. The product composition also draws once a source bin is chosen,
+state (`<DetailedOnly unless={started}>`, which keeps one wrapper so the block
+never remounts when the first value arrives). The product composition also draws once a source bin is chosen,
 because its stock history is an action. Explanation parts stay mounted behind
 `hidden`, so an open disclosure survives a level switch.
 
@@ -470,8 +473,8 @@ stock family presents wet first. Only presentation changes.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
   estimate" at each batch's latest moisture reading, since an order has no
-  departure moisture yet; the batch bar and key as the picture; available dry stock as a
-  row under them at both levels.
+  departure moisture yet, with available dry stock as a secondary line under it at
+  both levels; the batch bar and key as the picture.
 - A wet estimate is computed at a moisture, not weighed: its label always says
   "estimate", and it reads in whole kilograms.
 

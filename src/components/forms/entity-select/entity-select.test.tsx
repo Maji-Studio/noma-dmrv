@@ -164,7 +164,7 @@ describe("EntitySelect selected-value display", () => {
       </FormDetailProvider>,
     );
     expect(html).toContain("North product bin");
-    // Remaining stock informs the pick (R1), so Simple shows it too and the
+    // Remaining stock informs the pick, so Simple shows it too and the
     // control is described by the helper, the stock caption and the label.
     const describedBy = html.match(/aria-describedby="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(describedBy[0]).toBe("field-helper");

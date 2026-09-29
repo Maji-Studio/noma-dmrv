@@ -84,7 +84,7 @@ async function pairs(page: Page, name: string, sectionNames: string[], dialogNam
     await expect(sheet.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     // Correction history is saved audit data; only the replacement form follows the switch.
     const simpleScope = name === "output-stock-correction" ? sheet.locator("form").last() : sheet;
-    // Simple shows the same data and actions as Detailed (R1); only explanation
+    // Simple shows the same data and actions as Detailed; only explanation
     // such as Show calculation waits for Detailed.
     await expect(simpleScope.getByRole("button", { name: /^Show calculation for/ })).toHaveCount(0);
     await scrollTop(sheet);

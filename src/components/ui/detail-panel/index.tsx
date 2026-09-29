@@ -42,6 +42,7 @@ import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import {
   isCertFieldValuePresent,
@@ -320,19 +321,12 @@ function DetailSecondaryLine({
   const resolvedCertifyStatus =
     certifyStatus ?? resolveCertFieldStatus(pending ? undefined : true, present);
   return (
-    <span className="flex flex-wrap items-center gap-x-6 body-caption text-[var(--color-text-secondary)]">
-      <span>{label}</span>
-      <span
-        className={cn(
-          "tabular-nums",
-          isEmpty ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]",
-        )}
-        data-empty={isEmpty || undefined}
-      >
-        {displayValue}
-      </span>
-      {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
-    </span>
+    <SecondaryFigure
+      label={label}
+      value={displayValue}
+      empty={isEmpty}
+      trailing={certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
+    />
   );
 }
 
@@ -341,7 +335,7 @@ function DetailSecondaryLine({
  * -----------------------------------------------------------------------------------------------*/
 
 /**
- * One read field. Simple and Detailed show the same fields (R1), so there is
+ * One read field. Simple and Detailed show the same fields, so there is
  * no per-field level flag; explanation goes in the section's `explanation`.
  */
 export interface DetailPanelField {
@@ -359,7 +353,7 @@ export interface DetailPanelField {
   secondary?: DetailSecondaryValue;
 }
 
-/** One read section. Both detail levels show every section and its fields (R1). */
+/** One read section. Both detail levels show every section and its fields. */
 export interface DetailPanelSection {
   title: string;
   fields: DetailPanelField[];

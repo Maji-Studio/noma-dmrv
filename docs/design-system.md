@@ -742,13 +742,7 @@ Detailed levels and derived blocks, and the `@/schemas/helpers` numeric
 helpers. This doc owns only the form type set, lines and spacing
 ([above](#form-type-lines-and-spacing)).
 
-**Simple and Detailed show the same information.** Both levels render every
-input, field, section, action and piece of decision info (stock, before →
-after, blockers, warnings). Detailed adds only explanation: calculation rows,
-basis captions, provenance, raw versus capped values. Dry figures in a read
-view are a secondary line under the wet figure at both levels. When a sheet
-gets long, group and pair rather than hide. The rule and its guard test live
-in [forms.md](./forms.md#simple-and-detailed-presentation).
+Simple and Detailed differ only in explanation: see [forms.md](./forms.md#simple-and-detailed-presentation).
 
 ## Naming, file structure, React rules
 

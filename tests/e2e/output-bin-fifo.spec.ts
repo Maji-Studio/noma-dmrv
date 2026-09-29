@@ -57,7 +57,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.getByRole("button", { name: "Reconcile stock", exact: true }).click();
     await fillStock(page, "100", "0", "E2E drying without dry loss");
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
-    // The stock preview informs the decision, so Simple shows it (R1).
+    // The stock preview informs the decision, so Simple shows it.
     await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeVisible();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     await expect(page.getByText("Drying alone does not remove dry biochar.", { exact: true })).toBeVisible();
@@ -78,7 +78,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await page.locator("#quantityKg").fill("100");
     await page.locator("#orderDate").fill(FIFO_BROWSER_DATE);
     await page.locator("#packaging").selectOption("loose");
-    // Matching stock informs the order, so Simple shows it (R1).
+    // Matching stock informs the order, so Simple shows it.
     await expect(page.getByRole("dialog").getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     const matching = page.getByRole("region", { name: "Matching storage bins" });
     await expect(matching.getByRole("article")).toHaveCount(FIFO_MATCHING_BIN_COUNT);
@@ -113,7 +113,7 @@ test.describe("Output-bin conserved FIFO", () => {
 
     await page.locator("#deliveredWetMassKg").fill("2000");
     await fillStockMoisture(page, "delivery", "30");
-    // Simple shows the preview headline, picture and history action (R1);
+    // Simple shows the preview headline, picture and history action;
     // Detailed adds the dry pair and the calculation.
     await expect(preview.getByText("2,000 kg wet loaded at 30% moisture", { exact: true })).toBeVisible();
     await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toBeVisible();
@@ -256,7 +256,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
     // A zero count draws no split. The pile's estimated moisture still gives a
     // wet headline at both levels, so the dry pair stays the Detailed
-    // calculation row (Q1).
+    // calculation row.
     await expect(page.getByText("Counted 0 kg wet", { exact: true })).toBeVisible();
     await expect(page.getByRole("group", { name: "Dry biochar in bin: 343 kg before, 0 kg after" })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();

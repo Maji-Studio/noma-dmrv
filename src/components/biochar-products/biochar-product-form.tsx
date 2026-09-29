@@ -128,7 +128,7 @@ export function ProductCompositionBlock({
       ) : undefined}
     />
   );
-  return started || storageLocationId ? preview : <DetailedOnly>{preview}</DetailedOnly>;
+  return <DetailedOnly unless={started || Boolean(storageLocationId)}>{preview}</DetailedOnly>;
 }
 
 /**

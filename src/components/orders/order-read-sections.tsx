@@ -3,7 +3,7 @@
  *
  * The order as saved, in the edit form's section order, then today's matching
  * stock and the fulfilment status with what has been delivered. Both detail
- * levels show every section (R1).
+ * levels show every section.
  */
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";

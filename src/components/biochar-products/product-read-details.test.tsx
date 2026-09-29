@@ -72,7 +72,7 @@ describe("Product read view levels", () => {
     expect(simple).toContain("Chicken manure solids 80 kg");
     expect(simple).toContain("Water 70 kg");
     expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(1);
-    // Dry figures are data (Q1): a secondary line under each wet mass.
+    // Dry figures are data: a secondary line under each wet mass.
     expect(simple).toContain("Source biochar wet mass (kg) 250 kg Dry biochar 200 kg");
     expect(simple).toContain("Chicken manure wet mass (kg) 100 kg Dry solids 80 kg");
     expect(simple).toContain("Derived transport");

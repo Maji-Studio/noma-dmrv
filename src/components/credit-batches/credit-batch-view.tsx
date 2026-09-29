@@ -20,7 +20,7 @@ import type {
 } from "@/data-access/credit-batches";
 import { StockRows } from "@/components/storage-locations/stock-figures";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
-import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatWetDryMass, PERCENT_SCALE } from "@/lib/mass-moisture";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
 import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
@@ -35,14 +35,14 @@ import {
 } from "@/lib/certification/links";
 
 /** Names the figure, so the headline needs no label of its own. */
-const PERCENT_PER_UNIT = 100;
-const DURABILITY_PERCENT_DIGITS = 1;
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
 const CARBON_ESTIMATE_HINT =
   "A local estimate of stored CO₂e before project emissions. The registry result is authoritative.";
 /** What the input rows are to the estimate above them. */
 const CARBON_ESTIMATE_BASIS =
   "These inputs are not in the estimate. Isometric turns them into project emissions at submission.";
+/** Durable fractions read as a percentage with one decimal. */
+const DURABILITY_PERCENT_DIGITS = 1;
 
 /**
  * Why the estimate is missing, as one caption under the empty figure. Setup
@@ -143,7 +143,7 @@ function CreditBatchCarbonEstimate({
 
 /** A durable fraction (0 to 1) as a percentage with one decimal. */
 function formatDurabilityPercent(fraction: number): string {
-  return `${(fraction * PERCENT_PER_UNIT).toFixed(DURABILITY_PERCENT_DIGITS)}%`;
+  return `${(fraction * PERCENT_SCALE).toFixed(DURABILITY_PERCENT_DIGITS)}%`;
 }
 
 function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {

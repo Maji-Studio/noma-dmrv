@@ -1,5 +1,5 @@
 /**
- * R1 guard: Simple and Detailed show the same information and differ only in
+ * Level parity guard: Simple and Detailed show the same information and differ only in
  * explanation (docs/forms.md, "Simple and Detailed presentation").
  *
  * Two layers:
@@ -119,7 +119,7 @@ function sourceFiles(): { path: string; text: string }[] {
     .map(file => ({ path: relative(SRC, join(SRC, file)), text: readFileSync(join(SRC, file), "utf8") }));
 }
 
-describe("R1 source scan", () => {
+describe("detail level source scan", () => {
   const files = sourceFiles();
 
   it("reads the detail level only in the explanation primitives", () => {
@@ -128,7 +128,7 @@ describe("R1 source scan", () => {
   });
 
   it("renders DetailedOnly only where it wraps explanation", () => {
-    const callers = files.filter(file => /<DetailedOnly>|function DetailedOnly/.test(file.text)).map(file => file.path);
+    const callers = files.filter(file => /<DetailedOnly[\s>]|function DetailedOnly/.test(file.text)).map(file => file.path);
     expect(callers.sort()).toEqual([...DETAILED_ONLY_CALLERS].sort());
   });
 
@@ -160,7 +160,7 @@ function textOf(node: ReactTestInstance | string): string {
 
 const clean = (value: string) => value.replace(/\s+/g, " ").trim();
 
-/** What R1 compares: labels, titles, inputs, actions and links, in order, plus the visible text. */
+/** What the parity check compares: labels, titles, inputs, actions and links, in order, plus the visible text. */
 function inventory(root: ReactTestInstance): { items: string[]; text: string } {
   const items: string[] = [];
   const walk = (node: ReactTestInstance | string) => {
@@ -291,7 +291,7 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
   { name: "mix pile", element: <MixPileCard binName="Product bin" wetKg={1800} moisturePercent={20} dryKg={1440} batches={[{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] as never} /> },
 ];
 
-describe("R1 render parity", () => {
+describe("detail level render parity", () => {
   it("covers every read-section builder", () => {
     const builders = sourceFiles()
       .filter(file => /\):\s*DetailPanelSection\[\]/.test(file.text) || file.path.endsWith("-read-sections.tsx"))

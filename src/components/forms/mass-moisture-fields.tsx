@@ -250,8 +250,9 @@ export function MassMoistureFields({
           {addedWaterField}
         </div>
       )}
-      <div data-testid="mass-moisture-split" className="md:col-span-2 empty:hidden">
-        {started ? split : <DetailedOnly>{split}</DetailedOnly>}
+      {/* Hidden while nothing inside has content, so Simple adds no empty grid row. */}
+      <div data-testid="mass-moisture-split" className="md:col-span-2 [&:not(:has(*:not(:empty)))]:hidden">
+        <DetailedOnly unless={started}>{split}</DetailedOnly>
         {splitFooter}
       </div>
     </div>

@@ -11,7 +11,7 @@ import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
 const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
 
 /**
- * Matching stock informs the order (R1 decision info), so both levels show it.
+ * Matching stock informs the order, so both levels show it.
  *
  * Each bin leads with its wet stock. An order has no departure moisture yet
  * (the delivery measures it), so the estimate uses each batch's latest
