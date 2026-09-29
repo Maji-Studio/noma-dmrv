@@ -6,6 +6,7 @@ import { useSimplePresence } from "@/components/forms/form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
+import { calculatedWithoutNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 import type { ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
@@ -52,7 +53,8 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
 export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
   const parts = useSimplePresence(STOCK_SIMPLE_PRESENCE);
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
-  const needsAttention = Boolean(blockingMessage) || Boolean(preview.blockers?.length) || preview.discrepancySolidsKg > 0;
+  const backdated = "calculatedWithout" in preview ? calculatedWithoutNotice(preview.calculatedWithout ?? []) : null;
+  const needsAttention = Boolean(blockingMessage) || Boolean(preview.blockers?.length) || preview.discrepancySolidsKg > 0 || Boolean(backdated);
 
   // The live region stays mounted while the level hides it, so a blocker that
   // appears later is still announced.
@@ -67,6 +69,7 @@ export function OutputStockPreview({ variant = "load", preview, entry, moreInfo,
         />
       )}
       {preview.discrepancySolidsKg > 0 && <StockNotice>Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</StockNotice>}
+      {backdated && <StockNotice>{backdated}</StockNotice>}
       {blockingMessage && <StockNotice tone="error" role="alert">{blockingMessage}</StockNotice>}
       {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? (blocker.entity === "binMovement" ? <span key={blocker.id}>{blocker.code}</span> : <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?ids=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>))}
     </section>

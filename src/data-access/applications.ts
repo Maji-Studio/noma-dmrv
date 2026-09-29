@@ -50,6 +50,7 @@ import {
 } from "drizzle-orm";
 import { GRAMS_PER_KG, massGrams, splitGrams } from "./delivery-allocation-math";
 import { getApplicationAllocationShares, saveApplicationOutputAllocations, type ApplicationAllocationShare } from "./delivery-allocation-provenance";
+import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
 
 import { SafeError } from "@/lib/errors";
 import { parseGisBoundary } from "@/schemas/gis-boundary";
@@ -316,6 +317,8 @@ function resolveApplicationDryMassTons(
  */
 export interface ApplicationListItem extends Application {
   allocationShares: ApplicationAllocationShare[];
+  /** Drawn from a mix bin: recorded as usual, but held out of credit batches (ADR 0030). */
+  heldOutOfCredits: boolean;
   deliveryCode: string;
   customerName: string | null;
   locationName: string | null;
@@ -472,8 +475,9 @@ export async function getApplications(
     .offset(offset);
 
   const allocationShares = await getApplicationAllocationShares(ctx, items.map(item => item.id));
+  const heldOut = await getMixBinHeldApplicationIds(ctx, db, items.map(item => item.id));
   return {
-    items: items.map(item => ({ ...item, allocationShares: allocationShares.filter(share => share.applicationId === item.id) })),
+    items: items.map(item => ({ ...item, allocationShares: allocationShares.filter(share => share.applicationId === item.id), heldOutOfCredits: heldOut.has(item.id) })),
     total,
     page,
     pageSize,

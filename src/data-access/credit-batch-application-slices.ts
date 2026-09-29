@@ -5,6 +5,7 @@ import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { SafeError } from "@/lib/errors";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { massGrams } from "./delivery-allocation-math";
+import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
 import { requireOrgScope } from "./utils";
 
 export interface CreditBatchApplicationSlice {
@@ -52,9 +53,11 @@ export async function reconcileUnassignedCreditBatchApplicationSlices(ctx: OrgCo
       }
     }
   }
+  // Mix-bin draws feed no credit batch until the PDD covers mixing (ADR 0030).
+  const heldOut = await getMixBinHeldApplicationIds(ctx, tx, applicationIds);
   const desired = new Map<string, CreditBatchApplicationSlice>();
   for (const row of rows) {
-    if (!applicationIds.includes(row.applicationId)) continue;
+    if (!applicationIds.includes(row.applicationId) || heldOut.has(row.applicationId)) continue;
     if (requestedBatchIds.length && !requestedBatchIds.includes(row.creditBatchId)) continue;
     const key = `${row.creditBatchId}:${row.applicationId}`;
     const slice = desired.get(key) ?? { creditBatchId: row.creditBatchId, applicationId: row.applicationId, allocatedWetMassKg: 0, allocatedDryMassKg: 0, removalId: null };

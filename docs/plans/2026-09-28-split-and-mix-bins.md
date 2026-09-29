@@ -1,6 +1,6 @@
 # Split and mix output bins
 
-**Owner:** Kenji Nguyen · **Status:** agreed in grilling (2026-09-28), not implemented · **Last reviewed:** 2026-09-28
+**Owner:** Kenji Nguyen · **Status:** agreed in grilling (2026-09-28); slices A to F implemented (F: mix bins, 2026-09-29) · **Last reviewed:** 2026-09-29
 
 Decisions: [ADR 0029 amendment (2026-09-28)](../adr/0029-output-bin-stock-is-dry-biochar-drawn-fifo.md) and [ADR 0030](../adr/0030-mix-bins-draw-pro-rata.md). Four grilling rounds (21 decisions, with diagrams) are recorded on the [Split and Mix Bins page](https://claude.ai/artifact/ARZrecVgBMHDPa3J91TKnM).
 

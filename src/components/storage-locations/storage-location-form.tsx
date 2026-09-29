@@ -1,7 +1,8 @@
 "use client";
 
 import { nullableNumericValue } from "@/lib/form-utils";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
+import { EventTimeInput } from "@/components/forms/event-time-input";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,12 +20,23 @@ import {
   storageLocationTypes,
   formatStorageLocationType,
   isFeedstockBinType,
+  isOutputBinType,
   STORAGE_LOCATION_TYPE_DESCRIPTIONS,
   type StorageLocationFormData,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
+
+const STOCK_MODE_OPTIONS = [
+  { value: "split", label: "Split: batches kept apart" },
+  { value: "mix", label: "Mix: one blended pile" },
+] as const;
+
+const STOCK_MODE_HINT =
+  "Split keeps every batch in its own bay, bag or heap, and each removal records which batches it came from. Mix is one blended pile: every removal takes each batch in proportion to what it holds.";
+const MERGE_TIME_HINT =
+  "Removals from this time on take every batch in proportion. Entries already saved keep their shares.";
 
 interface StorageLocationFormProps {
   storageLocation?: StorageLocation;
@@ -78,6 +90,8 @@ export function StorageLocationForm({
     handleSubmit,
     control,
     trigger,
+    setValue,
+    setError,
     formState: { errors },
   } = useForm<StorageLocationFormData>({
     resolver: zodResolver(storageLocationFormSchema),
@@ -88,6 +102,8 @@ export function StorageLocationForm({
       capacityKg: storageLocation?.capacityKg ?? undefined,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
       formulationId: storageLocation?.formulationId ?? defaultFormulationId ?? "",
+      stockMode: storageLocation?.stockMode ?? "split",
+      mergedAt: "",
       storageMethod: storageLocation?.storageMethod ?? "",
       storageDescription: storageLocation?.storageDescription ?? "",
     },
@@ -96,6 +112,13 @@ export function StorageLocationForm({
   const watchedType = useWatch({ control, name: "type" });
   const showFeedstockType = isFeedstockBinType(watchedType);
   const showFormulation = watchedType === "product_bin";
+  const showStockMode = isOutputBinType(watchedType);
+  const watchedStockMode = useWatch({ control, name: "stockMode" });
+  const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const clock = useFacilityClock(watchedFacilityId);
+  // Only an existing split bin merges; a new bin simply starts as mix.
+  const merging = showStockMode && storageLocation?.stockMode === "split" && watchedStockMode === "mix";
+  const unmixing = showStockMode && storageLocation?.stockMode === "mix" && watchedStockMode === "split";
   const typeDescription = watchedType
     ? STORAGE_LOCATION_TYPE_DESCRIPTIONS[watchedType]
     : undefined;
@@ -117,6 +140,12 @@ export function StorageLocationForm({
     }
     if (normalized.type !== "product_bin") {
       normalized.formulationId = null;
+    }
+    if (!isOutputBinType(normalized.type)) normalized.stockMode = "split";
+    if (!merging) normalized.mergedAt = null;
+    else if (!normalized.mergedAt) {
+      setError("mergedAt", { message: "Enter when the batches were merged." });
+      return;
     }
     return onSubmit(normalized);
   });
@@ -186,6 +215,39 @@ export function StorageLocationForm({
           />
         </FormField>
       </div>
+
+      {showStockMode && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField
+            id="stockMode"
+            label="Stock mode"
+            hint={STOCK_MODE_HINT}
+            error={errors.stockMode?.message}
+            helperText={unmixing ? "Only an empty bin can switch to split." : undefined}
+            required
+          >
+            <FormSelect
+              id="stockMode"
+              disabled={isSubmitting}
+              error={!!errors.stockMode}
+              options={STOCK_MODE_OPTIONS}
+              {...register("stockMode", {
+                // Merging starts from now, which the operator can move back.
+                onChange: (event) => {
+                  if (event.target.value === "mix" && storageLocation?.stockMode === "split") {
+                    setValue("mergedAt", new Date().toISOString());
+                  }
+                },
+              })}
+            />
+          </FormField>
+          {merging && (
+            <FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} helperText={clock.hint} required>
+              <EventTimeInput control={control} name="mergedAt" id="mergedAt" timeZone={clock.timeZone} disabled={isSubmitting} />
+            </FormField>
+          )}
+        </div>
+      )}
 
       {showFeedstockType && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">

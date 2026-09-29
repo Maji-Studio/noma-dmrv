@@ -47,6 +47,13 @@ export interface OutputStockPreview {
   moistureEstimate?: OutputMoistureEstimate | null;
   /** What this movement's readings reset: the same remaining stock at its previous estimate, then at the reading. */
   moistureReset?: OutputMoistureReset | null;
+  /** The bin's stock mode at this movement's time; a merged bin is split before its merge. */
+  stockMode?: 'split' | 'mix';
+  /**
+   * Mix bins: posted removals timed after this entry, labelled with their
+   * facility time. Their saved shares were calculated without it and stay as posted.
+   */
+  calculatedWithout?: { id: string; label: string; occurredAt: string }[];
   discrepancySolidsKg: number;
   allocations: OutputStockAllocationView[];
   beforeAllocations?: OutputStockAllocationView[];

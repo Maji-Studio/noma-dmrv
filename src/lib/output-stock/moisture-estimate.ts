@@ -1,5 +1,5 @@
 import { add, decimal, divide, rational, rationalToNumber, subtract, type Rational } from './exact';
-import { layerRemainingSolidsKg, type OutputStockLayer, type OutputStockRequest, type planOutputStock } from './planner';
+import { layerRemainingSolidsKg, type DrawPolicy, type OutputStockLayer, type OutputStockRequest, type planOutputStock } from './planner';
 
 const PERCENT = 100;
 
@@ -83,12 +83,13 @@ export function estimateStock(layers: readonly LayerMoistureBasis[], at: string)
 export interface PlannedReading { layerId: string; moisturePercent: number; solidsKg: Rational }
 
 /**
- * The readings a planned movement records. A reading resets the sub-bin it was
- * taken from: every drawn layer at its own reading, or, for a count, every layer
- * present at the counted moisture. A layer the movement empties has no moisture
- * left to reset, and a zero count measured none.
+ * The readings a planned movement records. A reading resets what it was taken
+ * from: in a split bin every drawn sub-bin at its own reading; in a mix bin,
+ * and for any count, every layer present, since the reading describes the whole
+ * pile. A layer the movement empties has no moisture left to reset, and a zero
+ * count measured none.
  */
-export function planReadings(request: OutputStockRequest, plan: Pick<ReturnType<typeof planOutputStock>, 'allocations' | 'remainingLayers'>, occurredAt: string): PlannedReading[] {
+export function planReadings(request: OutputStockRequest, plan: Pick<ReturnType<typeof planOutputStock>, 'allocations' | 'remainingLayers'>, occurredAt: string, policy: DrawPolicy = 'fifo'): PlannedReading[] {
   const remaining = new Map<string, OutputStockLayer>(plan.remainingLayers.map(layer => [layer.id, layer]));
   const held = (layerId: string) => {
     const layer = remaining.get(layerId);
@@ -96,11 +97,13 @@ export function planReadings(request: OutputStockRequest, plan: Pick<ReturnType<
     return solidsKg && solidsKg.numerator > BigInt(0) ? solidsKg : null;
   };
   const readings: PlannedReading[] = [];
-  if (request.kind === 'count') {
-    if (request.moisturePercent == null || Number(request.wetKg) <= 0) return readings;
+  const pileReading = request.kind === 'count' ? (Number(request.wetKg) > 0 ? request.moisturePercent : undefined)
+    : policy === 'pro_rata' && request.kind === 'wet' ? request.moisturePercent : undefined;
+  if (request.kind === 'count' || policy === 'pro_rata') {
+    if (pileReading == null) return readings;
     for (const layer of plan.remainingLayers) {
       const solidsKg = layer.placedAt <= occurredAt ? held(layer.id) : null;
-      if (solidsKg) readings.push({ layerId: layer.id, moisturePercent: Number(request.moisturePercent), solidsKg });
+      if (solidsKg) readings.push({ layerId: layer.id, moisturePercent: Number(pileReading), solidsKg });
     }
     return readings;
   }

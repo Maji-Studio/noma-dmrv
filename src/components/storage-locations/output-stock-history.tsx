@@ -27,6 +27,9 @@ import {
 
 const CORRECTABLE_KINDS = ["loss", "count", "delivery"];
 
+/** A merge moves no stock; it changes how every later removal is drawn. */
+const MERGE_CAPTION = "From this time on, every removal takes each batch in proportion to what it holds.";
+
 /** The one fact the entries cannot show as a figure. */
 const HISTORY_HINT =
   "Each entry is one measurement. Current wet stock stays an estimate at the latest moisture, so a later moisture never rewrites an earlier measurement.";
@@ -70,13 +73,15 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
           </h4>
           <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatFacilityDateTime(entry.occurredAt, timeZone)}</span>
         </div>
-        {entry.moistureReset ? <MoistureResetChange reset={entry.moistureReset} named={false} /> : <StockRows label={`${kindLabel} figures`} rows={rows} />}
+        {entry.kind === "merge"
+          ? <p className="body-caption text-[var(--color-text-secondary)]">{MERGE_CAPTION}</p>
+          : entry.moistureReset ? <MoistureResetChange reset={entry.moistureReset} named={false} /> : <StockRows label={`${kindLabel} figures`} rows={rows} />}
         {reversedEntry && (
           <p className="body-caption text-[var(--color-text-secondary)]">
             Reverses the entry recorded {formatFacilityDateTime(reversedEntry.occurredAt, timeZone)}.
           </p>
         )}
-        {entry.reason && <p className="body-caption text-[var(--color-text-secondary)]">{entry.reason}</p>}
+        {entry.reason && entry.kind !== "merge" && <p className="body-caption text-[var(--color-text-secondary)]">{entry.reason}</p>}
         <p className="body-caption text-[var(--color-text-tertiary)]">
           Recorded {formatFacilityDateTime(entry.recordedAt, timeZone)} by {entry.actorName ?? MISSING_VALUE.notRecorded}
         </p>

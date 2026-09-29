@@ -9,13 +9,14 @@ import { subBinMovements } from '@/lib/output-stock/sub-bin-movements';
 import { outputSubBinsSchema } from '@/schemas/output-stock';
 import type { OutputSubBins, OutputSubBinsInput } from '@/types/output-stock';
 import { and, eq, isNull } from 'drizzle-orm';
+import { getStockModeAt } from './output-bin-stock-mode';
 import { getBiocharOutputStockLayers, getLayerMoistureBases, getProductOutputStockLayers } from './output-stock';
 import { prepareOutputCorrection } from './output-stock-corrections';
 import { getOutputStockHistory } from './output-stock-history';
 import { requireOrgScope } from './utils';
 
 /**
- * The sub-bins a split bin holds at `occurredAt`, oldest first, each with its
+ * The sub-bins a bin holds at `occurredAt`, oldest first, with the bin's mode then, each with its
  * own moisture estimate and latest movements. A correction reads them as they
  * were before the entry it replaces, so the operator can re-choose them. When
  * the correction itself is refused, the bin's current sub-bins still show: the
@@ -46,7 +47,8 @@ export async function getOutputSubBins(ctx: OrgContext, raw: OutputSubBinsInput)
   const held = layers.filter(layer => layer.placedAt <= input.occurredAt && layer.remainingSolidsKg && layer.remainingSolidsKg.numerator > BigInt(0))
     .sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.postingSequence < b.postingSequence ? -1 : a.postingSequence > b.postingSequence ? 1 : 0));
   return {
-    stockMode: bin.stockMode,
+    // A merged bin was split before its merge, so a draw timed then still picks sub-bins.
+    stockMode: await getStockModeAt(ctx, bin, input.occurredAt),
     subBins: held.map(layer => {
       const basis = bases.find(b => b.layerId === layer.id);
       const estimate = basis ? estimateStock([basis], input.occurredAt) : null;
