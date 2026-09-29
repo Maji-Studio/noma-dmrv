@@ -279,13 +279,13 @@ export function formatWetDryMass({
  * Stock pair in the words of the selected bin caption, for option subtitles
  * and captions: "2,500 kg wet, 1,500 kg dry biochar". An estimated wet figure
  * reads "≈ 2,500 kg wet"; a missing figure keeps its side and names the gap
- * ("dry biochar not recorded").
+ * ("dry biochar not available").
  */
 export function formatWetDryStock({
   wetKg,
   dryKg,
   estimatedWet = false,
-  missing = MISSING_VALUE.notRecorded,
+  missing = MISSING_VALUE.notAvailable,
 }: {
   wetKg: number | null | undefined;
   dryKg: number | null | undefined;

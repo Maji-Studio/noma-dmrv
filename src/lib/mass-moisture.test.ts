@@ -224,9 +224,9 @@ describe("formatWetDryStock", () => {
 
   it("marks an estimated wet figure and names a missing side", () => {
     expect(formatWetDryStock({ wetKg: 277.3, dryKg: null, estimatedWet: true })).toBe(
-      "≈ 277.3 kg wet, dry biochar not recorded",
+      "≈ 277.3 kg wet, dry biochar not available",
     );
-    expect(formatWetDryStock({ wetKg: null, dryKg: 249.6, missing: "Not available" })).toBe(
+    expect(formatWetDryStock({ wetKg: null, dryKg: 249.6 })).toBe(
       "wet not available, 249.6 kg dry biochar",
     );
   });

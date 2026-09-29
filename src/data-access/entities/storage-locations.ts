@@ -1,4 +1,3 @@
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getIngredientMoistureBasis } from '../ingredient-moisture-basis';
 import { getOutputBinStockView } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
@@ -60,7 +59,6 @@ function outputBinStockSubtitle(stock: { estimatedWetMassKg: number | null; dryM
     wetKg: stock.estimatedWetMassKg,
     dryKg: stock.dryMassKg,
     estimatedWet: true,
-    missing: MISSING_VALUE.notAvailable,
   });
 }
 export function formatStorageLocationSubtitle(

@@ -171,7 +171,7 @@ describe("toStorageLocationEntityOption", () => {
 
     expect(option.remainingMass).toEqual({ wetKg: 3_100, dryKg: null });
     expect(option.subtitle).toContain(
-      "3,100 kg wet, dry biochar not recorded available",
+      "3,100 kg wet, dry biochar not available available",
     );
   });
 
@@ -202,7 +202,7 @@ describe("toStorageLocationEntityOption", () => {
 
     expect(option.remainingMass).toEqual({ wetKg: 2_900, dryKg: null });
     expect(option.subtitle).toContain(
-      "2,900 kg wet, dry biochar not recorded stored",
+      "2,900 kg wet, dry biochar not available stored",
     );
   });
 });

@@ -44,7 +44,7 @@ describe("application delivery option mass", () => {
         delivery({ massDryKg: null, moistureContentPercent: null }),
       ),
     ).toBe(
-      "850 kg wet, dry biochar not recorded",
+      "850 kg wet, dry biochar not available",
     );
   });
 
