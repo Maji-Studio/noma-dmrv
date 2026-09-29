@@ -6,10 +6,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { and, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { deriveLaneStock } from "./lane-stock-derivation";
-import {
-  getOutputBinDryBalance,
-  UnresolvedOutputStockError,
-} from "./output-stock";
+import { getOutputBinStocks, type OutputBinStock } from "./output-stock";
 import { requireOrgScope } from "./utils";
 
 /**
@@ -55,6 +52,13 @@ export async function getStorageLocationLaneSummary(
     product_bin: { binCount: 0, onHandKg: 0 },
   };
 
+  // All-layers balance: the lane total conserves receipts placed later too.
+  const outputStocks: Map<string, OutputBinStock> = options.archived
+    ? new Map()
+    : await getOutputBinStocks(
+        ctx,
+        bins.filter((bin) => bin.type !== "feedstock_bin").map((bin) => bin.id),
+      );
   for (const bin of bins) {
     const stock = laneStockById.get(bin.id);
     const lane = summary[bin.type];
@@ -62,12 +66,8 @@ export async function getStorageLocationLaneSummary(
     if (bin.type === "feedstock_bin") {
       lane.onHandKg = (lane.onHandKg ?? 0) + (stock?.feedstockStockWetKg ?? 0);
     } else if (!options.archived && lane.onHandKg != null) {
-      try {
-        lane.onHandKg += await getOutputBinDryBalance(ctx, bin.id);
-      } catch (error) {
-        if (!(error instanceof UnresolvedOutputStockError)) throw error;
-        lane.onHandKg = null;
-      }
+      const dryKg = outputStocks.get(bin.id)?.allLayersDryKg ?? null;
+      lane.onHandKg = dryKg == null ? null : lane.onHandKg + dryKg;
     }
   }
 

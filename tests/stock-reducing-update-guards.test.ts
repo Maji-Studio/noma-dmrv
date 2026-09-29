@@ -6,7 +6,7 @@ import { updateOrder } from "@/data-access/orders";
 import { updateBiocharProduct } from "@/data-access/biochar-products";
 import { updateFormulation } from "@/data-access/formulations";
 import { updateProductionRun } from "@/data-access/production-runs";
-import { getOutputBinDryBalance } from "@/data-access/output-stock";
+import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { cleanupPostedStock, postedStockFixture, postDelivery, postMeasurement } from "./helpers/posted-output-stock-fixture";
 
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
@@ -19,7 +19,7 @@ describe("stock-reducing update guards", () => {
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     await expect(updateOrder(f.ctx, f.order.id, { formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(500);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(500);
   });
   it("prevents moving a posted product to another depleted bin", async () => {
     const f = await fixture();
@@ -27,8 +27,8 @@ describe("stock-reducing update guards", () => {
       code: `E2E-TARGET-${f.tag}`, name: `E2E Target ${f.tag}`, type: "product_bin", formulationId: f.pure.id }).returning();
     if (!f.product) throw new Error("Expected posted product");
     await expect(updateBiocharProduct(f.ctx, f.product.id, { storageLocationId: target.id })).rejects.toThrow("immutable");
-    expect(await getOutputBinDryBalance(f.ctx, target.id)).toBe(0);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(1000);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, target.id)).toBe(0);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
   });
   it("requires explicit stock loss instead of reducing posted creation mass", async () => {
     const f = await fixture(); await postDelivery(f, 800);
@@ -49,6 +49,6 @@ describe("stock-reducing update guards", () => {
     const f = await fixture(); const run = f.runs[0];
     await expect(updateProductionRun(f.ctx, run.id, { biocharOutputKg: 100 })).rejects.toThrow();
     expect((await db.select().from(productionRuns).where(eq(productionRuns.id, run.id)))[0].biocharOutputKg).toBe(1000);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(1000);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(1000);
   });
 });

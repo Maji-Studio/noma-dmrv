@@ -624,6 +624,21 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   refusal and point operators at archive plus a new bin, or allow the change on
   an emptied bin and define what happens to the history that still names it.
 
+### Lane totals count receipts the bin tiles do not show yet (`product-bins/lane-total-future-receipts`, opened 2026-09-29) — **decision pending**
+
+- An output bin has two dry figures (`outputStockBalance` in
+  `src/lib/output-stock/layer-projection.ts`). `allLayersDryKg` counts every
+  layer, including a run or product placed later than now. `availableDryKg`
+  counts only layers placed by now.
+- The storage list's lane summary adds `allLayersDryKg`, while each bin's tile
+  and every selector shows `availableDryKg`. After a future-dated receipt, the
+  lane total is higher than the sum of its tiles.
+- Guards must keep the all-layers balance, so a later receipt is never drawn
+  twice or archived away. The lane total is display only.
+- **Resolve via:** a product call on what the lane total means. Either it
+  switches to `availableDryKg` so it matches the tiles, or it keeps the
+  all-layers figure and labels the difference.
+
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 
 Surfaced by a manual walkthrough of every entity + certification; most findings
@@ -839,7 +854,7 @@ bound); these are the decisions it deliberately did not make.
   stock comes from `deriveLaneStock` (aggregates over feedstocks, production-run
   draws, product ingredients and feedstock bin movements), and biochar and
   product bin stock comes from the dry-biochar FIFO layers
-  (`getOutputBinStockView`, ADR 0029). Sorting on it means replicating both
+  (`getOutputBinStocks`, ADR 0029). Sorting on it means replicating both
   inside the paginated query.
 - Sorting the page in the client is not a substitute: it would order the twenty
   rows already fetched, so a nearly-full bin on page 3 would never rise to

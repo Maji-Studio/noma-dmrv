@@ -3,105 +3,121 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { DbTransaction } from '@/db';
 import type { OrgContext } from '@/lib/auth/server';
-import { facilities } from '@/db/schema';
-import { getBiocharOutputStockLayers, getOutputBinDryBalance, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
+import { biocharProducts, biocharProductSourceAllocations, facilities, outputStockAllocations, productionRuns, storageLocations } from '@/db/schema';
+import { getBiocharOutputStockLayers, getOutputBinStocks, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
 import { assertProductionRunBiocharStockNotOverdrawn, deriveProductionRunUpdateBiocharStockState } from './production-run-stock-locks';
+
+// Layer rules are tested with plain rows in lib/output-stock/layer-projection.test.ts.
+// These cases pin what only the readers own: scope predicates, batching and wiring.
 
 const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner', isPlatformAdmin: false };
 const input = { storageLocationId: 'bin', facilityId: 'facility', occurredAt: '2026-09-14T12:00:00.000Z' };
 const bin = { id: 'bin', facilityId: 'facility', type: 'biochar_bin', archivedAt: null };
-const run = { id: 'run', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
-function reader(results: unknown[][]) {
-  const predicates: string[] = [];
+const run = { id: 'run', binId: 'bin', facilityId: 'facility', archivedAt: null, dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
+
+/**
+ * A reader that answers each table from its own queue, so the tests do not
+ * depend on the order concurrent queries start in. Records every predicate.
+ */
+function reader(queues: ReadonlyArray<readonly [unknown, readonly unknown[][]]>) {
+  const pending = new Map(queues.map(([table, results]) => [table, [...results]]));
+  const predicates: { table: unknown; sql: string }[] = [];
   const executor = { select: vi.fn(() => {
-    let result: unknown[] = [];
-    const query = { from: (table: unknown) => { result = table === facilities ? [{ timezone: 'Africa/Dar_es_Salaam' }] : results.shift() ?? []; return query; }, innerJoin: () => query, leftJoin: () => query, orderBy: () => query,
-      where: (predicate: SQL) => { if (!new PgDialect().sqlToQuery(predicate).sql.includes('"facilities"')) predicates.push(new PgDialect().sqlToQuery(predicate).sql); return query; },
-      then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(result).then(resolve) };
+    let table: unknown;
+    const query = { from: (from: unknown) => { table = from; return query; }, innerJoin: () => query, leftJoin: () => query, orderBy: () => query,
+      where: (predicate: SQL) => { predicates.push({ table, sql: new PgDialect().sqlToQuery(predicate).sql }); return query; },
+      then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(table === facilities ? [{ timezone: 'Africa/Dar_es_Salaam' }] : pending.get(table)?.shift() ?? []).then(resolve) };
     return query;
   }) } as unknown as DbTransaction;
-  return { executor, predicates };
+  return { executor, predicates, sqlFor: (table: unknown) => predicates.filter(p => p.table === table).map(p => p.sql) };
 }
 
-describe('output stock read and repair boundaries', () => {
-  it.each(['biochar_bin', 'product_bin'])('hydrates archived %s only in explicit read mode', async type => {
-    const read = reader([[{ ...bin, type, archivedAt: new Date() }], [bin], [], []]);
-    expect(await getOutputBinStockView(ctx, bin.id, read.executor)).toMatchObject({ dryMassKg: 0 });
-    expect(read.predicates[1]).not.toContain('"archived_at" is null');
-    const posting = reader([[]]);
-    const load = type === 'biochar_bin' ? getBiocharOutputStockLayers : getProductOutputStockLayers;
+describe('posting readers', () => {
+  it.each([['biochar_bin', getBiocharOutputStockLayers], ['product_bin', getProductOutputStockLayers]] as const)('scope a %s to the organization, facility and live bins', async (_type, load) => {
+    const posting = reader([]);
     await expect(load(ctx, input, posting.executor)).rejects.toThrow('archived');
-    expect(posting.predicates[0]).toContain('"archived_at" is null');
-    expect(posting.predicates[0]).toContain('"organization_id"');
-    expect(posting.predicates[0]).toContain('"facility_id"');
+    const [binPredicate] = posting.sqlFor(storageLocations);
+    expect(binPredicate).toContain('"archived_at" is null');
+    expect(binPredicate).toContain('"organization_id"');
+    expect(binPredicate).toContain('"facility_id"');
   });
-  it.each([null, 'NaN', 'Infinity'])('returns unavailable for an unresolved bin while an unrelated bin remains readable (%s)', async dryKg => {
-    const unresolved = reader([[bin], [bin], [{ ...run, dryKg }], [], []]);
-    const resolved = reader([[bin], [bin], [run], [], [], [{ id: run.id, wet: '125.000' }]]);
-    expect(await Promise.all([getOutputBinStockView(ctx, 'bin', unresolved.executor), getOutputBinStockView(ctx, 'other', resolved.executor)]))
-      .toEqual([{ dryMassKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null }, { dryMassKg: 100, estimatedWetMassKg: 125, estimatedMoisturePercent: 20 }]);
-    await expect(getBiocharOutputStockLayers(ctx, input, reader([[bin], [{ ...run, dryKg: null }], [], []]).executor)).rejects.toThrow('unresolved');
+
+  it('keeps an archived run out of a live read and in an explicit archived read', async () => {
+    const rows = () => reader([[storageLocations, [[bin]]], [productionRuns, [[run, { ...run, id: 'archived', archivedAt: new Date(), postingSequence: BigInt(2) }]]]]);
+    expect((await getBiocharOutputStockLayers(ctx, input, rows().executor)).layers.map(l => l.id)).toEqual(['run']);
+    expect((await getBiocharOutputStockLayers(ctx, input, rows().executor, { includeArchived: true })).layers.map(l => l.id)).toEqual(['run', 'archived']);
   });
+
+  it('keeps a run recorded at another facility out of the bin', async () => {
+    const read = reader([[storageLocations, [[bin]]], [productionRuns, [[run, { ...run, id: 'elsewhere', facilityId: 'other', postingSequence: BigInt(2) }]]]]);
+    expect((await getBiocharOutputStockLayers(ctx, input, read.executor)).layers.map(l => l.id)).toEqual(['run']);
+  });
+});
+
+describe('batched stock read', () => {
+  const productBin = { id: 'products', facilityId: 'facility', type: 'product_bin', archivedAt: null };
+
+  it('reads any number of bins with one query per table', async () => {
+    const bins = Array.from({ length: 5 }, (_, i) => ({ ...bin, id: `bin-${i}` }));
+    const read = reader([[storageLocations, [[...bins, productBin]]]]);
+    await getOutputBinStocks(ctx, [...bins.map(b => b.id), productBin.id], read.executor);
+    for (const table of [storageLocations, productionRuns, biocharProductSourceAllocations, biocharProducts, outputStockAllocations]) {
+      expect(read.sqlFor(table).length).toBeLessThanOrEqual(2);
+    }
+    for (const { sql } of read.predicates) expect(sql).toContain('"organization_id"');
+  });
+
+  it.each([null, 'NaN', 'Infinity'])('reads an unresolved bin as unavailable while another bin stays readable (%s)', async dryKg => {
+    const other = { ...bin, id: 'other' };
+    const read = reader([[storageLocations, [[bin, other]]], [productionRuns, [[{ ...run, dryKg }, { ...run, id: 'other-run', binId: 'other' }], [{ id: 'other-run', wet: '125.000' }]]]]);
+    const stocks = await getOutputBinStocks(ctx, ['bin', 'other'], read.executor);
+    expect(stocks.get('bin')).toEqual({ allLayersDryKg: null, availableDryKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null });
+    expect(stocks.get('other')).toEqual({ allLayersDryKg: 100, availableDryKg: 100, estimatedWetMassKg: 125, estimatedMoisturePercent: 20 });
+  });
+
+  it('keeps a product bin to its own live products and to source runs at its facility', async () => {
+    const product = { id: 'product', binId: 'products', facilityId: 'facility', archivedAt: null, placedAt: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1), composition: {} };
+    const read = reader([
+      [storageLocations, [[productBin]]],
+      [biocharProducts, [[product, { ...product, id: 'archived', archivedAt: new Date(), postingSequence: BigInt(2) }, { ...product, id: 'elsewhere', binId: 'other-bin', postingSequence: BigInt(3) }]]],
+      [biocharProductSourceAllocations, [[{ productId: 'product', runId: 'run', runFacilityId: 'facility', dryKg: '60.000' }, { productId: 'product', runId: 'far', runFacilityId: 'other', dryKg: '40.000' }]]],
+    ]);
+    expect((await getOutputBinStocks(ctx, ['products'], read.executor)).get('products')).toMatchObject({ allLayersDryKg: 60 });
+  });
+
+  it('includes an archived bin\'s archived layers', async () => {
+    const archived = { ...bin, archivedAt: new Date() };
+    const read = reader([[storageLocations, [[archived]]], [productionRuns, [[{ ...run, archivedAt: new Date() }]]]]);
+    expect(await getOutputBinStockView(ctx, 'bin', read.executor)).toMatchObject({ dryMassKg: 100 });
+  });
+
+  it('skips the query when there is nothing to read', async () => {
+    const read = reader([]);
+    expect(await getOutputBinStocks(ctx, [], read.executor)).toEqual(new Map());
+    expect(read.executor.select).not.toHaveBeenCalled();
+  });
+
+  it.each([['2026-09-15T22:29:00.000Z', 100], ['2026-09-15T22:31:00.000Z', 0]] as const)('reads availability as of now, and keeps later receipts in the all-layers balance (run ended %s)', async (endTime, availableDryKg) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
+    try {
+      const read = reader([[storageLocations, [[bin]]], [productionRuns, [[{ ...run, endTime: new Date(endTime) }]]]]);
+      expect((await getOutputBinStocks(ctx, ['bin'], read.executor)).get('bin')).toMatchObject({ availableDryKg, allLayersDryKg: 100 });
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('production run repair', () => {
   it('excludes only the unresolved repair row, then validates its replacement', async () => {
-    const tx = reader([[bin], [bin], [{ ...run, dryKg: null }], [], [], [bin], [bin], [run], [], []]).executor;
+    const tx = reader([[storageLocations, [[bin], [bin], [bin], [bin]]], [productionRuns, [[{ ...run, dryKg: null }], [run]]]]).executor;
     const state = await deriveProductionRunUpdateBiocharStockState(ctx, tx, { id: run.id, biocharStorageLocationId: bin.id, biocharOutputKg: null, biocharDryMassKg: null, endTime: new Date() }, { biocharOutputKg: 125, biocharMoisturePercent: 20 });
     expect(state).toEqual([{ storageLocationId: bin.id, availableKg: 0 }]);
     await expect(assertProductionRunBiocharStockNotOverdrawn(ctx, tx, state)).resolves.toBeUndefined();
   });
-  it('rejects excluding resolved stock, another unresolved row, or stock with saved downstream draws', async () => {
-    const options = { excludeUnresolvedRunId: run.id };
-    await expect(getBiocharOutputStockLayers(ctx, input, reader([[bin], [run], [], []]).executor, options)).rejects.toThrow('Only unresolved');
-    await expect(getBiocharOutputStockLayers(ctx, input, reader([[bin], [{ ...run, id: 'other', dryKg: null }], [], []]).executor, options)).rejects.toThrow('unresolved');
-    await expect(getBiocharOutputStockLayers(ctx, input, reader([[bin], [{ ...run, dryKg: null }], [{ runId: run.id }], []]).executor, options)).rejects.toThrow('downstream allocations');
-  });
+
   it('does not read stock for unrelated metadata edits', async () => {
     const tx = reader([]).executor;
     expect(await deriveProductionRunUpdateBiocharStockState(ctx, tx, { id: run.id, biocharStorageLocationId: bin.id, biocharOutputKg: null, biocharDryMassKg: null, endTime: null }, {})).toEqual([]);
     expect(tx.select).not.toHaveBeenCalled();
-  });
-});
-
-
-describe('product ingredient snapshot completeness', () => {
-  const zeroLine = { formulationIngredientId: 'zero', massKg: 0 };
-  const positiveLine = { formulationIngredientId: 'positive', massKg: 50 };
-  const snapshot = { biocharProductId: 'product', formulationIngredientId: 'positive', drySolidsKg: '40.000' };
-  function productReader(lines: unknown[], snapshots: unknown[]) {
-    return reader([[bin], [{ id: 'product', placedAt: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1), composition: { ingredients: lines } }],
-      [{ productId: 'product', runId: 'run', dryKg: '100.000' }], snapshots, []]).executor;
-  }
-  it('requires no snapshot for zero lines and sums only frozen positive solids', async () => {
-    const zero = await getProductOutputStockLayers(ctx, input, productReader([zeroLine], []));
-    expect(zero.layers[0].ingredientDrySolidsKg).toBe('0.000');
-    const mixed = await getProductOutputStockLayers(ctx, input, productReader([zeroLine, positiveLine], [snapshot]));
-    expect(mixed.layers[0]).toMatchObject({ ingredientDrySolidsKg: '40.000', establishedDryBiocharKg: '100.000' });
-    expect(mixed.layers[0].remainingSolidsKg).toEqual({ numerator: BigInt(140), denominator: BigInt(1) });
-  });
-  it('rejects missing positive snapshots even when a zero-line snapshot fills the count', async () => {
-    await expect(getProductOutputStockLayers(ctx, input, productReader([zeroLine, positiveLine], []))).rejects.toThrow('Ingredient dry solids are unresolved');
-    await expect(getProductOutputStockLayers(ctx, input, productReader([zeroLine, positiveLine], [{ ...snapshot, formulationIngredientId: 'zero' }]))).rejects.toThrow('Ingredient dry solids are unresolved');
-  });
-});
-
-
-describe('future stock conservation', () => {
-  it.each(['biochar_bin', 'product_bin'])('keeps future %s stock in the guard balance but out of today previews', async type => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
-    try {
-      const rows = () => type === 'biochar_bin'
-        ? [[{ ...bin, type }], [bin], [{ ...run, endTime: new Date('2026-09-16T12:00:00.000Z') }], [], []]
-        : [[{ ...bin, type }], [bin], [{ id: 'product', placedAt: new Date('2026-09-16T12:00:00.000Z'), postingSequence: BigInt(1), composition: {} }], [{ productId: 'product', runId: run.id, dryKg: '100.000' }], [], []];
-      expect(await getOutputBinDryBalance(ctx, bin.id, reader(rows()).executor)).toBe(100);
-      expect(await getOutputBinStockView(ctx, bin.id, reader([...rows(), []]).executor)).toEqual({ dryMassKg: 0, estimatedWetMassKg: 0, estimatedMoisturePercent: null });
-    } finally { vi.useRealTimers(); }
-  });
-  it.each([['2026-09-15T22:29:00.000Z', 100], ['2026-09-15T22:31:00.000Z', 0]] as const)('reads stock as of the current instant (run ended %s)', async (endTime, dryMassKg) => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
-    try {
-      const read = reader([[bin], [bin], [{ ...run, endTime: new Date(endTime) }], [], [], [{ id: run.id, wet: '125.000' }]]);
-      expect(await getOutputBinStockView(ctx, bin.id, read.executor)).toMatchObject({ dryMassKg });
-    } finally { vi.useRealTimers(); }
   });
 });

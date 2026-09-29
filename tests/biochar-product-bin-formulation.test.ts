@@ -7,7 +7,7 @@ import { biocharProducts, biocharProductSourceAllocations, feedstocks, feedstock
 import { createBiocharProduct, updateBiocharProduct } from "@/data-access/biochar-products";
 import { updateFormulation } from "@/data-access/formulations";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
-import { getOutputBinDryBalance } from "@/data-access/output-stock";
+import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { cleanupPostedStock, postedStockFixture, postProduct, productInput } from "./helpers/posted-output-stock-fixture";
 
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
@@ -56,7 +56,7 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture();
     const input = await productInput(f, { formulationId: f.recipe.id, composition: composition(f) });
     await expect(createBiocharProduct(f.ctx, { ...input, formulationId: f.pure.id })).rejects.toThrow("product bin for this formulation");
-    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.source.id)).toBe(1500);
   });
   it("rejects a composition that omits a formulation ingredient", async () => {
     const f = await fixture(); await expect(submitInvalidBlend(f, { composition: {} })).rejects.toThrow("must include every ingredient");
@@ -65,7 +65,7 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture(); const bin = await ingredientBin(f); const row = composition(f, 20, bin.id).ingredients[0];
     await expect(submitInvalidBlend(f, { composition: { ingredients: [row, { ...row }] } })).rejects.toThrow("Each formulation ingredient can appear only once");
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(100);
-    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.source.id)).toBe(1500);
   });
   it("claims an unassigned bin for the explicit Pure biochar formulation", async () => {
     const f = await fixture(); await db.update(storageLocations).set({ formulationId: null }).where(eq(storageLocations.id, f.bin.id));
@@ -88,14 +88,14 @@ describe("posted product bin and formulation contract", () => {
     const product = await blend(f, { composition: composition(f, 0, bin.id) });
     expect(await snapshot(product.id)).toBeUndefined();
     expect(product.composition).toMatchObject({ ingredients: [{ massKg: 0, massDryKg: 0, moistureContentPercent: null }] });
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(100);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(100);
   });
   it("requires a measured moisture for a positive ingredient, even when the bin has an estimate", async () => {
     const f = await fixture(); const bin = await ingredientBin(f);
     const unmeasured = composition(f, 1, bin.id, { moistureContentPercent: null });
     await expect(blend(f, { composition: unmeasured })).rejects.toThrow("Enter the measured moisture");
     await expect(submitInvalidBlend(f, { composition: unmeasured })).rejects.toBeInstanceOf(ActionConflictError);
-    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(1500);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.source.id)).toBe(1500);
   });
   it("deducts ingredient wet mass and freezes weighted remaining dry solids", async () => {
     const f = await fixture(); const bin = await ingredientBin(f); const product = await blend(f, { composition: composition(f, 50, bin.id) });
@@ -137,7 +137,7 @@ describe("posted product bin and formulation contract", () => {
     const product = await blend(f, { massKg: 1600, composition: composition(f, 100, null, { moistureContentPercent: 0 }) });
     const shares = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
     expect(shares.reduce((sum, row) => sum + row.allocatedDryMassKg, 0)).toBe(1500);
-    expect(await getOutputBinDryBalance(f.ctx, f.source.id)).toBe(0);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.source.id)).toBe(0);
     await updateFormulation(f.ctx, f.recipe.id, { biocharRatio: 0.7 });
     await expect(updateBiocharProduct(f.ctx, product.id, { composition: composition(f, 105, null, { moistureContentPercent: 0 }) })).rejects.toThrow("immutable");
     expect(await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id))).toEqual(shares);

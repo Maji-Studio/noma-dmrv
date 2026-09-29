@@ -13,7 +13,7 @@ import { orderedSourcesSchema, outputStockPreviewSchema } from '@/schemas/output
 import type { MatchingOutputBin, OutputStockPreview, OutputStockPreviewInput } from '@/types/output-stock';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { requestFingerprint } from './bin-movement-requests';
-import { getBiocharOutputStockLayers, getLayerMoistureBases, getOutputBinStockView, getProductOutputStockLayers } from './output-stock';
+import { getBiocharOutputStockLayers, getLayerMoistureBases, getOutputBinStocks, getProductOutputStockLayers } from './output-stock';
 import { getCertifiedLineage } from './certification-lineage-guards';
 import { getStockModeChanges } from './output-bin-stock-mode';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
@@ -240,9 +240,10 @@ export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId
   // Orders carry no departure moisture, so wet availability is the bin's
   // estimate at each batch's latest reading, as the bin selectors show it.
   // A bin whose layers do not resolve reads null instead of failing the list.
-  return Promise.all(bins.map(async bin => {
-    const { dryMassKg, estimatedWetMassKg } = await getOutputBinStockView(ctx, bin.id);
-    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg, estimatedWetMassKg };
-  }));
+  const stocks = await getOutputBinStocks(ctx, bins.map(bin => bin.id));
+  return bins.map(bin => {
+    const stock = stocks.get(bin.id);
+    return { id: bin.id, code: bin.code, name: bin.name, dryMassKg: stock?.availableDryKg ?? null, estimatedWetMassKg: stock?.estimatedWetMassKg ?? null };
+  });
 }
 export { getOutputStockHistory } from './output-stock-history';

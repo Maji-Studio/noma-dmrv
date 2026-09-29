@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { binMovements, facilities, feedstocks, productionRunFeedstockDraws, productionRuns, storageLocations } from '@/db/schema';
-import { getBiocharOutputStockLayers, getOutputBinDryBalance } from '@/data-access/output-stock';
+import { getBiocharOutputStockLayers, getOutputBinAllLayersDryKg } from '@/data-access/output-stock';
 import { getIngredientStockBasis } from '@/data-access/ingredient-moisture-basis';
 import { getOutputStockHistory } from '@/data-access/output-stock-history';
 import { previewOutputStock } from '@/data-access/output-stock-operations';
@@ -40,7 +40,7 @@ describe('output stock event times in PostgreSQL', () => {
         await tx.execute(sql`select set_config('TimeZone', ${zone}, true)`);
         const state = await getBiocharOutputStockLayers(f.ctx, { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt: '2026-09-15T23:00:00.000Z' }, tx);
         expect(state.layers.map(l => l.placedAt).sort()).toEqual(['2026-09-15T22:30:00.000Z', '2026-09-15T23:30:00.000Z']);
-        expect(state.remainingDryKg).toBe('900.000');
+        expect(state.availableDryKg).toBe('900.000');
       });
     }
     const input = { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt: '2026-09-15T22:29:00.000Z', kind: 'production_draw' as const, wetMassKg: 100, moisturePercent: 0 };
@@ -122,7 +122,7 @@ describe('output stock event times in PostgreSQL', () => {
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
       composition: { ingredients: input.ingredientBins },
       idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(100);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(100);
     await expect(archiveStorageLocation(f.ctx, f.bin.id)).rejects.toThrow('Cannot archive');
     for (const id of [f.source.id, f.bin.id]) {
       const [bin] = await db.select().from(storageLocations).where(and(eq(storageLocations.id, id), eq(storageLocations.organizationId, f.ctx.organizationId)));

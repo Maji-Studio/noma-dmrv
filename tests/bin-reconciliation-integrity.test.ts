@@ -69,7 +69,7 @@ beforeAll(async () => {
 });
 
 import { postedStockFixture, cleanupPostedStock, productInput, postProduct, postDelivery, deliveryInput, postMeasurement } from "./helpers/posted-output-stock-fixture";
-import { getOutputBinDryBalance } from "@/data-access/output-stock";
+import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { postOutputStock } from "@/data-access/output-stock-post";
 import { recordStockTakeMovement } from "@/data-access/bin-movements";
@@ -93,7 +93,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     ]);
     expect(deletion.status).toBe("rejected"); expect(stockTake.status).toBe("fulfilled");
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(70);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(70);
   });
 
   it("serializes a stock-take against a concurrent production-run feedstock draw", async () => {
@@ -312,7 +312,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const results = await Promise.allSettled(inputs.map(input => createDelivery(f.ctx, input)));
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(10);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(10);
   });
 
   it("waits for the source-bin advisory lock before locking source production rows", async () => {
@@ -362,6 +362,6 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBeGreaterThanOrEqual(0);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBeGreaterThanOrEqual(0);
   });
 });
