@@ -40,7 +40,7 @@ Not found: a ban on mixing, a stockpile time limit, a required FIFO or pro-rata 
 4. **Moisture readings are required and never prefilled.** This covers delivery, loss, count, product creation (biochar draw) and ingredient moisture. Below each field, one short hint: "Estimated moisture: 29.4%", with the date of the reading it comes from in an ⓘ tooltip. Keep the hint to one figure.
 5. **A reading resets what it describes.** A mix-bin reading sets the whole pile's estimated moisture. A split-bin reading sets the moisture of the sub-bin it was taken from. Dry biochar and solids never change; only the wet estimate does.
 6. **Reset visibility.** The stock preview shows the change as before → after blocks (moisture and wet estimate, with an arrow between them, not a sentence). It's applied on save with no opt-out. The bin's history gets its own "Moisture updated" row, linked to the removal that measured it.
-7. **Plausibility warning.** If a reading differs from the estimate by more than `MOISTURE_READING_WARNING_POINTS` (5 percentage points, in `@/config`), show an advisory warning. It never blocks (ADR 0026).
+7. **Plausibility warning.** If a reading differs from the estimate by more than `MOISTURE_READING_WARNING_POINTS` (5 percentage points, in `@/config`), show an advisory warning. It never blocks (ADR 0026). Recording an acknowledgement follows ADR 0026 once that system exists; it is not implemented yet, so this slice shows the advisory only.
 8. **Overdraw still blocks.** A reading makes the dry figure right, but it doesn't prove the records hold that much. If the measured solids exceed what the chosen sub-bins (or the mix pile) hold by the records, the save is blocked. The fix is a count first.
 
 ### Split bins
