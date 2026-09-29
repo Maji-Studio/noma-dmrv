@@ -30,6 +30,7 @@ import {
 } from "@/hooks/use-applications";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
+import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -76,6 +77,9 @@ import {
   formatFieldSizeHa,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
+
+/** Mix-bin biochar is recorded as usual but feeds no credit batch until the PDD covers mixing (ADR 0030). */
+const MIX_BIN_CREDIT_HOLD_NOTICE = "Not in a credit batch: this biochar was drawn from a mix bin. Mix-bin biochar is held out of credit batches until the project design document (PDD) covers mixing.";
 
 // ============================================
 // Column Definitions
@@ -321,6 +325,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         ...result.data,
         deliveryCode: "",
         allocationShares: [],
+        heldOutOfCredits: false,
         customerName: null,
         locationName: null,
         durabilityOption,
@@ -751,6 +756,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                   : null,
               },
             ],
+            content: sideSheetEntity.heldOutOfCredits
+              ? <StockNotice>{MIX_BIN_CREDIT_HOLD_NOTICE}</StockNotice>
+              : undefined,
           },
           ...(sideSheetEntity.allocationShares.length > 0 ? [{
             // The bar and key line are Simple content; the block itself

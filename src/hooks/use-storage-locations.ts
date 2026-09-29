@@ -11,6 +11,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { StorageLocation } from "@/db/schema";
+import { outputStockKeys } from "./use-output-stock";
 import type {
   StorageLocationFilterData,
   CreateStorageLocationData,
@@ -243,6 +244,8 @@ export function useUpdateStorageLocation(
         queryClient.invalidateQueries({
           queryKey: facilityKeys.storageLocations(data.facilityId),
         }),
+        // A stock-mode change reshapes the bin's sub-bins, balance and history.
+        queryClient.invalidateQueries({ queryKey: outputStockKeys.all }),
       ]);
 
       await callbacks?.onSuccess?.(data, variables);

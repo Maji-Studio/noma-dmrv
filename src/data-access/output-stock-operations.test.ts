@@ -21,7 +21,8 @@ import { getMatchingOutputBins, previewOutputStock } from './output-stock-operat
 it('returns certification artifact identities while checking both affected sources and the corrected delivery', async () => {
   const binId = '00000000-0000-4000-8000-000000000001';
   const layers = [{ id: 'run', placedAt: '2026-09-01T12:00:00.000Z', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
-  mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }]];
+  // Bin, its mode changes (none), its movements (none), then layer and run codes.
+  mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }]];
   mocks.state.mockResolvedValue({ layers });
   mocks.correction.mockResolvedValue({ original: { inputSnapshot: {} }, layers, allocations: [], deliveryId: 'delivery' });
   mocks.lineage.mockResolvedValueOnce([{ removalId: 'removal', removalSubmissionId: 'submitted', ghgStatementSubmissionId: null }]).mockResolvedValueOnce([{ removalId: 'removal', ghgStatementId: 'statement', ghgStatementSubmissionId: 'submitted' }]);
@@ -41,7 +42,8 @@ it('passes the blocking movement through when a correction is refused', async ()
   // The refused pass reads only the bin before the correction throws; the
   // fallback pass then reads the bin, its events and both code lists.
   const runCodes = [{ id: 'run', code: 'RUN-001' }];
-  mocks.reads = [[bin], [bin], [], runCodes, runCodes];
+  // The refused correction reads only the bin; the balance fallback then reads the bin, its mode changes, movements and codes.
+  mocks.reads = [[bin], [bin], [], [], runCodes, runCodes];
   mocks.state.mockResolvedValue({ layers });
   const movement = { entity: 'binMovement', id: 'later', code: conflictCode('Later loss (2026-09-12)') };
   mocks.correction.mockRejectedValue(new ActionConflictError('Correction blocked by a later loss.', { entity: 'storageLocation', id: binId, code: conflictCode('BC-001') }, { blockers: [movement] }));

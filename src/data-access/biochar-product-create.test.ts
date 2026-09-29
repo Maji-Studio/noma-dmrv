@@ -15,6 +15,7 @@ vi.mock('./biochar-product-composition', () => ({
 }));
 vi.mock('./biochar-product-source-allocations', () => ({ insertBiocharProductSourceAllocations: mocks.sourceAllocations }));
 vi.mock('./output-stock-post', () => ({ withOutputStockPosting: mocks.posting }));
+vi.mock('./output-bin-stock-mode', () => ({ assertAdditionAfterSplit: vi.fn() }));
 import { createBiocharProduct } from './biochar-product-create';
 
 const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
@@ -33,7 +34,7 @@ beforeEach(() => {
   mocks.insert.mockReturnValue({ values: () => ({ returning: async () => [{ id: 'product' }] }) });
   mocks.revalidate.mockResolvedValue({ composition: { ingredients: [] }, source: {
     preview: { basisFingerprint: 'source-only', blockingMessage: null, allocations: [{ layerId: 'run', dryMassKg: 90 }] },
-    plan: { allocations: [{ layerId: 'run' }] }, layers: [{ id: 'run', placedAt: '2026-09-13T12:00:00.000Z' }],
+    plan: { allocations: [{ layerId: 'run' }] }, layers: [{ id: 'run', placedAt: '2026-09-13T12:00:00.000Z' }], input: { moisturePercent: 10 },
   } });
   mocks.persist.mockResolvedValue({ movement: { id: 'movement' } });
   // Stands in for a first-time request: every lock is held, so the write runs.

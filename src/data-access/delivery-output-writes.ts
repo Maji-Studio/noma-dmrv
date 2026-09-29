@@ -9,7 +9,6 @@ import { assertCanMutateCertifiedLineage } from './certification-lineage-guards'
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
 import { lockBinStock } from './lock-bin-stocks';
 import { getOutputStockAllocationProjection } from './output-stock';
-import { storedOverallMoisture } from './output-stock-operations';
 import { withOutputStockPosting } from './output-stock-post';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { assertSameOrg, requireOrgScope } from './utils';
@@ -40,8 +39,7 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
       distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote, tripType: data.tripType ?? 'return' }).returning();
     const posted = await post({ deliveryId: delivery.id });
     // A split-bin load stores its overall moisture, 1 − solids ÷ wet, from the per-sub-bin readings.
-    const [saved] = await tx.update(deliveries).set({ massDryKg: posted.preview.removedDryKg,
-      ...(data.sources ? { moistureContentPercent: storedOverallMoisture(posted.preview) } : {}) }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
+    const [saved] = await tx.update(deliveries).set({ massDryKg: posted.preview.removedDryKg, moistureContentPercent: posted.moisturePercent }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
     await syncBiocharProductTransportLegs(ctx, tx, posted.preview.allocations.map(a => a.layerId));
     return saved;
   } });
