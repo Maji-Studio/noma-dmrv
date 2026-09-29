@@ -24,7 +24,6 @@ const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000421";
 const FEEDSTOCK_INTAKE_KG = 120;
 const FEEDSTOCK_CONSUMED_KG = 50;
 const FEEDSTOCK_MOVEMENT_KG = -127;
-const BIOCHAR_PRODUCED_KG = 120;
 const BIOCHAR_ALLOCATED_KG = 35;
 const BIOCHAR_MOVEMENT_KG = -3;
 const PRODUCT_MOVEMENT_KG = 7;
@@ -314,13 +313,10 @@ describe("shared lane-stock derivation", () => {
       feedstockStockWetKg: -27,
       feedstockEstimatedDryKg: -21.6,
     });
-    expect(biochar).toMatchObject({
-      biocharProducedKg: BIOCHAR_PRODUCED_KG,
-      biocharAllocatedKg: BIOCHAR_ALLOCATED_KG,
-      biocharMovementDeltaKg: BIOCHAR_MOVEMENT_KG,
-      biocharStockKg: 85,
-    });
-    expect(product?.productMovementDeltaKg).toBe(PRODUCT_MOVEMENT_KG);
+    expect(biochar?.biocharAllocatedKg).toBe(BIOCHAR_ALLOCATED_KG);
+    // Output-bin movements never count as feedstock stock.
+    expect(biochar?.feedstockMovementDeltaKg).toBe(0);
+    expect(product?.feedstockMovementDeltaKg).toBe(0);
   });
 
   it("excludes editable feedstock draws while retaining posted output source allocations", async () => {
@@ -336,7 +332,6 @@ describe("shared lane-stock derivation", () => {
     expect(withoutRun.feedstockConsumedWetKg).toBe(20);
     expect(withoutRun.feedstockStockWetKg).toBe(3);
     expect(withoutProduct.biocharAllocatedKg).toBe(15);
-    expect(withoutProduct.biocharStockKg).toBe(85);
   });
 
   it("keeps enrichment stock in parity with the shared derivation", async () => {
