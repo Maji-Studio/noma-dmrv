@@ -23,7 +23,7 @@ export const outputStockPreviewSchema = z.object({
     ctx.addIssue({ code: 'custom', path: ['wetMassKg'], message: 'Wet mass must be greater than zero.' });
   if (value.sources && value.kind === 'count')
     ctx.addIssue({ code: 'custom', path: ['sources'], message: 'A count covers the whole bin.' });
-  // A correction of a split-bin draw reuses the original readings, so the server decides there.
+  // A correction may replay the original readings, so the server decides there.
   if (!(value.kind === 'count' && value.wetMassKg === 0) && !value.sources && !value.correctsMovementId && value.moisturePercent == null)
     ctx.addIssue({ code: 'custom', path: ['moisturePercent'], message: 'Enter the measured moisture.' });
 });
