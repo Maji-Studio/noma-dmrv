@@ -154,7 +154,7 @@ describe("ApplicationEvidencePanel", () => {
     expect(html).toContain("Visual evidence");
     expect(html).toContain("Available later");
     const selectedCard = html.match(
-      /<button[^>]*role="radio"[^>]*aria-checked="true"[^>]*>[\s\S]*?<\/button>/,
+      /<label[^>]*>(?:(?!<\/label>)[\s\S])*?<input[^>]*checked=""[^>]*>[\s\S]*?<\/label>/,
     )?.[0];
     expect(selectedCard).toContain("Customer location");
     expect(html).not.toContain("Add GIS reference");
@@ -163,7 +163,7 @@ describe("ApplicationEvidencePanel", () => {
   it("preserves a saved visual evidence method as unavailable", () => {
     const html = renderPanel([], "visual");
     const visualCard = html.match(
-      /<div[^>]*role="radio"[^>]*aria-checked="true"[^>]*aria-disabled="true"[^>]*>[\s\S]*?<\/div>/,
+      /<label[^>]*>(?:(?!<\/label>)[\s\S])*?<input[^>]*disabled=""[^>]*checked=""[^>]*>[\s\S]*?<\/label>/,
     )?.[0];
 
     expect(visualCard).toContain("Visual evidence");

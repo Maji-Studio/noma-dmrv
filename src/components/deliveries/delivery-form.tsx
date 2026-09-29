@@ -10,7 +10,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useState } from "react";
 
-import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, TripTypeChoice, WetMassField } from "@/components/forms";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
@@ -33,7 +33,6 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, MapPinIcon, ScalesIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
@@ -451,20 +450,21 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             />
           </FormField>
 
-          <FormField
-            id="tripType"
-            label="Trip type"
-            error={errors.tripType?.message}
-            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
-          >
-            <FormSelect
+          <div className="md:col-span-2">
+            <FormField
               id="tripType"
-              options={TRIP_TYPE_OPTIONS}
-              disabled={isSubmitting}
-              error={!!errors.tripType}
-              {...register("tripType")}
-            />
-          </FormField>
+              label="Trip type"
+              error={errors.tripType?.message}
+              hint="Choose One-way only with an evidenced onward destination."
+            >
+              <TripTypeChoice
+                id="tripType"
+                disabled={isSubmitting}
+                error={!!errors.tripType}
+                {...register("tripType")}
+              />
+            </FormField>
+          </div>
         </div>
 
         {distanceKmOverride != null && (

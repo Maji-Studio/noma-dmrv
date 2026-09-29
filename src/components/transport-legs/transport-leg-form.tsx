@@ -10,6 +10,7 @@ import {
   FormSection,
   FormSelect,
   PositionPicker,
+  TripTypeChoice,
   makeCertFieldStatus,
 } from "@/components/forms";
 import {
@@ -22,7 +23,7 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { type TripTypeValue } from "@/schemas/trip-type";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
@@ -271,20 +272,21 @@ export function TransportLegForm({
             </output>
           </FormField>
           <input type="hidden" {...register("transportMethodType")} />
-          <FormField
-            id="tripType"
-            label="Trip type"
-            error={errors.tripType?.message}
-            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
-          >
-            <FormSelect
+          <div className="md:col-span-2">
+            <FormField
               id="tripType"
-              options={TRIP_TYPE_OPTIONS}
-              disabled={isSubmitting}
-              error={!!errors.tripType}
-              {...register("tripType")}
-            />
-          </FormField>
+              label="Trip type"
+              error={errors.tripType?.message}
+              hint="Choose One-way only with an evidenced onward destination."
+            >
+              <TripTypeChoice
+                id="tripType"
+                disabled={isSubmitting}
+                error={!!errors.tripType}
+                {...register("tripType")}
+              />
+            </FormField>
+          </div>
           <FormField
             id="loadMassKg"
             label="Load mass (kg)"

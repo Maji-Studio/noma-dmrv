@@ -16,24 +16,24 @@ import type { DocumentType } from "@/schemas/documents";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import { GisReferenceDialog } from "./gis-reference-dialog";
 import { GisReferenceSummary } from "./gis-reference-summary";
-import { RadioCardGroup } from "./radio-card-group";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 
 const GIS_BOUNDARY_DOC_TYPE: DocumentType = "gis_boundary";
 
 const METHOD_OPTIONS = [
   {
-    key: "location",
+    value: "location",
     title: "Customer location",
     description:
       "Use the application GPS coordinates from the delivery's customer location.",
   },
   {
-    key: "boundary",
+    value: "boundary",
     title: "GIS reference",
     description: "The field boundary as a GeoJSON file, drawn on a map.",
   },
   {
-    key: "visual",
+    value: "visual",
     title: "Visual evidence",
     description: "Geotagged photos of each application stage.",
     disabled: true,
@@ -176,13 +176,13 @@ export function ApplicationEvidencePanel({
   return (
     <div className="flex flex-col gap-16">
       {!readOnly && (
-        <RadioCardGroup
-          label="Evidence method"
+        <ChoiceCardGroup
+          legend="Evidence method"
           value={mode}
           options={METHOD_OPTIONS}
           disabled={disabled}
-          onChange={(key) =>
-            onModeChange?.(key as ApplicationEvidenceMethod)
+          onValueChange={(next) =>
+            onModeChange?.(next as ApplicationEvidenceMethod)
           }
         />
       )}

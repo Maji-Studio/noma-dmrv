@@ -17,6 +17,7 @@ import {
   FormField,
   FormInput,
   FormSelect,
+  TripTypeChoice,
   ServerError,
 } from "@/components/forms";
 import { EmptyState } from "@/components/ui";
@@ -45,7 +46,6 @@ import {
   type OrganizationSettingsInput,
   type OrganizationSettingsValues,
 } from "@/schemas/organization-settings";
-import { TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { useState } from "react";
 
 const CURRENCY_OPTIONS = currencyCodes.map((code) => ({
@@ -212,9 +212,8 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           helperText="Seeds new deliveries, feedstock hauls and transport legs."
             hint="A return trip counts the distance twice in emissions accounting, which is the conservative protocol default. Choose one-way only when evidence shows an onward destination. You can still edit each transport leg."
         >
-          <FormSelect
+          <TripTypeChoice
             id="default-trip-type"
-            options={TRIP_TYPE_OPTIONS}
             error={!!errors.defaultTripType}
             {...register("defaultTripType")}
           />
