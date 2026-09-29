@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
-import { storageLocationType, durabilityOption } from './common';
+import { outputStockMode, storageLocationType, durabilityOption } from './common';
 import { organizations } from './auth';
 
 // ============================================
@@ -137,6 +137,9 @@ export const storageLocations = pgTable(
     // intake, validated on subsequent. No FK reference to avoid a circular import with
     // products.ts; enforced at the application layer (mirrors feedstockTypeId above).
     formulationId: uuid('formulation_id'),
+    // Output bins only in practice: split (default, separate sub-bins) or mix
+    // (one pile drawn pro rata). Feedstock bins stay split and ignore it.
+    stockMode: outputStockMode('stock_mode').default('split').notNull(),
     facilityId: uuid('facility_id')
       .notNull(),
     // Stamped by the facility archive cascade; NULL = active
@@ -157,6 +160,10 @@ export const storageLocations = pgTable(
     check(
       'storage_locations_formulation_product_bin_only',
       sql`${table.type} = 'product_bin' or ${table.formulationId} is null`
+    ),
+    check(
+      'storage_locations_mix_output_bin_only',
+      sql`${table.type} <> 'feedstock_bin' or ${table.stockMode} = 'split'`
     ),
     // Bin name is unique per facility, case- and whitespace-insensitive (issue
     // #252). Archived bins keep their name reserved so a facility restore can't

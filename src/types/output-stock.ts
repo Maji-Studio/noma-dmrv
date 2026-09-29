@@ -16,6 +16,8 @@ export interface OutputStockPreviewInput {
   wetMassKg: number;
   moisturePercent?: number | null;
   correctsMovementId?: string;
+  /** Split bins: sub-bins in the order they were emptied, each with its reading. */
+  sources?: { layerId: string; moisturePercent: number }[];
 }
 
 export interface OutputStockPreview {
