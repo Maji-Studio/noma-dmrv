@@ -1,4 +1,5 @@
 import { getOutputBinStockView } from './output-stock';
+import type { StorageLocationLaneSummary } from "./storage-location-lane-summary";
 /**
  * Storage Location Enrichment
  *
@@ -93,10 +94,7 @@ export interface PaginatedStorageLocations {
   page: number;
   pageSize: number;
   totalPages: number;
-  laneSummary: Record<
-    StorageLocation["type"],
-    { binCount: number; onHandKg: number }
-  >;
+  laneSummary: StorageLocationLaneSummary;
 }
 
 export type BaseStorageLocationRow = {
@@ -152,6 +150,7 @@ export async function enrichStorageLocationRows(
     productApplicationRows,
     lastActivityRows,
     laneStockRows,
+    outputViewEntries,
   ] = storageLocationIds.length > 0
     ? await db.transaction(async (tx) => Promise.all([
         tx
@@ -461,6 +460,14 @@ export async function enrichStorageLocationRows(
         `),
         // Enrichment also needs the source-allocation aggregate from the biochar lane.
         deriveLaneStock(ctx, tx, { storageLocationIds }),
+        // Output-bin stock reads the same snapshot as every other figure here.
+        Promise.all(
+          rows
+            .filter((row) => row.type !== "feedstock_bin")
+            .map(async (row) =>
+              [row.id, await getOutputBinStockView(ctx, row.id, tx)] as const,
+            ),
+        ),
       ]), {
         isolationLevel: "repeatable read",
         accessMode: "read only",
@@ -482,6 +489,7 @@ export async function enrichStorageLocationRows(
             label: string;
           }>,
         },
+        [],
         [],
       ];
 
@@ -536,7 +544,7 @@ export async function enrichStorageLocationRows(
     laneStockRows.map((row) => [row.storageLocationId, row]),
   );
 
-  const outputViews = new Map(await Promise.all(rows.filter(row => row.type !== 'feedstock_bin').map(async row => [row.id, await getOutputBinStockView(ctx, row.id)] as const)));
+  const outputViews = new Map(outputViewEntries);
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
