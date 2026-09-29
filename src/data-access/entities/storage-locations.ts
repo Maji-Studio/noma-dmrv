@@ -1,5 +1,3 @@
-import { formatMassKg } from "@/lib/format-utils";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { getIngredientMoistureBasis } from '../ingredient-moisture-basis';
 import { getOutputBinStockView } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
@@ -21,7 +19,7 @@ import {
   storageLocations
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatWetDryStock } from "@/lib/mass-moisture";
 import {
   CANCELLED_PRODUCTION_RUN_STATUS,
   COMPLETED_PRODUCTION_RUN_STATUS,
@@ -57,9 +55,11 @@ import { requireOrgScope } from "../utils";
 
 /** Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet, 249.6 kg dry biochar". */
 function outputBinStockSubtitle(stock: { estimatedWetMassKg: number | null; dryMassKg: number | null }): string {
-  const wet = stock.estimatedWetMassKg == null ? `wet ${MISSING_VALUE.notAvailable.toLowerCase()}` : `≈ ${formatMassKg(stock.estimatedWetMassKg)} wet`;
-  const dry = stock.dryMassKg == null ? `dry biochar ${MISSING_VALUE.notAvailable.toLowerCase()}` : `${formatMassKg(stock.dryMassKg)} dry biochar`;
-  return `${wet}, ${dry}`;
+  return formatWetDryStock({
+    wetKg: stock.estimatedWetMassKg,
+    dryKg: stock.dryMassKg,
+    estimatedWet: true,
+  });
 }
 export function formatStorageLocationSubtitle(
   type: string,
@@ -122,14 +122,7 @@ export function formatStorageLocationSubtitle(
       if (availableWetKg === 0) {
         return `${typeLabel} · Empty`;
       }
-      return `${typeLabel} · ${formatWetDryMass({
-        wetKg: availableWetKg,
-        dryKg: availableDryKg,
-        wetLabel: "Wet biochar",
-        dryLabel: "Dry biochar",
-        separator: " | ",
-        unitSpacing: "compact",
-      })} available`;
+      return `${typeLabel} · ${formatWetDryStock({ wetKg: availableWetKg, dryKg: availableDryKg })} available`;
     }
     case "product_bin": {
       const typeLabel = formatStorageLocationType(type);
@@ -148,14 +141,7 @@ export function formatStorageLocationSubtitle(
       const parts = [
         typeLabel,
         blendLabel,
-        `${formatWetDryMass({
-          wetKg: availableWetKg,
-          dryKg: productDryKg,
-          wetLabel: "Wet biochar product",
-          dryLabel: "Dry biochar",
-          separator: " | ",
-          unitSpacing: "compact",
-        })} stored`,
+        `${formatWetDryStock({ wetKg: availableWetKg, dryKg: productDryKg })} stored`,
       ];
       if (biocharEquivalentKg > 0) {
         parts.push(

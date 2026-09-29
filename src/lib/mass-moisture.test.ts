@@ -7,6 +7,7 @@ import {
   formatMoisturePercent,
   formatSplitMass,
   formatWetDryMass,
+  formatWetDryStock,
   parseWatchedNumber,
   splitWetMassAfterAddedWater,
   splitWatchedWetMass,
@@ -213,5 +214,24 @@ describe("formatWetDryMass", () => {
     ).toBe(
       "Wet biochar product: 3,500kg | Dry biochar: 2,975kg",
     );
+  });
+});
+
+describe("formatWetDryStock", () => {
+  it("words a stock pair like the bin caption", () => {
+    expect(formatWetDryStock({ wetKg: 2_500, dryKg: 1_500 })).toBe("2,500 kg wet, 1,500 kg dry biochar");
+  });
+
+  it("marks an estimated wet figure and names a missing side", () => {
+    expect(formatWetDryStock({ wetKg: 277.3, dryKg: null, estimatedWet: true })).toBe(
+      "≈ 277.3 kg wet, dry biochar not available",
+    );
+    expect(formatWetDryStock({ wetKg: null, dryKg: 249.6 })).toBe(
+      "wet not available, 249.6 kg dry biochar",
+    );
+  });
+
+  it("shows a negative balance instead of calling it missing", () => {
+    expect(formatWetDryStock({ wetKg: -50, dryKg: -40 })).toBe("-50 kg wet, -40 kg dry biochar");
   });
 });

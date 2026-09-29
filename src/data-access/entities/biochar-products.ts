@@ -23,7 +23,7 @@ import {
   fromCompositionMassJsonb,
 } from "@/lib/biochar-composition";
 import { resolveProductDryBiocharKg } from "@/lib/biochar-mass-accounting";
-import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatWetDryStock } from "@/lib/mass-moisture";
 import { and, desc, eq, gt, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { sourceBiocharMassKgSql } from "../biochar-product-source-mass";
 import { requireOrgScope } from "../utils";
@@ -67,14 +67,7 @@ function formatStockSubtitle(
     labelVariant === "excluding-this-order"
       ? "available excluding this order"
       : "available";
-  return `${formatWetDryMass({
-    wetKg: remainingWetKg,
-    dryKg: remainingDryKg,
-    wetLabel: "Wet biochar product",
-    dryLabel: "Dry biochar",
-    separator: " | ",
-    unitSpacing: "compact",
-  })} ${availabilityLabel}`;
+  return `${formatWetDryStock({ wetKg: remainingWetKg, dryKg: remainingDryKg })} ${availabilityLabel}`;
 }
 
 // Persisted signed allocation effects are the current physical product depletion.

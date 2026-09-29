@@ -23,9 +23,9 @@ function formatDeliveredMass(order: Pick<OrderWithRelations, "deliveredWetMassKg
   return `${order.deliveredWetMassKg.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_STORAGE_DECIMALS })} of ${requested} wet`;
 }
 
-/** "1 of 2 deliveries". */
-function formatDeliveredCount(order: Pick<OrderWithRelations, "deliveredCount" | "deliveryCount">): string {
-  return `${order.deliveredCount} of ${order.deliveryCount} ${pluralize(order.deliveryCount, "delivery", "deliveries")}`;
+/** "2 deliveries". Every delivery is recorded as delivered, so the count is the whole story. */
+function formatDeliveryCount(order: Pick<OrderWithRelations, "deliveryCount">): string {
+  return `${order.deliveryCount} ${pluralize(order.deliveryCount, "delivery", "deliveries")}`;
 }
 
 export function orderSheetSections(order: OrderWithRelations): DetailPanelSection[] {
@@ -76,7 +76,7 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
         },
         ...(hasDeliveries ? [
           { label: "Delivered", value: formatDeliveredMass(order) },
-          { label: "Deliveries", detailedOnly: true, value: formatDeliveredCount(order) },
+          { label: "Deliveries", detailedOnly: true, value: formatDeliveryCount(order) },
         ] : []),
       ],
     },
