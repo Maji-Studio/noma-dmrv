@@ -71,7 +71,8 @@ export interface StorageLocationWithFacility extends StorageLocation {
     productionRunCount: number;
     currentMassKg: number | null;
     dryMassKg?: number | null;
-    recordedWetMassKg?: number | null;
+    /** From each batch's latest moisture reading. */
+    estimatedMoisturePercent?: number | null;
     allocatedToProductsKg: number;
     downstreamFormulations: string[];
   };
@@ -79,7 +80,8 @@ export interface StorageLocationWithFacility extends StorageLocation {
     batchCount: number;
     currentMassKg: number | null;
     dryMassKg?: number | null;
-    recordedWetMassKg?: number | null;
+    /** From each batch's latest moisture reading. */
+    estimatedMoisturePercent?: number | null;
     biocharEquivalentKg: number | null;
     formulationNames: string[];
     appliedApplicationCount: number;
@@ -586,6 +588,7 @@ export async function enrichStorageLocationRows(
         // Unclamped, movement-inclusive (see currentWetMassKg above).
         currentMassKg: outputView?.estimatedWetMassKg ?? null,
         dryMassKg: outputView?.dryMassKg ?? null,
+        estimatedMoisturePercent: outputView?.estimatedMoisturePercent ?? null,
         allocatedToProductsKg: allocatedKg,
         downstreamFormulations: [
           ...(downstreamFormulationsByLocation.get(row.id) ?? []),
@@ -595,7 +598,7 @@ export async function enrichStorageLocationRows(
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
         currentMassKg: outputView?.estimatedWetMassKg ?? null,
         dryMassKg: outputView?.dryMassKg ?? null,
-        recordedWetMassKg: outputView?.recordedWetMassKg ?? null,
+        estimatedMoisturePercent: outputView?.estimatedMoisturePercent ?? null,
         biocharEquivalentKg: outputView?.dryMassKg ?? null,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null

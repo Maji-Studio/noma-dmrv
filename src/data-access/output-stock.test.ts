@@ -37,9 +37,9 @@ describe('output stock read and repair boundaries', () => {
   });
   it.each([null, 'NaN', 'Infinity'])('returns unavailable for an unresolved bin while an unrelated bin remains readable (%s)', async dryKg => {
     const unresolved = reader([[bin], [bin], [{ ...run, dryKg }], [], []]);
-    const resolved = reader([[bin], [bin], [run], [], [], [{ id: run.id, wet: 125 }]]);
+    const resolved = reader([[bin], [bin], [run], [], [], [{ id: run.id, wet: '125.000' }]]);
     expect(await Promise.all([getOutputBinStockView(ctx, 'bin', unresolved.executor), getOutputBinStockView(ctx, 'other', resolved.executor)]))
-      .toEqual([{ dryMassKg: null, recordedWetMassKg: null, estimatedWetMassKg: null }, { dryMassKg: 100, recordedWetMassKg: 125, estimatedWetMassKg: 125 }]);
+      .toEqual([{ dryMassKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null }, { dryMassKg: 100, estimatedWetMassKg: 125, estimatedMoisturePercent: 20 }]);
     await expect(getBiocharOutputStockLayers(ctx, input, reader([[bin], [{ ...run, dryKg: null }], [], []]).executor)).rejects.toThrow('unresolved');
   });
   it('excludes only the unresolved repair row, then validates its replacement', async () => {
@@ -93,14 +93,14 @@ describe('future stock conservation', () => {
         ? [[{ ...bin, type }], [bin], [{ ...run, endTime: new Date('2026-09-16T12:00:00.000Z') }], [], []]
         : [[{ ...bin, type }], [bin], [{ id: 'product', placedAt: new Date('2026-09-16T12:00:00.000Z'), postingSequence: BigInt(1), composition: {} }], [{ productId: 'product', runId: run.id, dryKg: '100.000' }], [], []];
       expect(await getOutputBinDryBalance(ctx, bin.id, reader(rows()).executor)).toBe(100);
-      expect(await getOutputBinStockView(ctx, bin.id, reader([...rows(), []]).executor)).toEqual({ dryMassKg: 0, recordedWetMassKg: 0, estimatedWetMassKg: 0 });
+      expect(await getOutputBinStockView(ctx, bin.id, reader([...rows(), []]).executor)).toEqual({ dryMassKg: 0, estimatedWetMassKg: 0, estimatedMoisturePercent: null });
     } finally { vi.useRealTimers(); }
   });
   it.each([['2026-09-15T22:29:00.000Z', 100], ['2026-09-15T22:31:00.000Z', 0]] as const)('reads stock as of the current instant (run ended %s)', async (endTime, dryMassKg) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-15T22:30:00Z'));
     try {
-      const read = reader([[bin], [bin], [{ ...run, endTime: new Date(endTime) }], [], [], [{ id: run.id, wet: 125 }]]);
+      const read = reader([[bin], [bin], [{ ...run, endTime: new Date(endTime) }], [], [], [{ id: run.id, wet: '125.000' }]]);
       expect(await getOutputBinStockView(ctx, bin.id, read.executor)).toMatchObject({ dryMassKg });
     } finally { vi.useRealTimers(); }
   });

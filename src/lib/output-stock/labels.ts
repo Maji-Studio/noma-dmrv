@@ -1,7 +1,7 @@
 const OUTPUT_STOCK_EVENT_LABELS: Record<string, string> = {
   delivery: "Delivery", loss: "Stock loss", count: "Stock count",
   production_draw: "Product creation", product_draw: "Product withdrawal",
-  reversal: "Reversal", replacement: "Replacement",
+  reversal: "Reversal", replacement: "Replacement", moisture_update: "Moisture updated",
 };
 
 export function outputStockEventLabel(kind: string): string {

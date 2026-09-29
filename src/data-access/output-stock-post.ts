@@ -1,5 +1,5 @@
 import { db, type DbTransaction } from '@/db';
-import { binMovements, deliveries, outputStockAllocations, outputStockRunAllocations } from '@/db/schema';
+import { binMovements, deliveries, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { conflictCode } from '@/lib/conflict-ref';
 import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
@@ -122,6 +122,13 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
         establishedDryBiocharKg: layer.establishedDryBiocharKg, ingredientDrySolidsKg: layer.ingredientDrySolidsKg, placedAt: layer.placedAt, postingSequence: String(layer.postingSequence), code: preview.allocations[index].code,
         policy, order, readingPercent: a.readingPercent == null ? null : String(a.readingPercent) } }).returning();
     for (const run of a.runs) await tx.insert(outputStockRunAllocations).values({ organizationId: ctx.organizationId, allocationId: allocation.id, productionRunId: run.productionRunId, dryMassKg: run.dryKg });
+  }
+  // Each reading resets the estimate of the sub-bin it was taken from; the
+  // saved preview keeps the before and after the operator saw.
+  for (const reading of prepared.readings) {
+    await tx.insert(outputStockMoistureReadings).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, movementId: movement.id,
+      biocharProductId: prepared.lane === 'product' ? reading.layerId : null, productionRunId: prepared.lane === 'biochar' ? reading.layerId : null,
+      moisturePercent: reading.moisturePercent, solidsBasisKg: storeRational(reading.solidsKg), occurredAt: new Date(input.occurredAt) });
   }
   if (correction?.deliveryId) {
     const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, correction.deliveryId))).for('update');

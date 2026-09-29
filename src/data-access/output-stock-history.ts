@@ -2,7 +2,8 @@ import { db } from '@/db';
 import { binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
-import type { OutputStockHistoryEntry } from '@/types/output-stock';
+import { orderedSourceSchema } from '@/schemas/output-stock';
+import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
 import { requireOrgScope } from './utils';
@@ -21,11 +22,12 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
   const sources = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId));
   const runCode = new Map(runs.map(r => [r.id, r.code]));
   const productCode = new Map(products.map(p => [p.id, p.code]));
-  const history: OutputStockHistoryEntry[] = movements.filter(({ movement: m }) => m.outputKind).map(({ movement: m, actorName }) => {
+  const history: OutputStockHistoryEntry[] = movements.filter(({ movement: m }) => m.outputKind).flatMap(({ movement: m, actorName }) => {
     const effects = rows.filter(r => r.movement.id === m.id);
     const allocations = [...new Map(effects.map(e => [e.allocation.id, e.allocation])).values()];
     const kind = m.inputSnapshot?.kind;
-    return { id: m.id, kind: m.outputKind!, eventKind: kind === 'loss' || kind === 'count' || kind === 'delivery' || kind === 'production_draw' ? kind : undefined,
+    const savedSources = orderedSourceSchema.array().min(1).safeParse(m.inputSnapshot?.sources);
+    const entry: OutputStockHistoryEntry = { id: m.id, kind: m.outputKind!, eventKind: kind === 'loss' || kind === 'count' || kind === 'delivery' || kind === 'production_draw' ? kind : undefined,
       occurredAt: m.occurredAt!.toISOString(), recordedAt: m.createdAt.toISOString(), actorName,
       reason: m.reason, wetMassKg: typeof m.inputSnapshot?.wetMassKg === 'number' ? m.inputSnapshot.wetMassKg : null,
       moisturePercent: typeof m.inputSnapshot?.moisturePercent === 'number' ? m.inputSnapshot.moisturePercent : null,
@@ -34,7 +36,13 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
       allocations: allocations.map(a => ({ layerId: (a.biocharProductId ?? a.productionRunId)!,
         code: (a.biocharProductId ? productCode.get(a.biocharProductId) : runCode.get(a.productionRunId!)) ?? String(a.basisSnapshot.code),
         wetMassKg: a.wetMassKg === null ? null : Number(a.wetMassKg), dryMassKg: Number(a.dryMassKg),
-        runs: effects.filter(e => e.allocation.id === a.id && e.run).map(e => ({ productionRunId: e.run!.productionRunId, code: runCode.get(e.run!.productionRunId) ?? e.run!.productionRunId, dryMassKg: Number(e.run!.dryMassKg) })) })) };
+        runs: effects.filter(e => e.allocation.id === a.id && e.run).map(e => ({ productionRunId: e.run!.productionRunId, code: runCode.get(e.run!.productionRunId) ?? e.run!.productionRunId, dryMassKg: Number(e.run!.dryMassKg) })) })),
+      ...(savedSources.success ? { sources: savedSources.data } : {}) };
+    // A reading gets its own row right after the movement that measured it,
+    // showing the change the operator saw when it was saved.
+    const reset = m.outputKind === 'reversal' ? null : (m.inputSnapshot?.preview as Partial<OutputStockPreview> | undefined)?.moistureReset;
+    if (!reset) return [entry];
+    return [entry, moistureUpdateEntry(entry, reset)];
   });
   const receipts = bin.type === 'product_bin' ? products.map(p => {
     const provenance = sources.filter(s => s.biocharProductId === p.id);
@@ -57,4 +65,11 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     balance -= entry.dryMassKg;
   }
   return history;
+}
+
+/** The "Moisture updated" row a movement's readings add to the bin's history. */
+function moistureUpdateEntry(movement: OutputStockHistoryEntry, reset: OutputMoistureReset): OutputStockHistoryEntry {
+  return { ...movement, id: `${movement.id}:moisture`, kind: 'moisture_update', eventKind: undefined, reason: '', wetMassKg: null, moisturePercent: null,
+    dryMassKg: 0, beforeDryKg: movement.afterDryKg, correctsMovementId: null, deliveryId: null, allocations: [], sources: undefined,
+    measuredByMovementId: movement.id, moistureReset: reset };
 }

@@ -8,6 +8,6 @@ export function OutputBinBalance({ storageLocationId, facilityId }: { storageLoc
     {preview.isLoading && <p role="status">Loading dry stock...</p>}
     {preview.error && <p role="alert">{preview.error.message}</p>}
     {preview.data && <p className="body-medium">{formatMassKg(preview.data.beforeDryKg)} dry biochar available</p>}
-    <p className="body-caption">Wet stock depends on current moisture. A delivery measurement does not replace the pile measurement.</p>
+    <p className="body-caption">Wet stock is an estimate from the latest moisture reading of each batch. Every delivery, loss and count reading updates the batch it was taken from.</p>
   </div>;
 }

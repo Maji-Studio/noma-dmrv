@@ -27,6 +27,7 @@ import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
+import { moistureReadingGuidance, type MoistureFieldEstimate } from "@/lib/output-stock/moisture-guidance";
 import {
   MASS_KG_INPUT_STEP,
   STORED_PERCENT_INPUT_STEP,
@@ -69,6 +70,17 @@ interface MassMoistureInputProps {
 }
 
 /**
+ * A stock reading: the estimate it is checked against, and the value as typed.
+ * With an estimate the field shows it as one line under the input, dates it
+ * behind the ⓘ, and warns (never blocks) when the reading is far from it. The
+ * estimate is never filled in: every reading is measured.
+ */
+interface MoistureReadingProps {
+  estimate?: MoistureFieldEstimate | null;
+  reading?: unknown;
+}
+
+/**
  * Moisture percentage input. Carries the wet-basis explainer on every instance —
  * "moisture content" is ambiguous between wet and dry basis in the biochar
  * literature, and this app is wet-basis throughout.
@@ -88,15 +100,18 @@ export function MoistureField({
   certifyStatus,
   materialLabel,
   step = STORED_PERCENT_INPUT_STEP,
-}: MassMoistureInputProps & { materialLabel?: string }) {
+  estimate,
+  reading,
+}: MassMoistureInputProps & MoistureReadingProps & { materialLabel?: string }) {
+  const guidance = estimate === undefined ? null : moistureReadingGuidance(estimate, parseWatchedNumber(reading));
   return (
     <FormField
       id={id}
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       error={error}
-      warning={warning}
-      helperText={helperText}
-      hint={hint}
+      warning={guidance?.warning ?? warning}
+      helperText={guidance?.helperText ?? helperText}
+      hint={guidance?.basisText ? <>{guidance.basisText} {hint}</> : hint}
       required={required}
       certifyRequired={certifyRequired}
       certifyStatus={certifyStatus}
@@ -161,7 +176,7 @@ export function WetMassField({
 
 interface MassMoistureFieldsProps {
   wet: MassMoistureInputProps;
-  moisture: MassMoistureInputProps;
+  moisture: MassMoistureInputProps & MoistureReadingProps;
   /** Watched wet-mass value driving the live split. */
   wetMassKg: unknown;
   /** Watched moisture value driving the live split. */

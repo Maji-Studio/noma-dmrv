@@ -47,6 +47,7 @@ import {
   feedstocks,
   orders,
   productionRunFeedstocks,
+  outputStockMoistureReadings,
   productionRuns,
   productionProcesses,
   reactors,
@@ -360,6 +361,9 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
         .delete(certifierGhgStatements)
         .where(eq(certifierGhgStatements.id, fixture.ghgStatementId));
     }
+    await tx
+      .delete(outputStockMoistureReadings)
+      .where(eq(outputStockMoistureReadings.productionRunId, fixture.productionRunId));
     await tx
       .delete(productionRuns)
       .where(eq(productionRuns.id, fixture.productionRunId));

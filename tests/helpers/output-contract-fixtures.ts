@@ -4,7 +4,7 @@ import { eq, inArray, type SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
-  formulations, orders, outputStockAllocations, outputStockRunAllocations,
+  formulations, orders, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations,
   applicationOutputAllocations, applications, facilities, productionRuns,
   reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
@@ -177,6 +177,7 @@ export async function deleteOutputDeliveryFixtures(executor: Executor, predicate
     if (allocations.length) {
       await executor.delete(outputStockRunAllocations).where(inArray(outputStockRunAllocations.allocationId, allocations.map(row => row.id)));
       await executor.delete(outputStockAllocations).where(inArray(outputStockAllocations.id, allocations.map(row => row.id)));
+      await executor.delete(outputStockMoistureReadings).where(inArray(outputStockMoistureReadings.movementId, allocations.map(row => row.movementId)));
       await executor.delete(binMovements).where(inArray(binMovements.id, allocations.map(row => row.movementId)));
     }
   }
@@ -186,6 +187,7 @@ export async function deleteOutputDeliveryFixtures(executor: Executor, predicate
 export async function cleanupOutputFixtureParents(executor: Executor, facilityId: string) {
   const runs = await executor.select({ id: productionRuns.id }).from(productionRuns).where(eq(productionRuns.facilityId, facilityId));
   const ownRunIds = runs.map(row => row.id).filter(id => ownedRuns.has(id));
+  if (ownRunIds.length) await executor.delete(outputStockMoistureReadings).where(inArray(outputStockMoistureReadings.productionRunId, ownRunIds));
   if (ownRunIds.length) await executor.delete(productionRuns).where(inArray(productionRuns.id, ownRunIds));
   const reactorRows = await executor.select({ id: reactors.id }).from(reactors).where(eq(reactors.facilityId, facilityId));
   const ownReactorIds = reactorRows.map(row => row.id).filter(id => ownedReactors.has(id));
@@ -203,6 +205,7 @@ export async function deleteOutputProductFixtures(executor: Executor, predicate:
     if (draws.length) {
       await executor.delete(outputStockRunAllocations).where(inArray(outputStockRunAllocations.allocationId, draws.map(draw => draw.id)));
       await executor.delete(outputStockAllocations).where(inArray(outputStockAllocations.id, draws.map(draw => draw.id)));
+      await executor.delete(outputStockMoistureReadings).where(inArray(outputStockMoistureReadings.movementId, draws.map(draw => draw.movementId)));
       await executor.delete(binMovements).where(inArray(binMovements.id, draws.map(draw => draw.movementId)));
     }
   }

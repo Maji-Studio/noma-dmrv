@@ -6,7 +6,6 @@ import {
   prepareBiocharProductSubmission,
 } from "./biochar-product-form";
 import { formProductComposition } from "./form-product-composition";
-import type { AffectedStockPreview } from "@/types/output-stock";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 
 const registration = (name: string): UseFormRegisterReturn => ({
@@ -101,7 +100,6 @@ describe("formProductComposition", () => {
     feedstockTypeCategory: "manure",
     massKg: 550,
     moistureContentPercent: 20,
-    moistureSource: "operator_override" as const,
     storageLocationId: "33333333-3333-4333-8333-333333333333",
   };
   const part = (composition: ReturnType<typeof formProductComposition>, label: string) =>
@@ -149,21 +147,6 @@ describe("formProductComposition", () => {
     expect(part(composition, "Chicken manure solids")).toBe(440);
     expect(part(composition, "Water")).toBe(160);
     expect(part(composition, "Water added")).toBe(50);
-  });
-
-  it("uses the ingredient bin's projected stock ratio for a weighted moisture", () => {
-    const stock = {
-      lane: "ingredient",
-      storageLocationId: manure.storageLocationId,
-      beforeDryKg: 300,
-      beforeEstimatedWetKg: 400,
-    } as AffectedStockPreview;
-    const weighted = { ...manure, moistureSource: "weighted_remaining" as const };
-    const withStock = formProductComposition({ ...base, ingredients: [weighted], previews: [stock] });
-    expect(part(withStock, "Chicken manure solids")).toBe(412.5);
-    // Without a fresh projection the part stays unknown rather than guessed.
-    const stale = formProductComposition({ ...base, ingredients: [weighted] });
-    expect(part(stale, "Chicken manure solids")).toBeNull();
   });
 
   it("keeps the saved ingredient dry snapshot on a frozen allocation", () => {

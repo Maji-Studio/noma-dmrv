@@ -116,7 +116,7 @@ describe('output stock event times in PostgreSQL', () => {
     const input: ProductStockPreviewInput = { facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
       ingredientBins: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, feedstockTypeName: f.ingredientType.name,
-        feedstockTypeCategory: f.ingredientType.category, massKg: 0, moistureContentPercent: 0, moistureSource: 'operator_override' }] };
+        feedstockTypeCategory: f.ingredientType.category, massKg: 0, moistureContentPercent: 0 }] };
     const [preview] = await previewProductStock(f.ctx, input);
     await createBiocharProduct(f.ctx, { code: `E2E-FUTURE-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,

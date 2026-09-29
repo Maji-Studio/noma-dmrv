@@ -58,6 +58,7 @@ export default async function globalTeardown() {
       await client.query(`DELETE FROM application_output_allocations WHERE application_id IN (SELECT id FROM e2e_scope_applications) OR delivery_id IN (SELECT id FROM e2e_scope_deliveries) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
       await client.query(`DELETE FROM output_stock_run_allocations WHERE allocation_id IN (SELECT id FROM e2e_scope_output_allocations)`);
       await client.query(`DELETE FROM output_stock_allocations WHERE id IN (SELECT id FROM e2e_scope_output_allocations)`);
+      await client.query(`DELETE FROM output_stock_moisture_readings WHERE storage_location_id IN (SELECT id FROM e2e_scope_bins) OR biochar_product_id IN (SELECT id FROM e2e_scope_products) OR production_run_id IN (SELECT id FROM e2e_scope_runs)`);
       await client.query(`DELETE FROM bin_movements WHERE storage_location_id IN (SELECT id FROM e2e_scope_bins)`);
       await client.query(`DELETE FROM product_ingredient_snapshots WHERE biochar_product_id IN (SELECT id FROM e2e_scope_products)`);
 
