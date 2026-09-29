@@ -5,7 +5,6 @@
  * Avoids UTC conversion bugs from toISOString().split("T")[0].
  */
 
-import { formatInTimeZone } from "date-fns-tz";
 import { SafeError } from "@/lib/errors";
 
 /**
@@ -40,31 +39,60 @@ function wallClockFormatter(timeZone: string): Intl.DateTimeFormat {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hourCycle: "h23",
+    timeZoneName: "longOffset",
   });
   wallClockFormatters.set(timeZone, formatter);
   return formatter;
 }
 
+/** The facility wall clock of an instant, field by field, zero-padded. */
+interface WallClockParts {
+  year: string;
+  month: string;
+  day: string;
+  hour: string;
+  minute: string;
+  second: string;
+  /** Numeric offset as `xxx` renders it: "+03:00", "-05:00", "+00:00". */
+  offset: string;
+}
+
+/** `longOffset` reads "GMT+03:00", or bare "GMT" at a zero offset. */
+const LONG_OFFSET_PATTERN = /[+-]\d{2}:\d{2}/;
+const ZERO_OFFSET = "+00:00";
+
 /**
- * Read `instant` back as the "YYYY-MM-DDTHH:MM" wall clock it shows in
- * `timeZone`.
+ * Read `instant` field by field as the wall clock it shows in `timeZone`.
  *
  * Deliberately not `formatInTimeZone`: date-fns-tz renders by building a Date
  * whose *local* components are the target zone's wall clock, so when the
  * process's own zone skips that wall clock the Date rolls forward and the
  * reader lies. A Dar es Salaam 02:30 read on a machine set to
  * `America/New_York` came back as 03:30 on that zone's spring-forward day —
- * exactly the ambiguity this module has to detect.
+ * exactly the ambiguity this module has to detect, and a wrong facility time
+ * on any read surface a viewer opens from such a zone.
  */
-function wallClockIn(instant: Date, timeZone: string): string {
+function wallClockParts(instant: Date, timeZone: string): WallClockParts {
   const parts = wallClockFormatter(timeZone).formatToParts(instant);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((candidate) => candidate.type === type)?.value ?? "";
-  return (
-    `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}` +
-    `T${part("hour")}:${part("minute")}`
-  );
+  return {
+    year: part("year").padStart(4, "0"),
+    month: part("month"),
+    day: part("day"),
+    hour: part("hour"),
+    minute: part("minute"),
+    second: part("second"),
+    offset: LONG_OFFSET_PATTERN.exec(part("timeZoneName"))?.[0] ?? ZERO_OFFSET,
+  };
+}
+
+/** Read `instant` back as the "YYYY-MM-DDTHH:MM" wall clock it shows in `timeZone`. */
+function wallClockIn(instant: Date, timeZone: string): string {
+  const { year, month, day, hour, minute } = wallClockParts(instant, timeZone);
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
 /**
@@ -87,18 +115,52 @@ function zoneOffsetMs(instantMs: number, timeZone: string): number {
 // Facility Timezone Display Helpers
 // ============================================
 
-/** Format a UTC date in a facility's local timezone. */
+/** English month abbreviations, as date-fns `MMM` renders them in en-US. */
+export const SHORT_MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/**
+ * The date-fns tokens {@link formatFacilityTime} renders. Any other run of
+ * letters is refused rather than printed literally, so a new pattern fails
+ * loudly in tests instead of showing a stray letter on screen.
+ */
+const FACILITY_FORMAT_TOKEN = /yyyy|MMM|MM|dd|d|HH|mm|ss|xxx|[A-Za-z]+/g;
+
+function renderFacilityToken(token: string, parts: WallClockParts): string {
+  switch (token) {
+    case "yyyy": return parts.year;
+    case "MMM": return SHORT_MONTH_NAMES[Number(parts.month) - 1];
+    case "MM": return parts.month;
+    case "dd": return parts.day;
+    case "d": return String(Number(parts.day));
+    case "HH": return parts.hour;
+    case "mm": return parts.minute;
+    case "ss": return parts.second;
+    case "xxx": return parts.offset;
+    default: throw new Error(`formatFacilityTime does not support the "${token}" token`);
+  }
+}
+
+/**
+ * Format a UTC date in a facility's local timezone with a date-fns style
+ * pattern (the tokens in {@link FACILITY_FORMAT_TOKEN}). Read through `Intl`,
+ * so the viewer's own zone never shifts the facility time; see
+ * {@link wallClockParts} for the `formatInTimeZone` failure this avoids.
+ */
 export function formatFacilityTime(
   utcDate: Date,
   timezone: string,
   fmt = "yyyy-MM-dd HH:mm"
 ): string {
-  return formatInTimeZone(utcDate, timezone, fmt);
+  const parts = wallClockParts(utcDate, timezone);
+  return fmt.replace(FACILITY_FORMAT_TOKEN, (token) => renderFacilityToken(token, parts));
 }
 
 /** Format a UTC date as date-only in a facility's local timezone. */
 export function formatFacilityDate(utcDate: Date, timezone: string): string {
-  return formatInTimeZone(utcDate, timezone, "yyyy-MM-dd");
+  return formatFacilityTime(utcDate, timezone, "yyyy-MM-dd");
 }
 
 /**

@@ -18,6 +18,7 @@ import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "../../src/lib/certification/application-evidence";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 /**
  * Create Order → delivered Delivery → Application (all certify-relevant form
@@ -63,7 +64,7 @@ async function seedFormCompleteApplication(
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
-  await page.fill('input[name="moistureContentPercent"]', "10");
+  await fillStockMoisture(page, "delivery", "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
   await waitForSideSheetClose(page);
 

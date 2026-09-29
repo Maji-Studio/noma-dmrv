@@ -9,6 +9,7 @@ vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null, Tooltip: ({ ch
 
 const state = vi.hoisted(() => ({ blocker: null as string | null }));
 vi.mock("@/hooks/use-output-stock", () => ({
+  useOutputSubBins: () => ({ data: undefined, error: null }),
   useOutputStockBalance: () => ({ data: undefined }),
   usePostOutputStock: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useOutputStockPreview: () => ({ isFetching: false, refetch: vi.fn(), data: {

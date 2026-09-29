@@ -15,6 +15,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const PRODUCTION_RUN_DATE = "2025-06-15";
 
@@ -135,7 +136,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await selectFirstEntity(page, "Order");
     await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
-    await page.fill('input[name="moistureContentPercent"]', "10");
+    await fillStockMoisture(page, "delivery", "10");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
     await waitForSideSheetClose(page);

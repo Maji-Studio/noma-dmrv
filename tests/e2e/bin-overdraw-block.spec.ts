@@ -25,6 +25,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const PRODUCTION_RUNS_URL = "/production-runs";
 const BIOCHAR_PRODUCTS_URL = "/biochar-products";
@@ -291,7 +292,7 @@ async function openLinkedProductForm(
   await selectEntity(page, "Product bin", productBin.id, productBin.name);
 
   await page.fill('input[name="massKg"]', massKg);
-  await page.fill('input[name="moistureContentPercent"]', "0");
+  await fillStockMoisture(page, "product-source", "0");
   await page.fill('input[name="waterAddedKg"]', "0");
 }
 
@@ -384,7 +385,7 @@ async function openDeliveredDeliveryForm(
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', wetMassKg);
-  await page.fill('input[name="moistureContentPercent"]', "10");
+  await fillStockMoisture(page, "delivery", "10");
 }
 
 /** Submit the create-delivery side sheet. */

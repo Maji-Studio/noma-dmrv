@@ -10,6 +10,7 @@ import { seedOutputStockBrowserFixture, readOutputStockBrowserFixture, FIFO_BROW
 import { createApplication } from "../../src/data-access/applications";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const OUTPUT = path.resolve("docs/archive/qa/2026-09-22-form-detail-e");
 const VIEWPORTS = [{ width: 1440, height: 1100 }, { width: 390, height: 844 }];
@@ -191,7 +192,7 @@ async function bin(page: Page, f: StockFixture) {
 async function fillStock(page: Page, wet: string, reason: string) {
   await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill(wet);
-  await page.locator("#stock-moisture").fill("30");
+  await fillStockMoisture(page, "stock", "30");
   await page.locator("#stock-reason").fill(reason);
 }
 
@@ -203,13 +204,13 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
   await selectEntity(page, "Order", f.order.id, f.order.code);
   await page.locator("#storageLocationId").selectOption(f.bin.id);
   await page.locator("#deliveredWetMassKg").fill("2500");
-  await page.locator("#moistureContentPercent").fill("15");
+  await fillStockMoisture(page, "delivery", "15");
   // The blocker renders once, under the wet-mass field, never a second time inside the preview.
   await expect(page.getByText(/Not enough dry biochar/)).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Create Delivery", exact: true })).toBeDisabled();
   await capture(page, "delivery-create-1440-simple-blocker");
   await page.locator("#deliveredWetMassKg").fill("2000");
-  await page.locator("#moistureContentPercent").fill("30");
+  await fillStockMoisture(page, "delivery", "30");
   await page.locator("#distanceKmOverride").fill("25");
   await page.locator("#distanceKmOverride").blur();
   await pairs(page, "delivery-create", ["Mass and moisture", "Transport"]);
@@ -378,7 +379,7 @@ test("gallery biochar product create and read", async ({ adminPage: page, testUs
   await page.locator("#placedAt").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Biochar bin", f.source.id, f.source.name);
   await page.locator('input[name="massKg"]').fill("300");
-  await page.locator('input[name="moistureContentPercent"]').fill("10");
+  await fillStockMoisture(page, "product-source", "10");
   await selectEntity(page, "Formulation", f.recipe.id, f.recipe.name);
   const ingredientMass = page.locator('[id="ingredientBins.0.massKg"]');
   await ingredientMass.fill("80");

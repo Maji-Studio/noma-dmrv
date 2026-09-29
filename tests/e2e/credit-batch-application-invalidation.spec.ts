@@ -30,6 +30,7 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 import type { Page } from "@playwright/test";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 async function createApplicationForLineage(
   page: Page,
@@ -72,7 +73,7 @@ async function createApplicationForLineage(
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
-  await page.fill('input[name="moistureContentPercent"]', "10");
+  await fillStockMoisture(page, "delivery", "10");
   await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
   await waitForSideSheetClose(page);
 

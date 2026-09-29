@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { eventTimeFromInput, eventTimeInputValue } from "./event-time-input";
+import {
+  eventTimeFromInput,
+  eventTimeInputValue,
+  eventTimeRefusal,
+  REPEATED_EVENT_TIME_MESSAGE,
+  SKIPPED_EVENT_TIME_MESSAGE,
+} from "./event-time-input";
 
 const DAR = "Africa/Dar_es_Salaam";
 const NEW_YORK = "America/New_York";
@@ -27,5 +33,23 @@ describe("event time picker conversion", () => {
   });
   it.each([undefined, null, "", "garbage", 42])("shows %j as an empty picker", value => {
     expect(eventTimeInputValue(value, DAR)).toBe("");
+  });
+});
+
+describe("event time refusal reason", () => {
+  it("says a skipped wall clock does not exist on the facility clock", () => {
+    expect(eventTimeRefusal("2026-03-08T02:30", NEW_YORK)).toBe(SKIPPED_EVENT_TIME_MESSAGE);
+  });
+  it("says a repeated wall clock happens twice on the facility clock", () => {
+    expect(eventTimeRefusal("2026-11-01T01:30", NEW_YORK)).toBe(REPEATED_EVENT_TIME_MESSAGE);
+  });
+  it.each(["2026-03-08T03:30", "", "2026-09-15", "not a time"])("gives no daylight-saving reason for %j", value => {
+    expect(eventTimeRefusal(value, NEW_YORK)).toBeNull();
+  });
+  it("words the reasons as two short sentences without dashes", () => {
+    for (const message of [SKIPPED_EVENT_TIME_MESSAGE, REPEATED_EVENT_TIME_MESSAGE]) {
+      expect(message).not.toMatch(/[–—]/);
+      expect(message.split(". ")).toHaveLength(2);
+    }
   });
 });

@@ -2,7 +2,7 @@ import { db } from '@/db';
 import { binMovements, biocharProducts, biocharProductSourceAllocations, productionRuns, storageLocations, users } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
-import { orderedSourceSchema } from '@/schemas/output-stock';
+import { orderedSourcesSchema } from '@/schemas/output-stock';
 import type { OutputMoistureReset, OutputStockHistoryEntry, OutputStockPreview } from '@/types/output-stock';
 import { and, asc, eq } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
@@ -26,7 +26,7 @@ export async function getOutputStockHistory(ctx: OrgContext, storageLocationId: 
     const effects = rows.filter(r => r.movement.id === m.id);
     const allocations = [...new Map(effects.map(e => [e.allocation.id, e.allocation])).values()];
     const kind = m.inputSnapshot?.kind;
-    const savedSources = orderedSourceSchema.array().min(1).safeParse(m.inputSnapshot?.sources);
+    const savedSources = orderedSourcesSchema.safeParse(m.inputSnapshot?.sources);
     const entry: OutputStockHistoryEntry = { id: m.id, kind: m.outputKind!, eventKind: kind === 'loss' || kind === 'count' || kind === 'delivery' || kind === 'production_draw' ? kind : undefined,
       occurredAt: m.occurredAt!.toISOString(), recordedAt: m.createdAt.toISOString(), actorName,
       reason: m.reason, wetMassKg: typeof m.inputSnapshot?.wetMassKg === 'number' ? m.inputSnapshot.wetMassKg : null,

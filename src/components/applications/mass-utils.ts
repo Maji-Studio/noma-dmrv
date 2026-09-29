@@ -1,5 +1,6 @@
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
 import type { SoilTemperatureSource } from "@/schemas/applications";
@@ -115,8 +116,15 @@ export function applicationKgToTons(value: number | null | undefined): number | 
 /** Kept as a named re-export so the application surfaces keep one import site. */
 export const formatKg = formatMassKg;
 
-function formatDeliveryDate(value: Date | string): string {
-  return formatDate(value);
+/**
+ * The delivery's calendar day on its facility clock, never the viewer's. The
+ * server resolves `deliveryDay` in the facility zone; a delivery without one
+ * (no facility row) falls back to the zone a missing facility resolves to.
+ */
+export function formatApplicationDeliveryDay(delivery: Pick<ApplicationDeliveryOption, "deliveryDate" | "deliveryDay">): string {
+  return delivery.deliveryDay
+    ? formatDayString(delivery.deliveryDay)
+    : formatFacilityDay(delivery.deliveryDate, DEFAULT_FACILITY_TIMEZONE);
 }
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {
@@ -161,7 +169,7 @@ export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDelive
   return [
     delivery.productBinName,
     delivery.formulationName,
-    formatDeliveryDate(delivery.deliveryDate),
+    formatApplicationDeliveryDay(delivery),
     getApplicationDeliveryMassLabel(delivery),
   ]
     .filter(Boolean)
