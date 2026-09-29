@@ -3,27 +3,19 @@ import { getOutputBinStockView } from '../output-stock';
 /** Storage-location options with live inventory subtitles. */
 
 import type { EntityOption } from "@/components/forms/entity-select/types";
-import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
-  binMovements,
   biocharProducts,
-  biocharProductSourceAllocations,
   feedstocks,
   feedstockTypes,
-  formulations,
-  outputStockAllocations,
   productionRunFeedstockDraws,
   productionRuns,
   storageLocations
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { formatWetDryStock } from "@/lib/mass-moisture";
-import {
-  CANCELLED_PRODUCTION_RUN_STATUS,
-  COMPLETED_PRODUCTION_RUN_STATUS,
-} from "@/lib/production-runs/lifecycle";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import {
   formatStorageLocationType,
   type StorageLocationType,
@@ -34,18 +26,12 @@ import {
   ilike,
   inArray,
   isNull,
-  lt,
   ne,
   or,
   sql,
   type SQL,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import {
-  productDryBiocharKgSql,
-  productWetMassKgSql,
-  sourceBiocharMassKgSql,
-} from "../biochar-product-source-mass";
 import {
   deriveLaneStock,
   type LaneStockDerivation,
@@ -61,98 +47,32 @@ function outputBinStockSubtitle(stock: { estimatedWetMassKg: number | null; dryM
     estimatedWet: true,
   });
 }
-export function formatStorageLocationSubtitle(
-  type: string,
+/** Feedstock bin option subtitle: type, held feedstock, wet stock, pending intake. */
+export function formatFeedstockBinSubtitle(
   feedstockTypeName: string | null,
   feedstockTypeUsage: string | null,
-  totalStoredWetKg: number,
+  onHandWetKg: number,
   pendingStoredWetKg: number,
-  totalConsumedKg: number,
-  totalProducedWetKg: number,
-  totalProducedDryKg: number,
-  unresolvedProducedDryCount: number,
-  totalAllocatedWetKg: number,
-  totalAllocatedDryKg: number,
-  documentedLossWetKg: number,
-  totalProductKg: number,
-  totalProductDryKg: number,
-  unresolvedProductDryCount: number,
-  biocharEquivalentKg: number,
-  formulationName: string | null,
-  remainingMass?: EntityOption["remainingMass"],
 ): string {
-  switch (type) {
-    case "feedstock_bin": {
-      const typeLabel = formatStorageLocationType(type);
-      const onHandKg =
-        remainingMass?.wetKg ?? Math.max(0, totalStoredWetKg - totalConsumedKg);
-      if (!feedstockTypeName && onHandKg === 0) {
-        return `${typeLabel} · Empty · Feedstock type locks on first intake`;
-      }
-      const parts: string[] = [typeLabel];
-      if (feedstockTypeName) {
-        parts.push(
-          feedstockTypeUsage
-            ? `${feedstockTypeName} (${formatFeedstockTypeUsage(feedstockTypeUsage)})`
-            : feedstockTypeName
-        );
-      }
-      parts.push(`${Math.round(onHandKg).toLocaleString()} kg stored`);
-      if (pendingStoredWetKg > 0) {
-        parts.push(
-          `${Math.round(pendingStoredWetKg).toLocaleString()} kg pending intake (wet)`,
-        );
-      }
-      return parts.join(" · ");
-    }
-    case "biochar_bin": {
-      const typeLabel = formatStorageLocationType(type);
-      const availableWetKg =
-        remainingMass?.wetKg ??
-        Math.max(
-          0,
-          totalProducedWetKg - totalAllocatedWetKg - documentedLossWetKg,
-        );
-      const availableDryKg =
-        remainingMass && "dryKg" in remainingMass
-          ? remainingMass.dryKg
-          : unresolvedProducedDryCount > 0 || documentedLossWetKg > 0
-          ? null
-          : Math.max(0, totalProducedDryKg - totalAllocatedDryKg);
-      if (availableWetKg === 0) {
-        return `${typeLabel} · Empty`;
-      }
-      return `${typeLabel} · ${formatWetDryStock({ wetKg: availableWetKg, dryKg: availableDryKg })} available`;
-    }
-    case "product_bin": {
-      const typeLabel = formatStorageLocationType(type);
-      // A product bin is bound to one formulation (or pure biochar when unset).
-      const blendLabel = formulationName ?? PURE_BIOCHAR_LABEL;
-      const availableWetKg = remainingMass?.wetKg ?? totalProductKg;
-      if (availableWetKg === 0) {
-        return `${typeLabel} · ${blendLabel} · Empty`;
-      }
-      const productDryKg =
-        remainingMass && "dryKg" in remainingMass
-          ? remainingMass.dryKg
-          : unresolvedProductDryCount > 0
-            ? null
-            : totalProductDryKg;
-      const parts = [
-        typeLabel,
-        blendLabel,
-        `${formatWetDryStock({ wetKg: availableWetKg, dryKg: productDryKg })} stored`,
-      ];
-      if (biocharEquivalentKg > 0) {
-        parts.push(
-          `${Math.round(biocharEquivalentKg).toLocaleString()} kg biochar equivalent`,
-        );
-      }
-      return parts.join(" · ");
-    }
-    default:
-      return "Empty";
+  const typeLabel = formatStorageLocationType("feedstock_bin");
+  if (!feedstockTypeName && onHandWetKg === 0) {
+    return `${typeLabel} · Empty · Feedstock type locks on first intake`;
   }
+  const parts: string[] = [typeLabel];
+  if (feedstockTypeName) {
+    parts.push(
+      feedstockTypeUsage
+        ? `${feedstockTypeName} (${formatFeedstockTypeUsage(feedstockTypeUsage)})`
+        : feedstockTypeName
+    );
+  }
+  parts.push(`${Math.round(onHandWetKg).toLocaleString()} kg stored`);
+  if (pendingStoredWetKg > 0) {
+    parts.push(
+      `${Math.round(pendingStoredWetKg).toLocaleString()} kg pending intake (wet)`,
+    );
+  }
+  return parts.join(" · ");
 }
 
 function formatFeedstockTypeUsage(usage: string): string {
@@ -170,10 +90,6 @@ function buildInventoryAggregates(
   .select({
     storageLocationId: feedstocks.storageLocationId,
     feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`.as("feedstock_type_name"),
-    totalStoredKg: sumNumeric(
-      feedstocks.massDryKg,
-      sql`${feedstocks.status} = 'complete'`,
-    ).as("total_stored_kg"),
     totalStoredWetKg: sumNumeric(
       feedstocks.massWetKg,
       sql`${feedstocks.status} = 'complete'`,
@@ -251,189 +167,10 @@ function buildInventoryAggregates(
   .groupBy(sql`ingredient.value ->> 'storageLocationId'`)
   .as("ingredient_consumption_agg");
 
-  const biocharOutputAggregate = executor
-  .select({
-    storageLocationId: productionRuns.biocharStorageLocationId,
-    totalProducedWetKg: sumNumeric(productionRuns.biocharOutputKg).as(
-      "total_produced_wet_kg",
-    ),
-    totalProducedDryKg: sumNumeric(productionRuns.biocharDryMassKg).as(
-      "total_produced_dry_kg",
-    ),
-    unresolvedProducedDryCount: numericAggregate(sql<number>`
-      COALESCE(
-        SUM(
-          CASE
-            WHEN COALESCE(${productionRuns.biocharOutputKg}, 0) > 0
-              AND ${productionRuns.biocharDryMassKg} IS NULL
-            THEN 1
-            ELSE 0
-          END
-        ),
-        0
-      )
-    `).as(
-      "unresolved_produced_dry_count",
-    ),
-  })
-  .from(productionRuns)
-  .where(and(
-    eq(productionRuns.organizationId, ctx.organizationId),
-    eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
-  ))
-  .groupBy(productionRuns.biocharStorageLocationId)
-  .as("biochar_output_agg");
-
-  const legacyBiocharAllocationAggregate = executor
-  .select({
-    storageLocationId: productionRuns.biocharStorageLocationId,
-    totalAllocatedWetKg: numericAggregate(sql<number>`
-      COALESCE(
-        SUM(
-          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
-        ),
-        0
-      )
-    `).as("legacy_allocated_wet_kg"),
-    totalAllocatedDryKg: numericAggregate(sql<number>`
-      COALESCE(
-        SUM(
-          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
-          * (
-            COALESCE(${productionRuns.biocharDryMassKg}, 0)
-            / NULLIF(COALESCE(${productionRuns.biocharOutputKg}, 0), 0)
-          )
-        ),
-        0
-      )
-    `).as("legacy_allocated_dry_kg"),
-  })
-  .from(productionRuns)
-  .innerJoin(
-    biocharProducts,
-    and(
-      eq(biocharProducts.linkedProductionRunId, productionRuns.id),
-      eq(biocharProducts.organizationId, ctx.organizationId),
-    ),
-  )
-  .where(and(
-    eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
-    isNull(biocharProducts.sourceBiocharStorageLocationId),
-  ))
-  .groupBy(productionRuns.biocharStorageLocationId)
-  .as("legacy_biochar_allocation_agg");
-
-  const sourceBiocharAllocationAggregate = executor
-  .select({
-    storageLocationId:
-      biocharProductSourceAllocations.sourceStorageLocationId,
-    totalAllocatedWetKg: sumNumeric(
-      biocharProductSourceAllocations.allocatedWetMassKg,
-    ).as("source_allocated_wet_kg"),
-    totalAllocatedDryKg: sumNumeric(
-      biocharProductSourceAllocations.allocatedDryMassKg,
-    ).as("source_allocated_dry_kg"),
-  })
-  .from(biocharProductSourceAllocations)
-  .where(
-    eq(
-      biocharProductSourceAllocations.organizationId,
-      ctx.organizationId,
-    ),
-  )
-  .groupBy(
-    biocharProductSourceAllocations.sourceStorageLocationId,
-  )
-  .as("source_biochar_allocation_agg");
-
-  const biocharLossAggregate = executor
-  .select({
-    storageLocationId: binMovements.storageLocationId,
-    documentedLossWetKg: numericAggregate(sql<number>`
-      COALESCE(
-        SUM(-${binMovements.massDeltaKg}),
-        0
-      )
-    `).as("documented_loss_wet_kg"),
-  })
-  .from(binMovements)
-  .where(
-    and(
-      eq(binMovements.organizationId, ctx.organizationId),
-      eq(binMovements.lane, "biochar"),
-      lt(binMovements.massDeltaKg, 0),
-    ),
-  )
-  .groupBy(binMovements.storageLocationId)
-  .as("biochar_loss_agg");
-
-  const productInventoryAggregate = executor
-  .select({
-    storageLocationId: biocharProducts.storageLocationId,
-    totalProductKg: sumNumeric(
-      productWetMassKgSql(
-        biocharProducts.massKg,
-        biocharProducts.waterAddedKg,
-      ),
-    ).as("total_product_kg"),
-    totalProductDryKg: sumNumeric(productDryBiocharKgSql(
-      biocharProducts.id,
-      biocharProducts.massKg,
-      biocharProducts.moistureContentPercent,
-      biocharProducts.composition,
-      ctx.organizationId,
-    )).as("total_product_dry_kg"),
-    unresolvedProductDryCount: numericAggregate(sql<number>`
-      COALESCE(
-        SUM(
-          CASE
-            WHEN COALESCE(${biocharProducts.massKg}, 0) > 0
-              AND ${biocharProducts.moistureContentPercent} IS NULL
-              AND NOT EXISTS (
-                SELECT 1 FROM ${biocharProductSourceAllocations} allocation
-                WHERE allocation.biochar_product_id = ${biocharProducts.id}
-                  AND allocation.organization_id = ${ctx.organizationId}
-              )
-            THEN 1
-            ELSE 0
-          END
-        ),
-        0
-      )
-    `).as("unresolved_product_dry_count"),
-    biocharEquivalentKg: numericAggregate(sql<number>`
-      COALESCE(
-        SUM(
-          ${sourceBiocharMassKgSql(biocharProducts.massKg, biocharProducts.composition)}
-        ),
-        0
-      )
-    `).as("biochar_equivalent_kg"),
-  })
-  .from(biocharProducts)
-  .where(eq(biocharProducts.organizationId, ctx.organizationId))
-  .groupBy(biocharProducts.storageLocationId)
-  .as("product_inventory_agg");
-
-  const productDeliveredAggregate = executor.select({
-    storageLocationId: outputStockAllocations.sourceStorageLocationId,
-    totalDeliveredWetKg: sumNumeric(outputStockAllocations.wetMassKg).as('total_delivered_wet_kg'),
-    totalDeliveredDryKg: sumNumeric(outputStockAllocations.dryMassKg).as('total_delivered_dry_kg'),
-    unresolvedDeliveredDryCount: sql<number>`0`.mapWith(Number).as('unresolved_delivered_dry_count'),
-  }).from(outputStockAllocations).where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), sql`${outputStockAllocations.biocharProductId} is not null`))
-    .groupBy(outputStockAllocations.sourceStorageLocationId).as('product_delivered_agg');
-
   return {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
     ingredientConsumptionAggregate,
-    biocharOutputAggregate,
-    legacyBiocharAllocationAggregate,
-    sourceBiocharAllocationAggregate,
-    biocharLossAggregate,
-    productInventoryAggregate,
-    productDeliveredAggregate,
   };
 }
 
@@ -445,98 +182,46 @@ interface StorageLocationOptionRow {
   heldFeedstockTypeName: string | null;
   heldFeedstockTypeUsage: string | null;
   feedstockTypeName: string | null;
-  formulationName: string | null;
-  totalStoredKg: number;
   totalStoredWetKg: number;
   pendingStoredWetKg: number;
   totalConsumedKg: number;
-  totalProducedWetKg: number;
-  totalProducedDryKg: number;
-  unresolvedProducedDryCount: number;
-  totalAllocatedWetKg: number;
-  totalAllocatedDryKg: number;
-  documentedLossWetKg: number;
-  totalProductKg: number;
-  totalProductDryKg: number;
-  unresolvedProductDryCount: number;
-  totalDeliveredWetKg: number;
-  totalDeliveredDryKg: number;
-  unresolvedDeliveredDryCount: number;
-  biocharEquivalentKg: number;
 }
 
-export function toStorageLocationEntityOption(
+export function toFeedstockBinEntityOption(
   row: StorageLocationOptionRow,
   stock?: LaneStockDerivation,
 ): EntityOption {
-  let remainingMass: EntityOption["remainingMass"];
-
-  if (row.type === "feedstock_bin") {
-    remainingMass = {
-      wetKg:
-        stock?.feedstockStockWetKg ??
-        row.totalStoredWetKg - row.totalConsumedKg,
-      dryKg: stock?.feedstockEstimatedDryKg ?? null,
-    };
-  } else if (row.type === "biochar_bin") {
-    const movementDeltaKg = stock?.biocharMovementDeltaKg ?? 0;
-    const dryBasisDiffersFromLane = Boolean(
-      stock &&
-      (stock.biocharProducedKg !== row.totalProducedWetKg ||
-        stock.biocharAllocatedKg !== row.totalAllocatedWetKg),
-    );
-    remainingMass = {
-      wetKg:
-        stock?.biocharStockKg ??
-        row.totalProducedWetKg -
-          row.totalAllocatedWetKg -
-          row.documentedLossWetKg,
-      dryKg:
-        row.unresolvedProducedDryCount > 0 ||
-        movementDeltaKg !== 0 ||
-        dryBasisDiffersFromLane
-          ? null
-          : row.totalProducedDryKg - row.totalAllocatedDryKg,
-    };
-  } else {
-    const movementDeltaKg = stock?.productMovementDeltaKg ?? 0;
-    remainingMass = {
-      wetKg:
-        row.totalProductKg - row.totalDeliveredWetKg + movementDeltaKg,
-      dryKg:
-        row.unresolvedProductDryCount > 0 ||
-        row.unresolvedDeliveredDryCount > 0 ||
-        movementDeltaKg !== 0
-          ? null
-          : row.totalProductDryKg - row.totalDeliveredDryKg,
-    };
-  }
-
+  const remainingMass = {
+    wetKg:
+      stock?.feedstockStockWetKg ??
+      row.totalStoredWetKg - row.totalConsumedKg,
+    dryKg: stock?.feedstockEstimatedDryKg ?? null,
+  };
   return {
     id: row.id,
     code: row.code,
     name: row.name,
     remainingMass,
-    subtitle: formatStorageLocationSubtitle(
-      row.type,
+    subtitle: formatFeedstockBinSubtitle(
       row.heldFeedstockTypeName ?? row.feedstockTypeName,
       row.heldFeedstockTypeUsage,
-      row.totalStoredWetKg,
+      remainingMass.wetKg,
       row.pendingStoredWetKg,
-      row.totalConsumedKg,
-      row.totalProducedWetKg,
-      row.totalProducedDryKg,
-      row.unresolvedProducedDryCount,
-      row.totalAllocatedWetKg,
-      row.totalAllocatedDryKg,
-      row.documentedLossWetKg,
-      row.totalProductKg,
-      row.totalProductDryKg,
-      row.unresolvedProductDryCount,
-      row.biocharEquivalentKg,
-      row.formulationName,
-      remainingMass,
     ),
+  };
+}
+
+/** Output bins read their stock from the dry-biochar FIFO layers only. */
+function toOutputBinEntityOption(
+  row: Pick<StorageLocationOptionRow, "id" | "code" | "name">,
+  stock: { estimatedWetMassKg: number | null; dryMassKg: number | null },
+): EntityOption {
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg },
+    subtitle: outputBinStockSubtitle(stock),
   };
 }
 
@@ -560,12 +245,6 @@ export async function getStorageLocations(ctx: OrgContext, params: {
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
     ingredientConsumptionAggregate,
-    biocharOutputAggregate,
-    legacyBiocharAllocationAggregate,
-    sourceBiocharAllocationAggregate,
-    biocharLossAggregate,
-    productInventoryAggregate,
-    productDeliveredAggregate,
   } = buildInventoryAggregates(ctx);
 
   const conditions: SQL[] = [
@@ -653,10 +332,6 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       heldFeedstockTypeName: heldFeedstockTypes.name,
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
-      formulationName: formulations.name,
-      totalStoredKg: numericAggregate(
-        sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
-      ),
       totalStoredWetKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
       ),
@@ -669,51 +344,6 @@ export async function getStorageLocations(ctx: OrgContext, params: {
           + COALESCE(${ingredientConsumptionAggregate.totalConsumedKg}, 0)
         `,
       ),
-      totalProducedWetKg: numericAggregate(
-        sql<number>`COALESCE(${biocharOutputAggregate.totalProducedWetKg}, 0)`,
-      ),
-      totalProducedDryKg: numericAggregate(
-        sql<number>`COALESCE(${biocharOutputAggregate.totalProducedDryKg}, 0)`,
-      ),
-      unresolvedProducedDryCount: numericAggregate(
-        sql<number>`COALESCE(${biocharOutputAggregate.unresolvedProducedDryCount}, 0)`,
-      ),
-      totalAllocatedWetKg: numericAggregate(
-        sql<number>`
-          COALESCE(${legacyBiocharAllocationAggregate.totalAllocatedWetKg}, 0)
-          + COALESCE(${sourceBiocharAllocationAggregate.totalAllocatedWetKg}, 0)
-        `,
-      ),
-      totalAllocatedDryKg: numericAggregate(
-        sql<number>`
-          COALESCE(${legacyBiocharAllocationAggregate.totalAllocatedDryKg}, 0)
-          + COALESCE(${sourceBiocharAllocationAggregate.totalAllocatedDryKg}, 0)
-        `,
-      ),
-      documentedLossWetKg: numericAggregate(
-        sql<number>`COALESCE(${biocharLossAggregate.documentedLossWetKg}, 0)`,
-      ),
-      totalProductKg: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
-      ),
-      totalProductDryKg: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.totalProductDryKg}, 0)`,
-      ),
-      unresolvedProductDryCount: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.unresolvedProductDryCount}, 0)`,
-      ),
-      totalDeliveredWetKg: numericAggregate(
-        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredWetKg}, 0)`,
-      ),
-      totalDeliveredDryKg: numericAggregate(
-        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredDryKg}, 0)`,
-      ),
-      unresolvedDeliveredDryCount: numericAggregate(
-        sql<number>`COALESCE(${productDeliveredAggregate.unresolvedDeliveredDryCount}, 0)`,
-      ),
-      biocharEquivalentKg: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
-      ),
     })
     .from(storageLocations)
     .leftJoin(
@@ -721,13 +351,6 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       and(
         eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id),
         eq(heldFeedstockTypes.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      formulations,
-      and(
-        eq(storageLocations.formulationId, formulations.id),
-        eq(formulations.organizationId, ctx.organizationId),
       ),
     )
     .leftJoin(
@@ -742,39 +365,6 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       ingredientConsumptionAggregate,
       sql`${storageLocations.id}::text = ${ingredientConsumptionAggregate.storageLocationId}`,
     )
-    .leftJoin(
-      biocharOutputAggregate,
-      eq(storageLocations.id, biocharOutputAggregate.storageLocationId)
-    )
-    .leftJoin(
-      legacyBiocharAllocationAggregate,
-      eq(
-        storageLocations.id,
-        legacyBiocharAllocationAggregate.storageLocationId,
-      )
-    )
-    .leftJoin(
-      sourceBiocharAllocationAggregate,
-      eq(
-        storageLocations.id,
-        sourceBiocharAllocationAggregate.storageLocationId,
-      )
-    )
-    .leftJoin(
-      biocharLossAggregate,
-      eq(
-        storageLocations.id,
-        biocharLossAggregate.storageLocationId,
-      )
-    )
-    .leftJoin(
-      productInventoryAggregate,
-      eq(storageLocations.id, productInventoryAggregate.storageLocationId)
-    )
-    .leftJoin(
-      productDeliveredAggregate,
-      eq(storageLocations.id, productDeliveredAggregate.storageLocationId),
-    )
     .where(whereClause)
     .limit(limit);
 
@@ -787,10 +377,9 @@ export async function getStorageLocations(ctx: OrgContext, params: {
   );
 
   return Promise.all(results.map(async result => {
-    const option = toStorageLocationEntityOption(result, laneStockById.get(result.id));
-    if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id))?.moisturePercent ?? null } };
-    const stock = await getOutputBinStockView(ctx, result.id);
-    return { ...option, remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg }, subtitle: outputBinStockSubtitle(stock) };
+    if (result.type !== 'feedstock_bin') return toOutputBinEntityOption(result, await getOutputBinStockView(ctx, result.id));
+    const option = toFeedstockBinEntityOption(result, laneStockById.get(result.id));
+    return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id))?.moisturePercent ?? null } };
   }));
 }
 
@@ -806,12 +395,6 @@ export async function getStorageLocationById(
     feedstockInventoryAggregate,
     productionRunConsumptionAggregate,
     ingredientConsumptionAggregate,
-    biocharOutputAggregate,
-    legacyBiocharAllocationAggregate,
-    sourceBiocharAllocationAggregate,
-    biocharLossAggregate,
-    productInventoryAggregate,
-    productDeliveredAggregate,
   } = buildInventoryAggregates(ctx, executor);
 
   const [result] = await executor
@@ -823,10 +406,6 @@ export async function getStorageLocationById(
       heldFeedstockTypeName: heldFeedstockTypes.name,
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
-      formulationName: formulations.name,
-      totalStoredKg: numericAggregate(
-        sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
-      ),
       totalStoredWetKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
       ),
@@ -839,51 +418,6 @@ export async function getStorageLocationById(
           + COALESCE(${ingredientConsumptionAggregate.totalConsumedKg}, 0)
         `,
       ),
-      totalProducedWetKg: numericAggregate(
-        sql<number>`COALESCE(${biocharOutputAggregate.totalProducedWetKg}, 0)`,
-      ),
-      totalProducedDryKg: numericAggregate(
-        sql<number>`COALESCE(${biocharOutputAggregate.totalProducedDryKg}, 0)`,
-      ),
-      unresolvedProducedDryCount: numericAggregate(
-        sql<number>`COALESCE(${biocharOutputAggregate.unresolvedProducedDryCount}, 0)`,
-      ),
-      totalAllocatedWetKg: numericAggregate(
-        sql<number>`
-          COALESCE(${legacyBiocharAllocationAggregate.totalAllocatedWetKg}, 0)
-          + COALESCE(${sourceBiocharAllocationAggregate.totalAllocatedWetKg}, 0)
-        `,
-      ),
-      totalAllocatedDryKg: numericAggregate(
-        sql<number>`
-          COALESCE(${legacyBiocharAllocationAggregate.totalAllocatedDryKg}, 0)
-          + COALESCE(${sourceBiocharAllocationAggregate.totalAllocatedDryKg}, 0)
-        `,
-      ),
-      documentedLossWetKg: numericAggregate(
-        sql<number>`COALESCE(${biocharLossAggregate.documentedLossWetKg}, 0)`,
-      ),
-      totalProductKg: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
-      ),
-      totalProductDryKg: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.totalProductDryKg}, 0)`,
-      ),
-      unresolvedProductDryCount: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.unresolvedProductDryCount}, 0)`,
-      ),
-      totalDeliveredWetKg: numericAggregate(
-        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredWetKg}, 0)`,
-      ),
-      totalDeliveredDryKg: numericAggregate(
-        sql<number>`COALESCE(${productDeliveredAggregate.totalDeliveredDryKg}, 0)`,
-      ),
-      unresolvedDeliveredDryCount: numericAggregate(
-        sql<number>`COALESCE(${productDeliveredAggregate.unresolvedDeliveredDryCount}, 0)`,
-      ),
-      biocharEquivalentKg: numericAggregate(
-        sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
-      ),
     })
     .from(storageLocations)
     .leftJoin(
@@ -891,13 +425,6 @@ export async function getStorageLocationById(
       and(
         eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id),
         eq(heldFeedstockTypes.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(
-      formulations,
-      and(
-        eq(storageLocations.formulationId, formulations.id),
-        eq(formulations.organizationId, ctx.organizationId),
       ),
     )
     .leftJoin(
@@ -912,39 +439,6 @@ export async function getStorageLocationById(
       ingredientConsumptionAggregate,
       sql`${storageLocations.id}::text = ${ingredientConsumptionAggregate.storageLocationId}`,
     )
-    .leftJoin(
-      biocharOutputAggregate,
-      eq(storageLocations.id, biocharOutputAggregate.storageLocationId)
-    )
-    .leftJoin(
-      legacyBiocharAllocationAggregate,
-      eq(
-        storageLocations.id,
-        legacyBiocharAllocationAggregate.storageLocationId,
-      )
-    )
-    .leftJoin(
-      sourceBiocharAllocationAggregate,
-      eq(
-        storageLocations.id,
-        sourceBiocharAllocationAggregate.storageLocationId,
-      )
-    )
-    .leftJoin(
-      biocharLossAggregate,
-      eq(
-        storageLocations.id,
-        biocharLossAggregate.storageLocationId,
-      )
-    )
-    .leftJoin(
-      productInventoryAggregate,
-      eq(storageLocations.id, productInventoryAggregate.storageLocationId)
-    )
-    .leftJoin(
-      productDeliveredAggregate,
-      eq(storageLocations.id, productDeliveredAggregate.storageLocationId),
-    )
     .where(
       and(
         eq(storageLocations.id, id),
@@ -955,12 +449,11 @@ export async function getStorageLocationById(
 
   if (!result) return null;
 
+  if (result.type !== 'feedstock_bin') return toOutputBinEntityOption(result, await getOutputBinStockView(ctx, result.id, executor));
   const [stock] = await deriveLaneStock(ctx, executor, {
     storageLocationIds: [result.id],
     lanes: "feedstock",
   });
-  const option = toStorageLocationEntityOption(result, stock);
-  if (result.type === 'feedstock_bin') return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id, occurredAt, executor))?.moisturePercent ?? null } };
-  const output = await getOutputBinStockView(ctx, result.id, executor);
-  return { ...option, remainingMass: { wetKg: output.estimatedWetMassKg, dryKg: output.dryMassKg }, subtitle: outputBinStockSubtitle(output) };
+  const option = toFeedstockBinEntityOption(result, stock);
+  return { ...option, mass: { moisturePercent: (await getIngredientMoistureBasis(ctx, result.id, occurredAt, executor))?.moisturePercent ?? null } };
 }
