@@ -100,12 +100,21 @@ describe("completed delivery order balance", () => {
     expect(await idsWith("fulfilled")).toContain(f.order.id);
     expect(await idsWith("partial")).not.toContain(f.order.id);
   });
-  it("treats exactly 98% of a non-round quantity as fulfilled in the list and its filter", async () => {
-    const f = await fixture(1234.5, 1300); await postDelivery(f, 1209.81);
+  // Exact 98% boundaries, including one (0.875 x 0.98 = 0.8575) where a float
+  // threshold rounded to 3 decimals lands on the other side of the numeric one.
+  it.each([
+    { quantityKg: 1234.5, deliveredKg: 1209.81, expected: "fulfilled" },
+    { quantityKg: 1234.5, deliveredKg: 1209.809, expected: "partial" },
+    { quantityKg: 0.875, deliveredKg: 0.858, expected: "fulfilled" },
+    { quantityKg: 0.875, deliveredKg: 0.857, expected: "partial" },
+  ] as const)("reads $deliveredKg kg of $quantityKg kg as $expected in the list row and its filter", async ({ quantityKg, deliveredKg, expected }) => {
+    const f = await fixture(quantityKg, 1300); await postDelivery(f, deliveredKg);
     const listed = (await getOrders(f.ctx, { facilityId: f.order.facilityId, pageSize: 100 })).items.find(order => order.id === f.order.id);
-    expect(listed?.fulfillmentStatus).toBe("fulfilled");
-    const ids = (await getOrders(f.ctx, { facilityId: f.order.facilityId, status: "fulfilled", pageSize: 100 })).items.map(order => order.id);
-    expect(ids).toContain(f.order.id);
+    expect(listed?.fulfillmentStatus).toBe(expected);
+    const idsWith = async (status: "partial" | "fulfilled") =>
+      (await getOrders(f.ctx, { facilityId: f.order.facilityId, status, pageSize: 100 })).items.map(order => order.id);
+    expect(await idsWith(expected)).toContain(f.order.id);
+    expect(await idsWith(expected === "fulfilled" ? "partial" : "fulfilled")).not.toContain(f.order.id);
   });
   it("re-credits the original truck only through explicit correction", async () => {
     const f = await fixture(); await postDelivery(f, 20); const current = await postDelivery(f, 60);

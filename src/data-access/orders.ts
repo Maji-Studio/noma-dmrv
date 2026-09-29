@@ -4,7 +4,6 @@
  */
 
 import { db, type DbTransaction } from "@/db";
-import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import { numericAggregate } from "@/db/aggregate";
 import {
   customerLocations,
@@ -17,7 +16,6 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import {
-  deriveOrderFulfillmentStatus,
   ORDER_FULFILLED_SHORTFALL_FRACTION,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
@@ -39,7 +37,7 @@ export interface OrderWithRelations extends Order {
   deliveryCount: number;
   /** Wet mass of the deliveries in the `delivered` status, in kg. */
   deliveredWetMassKg: number;
-  /** Fulfillment derived from delivered against requested wet mass; see lib/orders/fulfillment. */
+  /** Fulfillment derived in SQL from delivered against requested wet mass (`getOrders`). */
   fulfillmentStatus: OrderFulfillmentStatus;
 }
 
@@ -110,13 +108,14 @@ export async function getOrders(
     .groupBy(deliveries.orderId)
     .as("delivery_agg");
 
-  // SQL mirror of deriveOrderFulfillmentStatus — keep the two thresholds in sync.
-  // orders.quantity_kg is a float4, so the threshold is computed in numeric and
-  // rounded to the mass storage scale, exactly as the TS side rounds it.
+  // The one implementation of order fulfillment: the list rows select it and
+  // the status filter matches on it, so a badge and its filter cannot disagree.
+  // The threshold is exact numeric arithmetic (no float, no rounding):
+  // delivered >= requested x (1 - shortfall fraction).
   const fulfillmentExpr = sql<OrderFulfillmentStatus>`
     case
       when coalesce(${deliveryAgg.total}, 0) = 0 then 'no_deliveries'
-      when coalesce(${deliveryAgg.deliveredWetKg}, 0) >= round(${orders.quantityKg}::numeric * (${1 - ORDER_FULFILLED_SHORTFALL_FRACTION})::numeric, ${MASS_KG_STORAGE_DECIMALS}) then 'fulfilled'
+      when coalesce(${deliveryAgg.deliveredWetKg}, 0) >= ${orders.quantityKg}::numeric * (1 - ${ORDER_FULFILLED_SHORTFALL_FRACTION}::numeric) then 'fulfilled'
       else 'partial'
     end
   `;
@@ -207,6 +206,7 @@ export async function getOrders(
       deliveredWetMassKg: numericAggregate(
         sql<number>`coalesce(${deliveryAgg.deliveredWetKg}, 0)`,
       ),
+      fulfillmentStatus: fulfillmentExpr,
     })
     .from(orders)
     .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -219,16 +219,8 @@ export async function getOrders(
     .limit(pageSize)
     .offset(offset);
 
-  // Combine data — derive fulfillment status from the delivered mass (single source of truth)
-  const items: OrderWithRelations[] = orderList.map((o) => {
-    return {
-      ...o,
-      fulfillmentStatus: deriveOrderFulfillmentStatus(o.deliveryCount, o.deliveredWetMassKg, o.quantityKg),
-    };
-  });
-
   return {
-    items,
+    items: orderList,
     total,
     page,
     pageSize,

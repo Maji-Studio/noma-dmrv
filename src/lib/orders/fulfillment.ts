@@ -4,12 +4,12 @@
  * Orders have no `status` column, and the `delivery_status` enum is only
  * `delivered`, so counting delivered deliveries says nothing: every linked
  * delivery is delivered. Fulfillment is therefore the delivered wet mass
- * against the requested wet mass. This module is the single source of truth
- * for that derivation, shared by the orders data-access layer (the SQL CASE
- * used for filtering must mirror `deriveOrderFulfillmentStatus`), the filter
- * schema, and the list UI.
+ * against the requested wet mass. The derivation itself is one SQL CASE in
+ * `getOrders` (src/data-access/orders.ts), which both the list rows and the
+ * status filter read, so the two cannot disagree at a boundary. This module
+ * owns the shared vocabulary: the shortfall fraction, the status values, and
+ * their display.
  */
-import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import type { StatusValue } from "@/components/ui/status-badge";
 
 /**
@@ -26,29 +26,6 @@ export const orderFulfillmentStatuses = [
 ] as const;
 
 export type OrderFulfillmentStatus = (typeof orderFulfillmentStatuses)[number];
-
-/**
- * Derive an order's fulfillment status from its deliveries' wet mass.
- *
- * @param deliveryCount       deliveries linked to the order (non-archived)
- * @param deliveredWetMassKg  their summed delivered wet mass
- * @param requestedWetMassKg  the order's requested wet mass
- */
-export function deriveOrderFulfillmentStatus(
-  deliveryCount: number,
-  deliveredWetMassKg: number,
-  requestedWetMassKg: number,
-): OrderFulfillmentStatus {
-  if (deliveryCount <= 0) return "no_deliveries";
-  // Compare at the storage scale so the list filter (SQL numeric) and this
-  // badge agree at the exact boundary.
-  const scale = 10 ** MASS_KG_STORAGE_DECIMALS;
-  const threshold = Math.round(requestedWetMassKg * (1 - ORDER_FULFILLED_SHORTFALL_FRACTION) * scale) / scale;
-  if (deliveredWetMassKg >= threshold) {
-    return "fulfilled";
-  }
-  return "partial";
-}
 
 /**
  * Human-readable label + design-system badge variant for each status.
