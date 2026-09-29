@@ -21,6 +21,8 @@ export function OutputBinBalance({ storageLocationId, facilityId }: { storageLoc
   const clock = useFacilityClock(facilityId);
   const split = subBins.data?.stockMode === "split" && subBins.data.subBins.length > 0 ? subBins.data.subBins : null;
   const wetKg = preview.data?.beforeEstimatedWetKg ?? null;
+  // Until the mode is known, show only the loading line, so the layout does not swap.
+  if (subBins.isLoading) return <p role="status" className="body-caption">Loading stock...</p>;
   if (subBins.data?.stockMode === "mix" && preview.data) {
     return <MixPileCard binName={preview.data.binName} wetKg={wetKg} moisturePercent={preview.data.moistureEstimate?.moisturePercent ?? null}
       dryKg={preview.data.beforeDryKg} batches={subBins.data.subBins} />;

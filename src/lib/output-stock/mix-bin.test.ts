@@ -123,11 +123,24 @@ describe('mix bins: pro-rata invariants', () => {
     expect(plan.remainingLayers.every(l => l.remainingSolidsKg!.numerator === BigInt(0))).toBe(true);
   });
 
-  it('draws solids that sum to the measured load exactly', () => {
+  it('draws whole grams that sum to the load, not a gram per batch more or less', () => {
     const plan = drawn([batch('A', '100', 1), batch('B', '100', 2), batch('C', '100', 3)], AT, { kind: 'wet', wetKg: 100, moisturePercent: 0 });
     const total = plan.allocations.reduce((sum, a) => add(sum, a.solidsKg), decimal('0'));
     expect(total).toEqual(decimal('100'));
-    expect(plan.allocations.map(a => a.dryKg)).toEqual(['33.333', '33.333', '33.333']);
+    expect(plan.allocations.map(a => a.dryKg)).toEqual(['33.334', '33.333', '33.333']);
+    // Six batches, 503 g of solids: rounding each batch alone would report 504 g.
+    const six = Array.from({ length: 6 }, (_, i) => batch(`S${i}`, '10', i + 1));
+    expect(drawn(six, AT, { kind: 'wet', wetKg: '1.006', moisturePercent: 50 }).drawnDryKg).toBe('0.503');
+    expect(drawn(six, AT, { kind: 'wet', wetKg: '0.006', moisturePercent: 50 }).drawnDryKg).toBe('0.003');
+    // One gram across four batches is still one gram, not "below one gram".
+    expect(drawn(six.slice(0, 4), AT, { kind: 'wet', wetKg: '0.001', moisturePercent: 0 }).drawnDryKg).toBe('0.001');
+  });
+
+  it('never gives a batch more dry than wet at zero moisture', () => {
+    const plan = drawn([batch('A', '100', 1), batch('B', '100', 2)], AT, { kind: 'wet', wetKg: '100.007', moisturePercent: 0 });
+    expect(plan.drawnDryKg).toBe('100.007');
+    for (const a of plan.allocations) expect(grams(a.dryKg) * BigInt(1000) * a.wetShareKg!.denominator <= a.wetShareKg!.numerator * BigInt(1000) * BigInt(1000)).toBe(true);
+    expect(plan.allocations.map(a => a.dryKg)).toEqual(['50.004', '50.003']);
   });
 
   it('blocks a load holding more solids than the pile', () => {

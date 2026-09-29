@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { OUTPUT_STOCK_MODES, type OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   emptyToNull,
   expectedUpdatedAtSchema,
@@ -73,8 +74,13 @@ export const STORAGE_LOCATION_TYPE_DESCRIPTIONS: Record<StorageLocationType, str
  * How an output bin holds its stock (plan 2026-09-28): split keeps every batch
  * apart as a sub-bin; mix is one blended pile drawn pro-rata (ADR 0030).
  */
-export const outputStockModes = ["split", "mix"] as const;
-export type OutputStockModeValue = (typeof outputStockModes)[number];
+export const outputStockModes = OUTPUT_STOCK_MODES;
+
+/** How the bin form and the bin sheet name each mode. */
+export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
+  split: "Split: batches kept apart",
+  mix: "Mix: one blended pile",
+};
 
 /** Only biochar and product bins choose a stock mode. */
 export function isOutputBinType(type: StorageLocationType | undefined | null): boolean {

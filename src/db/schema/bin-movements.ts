@@ -44,7 +44,7 @@ export const binMovements = pgTable(
     countedWetMassKg: massKg('counted_wet_mass_kg'),
     moistureRatioUsed: fraction('moisture_ratio_used'),
     // Output events carry exact dry effects and an immutable measurement basis.
-    outputKind: text('output_kind', { enum: ['production_draw', 'product_draw', 'delivery', 'loss', 'count', 'reversal', 'replacement', 'merge'] }),
+    outputKind: text('output_kind', { enum: ['production_draw', 'product_draw', 'delivery', 'loss', 'count', 'reversal', 'replacement', 'merge', 'split'] }),
     occurredAt: timestamp('occurred_at', { withTimezone: true }),
     postingSequence: bigserial('posting_sequence', { mode: 'bigint' }).notNull(),
     idempotencyKey: text('idempotency_key'),

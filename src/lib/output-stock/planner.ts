@@ -195,19 +195,44 @@ export function planOutputStock(layers: readonly OutputStockLayer[], occurredAt:
 }
 
 /**
- * A mix draw's solids per layer, in proportion to each layer's remaining
- * solids. Shares close on the microgram grid with the cumulative apportionment
- * run shares use, so they sum to the draw floored to the grid; a draw of the
- * whole pile takes every layer exactly. Layers whose share is below the grid
- * are left out.
+ * A mix draw's solids per layer (ADR 0030). Every layer present gives dry
+ * biochar in proportion to what it holds; the draw's dry total is its exact
+ * dry rounded half up to the gram, as a single-layer draw would be, and those
+ * whole grams are apportioned across layers with the cumulative rule run
+ * shares use, capped at what each layer holds. Each layer's solids follow from
+ * its grams at its own biochar share, so no layer rounds on its own and a
+ * blended layer keeps its composition. A draw of the whole pile takes every
+ * layer exactly; layers given no gram are left out.
  */
-function proRataShares<T extends { capacity: Rational }>(held: readonly T[], solidsKg: Rational): [T, Rational][] {
+function proRataShares<T extends { capacity: Rational; fraction: Rational; remaining: bigint }>(held: readonly T[], solidsKg: Rational): [T, Rational][] {
   const total = held.reduce((sum, p) => add(sum, p.capacity), rational(BigInt(0)));
   if (solidsKg.numerator === BigInt(0)) return [];
   if (compare(solidsKg, total) === BigInt(0)) return held.map(p => [p, p.capacity]);
-  const weights = held.map(p => gridUnits(p.capacity));
-  const units = gridUnits(solidsKg);
-  const available = weights.reduce((sum, weight) => sum + weight, BigInt(0));
-  const shares = splitCumulativeGrams(units < available ? units : available, weights);
-  return held.flatMap((p, index): [T, Rational][] => shares[index] > BigInt(0) ? [[p, rational(shares[index], SOLIDS_GRID_PER_KG)]] : []);
+  const gramsPerKg = rational(GRAMS_PER_KG);
+  const exactDryGrams = held.reduce((sum, p) => add(sum, multiply(multiply(divide(multiply(solidsKg, p.capacity), total), p.fraction), gramsPerKg)), rational(BigInt(0)));
+  // A layer gives at most its whole remaining grams, and never more solids than it holds.
+  const caps = held.map(p => { const exact = multiply(multiply(p.capacity, p.fraction), gramsPerKg); const floor = exact.numerator / exact.denominator; return floor < p.remaining ? floor : p.remaining; });
+  const capTotal = caps.reduce((sum, cap) => sum + cap, BigInt(0));
+  const target = round(exactDryGrams);
+  const shares = apportionCapped(target < capTotal ? target : capTotal, held.map(p => gridUnits(multiply(p.capacity, p.fraction))), caps);
+  return held.flatMap((p, index): [T, Rational][] => shares[index] > BigInt(0) ? [[p, divide(rational(shares[index]), multiply(p.fraction, gramsPerKg))]] : []);
+}
+
+/** Cumulative proportional apportionment with a ceiling per part; what a full part cannot take goes to the others. */
+function apportionCapped(total: bigint, weights: readonly bigint[], caps: readonly bigint[]): bigint[] {
+  const shares = weights.map(() => BigInt(0));
+  let left = total;
+  let open = weights.flatMap((weight, index) => weight > BigInt(0) && caps[index] > BigInt(0) ? [index] : []);
+  while (left > BigInt(0) && open.length) {
+    const split = splitCumulativeGrams(left, open.map(index => weights[index]));
+    left = BigInt(0);
+    open = open.filter((index, k) => {
+      const room = caps[index] - shares[index];
+      const given = split[k] < room ? split[k] : room;
+      shares[index] += given;
+      left += split[k] - given;
+      return shares[index] < caps[index];
+    });
+  }
+  return shares;
 }

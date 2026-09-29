@@ -571,11 +571,16 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   `src/data-access/mix-bin-credit-hold.ts` keeps applications drawn pro-rata
   from a mix bin (directly, or through a product made from a mix biochar bin)
   out of credit-batch slices. The application sheet says why. Flip the switch
-  once the PDD is accepted.
+  once the PDD is accepted, then reconcile the credit-batch slices of the held
+  applications: flipping it alone does not re-slice them.
 - **Backdated additions to a mix bin (2026-09-29):** delivery, loss, count and
   product creation previews name the later mix removals an entry was not part of
-  (plan rule 19). Completing a production run into a mix biochar bin has no stock
+  (plan rule 19), including an entry timed while the bin was still split.
+  Completing a production run into a mix biochar bin has no stock
   preview, so a backdated run end shows no such warning yet.
+- **Merge time is not correctable (2026-09-29):** a split-to-mix merge posts a
+  movement at the chosen "Merged at" time, and history has no Correct entry for
+  it. A wrong merge time needs a data fix until merges get a correction path.
 - **Deferred:** all whole and partial bin-to-bin transfers remain in
   [#34](https://github.com/Maji-Studio/noma-dmrv/issues/34). Transfers must preserve
   provenance and atomically update both bins; destination ordering is to be

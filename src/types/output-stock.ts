@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import type { MoistureBasis } from '@/lib/output-stock/moisture-estimate';
+import type { OutputStockMode } from '@/lib/output-stock/stock-mode';
 import type { orderedSourceSchema } from '@/schemas/output-stock';
 /** Serializable operator read models; exact fractions remain inside the ledger. */
 export interface OutputStockAllocationView {
@@ -48,7 +49,7 @@ export interface OutputStockPreview {
   /** What this movement's readings reset: the same remaining stock at its previous estimate, then at the reading. */
   moistureReset?: OutputMoistureReset | null;
   /** The bin's stock mode at this movement's time; a merged bin is split before its merge. */
-  stockMode?: 'split' | 'mix';
+  stockMode?: OutputStockMode;
   /**
    * Mix bins: posted removals timed after this entry, labelled with their
    * facility time. Their saved shares were calculated without it and stay as posted.
@@ -134,7 +135,7 @@ export interface OutputSubBin {
 }
 
 export interface OutputSubBins {
-  stockMode: 'split' | 'mix';
+  stockMode: OutputStockMode;
   /** Oldest first: the order a draw takes them in unless the operator changes it. */
   subBins: OutputSubBin[];
 }

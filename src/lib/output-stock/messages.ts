@@ -32,6 +32,6 @@ export function calculatedWithoutNotice(removals: readonly { label: string }[]):
   const names = removals.map(removal => removal.label);
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
   return names.length === 1
-    ? `This entry is timed before a saved removal: ${list}. Its batch shares were calculated without this entry and stay as saved.`
-    : `This entry is timed before ${names.length} saved removals: ${list}. Their batch shares were calculated without this entry and stay as saved.`;
+    ? `This entry is timed before a saved removal, ${list}. That removal keeps the batch shares it was saved with. Check the time, then save.`
+    : `This entry is timed before ${names.length} saved removals: ${list}. Those removals keep the batch shares they were saved with. Check the time, then save.`;
 }
