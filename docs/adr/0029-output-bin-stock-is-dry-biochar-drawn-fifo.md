@@ -1,6 +1,18 @@
 # Output bin stock is dry biochar per layer, drawn first-in first-out
 
-**Status: Accepted** (2026-09-14; implementation pending in [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756)). [Design and examples](../plans/2026-09-14-fifo-bin-accounting.md).
+**Status: Accepted** (2026-09-14; implemented in [#759](https://github.com/Maji-Studio/noma-dmrv/pull/759); amended 2026-09-28, see below). [Design and examples](../plans/2026-09-14-fifo-bin-accounting.md).
+
+## Amendment (2026-09-28) — split bins, moisture readings, mix bins
+
+Agreed with Kenji in the [split and mix bins plan](../plans/2026-09-28-split-and-mix-bins.md). Where this conflicts with the decision below, the amendment wins. Not implemented yet.
+
+- **Stock mode.** Output bins are Split (default, today's behaviour) or Mix. Mix bins draw pro-rata under [ADR 0030](./0030-mix-bins-draw-pro-rata.md).
+- **Split bins are physical.** Layers are physically separate sub-bins. For delivery, loss and product-creation draws, the operator ticks sub-bins and sets the order they were emptied; oldest first is only the default. Each sub-bin in the draw has its own measured moisture, with one load weight: every sub-bin except the last is emptied at its reading, and the last takes the rest. Insufficient stock still blocks the whole action. Counts stay whole-bin, and corrections reuse the saved order and readings.
+- **Readings reset moisture.** Replaces "Departure readings do not update the remaining pile's moisture or wet estimate". A measured reading now sets the estimated moisture, and so the wet estimate, of the sub-bin or mix pile it describes. It's shown before and after in the preview and logged as its own history row. Dry biochar is unaffected.
+- **No prefilled moisture.** Replaces the ingredient-moisture prefill. Every moisture field in stock forms (delivery, loss, count, product creation, ingredients) is required and starts empty. The current estimate is shown as a hint, and a reading that differs from it by more than a configured margin raises an advisory warning. Ingredient snapshots record a measured value.
+- **Time.** Layer placement and stock events carry date and time; FIFO order and eligibility compare instants.
+
+## Context
 
 Moisture changes make recorded wet quantities an unreliable limit for biochar leaving storage. Biochar bins and product bins therefore conserve **dry biochar per source layer**, with oldest-first physical loading and FIFO accounting across layers. Product layers retain a fixed biochar share of dry solids and proportional source-run provenance; a mixed delivery's applications inherit proportional shares of that delivery.
 

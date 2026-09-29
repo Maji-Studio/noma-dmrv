@@ -544,12 +544,12 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
 
 ## Product bins & formulations
 
-### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implementation pending
+### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implemented in #759; split and mix bins agreed 2026-09-28
 
 - **Accepted design:** [ADR 0029](./adr/0029-output-bin-stock-is-dry-biochar-drawn-fifo.md)
   and the [implementation plan](./plans/2026-09-14-fifo-bin-accounting.md)
   replace `src/data-access/delivery-dry-biochar.ts:deriveDeliveryDryBiocharKg`
-  and `src/data-access/biochar-product-source-allocations.ts:planBiocharProductSourceAllocations` under [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
+  and `src/data-access/biochar-product-source-allocations.ts:planBiocharProductSourceAllocations` under [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756), shipped in [#759](https://github.com/Maji-Studio/noma-dmrv/pull/759).
   Orders reserve nothing; completed deliveries post measured FIFO dry withdrawals. Applications retain proportional truck shares via `src/lib/biochar-mass-accounting.ts:allocateTrackedDryBiocharKg`.
 - **Reconciliation and corrections:** compare counted and tracked solids using
   the count's moisture. Show dry losses explicitly. Retain linked corrections
@@ -558,6 +558,14 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   composition, editable ingredient-moisture evidence, and the PDD method against
   the pinned Biochar v1.1 and Agricultural Soils v1.1. FIFO attribution alone
   does not establish actual composition if material is remixed.
+- **Split and mix bins (2026-09-28):** the [plan](./plans/2026-09-28-split-and-mix-bins.md),
+  the ADR 0029 amendment and [ADR 0030](./adr/0030-mix-bins-draw-pro-rata.md) replace
+  assumed oldest-first loading with operator-recorded draw order in physically
+  separate sub-bins, and add pro-rata mix piles. The PDD still has to describe
+  both practices, how a mix pile's homogeneity is shown (the Agricultural Soils
+  module requires it per Storage Batch), and the per-removal moisture-reading
+  method. The module requires lab moisture per production batch and says nothing
+  about removal readings.
 - **Deferred:** all whole and partial bin-to-bin transfers remain in
   [#34](https://github.com/Maji-Studio/noma-dmrv/issues/34). Transfers must preserve
   provenance and atomically update both bins; destination ordering is to be

@@ -1,7 +1,7 @@
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
 import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
-import { formatWetDryMass } from "@/lib/mass-moisture";
+import { formatWetDryStock } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
@@ -129,37 +129,15 @@ export function formatApplicationDeliveryDay(delivery: Pick<ApplicationDeliveryO
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {
   if (delivery.deliveredWetMassKg != null) {
-    return formatWetDryMass({
-      wetKg: delivery.deliveredWetMassKg,
-      dryKg: delivery.massDryKg,
-      moisturePercent: delivery.moistureContentPercent,
-      wetLabel: "Wet biochar product",
-      dryLabel: "Dry biochar",
-      separator: " | ",
-      unitSpacing: "compact",
-    });
+    return formatWetDryStock({ wetKg: delivery.deliveredWetMassKg, dryKg: delivery.massDryKg });
   }
 
   if (delivery.massDryKg != null) {
-    return formatWetDryMass({
-      wetKg: null,
-      dryKg: delivery.massDryKg,
-      wetLabel: "Wet biochar product",
-      dryLabel: "Dry biochar",
-      separator: " | ",
-      unitSpacing: "compact",
-    });
+    return formatWetDryStock({ wetKg: null, dryKg: delivery.massDryKg });
   }
 
   if (delivery.orderQuantityKg != null) {
-    return formatWetDryMass({
-      wetKg: delivery.orderQuantityKg,
-      dryKg: null,
-      wetLabel: "Wet biochar product",
-      dryLabel: "Dry biochar",
-      separator: " | ",
-      unitSpacing: "compact",
-    });
+    return formatWetDryStock({ wetKg: delivery.orderQuantityKg, dryKg: null });
   }
 
   return null;

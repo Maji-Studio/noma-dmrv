@@ -218,10 +218,11 @@ async function assertDeliveryAcceptsApplication(
     .innerJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
-  // Serialize applications with delivery corrections.
+  // Serialize applications with delivery corrections. The lock covers the
+  // delivery row only; the joined facility is read for its clock, not held.
   const [delivery] = await (txOrDb === db
     ? deliveryQuery
-    : deliveryQuery.for("update"));
+    : deliveryQuery.for("update", { of: deliveries }));
 
   if (!delivery) {
     throw new SafeError("Delivery not found");
