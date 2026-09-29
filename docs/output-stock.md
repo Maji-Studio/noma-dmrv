@@ -36,7 +36,7 @@ source's final gram.
 ## Split bins: operator order
 
 Every output bin has a stock mode (`storage_locations.stock_mode`, default
-`split`); mix bins arrive with ADR 0030. In a split bin each layer is a
+`split`; mix bins are below). In a split bin each layer is a
 physically separate sub-bin. A delivery or loss may name the sub-bins it came
 from in the order they were emptied, each with its own moisture reading
 (`sources`); product creation follows with the sub-bin picker. Every sub-bin but the last is emptied at its
@@ -46,8 +46,8 @@ and if the last sub-bin would give more solids than its records hold the save
 is blocked until the bin is reconciled. Without `sources` the draw is oldest first at one
 reading. Counts stay whole-bin.
 
-Each allocation's `basis_snapshot` records `policy` (`fifo` or
-`operator_order`), the operator's `order`, and the `readingPercent` used for
+Each allocation's `basis_snapshot` records `policy` (`fifo`, `operator_order`
+or `pro_rata`), the operator's `order`, and the `readingPercent` used for
 that layer. A draw from several sub-bins stores its overall moisture as
 1 − solids ÷ wet, which history also shows. A correction starts from the saved
 order and readings and may change them, through the same
@@ -55,6 +55,30 @@ preview and refusals as a new draw, and only while no later movement,
 application or certification submission depends on the original. The last
 sub-bin's partial solids are floored to a microgram (1e-9 kg) so exact balances stay
 bounded across many split draws.
+
+## Mix bins: pro-rata
+
+A mix bin ([ADR 0030](./adr/0030-mix-bins-draw-pro-rata.md)) is one blended
+pile. Every removal, loss and count shortfall takes each layer present in
+proportion to its remaining solids (`planOutputStock(…, 'pro_rata')`). The
+draw's exact dry, rounded half up to the gram, is apportioned as whole grams
+across layers; every layer but the largest takes the solids of its grams, and
+the largest takes the rest of the measured solids (floored to the microgram), so
+no layer rounds on its own. One moisture reading resets the whole pile: it is
+saved on every layer present (`planReadings(…, 'pro_rata')`).
+
+The mode is timed. Switching a split bin to mix posts a `merge` movement at
+"Merged at", which must be later than the bin's last recorded movement; switching
+back to split needs an empty bin and posts a `split` movement. `stockModeAt`
+reads this timeline, so every entry, including a later correction, is planned in
+the mode in force at its own time, and no correction crosses a later switch to
+split. An entry timed before saved mix removals lists them in its preview
+(`calculatedWithout`); their saved shares stay.
+
+Mix-drawn applications (a delivery from a mix bin, or a product made from a mix
+biochar bin) are held out of credit-batch slices while
+`MIX_BIN_REMOVALS_CREDITABLE` (`src/config/output-stock.ts`) is `false`
+(`src/data-access/mix-bin-credit-hold.ts`).
 
 ## Orders, deliveries, and applications
 

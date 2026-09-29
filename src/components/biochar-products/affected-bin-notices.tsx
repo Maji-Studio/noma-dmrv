@@ -11,7 +11,7 @@
 
 import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { formatMassKg } from "@/lib/format-utils";
-import { calculatedWithoutNotice } from "@/lib/output-stock/messages";
+import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview } from "@/types/output-stock";
 
 type Blocker = NonNullable<AffectedStockPreview["blockers"]>[number];
@@ -36,12 +36,7 @@ export function binNeedsAttention(preview: AffectedStockPreview | undefined, hid
   return (!hideBlockingMessage && Boolean(preview.blockingMessage))
     || Boolean(preview.blockers?.length)
     || preview.discrepancySolidsKg > 0
-    || calculatedWithoutFor(preview) !== null;
-}
-
-/** Rule 19: the saved mix removals this entry is timed before, which keep their batch shares. */
-function calculatedWithoutFor(preview: AffectedStockPreview): string | null {
-  return "calculatedWithout" in preview ? calculatedWithoutNotice(preview.calculatedWithout ?? []) : null;
+    || backdatedNotice(preview) !== null;
 }
 
 export function AffectedBinNotices({
@@ -54,7 +49,7 @@ export function AffectedBinNotices({
 }) {
   if (!preview || !binNeedsAttention(preview, hideBlockingMessage)) return null;
   const blockers = preview.blockers ?? [];
-  const backdated = calculatedWithoutFor(preview);
+  const backdated = backdatedNotice(preview);
   return (
     <div className="flex flex-col gap-6" aria-live="polite">
       {preview.discrepancySolidsKg > 0 && (

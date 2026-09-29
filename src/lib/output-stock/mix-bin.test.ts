@@ -136,6 +136,18 @@ describe('mix bins: pro-rata invariants', () => {
     expect(drawn(six.slice(0, 4), AT, { kind: 'wet', wetKg: '0.001', moisturePercent: 0 }).drawnDryKg).toBe('0.001');
   });
 
+  it('removes exactly the measured solids, so repeated draws of a pile close it', () => {
+    // 1.005 kg at 30% is 0.7035 kg solids: rounding it to whole grams would leave 0.703 kg.
+    const first = drawn([batch('A', '1.407', 1)], AT, { kind: 'wet', wetKg: '1.005', moisturePercent: 30 });
+    const second = drawn(first.remainingLayers, AT, { kind: 'wet', wetKg: '1.005', moisturePercent: 30 });
+    expect(second.remainingLayers[0].remainingSolidsKg!.numerator).toBe(BigInt(0));
+    // Blended batches: 1.003 kg of solids at a 50% biochar share each.
+    const blend = (id: string, sequence: number) => ({ ...batch(id, '50', sequence), ingredientDrySolidsKg: '50' });
+    const plan = drawn([blend('A', 1), blend('B', 2)], AT, { kind: 'wet', wetKg: '1.003', moisturePercent: 0 });
+    expect(plan.allocations.reduce((sum, a) => add(sum, a.solidsKg), decimal('0'))).toEqual(decimal('1.003'));
+    expect(['0.501', '0.502']).toContain(plan.drawnDryKg);
+  });
+
   it('never gives a batch more dry than wet at zero moisture', () => {
     const plan = drawn([batch('A', '100', 1), batch('B', '100', 2)], AT, { kind: 'wet', wetKg: '100.007', moisturePercent: 0 });
     expect(plan.drawnDryKg).toBe('100.007');

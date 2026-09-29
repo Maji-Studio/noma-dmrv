@@ -23,6 +23,11 @@ export function operatorStockMessage(message: string): string {
   return OPERATOR_MESSAGES[message] ?? message;
 }
 
+/** The backdating notice a stock preview carries, if any; ingredient previews carry none. */
+export function backdatedNotice(preview: object): string | null {
+  return 'calculatedWithout' in preview && Array.isArray(preview.calculatedWithout) ? calculatedWithoutNotice(preview.calculatedWithout) : null;
+}
+
 /**
  * A mix-bin entry timed before saved removals (plan rule 19): those removals
  * keep the batch shares they were saved with, and the operator is told which.

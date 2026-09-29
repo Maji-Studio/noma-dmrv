@@ -39,8 +39,8 @@ export async function getStockModeAt(ctx: OrgContext, bin: Pick<StorageLocation,
  * row lock the edit already holds. Both directions post a timed movement, so an
  * entry keeps the mode in force at its own time when it is corrected later.
  * Split to mix is a merge at the operator's time: every batch present is drawn
- * pro-rata after it. It can't precede the bin's last recorded movement, which
- * was posted as split. Mix to split needs an empty bin, because a mixed pile
+ * pro-rata after it. It must come after the bin's last recorded movement,
+ * which was posted as split. Mix to split needs an empty bin, because a mixed pile
  * can't be sorted back into batches, and takes effect now. Returns the mode
  * to save.
  */
@@ -63,13 +63,14 @@ export async function applyStockModeChange(ctx: OrgContext, tx: DbTransaction, e
     return 'split';
   }
   const mergedAt = next.mergedAt ?? new Date();
-  if (mergedAt.getTime() > Date.now()) throw new SafeError('The merge time cannot be in the future.');
+  if (mergedAt.getTime() > Date.now()) throw new SafeError('Merged at cannot be in the future.');
   const [last] = await tx.select({ occurredAt: binMovements.occurredAt }).from(binMovements)
     .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, existing.id), isNotNull(binMovements.outputKind)))
     .orderBy(desc(binMovements.occurredAt)).limit(1);
-  if (last?.occurredAt && mergedAt.getTime() < last.occurredAt.getTime()) {
+  // Strictly after: a merge at the same instant would pull that split entry into the mix period.
+  if (last?.occurredAt && mergedAt.getTime() <= last.occurredAt.getTime()) {
     const at = formatFacilityDateTime(last.occurredAt, await getOutputStockFacilityTimezone(ctx, existing.facilityId, tx));
-    throw new SafeError(`Enter a merge time at or after the bin's last recorded movement (${at}). Movements already recorded stay split.`);
+    throw new SafeError(`Set Merged at later than the bin's last recorded movement (${at}). Movements already recorded stay split.`);
   }
   await postModeChange(ctx, tx, existing, 'merge', mergedAt, balance);
   return 'mix';
