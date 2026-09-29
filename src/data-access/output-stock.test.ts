@@ -75,6 +75,16 @@ describe('batched stock read', () => {
     expect(stocks.get('other')).toEqual({ allLayersDryKg: 100, availableDryKg: 100, estimatedWetMassKg: 125, estimatedMoisturePercent: 20 });
   });
 
+  it('keeps a product bin to its own live products and to source runs at its facility', async () => {
+    const product = { id: 'product', binId: 'products', facilityId: 'facility', archivedAt: null, placedAt: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1), composition: {} };
+    const read = reader([
+      [storageLocations, [[productBin]]],
+      [biocharProducts, [[product, { ...product, id: 'archived', archivedAt: new Date(), postingSequence: BigInt(2) }, { ...product, id: 'elsewhere', binId: 'other-bin', postingSequence: BigInt(3) }]]],
+      [biocharProductSourceAllocations, [[{ productId: 'product', runId: 'run', runFacilityId: 'facility', dryKg: '60.000' }, { productId: 'product', runId: 'far', runFacilityId: 'other', dryKg: '40.000' }]]],
+    ]);
+    expect((await getOutputBinStocks(ctx, ['products'], read.executor)).get('products')).toMatchObject({ allLayersDryKg: 60 });
+  });
+
   it('includes an archived bin\'s archived layers', async () => {
     const archived = { ...bin, archivedAt: new Date() };
     const read = reader([[storageLocations, [[archived]]], [productionRuns, [[{ ...run, archivedAt: new Date() }]]]]);
