@@ -309,6 +309,7 @@ export function ProductionRunList() {
                 : new Date(endTime),
       });
       createWithEvidence.reset();
+      setFocusedRunId(null);
       setSideSheet(null);
       toast.success("Production run updated.");
     } catch (error) {

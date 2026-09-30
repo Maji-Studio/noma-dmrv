@@ -236,7 +236,7 @@ export function CustomerList() {
         customer: data,
         locations: pendingLocations ?? [],
       });
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Customer created.");
     } catch (error) {
       setCreateError(
@@ -258,7 +258,7 @@ export function CustomerList() {
         expectedUpdatedAt: displaySideSheet.entity.updatedAt,
         ...data,
       });
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Customer updated.");
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
