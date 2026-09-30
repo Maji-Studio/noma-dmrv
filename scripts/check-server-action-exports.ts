@@ -31,9 +31,10 @@
  * It also fails when `requireOrgRole` or `requireOrgScope` (however imported
  * or aliased) is applied to a value derived from a parameter, through casts,
  * property access or a local initialised from it, inside a `"use server"`
- * module or inline server function. The one allowed shape is a parameter of an
- * inline callback (the `withAction(async (ctx) => …)` pattern), where the
- * context was resolved from the session.
+ * module or inline server function. The one allowed shape is the first
+ * parameter of the callback passed to `withAction(async (ctx) => …)`, which
+ * `withAction` resolves from the session. Any other callback parameter
+ * (`contexts.map((ctx) => requireOrgRole(ctx, …))`) may carry caller input.
  *
  * There is no waiver: fix the export, do not suppress it. `unknown`/`any`
  * inputs stay allowed because they are ordinary action input; casting one to a
@@ -51,6 +52,8 @@ const CONTEXT_PROPERTIES = ["organizationId", "orgRole", "isPlatformAdmin"];
 /** Parameter or property names that carry a raw tenant id. */
 const TENANT_ID_NAMES = new Set(["organizationId", "orgId"]);
 const GUARD_NAMES = new Set(["requireOrgRole", "requireOrgScope"]);
+/** Wrappers that call their callback with a session-resolved OrgContext. */
+const SESSION_CONTEXT_WRAPPERS = new Set(["withAction"]);
 const FORWARDING_UTILITY_TYPES = new Set([
   "Parameters",
   "ConstructorParameters",
@@ -277,19 +280,6 @@ function exportSite(
   return star ?? sourceFile.statements[0] ?? sourceFile;
 }
 
-/** A session-resolved callback: an inline function passed as a call argument. */
-function isInlineCallback(fn: ts.Node): boolean {
-  if (!(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return false;
-  if (isInlineServerFunction(fn)) return false;
-  let parent = fn.parent;
-  while (parent && ts.isParenthesizedExpression(parent)) parent = parent.parent;
-  return (
-    !!parent &&
-    (ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
-    (parent.arguments ?? []).some((argument) => argument === fn || argument.pos === fn.pos)
-  );
-}
-
 /** Strips `as`, `!`, `satisfies`, type assertions and parentheses. */
 function unwrapExpression(expression: ts.Expression): ts.Expression {
   let current = expression;
@@ -333,6 +323,27 @@ function resolvedCalleeName(
   const target =
     symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
   return target.name;
+}
+
+/**
+ * True only for the first parameter of the callback handed to `withAction`,
+ * the one parameter whose value comes from the session.
+ */
+function isSessionContextParameter(
+  checker: ts.TypeChecker,
+  parameter: ts.ParameterDeclaration,
+): boolean {
+  const fn = parameter.parent;
+  if (!(ts.isArrowFunction(fn) || ts.isFunctionExpression(fn))) return false;
+  if (fn.parameters[0] !== parameter) return false;
+  let argument: ts.Node = fn;
+  while (ts.isParenthesizedExpression(argument.parent)) argument = argument.parent;
+  const call = argument.parent;
+  if (!call || !ts.isCallExpression(call) || call.arguments[0] !== argument) {
+    return false;
+  }
+  const wrapper = resolvedCalleeName(checker, call.expression);
+  return !!wrapper && SESSION_CONTEXT_WRAPPERS.has(wrapper);
 }
 
 /**
@@ -385,7 +396,7 @@ function checkGuardCalls(
       const [first] = node.arguments;
       if (name && GUARD_NAMES.has(name) && first) {
         const parameter = sourceParameter(checker, first);
-        if (parameter && !isInlineCallback(parameter.parent)) {
+        if (parameter && !isSessionContextParameter(checker, parameter)) {
           report(
             node,
             name,

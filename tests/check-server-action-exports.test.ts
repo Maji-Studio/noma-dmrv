@@ -121,6 +121,10 @@ export async function deeplyNested(input: { a: { b: { ctx: OrgContext } } }) {
   return input.a;
 }
 
+export async function mappedContexts(contexts: unknown[]) {
+  return contexts.map((ctx) => requireOrgRole(ctx as OrgContext, "admin"));
+}
+
 export { issueUrl } from "./report-core";
 `;
 
@@ -133,6 +137,13 @@ export async function issueUrlAction(input: { reportId: string }) {
     requireOrgRole(ctx, "admin");
     return issueUrl(ctx, input.reportId);
   });
+}
+
+type Recursive = Recursive[];
+
+// A self-referential input type must not send the inspector into a loop.
+export async function recursiveInput(input: Recursive) {
+  return input.length;
 }
 
 export async function renameReport(input: unknown) {
@@ -214,12 +225,14 @@ describe("check-server-action-exports", () => {
         .map((v) => v.reason);
       // guarded (cast), trustsParameter (private helper), aliasedGuard
       // (aliased import + property access + cast), localFromParameter (local
-      // initialised from a parameter).
+      // initialised from a parameter), mappedContexts (a callback parameter
+      // fed by caller input, not by withAction).
       expect(guardFindings).toEqual([
         expect.stringMatching(/parameter "ctx"/),
         expect.stringMatching(/parameter "ctx"/),
         expect.stringMatching(/parameter "args"/),
         expect.stringMatching(/parameter "input"/),
+        expect.stringMatching(/parameter "ctx"/),
       ]);
       // The directive-free core is never an action, whatever it accepts.
       expect(violations.every((v) => v.file === "actions.ts")).toBe(true);
