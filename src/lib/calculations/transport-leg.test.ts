@@ -13,7 +13,6 @@ function row(
   locationName: string | null = null,
   gps: [number, number] | null = null,
   distanceSource: DistanceSourceValue | null = null,
-  tripType: "return" | "one_way" | null = null,
 ): DistributionLegRow {
   return {
     loadMassKg,
@@ -22,7 +21,6 @@ function row(
     locationName,
     locationGpsLatitude: gps?.[0] ?? null,
     locationGpsLongitude: gps?.[1] ?? null,
-    tripType,
   };
 }
 
@@ -123,19 +121,12 @@ describe("deriveTransportLeg", () => {
     expect(leg.distanceSource).toBe("manual");
   });
 
-  it("defaults trip type to Return (conservative round-trip, #316)", () => {
+  it("keeps the one-way distance and carries no trip type (every leg is a round trip, #852)", () => {
     const leg = deriveTransportLeg({
       origin, destination, vehicle, loadMassKg: 1500, storedDistanceKm: 40,
     });
-    expect(leg.tripType).toBe("return");
-  });
-
-  it("carries an explicit one-way trip type through", () => {
-    const leg = deriveTransportLeg({
-      origin, destination, vehicle, loadMassKg: 1500,
-      storedDistanceKm: 40, tripType: "one_way",
-    });
-    expect(leg.tripType).toBe("one_way");
+    expect(leg.distanceKm).toBe(40);
+    expect("tripType" in leg).toBe(false);
   });
 
   it("keeps a pre-provenance stored distance's source null (never fabricated)", () => {
@@ -217,35 +208,10 @@ describe("aggregateDistributionLegs", () => {
     expect(agg.distanceSource).toBeNull();
   });
 
-  describe("collapsed trip type (conservative)", () => {
-    it("defaults to Return when no delivery specifies a trip type", () => {
-      const agg = aggregateDistributionLegs([row(250, 40, "Plot A")]);
-      expect(agg.tripType).toBe("return");
-    });
-
-    it("is one_way only when every qualifying delivery is one_way", () => {
-      const agg = aggregateDistributionLegs([
-        row(100, 20, "Plot A", null, null, "one_way"),
-        row(100, 60, "Plot B", null, null, "one_way"),
-      ]);
-      expect(agg.tripType).toBe("one_way");
-    });
-
-    it("is Return when any qualifying delivery is a round trip", () => {
-      const agg = aggregateDistributionLegs([
-        row(100, 20, "Plot A", null, null, "one_way"),
-        row(100, 60, "Plot B", null, null, "return"),
-      ]);
-      expect(agg.tripType).toBe("return");
-    });
-
-    it("ignores the trip type of skipped (non-qualifying) rows", () => {
-      const agg = aggregateDistributionLegs([
-        row(100, 20, "Plot A", null, null, "one_way"),
-        row(null, 60, "Plot B", null, null, "return"), // skipped: no mass
-      ]);
-      expect(agg.tripType).toBe("one_way");
-    });
+  it("carries no trip type on the aggregated leg (every leg is a round trip, #852)", () => {
+    const agg = aggregateDistributionLegs([row(250, 40, "Plot A")]);
+    expect(agg.weightedDistanceKm).toBe(40);
+    expect("tripType" in agg).toBe(false);
   });
 
   describe("weakest contributing source", () => {

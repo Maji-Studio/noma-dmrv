@@ -480,7 +480,6 @@ async function replaceDerivedTransportLeg(
     vehicleType: derived.vehicleType,
     modelYear: derived.modelYear,
     loadMassKg: derived.loadMassKg as number,
-    tripType: derived.tripType,
   };
 
   await tx
@@ -500,7 +499,6 @@ async function replaceDerivedTransportLeg(
 export interface FeedstockTransportOverride {
   distanceKm?: number | null;
   distanceSource?: "map_estimate" | "manual" | "document" | null;
-  tripType?: "return" | "one_way" | null;
   /** Route anchors changed, so the previous route's distance is not reusable. */
   resetDistanceToRoute?: boolean;
 }
@@ -538,7 +536,6 @@ export async function syncFeedstockTransportLeg(
       loadMassKg: feedstocks.massWetKg,
       existingDistanceKm: transportLegs.distanceKm,
       existingDistanceSource: transportLegs.distanceSource,
-      existingTripType: transportLegs.tripType,
     })
     .from(feedstocks)
     .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
@@ -609,10 +606,6 @@ export async function syncFeedstockTransportLeg(
         : preserveExistingDistance
           ? row.existingDistanceSource
           : undefined,
-    tripType:
-      distanceOverride?.tripType === undefined
-        ? row.existingTripType
-        : distanceOverride.tripType,
   });
 
   await replaceDerivedTransportLeg(ctx, tx, "feedstock", feedstockId, derived);
@@ -687,7 +680,6 @@ async function syncLockedBiocharProductTransportLeg(
       loadMassKg: allocated.wetMassKg,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
       deliveryDistanceSource: deliveries.distanceSource,
-      deliveryTripType: deliveries.tripType,
       locationDistanceKm: customerLocations.distanceFromFacilityKm,
       locationDistanceSource: customerLocations.distanceSource,
       locationName: customerLocations.name,
@@ -731,7 +723,6 @@ async function syncLockedBiocharProductTransportLeg(
         locationName: row.locationName,
         locationGpsLatitude: row.locationGpsLatitude,
         locationGpsLongitude: row.locationGpsLongitude,
-        tripType: row.deliveryTripType,
       };
     }),
   );
@@ -751,7 +742,6 @@ async function syncLockedBiocharProductTransportLeg(
     loadMassKg: agg.totalMassKg > 0 ? agg.totalMassKg : null,
     storedDistanceKm: agg.weightedDistanceKm,
     storedDistanceSource: agg.distanceSource,
-    tripType: agg.tripType,
   });
 
   // When no delivery qualifies, `derived` is not persistable and the replace

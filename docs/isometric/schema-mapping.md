@@ -24,7 +24,7 @@
 | Low-carbon procurement | `power_procurement_evidence` in `src/db/schema/compliance.ts` | schema-implemented | No conjunctive EC1-EC5 evaluator, annual intensity roll-up, or claim gate |
 | Electricity/fuel metering | Run-level electricity and three diesel input fields in `src/db/schema/production.ts`; original readings CSV retained as `sensor_data` documents | partial | No queryable hourly electricity meter stream or complete meter/fuel evidence metadata |
 | Registry energy mapping | `src/lib/isometric/transformers/datapoint.ts` and `src/lib/isometric/utils/aggregation.ts` | implemented | Electricity is one grid component; diesel uses separate `Generator diesel usage` and `Startup diesel usage` components. Display-name mapping remains an operational coupling |
-| Transportation | Leg method, trip type, distance, mass, factor, and evidence references in `src/db/schema/logistics.ts` | partial | Fallback justification, per-record-type evidence gates, onward-trip proof, vehicle year/class, factor source/vintage remain open |
+| Transportation | Leg method, one-way distance (counted as a round trip), mass, factor, and evidence references in `src/db/schema/logistics.ts` | partial | Fallback justification, per-record-type evidence gates, vehicle year/class, factor source/vintage remain open |
 | BCU accounting | None | missing | No BCU schema, retirement, ownership, cap, additionality, or anti-double-count structures |
 | Embodied inventory | Generic documents only | missing | No item/material/equipment inventory or complete factor records |
 | GHG/SSR materiality assessment | None | missing | `ghg_materiality_assessments` does not exist; no issuance gate |

@@ -7,6 +7,7 @@
 
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { formatRoundTripKm } from "@/lib/format-utils";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useState } from "react";
 
@@ -22,7 +23,6 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrdersForSelect } from "@/hooks/use-orders";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
 import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
@@ -33,7 +33,6 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, MapPinIcon, ScalesIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
@@ -83,11 +82,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const { facilityId: contextFacilityId } = useFacilityContext();
   const formFacilityId = delivery?.facilityId ?? contextFacilityId;
   const deliveryClock = useFacilityClock(formFacilityId);
-  // Organization operating defaults seed create mode only; an existing record
-  // always wins. Warmed once per session in FacilityProvider, so this is a
-  // cache read rather than a round trip on open.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-
 
   // The order picker fetches its own options (FormEntitySelect); this query
   // only backs the stored-distance prefill for the selected order below.
@@ -114,7 +108,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
     distanceSource: delivery?.distanceSource ?? null,
     distanceNote: delivery?.distanceNote ?? "",
-    tripType: delivery?.tripType ?? orgDefaults.defaultTripType,
   };
 
   const {
@@ -284,9 +277,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   // All three branches describe the same quantity — the one-way facility ›
   // destination distance the field's own label names — so none of them
-  // re-qualifies it. Round-trip doubling is the Trip type field's job.
-  // Why the field is empty stays visible (a cue); the other branches explain.
-  const distanceCue = watchOrderId ? undefined : "Select an order to load the destination's stored distance.";
+  // re-qualifies it. Why the field is empty stays visible (a cue); with a
+  // distance the cue shows the round trip every leg counts.
+  const distanceCue = !watchOrderId
+    ? "Select an order to load the destination's stored distance."
+    : effectiveDistanceKm != null && effectiveDistanceKm > 0
+      ? formatRoundTripKm(effectiveDistanceKm)
+      : undefined;
   const distanceHelperText = !watchOrderId
     ? undefined
     : storedDistanceKm == null
@@ -402,7 +399,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={[
           "distanceKmOverride",
           "distanceSource",
-          "tripType",
           "distanceNote",
         ]}
       >
@@ -414,7 +410,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="distanceKmOverride"
-            label="One-way distance (per leg, km)"
+            label="One-way distance"
+            unit="km"
             error={errors.distanceKmOverride?.message}
             helperText={distanceHelperText}
             cue={distanceCue}
@@ -454,20 +451,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             />
           </FormField>
 
-          <FormField
-            id="tripType"
-            label="Trip type"
-            error={errors.tripType?.message}
-            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
-          >
-            <FormSelect
-              id="tripType"
-              options={TRIP_TYPE_OPTIONS}
-              disabled={isSubmitting}
-              error={!!errors.tripType}
-              {...register("tripType")}
-            />
-          </FormField>
         </div>
 
         {distanceKmOverride != null && (

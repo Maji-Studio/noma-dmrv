@@ -58,15 +58,16 @@ code today; breaking one compiles cleanly and fails silently.
   executor cannot be threaded through, stage the work and flush it after the
   transaction settles (`src/fn/certification/sync-event-stage.ts`). Applies to
   every tx-scoped read, not just this helper.
-- **`transport_legs.tripType` defaults to `'return'` and is credit-bearing.**
-  `roundTripDistanceFactor` (defined in `src/schemas/trip-type.ts`; imported by
+- **Every transport leg counts its round trip, and the ×2 is credit-bearing.**
+  `ROUND_TRIP_DISTANCE_FACTOR` (`src/lib/calculations/round-trip.ts`; used by
   `src/lib/isometric/utils/aggregation.ts` and
-  `src/lib/certification/evidence-ledger/build-model.ts`) applies
-  ×2 for `return` and ×1 for `one_way` (issue #316, §4.2 — conservative by
-  default; `one_way` requires an evidenced onward destination). "Simplifying"
-  the default or the multiplier halves submitted transport emissions in the
+  `src/lib/certification/evidence-ledger/build-model.ts`) doubles each leg's
+  stored one-way distance (Transportation v1.1 §5: the vehicle returns empty,
+  so the full round trip counts; issue #852 removed the One-way option).
+  Removing the multiplier halves submitted transport emissions in the
   **anti-conservative** direction — the same integrity class as the
-  `pyrolyzer_direct` zero-stub trap below.
+  `pyrolyzer_direct` zero-stub trap below. An evidenced onward-journey
+  exception is out of scope until a real case needs it.
 - **`sReflectanceFraction` is stored 0–1 but captured as a percentage.** The
   form converts on entry and clears the field on a durability-mode switch
   (`src/components/samples/sample-form.tsx`); `src/schemas/samples.ts` makes it

@@ -247,7 +247,7 @@ test("gallery delivery and application create read edit", async ({ adminPage: pa
 test("gallery feedstock create read edit", async ({ adminPage: page, seededData: d }) => {
   const { db, pool } = createDbConnection();
   try {
-    await db.insert(schema.transportLegs).values({ organizationId: DEC_ORG_ID, entityType: "feedstock", entityId: d.feedstock.id, originName: "E2E Wood-chip supplier", destinationName: d.facility.name, distanceKm: 42, distanceSource: "manual", transportMethodType: "road", loadMassKg: 1500, tripType: "return", isDerived: true });
+    await db.insert(schema.transportLegs).values({ organizationId: DEC_ORG_ID, entityType: "feedstock", entityId: d.feedstock.id, originName: "E2E Wood-chip supplier", destinationName: d.facility.name, distanceKm: 42, distanceSource: "manual", transportMethodType: "road", loadMassKg: 1500, isDerived: true });
     await db.update(schema.feedstocks).set({ massWetKg: 1500, massDryKg: 1200, moistureContentPercent: 20, vehicleId: d.vehicle.id, notes: "E2E wood chips received, weighed and allocated to the covered feedstock bin." }).where(eq(schema.feedstocks.id, d.feedstock.id));
   } finally { await pool.end(); }
   await navigate(page, "feedstocks", d.facility);
@@ -280,8 +280,8 @@ test("gallery production run create read edit credit batch and sample read", asy
     await db.update(schema.samples).set({ labName: "E2E Carbon Laboratory", labAccreditation: "E2E demonstration accreditation", analysisDate: "2026-09-21", totalHydrogenPercent: 2.5, totalNitrogenPercent: 0.8, totalOxygenPercent: 8, totalSulfurPercent: 0.1, inorganicCarbonPercent: 2, saltContentGPerKg: 1.2, weightGrams: 250, volumeMl: 500, moistureContentPercent: 5, ashContentPercent: 12, bulkDensityKgPerM3: 400, ph: 8.2 }).where(eq(schema.samples.sampleCode, batch.sampleCodes[0]));
     const [sample] = await db.select().from(schema.samples).where(eq(schema.samples.sampleCode, batch.sampleCodes[0]));
     await db.insert(schema.transportLegs).values([
-      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Production facility", destinationName: "E2E Regional collection hub", distanceKm: 42, distanceSource: "manual", transportMethodType: "road", vehicleType: "Light goods vehicle", loadMassKg: 2, tripType: "return" },
-      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Regional collection hub", destinationName: "E2E Carbon Laboratory", distanceKm: 180, distanceSource: "manual", transportMethodType: "road", vehicleType: "Heavy goods vehicle", loadMassKg: 2, tripType: "one_way" },
+      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Production facility", destinationName: "E2E Regional collection hub", distanceKm: 42, distanceSource: "manual", transportMethodType: "road", vehicleType: "Light goods vehicle", loadMassKg: 2 },
+      { organizationId: DEC_ORG_ID, entityType: "sample", entityId: sample.id, originName: "E2E Regional collection hub", destinationName: "E2E Carbon Laboratory", distanceKm: 180, distanceSource: "manual", transportMethodType: "road", vehicleType: "Heavy goods vehicle", loadMassKg: 2 },
     ]);
   } finally { await pool.end(); }
   await navigate(page, "production-runs", d.facility);

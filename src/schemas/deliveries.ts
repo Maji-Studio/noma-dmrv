@@ -23,7 +23,6 @@ import {
   storedPercentSchema,
 } from "./helpers";
 import { deliveryDryMassSchema } from "./isometric";
-import { optionalTripType } from "./trip-type";
 
 // ============================================
 // Constants and Enums
@@ -126,8 +125,6 @@ const deliveryFormBaseSchema = z.object({
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
-  // Round-trip vs one-way accounting for the distribution leg (issue #316).
-  tripType: optionalTripType,
 });
 
 /**
@@ -172,7 +169,6 @@ export const createDeliverySchema = z.object({
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
-  tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   validateDistanceOverride(value, ctx);
   validateDeliveredWetMass(value, ctx);
@@ -205,7 +201,6 @@ export const updateDeliverySchema = z.object({
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
-  tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   // Delivered/mass validity depends on the saved row, so updateDelivery checks
   // it after merging the partial patch under the delivery stock lock.

@@ -45,7 +45,6 @@ import {
   type OrganizationSettingsInput,
   type OrganizationSettingsValues,
 } from "@/schemas/organization-settings";
-import { TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { useState } from "react";
 
 const CURRENCY_OPTIONS = currencyCodes.map((code) => ({
@@ -202,21 +201,6 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
             options={TIMEZONE_OPTIONS}
             error={!!errors.defaultTimezone}
             {...register("defaultTimezone")}
-          />
-        </FormField>
-
-        <FormField
-          id="default-trip-type"
-          label="Transport trip type"
-          error={errors.defaultTripType?.message}
-          helperText="Seeds new deliveries, feedstock hauls and transport legs."
-            hint="A return trip counts the distance twice in emissions accounting, which is the conservative protocol default. Choose one-way only when evidence shows an onward destination. You can still edit each transport leg."
-        >
-          <FormSelect
-            id="default-trip-type"
-            options={TRIP_TYPE_OPTIONS}
-            error={!!errors.defaultTripType}
-            {...register("defaultTripType")}
           />
         </FormField>
 
