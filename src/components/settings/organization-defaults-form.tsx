@@ -169,7 +169,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="content-measure-preview flex flex-col gap-24"
+      className="content-measure-preview flex flex-col gap-20"
     >
       <FormSection title="Region and currency" divider={false}>
         <div className="grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2">
@@ -204,6 +204,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           />
         </FormField>
 
+        <div className="sm:col-span-2">
         <FormField
           id="default-timezone"
           label="Timezone"
@@ -219,6 +220,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           />
         </FormField>
 
+        </div>
         </div>
       </FormSection>
 
