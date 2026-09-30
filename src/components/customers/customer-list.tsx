@@ -174,6 +174,7 @@ export function CustomerList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    void setFocusedCustomerId(null);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });

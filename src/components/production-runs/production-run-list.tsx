@@ -308,9 +308,7 @@ export function ProductionRunList() {
                 ? endTime
                 : new Date(endTime),
       });
-      createWithEvidence.reset();
-      setFocusedRunId(null);
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Production run updated.");
     } catch (error) {
       if (getRunConflict(error)) throw error;

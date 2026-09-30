@@ -27,6 +27,14 @@ import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { readInput, readResponse } from "./read-response";
 
+// Mirrors the 16 KiB read cap in read-response.ts. Three 8 KiB chunks pass it,
+// so a bounded reader stops by the third pull; a reader that buffers the whole
+// body would keep pulling until the stream's sentinel tail errors.
+const READ_CAP_BYTES = 16 * 1024;
+const STREAM_CHUNK_BYTES = 8 * 1024;
+const PULLS_TO_PASS_CAP = Math.floor(READ_CAP_BYTES / STREAM_CHUNK_BYTES) + 1;
+const STREAM_CHUNKS_BEFORE_SENTINEL = 400;
+
 const ORG_CONTEXT = {
   userId: "user-1",
   organizationId: "org-1",
@@ -263,7 +271,7 @@ describe("read input decoding", () => {
     const stream = new ReadableStream<Uint8Array>({
       pull(controller) {
         pulls += 1;
-        if (pulls <= 400) controller.enqueue(new Uint8Array(8 * 1024));
+        if (pulls <= STREAM_CHUNKS_BEFORE_SENTINEL) controller.enqueue(new Uint8Array(STREAM_CHUNK_BYTES));
         else controller.error(new Error("TAIL_READ_SENTINEL"));
       },
       cancel() {
@@ -278,7 +286,7 @@ describe("read input decoding", () => {
 
     await expect(readInput(streamed)).rejects.toThrow(OVERSIZED_BODY_ERROR);
     expect(cancelled).toBe(true);
-    expect(pulls).toBeLessThanOrEqual(3);
+    expect(pulls).toBeLessThanOrEqual(PULLS_TO_PASS_CAP);
   });
 
   it("answers a failing body stream as a malformed body", async () => {
