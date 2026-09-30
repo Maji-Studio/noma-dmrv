@@ -77,7 +77,7 @@ export function RemovalBatchesAccordion({
               </Link>
 
               <div className="flex flex-col gap-6">
-                <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+                <span className="body-small text-[var(--color-text-secondary)]">
                   Credit batches ({entry.creditBatches.length})
                 </span>
                 {entry.creditBatches.length === 0 ? (

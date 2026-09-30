@@ -33,9 +33,10 @@ Read these first. Each one fails quietly rather than loudly.
   an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
   **44px is on the scale** because it is the minimum touch target; six controls
   had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
-  One sanctioned exception: the inline `InfoHint` glyph keeps a 24px hit area
-  (the WCAG 2.5.8 floor) — a 44px box on an in-text hint would break label-row
-  alignment wherever it appears.
+  Two sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
+  inline `InfoHint` glyph, and the icon-only `IsometricLink` beside the ID it
+  opens. A 44px box on either would break label-row alignment wherever it
+  appears.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),

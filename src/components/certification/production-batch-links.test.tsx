@@ -39,7 +39,7 @@ describe("ProductionBatchLinks", () => {
     expect(html).toContain(
       "https://registry.sandbox.isometric.com/account/certify/project/prj_1K9YJ33RKSBX9FFF/facilities/fcl_1KST05ZW3SBXZCM7/production-batches/ptb_1KZ90J63TSBX9M2P",
     );
-    expect(html).toContain("View on Isometric ↗");
+    expect(html).toContain("View on Isometric");
   });
 
   it("keeps the identity visible without an anchor for a legacy row", () => {
