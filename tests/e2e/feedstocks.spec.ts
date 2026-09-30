@@ -279,7 +279,7 @@ test.describe("Feedstock UI CRUD", () => {
     ).toHaveCount(0);
   });
 
-  test("explains the certification seal once in the sheet header and on hover", async ({
+  test("explains the CERT chip once in the sheet header and on hover", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -296,8 +296,8 @@ test.describe("Feedstock UI CRUD", () => {
     await expect(dialog.locator("[data-cert-legend]")).toBeVisible();
     await expect(dialog.locator("[data-cert-legend]")).toHaveText("CERTNeeded for certification");
 
-    // Each seal carries the same explanation as an sr-only string; hovering a
-    // seal mounts a tooltip with it. The tooltip portals to <body>, so count
+    // Each chip carries the same explanation as an sr-only string; hovering a
+    // chip mounts a tooltip with it. The tooltip portals to <body>, so count
     // page-wide matches.
     const explanationOnPage = page.getByText("Required for certification", { exact: true });
     const beforeHover = await explanationOnPage.count();
