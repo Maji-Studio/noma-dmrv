@@ -67,5 +67,5 @@ Measured problems to fix (from the round 1 review):
 Check with the scripts in the orchestrator's scratchpad (Node, Playwright; they read `http://localhost:3122`):
 `/private/tmp/claude-501/-Users-kenji-Dropbox-Maji-18-Dark-Earth-Carbon-noma-dmrv/d834ef15-fa4e-40a8-9d78-471157defa94/scratchpad/`
 - `sweep.cjs <keys>`: overflow, console errors, prose characters per line, chain width and panel side, page height at 400 to 2560, plus screenshots in `shots/`.
-- `labels.cjs`: label line-box heights on chain and dense (edit its key list to yours). A line box of about 15px means an 11px font.
-- `scrollviz.cjs`: which diagrams scroll sideways at 1280, 1440 and 1920 (edit its key list). None may, at 1280 and above.
+- `labels.cjs`: label line-box heights on chain and dense (pass your keys, e.g. `labels.cjs 6,8`). A line box of about 15px means an 11px font.
+- `scrollviz.cjs`: which diagrams scroll sideways at 1280, 1440 and 1920 (pass keys the same way). None may, at 1280 and above.

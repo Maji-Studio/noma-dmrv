@@ -1,5 +1,5 @@
 ---
-// Variant 8 hero: centred headline and lead inside the frame, then hairline cells: figures, trace panel edge to edge, logos.
+// Variant 11 hero: centred headline, lead and the one action, the chain trace at frame width, then two figure cells and the logos.
 import { copy as c } from "../../content/copy.js";
 import BlockLink from "../../components/BlockLink.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
@@ -17,15 +17,16 @@ import FactLine from "../../components/FactLine.astro";
   <div class="logos"><LogoStrip label={c.proof.label} logos={c.proof.logos} /></div>
 </section>
 <style>
-  .intro { padding: clamp(32px, 3.6vw, 64px) var(--gutter); display: grid; gap: 20px; justify-items: center; text-align: center; }
-  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 20ch; }
-  .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--measure); }
+  .intro { padding: clamp(28px, 3.2vw, 52px) var(--gutter) clamp(28px, 2.6vw, 40px); display: grid; gap: 16px; justify-items: center; text-align: center; }
+  h1 { font-size: var(--fs-display); letter-spacing: var(--track-display); line-height: var(--lh-display); max-width: 26ch; }
+  .lead { font-size: var(--fs-lead); line-height: 1.5; max-width: var(--prose); }
+  .cta { margin-top: 4px; }
   .figs { border-bottom: var(--rule); }
   .figs :global(.facts) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .figs :global(.fact) { border-top: 0; padding: clamp(16px, 2vw, 28px) var(--gutter); justify-items: center; text-align: center; }
+  .figs :global(.fact) { border-top: 0; padding: clamp(24px, 3vw, 40px) var(--gutter); justify-items: center; text-align: center; }
   .figs :global(.fact + .fact) { border-left: var(--rule); }
   .figs :global(dd) { max-width: 30ch; }
   .figs :global(mark) { margin-left: 0; }
-  .logos { padding: clamp(32px, 4vw, 56px) var(--gutter); }
+  .logos { padding: clamp(28px, 3vw, 44px) var(--gutter); }
   @media (max-width: 640px) { .figs :global(.facts) { grid-template-columns: 1fr; } .figs :global(.fact + .fact) { border-left: 0; border-top: var(--rule); } }
 </style>

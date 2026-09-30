@@ -1,10 +1,14 @@
 ---
-// PROTOTYPE layout variant 8, "Vercel style" (see src/variants/BRIEF.md): hairline frame, cells, bento.
+// PROTOTYPE layout variant 11, "Vercel frame, Apple rhythm" (see src/variants/BRIEF.md).
+// Idea: the whole page is one bounded frame with full-height hairline side rules. Inside it each section is one idea:
+// a short centred headline, its lead as a left-aligned block on a 54ch measure, then the visual filling the frame width.
+// The trace's "How to read it" panel stays beside the diagram, which keeps 1010px or more from 1440.
+// Section order is unchanged from variant 8. Copied helpers: v11/Hero.astro (from v8 Hero), v11/Head.astro.
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import SiteHeader from "../../components/SiteHeader.astro";
 import SiteFooter from "../../components/SiteFooter.astro";
-import Hero from "../../variants/v8/Hero.astro";
-import Section from "../../components/Section.astro";
+import Hero from "../../variants/v11/Hero.astro";
+import Head from "../../variants/v11/Head.astro";
 import VisualFrame from "../../components/VisualFrame.astro";
 import ScreenshotFrame from "../../components/ScreenshotFrame.astro";
 import FeatureList from "../../components/FeatureList.astro";
@@ -12,113 +16,132 @@ import ComparisonTable from "../../components/ComparisonTable.astro";
 import OpenSourceOptions from "../../components/OpenSourceOptions.astro";
 import WalkthroughForm from "../../components/WalkthroughForm.astro";
 import { copy as c } from "../../content/copy.js";
-import "../../variants/measure-cap.css";
 ---
 <BaseLayout layout="11"
   title="noma, open-source biochar dMRV by MAJI"
   description="Trace every tonne of biochar, from feedstock to certification. Open-source digital monitoring, reporting and verification for biochar producers."
 >
-  <SiteHeader />
-  <main id="main">
-    <Hero />
+  <div class="frame">
+    <SiteHeader />
+    <main id="main">
+      <Hero />
 
-    <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead} split>
-      <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
-      <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
-    </Section>
+      <section class="sec" id="trace">
+        <Head title={c.dense.title} lead={c.dense.lead} />
+        <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
+        <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
+      </section>
 
-    <Section title={c.map.title} lead={c.map.lead} split>
-      <VisualFrame visual="map" caption={c.captions.map} />
-    </Section>
+      <section class="sec">
+        <Head title={c.map.title} lead={c.map.lead} />
+        <VisualFrame visual="map" caption={c.captions.map} />
+      </section>
 
-    <Section id="features" band="rose" title={c.features.title} lead={c.features.lead} split>
-      <VisualFrame visual="bins" caption={c.captions.bins}>
-        <Fragment slot="side">
-          <h3 class="feat-title">{c.features.bins.title}</h3>
-          <p>{c.features.bins.text}</p>
-          <p class="hint">{c.features.bins.hint}</p>
-        </Fragment>
-      </VisualFrame>
-      <FeatureList
-        shipped={c.features.shipped} upcoming={c.features.upcoming} upcomingLabel={c.features.upcomingLabel}
-        shippedHeading={c.features.shippedHeading} upcomingHeading={c.features.upcomingHeading}
-      />
-      <ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} />
-    </Section>
+      <section class="sec rose" id="features">
+        <Head title={c.features.title} lead={c.features.lead} />
+        <VisualFrame visual="bins" caption={c.captions.bins}>
+          <Fragment slot="side">
+            <h3 class="feat-title">{c.features.bins.title}</h3>
+            <p>{c.features.bins.text}</p>
+            <p class="hint">{c.features.bins.hint}</p>
+          </Fragment>
+        </VisualFrame>
+        <FeatureList
+          shipped={c.features.shipped} upcoming={c.features.upcoming} upcomingLabel={c.features.upcomingLabel}
+          shippedHeading={c.features.shippedHeading} upcomingHeading={c.features.upcomingHeading}
+        />
+        <ComparisonTable title={c.compare.title} columns={c.compare.columns} rows={c.compare.rows} />
+      </section>
 
-    <Section id="registry" title={c.registry.title} lead={c.registry.lead} aside>
-      <VisualFrame visual="morph" caption={c.captions.morph} />
-    </Section>
+      <section class="sec" id="registry">
+        <Head title={c.registry.title} lead={c.registry.lead} />
+        <VisualFrame visual="morph" caption={c.captions.morph} />
+      </section>
 
-    <Section id="open-source" band="purple" title={c.openSource.title}>
-      <OpenSourceOptions cards={c.openSource.cards} />
-    </Section>
+      <section class="sec purple" id="open-source">
+        <Head title={c.openSource.title} />
+        <OpenSourceOptions cards={c.openSource.cards} />
+      </section>
 
-    <Section id="walkthrough" title={c.walkthrough.title} lead={c.walkthrough.lead} aside>
-      <WalkthroughForm idPrefix="wt" />
-    </Section>
-  </main>
-  <SiteFooter />
+      <section class="sec" id="walkthrough">
+        <Head title={c.walkthrough.title} lead={c.walkthrough.lead} />
+        <div class="form-cell"><WalkthroughForm idPrefix="wt" /></div>
+      </section>
+    </main>
+    <SiteFooter />
+  </div>
 </BaseLayout>
-<style>
-  .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); column-gap: clamp(24px, 3vw, 48px); row-gap: clamp(24px, 3vw, 40px); align-items: start; padding: var(--section-space) var(--gutter); }
-  .shots > :global(.lead) { grid-row: 1 / span 2; }
-  @media (max-width: 900px) { .shots { grid-template-columns: 1fr; } .shots > :global(.lead) { grid-row: auto; } }
-  .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
-  .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
-  .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
-</style>
 <style is:global>
   :root[data-layout="11"] {
-    --frame: 1360px;
-    --gutter: clamp(20px, 3vw, 40px);
-    --section-space: clamp(48px, 5vw, 80px);
-    --col-gap: clamp(24px, 4vw, 64px);
-    --fs-display: clamp(42px, 6.4vw, 96px);
-    --fs-heading: clamp(30px, 3.8vw, 56px);
-    --measure: 60ch;
+    /* layout literals for this variant */
+    --frame: 1600px;
+    --edge: clamp(8px, 1.2vw, 20px);   /* page ground visible outside the frame rules */
+    --gutter: clamp(20px, 3vw, 48px);
+    --head-space: clamp(48px, 6vw, 96px);
+    --section-space: var(--head-space);
+    --prose: 52ch;                      /* about 71 characters of GT Flexa */
+    --form: 760px;
+    --fs-display: clamp(38px, 5.2vw, 88px);
+    --fs-heading: clamp(32px, 4.2vw, 68px);
+    --fs-lead: clamp(18px, 1.5vw, 21px);
+    --viz-pad: 20px;
+    --viz-max-h: 1000px;
+    --side-width: calc(clamp(260px, 19vw, 320px) + var(--gutter));
   }
-  /* The frame: the whole page is one bounded column whose side edges are hairlines running the full page height. */
-  :root[data-layout="11"] body { max-width: var(--frame); margin-inline: auto; border-inline: var(--rule); }
-  :root[data-layout="11"] .section { border-top: var(--rule) !important; }
-  :root[data-layout="11"] main .inner { padding: 0; gap: 0; }
-  :root[data-layout="11"] main .head { padding: var(--section-space) var(--gutter); }
-  :root[data-layout="11"] main .head:not(:last-child) { border-bottom: var(--rule); }
-  :root[data-layout="11"] .head.split { column-gap: 0; }
-  :root[data-layout="11"] .head.split .lead { border-left: var(--rule); padding-left: var(--gutter); align-self: stretch; display: flex; align-items: flex-end; }
-  @media (max-width: 860px) { :root[data-layout="11"] .head.split .lead { border-left: 0; padding-left: 0; } }
-  /* Visuals fill their cells edge to edge. */
-  :root[data-layout="11"] .vf { margin: 0 !important; border: 0 !important; border-bottom: var(--rule) !important; }
-  :root[data-layout="11"] .vf.has-side .side { padding: var(--section-space) var(--gutter); }
-  /* Aside sections: heading cell | content cell, one vertical hairline between. */
-  :root[data-layout="11"] .inner.aside { column-gap: 0; align-items: stretch; }
-  :root[data-layout="11"] .aside .head { border-bottom: 0 !important; border-right: var(--rule); align-self: stretch; align-content: start; }
-  :root[data-layout="11"] .aside > :not(.head) { border-bottom: 0 !important; }
-  :root[data-layout="11"] .aside .wt-form { border: 0; padding: var(--section-space) var(--gutter); }
-  @media (max-width: 860px) {
-    :root[data-layout="11"] .aside .head { border-right: 0; border-bottom: var(--rule) !important; }
-  }
-  /* Features as a bento of bordered cells. */
+  :root[data-layout="11"] .frame { width: min(var(--frame), 100% - var(--edge) * 2); margin-inline: auto; border-inline: var(--rule); min-width: 0; background: var(--page); }
+  :root[data-layout="11"] main p { max-width: min(100%, var(--prose)); }
+  :root[data-layout="11"] .sec { min-width: 0; }
+  :root[data-layout="11"] .sec.rose { background: var(--clr-rose-20); }
+  :root[data-layout="11"] .sec.purple { background: var(--clr-purple-5); }
+
+  /* Section head: centred headline, left-aligned lead block */
+  :root[data-layout="11"] .sh { display: grid; justify-items: center; gap: 24px; padding: var(--head-space) var(--gutter) calc(var(--head-space) * 0.7); }
+  :root[data-layout="11"] .sh h2 { font-size: var(--fs-heading); letter-spacing: var(--track-heading); line-height: var(--lh-display); max-width: 20ch; text-align: center; }
+  :root[data-layout="11"] .sh .lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--clr-dark-purple-70); text-align: left; }
+
+  /* Visuals fill the frame, hairlines above and below. The trace's panel stays beside the diagram. */
+  :root[data-layout="11"] .vf { margin: 0; border: 0; border-block: var(--rule); }
+  :root[data-layout="11"] .vf.has-side { grid-template-columns: minmax(0, 0.55fr) minmax(0, 1.7fr); }
+  :root[data-layout="11"] .vf figcaption { padding-inline: var(--gutter); }
+  :root[data-layout="11"] .vf.has-side .side { padding: var(--head-space) var(--gutter); }
+  :root[data-layout="11"] .feat-title { font-size: var(--fs-subheading); letter-spacing: -0.035em; }
+  :root[data-layout="11"] .hint { font-size: var(--fs-small); color: var(--clr-dark-purple-70); }
+  @media (max-width: 900px) { :root[data-layout="11"] .vf.has-side { grid-template-columns: minmax(0, 1fr); } }
+
+  /* Screenshots: a cell under the dense trace */
+  :root[data-layout="11"] .shots { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--gutter); padding: var(--gutter); align-items: start; border-bottom: var(--rule); }
+  :root[data-layout="11"] .shots > .lead { grid-row: 1 / span 2; }
+  @media (max-width: 900px) { :root[data-layout="11"] .shots { grid-template-columns: minmax(0, 1fr); } :root[data-layout="11"] .shots > .lead { grid-row: auto; } }
+
+  /* Features: even hairline cells, three across; upcoming as 2, 2, 2, 3, 3 on a six column grid */
   :root[data-layout="11"] .features { gap: 0; }
-  :root[data-layout="11"] .features .group-title { margin: 0; padding: 28px var(--gutter); border-bottom: var(--rule); }
-  :root[data-layout="11"] .features .grid { border: 0; border-bottom: var(--rule); }
-  :root[data-layout="11"] .features .shipped { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  :root[data-layout="11"] .features .shipped li { grid-column: span 2; }
-  :root[data-layout="11"] .features .shipped li:nth-child(1), :root[data-layout="11"] .features .shipped li:nth-child(4) { grid-column: span 4; }
-  :root[data-layout="11"] .features .shipped li:nth-child(8), :root[data-layout="11"] .features .shipped li:nth-child(9) { grid-column: span 3; }
+  :root[data-layout="11"] .features .group-title { margin: 0; padding: 28px var(--gutter); border-top: var(--rule); background: var(--page); }
+  :root[data-layout="11"] .features .group-title:first-child { border-top: 0; }
+  :root[data-layout="11"] .features .grid { border: 0; border-top: var(--rule); }
   :root[data-layout="11"] .features li { padding: 28px var(--gutter) 40px; }
+  :root[data-layout="11"] .features .upcoming { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  :root[data-layout="11"] .features .upcoming li { grid-column: span 2; }
+  :root[data-layout="11"] .features .upcoming li:nth-child(n+4) { grid-column: span 3; }
   @media (max-width: 900px) {
-    :root[data-layout="11"] .features .shipped { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    :root[data-layout="11"] .features .shipped li, :root[data-layout="11"] .features .shipped li:nth-child(n) { grid-column: auto; }
+    :root[data-layout="11"] .features .upcoming { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    :root[data-layout="11"] .features .upcoming li, :root[data-layout="11"] .features .upcoming li:nth-child(n) { grid-column: auto; }
+    :root[data-layout="11"] .features .upcoming li:last-child { grid-column: 1 / -1; }
   }
-  @media (max-width: 560px) { :root[data-layout="11"] .features .shipped { grid-template-columns: 1fr; } }
-  :root[data-layout="11"] .compare { gap: 0; margin: 0; }
-  :root[data-layout="11"] .compare h3 { padding: 28px var(--gutter); border-bottom: var(--rule); }
+  @media (max-width: 560px) { :root[data-layout="11"] .features .upcoming { grid-template-columns: 1fr; } }
+  :root[data-layout="11"] .compare { gap: 0; margin: 0; border-top: var(--rule); }
+  :root[data-layout="11"] .compare h3 { padding: 28px var(--gutter); border-bottom: var(--rule); background: var(--page); }
   :root[data-layout="11"] .compare .scroll { border: 0; }
   :root[data-layout="11"] .compare :is(th, td) { padding-inline: var(--gutter); }
-  :root[data-layout="11"] .options { gap: 0; }
-  :root[data-layout="11"] .option { border: 0; padding: var(--section-space) var(--gutter); }
+
+  /* Open source: two cells with one vertical hairline */
+  :root[data-layout="11"] .options { gap: 0; border-top: var(--rule); }
+  :root[data-layout="11"] .option { border: 0; padding: var(--head-space) var(--gutter); }
   :root[data-layout="11"] .option + .option { border-left: var(--rule); }
   @media (max-width: 700px) { :root[data-layout="11"] .option + .option { border-left: 0; border-top: var(--rule); } }
+
+  /* Form: one centred cell */
+  :root[data-layout="11"] .form-cell { display: grid; justify-items: center; padding: var(--gutter); border-top: var(--rule); }
+  :root[data-layout="11"] .form-cell .wt-form { width: 100%; max-width: var(--form); }
   :root[data-layout="11"] .foot .row { margin-inline: calc(var(--gutter) * -1); }
+  :root[data-layout="11"] .site-header { border-bottom: var(--rule); }
 </style>

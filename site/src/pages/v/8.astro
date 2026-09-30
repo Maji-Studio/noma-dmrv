@@ -70,23 +70,25 @@ import "../../variants/measure-cap.css";
 </style>
 <style is:global>
   :root[data-layout="8"] {
-    --frame: 1360px;
+    --frame: 1600px;
+    --edge: 24px;               /* clear space between the frame rules and the viewport edge */
+    --viz-pad: 20px;
+    --side-width: 270px;
     --gutter: clamp(20px, 3vw, 40px);
     --section-space: clamp(48px, 5vw, 80px);
     --col-gap: clamp(24px, 4vw, 64px);
-    --fs-display: clamp(42px, 6.4vw, 96px);
+    --fs-display: clamp(40px, 4.6vw, 72px);
     --fs-heading: clamp(30px, 3.8vw, 56px);
     --measure: 60ch;
   }
+  @media (max-width: 700px) { :root[data-layout="8"] { --edge: 12px; } }
   /* The frame: the whole page is one bounded column whose side edges are hairlines running the full page height. */
-  :root[data-layout="8"] body { max-width: var(--frame); margin-inline: auto; border-inline: var(--rule); }
+  :root[data-layout="8"] body { width: min(var(--frame), calc(100% - var(--edge) * 2)); margin-inline: auto; border-inline: var(--rule); }
   :root[data-layout="8"] .section { border-top: var(--rule) !important; }
   :root[data-layout="8"] main .inner { padding: 0; gap: 0; }
   :root[data-layout="8"] main .head { padding: var(--section-space) var(--gutter); }
   :root[data-layout="8"] main .head:not(:last-child) { border-bottom: var(--rule); }
-  :root[data-layout="8"] .head.split { column-gap: 0; }
-  :root[data-layout="8"] .head.split .lead { border-left: var(--rule); padding-left: var(--gutter); align-self: stretch; display: flex; align-items: flex-end; }
-  @media (max-width: 860px) { :root[data-layout="8"] .head.split .lead { border-left: 0; padding-left: 0; } }
+  :root[data-layout="8"] .head.split { column-gap: var(--col-gap); }
   /* Visuals fill their cells edge to edge. */
   :root[data-layout="8"] .vf { margin: 0 !important; border: 0 !important; border-bottom: var(--rule) !important; }
   :root[data-layout="8"] .vf.has-side .side { padding: var(--section-space) var(--gutter); }
@@ -100,21 +102,15 @@ import "../../variants/measure-cap.css";
   }
   /* Features as a bento of bordered cells. */
   :root[data-layout="8"] .features { gap: 0; }
-  :root[data-layout="8"] .features .group-title { margin: 0; padding: 28px var(--gutter); border-bottom: var(--rule); }
-  :root[data-layout="8"] .features .grid { border: 0; border-bottom: var(--rule); }
-  :root[data-layout="8"] .features .shipped { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  :root[data-layout="8"] .features .shipped li { grid-column: span 2; }
-  :root[data-layout="8"] .features .shipped li:nth-child(1), :root[data-layout="8"] .features .shipped li:nth-child(4) { grid-column: span 4; }
-  :root[data-layout="8"] .features .shipped li:nth-child(8), :root[data-layout="8"] .features .shipped li:nth-child(9) { grid-column: span 3; }
+  :root[data-layout="8"] .features .group-title { margin: 0; padding: 24px var(--gutter); }
+  :root[data-layout="8"] .features .grid { border: 0; border-block: var(--rule); }
+  :root[data-layout="8"] .features .shipped { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   :root[data-layout="8"] .features li { padding: 28px var(--gutter) 40px; }
-  @media (max-width: 900px) {
-    :root[data-layout="8"] .features .shipped { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    :root[data-layout="8"] .features .shipped li, :root[data-layout="8"] .features .shipped li:nth-child(n) { grid-column: auto; }
-  }
+  @media (max-width: 900px) { :root[data-layout="8"] .features .shipped { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 560px) { :root[data-layout="8"] .features .shipped { grid-template-columns: 1fr; } }
   :root[data-layout="8"] .compare { gap: 0; margin: 0; }
-  :root[data-layout="8"] .compare h3 { padding: 28px var(--gutter); border-bottom: var(--rule); }
-  :root[data-layout="8"] .compare .scroll { border: 0; }
+  :root[data-layout="8"] .compare h3 { padding: 24px var(--gutter); }
+  :root[data-layout="8"] .compare .scroll { border: 0; border-top: var(--rule); }
   :root[data-layout="8"] .compare :is(th, td) { padding-inline: var(--gutter); }
   :root[data-layout="8"] .options { gap: 0; }
   :root[data-layout="8"] .option { border: 0; padding: var(--section-space) var(--gutter); }

@@ -1,0 +1,9 @@
+---
+// Variant 12 section head: a framed cell, headline left, lead right behind one vertical hairline.
+interface Props { title: string; lead?: string; stack?: boolean }
+const { title, lead, stack = false } = Astro.props;
+---
+<header class:list={["sh", { stack, solo: !lead }]}>
+  <h2>{title}</h2>
+  {lead && <p class="lead">{lead}</p>}
+</header>
