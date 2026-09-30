@@ -30,6 +30,7 @@ import { logger } from "@/lib/log";
 import { buildStorageKey, getStorageProvider } from "@/lib/storage";
 import {
   approveGhgStatementReportSchema,
+  loadGhgStatementReportsSchema,
   prepareGhgStatementReportSchema,
   type ApproveGhgStatementReportInput,
   type PrepareGhgStatementReportInput,
@@ -61,7 +62,6 @@ export interface GhgStatementReportView {
   submittedAt: Date | null;
   reviewUrl: string;
 }
-
 
 /**
  * Canonicalization failures are deterministic: the same model rendered by the
@@ -101,7 +101,6 @@ function reportView(row: GhgStatementReportRow): GhgStatementReportView {
     reviewUrl: `/api/documents/${row.documentId}`,
   };
 }
-
 
 export async function prepareGhgStatementReport(
   input: PrepareGhgStatementReportInput,
@@ -233,9 +232,10 @@ export async function loadGhgStatementReports(
   ghgStatementId: string,
 ): Promise<ActionResult<GhgStatementReportView[]>> {
   return withAction(async (orgCtx) => {
+    const parsed = loadGhgStatementReportsSchema.parse({ ghgStatementId });
     const statement = await getCertifierGhgStatementById(
       orgCtx,
-      ghgStatementId,
+      parsed.ghgStatementId,
     );
     if (!statement) throw new SafeError("GHG Statement not found.");
     const reports = await listGhgStatementReports(orgCtx, statement.id);

@@ -3,6 +3,10 @@
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import { getIsometricClientForOrg } from "@/lib/isometric";
+import {
+  loadTelemetrySubmissionStateSchema,
+  submitTelemetrySchema,
+} from "@/schemas/certification";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ISOMETRIC_PROVIDER, submitRateLimit } from "./shared";
@@ -25,9 +29,12 @@ export type {
 export async function submitTelemetryAction(
   args: SubmitTelemetryArgs,
 ): Promise<ActionResult<SubmitTelemetryResult>> {
-  return withAction((orgCtx) => submitTelemetry(orgCtx, args), {
-    rateLimit: submitRateLimit("cert:submit-telemetry"),
-  });
+  return withAction(
+    (orgCtx) => submitTelemetry(orgCtx, submitTelemetrySchema.parse(args)),
+    {
+      rateLimit: submitRateLimit("cert:submit-telemetry"),
+    },
+  );
 }
 
 export async function loadTelemetrySubmissionState(
@@ -39,12 +46,13 @@ export async function loadTelemetrySubmissionState(
   } | null>
 > {
   return withAction(async (orgCtx) => {
+    const parsed = loadTelemetrySubmissionStateSchema.parse({ removalId });
     const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const latest = await getLatestSubmission(orgCtx, {
       provider: ISOMETRIC_PROVIDER,
       submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
       localEntityType: DATA_UPLOAD_ENTITY_TYPE,
-      localEntityId: removalId,
+      localEntityId: parsed.removalId,
     });
     if (!latest) return null;
     const externalId = latest.externalId;

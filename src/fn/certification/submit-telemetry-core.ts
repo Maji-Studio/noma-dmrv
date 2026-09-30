@@ -78,6 +78,7 @@ export const DATA_UPLOAD_ENTITY_TYPE = "removal" as const;
 const DATA_UPLOAD_OPERATION = "removal:data-upload" as const;
 const PARQUET_SCHEMA_VERSION = 1 as const;
 const UPLOAD_ERROR_TRUNCATION_LIMIT = 1000;
+const MS_PER_SECOND = 1_000;
 
 type FileUploadResponse = { id: string; upload_url: string };
 export type DataUploadSubmission = components["schemas"]["DataUploadSubmission"];
@@ -104,8 +105,6 @@ export interface SubmitTelemetryResult {
   errorMessage: string | null;
   version: number;
 }
-
-
 
 // Runs the full DataUploadSubmission pipeline inside one short-lived
 // server action — ADR 0006 §5 requires this because the signed
@@ -186,6 +185,11 @@ export async function submitTelemetry(
     until: windowEnd,
   });
 
+  const sensorRefs = sensorRows.map((row) => ({
+    reactorId: row.reactorId,
+    measurementProperty: row.measurementProperty,
+    sensorReference: row.sensorReference,
+  }));
   const aggregated = aggregateForDataUpload({
     readings: readings.map((row) => ({
       reactorId: row.reactorId,
@@ -194,11 +198,7 @@ export async function submitTelemetry(
       pressureBar: row.pressureBar,
       gasFlowRate: row.gasFlowRate,
     })),
-    sensorRefs: sensorRows.map((row) => ({
-      reactorId: row.reactorId,
-      measurementProperty: row.measurementProperty,
-      sensorReference: row.sensorReference,
-    })),
+    sensorRefs,
   });
   if (aggregated.length === 0) {
     throw new SafeError(
@@ -239,13 +239,9 @@ export async function submitTelemetry(
     // bucketSeconds, so it uses this default). A literal here would silently
     // drift from the actual aggregation if the default ever changes.
     bucketSeconds: DEFAULT_BUCKET_SECONDS,
-    sensorRefs: sensorRows
-      .map((row) => ({
-        reactorId: row.reactorId,
-        measurementProperty: row.measurementProperty,
-        sensorReference: row.sensorReference,
-      }))
-      .sort((a, b) => a.sensorReference.localeCompare(b.sensorReference)),
+    sensorRefs: [...sensorRefs].sort((a, b) =>
+      a.sensorReference.localeCompare(b.sensorReference),
+    ),
     // Distinct run ids kept for human-auditable snapshots; the digest below
     // is what actually guards reading-level content changes.
     sourceProductionRunIds: [
@@ -716,7 +712,7 @@ function parseSignedUrlExpiry(url: string): Date | null {
   if (!expiresSeconds || !Number.isFinite(expiresSeconds)) return null;
   const signedAt = signedAtRaw ? parseAmzDate(signedAtRaw) : new Date();
   if (!signedAt) return null;
-  return new Date(signedAt.getTime() + expiresSeconds * 1000);
+  return new Date(signedAt.getTime() + expiresSeconds * MS_PER_SECOND);
 }
 
 function parseAmzDate(raw: string): Date | null {
