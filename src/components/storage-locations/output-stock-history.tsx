@@ -13,6 +13,7 @@ import { outputStockEventLabel } from "@/lib/output-stock/labels";
 import type { OutputStockHistoryEntry } from "@/types/output-stock";
 import { ClockCounterClockwiseIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
+import { StockKindIcon } from "./stock-kind-icons";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { OutputStockForm } from "./output-stock-form";
 import {
@@ -39,6 +40,8 @@ const HISTORY_HINT =
 interface EntryProps {
   entry: OutputStockHistoryEntry;
   kindLabel: string;
+  /** Movement kind the label and icon come from ("replacement" for a correction). */
+  kindKey: string;
   reversedEntry?: OutputStockHistoryEntry;
   reversed: boolean;
   correctable: boolean;
@@ -55,7 +58,7 @@ interface EntryProps {
  * in aligned rows. A correction folds its reversal into the replacement it
  * belongs to, so one operator action reads as one entry.
  */
-function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, last, timeZone, onCorrect }: EntryProps) {
+function HistoryEntry({ entry, kindLabel, kindKey, reversedEntry, reversed, correctable, last, timeZone, onCorrect }: EntryProps) {
   const subject = `${kindLabel.toLowerCase()} on ${formatFacilityDateTime(entry.occurredAt, timeZone)}`;
   const rows = [
     ...(entry.wetMassKg === null ? [] : [{ label: "Wet", value: formatWetAtMoisture(entry.wetMassKg, entry.moisturePercent) }]),
@@ -64,7 +67,7 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
   return (
     <li className="flex gap-12">
       <div className="flex flex-col items-center" aria-hidden="true">
-        <span className={`mt-6 size-8 shrink-0 rounded-full ${reversed ? "border border-[var(--color-border-primary)]" : "bg-[var(--color-text-primary)]"}`} />
+        <StockKindIcon kind={kindKey} size={16} className={`mt-4 shrink-0 bg-[var(--color-background-white)] ${reversed ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`} />
         {!last && <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />}
       </div>
       <article id={`output-movement-${entry.id}`} className="min-w-0 flex-1 space-y-8 pb-24">
@@ -149,6 +152,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
                 timeZone={clock.timeZone}
                 key={entry.id}
                 entry={entry}
+                kindKey={entry.correctsMovementId && entry.kind !== "reversal" ? "replacement" : entry.kind}
                 kindLabel={outputStockEventLabel(entry.correctsMovementId && entry.kind !== "reversal" ? "replacement" : entry.kind)}
                 reversedEntry={entry.correctsMovementId ? entries.find(item => item.id === entry.correctsMovementId) : undefined}
                 reversed={isReversed(entry)}
