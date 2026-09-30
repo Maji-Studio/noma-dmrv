@@ -6,6 +6,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { ONE_WAY_EACH_DELIVERY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DistanceCalcField,
@@ -245,6 +246,7 @@ export function SupplierLocationForm({
             certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
             certifyStatus={certStatus("distanceFromFacilityKm")}
             helperText="One-way road distance from this source location to the facility. Every feedstock delivery counts the round trip, twice this distance, in emissions."
+            cue={oneWayDistanceCue(distanceFromFacilityKm, ONE_WAY_EACH_DELIVERY_CUE)}
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

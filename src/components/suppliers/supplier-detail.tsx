@@ -208,7 +208,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                   <th className={LOCATION_HEAD_CLASS}>Source location position</th>
                   <th className="px-16 py-12 text-left">
                     <span className={cn("flex items-center gap-6", LOCATION_HEAD_TEXT)}>
-                      Distance to facility
+                      Distance to facility (one way)
                       <CertificationFieldTag />
                     </span>
                   </th>

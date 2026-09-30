@@ -14,10 +14,11 @@ import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIco
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
-import { formatRoundTripKm } from "@/lib/format-utils";
+import { ONE_WAY_CUE, formatRoundTripKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
+import { ControlUnitSuffix, unitEndPadding } from "@/components/forms/form-field";
 import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
@@ -53,8 +54,8 @@ import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
-/** End padding that keeps typed digits clear of the "km" suffix. */
-const DISTANCE_INPUT_STYLE = { paddingInlineEnd: "calc(2ch + var(--spacing-24))" } as const;
+const DISTANCE_UNIT = "km";
+const DISTANCE_INPUT_STYLE = { paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) } as const;
 
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
@@ -528,6 +529,7 @@ export function FeedstockForm({
               <FormField
                 id="transportDistanceKm"
                 label="Distance"
+                labelUnit={DISTANCE_UNIT}
                 error={errors.transportDistanceKm?.message}
                 certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
                 certifyStatus={transportDistanceCertStatus}
@@ -553,7 +555,6 @@ export function FeedstockForm({
                       error={!!errors.transportDistanceKm}
                       className="peer w-full"
                       style={DISTANCE_INPUT_STYLE}
-                      aria-describedby="transportDistanceKm-unit"
                       {...register("transportDistanceKm", {
                         setValueAs: numericValue,
                         onChange: (event) => {
@@ -573,16 +574,7 @@ export function FeedstockForm({
                         },
                       })}
                     />
-                    <span
-                      aria-hidden="true"
-                      data-control-unit=""
-                      className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[length:var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
-                    >
-                      km
-                    </span>
-                    <span id="transportDistanceKm-unit" className="sr-only">
-                      Kilometres
-                    </span>
+                    <ControlUnitSuffix unit={DISTANCE_UNIT} />
                   </div>
                     {isDistanceOverride && (
                       <button
@@ -598,15 +590,15 @@ export function FeedstockForm({
                       </button>
                     )}
                   </div>
-                  {countedTransportDistanceKm != null && (
-                    <p
-                      className="body-caption text-[var(--color-text-tertiary)] mt-6"
-                      data-testid="transport-distance-total"
-                      aria-live="polite"
-                    >
-                      {formatRoundTripKm(countedTransportDistanceKm)}
-                    </p>
-                  )}
+                  <p
+                    className="body-caption text-[var(--color-text-tertiary)] mt-6"
+                    data-testid="transport-distance-total"
+                    aria-live="polite"
+                  >
+                    {countedTransportDistanceKm != null
+                      ? formatRoundTripKm(countedTransportDistanceKm)
+                      : ONE_WAY_CUE}
+                  </p>
                 </div>
               </FormField>
             </ActionableFocusTarget>

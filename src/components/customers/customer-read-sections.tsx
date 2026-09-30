@@ -19,7 +19,7 @@ export function customerSheetSections(customer: CustomerWithRelations, locations
     {
       title: "Locations",
       fields: buildPartyLocationDetailFields(locations, {
-        distanceLabel: "Distance from facility",
+        distanceLabel: "Distance from facility (one way)",
         defaultLabel: "Default destination",
         positionLabel: "Application site position",
         descriptionLabel: "Site description",

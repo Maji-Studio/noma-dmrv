@@ -24,7 +24,7 @@ import {
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { formatRoundTripKm } from "@/lib/format-utils";
+import { ONE_WAY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
 
@@ -223,11 +223,7 @@ export function TransportLegForm({
             id="distanceKm"
             label="Distance"
             // Every leg counts its round trip; show what the entry counts.
-            cue={
-              distanceKm != null && Number.isFinite(distanceKm) && distanceKm > 0
-                ? formatRoundTripKm(distanceKm)
-                : undefined
-            }
+            cue={oneWayDistanceCue(distanceKm, ONE_WAY_CUE)}
             required
             certifyRequired={isTransportLegCertifyField("distanceKm")}
             certifyStatus={certStatus("distanceKm")}

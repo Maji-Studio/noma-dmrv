@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
-import { FormField } from "@/components/forms/form-field";
+import { ControlUnitSuffix, FormField, unitEndPadding } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { useGeoCapabilities, useRouteDistance } from "@/hooks/use-geo";
 import {
@@ -55,8 +55,6 @@ interface DistanceCalcFieldProps {
 }
 
 const DISTANCE_UNIT = "km";
-/** End padding that keeps typed digits clear of the unit suffix. */
-const DISTANCE_UNIT_END_SPACE = `calc(${DISTANCE_UNIT.length}ch + var(--spacing-24))`;
 
 const ROUTING_UNAVAILABLE_MESSAGE =
   "Routing is not set up. Enter the distance by hand.";
@@ -98,22 +96,11 @@ function DistanceControl({
           <FormInput
             {...inputProps}
             className={cn(inputProps.className, "peer w-full")}
-            style={{ paddingInlineEnd: DISTANCE_UNIT_END_SPACE }}
-            aria-describedby={
-              [aria["aria-describedby"], `${inputProps.id}-unit`].filter(Boolean).join(" ")
-            }
+            style={{ paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) }}
+            aria-describedby={aria["aria-describedby"]}
             {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
           />
-          <span
-            aria-hidden="true"
-            data-control-unit=""
-            className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[length:var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
-          >
-            {DISTANCE_UNIT}
-          </span>
-          <span id={`${inputProps.id}-unit`} className="sr-only">
-            Kilometres
-          </span>
+          <ControlUnitSuffix unit={DISTANCE_UNIT} />
         </div>
         {action}
       </div>
@@ -204,6 +191,7 @@ export function DistanceCalcField({
       error={error ?? (route.isError ? route.error.message : undefined)}
       helperText={helperText}
       cue={cue}
+      labelUnit={DISTANCE_UNIT}
       required={required}
       certifyRequired={certifyRequired}
       certifyStatus={certifyStatus}
