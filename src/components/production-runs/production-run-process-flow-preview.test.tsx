@@ -60,7 +60,8 @@ describe("ProcessFlowPreview", () => {
     expect(widths).toHaveLength(2);
     expect(widths[0]).toBe(100);
     expect(widths[1]).toBeCloseTo(30, 5);
-    
+    // The old rail: a dot per stop and a line between them.
+    expect(html).not.toContain("rounded-full");
   });
 
   it("draws an unresolved bar to the same scale", () => {

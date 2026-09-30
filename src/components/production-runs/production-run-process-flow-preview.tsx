@@ -26,14 +26,14 @@
 import type { ReactNode } from "react";
 import { CompositionCard } from "@/components/forms/composition-card";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
+import { flowBarWidthPercent, flowScaleKg } from "./production-run-flow-scale";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { formatMassKg, formatPercent } from "@/lib/format-utils";
 import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { StockRows, type StockRow } from "@/components/storage-locations/stock-figures";
 
 const YIELD_DIGITS = 1;
-/** Smallest share of the row a resolved bar is drawn at, so a tiny output stays visible. */
-const MIN_FLOW_BAR_PERCENT = 6;
+
 
 const PROCESS_FLOW_HINT =
   "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses.";
@@ -86,7 +86,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
   const basis = resolveBasis(props);
   // Until a yield resolves there is no basis to name, only the figure missing.
   const yieldLabel = basis.yieldPercent === null ? "Yield" : `${basis.dry ? "Dry" : "Wet"} yield`;
-  const scaleKg = Math.max(feedstockKg ?? 0, biocharKg ?? 0);
+  const scaleKg = flowScaleKg(feedstockKg, biocharKg);
 
   return (
     <CompositionCard
@@ -157,10 +157,7 @@ function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel,
   /** The heavier of the two wet masses: the mass that fills the row. */
   scaleKg: number;
 }) {
-  const barWidthPercent =
-    massKg !== null && scaleKg > 0
-      ? Math.max((massKg / scaleKg) * PERCENT_SCALE, MIN_FLOW_BAR_PERCENT)
-      : undefined;
+  const barWidthPercent = flowBarWidthPercent(massKg, scaleKg);
   return (
     <div className="space-y-8">
       <div className="flex items-baseline justify-between gap-8">

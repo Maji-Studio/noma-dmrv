@@ -134,7 +134,7 @@ export function ProductionRunFeedstockDrawRow({
             id={`feedstockDraws.${index}.wetMassKg`}
             label="Wet mass (kg)"
             error={resolvedWetMassError}
-            cue={availability?.availableKg != null ? `${formatStockLimitKg(availability.availableKg)} available in this bin` : undefined}
+            cue={availability?.availableKg != null ? `${formatStockLimitKg(availability.availableKg)} available ${productionRunId ? "to this run" : "in this bin"}` : undefined}
             hint="As-received weight from this bin, water included."
             required
           >
