@@ -4,6 +4,8 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Modal } from "@/components/ui";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
+import { formatWetEstimate } from "@/components/storage-locations/stock-preview-shared";
 import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import type { MatchingOutputBin } from "@/types/output-stock";
@@ -15,17 +17,23 @@ import { Notice } from "@/components/ui/notice";
 /** Status lines under a block: caption size, secondary ink. */
 const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
 
-/** What the single figure counts: wet when every bin resolves, dry as the fallback. */
-export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { text: string; binCount: number } {
+/**
+ * The row's figures. Wet leads, as an estimate, and counts only the bins that
+ * have one: a partial sum is never presented as the total, and a headline never
+ * switches to dry. The dry stock is a secondary line.
+ */
+export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string; dry: string; dryKnown: boolean; binCount: number } {
   const binCount = bins.length;
-  if (bins.every(bin => bin.estimatedWetMassKg != null)) {
-    const wetKg = bins.reduce((sum, bin) => sum + (bin.estimatedWetMassKg ?? 0), 0);
-    return { text: `≈ ${formatMassKg(wetKg)} wet`, binCount };
-  }
-  const known = bins.filter(bin => bin.dryMassKg != null);
-  if (known.length === 0) return { text: MISSING_VALUE.notRecorded, binCount };
-  const dryKg = known.reduce((sum, bin) => sum + (bin.dryMassKg ?? 0), 0);
-  return { text: `${formatMassKg(dryKg)} dry`, binCount };
+  const withWet = bins.filter(bin => bin.estimatedWetMassKg != null);
+  const withDry = bins.filter(bin => bin.dryMassKg != null);
+  const wetKg = withWet.reduce((sum, bin) => sum + (bin.estimatedWetMassKg ?? 0), 0);
+  const dryKg = withDry.reduce((sum, bin) => sum + (bin.dryMassKg ?? 0), 0);
+  const wet = withWet.length === 0
+    ? MISSING_VALUE.notAvailable
+    : withWet.length === binCount
+      ? `≈ ${formatWetEstimate(wetKg)} kg wet`
+      : `≈ ${formatWetEstimate(wetKg)} kg wet in ${withWet.length} of ${binCount} bins`;
+  return { wet, dry: withDry.length === 0 ? MISSING_VALUE.notAvailable : formatMassKg(dryKg), dryKnown: withDry.length > 0, binCount };
 }
 
 /**
@@ -54,9 +62,10 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
         className="flex w-full items-center justify-between gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-10 text-left transition-colors duration-300 hover:border-[var(--color-border-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]"
       >
         <span className="flex min-w-0 flex-col gap-2">
-          <span className="body-small text-[var(--color-text-secondary)]">Available stock</span>
-          <span className="body-medium font-medium tabular-nums text-[var(--color-text-primary)]">{summary.text}</span>
-          <span className={STATUS_CLASS}>{`In ${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}. Tap to see each bin.`}</span>
+          <span className="body-small text-[var(--color-text-secondary)]">Available wet stock, estimate</span>
+          <span className="body-medium font-medium tabular-nums text-[var(--color-text-primary)]">{summary.wet}</span>
+          <SecondaryFigure label="Available dry stock" value={summary.dry} empty={!summary.dryKnown} />
+          <span className={STATUS_CLASS}>{`${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}. Tap to see each bin.`}</span>
         </span>
         <CaretRightIcon aria-hidden size={16} weight="bold" className="shrink-0 text-[var(--color-text-tertiary)]" />
       </button>

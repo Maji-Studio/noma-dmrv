@@ -140,8 +140,7 @@ export function CohortInputLedger({
         <InfoHint label="More about production inputs">
           Diesel adds startup, genset and preprocessing fuel. Each input is claimed once in full for this credit batch, even when
           its output is later split across Removals. Isometric calculates CO₂e
-          at submission. noma submits the quantities above, not emission
-          factors.
+          at submission. noma submits these quantities, not emission factors.
         </InfoHint>
       </div>
 

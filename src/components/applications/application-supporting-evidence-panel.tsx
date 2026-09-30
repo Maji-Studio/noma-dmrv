@@ -94,7 +94,7 @@ export function ApplicationSupportingEvidencePanel({
 
   const upload = applicationId ? (
     <FormFileUpload
-      id={`application-${applicationId}-supporting-evidence-upload`}
+      id={uploadId}
       accept={SUPPORTING_EVIDENCE_ACCEPT}
       disabled={disabled}
       entityType={ENTITY_TYPE}
@@ -108,7 +108,7 @@ export function ApplicationSupportingEvidencePanel({
     />
   ) : (
     <FormFileUpload
-      id="application-create-supporting-evidence-upload"
+      id={uploadId}
       accept={SUPPORTING_EVIDENCE_ACCEPT}
       disabled={disabled}
       deferred

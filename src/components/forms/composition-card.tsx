@@ -26,6 +26,7 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
 import { useId, useState, type ReactNode } from "react";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -86,7 +87,12 @@ export function CompositionCard({
       {hasActions && (
         <div
           hidden={!showActionRow}
-          className="flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-[var(--color-border-tertiary)] pt-8"
+          className={cn(
+            "flex flex-wrap items-center gap-x-8 gap-y-4",
+            // The rule divides the picture from the calculation control, so it
+            // only shows with that control (Detailed). Actions alone need none.
+            calculation && detailed && "border-t border-[var(--color-border-tertiary)] pt-8",
+          )}
         >
           {calculation && (
             <Button

@@ -31,22 +31,34 @@ describe("MatchingOutputBins", () => {
     expect(html).not.toContain("Orders do not reserve stock.");
     expect(html).not.toContain("150 kg");
   });
-  it("shows one wet total that opens the bins", () => {
+  it("shows one wet total with dry as a secondary line, and the button opens the bins", () => {
     state.bins = [
       { id: "a", code: "B1", name: "Bin A", dryMassKg: 100, estimatedWetMassKg: 120 },
       { id: "b", code: "B2", name: "Bin B", dryMassKg: 70, estimatedWetMassKg: 80 },
     ];
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
-    expect(html).toContain("Available stock");
-    expect(html).toContain("≈ 200 kg wet");
-    expect(html).toContain("In 2 bins");
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    expect(text).toContain("Available wet stock, estimate");
+    expect(text).toContain("≈ 200 kg wet");
+    expect(text).toContain("Available dry stock 170 kg");
+    expect(text).toContain("2 bins");
     expect(html).not.toContain('role="article"');
   });
-  it("falls back to dry when a bin has no wet estimate", () => {
-    expect(summarizeMatchingStock([
+  it("says how many bins a partial wet estimate covers and keeps wet as the headline", () => {
+    const bins = [
       { id: "a", code: "B1", name: "A", dryMassKg: 100, estimatedWetMassKg: 120 },
-      { id: "b", code: "B2", name: "B", dryMassKg: 70, estimatedWetMassKg: null },
-    ]).text).toBe("170 kg dry");
+      { id: "b", code: "B2", name: "B", dryMassKg: 70, estimatedWetMassKg: 50 },
+      { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: null },
+    ];
+    const summary = summarizeMatchingStock(bins);
+    expect(summary.wet).toBe("≈ 170 kg wet in 2 of 3 bins");
+    expect(summary.dry).toBe("200 kg");
+  });
+  it("reads Not available when nothing resolves", () => {
+    const summary = summarizeMatchingStock([{ id: "a", code: "B1", name: "A", dryMassKg: null, estimatedWetMassKg: null }]);
+    expect(summary.wet).toBe("Not available");
+    expect(summary.dry).toBe("Not available");
+    expect(summary.dryKnown).toBe(false);
   });
   it("explicitly permits an order without stock", () => {
     state.bins = [];

@@ -481,7 +481,11 @@ stock family presents wet first. Only presentation changes.
   right after the requested wet mass field). Headline "Available wet stock,
   estimate" at each batch's latest moisture reading, since an order has no
   departure moisture yet, with available dry stock as a secondary line under it at
-  both levels; the batch bar and key as the picture.
+  both levels; the batch bar and key as the picture. On the order form and
+  read sheet the bins collapse into one tappable "Available stock" row
+  (wet estimate first, dry secondary) that opens a "Matching stock" modal with
+  these cards. The row's wet figure sums only the bins that have an estimate and
+  says "in N of M bins" when some do not; it never switches to dry.
 - A wet estimate is computed at a moisture, not weighed: its label always says
   "estimate", and it reads in whole kilograms.
 

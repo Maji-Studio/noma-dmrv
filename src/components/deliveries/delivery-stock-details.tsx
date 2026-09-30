@@ -6,11 +6,11 @@
  * levels show them. Detailed adds the ledger with each batch's share of the
  * total.
  *
- * The action row carries `Show calculation` for the production runs behind each
- * batch and the stock history dialog. The calculation deliberately holds runs
- * only: the ledger directly above it already totals every batch, and two
- * breakdowns of the same draw read as two competing answers. Stock history is
- * the block's own action, shown at both levels.
+ * The action row carries `Show calculation` (Detailed) for the production runs
+ * behind each batch and the stock history dialog (both levels). The calculation
+ * deliberately holds runs only: the ledger above it already totals every batch,
+ * and two breakdowns of the same draw read as two competing answers. The card
+ * draws its rule only above the calculation control, so Simple has none.
  */
 "use client";
 import { CompositionCard, CompositionLedger } from "@/components/forms";
@@ -60,6 +60,7 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
     <CompositionCard
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}
+      actions={storageLocationId ? <OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} /> : undefined}
       calculation={groups.length > 0 ? <SourceRunGroups label="Source production runs per delivered batch" groups={groups} /> : undefined}
       detail={<CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />}
     >
@@ -73,7 +74,6 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
         <SegmentBar label={TOTAL_LABEL} segments={drawn} />
         <SegmentKey segments={drawn} format={formatDryKeyMass} />
       </div>}
-      {storageLocationId && <div><OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} /></div>}
     </CompositionCard>
   </>;
 }

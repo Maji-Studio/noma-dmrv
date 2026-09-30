@@ -7,7 +7,7 @@ import { z } from "zod";
 import { GearIcon } from "@phosphor-icons/react/dist/ssr";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
-import { FormField, FormInput, ServerError } from "@/components/forms";
+import { FormActions, FormField, FormInput } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
@@ -91,6 +91,7 @@ export function MethodBPrerequisitesSetup({
         onClose={() => setOpen(false)}
         title="Method-B prerequisites"
         testId="method-b-prerequisites-dialog"
+        dismissible={!recordPrerequisites.isPending}
       >
         <div className="grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2">
           <FormField
@@ -138,15 +139,15 @@ export function MethodBPrerequisitesSetup({
             {...register("randomSamplingPlanRef")}
           />
         </FormField>
-        {serverError && <ServerError message={serverError} />}
-        <div className="flex justify-end gap-8">
-          <Button variant="weak" onClick={() => setOpen(false)} disabled={recordPrerequisites.isPending}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={submit} busy={recordPrerequisites.isPending}>
-            Record prerequisites
-          </Button>
-        </div>
+        <FormActions
+          sticky={false}
+          submitType="button"
+          onSubmitClick={submit}
+          submitLabel="Record prerequisites"
+          onCancel={() => setOpen(false)}
+          isSubmitting={recordPrerequisites.isPending}
+          errorMessage={serverError ?? undefined}
+        />
       </QuickAddDialogShell>
     </>
   );
