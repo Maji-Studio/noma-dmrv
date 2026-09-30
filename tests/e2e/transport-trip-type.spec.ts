@@ -19,6 +19,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 // Sorts ahead of the seeded feedstock/delivery rows (deliveryDate desc), so
 // "first row" reopens the record this spec created.
@@ -30,7 +31,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
 
   await waitForFacilityHydration(page, seededData.facility.name);
 
-  await page.click('button:has-text("New Order")');
+  await page.click('button:has-text("New order")');
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', "2026-03-02");
@@ -46,7 +47,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "50");
   await selectEntity(page, "Formulation", seededData.formulation.id, seededData.formulation.name);
-  await page.click('button[type="submit"]:has-text("Create Order")');
+  await page.click('button[type="submit"]:has-text("Create order")');
   await waitForSideSheetClose(page);
 }
 
@@ -62,7 +63,7 @@ test.describe("Transport trip type (#316)", () => {
 
     await waitForFacilityHydration(page, seededData.facility.name);
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
@@ -104,7 +105,7 @@ test.describe("Transport trip type (#316)", () => {
     // Override to One-way, then save.
     await tripType.selectOption("one_way");
     await expect(dialog.getByTestId("transport-distance-total")).toHaveCount(0);
-    await dialog.locator('button:has-text("Create Feedstock")').click();
+    await dialog.locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
 
     // Reopen: row → view sheet → edit form. The trip type prefills async from
@@ -112,7 +113,7 @@ test.describe("Transport trip type (#316)", () => {
     await page.waitForLoadState("networkidle");
     await page.locator("table tbody tr").first().click();
     await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit Feedstock" }).click();
+    await page.getByRole("button", { name: "Edit feedstock" }).click();
     await expect(
       page.locator('[role="dialog"] select[name="transportTripType"]')
     ).toHaveValue("one_way", { timeout: 15000 });
@@ -130,7 +131,7 @@ test.describe("Transport trip type (#316)", () => {
     await expect(page).toHaveURL(/\/deliveries/, { timeout: 10000 });
     await waitForFacilityHydration(page, seededData.facility.name);
 
-    await page.click('button:has-text("New Delivery")');
+    await page.click('button:has-text("New delivery")');
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
@@ -141,13 +142,13 @@ test.describe("Transport trip type (#316)", () => {
     const tripType = dialog.locator('select[name="tripType"]');
     await expect(tripType).toHaveValue("return");
 
-    await page.fill('input[name="deliveryDate"]', FUTURE_DATE);
+    await page.fill('input[name="deliveryDate"]', `${FUTURE_DATE}T12:00`);
     await selectEntityByText(page, "Order", seededData.customer.name);
     await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
-    await page.fill('input[name="moistureContentPercent"]', "10");
+    await fillStockMoisture(page, "delivery", "10");
     await tripType.selectOption("one_way");
-    await page.click('button[type="submit"]:has-text("Create Delivery")');
+    await page.click('button[type="submit"]:has-text("Create delivery")');
     await waitForSideSheetClose(page);
 
     // Reopen: row → view sheet → edit form. tripType is a delivery column, so
@@ -155,7 +156,7 @@ test.describe("Transport trip type (#316)", () => {
     await page.waitForLoadState("networkidle");
     await page.locator("table tbody tr").first().click();
     await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit Delivery" }).click();
+    await page.getByRole("button", { name: "Edit delivery" }).click();
     await expect(
       page.locator('[role="dialog"] select[name="tripType"]')
     ).toHaveValue("one_way", { timeout: 15000 });
@@ -170,14 +171,14 @@ test.describe("Transport trip type (#316)", () => {
 
     // Supplier create sheet → pending source-location dialog.
     await page.goto("/suppliers");
-    await page.click('button:has-text("New Supplier")');
+    await page.click('button:has-text("New supplier")');
     await waitForSideSheet(page);
     const supplierSheet = page.getByRole("dialog", {
-      name: "Create Supplier",
+      name: "Create supplier",
     });
-    await supplierSheet.getByRole("button", { name: "Add Location" }).click();
+    await supplierSheet.getByRole("button", { name: "Add location" }).click();
     const supplierLocationDialog = page.getByRole("dialog", {
-      name: "Add Location",
+      name: "Add location",
     });
     await expect(
       supplierLocationDialog.getByText(
@@ -186,10 +187,10 @@ test.describe("Transport trip type (#316)", () => {
     ).toBeVisible();
     await page.keyboard.press("Escape");
 
-    // Customer detail → Add Location dialog.
+    // Customer detail → Add location dialog.
     await page.goto(`/customers/${seededData.customer.id}`);
     await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: "Add Location" }).click();
+    await page.getByRole("button", { name: "Add location" }).click();
     // The locations table header now carries the same copy (QA detail-view
     // pass), so target the form INPUT via its accessible name.
     await expect(

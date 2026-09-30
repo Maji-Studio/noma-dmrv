@@ -39,6 +39,7 @@ import type { Reactor } from "@/db/schema";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { formatTotalThroughputTph } from "./reactor-throughput";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { reactorSheetSections } from "./reactor-read-sections";
 
 // ============================================
 // Column Definitions
@@ -246,7 +247,7 @@ export function ReactorList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Reactor" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create reactor" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.identifier;
@@ -260,7 +261,7 @@ export function ReactorList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Reactor
+            New reactor
           </Button>
         }
       />
@@ -268,14 +269,14 @@ export function ReactorList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
-          title="Total Reactors"
+          title="Total reactors"
           value={totalReactors}
           icon={<LightningIcon size={24} weight="bold" />}
           description="Pyrolysis equipment units"
           isLoading={isLoading}
         />
         <StatCard
-          title="Throughput on This Page"
+          title="Throughput on this page"
           value={totalThroughputValue}
           icon={<FlaskIcon size={24} weight="bold" />}
           description="Combined nominal throughput on this page"
@@ -338,7 +339,7 @@ export function ReactorList() {
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingReactorId}
-        title="Delete Reactor"
+        title="Delete reactor"
         message="Are you sure you want to delete this reactor? This action cannot be undone. Note: Reactors with associated production runs cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -356,22 +357,8 @@ export function ReactorList() {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Reactor"
-        sections={sideSheetEntity ? [
-          {
-            title: "Required information",
-            fields: [
-              { label: "Identifier", value: sideSheetEntity.identifier },
-            ],
-          },
-          {
-            title: "Reactor configuration",
-            fields: [
-              { label: "Reactor type", value: formatReactorType(sideSheetEntity.reactorType) },
-              { label: "Nominal throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
-            ],
-          },
-        ] : undefined}
+        editLabel="Edit reactor"
+        sections={sideSheetEntity ? reactorSheetSections(sideSheetEntity) : undefined}
       >
         <ReactorForm
           key={sideSheetEntity?.id ?? "create"}
@@ -380,7 +367,7 @@ export function ReactorList() {
           onCancel={closeSideSheet}
           isSubmitting={createReactor.isPending || updateReactor.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Reactor"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create reactor"}
         />
       </EntitySideSheet>
     </div>

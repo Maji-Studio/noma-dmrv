@@ -36,6 +36,7 @@ import {
   DEFAULT_PROTOCOL_SLUG,
 } from "@/config/certification";
 import { EnvBanner } from "./env-banner";
+import { Notice } from "@/components/ui/notice";
 
 // Carry the edited facility through to Settings — the facility side-sheet can
 // show a facility other than the sidebar-selected one (same rationale as
@@ -303,7 +304,7 @@ export function FacilityIsometricConnector({
       )}
 
       {requiresShareAck && (
-        <div className="flex flex-col gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16">
+        <Notice tone="warning">
           <p className="body-small text-[var(--color-text-primary)]">
             This project is already linked to{" "}
             <strong className="body-small-bold">
@@ -312,7 +313,7 @@ export function FacilityIsometricConnector({
             . Submissions from this and the listed facilities will target the
             same Isometric project.
           </p>
-          <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
+          <label className="mt-12 flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
             <input
               type="checkbox"
               className="mt-2 shrink-0"
@@ -323,7 +324,7 @@ export function FacilityIsometricConnector({
             />
             <span>I intend to share this project across facilities.</span>
           </label>
-        </div>
+        </Notice>
       )}
 
       {isProduction && isDirty && (

@@ -1,3 +1,5 @@
+import { Notice } from "@/components/ui/notice";
+
 interface CompilationBlockersProps {
   blockers: string[];
   showHeading?: boolean;
@@ -15,24 +17,13 @@ export function CompilationBlockers({
   if (blockers.length === 0) return null;
 
   return (
-    <div className="border-l-2 border-[var(--st-bad)] pl-12" role="alert">
-      {showHeading && (
-        <p className="body-small font-medium text-[var(--color-text-primary)]">
-          Compilation blocked
-        </p>
-      )}
-      <ul
-        className={
-          showHeading
-            ? "mt-4 list-disc pl-16 body-small text-[var(--color-text-secondary)]"
-            : "list-disc pl-16 body-small text-[var(--color-text-secondary)]"
-        }
-      >
+    <Notice tone="error" title={showHeading ? "Compilation blocked" : undefined}>
+      <ul className="list-disc pl-16">
         {blockers.map((blocker) => (
           <li key={blocker}>{blocker}</li>
         ))}
       </ul>
-    </div>
+    </Notice>
   );
 }
 

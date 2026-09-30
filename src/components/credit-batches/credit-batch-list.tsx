@@ -17,7 +17,6 @@ import {
   CertificateIcon,
   LeafIcon,
   PlusIcon,
-  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import {
@@ -67,6 +66,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { sumNullableBy } from "@/lib/nullable-sum";
+import { Notice } from "@/components/ui/notice";
 
 // ============================================
 // Helpers
@@ -500,7 +500,7 @@ export function CreditBatchList({
   const sideSheetEntity = viewEntity;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Credit Batch" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create credit batch" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" || !sideSheetEntity
@@ -524,7 +524,7 @@ export function CreditBatchList({
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Credit Batch
+            New credit batch
           </Button>
         }
       />
@@ -585,28 +585,21 @@ export function CreditBatchList({
       />
 
       {healthError && (
-        <div
-          className="flex flex-col gap-12 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-16 py-12 sm:flex-row sm:items-center sm:justify-between"
-          role="alert"
+        <Notice
+          tone="warning"
+          action={
+            <Button
+              variant="weak"
+              size="small"
+              busy={healthFetching}
+              onClick={() => void refetchHealth()}
+            >
+              Retry
+            </Button>
+          }
         >
-          <span className="inline-flex items-center gap-8 body-small text-[var(--color-text-secondary)]">
-            <WarningIcon
-              size={16}
-              weight="fill"
-              className="shrink-0 text-[var(--st-wait)]"
-              aria-hidden
-            />
-            {readinessErrorMessage(readinessFilter)}
-          </span>
-          <Button
-            variant="weak"
-            size="small"
-            busy={healthFetching}
-            onClick={() => void refetchHealth()}
-          >
-            Retry
-          </Button>
-        </div>
+          {readinessErrorMessage(readinessFilter)}
+        </Notice>
       )}
 
       {/* Card Grid or Empty State */}
@@ -670,20 +663,22 @@ export function CreditBatchList({
         isOpen={!!deletingBatchId}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingBatchId(null)}
-        title="Delete Credit Batch"
+        title="Delete credit batch"
         message={CREDIT_BATCH_DELETE_MESSAGE}
         isPending={deleteCreditBatch.isPending}
       />
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        detailToggle="view"
+        detailScope={sideSheetEntity?.id ?? "create"}
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Credit Batch"
+        editLabel="Edit credit batch"
         canEdit={!sideSheetLocked}
         size="wide"
         sections={

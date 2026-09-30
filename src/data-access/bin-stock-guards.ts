@@ -1,4 +1,4 @@
-import { getOutputBinDryBalance, getOutputStockAllocationProjection } from './output-stock';
+import { getOutputBinAllLayersDryKg, getOutputStockAllocationProjection } from './output-stock';
 /**
  * Bin over-draw guards (issue #116)
  *
@@ -74,7 +74,7 @@ export async function deriveProductAvailableKg(
 ): Promise<number> {
   requireOrgScope(ctx);
   if (excludeDeliveryId) throw new SafeError('Stock edits require an explicit correction preview.');
-  return getOutputBinDryBalance(ctx, storageLocationId, tx);
+  return getOutputBinAllLayersDryKg(ctx, storageLocationId, tx);
 }
 
 /** Derive one bin lane while the caller holds that bin's transaction lock. */
@@ -107,7 +107,7 @@ export async function deriveBiocharAvailableKg(
 ): Promise<number> {
   requireOrgScope(ctx);
   if (excludeProductId) throw new SafeError('Product source allocations are immutable.');
-  return getOutputBinDryBalance(ctx, biocharStorageLocationId, tx);
+  return getOutputBinAllLayersDryKg(ctx, biocharStorageLocationId, tx);
 }
 
 /**

@@ -47,19 +47,15 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import {
-  FacilityCertifierLinkLoader,
-  FacilityCertifierSummary,
-} from "@/components/certification";
+import { FacilityCertifierLinkLoader } from "@/components/certification";
 import { FacilityForm } from "./facility-form";
 import { FacilityCard } from "./facility-card";
 import { ArchiveFacilityDialog } from "./archive-facility-dialog";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
 import type { FacilityWithRelations } from "@/data-access/facilities";
-import { formatTimezoneLabel } from "@/lib/date-utils";
-import { formatDurabilityOption } from "@/schemas/credit-batches";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { CardSkeleton } from "@/components/ui/loading-skeleton";
+import { facilitySheetSections } from "./facility-read-sections";
 
 /** Placeholder cards shown while the first page of facilities loads. */
 const LOADING_CARD_COUNT = 3;
@@ -258,81 +254,13 @@ export function FacilityList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Facility" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create facility" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name;
 
   const sideSheetSections = sideSheetEntity
-    ? [
-        {
-          title: "Facility information",
-          fields: [
-            { label: "Facility name", value: sideSheetEntity.name },
-            { label: "Country", value: sideSheetEntity.country },
-            { label: "Timezone", value: formatTimezoneLabel(sideSheetEntity.timezone) },
-            { label: "Location", value: sideSheetEntity.location },
-            { label: "Address", value: sideSheetEntity.address },
-            { label: "Facility position latitude", value: sideSheetEntity.gpsLatitude },
-            { label: "Facility position longitude", value: sideSheetEntity.gpsLongitude },
-            { label: "Contact email", value: sideSheetEntity.contactEmail },
-            { label: "Contact phone", value: sideSheetEntity.contactPhone },
-            { label: "Durability tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
-          ],
-        },
-        {
-          title: "Infrastructure",
-          fields: [
-            {
-              label: "Reactors",
-              value: formatCount(sideSheetEntity.reactorCount, "reactor"),
-            },
-            {
-              label: "Feedstock bins",
-              value: formatCount(
-                sideSheetEntity.storageSummary.feedstockBinCount,
-                "bin",
-              ),
-            },
-            {
-              label: "Biochar bins",
-              value: formatCount(
-                sideSheetEntity.storageSummary.biocharBinCount,
-                "bin",
-              ),
-            },
-            {
-              label: "Product bins",
-              value: formatCount(
-                sideSheetEntity.storageSummary.productBinCount,
-                "bin",
-              ),
-            },
-          ],
-        },
-        {
-          title: "Inventory snapshot",
-          fields: [
-            {
-              label: "Feedstock on hand (wet)",
-              value: formatMass(sideSheetEntity.inventorySummary.feedstockWetKg),
-            },
-            {
-              label: "Biochar on hand",
-              value: formatMass(sideSheetEntity.inventorySummary.biocharKg),
-            },
-            {
-              label: "Product mass",
-              value: formatMass(sideSheetEntity.inventorySummary.productKg),
-            },
-          ],
-        },
-        {
-          title: "Registry connection",
-          fields: [],
-          content: <FacilityCertifierSummary facilityId={sideSheetEntity.id} />,
-        },
-      ]
+    ? facilitySheetSections(sideSheetEntity)
     : undefined;
 
   return (
@@ -344,28 +272,28 @@ export function FacilityList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Facility
+            New facility
           </Button>
         }
       />
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          title={showArchived ? "Archived Facilities" : "Active Facilities"}
+          title={showArchived ? "Archived facilities" : "Active facilities"}
           value={totalFacilities}
           icon={<FactoryIcon size={24} weight="bold" />}
           description="Facilities matching the current filters"
           isLoading={isLoading}
         />
         <StatCard
-          title="Total Reactors"
+          title="Total reactors"
           value={totalReactors}
           icon={<LightningIcon size={24} weight="bold" />}
           description="Installed across the visible facilities"
           isLoading={isLoading}
         />
         <StatCard
-          title="Wet Feedstock On Hand"
+          title="Wet feedstock on hand"
           value={formatMass(feedstockOnHandKg)}
           icon={<PackageIcon size={24} weight="bold" />}
           description={`${formatCount(totalStorageBins, "storage bin")} on this page`}
@@ -520,7 +448,7 @@ export function FacilityList() {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Facility"
+        editLabel="Edit facility"
         sections={sideSheetSections}
       >
         <FacilityForm
@@ -530,7 +458,7 @@ export function FacilityList() {
           onCancel={closeSideSheet}
           isSubmitting={createFacility.isPending || updateFacility.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Facility"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create facility"}
         />
       </EntitySideSheet>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-detail-context";
 import {
   FormField,
   FormInput,
@@ -7,7 +8,7 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
-import { Button } from "@/components/ui";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { useToast } from "@/components/ui/toast";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -38,8 +39,15 @@ import { OutputStockForm } from "./output-stock-form";
 const LOSS_CONFLICT_MESSAGE =
   "A loss from this form is already recorded. Check the reconciliation history before you submit again.";
 
+type OutputKind = "loss" | "count";
+
+const MOVEMENT_OPTIONS = [
+  { value: "loss", label: "Record loss" },
+  { value: "count", label: "Reconcile stock" },
+] as const;
+
 interface BinReconcileSheetProps {
-  initialKind?: "loss" | "count";
+  initialKind?: OutputKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   storageLocation: StorageLocationWithFacility | null;
@@ -240,7 +248,7 @@ export function BinReconcileSheet({
   storageLocation,
   onRecorded,
 }: BinReconcileSheetProps) {
-  const [outputKind, setOutputKind] = useState<"loss" | "count">(initialKind);
+  const [outputKind, setOutputKind] = useState<OutputKind>(initialKind);
   const close = () => onOpenChange(false);
   const handleRecorded = () => {
     onRecorded?.();
@@ -248,15 +256,16 @@ export function BinReconcileSheet({
   };
 
   return (
+    <FormDetailProvider scope={`${open}:${storageLocation?.id}:${outputKind}`} enabled={!!storageLocation && storageLocation.type !== "feedstock_bin"}>
     <SlideOverPanel.Root open={open} onOpenChange={onOpenChange}>
       <SlideOverPanel.Content size="default">
-        <SlideOverPanel.Header showClose>
+        <SlideOverPanel.Header showClose actions={<FormDetailControl />}>
           <div className="flex flex-col gap-4 min-w-0">
             <SlideOverPanel.Title>
               {storageLocation ? `Reconcile ${storageLocation.code}` : "Reconcile"}
             </SlideOverPanel.Title>
             {storageLocation && (
-              <SlideOverPanel.Description>
+              <SlideOverPanel.Description className="truncate">
                 {storageLocation.name}
               </SlideOverPanel.Description>
             )}
@@ -278,10 +287,14 @@ export function BinReconcileSheet({
                 onRecorded={handleRecorded}
               />
               </> : <>
-                <div className="flex gap-12">
-                  <Button variant="default" onClick={() => setOutputKind("loss")}>Record loss</Button>
-                  <Button variant="default" onClick={() => setOutputKind("count")}>Reconcile stock</Button>
-                </div>
+                {/* Which mode the sheet is in has to be readable at a glance:
+                    the two forms differ only in their labels otherwise. */}
+                <SegmentedControl
+                  legend="Movement to record"
+                  options={MOVEMENT_OPTIONS}
+                  value={outputKind}
+                  onValueChange={(next) => setOutputKind(next as OutputKind)}
+                />
                 <OutputStockForm key={`${storageLocation.id}-${outputKind}`} storageLocationId={storageLocation.id} facilityId={storageLocation.facilityId} kind={outputKind} onCancel={close} onRecorded={handleRecorded} />
               </> }
             </div>
@@ -289,5 +302,6 @@ export function BinReconcileSheet({
         </SlideOverPanel.Body>
       </SlideOverPanel.Content>
     </SlideOverPanel.Root>
+    </FormDetailProvider>
   );
 }

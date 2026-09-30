@@ -3789,7 +3789,7 @@ export interface components {
          *
          *     CUSTOM_TIME_PERIOD - Automatic amortization ensuring full amortization by a specified target date.
          *
-         *     ESTIMATED_PROJECT_LIFETIME - Automatic amortization ensuring full amortization over the project's estimated lifetime.
+         *     ESTIMATED_PROJECT_LIFETIME - Automatic amortization ensuring full amortization over the project's estimated lifetime, or 20 years, whichever is shorter.
          *
          *     ESTIMATED_PROJECT_REDUCTION_TONNAGE - Automatic amortization ensuring full amortization in proportion to the project's estimated gross reduction.
          * @enum {string}

@@ -19,6 +19,7 @@ import {
   formulations,
 } from "@/db/schema/products";
 import { isPositiveApplicationFieldSize } from "@/lib/application-field-size";
+import { formatUtcDate } from "@/lib/date-utils";
 import type { OrgContext } from "@/lib/auth/server";
 import { allocateTrackedDryBiocharKg } from "@/lib/biochar-mass-accounting";
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
@@ -49,6 +50,7 @@ import {
 } from "drizzle-orm";
 import { GRAMS_PER_KG, massGrams, splitGrams } from "./delivery-allocation-math";
 import { getApplicationAllocationShares, saveApplicationOutputAllocations, type ApplicationAllocationShare } from "./delivery-allocation-provenance";
+import { getMixBinHeldApplicationIds } from "./mix-bin-credit-hold";
 
 import { SafeError } from "@/lib/errors";
 import { parseGisBoundary } from "@/schemas/gis-boundary";
@@ -59,6 +61,7 @@ import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-
 import { inDeliveryCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
+import { facilityTimestampDateExpr } from "./output-stock-dates";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -110,6 +113,8 @@ export interface ApplicationDeliveryOptionData {
   code: string;
   status: DeliveryStatus;
   deliveryDate: Date;
+  /** The delivery's calendar day on its facility clock ("YYYY-MM-DD"). */
+  deliveryDay: string | null;
   orderCode: string | null;
   formulationName: string | null;
   productBinName: string | null;
@@ -208,15 +213,17 @@ async function assertDeliveryAcceptsApplication(
     .select({
       code: deliveries.code,
       status: deliveries.status,
-      deliveryDate: deliveries.deliveryDate,
+      deliveryDay: facilityTimestampDateExpr(deliveries.deliveryDate, facilities.timezone),
     })
     .from(deliveries)
+    .innerJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
-  // Serialize applications with delivery corrections.
+  // Serialize applications with delivery corrections. The lock covers the
+  // delivery row only; the joined facility is read for its clock, not held.
   const [delivery] = await (txOrDb === db
     ? deliveryQuery
-    : deliveryQuery.for("update"));
+    : deliveryQuery.for("update", { of: deliveries }));
 
   if (!delivery) {
     throw new SafeError("Delivery not found");
@@ -228,13 +235,10 @@ async function assertDeliveryAcceptsApplication(
     );
   }
 
-  // Compare at day granularity — application dates arrive as UTC midnight
-  // (z.coerce.date on a date-only string) while delivery dates may carry a
-  // time component, so truncate in UTC to keep both on the same basis
-  // regardless of server timezone.
-  const deliveryDayStart = new Date(delivery.deliveryDate);
-  deliveryDayStart.setUTCHours(0, 0, 0, 0);
-  if (applicationDate < deliveryDayStart) {
+  // Compare calendar days. An application date arrives as UTC midnight of the
+  // day typed (z.coerce.date on a date-only string); a delivery carries its
+  // real time, read as a day on the facility clock where it happened.
+  if (delivery.deliveryDay && formatUtcDate(applicationDate) < delivery.deliveryDay) {
     throw new SafeError(
       `Application date cannot be before the delivery date of ${delivery.code}`,
     );
@@ -313,6 +317,8 @@ function resolveApplicationDryMassTons(
  */
 export interface ApplicationListItem extends Application {
   allocationShares: ApplicationAllocationShare[];
+  /** Drawn from a mix bin: recorded as usual, but held out of credit batches (ADR 0030). */
+  heldOutOfCredits: boolean;
   deliveryCode: string;
   customerName: string | null;
   locationName: string | null;
@@ -469,8 +475,9 @@ export async function getApplications(
     .offset(offset);
 
   const allocationShares = await getApplicationAllocationShares(ctx, items.map(item => item.id));
+  const heldOut = await getMixBinHeldApplicationIds(ctx, db, items.map(item => item.id));
   return {
-    items: items.map(item => ({ ...item, allocationShares: allocationShares.filter(share => share.applicationId === item.id) })),
+    items: items.map(item => ({ ...item, allocationShares: allocationShares.filter(share => share.applicationId === item.id), heldOutOfCredits: heldOut.has(item.id) })),
     total,
     page,
     pageSize,
@@ -498,6 +505,7 @@ export async function getApplicationDeliveryOptions(
         code: deliveries.code,
         status: deliveries.status,
         deliveryDate: deliveries.deliveryDate,
+        deliveryDay: facilityTimestampDateExpr(deliveries.deliveryDate, facilities.timezone),
         orderCode: orders.code,
         formulationName: formulations.name,
         productBinName: storageLocations.name,
@@ -512,6 +520,7 @@ export async function getApplicationDeliveryOptions(
         destinationGpsLongitude: customerLocations.gpsLongitude,
       })
       .from(deliveries)
+      .leftJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
       .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
       .leftJoin(
         customerLocations,

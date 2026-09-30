@@ -120,7 +120,7 @@ test("facility-scoped lists render one operator gate and no inactive controls", 
     page.getByRole("heading", { name: "Select a facility", exact: true }),
   ).toHaveCount(1);
   await expect(
-    page.getByRole("button", { name: "New Application", exact: true }),
+    page.getByRole("button", { name: "New application", exact: true }),
   ).toHaveCount(0);
   await expect(page.locator("table")).toHaveCount(0);
   await page.screenshot({
@@ -153,10 +153,10 @@ test.describe("Deep-linked facility resolves on direct navigation (#473)", () =>
 
     // The resolved list surface renders (its create affordance only exists once
     // a facility is selected) — never the "Select a facility" gate.
-    // "New Reactor" is now unique on the page: the empty-state CTA says
+    // "New reactor" is now unique on the page: the empty-state CTA says
     // "Create your first reactor", so this stays strict (no `.first()`).
     await expect(
-      page.getByRole("button", { name: "New Reactor", exact: true }),
+      page.getByRole("button", { name: "New reactor", exact: true }),
     ).toBeVisible({ timeout: 20000 });
     await expect(
       page.getByRole("heading", { name: "Select a facility", exact: true }),

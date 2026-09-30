@@ -32,10 +32,11 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm, type PendingLocation } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
-import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { customerSheetSections } from "./customer-read-sections";
+import { Notice } from "@/components/ui/notice";
 
 // ============================================
 // Column Definitions
@@ -238,11 +239,9 @@ export function CustomerList() {
   if (fetchError) {
     return (
       <div className="container-max py-32">
-        <div className="border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10 p-16 flex items-center gap-12" role="alert">
-          <span className="text-[var(--color-signal-red)] body-small font-medium">
-            Customers could not be loaded. Refresh the page and try again.
-          </span>
-        </div>
+        <Notice tone="error">
+          Customers could not be loaded. Refresh the page and try again.
+        </Notice>
       </div>
     );
   }
@@ -253,7 +252,7 @@ export function CustomerList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Customer" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create customer" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name || undefined;
@@ -267,7 +266,7 @@ export function CustomerList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Customer
+            New customer
           </Button>
         }
       />
@@ -275,14 +274,14 @@ export function CustomerList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Customers"
+          title="Total customers"
           value={totalCustomers}
           icon={<UsersIcon size={24} weight="bold" />}
           description="Biochar application customers"
           isLoading={isLoading}
         />
         <StatCard
-          title="Locations on This Page"
+          title="Locations on this page"
           value={totalLocations}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
           description="Application field locations on this page"
@@ -343,7 +342,7 @@ export function CustomerList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingCustomerId}
-        title="Delete Customer"
+        title="Delete customer"
         message="Are you sure you want to delete this customer? This action cannot be undone. Note: Customers with locations cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -361,41 +360,10 @@ export function CustomerList() {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Customer"
+        editLabel="Edit customer"
         sections={
           sideSheetEntity
-            ? [
-                {
-                  title: "Required information",
-                  fields: [
-                    { label: "Customer name", value: sideSheetEntity.name },
-                  ],
-                },
-                {
-                  title: "Locations",
-                  fields: buildPartyLocationDetailFields(sideSheetLocations, {
-                    distanceLabel: "One-way distance from facility (per leg, km)",
-                    defaultLabel: "Default destination",
-                    positionLabel: "Application site position",
-                    descriptionLabel: "Site description",
-                    includeSoilTemperature: true,
-                  }),
-                },
-                {
-                  title: "Contact information",
-                  fields: [
-                    { label: "Contact email", value: sideSheetEntity.contactEmail },
-                    { label: "Contact phone", value: sideSheetEntity.contactPhone },
-                  ],
-                },
-                {
-                  title: "Business information",
-                  fields: [
-                    { label: "Crop type", value: sideSheetEntity.cropType },
-                    { label: "Address", value: sideSheetEntity.address },
-                  ],
-                },
-              ]
+            ? customerSheetSections(sideSheetEntity, sideSheetLocations)
             : undefined
         }
       >
@@ -407,7 +375,7 @@ export function CustomerList() {
           onCancel={closeSideSheet}
           isSubmitting={createCustomer.isPending || updateCustomer.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Customer"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create customer"}
         />
       </EntitySideSheet>
     </div>

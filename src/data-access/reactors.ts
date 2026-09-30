@@ -38,6 +38,8 @@ export interface PaginatedReactors {
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardReactorIdentifier } from "./unique-name-guards";
+import { CODE_CONFLICT_MESSAGES, withUniqueCodeGuard } from "./code-generator";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { retireDocumentsForEntities } from "./documents";
 import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 
@@ -243,32 +245,26 @@ export async function createReactor(
 ): Promise<Reactor> {
   requireOrgScope(ctx);
 
-  // Verify facility exists and is active (no new children under an archived parent)
-  const [facility] = await db
-    .select({ id: facilities.id })
-    .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
-
-  if (!facility) {
-    throw new SafeError("Facility not found or archived");
-  }
-
   // ADR 0022: sampling is a credit-batch choice, not a reactor property.
 
-  const [reactor] = await guardReactorIdentifier(ctx, data.identifier, () =>
-    db
-      .insert(reactors)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        identifier: data.identifier,
-        facilityId: data.facilityId,
-        reactorType: data.reactorType,
-        nominalThroughputTph: data.nominalThroughputTph ?? null,
-        specifications: data.specifications ?? null,
-      })
-      .returning()
-  );
+  const [reactor] = await db.transaction(async (tx) => {
+    // No new children under an archived parent, including one being archived.
+    await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    return guardReactorIdentifier(ctx, data.identifier, () =>
+      tx
+        .insert(reactors)
+        .values({
+          organizationId: ctx.organizationId,
+          code: data.code,
+          identifier: data.identifier,
+          facilityId: data.facilityId,
+          reactorType: data.reactorType,
+          nominalThroughputTph: data.nominalThroughputTph ?? null,
+          specifications: data.specifications ?? null,
+        })
+        .returning()
+    );
+  });
 
   return reactor;
 }
@@ -294,59 +290,54 @@ export async function updateReactor(
 ): Promise<Reactor> {
   requireOrgScope(ctx);
 
-  // Verify reactor exists
-  const [existing] = await db
-    .select()
-    .from(reactors)
-    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Reactor not found");
-  }
-
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: reactors.id })
-      .from(reactors)
-      .where(and(eq(reactors.code, data.code), eq(reactors.organizationId, ctx.organizationId)));
-
-    if (duplicate) {
-      throw new SafeError("A reactor with this code already exists");
-    }
-  }
-
-  // If facilityId is being changed, verify new facility exists and is active
-  if (data.facilityId && data.facilityId !== existing.facilityId) {
-    const [facility] = await db
-      .select({ id: facilities.id })
-      .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
-
-    if (!facility) {
-      throw new SafeError("Facility not found or archived");
-    }
-  }
-
   // ADR 0022: sampling is a credit-batch choice, not a reactor property.
 
-  // A rename OR a facility move can collide with the per-facility identifier
-  // index, so guard the update too.
-  const [updated] = await guardReactorIdentifier(
-    ctx,
-    data.identifier ?? existing.identifier,
-    () =>
-      db
-        .update(reactors)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
-        .returning()
-  );
+  return db.transaction(async (tx) => {
+    // Facility archive takes the facility row FOR UPDATE and then cascades to
+    // its reactors, so a move takes the facility SHARE lock before the reactor
+    // row lock: either the move lands before the archive, or it sees it.
+    if (data.facilityId) {
+      await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    }
 
-  return updated;
+    // Archived reactors (facility archive cascade) are not editable; filtering
+    // here also rejects a move that waited on its source facility's archive.
+    const [existing] = await tx
+      .select()
+      .from(reactors)
+      .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)))
+      .for("update");
+
+    if (!existing) {
+      throw new SafeError("Reactor not found");
+    }
+
+    // A rename OR a facility move can collide with the per-facility identifier
+    // index, and a code change with the org-scoped code index, so the update
+    // translates both.
+    const [updated] = await guardReactorIdentifier(
+      ctx,
+      data.identifier ?? existing.identifier,
+      () =>
+        withUniqueCodeGuard(
+          ctx,
+          reactors,
+          reactors.code,
+          CODE_CONFLICT_MESSAGES.reactor,
+          () =>
+            tx
+              .update(reactors)
+              .set({
+                ...data,
+                updatedAt: new Date(),
+              })
+              .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
+              .returning()
+        )
+    );
+
+    return updated;
+  });
 }
 
 // ============================================

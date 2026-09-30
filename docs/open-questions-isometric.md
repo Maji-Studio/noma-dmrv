@@ -213,10 +213,16 @@ uses it.
   exceeding that account-visible bound blocks new application registration.
   Both paths fail loudly instead of risking a duplicate POST
   (`src/lib/isometric/storage-locations.ts`,
-  `src/lib/isometric/biochar-applications.ts`).
+  `src/lib/isometric/biochar-applications.ts`). Every other list read,
+  including the Production Batch and measurement-sample lookups, stops at the
+  client's 10,000-record default (`DEFAULT_MAX_PAGES` in
+  `src/lib/isometric/client.ts`) with `IsometricPageLimitError`.
 - **Resolve via:** ask Isometric for a supplier-reference filter (report via
   MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a project or
-  credential/account approaches its respective bound.
+  credential/account approaches its respective bound. The account-wide
+  Production Batch and measurement-sample lists hit the client default first;
+  raise `DEFAULT_MAX_PAGES` for them, since exceeding it also blocks Removal
+  deletion.
 
 ### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
 

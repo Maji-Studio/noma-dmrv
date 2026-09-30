@@ -14,8 +14,6 @@ import {
   XIcon,
   ClockIcon,
   CheckCircleIcon,
-  WarningIcon,
-  ProhibitIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   useCreateProductionRun,
@@ -35,7 +33,6 @@ import {
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -46,28 +43,15 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
-import {
-  formatMoisturePercent,
-  MOISTURE_FIELD_LABEL,
-  qualifyMassLabel,
-  WET_MASS_FIELD_LABEL,
-} from "@/lib/mass-moisture";
-import { MoistureSplit } from "@/components/ui/moisture-split";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
+import { productionRunSheetSections, RunStatusBadge } from "./production-run-read-sections";
 import { ProductionIncidentTable } from "./production-incident-table";
-import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
-import {
-  buildProductionRunFeedstockDetailField,
-  buildProductionRunWindowDetailFields,
-  productionRunStatusCertStatus,
-} from "./production-run-detail-fields";
 import {
   type ProductionRunFormData,
   type ProductionRunFilterData,
@@ -87,18 +71,6 @@ function productionRunDetailHref(run: ProductionRunWithRelations) {
 // ============================================
 // Status Badge
 // ============================================
-
-const STATUS_ICONS: Record<ProductionRunStatus, React.ReactNode> = {
-  draft: <WarningIcon size={14} weight="fill" />,
-  running: <ClockIcon size={14} weight="fill" />,
-  complete: <CheckCircleIcon size={14} weight="fill" />,
-  failed: <WarningIcon size={14} weight="fill" />,
-  cancelled: <ProhibitIcon size={14} weight="fill" />,
-};
-
-function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
-  return <StatusBadge status={status} icon={STATUS_ICONS[status]} />;
-}
 
 // ============================================
 // Column Definitions
@@ -477,7 +449,7 @@ export function ProductionRunList() {
   const sideSheetMode = displaySideSheet?.mode ?? "create";
   const sideSheetEntity = displaySideSheet?.entity ?? null;
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Production Run" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create production run" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -495,16 +467,16 @@ export function ProductionRunList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Production Run
+            New production run
           </Button>
         }
       />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-        <StatCard title="Total Runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
+        <StatCard title="Total runs" value={statsData?.totalRuns ?? 0} icon={<FireIcon size={24} weight="bold" />} description="All production batches" isLoading={statsLoading} />
         <StatCard
-          title="Biochar Output"
+          title="Biochar output"
           value={
             <MassPair
               wetKg={statsData?.totalBiocharKg ?? null}
@@ -618,7 +590,7 @@ export function ProductionRunList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
-        title="Delete Production Run"
+        title="Delete production run"
         message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
@@ -626,6 +598,8 @@ export function ProductionRunList() {
       />
 
       <EntitySideSheet
+        detailToggle
+        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
@@ -634,99 +608,9 @@ export function ProductionRunList() {
         onModeChange={handleModeChange}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Production Run"
+        editLabel="Edit production run"
         size="wide"
-        sections={sideSheetEntity ? [
-          {
-            title: "Run setup",
-            fields: [
-              { label: "Reactor", value: sideSheetEntity.reactorIdentifier },
-              {
-                label: "Status",
-                value: <RunStatusBadge status={sideSheetEntity.status} />,
-                certifyRequired: true,
-                certifyStatus: productionRunStatusCertStatus(
-                  sideSheetEntity.status,
-                ),
-              },
-              ...(sideSheetEntity.status === "cancelled"
-                ? [{ label: "Cancellation reason", value: sideSheetEntity.cancellationReason }]
-                : []),
-              ...buildProductionRunWindowDetailFields(sideSheetEntity, facilities),
-              { label: "Operator", value: sideSheetEntity.operatorName },
-            ],
-          },
-          {
-            title: "Feedstock & processing",
-            fields: [
-              buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
-              ...sideSheetEntity.feedstockDraws.map((draw, index) => ({
-                label: `Source bin ${index + 1}`,
-                value: `${draw.storageLocationName}: ${formatMassKg(draw.wetMassKg)}`,
-              })),
-              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.totalFeedstockWetMassKg) },
-              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
-              { label: "Feed rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
-              { label: "Residence time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
-            ],
-            content: (
-              <MoistureSplit
-                wetMassKg={sideSheetEntity.totalFeedstockWetMassKg}
-                moisturePercent={sideSheetEntity.feedstockMoisturePercent}
-                dryMassKg={sideSheetEntity.feedstockMassDryKg}
-                materialLabel="Feedstock"
-              />
-            ),
-          },
-          {
-            title: "Output",
-            fields: [
-              {
-                label: "Biochar storage",
-                value: sideSheetEntity.biocharStorageLocationName,
-              },
-              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(sideSheetEntity.biocharOutputKg) },
-              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.biocharMoisturePercent) },
-            ],
-            content: (
-              <MoistureSplit
-                wetMassKg={sideSheetEntity.biocharOutputKg}
-                moisturePercent={sideSheetEntity.biocharMoisturePercent}
-                dryMassKg={sideSheetEntity.biocharDryMassKg}
-                materialLabel="Biochar"
-              />
-            ),
-          },
-          {
-            title: "Energy",
-            fields: [
-              { label: "Startup / plant diesel (L)", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
-              { label: "Genset diesel (L)", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
-              { label: "Preprocess fuel (L)", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
-              { label: "Electricity (kWh)", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
-            ],
-          },
-          {
-            title: "Readings file",
-            fields: [],
-            content: (
-              <ProductionReadingsDocuments
-                productionRunId={sideSheetEntity.id}
-                readOnly
-              />
-            ),
-          },
-          {
-            title: "Samples & incidents",
-            fields: [],
-            content: (
-              <div className="space-y-20">
-                <ProductionSampleTable productionRunId={sideSheetEntity.id} readOnly />
-                <ProductionIncidentTable productionRunId={sideSheetEntity.id} readOnly />
-              </div>
-            ),
-          },
-        ] : undefined}
+        sections={sideSheetEntity ? productionRunSheetSections(sideSheetEntity, facilities) : undefined}
       >
         <ProductionRunForm
           key={sideSheetEntity?.id ?? "create"}
@@ -735,7 +619,7 @@ export function ProductionRunList() {
           onCancel={attemptCloseSideSheet}
           isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Production Run"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create production run"}
           deferredAttachments={deferredAttachments}
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (

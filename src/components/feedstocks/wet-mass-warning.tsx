@@ -36,23 +36,23 @@ export function WetMassWarning({
 }: WetMassWarningProps) {
   const overageKg = allocatedKg - deliveredKg;
 
+  // The overage is field feedback: FormField renders it as the status-coloured
+  // caption and points the textarea at it, so no separate Notice is needed.
   return (
-    <div className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
-      <FormField
+    <FormField
+      id="overrideJustification"
+      label="Over-allocation justification"
+      error={justificationError}
+      warning={`${formatOverageKg(overageKg)} over delivery. Add a justification.`}
+    >
+      <FormTextarea
         id="overrideJustification"
-        label="Over-allocation justification"
-        error={justificationError}
-        warning={`${formatOverageKg(overageKg)} over delivery. Add a justification.`}
-      >
-        <FormTextarea
-          id="overrideJustification"
-          placeholder="Explain the difference..."
-          disabled={disabled}
-          error={!!justificationError}
-          rows={2}
-          {...justificationRegister}
-        />
-      </FormField>
-    </div>
+        placeholder="Explain the difference..."
+        disabled={disabled}
+        error={!!justificationError}
+        rows={2}
+        {...justificationRegister}
+      />
+    </FormField>
   );
 }

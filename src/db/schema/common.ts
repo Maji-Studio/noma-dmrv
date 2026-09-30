@@ -49,6 +49,12 @@ export const storageLocationType = pgEnum('storage_location_type', [
   'product_bin',
 ]);
 
+/**
+ * How an output bin holds its layers (ADR 0029 amendment, ADR 0030). Split:
+ * every batch or run sits apart as a sub-bin. Mix: one well-mixed pile.
+ */
+export const outputStockMode = pgEnum('output_stock_mode', ['split', 'mix']);
+
 export const feedstockTypeUsage = pgEnum('feedstock_type_usage', [
   'pyrolysis',
   'blend',

@@ -92,8 +92,9 @@ export function RemovalTemplateTraceView({
     removalId,
     Boolean(removalId),
   );
-  const tracedModel = compilation.data
-    ? attachRemovalCompilationToDiagnostic(model, compilation.data)
+  const compiledReview = compilation.data?.review;
+  const tracedModel = compiledReview
+    ? attachRemovalCompilationToDiagnostic(model, { review: compiledReview })
     : model;
   const removalEntries = removals.data?.removals ?? [];
 
@@ -171,7 +172,8 @@ export function RemovalTemplateTraceView({
                 Mapping revision
               </p>
               <p className="body-caption break-all font-mono">
-                {compilation.data.review.template.mappingRevision}
+                {compilation.data.review?.template.mappingRevision ??
+                  MISSING_VALUE.notYetComputed}
               </p>
             </div>
             <div>

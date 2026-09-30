@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { nullableNumericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
 import {
@@ -20,10 +21,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { ProductionReadingsField } from "./production-readings-field";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -39,6 +39,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import { ProcessFlowPreview } from "./production-run-process-flow-preview";
+
 import {
   productionRunMassBalanceFeedback,
 } from "./production-run-mass-balance";
@@ -51,6 +52,7 @@ import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
+import { ProductionRunMixBinNotice } from "./production-run-mix-bin-notice";
 import { summarizeFeedstockWetInput } from "./production-run-feedstock-input";
 
 // ============================================
@@ -141,15 +143,15 @@ export function ProductionRunForm({
               },
             ]
           : [{ ...EMPTY_FEEDSTOCK_DRAW }],
-    feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? undefined,
-    feedingRateKgHr: productionRun?.feedingRateKgHr ?? undefined,
+    feedstockMoisturePercent: productionRun?.feedstockMoisturePercent ?? null,
+    feedingRateKgHr: productionRun?.feedingRateKgHr ?? null,
     residenceTimeMinutes: productionRun?.residenceTimeMinutes ?? undefined,
-    dieselOperationLiters: productionRun?.dieselOperationLiters ?? undefined,
-    dieselGensetLiters: productionRun?.dieselGensetLiters ?? undefined,
-    preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? undefined,
-    electricityKwh: productionRun?.electricityKwh ?? undefined,
-    biocharOutputKg: productionRun?.biocharOutputKg ?? undefined,
-    biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
+    dieselOperationLiters: productionRun?.dieselOperationLiters ?? null,
+    dieselGensetLiters: productionRun?.dieselGensetLiters ?? null,
+    preprocessingFuelLiters: productionRun?.preprocessingFuelLiters ?? null,
+    electricityKwh: productionRun?.electricityKwh ?? null,
+    biocharOutputKg: productionRun?.biocharOutputKg ?? null,
+    biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? null,
     biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
   };
   type ProductionRunFormValues = typeof defaultValues;
@@ -223,6 +225,8 @@ export function ProductionRunForm({
   const feedstockWetInput = summarizeFeedstockWetInput(watchedFeedstockDraws);
   const selectedFeedstockDrawCount = feedstockWetInput.binCount;
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
+  const watchedEndDate = useWatch({ control, name: "endDate" });
+  const watchedEndTime = useWatch({ control, name: "endTime" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
   const watchedBiocharMoisture = useWatch({ control, name: "biocharMoisturePercent" });
 
@@ -296,7 +300,7 @@ export function ProductionRunForm({
     resetField,
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
+  const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
   const handleFormSubmit = handleSubmit(async (data) => {
     // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
@@ -373,13 +377,14 @@ export function ProductionRunForm({
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
               name="reactorId"
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="reactorId"
                   entityType="reactor"
                   value={field.value}
                   onChange={field.onChange}
@@ -429,7 +434,7 @@ export function ProductionRunForm({
           </FormField>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="startDate"
             label="Start date"
@@ -463,7 +468,7 @@ export function ProductionRunForm({
           </p>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="endDate"
             label="End date"
@@ -490,13 +495,14 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
             <Controller
               name="operatorId"
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="operatorId"
                   entityType="operator"
                   value={field.value || undefined}
                   onChange={field.onChange}
@@ -535,12 +541,12 @@ export function ProductionRunForm({
       >
 
         {!watchedFacilityId && (
-          <p className="text-[var(--color-text-tertiary)] body-caption">
+          <p className="body-caption text-[var(--color-text-tertiary)]">
             Select a facility in the sidebar to choose a feedstock source bin.
           </p>
         )}
         {feedstockDrawFields.length === 0 && (
-          <p className="body-small text-[var(--color-text-tertiary)] py-8">
+          <p className="body-caption text-[var(--color-text-tertiary)]">
             Add a source bin and the wet mass drawn from it.
           </p>
         )}
@@ -595,30 +601,7 @@ export function ProductionRunForm({
           />
         ))}
 
-        {feedstockWetInput.visible && (
-          <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
-            <p className="body-caption text-[var(--color-text-secondary)] flex items-center gap-6">
-              Total wet input
-              {isProductionRunCertifyField("feedstockWetMassKg") && (
-                <CertificationFieldTag status={certStatus("feedstockWetMassKg")} />
-              )}
-            </p>
-            <p
-              className={`body-small mt-2 ${
-                feedstockWetInput.hintText
-                  ? "font-normal text-[var(--color-text-tertiary)]"
-                  : "font-medium text-[var(--color-text-primary)]"
-              }`}
-            >
-              {feedstockWetInput.valueText}
-            </p>
-            {feedstockWetInput.hintText && (
-              <p className="body-caption text-[var(--color-text-tertiary)] mt-2">
-                {feedstockWetInput.hintText}
-              </p>
-            )}
-          </div>
-        )}
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <MoistureField
@@ -632,8 +615,9 @@ export function ProductionRunForm({
               setValueAs: nullableNumericValue,
             })}
           />
+          <MoistureSplit className="md:col-span-2" wetMassKg={watchWetMass} moisturePercent={watchMoisture} dryMassKg={previewDryMass} materialLabel="Feedstock" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
               id="feedingRateKgHr"
@@ -685,6 +669,7 @@ export function ProductionRunForm({
             control={control}
             render={({ field }) => (
               <EntitySelect
+                id="biocharStorageLocationId"
                 entityType="storageLocation"
                 value={field.value || undefined}
                 onChange={field.onChange}
@@ -697,6 +682,7 @@ export function ProductionRunForm({
             )}
           />
         </FormField>
+        <ProductionRunMixBinNotice binId={watchedDestBinId} facilityId={watchedFacilityId} endDate={watchedEndDate} endTime={watchedEndTime} timeZone={formTimezone} complete={watchedStatus === "complete" && (productionRun?.status !== "complete" || !!dirtyFields.endDate || !!dirtyFields.endTime || !!dirtyFields.biocharStorageLocationId)} />
 
         <MassMoistureFields
           materialLabel="Biochar"
@@ -722,6 +708,23 @@ export function ProductionRunForm({
             registration: register("biocharMoisturePercent", { setValueAs: nullableNumericValue }),
           }}
         />
+
+        {/* The rail spans three sections' fields, and the biochar output is the
+            last of them, so it sits here: every input it draws on is above it,
+            and it is still inside the section whose numbers complete it. */}
+        {(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
+          <ProcessFlowPreview
+            sourceBinName={sourceBinPreviewName}
+            feedstockKg={watchWetMass}
+            feedstockMoisturePercent={typeof watchMoisture === "number" ? watchMoisture : null}
+            feedstockDryKg={previewDryMass}
+            reactorName={selectedReactor?.name ?? null}
+            biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
+            biocharMoisturePercent={typeof watchedBiocharMoisture === "number" ? watchedBiocharMoisture : null}
+            biocharDryKg={previewBiocharDryMass}
+            destinationBinName={selectedDestBin?.name ?? null}
+          />
+        )}
       </FormSection>
 
       {/* ── Energy ── */}
@@ -735,7 +738,7 @@ export function ProductionRunForm({
           "electricityKwh",
         ]}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="dieselOperationLiters"
             label="Startup / plant diesel (L)"
@@ -830,25 +833,6 @@ export function ProductionRunForm({
       />
       </FormSpine>
 
-      {/* Process Flow — a derived recap of the run, not a data-entry step, so
-          it lives outside the numbered spine and only appears once there's
-          something to show. */}
-      {(watchedReactorId || watchedSourceBinId || watchedDestBinId) && (
-        <div className="space-y-12 border-t border-[var(--color-border-tertiary)] pt-20">
-          <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
-            Process Flow
-          </SectionLabel>
-          <ProcessFlowPreview
-            sourceBinName={sourceBinPreviewName}
-            feedstockKg={watchWetMass}
-            feedstockDryKg={previewDryMass}
-            reactorName={selectedReactor?.name ?? null}
-            biocharKg={typeof watchedBiocharKg === "number" ? watchedBiocharKg : null}
-            biocharDryKg={previewBiocharDryMass}
-            destinationBinName={selectedDestBin?.name ?? null}
-          />
-        </div>
-      )}
       </form>
 
       {watchedFacilityId && (

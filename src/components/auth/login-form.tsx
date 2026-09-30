@@ -9,6 +9,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { loginSchema, type LoginFormData } from "@/schemas/auth";
 import { FormField, FormInput, ServerError } from "@/components/forms";
+import { Notice } from "@/components/ui/notice";
 
 const DEFAULT_SIGN_IN_PATH = "/dashboard";
 
@@ -137,13 +138,7 @@ export function LoginForm() {
       )}
 
       {resendSuccess && (
-        <div
-          className="p-16 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)] body-small"
-          role="status"
-          aria-live="polite"
-        >
-          Verification email sent. Check your inbox.
-        </div>
+        <Notice tone="success">Verification email sent. Check your inbox.</Notice>
       )}
 
       <div className="flex items-center justify-between">
@@ -163,7 +158,7 @@ export function LoginForm() {
         width="full"
         disabled={isSubmitting}
       >
-        {isSubmitting ? "Signing in..." : "Sign In"}
+        {isSubmitting ? "Signing in..." : "Sign in"}
       </Button>
     </form>
   );

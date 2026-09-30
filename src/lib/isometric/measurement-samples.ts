@@ -15,6 +15,7 @@ import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
 import { pluralize } from "@/lib/copy-utils";
 import type { IsometricClient } from "./client";
+import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 import { encodeMeasurementProperty } from "./utils/measurement-property";
 
@@ -235,23 +236,25 @@ export async function createMeasurementSample(
  * server-side reference filter (unlike `/sensors`), so this paginates and
  * filters client-side. Returns the match or null.
  */
-export async function findMeasurementSampleBySupplierRef(
+export function findMeasurementSampleBySupplierRef(
   client: IsometricClient,
   supplierReferenceId: string,
   options: { requireUnique?: boolean } = {},
 ): Promise<IsometricMeasurementSample | null> {
-  let match: IsometricMeasurementSample | null = null;
-  for await (const sample of client.paginate<IsometricMeasurementSample>(
+  const where = (sample: IsometricMeasurementSample) =>
+    sample.supplier_reference_id === supplierReferenceId;
+  return findRegistryRecord<IsometricMeasurementSample>(
+    client,
     "/measurement_samples",
-  )) {
-    if (sample.supplier_reference_id !== supplierReferenceId) continue;
-    if (!options.requireUnique) return sample;
-    if (match && match.id !== sample.id) {
-      throw new SafeError("Multiple registry measurements use this supplier reference. Ask support to resolve them before continuing.");
-    }
-    match = sample;
-  }
-  return match;
+    options.requireUnique
+      ? {
+          match: "unique",
+          duplicateMessage:
+            "Multiple registry measurements use this supplier reference. Ask support to resolve them before continuing.",
+          where,
+        }
+      : { match: "first", where },
+  );
 }
 
 /** Deletes only the addressed registry artifact. Missing-resource handling belongs to the caller. */
@@ -260,14 +263,13 @@ export async function deleteMeasurementSample(client: IsometricClient, id: strin
 }
 
 /** Certify exposes DELETE, but no GET, at /measurement_samples/{id}. */
-export async function getMeasurementSample(
+export function getMeasurementSample(
   client: IsometricClient,
   id: string,
 ): Promise<IsometricMeasurementSample | null> {
-  for await (const sample of client.paginate<IsometricMeasurementSample>(
+  return findRegistryRecord<IsometricMeasurementSample>(
+    client,
     "/measurement_samples",
-  )) {
-    if (sample.id === id) return sample;
-  }
-  return null;
+    { match: "first", where: (sample) => sample.id === id },
+  );
 }

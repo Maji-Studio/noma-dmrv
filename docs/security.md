@@ -130,7 +130,9 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   performance switch, not a security-gate exception; base-branch, local, live,
   and deployed builds leave it unset or false.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
-  (`src/lib/cli/ensure-admin.ts`), never by the running app.
+  (`src/lib/cli/ensure-admin.ts`) and, locally, by the opt-in form capture
+  fixture (`tests/visual/form-capture-fixture.ts`), which reads it from
+  `.env.local` to sign in; never by the running app.
 - `ALLOW_DEV_BOOTSTRAP` carries the literal `"1"` and has two separate
   meanings, both CLI-only. In `src/lib/cli/ensure-admin-core.ts` it permits the
   destructive development bootstrap against a non-local database. In
@@ -215,6 +217,10 @@ Notes:
   `scripts/env-tpl-utils.ts`). `pnpm env:check` reports the same split.
 - `load-secrets-action` **fails the step** when a referenced `op://` field does
   not exist — it does not skip. Add the field before the workflow runs.
+- The `op` CLI that `load-secrets-action` installs is pinned through its
+  `version` input, read from the workflow-level `OP_CLI_VERSION` env in each of
+  the four workflows above. Bump it in all four together, to a release listed at
+  <https://app-updates.agilebits.com/product_history/CLI2>.
 - Never put real keys in code, comments, or docs — use `<REDACTED_API_KEY>` in
   examples. If a key leaks: rotate it in 1Password immediately, then scrub git
   history with `git-filter-repo`.

@@ -59,7 +59,7 @@ test("authenticated reads leave the browser in parallel", async ({
   try {
     await page.goto(`/production-runs?facility=${seededData.facility.id}`);
     await expect(
-      page.getByRole("button", { name: "New Production Run" }),
+      page.getByRole("button", { name: "New production run" }),
     ).toBeVisible();
     await expect.poll(() => inFlightReads.size).toBe(0);
 

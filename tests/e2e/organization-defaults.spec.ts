@@ -68,7 +68,7 @@ test.describe("Organization operating defaults", () => {
     // The orders list has no `?create=true` intent handler; the header button
     // is the only way in.
     await page.goto(`/orders?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Order" }).click();
+    await page.getByRole("button", { name: "New order" }).click();
     await expect(page.getByLabel("Currency")).toHaveValue("KES", {
       timeout: 30_000,
     });

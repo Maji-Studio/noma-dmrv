@@ -34,7 +34,7 @@ test.describe("Side-sheet discard guard", () => {
     await row.click();
     await waitForSideSheet(page);
 
-    await page.getByRole("button", { name: "Edit Feedstock" }).click();
+    await page.getByRole("button", { name: "Edit feedstock" }).click();
     const notesField = page.getByLabel("Notes");
     await expect(notesField).toBeVisible();
     await notesField.fill("E2E discard-guard probe");
@@ -60,7 +60,7 @@ test.describe("Side-sheet discard guard", () => {
     await dialog.getByRole("button", { name: "Discard changes" }).click();
     await expect(dialog).toBeHidden();
     await expect(
-      page.getByRole("button", { name: "Edit Feedstock" }),
+      page.getByRole("button", { name: "Edit feedstock" }),
     ).toBeVisible();
   });
 
@@ -82,7 +82,7 @@ test.describe("Side-sheet discard guard", () => {
       await row.click();
       await waitForSideSheet(page);
 
-      await page.getByRole("button", { name: "Edit Feedstock" }).click();
+      await page.getByRole("button", { name: "Edit feedstock" }).click();
 
       // Change only the supplier via the entity select — commits through RHF
       // setValue, which the native-event dirty heuristic cannot see.

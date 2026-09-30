@@ -4,7 +4,7 @@ import { eq, inArray, type SQL } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts, biocharProductSourceAllocations, binMovements, deliveries,
-  formulations, orders, outputStockAllocations, outputStockRunAllocations,
+  formulations, orders, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations,
   applicationOutputAllocations, applications, facilities, productionRuns,
   reactors, storageLocations, users, productIngredientSnapshots, type Delivery,
 } from "@/db/schema";
@@ -14,7 +14,7 @@ type ProductValues = typeof biocharProducts.$inferInsert;
 type OrderValues = typeof orders.$inferInsert;
 type DeliveryValues = typeof deliveries.$inferInsert;
 type ProductFixture = Omit<ProductValues, "placedAt" | "formulationId"> & {
-  placedAt?: string;
+  placedAt?: Date;
   formulationId?: string | null;
 };
 type OrderFixture = Omit<OrderValues, "formulationId"> & {
@@ -22,7 +22,9 @@ type OrderFixture = Omit<OrderValues, "formulationId"> & {
   biocharProductId?: string;
 };
 type DeliveryFixture = Omit<DeliveryValues, "storageLocationId"> & { storageLocationId?: string };
-const FIXTURE_PLACED_AT = "2025-01-01";
+const FIXTURE_PLACED_AT = new Date("2025-01-01T00:00:00.000Z");
+/** Fixture source runs end this long before the product they fill is placed. */
+const FIXTURE_RUN_LEAD_MS = 60 * 60 * 1000;
 const sourceByOrder = new Map<string, string>();
 const ownedBins = new Set<string>();
 const ownedRuns = new Set<string>();
@@ -43,7 +45,7 @@ async function productFixture(executor: Executor, input: ProductFixture): Promis
     formulationId = recipe.id;
     ownedFormulations.add(recipe.id);
   }
-  const placedAt = input.placedAt ?? input.productionDate?.toISOString().slice(0, 10) ?? FIXTURE_PLACED_AT;
+  const placedAt = input.placedAt ?? (input.productionDate ? new Date(input.productionDate) : FIXTURE_PLACED_AT);
   return { ...input, formulationId, placedAt };
 }
 export function outputProductFixtureValues(executor: Executor, input: ProductFixture): Promise<ProductValues>;
@@ -96,7 +98,7 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
   if (!runShares.length) {
     const [reactor] = await executor.insert(reactors).values({ organizationId: product.organizationId, facilityId: product.facilityId, code: `E2E-REACTOR-${randomUUID()}`, identifier: `E2E Fixture reactor ${randomUUID()}`, reactorType: "auger" }).returning();
     ownedReactors.add(reactor.id);
-    const [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(`${product.placedAt}T00:00:00Z`), biocharDryMassKg: delivery.massDryKg }).returning();
+    const [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(product.placedAt.getTime() - FIXTURE_RUN_LEAD_MS), biocharDryMassKg: delivery.massDryKg }).returning();
     ownedRuns.add(run.id);
     runShares = [{ id: run.id, dry: delivery.massDryKg }];
   }
@@ -110,7 +112,7 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
     ? establishedDry - previousDraws.reduce((sum, draw) => sum + Number(draw.dry), 0)
     : dry;
 
-  if (requireEstablishedSource && (dry <= 0 || Math.round(dry * GRAMS_PER_KG) > Math.round(beforeDry * GRAMS_PER_KG) || product.placedAt > delivery.deliveryDate.toISOString().slice(0, 10))) throw new Error("E2E delivery exceeds eligible established product stock");
+  if (requireEstablishedSource && (dry <= 0 || Math.round(dry * GRAMS_PER_KG) > Math.round(beforeDry * GRAMS_PER_KG) || product.placedAt > delivery.deliveryDate)) throw new Error("E2E delivery exceeds eligible established product stock");
   const ingredients = await executor.select().from(productIngredientSnapshots)
     .where(eq(productIngredientSnapshots.biocharProductId, product.id));
   const establishedGrams = BigInt(Math.round(establishedDry * GRAMS_PER_KG));
@@ -129,7 +131,7 @@ async function persistFixtureProvenance(executor: Executor, delivery: Delivery, 
   const solidsKg = establishedGrams > BigInt(0)
     ? { numerator: String(dryGrams * (establishedGrams + ingredientGrams)), denominator: String(establishedGrams * BigInt(GRAMS_PER_KG)) }
     : { numerator: String(dryGrams), denominator: String(GRAMS_PER_KG) };
-  const [movement] = await executor.insert(binMovements).values({ organizationId: delivery.organizationId, storageLocationId: delivery.storageLocationId, lane: "product", movementType: "adjustment", massDeltaKg: -delivery.deliveredWetMassKg, reason: "Saved consumer-test fixture", outputKind: "delivery", physicalDate: delivery.deliveryDate.toISOString().slice(0, 10), idempotencyKey: randomUUID(), basisFingerprint: "fixture-snapshot", inputSnapshot: { kind: "delivery", deliveryId: delivery.id, wetMassKg: delivery.deliveredWetMassKg, moisturePercent: delivery.moistureContentPercent }, outputDryDeltaKg: String(-dry), balanceBeforeDryKg: String(beforeDry), balanceAfterDryKg: String(beforeDry - dry) }).returning();
+  const [movement] = await executor.insert(binMovements).values({ organizationId: delivery.organizationId, storageLocationId: delivery.storageLocationId, lane: "product", movementType: "adjustment", massDeltaKg: -delivery.deliveredWetMassKg, reason: "Saved consumer-test fixture", outputKind: "delivery", occurredAt: delivery.deliveryDate, idempotencyKey: randomUUID(), basisFingerprint: "fixture-snapshot", inputSnapshot: { kind: "delivery", deliveryId: delivery.id, wetMassKg: delivery.deliveredWetMassKg, moisturePercent: delivery.moistureContentPercent }, outputDryDeltaKg: String(-dry), balanceBeforeDryKg: String(beforeDry), balanceAfterDryKg: String(beforeDry - dry) }).returning();
   const [allocation] = await executor.insert(outputStockAllocations).values({ organizationId: delivery.organizationId, movementId: movement.id, sourceStorageLocationId: delivery.storageLocationId, biocharProductId: product.id, deliveryId: delivery.id, dryMassKg: String(dry), wetMassKg: String(delivery.deliveredWetMassKg), basisSnapshot: { fixture: true, solidsKg } }).returning();
   const sourceTotal = runShares.reduce((sum, source) => sum + source.dry, 0);
   let allocatedGrams = 0;
@@ -175,6 +177,7 @@ export async function deleteOutputDeliveryFixtures(executor: Executor, predicate
     if (allocations.length) {
       await executor.delete(outputStockRunAllocations).where(inArray(outputStockRunAllocations.allocationId, allocations.map(row => row.id)));
       await executor.delete(outputStockAllocations).where(inArray(outputStockAllocations.id, allocations.map(row => row.id)));
+      await executor.delete(outputStockMoistureReadings).where(inArray(outputStockMoistureReadings.movementId, allocations.map(row => row.movementId)));
       await executor.delete(binMovements).where(inArray(binMovements.id, allocations.map(row => row.movementId)));
     }
   }
@@ -184,6 +187,7 @@ export async function deleteOutputDeliveryFixtures(executor: Executor, predicate
 export async function cleanupOutputFixtureParents(executor: Executor, facilityId: string) {
   const runs = await executor.select({ id: productionRuns.id }).from(productionRuns).where(eq(productionRuns.facilityId, facilityId));
   const ownRunIds = runs.map(row => row.id).filter(id => ownedRuns.has(id));
+  if (ownRunIds.length) await executor.delete(outputStockMoistureReadings).where(inArray(outputStockMoistureReadings.productionRunId, ownRunIds));
   if (ownRunIds.length) await executor.delete(productionRuns).where(inArray(productionRuns.id, ownRunIds));
   const reactorRows = await executor.select({ id: reactors.id }).from(reactors).where(eq(reactors.facilityId, facilityId));
   const ownReactorIds = reactorRows.map(row => row.id).filter(id => ownedReactors.has(id));
@@ -201,6 +205,7 @@ export async function deleteOutputProductFixtures(executor: Executor, predicate:
     if (draws.length) {
       await executor.delete(outputStockRunAllocations).where(inArray(outputStockRunAllocations.allocationId, draws.map(draw => draw.id)));
       await executor.delete(outputStockAllocations).where(inArray(outputStockAllocations.id, draws.map(draw => draw.id)));
+      await executor.delete(outputStockMoistureReadings).where(inArray(outputStockMoistureReadings.movementId, draws.map(draw => draw.movementId)));
       await executor.delete(binMovements).where(inArray(binMovements.id, draws.map(draw => draw.movementId)));
     }
   }
@@ -298,7 +303,7 @@ export async function preparePureOutputProductFixture(executor: Executor, produc
   if (!run) {
     const [reactor] = await executor.insert(reactors).values({ organizationId: product.organizationId, facilityId: product.facilityId, code: `E2E-REACTOR-${randomUUID()}`, identifier: `E2E Reactor ${randomUUID()}`, reactorType: "auger" }).returning();
     ownedReactors.add(reactor.id);
-    [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, biocharStorageLocationId: sourceStorageLocationId, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(`${product.placedAt}T00:00:00Z`), endTime: new Date(`${product.placedAt}T01:00:00Z`), biocharDryMassKg: dryKg, biocharOutputKg: product.massKg, biocharMoisturePercent: product.moistureContentPercent }).returning();
+    [run] = await executor.insert(productionRuns).values({ organizationId: product.organizationId, facilityId: product.facilityId, reactorId: reactor.id, biocharStorageLocationId: sourceStorageLocationId, code: `E2E-RUN-${randomUUID()}`, status: "complete", startTime: new Date(product.placedAt.getTime() - 2 * FIXTURE_RUN_LEAD_MS), endTime: new Date(product.placedAt.getTime() - FIXTURE_RUN_LEAD_MS), biocharDryMassKg: dryKg, biocharOutputKg: product.massKg, biocharMoisturePercent: product.moistureContentPercent }).returning();
     ownedRuns.add(run.id);
   }
   await executor.insert(biocharProductSourceAllocations).values({ organizationId: product.organizationId, biocharProductId: product.id, productionRunId: run.id, sourceStorageLocationId, allocatedDryMassKg: dryKg, allocatedWetMassKg: product.massKg });

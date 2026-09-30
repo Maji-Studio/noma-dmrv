@@ -1,8 +1,8 @@
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
 } from "@/lib/calculations/biochar-eligibility";
+import { Notice } from "@/components/ui/notice";
 
 interface SampleEligibilityAdvisoryProps {
   /** Resolved molar H/C_org for this replicate (calculated or entered), if any. */
@@ -45,24 +45,13 @@ export function SampleEligibilityAdvisory({
   if (breaches.length === 0) return null;
 
   return (
-    <div
-      role="status"
-      className="flex items-start gap-8 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] p-12"
-    >
-      <WarningIcon
-        size={16}
-        weight="fill"
-        aria-hidden
-        className="mt-1 shrink-0 text-[var(--color-signal-orange)]"
-      />
-      <p className="body-caption text-[var(--color-text-secondary)]">
-        This Sample exceeds the biochar eligibility ceiling (
-        {breaches.join("; ")}). Eligibility is judged on the credit
-        batch&apos;s Sample mean (H/C_org &lt; {H_TO_C_ORG_ELIGIBILITY_MAX} and
-        O/C_org &lt; {O_TO_C_ORG_ELIGIBILITY_MAX}, module §3 Table 2). Check
-        whether this result is an outlier. The credit batch is blocked when its
-        mean fails the eligibility check.
-      </p>
-    </div>
+    <Notice tone="warning">
+      This Sample exceeds the biochar eligibility ceiling (
+      {breaches.join("; ")}). Eligibility is judged on the credit
+      batch&apos;s Sample mean (H/C_org &lt; {H_TO_C_ORG_ELIGIBILITY_MAX} and
+      O/C_org &lt; {O_TO_C_ORG_ELIGIBILITY_MAX}, module §3 Table 2). Check
+      whether this result is an outlier. The credit batch is blocked when its
+      mean fails the eligibility check.
+    </Notice>
   );
 }

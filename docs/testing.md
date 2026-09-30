@@ -10,10 +10,11 @@ themselves. Related: [security.md](./security.md) (env inventory),
 
 ## Which runner picks up which file
 
-`vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**` and
-copied `.claude/worktrees/**`. A Playwright spec outside `tests/e2e/`, or a
-Vitest spec inside it, is **silently never run**. Put it in the right
-directory.
+`vitest.config.ts` uses Vitest's normal discovery and excludes `**/e2e/**`,
+`**/tests/visual/**` and copied `.claude/worktrees/**`. `playwright.config.ts`
+collects only `tests/e2e/`; `playwright.visual.config.ts` collects only
+`tests/visual/`. A Playwright spec outside those two folders, or a Vitest spec
+inside them, is **silently never run**. Put it in the right directory.
 
 - `pnpm test` — Vitest, both `tests/**/*.test.{ts,tsx}` and colocated
   `src/**/*.test.{ts,tsx}`. Put cross-module/database contracts in `tests/`;
@@ -28,11 +29,23 @@ directory.
   The Isometric suite fails closed if explicitly opted in without complete sandbox
   configuration; telemetry writes are enabled when its facility ID is also set.
 - `pnpm test:isometric-health` — opts into only
-  `tests/isometric-sandbox.integration.test.ts` and excludes describes matching
-  `write path`, even when telemetry is configured. Requires sandbox credentials
+  `tests/isometric-sandbox-health.integration.test.ts`, the read-only sandbox
+  checks. Write paths live in `tests/isometric-sandbox.integration.test.ts`,
+  which this command never collects; add a registry write there, never to the
+  health file. Both share `tests/helpers/isometric-sandbox-env.ts`. Requires sandbox credentials
   (`ISOMETRIC_CLIENT_SECRET`, `ISOMETRIC_ACCESS_TOKEN`),
   `ISOMETRIC_ENVIRONMENT=sandbox`, and `ISOMETRIC_DEMO_PROJECT_ID`. No DB required.
 - `pnpm test:e2e` — Playwright. CI gate in `e2e.yml`; nightly `@live` in `e2e-live.yml`.
+- `pnpm exec playwright test -c playwright.visual.config.ts` — the opt-in form
+  capture harness in `tests/visual/` (skipped unless `FORM_CAPTURE=1`; Vitest
+  excludes the folder). It needs a running, seeded dev server and does not use
+  the E2E user fixtures: it signs in as the existing local admin
+  (`ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env.local`, overridable with
+  `FORM_CAPTURE_EMAIL` / `FORM_CAPTURE_PASSWORD`), which creates one session
+  row that sign-out deletes, and writes no entity rows. The other
+  `FORM_CAPTURE_*` knobs (label, output dir, family, surfaces, viewports,
+  facility) and the output are documented at the top of
+  `tests/visual/form-capture.spec.ts`.
 
 ## vitest specs are not all unit tests
 
@@ -175,8 +188,9 @@ These are sandbox/read-only signals, not production readiness or write-path cove
 
 Run the hermetic selection regression with
 `pnpm test run tests/isometric-health-selection.test.ts`.
-It also runs in normal Vitest CI. It collects the real sandbox suite with Vitest, enables telemetry using placeholders,
-and verifies only reads are selected and missing opted-in credentials fail closed.
+It also runs in normal Vitest CI. It collects the real health command with Vitest, enables telemetry using placeholders,
+and verifies only the health file is selected (the write-path file sits beside it
+and must stay out), and missing opted-in credentials fail closed.
 Collection uses an isolated config and a dotenv stub; no test bodies execute, no
 local env files are read, and placeholders are never sent to the API. A sentinel
 integration suite catches accidental broadening without loading database tests.

@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
+import { FormDetailProvider } from "../form-detail-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const entityState = vi.hoisted(() => ({
@@ -145,10 +146,30 @@ describe("EntitySelect selected-value display", () => {
     );
 
     expect(html).toContain(
-      "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
+      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
     );
     expect(html).toContain('aria-describedby="field-helper ');
     expect(html).toContain('aria-invalid="true"');
+  });
+
+  it("keeps the selected input, helper and remaining stock caption in Simple", () => {
+    entityState.selected = {
+      id: "bin-1", code: "BIN-01", name: "North product bin",
+      remainingMass: { wetKg: 3000, dryKg: 2900 },
+    };
+    entityState.selectedPending = false;
+    const html = renderToStaticMarkup(
+      <FormDetailProvider scope="simple-selector">
+        <EntitySelect entityType="storageLocation" value="bin-1" onChange={() => undefined} aria-describedby="field-helper" />
+      </FormDetailProvider>,
+    );
+    expect(html).toContain("North product bin");
+    // Remaining stock informs the pick, so Simple shows it too and the
+    // control is described by the helper, the stock caption and the label.
+    const describedBy = html.match(/aria-describedby="([^"]*)"/)?.[1].split(" ") ?? [];
+    expect(describedBy[0]).toBe("field-helper");
+    expect(describedBy).toHaveLength(3);
+    expect(html).toContain("Remaining now: 3,000 kg wet, 2,900 kg dry biochar");
   });
 
   it("qualifies a selected stock figure that excludes the edited order", () => {
@@ -173,7 +194,7 @@ describe("EntitySelect selected-value display", () => {
     );
 
     expect(html).toContain(
-      "Remaining wet mass excluding this order: 3,000kg | dry mass: 2,900kg",
+      "Remaining, excluding this order: 3,000 kg wet, 2,900 kg dry biochar",
     );
   });
 
@@ -195,7 +216,7 @@ describe("EntitySelect selected-value display", () => {
       />,
     );
 
-    expect(html).toContain("Remaining wet mass: 500kg");
+    expect(html).toContain("Remaining now: 500 kg wet");
     expect(html).not.toContain("dry mass");
   });
 
@@ -222,7 +243,7 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain("Detail label");
     expect(html).not.toContain("List label");
     expect(html).toContain(
-      "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
+      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
     );
   });
 
@@ -246,7 +267,7 @@ describe("EntitySelect selected-value display", () => {
     entityState.selectedPending = false;
 
     expect(render("reactor-1")).toContain(
-      "Remaining wet mass: 2,000kg | dry mass: 1,900kg",
+      "Remaining now: 2,000 kg wet, 1,900 kg dry biochar",
     );
   });
 
@@ -275,7 +296,7 @@ describe("EntitySelect selected-value display", () => {
     const html = render("reactor-1");
     expect(html).toContain("Retained detail label");
     expect(html).toContain(
-      "Remaining wet mass: 3,000kg | dry mass: 2,900kg",
+      "Remaining now: 3,000 kg wet, 2,900 kg dry biochar",
     );
   });
 
@@ -289,10 +310,10 @@ describe("EntitySelect selected-value display", () => {
     entityState.selectedPending = false;
 
     expect(render("reactor-1")).not.toContain("Reactor description");
-    expect(render("reactor-1")).not.toContain("Remaining wet mass");
+    expect(render("reactor-1")).not.toContain("Remaining now");
 
     entityState.selected = undefined;
-    expect(render()).not.toContain("Remaining wet mass");
+    expect(render()).not.toContain("Remaining now");
   });
 });
 
@@ -358,5 +379,51 @@ describe("EntitySelect open option display", () => {
     expect(html).toContain("North Kiln");
     expect(html).toContain("Pyrolysis reactor");
     expect(html).not.toContain("RE-001");
+  });
+});
+
+describe("EntitySelect label association", () => {
+  const renderLabelled = (id?: string) =>
+    renderToStaticMarkup(
+      <div>
+        <label htmlFor="reactor-field">Reactor</label>
+        <EntitySelect
+          id={id}
+          entityType="reactor"
+          onChange={() => undefined}
+          placeholder="Select reactor"
+        />
+      </div>,
+    );
+
+  it("gives the combobox trigger the field id so the label names it", () => {
+    const html = renderLabelled("reactor-field");
+    const trigger = html.match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
+
+    expect(html).toContain('for="reactor-field"');
+    expect(trigger).toContain('id="reactor-field"');
+    // aria-label outranks a native label in the name computation, so it must
+    // not be set when a label points at the trigger.
+    expect(trigger).not.toContain("aria-label");
+  });
+
+  it("falls back to the placeholder as the name when no id is supplied", () => {
+    const trigger =
+      renderLabelled().match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
+
+    expect(trigger).toContain('aria-label="Select reactor"');
+    expect(trigger).not.toContain(" id=");
+  });
+});
+
+describe("EntitySelect popover", () => {
+  it("keeps the remaining-mass line rendered outside the popover", () => {
+    entityState.selected = {
+      id: "reactor-1",
+      code: "BIN-01",
+      name: "North product bin",
+      remainingMass: { wetKg: 3_000, dryKg: 2_900 },
+    };
+    expect(render("reactor-1")).toContain("3,000");
   });
 });

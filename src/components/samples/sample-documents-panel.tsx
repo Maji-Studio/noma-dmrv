@@ -79,11 +79,15 @@ export function SampleDocumentsPanel({
 
   return (
     <section className="flex flex-col gap-12">
-      <header className="flex items-center justify-end">
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          {uploadedDocs.length} {uploadedDocs.length === 1 ? "file" : "files"}
-        </span>
-      </header>
+      {/* With nothing uploaded the empty message says so; "0 files" above it
+          would say it twice. */}
+      {uploadedDocs.length > 0 && (
+        <header className="flex items-center justify-end">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {uploadedDocs.length} {uploadedDocs.length === 1 ? "file" : "files"}
+          </span>
+        </header>
+      )}
 
       {error && (
         <ServerError
@@ -200,7 +204,7 @@ export function SampleDocumentsPanel({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
-          title="Delete Document"
+          title="Delete document"
           message="Are you sure you want to delete this document? The file will be removed from storage."
           onConfirm={handleDeleteConfirm}
           onCancel={() => {

@@ -165,7 +165,7 @@ export function VehicleForm({
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
         submitLabel={submitLabel}
-        defaultSubmitLabel={isEditMode ? "Update Vehicle" : "Create Vehicle"}
+        defaultSubmitLabel={isEditMode ? "Update vehicle" : "Create vehicle"}
       />
     </form>
   );

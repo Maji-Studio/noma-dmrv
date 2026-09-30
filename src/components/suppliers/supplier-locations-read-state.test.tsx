@@ -27,7 +27,7 @@ describe("SupplierLocationsReadState", () => {
       />,
     );
 
-    expect(html).toContain('role="alert"');
+    expect(html).toContain('role="status"');
     expect(html).toContain("Supplier locations unavailable");
     expect(html).toContain("Retry");
     expect(html).toContain('aria-busy="true"');

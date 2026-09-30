@@ -102,7 +102,7 @@ test.describe("Deferred create attachments", () => {
     );
     const existingFeedstockCodes = await getListedFeedstockCodes(page);
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
@@ -116,7 +116,7 @@ test.describe("Deferred create attachments", () => {
     await expect(dialog.getByText("bol-deferred.pdf")).toBeVisible();
 
     // One Save: create + flush, then the sheet closes like any other create.
-    await dialog.locator('button:has-text("Create Feedstock")').click();
+    await dialog.locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
 
     // Reopen the feedstock created by this test. Delivery-date sorting can put
@@ -176,7 +176,9 @@ test.describe("Deferred create attachments", () => {
     await expect(parentDialog.getByText("lab-report-deferred.pdf")).toBeVisible();
 
     // Deferred transport leg via the nested dialog (no sample exists yet).
-    await parentDialog.getByRole("button", { name: "Add leg" }).click();
+    await parentDialog
+      .getByRole("button", { name: "Add transport leg" })
+      .click();
     const transportDialog = page.getByRole("dialog", {
       name: "Add transport leg",
     });
@@ -188,7 +190,9 @@ test.describe("Deferred create attachments", () => {
       .click();
     await expect(transportDialog).toBeHidden();
     await expect(parentDialog).toBeVisible();
-    await expect(parentDialog.getByText("12 km")).toBeVisible();
+    // The journey timeline prints the leg distance and the journey total, so
+    // the figure appears twice; the first is the leg's own box.
+    await expect(parentDialog.getByText("12 km").first()).toBeVisible();
 
     await parentDialog.getByRole("button", { name: "Create Sample" }).click();
     await waitForSideSheetClose(page);
@@ -201,7 +205,7 @@ test.describe("Deferred create attachments", () => {
     await expect(sampleDialog.getByText("lab-report-deferred.pdf")).toBeVisible({
       timeout: 15000,
     });
-    await expect(sampleDialog.getByText("12 km")).toBeVisible();
+    await expect(sampleDialog.getByText("12 km").first()).toBeVisible();
     await expect(
       sampleDialog.getByLabel("Delete lab-report-deferred.pdf"),
     ).toHaveCount(0);
@@ -216,7 +220,7 @@ test.describe("Deferred create attachments", () => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
@@ -237,7 +241,7 @@ test.describe("Deferred create attachments", () => {
       route.request().method() === "PUT" ? route.abort() : route.continue(),
     );
 
-    await dialog.locator('button:has-text("Create Feedstock")').click();
+    await dialog.locator('button:has-text("Create feedstock")').click();
 
     // Entity created, flush failed → sheet stays open in edit mode with the
     // failed item and an explanatory error.

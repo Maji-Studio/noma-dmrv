@@ -26,13 +26,14 @@ const ingredient = { formulationIngredientId: 'line', feedstockTypeId: 'type', s
 const mixedReader = () => reader([{ wet: 100, dry: 80 }, { wet: 100, dry: 100 }], [priorDraw]);
 
 describe('remaining ingredient moisture', () => {
-  it('withdraws wet stock pro rata without using a product override', async () => {
+  it('withdraws wet stock pro rata and keeps the estimate beside the measured moisture', async () => {
     const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, mixedReader());
     expect(basis).toMatchObject({ wetMassKg: 150, dryMassKg: 135 });
     expect(basis?.moisturePercent).toBe(10);
-    const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [ingredient] });
-    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 27, moistureSource: 'weighted_remaining',
-      moistureSourceSnapshot: { kind: 'weighted_remaining', wetMassKg: 150, dryMassKg: 135 } })]);
+    // The operator measured 20%; solids follow the reading, the 10% estimate is kept as what they saw.
+    const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [{ ...ingredient, moistureContentPercent: 20 }] });
+    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 24, moistureContentPercent: 20,
+      moistureEstimate: { moisturePercent: 10, wetMassKg: 150, dryMassKg: 135 } })]);
   });
   it('keeps the original pile ratio after a zero-moisture product override', async () => {
     const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader(
@@ -49,25 +50,26 @@ describe('remaining ingredient moisture', () => {
     });
     expect(parsed.feedstockMoisturePercent).toBe(basis?.moisturePercent);
     const result = await resolveCompositionIngredientMassBasis(ctx, reader([{ wet: 150, dry: 140 }]),
-      { ingredients: [{ ...ingredient, massKg: 15000000 }] });
-    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 14000000, moistureContentPercent: 6.666667 })]);
+      { ingredients: [{ ...ingredient, massKg: 15000000, moistureContentPercent: basis?.moisturePercent }] });
+    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 13999999.95, moistureContentPercent: 6.666667 })]);
   });
-  it('limits every physical stock input to the requested day and excludes archived intakes', async () => {
+  it('limits every physical stock input to the requested instant and excludes archived intakes', async () => {
     const conditions: SQL[] = [];
-    await getIngredientMoistureBasis(ctx, 'bin', '2026-09-14', reader([{ wet: 100, dry: 50 }], [], [], [], conditions), 'excluded-product');
+    const at = '2026-09-14T12:00:00.000Z';
+    await getIngredientMoistureBasis(ctx, 'bin', at, reader([{ wet: 100, dry: 50 }], [], [], [], conditions), 'excluded-product');
     const queries = conditions.map(condition => new PgDialect().sqlToQuery(condition));
     expect(queries[0].sql).toContain('"feedstocks"."archived_at" is null');
-    expect(queries[0].sql).toContain('"feedstocks"."delivery_date" <=');
+    // An intake's calendar day is compared with the facility day of the instant.
+    expect(queries[0].sql).toContain('"feedstocks"."delivery_date"::date <= (');
+    expect(queries[0].sql).toContain('at time zone "facilities"."timezone")::date');
     expect(queries[1].sql).toContain('"biochar_products"."placed_at" <=');
     expect(queries[1].params).toContain('excluded-product');
-    expect(queries[2].sql).toContain('("production_runs"."start_time" at time zone \'UTC\' at time zone "facilities"."timezone")::date::text <=');
+    expect(queries[2].sql).toContain('"production_runs"."start_time" <=');
     expect(queries[2].params).toContain('cancelled');
-    expect(queries[3].sql).toContain('coalesce("bin_movements"."physical_date", ("bin_movements"."created_at" at time zone \'UTC\' at time zone "facilities"."timezone")::date::text::date) <=');
+    // A timestamp without zone is read as UTC, never in the session zone.
+    expect(queries[3].sql).toContain('coalesce("bin_movements"."occurred_at", "bin_movements"."created_at" at time zone \'UTC\') <=');
     for (const query of queries) expect(query.params).toContain('org');
-    expect(queries[0].params).toContain('2026-09-14T23:59:59.999Z');
-    expect(queries[1].params).toContain('2026-09-14');
-    expect(queries[2].params).toContain('2026-09-14');
-    expect(queries[3].params).toContain('2026-09-14');
+    for (const query of queries) expect(query.params).toContain(at);
   });
   it('keeps the same basis when fractional intake rows are returned in a different order', async () => {
     const intakes = [{ wet: 0.1, dry: 0.05 }, { wet: 0.2, dry: 0.1 }, { wet: 0.3, dry: 0.15 }];
@@ -76,9 +78,14 @@ describe('remaining ingredient moisture', () => {
     expect(first).toEqual({ wetMassKg: 0.6, dryMassKg: 0.3, moisturePercent: 50 });
     expect(reordered).toEqual(first);
   });
-  it('retains an explicit override and freezes the saved basis on later reads', async () => {
-    const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [{ ...ingredient, moistureContentPercent: 10, moistureSource: 'operator_override' }] });
-    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 27, moistureContentPercent: 10, moistureSource: 'operator_override' })]);
+  it('rounds dry solids half up in exact decimals, as the snapshot check does', async () => {
+    // 1.005 × 0.7 is 0.7035 exactly (0.7034999… in floats); the database rounds it to 0.704.
+    const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [{ ...ingredient, massKg: 1.005, moistureContentPercent: 30 }] });
+    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 0.704 })]);
+  });
+  it('freezes the measured basis on later reads', async () => {
+    const result = await resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [{ ...ingredient, moistureContentPercent: 10 }] });
+    expect(result.ingredients).toEqual([expect.objectContaining({ massDryKg: 27, moistureContentPercent: 10 })]);
     const saved = await resolveCompositionIngredientMassBasis(ctx, reader([{ wet: 100, dry: 100 }]), { ingredients: [ingredient] }, result);
     expect(saved.ingredients).toEqual(result.ingredients);
   });
@@ -91,7 +98,8 @@ describe('remaining ingredient moisture', () => {
   it('does not turn missing dry facts or an exhausted bin into a default', async () => {
     expect(await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 100, dry: null }]))).toBeNull();
     expect(await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 50, dry: 40 }], [priorDraw]))).toBeNull();
-    await expect(resolveCompositionIngredientMassBasis(ctx, reader([]), { ingredients: [ingredient] })).rejects.toThrow('requires moisture');
+    // Without a reading nothing is inferred, even when the bin has an estimate.
+    await expect(resolveCompositionIngredientMassBasis(ctx, mixedReader(), { ingredients: [ingredient] })).rejects.toThrow('measured moisture');
   });
   it('includes run withdrawals and wet movements without changing saved ingredient solids', async () => {
     const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 100, dry: 80 }], [], [{ wet: 20, moisture: 0 }], [{ wet: -10, moisture: null }]));

@@ -6,6 +6,7 @@
 
 import { createContext, useContext } from "react";
 import type { Facility } from "@/db/schema";
+import { facilityTimeHelperText, resolveFacilityTimezone } from "@/lib/date-utils";
 
 export const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
 
@@ -46,4 +47,13 @@ export function useFacilityContext(): FacilityContextValue {
     throw new Error("useFacilityContext must be used within a FacilityProvider");
   }
   return ctx;
+}
+
+/**
+ * The clock a facility's stock events are entered and shown on: its IANA
+ * zone and the cue that names it. Every viewer sees the same wall clock.
+ */
+export function useFacilityClock(facilityId: string | null | undefined): { timeZone: string; hint: string } {
+  const { facilities } = useFacilityContext();
+  return { timeZone: resolveFacilityTimezone(facilities, facilityId), hint: facilityTimeHelperText(facilities, facilityId) };
 }

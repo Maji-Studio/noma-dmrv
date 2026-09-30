@@ -1,7 +1,7 @@
 "use client";
 
-import { getMatchingOutputBinsFn, getOutputStockHistoryFn, postOutputStockFn, previewOutputStockFn } from "@/fn/output-stock";
-import type { OutputStockPostInput, OutputStockPreviewInput } from "@/types/output-stock";
+import { getMatchingOutputBinsFn, getOutputStockHistoryFn, getOutputSubBinsFn, postOutputStockFn, previewOutputStockFn } from "@/fn/output-stock";
+import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from "@/types/output-stock";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { creditBatchKeys } from "./credit-batch-query-keys";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
@@ -16,7 +16,9 @@ import { dashboardOverviewKeys } from "./use-dashboard-overview";
 export const outputStockKeys = {
   all: ["outputStock"] as const,
   preview: (input: OutputStockPreviewInput | null) => ["outputStock", "preview", input] as const,
+  balance: (storageLocationId: string, facilityId: string, occurredAt?: string) => ["outputStock", "balance", storageLocationId, facilityId, occurredAt ?? "now"] as const,
   history: (id: string) => ["outputStock", "history", id] as const,
+  subBins: (input: SubBinsQueryInput | null) => ["outputStock", "subBins", input] as const,
   matching: (facilityId: string, formulationId: string) => ["outputStock", "matching", facilityId, formulationId] as const,
 };
 
@@ -35,10 +37,54 @@ export function useOutputStockPreview(input: OutputStockPreviewInput | null) {
   });
 }
 
-export function useMatchingOutputBins(facilityId: string, formulationId: string) {
+/**
+ * A bin's stock as of each fetch, or at `occurredAt` when an entry names its
+ * time. Without one the instant is taken when the query runs, not when the
+ * component renders, so the key stays stable and a refetch after a new entry
+ * includes it.
+ */
+export function useOutputStockBalance(bin: { storageLocationId: string; facilityId: string } | null, occurredAt?: string) {
+  return useQuery({
+    queryKey: outputStockKeys.balance(bin?.storageLocationId ?? "", bin?.facilityId ?? "", occurredAt),
+    enabled: bin !== null,
+    queryFn: async () => {
+      if (!bin) throw new Error("Choose a storage bin first.");
+      const result = await previewOutputStockFn({ ...bin, occurredAt: occurredAt ?? new Date().toISOString(), kind: "count", wetMassKg: 0, moisturePercent: null });
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+/** Without `occurredAt` the sub-bins are read as of each fetch, like the bin balance. */
+type SubBinsQueryInput = Omit<OutputSubBinsInput, "occurredAt"> & { occurredAt?: string };
+
+/**
+ * A split bin's sub-bins at the entry's time, oldest first. Keeps the last
+ * answer for the same bin while the time is edited, so the reading rows do
+ * not blink; another bin never shows the last bin's sub-bins.
+ */
+export function useOutputSubBins(input: SubBinsQueryInput | null) {
+  return useQuery({
+    queryKey: outputStockKeys.subBins(input),
+    enabled: input !== null,
+    queryFn: async () => {
+      if (!input) throw new Error("Choose a storage bin first.");
+      const result = await getOutputSubBinsFn({ ...input, occurredAt: input.occurredAt ?? new Date().toISOString() });
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2]?.storageLocationId === input?.storageLocationId ? previous : undefined,
+    retry: false,
+  });
+}
+
+export function useMatchingOutputBins(facilityId: string, formulationId: string, enabled = true) {
   return useQuery({
     queryKey: outputStockKeys.matching(facilityId, formulationId),
-    enabled: !!facilityId && !!formulationId,
+    enabled: enabled && !!facilityId && !!formulationId,
     queryFn: async () => {
       const result = await getMatchingOutputBinsFn({ facilityId, formulationId });
       if (!result.success) throw new Error(result.error);

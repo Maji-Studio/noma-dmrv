@@ -21,7 +21,7 @@ describe("toBiocharProductEntityOption", () => {
     ).toMatchObject({
       name: "Moshi Product Store G • Biochar Fertilizer",
       subtitle:
-        "Wet biochar product: 3,500kg | Dry biochar: 2,975kg available",
+        "3,500 kg wet, 2,975 kg dry biochar available",
     });
   });
 
@@ -88,7 +88,7 @@ describe("toBiocharProductEntityOption", () => {
         dryKg: 2_975,
       },
       subtitle:
-        "Wet biochar product: 3,500kg | Dry biochar: 2,975kg available",
+        "3,500 kg wet, 2,975 kg dry biochar available",
     });
   });
 
@@ -117,7 +117,7 @@ describe("toBiocharProductEntityOption", () => {
         labelVariant: "excluding-this-order",
       },
       subtitle:
-        "Wet biochar product: 3,000kg | Dry biochar: 2,550kg available excluding this order",
+        "3,000 kg wet, 2,550 kg dry biochar available excluding this order",
     });
   });
 
@@ -186,7 +186,7 @@ describe("toBiocharProductEntityOption", () => {
         unresolvedDeliveredDryCount: 0,
       }).subtitle,
     ).toBe(
-      "Wet biochar product: 550kg | Dry biochar: 0kg available",
+      "550 kg wet, 0 kg dry biochar available",
     );
   });
 

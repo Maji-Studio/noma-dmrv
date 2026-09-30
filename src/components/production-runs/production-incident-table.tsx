@@ -108,13 +108,13 @@ export function ProductionIncidentTable({
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-center justify-between">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Production Incidents
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
+          Production incidents
         </h3>
         {!readOnly && !formDialog.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <PlusIcon size={16} weight="bold" />
-            Add Incident
+            Add incident
           </Button>
         )}
       </div>
@@ -204,8 +204,8 @@ export function ProductionIncidentTable({
           onClose={closeDialog}
           title={
             formDialog.open && formDialog.incident
-              ? "Edit Production Incident"
-              : "Add Production Incident"
+              ? "Edit production incident"
+              : "Add production incident"
           }
           width="lg"
           testId="production-incident-dialog"
@@ -230,7 +230,7 @@ export function ProductionIncidentTable({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
-          title="Delete Production Incident"
+          title="Delete production incident"
           message="Are you sure you want to delete this incident? This action cannot be undone."
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeletingId(null)}

@@ -25,6 +25,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const PRODUCTION_RUNS_URL = "/production-runs";
 const BIOCHAR_PRODUCTS_URL = "/biochar-products";
@@ -42,8 +43,8 @@ const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
 const feedstockOverdrawText =
   /^Only .+ of wet feedstock is available\. Reduce the wet mass\.$/;
-const biocharOverdrawText = /Insufficient exact dry solids/;
-const deliveryOverdrawText = /Insufficient exact dry solids/;
+const biocharOverdrawText = /Not enough dry biochar in the selected bin/;
+const deliveryOverdrawText = /Not enough dry biochar in the selected bin/;
 
 /** Open the existing draft run form against the seeded 120 kg-wet source bin. */
 async function openRunFormWithSource(
@@ -56,9 +57,9 @@ async function openRunFormWithSource(
   );
   await waitForFacilityHydration(page, seededData.facility.name);
   await expect(
-    page.getByRole("button", { name: "New Production Run" }),
+    page.getByRole("button", { name: "New production run" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "New Production Run" }).click();
+  await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
 
   await page.selectOption('select[name="status"]', "draft");
@@ -98,10 +99,10 @@ async function openCompleteRunForm(
   );
   await waitForFacilityHydration(page, seededData.facility.name);
   await expect(
-    page.getByRole("button", { name: "New Production Run" }),
+    page.getByRole("button", { name: "New production run" }),
   ).toBeVisible();
   const existingRunCodes = await getListedActionCodes(page);
-  await page.getByRole("button", { name: "New Production Run" }).click();
+  await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
 
   await page.selectOption('select[name="status"]', "running");
@@ -149,7 +150,7 @@ async function openCompleteRunForm(
 async function submitRunCreate(page: Page) {
   await page
     .locator('[role="dialog"]')
-    .locator('button:has-text("Create Production Run")')
+    .locator('button:has-text("Create production run")')
     .click();
 }
 
@@ -247,7 +248,7 @@ async function editFirstRow(page: Page, readyInputName: string) {
 async function saveEdit(page: Page) {
   await page
     .locator('[role="dialog"]')
-    .locator('button:has-text("Save Changes")')
+    .locator('button:has-text("Save changes")')
     .click();
 }
 
@@ -272,8 +273,8 @@ async function openLinkedProductForm(
     `${BIOCHAR_PRODUCTS_URL}?facility=${seededData.facility.id}`,
   );
   await waitForFacilityHydration(page, seededData.facility.name);
-  await expect(page.getByRole("button", { name: "New Product" })).toBeVisible();
-  await page.getByRole("button", { name: "New Product" }).click();
+  await expect(page.getByRole("button", { name: "New product" })).toBeVisible();
+  await page.getByRole("button", { name: "New product" }).click();
   await waitForSideSheet(page);
 
   await selectEntity(
@@ -291,7 +292,7 @@ async function openLinkedProductForm(
   await selectEntity(page, "Product bin", productBin.id, productBin.name);
 
   await page.fill('input[name="massKg"]', massKg);
-  await page.fill('input[name="moistureContentPercent"]', "0");
+  await fillStockMoisture(page, "product-source", "0");
   await page.fill('input[name="waterAddedKg"]', "0");
 }
 
@@ -299,7 +300,7 @@ async function openLinkedProductForm(
 async function submitProductCreate(page: Page) {
   await page
     .locator('[role="dialog"]')
-    .locator('button:has-text("Create Product")')
+    .locator('button:has-text("Create product")')
     .click();
 }
 
@@ -337,7 +338,7 @@ async function cleanupProductScenario(
 async function createOrder(page: Page, seededData: SeededChainData, quantityKg = ORDER_QUANTITY_KG) {
   await page.goto(`${ORDERS_URL}?facility=${seededData.facility.id}`);
   await waitForFacilityHydration(page, seededData.facility.name);
-  await page.getByRole("button", { name: "New Order" }).click();
+  await page.getByRole("button", { name: "New order" }).click();
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', DELIVERY_DATE);
@@ -361,7 +362,7 @@ async function createOrder(page: Page, seededData: SeededChainData, quantityKg =
     page,
     "Formulation", seededData.formulation.id, seededData.formulation.name,
   );
-  await page.getByRole("button", { name: "Create Order" }).click();
+  await page.getByRole("button", { name: "Create order" }).click();
   await waitForSideSheetClose(page);
 }
 
@@ -375,23 +376,23 @@ async function openDeliveredDeliveryForm(
   await waitForFacilityHydration(page, seededData.facility.name);
   const newDeliveryButton = page
     .locator("header")
-    .getByRole("button", { name: "New Delivery" });
+    .getByRole("button", { name: "New delivery" });
   await expect(newDeliveryButton).toBeVisible();
   await newDeliveryButton.click();
   await waitForSideSheet(page);
 
-  await page.fill('input[name="deliveryDate"]', DELIVERY_DATE);
+  await page.fill('input[name="deliveryDate"]', `${DELIVERY_DATE}T12:00`);
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', wetMassKg);
-  await page.fill('input[name="moistureContentPercent"]', "10");
+  await fillStockMoisture(page, "delivery", "10");
 }
 
 /** Submit the create-delivery side sheet. */
 async function submitDeliveryCreate(page: Page) {
   await page
     .locator('[role="dialog"]')
-    .locator('button:has-text("Create Delivery")')
+    .locator('button:has-text("Create delivery")')
     .click();
 }
 
@@ -531,7 +532,7 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
       await expect(error).toBeHidden();
 
       await page.fill('input[name="massKg"]', "101");
-      await expect(page.getByRole("button", { name: "Create Product", exact: true })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Create product", exact: true })).toBeDisabled();
       await expect(error).toBeVisible({ timeout: 10000 });
     } finally {
       await cleanupProductScenario(page, seededData, productBin, false);
@@ -635,7 +636,7 @@ test.describe("createDelivery product-batch guard", () => {
     await expect(error).toBeHidden();
 
     await page.fill('input[name="deliveredWetMassKg"]', "100001");
-    await expect(page.getByRole("button", { name: "Create Delivery", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Create delivery", exact: true })).toBeDisabled();
     await expect(error).toBeVisible({ timeout: 10000 });
   });
 
@@ -675,9 +676,9 @@ async function openDeliveryCorrection(page: Page, seededData: SeededChainData) {
   await waitForFacilityHydration(page, seededData.facility.name);
   await page.getByPlaceholder("Search by code or name…").fill(seededData.productStorageLocation.code);
   await page.getByText(seededData.productStorageLocation.name, { exact: true }).first().click();
-  await page.getByRole("button", { name: "More info", exact: true }).first().click();
+  await page.getByRole("button", { name: "Stock history", exact: true }).first().click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-  await history.locator("article").filter({ has: page.getByRole("heading", { name: "Delivery, original entry", exact: true }) }).getByRole("button", { name: "Correct entry" }).click();
+  await history.locator("article").filter({ has: page.getByRole("heading", { name: "Delivery", exact: true }) }).getByRole("button", { name: "Correct entry" }).click();
   await history.locator("#stock-reason").fill("E2E corrected loading measurement");
   return history;
 }
@@ -709,7 +710,11 @@ test.describe("updateDelivery product-batch guard", () => {
     await history.locator("#stock-wet").fill("90000");
     await history.getByRole("button", { name: "Save correction", exact: true }).click();
     await expect(history.getByText("E2E corrected loading measurement", { exact: true }).first()).toBeVisible();
-    await expect(history.getByRole("heading", { name: "Delivery, original entry", exact: true })).toBeVisible();
-    await expect(history.getByRole("heading", { name: /^Reversal, corrects/ })).toBeVisible();
+    // The original entry stays, marked reversed; its reversal is folded into
+    // the replacement that names it.
+    await expect(history.getByRole("heading", { name: /^Delivery\s*Reversed$/ })).toBeVisible();
+    const replacement = history.locator("article").filter({ hasText: "E2E corrected loading measurement" });
+    await expect(replacement).toContainText("Replacement");
+    await expect(replacement).toContainText(/Reverses the entry recorded /);
   });
 });

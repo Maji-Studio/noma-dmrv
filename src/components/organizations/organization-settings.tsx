@@ -42,6 +42,7 @@ import {
   OrganizationRosterList,
   OrganizationRosterRow,
 } from "./organization-roster-list";
+import { Notice } from "@/components/ui/notice";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -195,11 +196,8 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
               </FormField>
             </div>
             {lastInviteLink && (
-              <div className="flex flex-col gap-8 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] p-12">
-                <span className="body-caption font-medium text-[var(--color-text-primary)]">
-                  Share this link with the invitee
-                </span>
-                <div className="flex items-center gap-8">
+              <Notice tone="success" title="Share this link with the invitee">
+                <div className="mt-8 flex items-center gap-8">
                   <input
                     readOnly
                     value={lastInviteLink}
@@ -220,7 +218,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                     {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-              </div>
+              </Notice>
             )}
             <FormActions
               control={control}

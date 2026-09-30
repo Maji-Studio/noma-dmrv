@@ -22,18 +22,12 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
-import { MoistureSplit } from "@/components/ui/moisture-split";
 import { FeedstockForm } from "./feedstock-form";
-import {
-  TransportEvidencePanel,
-  TransportLegsSummary,
-} from "@/components/transport-legs";
 import {
   useFeedstocks,
   useFeedstock,
@@ -51,15 +45,13 @@ import {
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
+import { feedstockSheetSections } from "./feedstock-read-sections";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
-import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import {
   useFeedstockTypeFilter,
@@ -526,7 +518,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Feedstock" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create feedstock" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -550,7 +542,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Feedstock
+            New feedstock
           </Button>
         }
       />
@@ -637,7 +629,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       {/* Delete Confirmation */}
       <DeleteConfirmDialog
         isOpen={!!deletingId}
-        title="Delete Feedstock"
+        title="Delete feedstock"
         message="Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingId(null); setDeleteError(null); }}
@@ -646,6 +638,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Side Sheet */}
       <EntitySideSheet
+        detailToggle
+        detailScope={sideSheetEntity?.id ?? "create"}
         numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
@@ -658,96 +652,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Feedstock"
-        sections={sideSheetEntity ? [
-          {
-            title: "Delivery information",
-            fields: [
-              { label: "Delivery date", value: formatDate(sideSheetEntity.deliveryDate) },
-              { label: "Supplier", value: sideSheetEntity.supplierName },
-            ],
-          },
-          {
-            title: "Transport details",
-            fields: [
-              { label: "Vehicle", value: sideSheetEntity.vehiclePlateNumber },
-              {
-                label: "Distance (km)",
-                ...certificationDetailField("feedstock", "transportDistanceKm"),
-                // Status from the raw column, not the formatted string — the
-                // "Not recorded" fallback is truthy and would falsely read as satisfied.
-                certifyStatus: resolveCertFieldStatus(
-                  true,
-                  sideSheetEntity.transportDistanceKm !== null,
-                ),
-                value:
-                  sideSheetEntity.transportDistanceKm !== null
-                    ? formatDistanceKm(sideSheetEntity.transportDistanceKm)
-                    : null,
-              },
-              { label: "Trip type", value: TRIP_TYPE_LABELS[sideSheetEntity.transportTripType ?? DEFAULT_TRIP_TYPE] },
-              {
-                label: "Distance source",
-                value: sideSheetEntity.transportDistanceSource
-                  ? DISTANCE_SOURCE_LABELS[sideSheetEntity.transportDistanceSource]
-                  : null,
-              },
-            ],
-          },
-          {
-            title: "Material",
-            fields: [
-              { label: "Feedstock type", value: sideSheetEntity.feedstockTypeName },
-              {
-                label: "Total wet mass (kg)",
-                ...certificationDetailField("feedstock", "massWetKg"),
-                certifyStatus: resolveCertFieldStatus(true, sideSheetEntity.massWetKg !== null),
-                value: formatMassKg(sideSheetEntity.massWetKg),
-              },
-              {
-                label: MOISTURE_FIELD_LABEL,
-                value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
-              },
-            ],
-            content: (
-              <MoistureSplit
-                wetMassKg={sideSheetEntity.massWetKg}
-                moisturePercent={sideSheetEntity.moistureContentPercent}
-                dryMassKg={sideSheetEntity.massDryKg}
-                materialLabel="Feedstock"
-              />
-            ),
-          },
-          {
-            title: "Bin allocations",
-            fields: [
-              { label: "Storage bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
-              { label: "Allocated wet mass (kg)", value: formatMassKg(sideSheetEntity.massWetKg) },
-              { label: "Over-allocation justification", value: sideSheetEntity.overrideJustification },
-            ],
-          },
-          {
-            title: "Documentation",
-            fields: [{ label: "Notes", value: sideSheetEntity.notes }],
-          },
-          {
-            title: "Transport evidence",
-            fields: [],
-            content: (
-              <TransportEvidencePanel
-                entityType="feedstock"
-                entityId={sideSheetEntity.id}
-                readOnly
-                embedded
-              />
-            ),
-          },
-          {
-            title: "Derived transport",
-            fields: [],
-            content: <TransportLegsSummary entityType="feedstock" entityId={sideSheetEntity.id} />,
-          },
-        ] : undefined}
+        editLabel="Edit feedstock"
+        sections={sideSheetEntity ? feedstockSheetSections(sideSheetEntity) : undefined}
       >
         <FeedstockForm
           key={sideSheetEntity?.id ?? "create"}
@@ -755,7 +661,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createFeedstock.isPending || updateFeedstock.isPending || isFlushing}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Feedstock"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create feedstock"}
           serverError={createError || updateError || undefined}
           serverErrorAction={
             updateError && updateBlockers.length > 0 ? (

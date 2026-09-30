@@ -6,7 +6,8 @@
  * range helper, and a grey "Dry: 237.5 kg" caption tucked under one of the two
  * inputs. The three quantities are one measurement, so they render as one
  * block: two inputs and, spanning both, the live `MoistureSplit` bar showing
- * what the entered numbers actually mean.
+ * what the entered numbers actually mean. The bar carries no frame of its own;
+ * it belongs to the inputs above it.
  *
  * `MassMoistureFields` is the pairing. `MoistureField` is for the forms that
  * capture a moisture reading with no wet mass beside it (lab samples), and
@@ -24,8 +25,10 @@ import type { ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
+import { DetailedOnly } from "./form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
+import { moistureReadingGuidance, type MoistureFieldEstimate } from "@/lib/output-stock/moisture-guidance";
 import {
   MASS_KG_INPUT_STEP,
   STORED_PERCENT_INPUT_STEP,
@@ -68,6 +71,17 @@ interface MassMoistureInputProps {
 }
 
 /**
+ * A stock reading: the estimate it is checked against, and the value as typed.
+ * With an estimate the field shows it as one line under the input, dates it
+ * behind the ⓘ, and warns (never blocks) when the reading is far from it. The
+ * estimate is never filled in: every reading is measured.
+ */
+interface MoistureReadingProps {
+  estimate?: MoistureFieldEstimate | null;
+  reading?: unknown;
+}
+
+/**
  * Moisture percentage input. Carries the wet-basis explainer on every instance —
  * "moisture content" is ambiguous between wet and dry basis in the biochar
  * literature, and this app is wet-basis throughout.
@@ -87,15 +101,18 @@ export function MoistureField({
   certifyStatus,
   materialLabel,
   step = STORED_PERCENT_INPUT_STEP,
-}: MassMoistureInputProps & { materialLabel?: string }) {
+  estimate,
+  reading,
+}: MassMoistureInputProps & MoistureReadingProps & { materialLabel?: string }) {
+  const guidance = estimate === undefined ? null : moistureReadingGuidance(estimate, parseWatchedNumber(reading));
   return (
     <FormField
       id={id}
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       error={error}
-      warning={warning}
-      helperText={helperText}
-      hint={hint}
+      warning={guidance?.warning ?? warning}
+      helperText={guidance?.helperText ?? helperText}
+      hint={guidance?.basisText ? <>{guidance.basisText} {hint}</> : hint}
       required={required}
       certifyRequired={certifyRequired}
       certifyStatus={certifyStatus}
@@ -160,7 +177,7 @@ export function WetMassField({
 
 interface MassMoistureFieldsProps {
   wet: MassMoistureInputProps;
-  moisture: MassMoistureInputProps;
+  moisture: MassMoistureInputProps & MoistureReadingProps;
   /** Watched wet-mass value driving the live split. */
   wetMassKg: unknown;
   /** Watched moisture value driving the live split. */
@@ -169,6 +186,11 @@ interface MassMoistureFieldsProps {
   addedWaterKg?: unknown;
   /** Added-water input (and any companion fields) rendered after the base measurements and before the chart. */
   addedWaterField?: ReactNode;
+  /**
+   * Replaces the moisture input with per-sub-bin readings (a split-bin draw).
+   * `moisturePercent` then carries the draw's overall moisture for the split.
+   */
+  readings?: ReactNode;
   /** Qualifies both labels and the split's dry-mass label ("Biochar", "Feedstock"). */
   materialLabel?: string;
   /** Overrides the wet figure label without changing the input label. */
@@ -183,7 +205,13 @@ interface MassMoistureFieldsProps {
 
 /**
  * Wet mass and moisture side by side, with the derived split spanning both.
- * The split panel is framed so it reads as output rather than another input.
+ *
+ * The split is unframed on purpose: it is not a separate panel of output, it is
+ * what the two inputs above it mean, so the bar and its key sit directly under
+ * them and move as they change. `MoistureSplit` decides how much of the
+ * calculation to show from the form detail level. Both levels draw the split
+ * once wet mass or moisture has a value. Before that, the unresolved state is
+ * explanation of what will appear, so only Detailed shows it.
  */
 export function MassMoistureFields({
   wet,
@@ -192,34 +220,39 @@ export function MassMoistureFields({
   moisturePercent,
   addedWaterKg,
   addedWaterField,
+  readings,
   materialLabel,
   wetSplitLabel,
   drySplitLabel,
   finalMoistureLabel,
   splitFooter,
 }: MassMoistureFieldsProps) {
+  const wetKg = parseWatchedNumber(wetMassKg);
+  const moistureValue = parseWatchedNumber(moisturePercent);
+  const started = wetKg !== null || moistureValue !== null;
+  const split = (
+    <MoistureSplit
+      wetMassKg={wetKg}
+      moisturePercent={moistureValue}
+      addedWaterKg={parseWatchedNumber(addedWaterKg)}
+      materialLabel={materialLabel}
+      wetLabel={wetSplitLabel}
+      dryLabel={drySplitLabel}
+      finalMoistureLabel={finalMoistureLabel}
+    />
+  );
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
-      <MoistureField {...moisture} materialLabel={materialLabel} />
+      {readings ? <div className="md:col-span-2">{readings}</div> : <MoistureField {...moisture} materialLabel={materialLabel} />}
       {addedWaterField && (
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-16">
           {addedWaterField}
         </div>
       )}
-      <div
-        data-testid="mass-moisture-split"
-        className="md:col-span-2 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
-      >
-        <MoistureSplit
-          wetMassKg={parseWatchedNumber(wetMassKg)}
-          moisturePercent={parseWatchedNumber(moisturePercent)}
-          addedWaterKg={parseWatchedNumber(addedWaterKg)}
-          materialLabel={materialLabel}
-          wetLabel={wetSplitLabel}
-          dryLabel={drySplitLabel}
-          finalMoistureLabel={finalMoistureLabel}
-        />
+      {/* Hidden while nothing inside has content, so Simple adds no empty grid row. */}
+      <div data-testid="mass-moisture-split" className="md:col-span-2 [&:not(:has(*:not(:empty)))]:hidden">
+        <DetailedOnly unless={started}>{split}</DetailedOnly>
         {splitFooter}
       </div>
     </div>

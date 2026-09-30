@@ -5,6 +5,7 @@ import {
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const COLD_COMPILE_TIMEOUT_MS = 30_000;
 const FIRST_BOUNDARY_FILE = "e2e-upload-boundary.geojson";
@@ -64,7 +65,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
 
   await page.goto(`/orders?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "New Order" }).click();
+  await page.getByRole("button", { name: "New order" }).click();
   await waitForSideSheet(page);
   await page.locator("#orderDate").fill(today);
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
@@ -83,28 +84,27 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.locator("#quantityKg").fill("100");
   await page
     .locator('[role="dialog"]')
-    .getByRole("button", { name: "Create Order" })
+    .getByRole("button", { name: "Create order" })
     .click();
   await waitForSideSheetClose(page);
 
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "New Delivery" }).click();
+  await page.getByRole("button", { name: "New delivery" }).click();
   await waitForSideSheet(page);
-  await page.locator("#deliveryDate").fill(today);
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.locator("#deliveredWetMassKg").fill("100");
-  await page.locator("#moistureContentPercent").fill("10");
+  await fillStockMoisture(page, "delivery", "10");
   await page
     .locator('[role="dialog"]')
-    .getByRole("button", { name: "Create Delivery" })
+    .getByRole("button", { name: "Create delivery" })
     .click();
   await waitForSideSheetClose(page);
 
   await page.goto(applicationsUrl);
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "New Application" }).click();
+  await page.getByRole("button", { name: "New application" }).click();
   await waitForSideSheet(page);
   await page.locator("#applicationDate").fill(today);
   const deliverySelect = page.locator("#deliveryId");
@@ -119,7 +119,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await page.locator("#fieldSizeHa").fill("2");
   await page.locator("#fieldIdentifier").fill(fieldIdentifier);
 
-  await page.getByRole("radio", { name: /GIS reference/ }).click();
+  await page.getByRole("radio", { name: /GIS reference/ }).locator("..").click();
   await page.getByRole("button", { name: /Add GIS reference/ }).click();
   await page.locator("#gis-reference-file").setInputFiles({
     name: FIRST_BOUNDARY_FILE,
@@ -143,7 +143,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
 
   await page
     .locator('[role="dialog"]')
-    .getByRole("button", { name: "Create Application" })
+    .getByRole("button", { name: "Create application" })
     .click();
   await waitForSideSheetClose(page);
 
@@ -162,9 +162,9 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
   await expect(page.getByText(SUMMARY_AREAS)).toBeVisible();
 
-  await page.getByRole("button", { name: "Edit Application" }).click();
+  await page.getByRole("button", { name: "Edit application" }).click();
   await page.getByRole("button", { name: "Replace" }).click();
-  await page.getByRole("radio", { name: /Insert manually/ }).click();
+  await page.getByRole("radio", { name: /Insert manually/ }).locator("..").click();
   await page
     .locator("#gis-reference-text")
     .fill(JSON.stringify(PASTE_BOUNDARY));
@@ -174,7 +174,7 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   });
   await page
     .locator('[role="dialog"]')
-    .getByRole("button", { name: "Update Application" })
+    .getByRole("button", { name: "Update application" })
     .click();
   await waitForSideSheetClose(page);
 
@@ -183,11 +183,11 @@ test("adds, reads, replaces, and removes a GIS boundary", async ({
   await expect(page.getByText("Pasted GeoJSON")).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT_MS,
   });
-  await page.getByRole("button", { name: "Edit Application" }).click();
+  await page.getByRole("button", { name: "Edit application" }).click();
   await page.getByRole("button", { name: "Remove" }).click();
   await page
     .locator('[role="dialog"]')
-    .getByRole("button", { name: "Update Application" })
+    .getByRole("button", { name: "Update application" })
     .click();
   await waitForSideSheetClose(page);
 

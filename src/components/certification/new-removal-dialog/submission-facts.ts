@@ -133,7 +133,7 @@ function uniqueLabels(values: string[]): string {
 function reportingWindowLabel(
   compilation: RemovalCompilationView | null,
 ): string | null {
-  const window = compilation?.review.reportingWindow;
+  const window = compilation?.review?.reportingWindow;
   if (!window?.startedOn || !window.completedOn) return null;
   return formatDateRange(window.startedOn, window.completedOn);
 }
@@ -148,7 +148,7 @@ function pendingDocumentCount(
   ctx: RemovalCertifyContext,
   compilation: RemovalCompilationView | null,
 ): number {
-  if (compilation) return compilation.review.pendingSourceCount ?? 0;
+  if (compilation?.review) return compilation.review.pendingSourceCount ?? 0;
   const { total, mirrored } = ctx.supportingDocuments;
   return Math.max(total - mirrored, 0);
 }

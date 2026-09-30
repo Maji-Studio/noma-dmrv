@@ -84,6 +84,11 @@ State the current condition, its task impact, and the next action. Do not turn a
 warning into a background lesson. If the operator can continue safely, say what
 needs review. If the warning blocks the task, say how to clear it.
 
+Render every warning, info line and blocker with `Notice` (see "Notice" in
+`docs/design-system.md`): an optional short title, one line, an optional action
+that clears it. Choose the tone by impact, not by wording: `warning` when the
+operator can continue, `error` only when the task is blocked.
+
 ## Toasts
 
 Confirm the completed action and name the affected record when useful.

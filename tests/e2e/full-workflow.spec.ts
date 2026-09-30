@@ -106,7 +106,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       vehicle: crypto.randomUUID(),
     };
 
-    // 1. Create Facility (infrastructure foundation)
+    // 1. Create facility (infrastructure foundation)
     await tx.insert(schema.facilities).values({
         organizationId: DEC_ORG_ID,
       id: ids.facility,
@@ -117,7 +117,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       durabilityOption: "200_year",
     });
 
-    // 2. Create Reactor (linked to facility)
+    // 2. Create reactor (linked to facility)
     await tx.insert(schema.reactors).values({
         organizationId: DEC_ORG_ID,
       id: ids.reactor,
@@ -151,7 +151,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       capacityKg: 3000,
     });
 
-    // 5. Create Supplier
+    // 5. Create supplier
     await tx.insert(schema.suppliers).values({
         organizationId: DEC_ORG_ID,
       id: ids.supplier,
@@ -160,7 +160,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       location: "Supplier Location",
     });
 
-    // 6. Create Feedstock Type
+    // 6. Create feedstock type
     await tx.insert(schema.feedstockTypes).values({
         organizationId: DEC_ORG_ID,
       id: ids.feedstockType,
@@ -169,7 +169,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       category: "forestry",
     });
 
-    // 7. Create Vehicle for deliveries
+    // 7. Create vehicle for deliveries
     await tx.insert(schema.vehicles).values({
         organizationId: DEC_ORG_ID,
       id: ids.vehicle,
@@ -182,7 +182,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       modelYear: 2020,
     });
 
-    // 8. Create Feedstock Delivery (links supplier, facility, feedstock type)
+    // 8. Create feedstock delivery (links supplier, facility, feedstock type)
     await tx.insert(schema.feedstockDeliveries).values({
         organizationId: DEC_ORG_ID,
       id: ids.feedstockDelivery,
@@ -196,7 +196,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       status: "complete",
     });
 
-    // 9. Create Feedstock (from delivery)
+    // 9. Create feedstock (from delivery)
     await tx.insert(schema.feedstocks).values({
         organizationId: DEC_ORG_ID,
       id: ids.feedstock,
@@ -211,7 +211,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       storageLocationId: ids.storageLocation,
     });
 
-    // 10. Create Production Run (links reactor, facility)
+    // 10. Create production run (links reactor, facility)
     const today = new Date().toISOString().split("T")[0];
     await tx.insert(schema.productionRuns).values({
         organizationId: DEC_ORG_ID,
@@ -249,7 +249,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       organicCarbonPercent: 82,
     });
 
-    // 13. Create Formulation
+    // 13. Create formulation
     await tx.insert(schema.formulations).values({
         organizationId: DEC_ORG_ID,
       id: ids.formulation,
@@ -258,7 +258,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       biocharRatio: 1.0,
     });
 
-    // 14. Create Biochar Product (links formulation, production run, storage)
+    // 14. Create biochar product (links formulation, production run, storage)
     await tx.insert(schema.biocharProducts).values(await outputProductFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.biocharProduct,
@@ -274,7 +274,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     const productSource = await preparePureOutputProductFixture(tx, ids.biocharProduct);
 
-    // 15. Create Customer
+    // 15. Create customer
     await tx.insert(schema.customers).values({
         organizationId: DEC_ORG_ID,
       id: ids.customer,
@@ -283,7 +283,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       cropType: "Coffee",
     });
 
-    // 16. Create Customer Location
+    // 16. Create customer location
     await tx.insert(schema.customerLocations).values({
         organizationId: DEC_ORG_ID,
       id: ids.customerLocation,
@@ -293,7 +293,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       gpsLongitude: 37.0,
     });
 
-    // 17. Create Order (links customer, customer location, biochar product)
+    // 17. Create order (links customer, customer location, biochar product)
     await tx.insert(schema.orders).values(await outputOrderFixtureValues(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.order,
@@ -307,7 +307,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       packaging: "bagged",
     }));
 
-    // 18. Create Delivery (links order, biochar product, storage)
+    // 18. Create delivery (links order, biochar product, storage)
     await insertOutputDeliveryFixture(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.delivery,
@@ -324,7 +324,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       vehicleId: ids.vehicle,
     }, row => row);
 
-    // 19. Create Application (links delivery)
+    // 19. Create application (links delivery)
     await insertOutputApplicationFixture(tx, {
         organizationId: DEC_ORG_ID,
       id: ids.application,
@@ -349,7 +349,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       feedstockTypeId: ids.feedstockType,
     });
 
-    // 20. Create Credit Batch (links facility, single feedstock per ADR 0016)
+    // 20. Create credit batch (links facility, single feedstock per ADR 0016)
     await tx.insert(schema.creditBatches).values({
         organizationId: DEC_ORG_ID,
       id: ids.creditBatch,

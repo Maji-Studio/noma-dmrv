@@ -96,7 +96,7 @@ test.describe("production run readings file", () => {
 
     await runRow.locator("td").first().click();
     await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit Production Run" }).click();
+    await page.getByRole("button", { name: "Edit production run" }).click();
     const dialog = page.locator('[role="dialog"]');
     await dialog.getByText("Readings file").first().scrollIntoViewIfNeeded();
 

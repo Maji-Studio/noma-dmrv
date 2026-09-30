@@ -65,7 +65,7 @@ export function FacilitySelector() {
           className="flex items-center gap-8 h-36 px-10 border border-dashed border-[var(--color-white-25)] text-[var(--color-white-50)] hover:text-white hover:border-[var(--clr-purple)] transition-colors duration-150"
         >
           <PlusIcon size={14} weight="bold" />
-          <span className="body-caption">Add First Facility</span>
+          <span className="body-caption">Add first facility</span>
         </Link>
       </div>
     );
@@ -144,7 +144,7 @@ export function FacilitySelector() {
                 className="w-full h-40 px-10 flex items-center gap-8 body-caption text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06] transition-colors duration-150"
               >
                 <GearSixIcon size={14} weight="bold" className="shrink-0" />
-                <span>Manage Facilities</span>
+                <span>Manage facilities</span>
               </button>
             </div>
           </div>

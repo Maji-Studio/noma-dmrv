@@ -27,6 +27,7 @@ import type { FacilityCertifierMapping } from "@/fn/certification/facility-mappi
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
 import { ProductionConfirmation } from "./production-confirmation";
 import { ConfirmActionDialog } from "./confirm-action-dialog";
+import { Notice } from "@/components/ui/notice";
 
 interface FacilityCertifierDialogProps {
   isOpen: boolean;
@@ -247,7 +248,7 @@ export function FacilityCertifierForm({
       {showProjectDetails && (
         <>
           {requiresShareAck && (
-            <div className="flex flex-col gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16">
+            <Notice tone="warning">
               <p className="body-small text-[var(--color-text-primary)]">
                 This project is already linked to{" "}
                 <strong className="body-small-bold">
@@ -257,7 +258,7 @@ export function FacilityCertifierForm({
                 the same Isometric project. The Isometric facility ID below
                 stays unique per facility.
               </p>
-              <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
+              <label className="mt-12 flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
                 <input
                   type="checkbox"
                   className="mt-2 shrink-0"
@@ -268,7 +269,7 @@ export function FacilityCertifierForm({
                 />
                 <span>I intend to share this project across facilities.</span>
               </label>
-            </div>
+            </Notice>
           )}
 
           <FormField

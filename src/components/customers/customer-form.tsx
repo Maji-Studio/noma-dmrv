@@ -124,7 +124,7 @@ export function CustomerForm({
     },
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Customer" : "Create Customer";
+  const defaultSubmitLabel = isEditMode ? "Update customer" : "Create customer";
 
   const handleFormSubmit = handleSubmit((data) => {
     if (!isEditMode && pendingLocations.length === 0) {
@@ -287,7 +287,7 @@ function CreateModeLocationsSection({
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
-          Add Location
+          Add location
         </Button>
       }
     >
@@ -350,7 +350,7 @@ function CreateModeLocationsSection({
       <QuickAddDialogShell
         isOpen={isLocationDialogOpen}
         onClose={() => setIsLocationDialogOpen(false)}
-        title="Add Location"
+        title="Add location"
         width="lg"
         testId="location-quick-add-dialog"
       >
@@ -408,7 +408,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
-          Add Location
+          Add location
         </Button>
       }
     >
@@ -473,7 +473,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
 
       <DeleteConfirmDialog
         isOpen={!!deletingLocationId}
-        title="Delete Location"
+        title="Delete location"
         message="Are you sure you want to delete this location? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingLocationId(null)}

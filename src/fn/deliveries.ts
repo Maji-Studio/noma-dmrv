@@ -184,7 +184,8 @@ export async function createDeliveryFn(
           vehicleId: validated.vehicleId ?? null,
           status: validated.status,
           deliveredWetMassKg: validated.deliveredWetMassKg ?? null,
-          moistureContentPercent: validated.moistureContentPercent ?? null,
+          moistureContentPercent: validated.moistureContentPercent,
+          sources: validated.sources,
           distanceKmOverride: validated.distanceKmOverride ?? null,
           distanceSource: resolveDeliveryDistanceSource(
             validated.distanceKmOverride ?? null,

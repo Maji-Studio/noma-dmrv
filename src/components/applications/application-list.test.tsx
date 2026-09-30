@@ -35,6 +35,9 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   XIcon: () => <span />,
   CheckIcon: () => <span />,
   WarningIcon: () => <span />,
+  InfoIcon: () => null,
+  WarningCircleIcon: () => null,
+  CheckCircleIcon: () => null,
 }));
 vi.mock("@/components/navigation", () => ({
   SelectFacilityEmptyState: ({ description }: { description: string }) => (
@@ -129,7 +132,7 @@ describe("ApplicationList without facility context", () => {
     expect(html).toContain(
       "Choose a facility from the sidebar to view its applications.",
     );
-    expect(html).not.toContain("New Application");
+    expect(html).not.toContain("New application");
     expect(html).not.toContain("data-testid=\"data-table\"");
     expect(html).not.toContain("<form");
   });

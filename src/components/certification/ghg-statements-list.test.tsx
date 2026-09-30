@@ -123,9 +123,8 @@ describe("CreateGateNotice", () => {
         />,
       );
 
-      expect(html).toContain("--color-signal-orange");
-      expect(html).toContain("--color-signal-orange-light");
-      expect(html).toContain("--color-signal-orange-strong");
+      expect(html).toContain('data-tone="warning"');
+      expect(html).toContain("--st-wait");
     },
   );
 

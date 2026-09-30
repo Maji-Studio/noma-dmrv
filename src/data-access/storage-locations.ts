@@ -35,6 +35,8 @@ import {
 } from "./bin-stock-guards";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import { assertBinIdentityChangeAllowed } from "./storage-location-identity-guards";
+import { applyStockModeChange, initialStockMode } from "./output-bin-stock-mode";
+import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   countStorageLocationReferences,
   storageLocationBlockers,
@@ -168,6 +170,7 @@ export async function getStorageLocations(
       supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
+      stockMode: storageLocations.stockMode,
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
@@ -264,6 +267,7 @@ export async function getStorageLocationWithFacility(
       supplierReferenceId: storageLocations.supplierReferenceId,
       feedstockTypeId: storageLocations.feedstockTypeId,
       formulationId: storageLocations.formulationId,
+      stockMode: storageLocations.stockMode,
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
@@ -323,6 +327,7 @@ export async function createStorageLocation(
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
     formulationId?: string | null;
+    stockMode?: OutputStockMode;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -388,6 +393,7 @@ export async function createStorageLocation(
           ? data.feedstockTypeId ?? null
           : null,
         formulationId,
+        stockMode: initialStockMode(data.type, data.stockMode),
         storageMethod: data.storageMethod ?? null,
         storageDescription: data.storageDescription ?? null,
         supplierReferenceId: data.supplierReferenceId ?? null,
@@ -449,6 +455,9 @@ export async function updateStorageLocation(
     capacityKg?: number | null;
     feedstockTypeId?: string | null;
     formulationId?: string | null;
+    /** Split to mix posts a merge at `mergedAt`; mix to split needs an empty bin. */
+    stockMode?: OutputStockMode;
+    mergedAt?: Date;
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
@@ -599,10 +608,14 @@ export async function updateStorageLocation(
       }
     }
 
+    const stockMode = await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
+
     const dataWithoutNormalized = { ...data };
     delete dataWithoutNormalized.formulationId;
     delete dataWithoutNormalized.feedstockTypeId;
     delete dataWithoutNormalized.expectedUpdatedAt;
+    delete dataWithoutNormalized.stockMode;
+    delete dataWithoutNormalized.mergedAt;
     // A rename OR a facility move can collide with the per-facility name index.
     const [updated] = await guardStorageLocationName(
       ctx,
@@ -614,6 +627,7 @@ export async function updateStorageLocation(
             ...dataWithoutNormalized,
             feedstockTypeId: normalizedFeedstockTypeId,
             formulationId: normalizedFormulationId,
+            stockMode,
             updatedAt: new Date(),
           })
           .where(

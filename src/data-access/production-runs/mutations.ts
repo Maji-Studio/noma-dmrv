@@ -48,6 +48,7 @@ import {
   deriveProductionRunUpdateBiocharStockState,
   lockProductionRunUpdateStock,
 } from "../production-run-stock-locks";
+import { assertRunAdditionAfterSplit } from "../output-bin-stock-mode";
 import { processPendingStorageObjectDeletions } from "../storage-object-deletions";
 import { assertSameOrg, requireOrgScope } from "../utils";
 import {
@@ -241,6 +242,7 @@ export async function createProductionRun(
     // Validate long-tail storage references before writing the run.
     if (data.biocharStorageLocationId) {
       await validateBiocharStorageLocation(ctx, tx, data.biocharStorageLocationId, data.facilityId, "Biochar");
+      await assertRunAdditionAfterSplit(ctx, tx, { status, biocharStorageLocationId: data.biocharStorageLocationId, facilityId: data.facilityId, endTime: data.endTime ?? null });
     }
     if (data.feedstockStorageLocationId && feedstockDraws.length === 0) {
       await validateProductionRunFeedstockDrawSources(
@@ -733,6 +735,7 @@ export async function updateProductionRun(
     ) {
       await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
     }
+    await assertRunAdditionAfterSplit(ctx, tx, { status: lockedTargetStatus, biocharStorageLocationId: effectiveBiocharStorageId, facilityId: lockedTargetFacilityId, endTime: lockedTargetEndTime }, locked);
 
     const transactionUpdateData = { ...updateData };
     if (

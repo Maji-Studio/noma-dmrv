@@ -136,11 +136,45 @@ specialized renderers (map pills, graph pills) must use that shared mapping.
 **Never pick an `--st-*` token in a feature component off an entity status.**
 The ramp stays available for non-status uses (charts, feedback, accents).
 
+### Notice
+
+`Notice` (`@/components/ui/notice`) is the one style for in-flow information,
+warnings and blockers. Never hand-roll a tinted box, a left-rule callout or a
+red bordered panel. It is a Phosphor icon, an optional `title`, one line of text
+and an optional `action` (a link or button); no eyebrow, no uppercase.
+
+| Tone | Use | Look | Role |
+| --- | --- | --- | --- |
+| `info` | Context the user may want, nothing to fix | grey icon, no tint | `status` |
+| `warning` | The user can continue, something needs review | orange icon, no tint | `status` |
+| `success` | An action completed and the page stays | green icon, no tint | `status` |
+| `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
+
+Only `error` is tinted, so one blocker stands out on a page of advisories. Keep
+`alert` for blocking errors; do not upgrade a warning to it. Field-level
+feedback stays in `FormField` (`error`, `warning`), not a Notice. `ServerError`
+renders through `Notice`. For loading failures with a retry, pass the button as
+`action`.
+
+### Flat controls
+
+Inputs, native selects, textareas, the entity select trigger and the date and
+time inputs share one look: a 1px `--color-border-secondary` border, a white
+fill, 40px height (textarea grows), the interaction-colour border and ring on
+focus, a red border on error and 50% opacity when disabled. There is no inset
+shadow. Do not add one to a control; elevation is border and paper (above).
+
+The entity select popover separates options with spacing, a hover fill and a
+selected fill, not per-row rules, and uses Phosphor icons. The search box and
+the "Add new" row are part of the same list, not boxed apart. Give the trigger
+the `FormField` id (`FormEntitySelect` does) so the field label names it.
+
 ---
 
 ## Typography
 
-Class definitions live in `src/app/globals.css`. Size → class ladder:
+Size tokens live in `src/app/globals.css`; the classes live in
+`src/styles/typography.css`. Size → class ladder:
 
 - **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase table headers)
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons)
@@ -152,6 +186,49 @@ Class definitions live in `src/app/globals.css`. Size → class ladder:
 
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
+
+**The type classes beat utilities, except `font-medium`.** `typography.css`
+is unlayered, and Tailwind utilities live in a cascade layer, so a type class
+and the bare `p` and `h1`..`h4` element rules win over `font-mono`, `text-*`,
+`tracking-*`, `leading-*`, margin utilities and every weight except one.
+`typography.css` ends with an unlayered `.font-medium` rule, so `body-small
+font-medium` renders medium. Write that rather than reaching for a `-bold`
+variant. For any other override on a type class or a bare `<p>`, drop the type
+class and use utilities alone.
+
+### Form type, lines and spacing
+
+Forms and the derived blocks inside them ([forms.md](./forms.md#derived-blocks))
+use at most four text styles:
+
+| Style | Classes | Used for |
+|---|---|---|
+| Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, helper cues, calculation rows' labels |
+| Label | `body-small font-medium` | field labels (secondary ink) and section titles (primary ink) |
+| Value | `body-small` | figures in a derived block's rows (`StockRows`) |
+| Headline figure | `body-large font-medium` | the one `DerivedHeadline` figure per block |
+
+Control text (inputs, selects, the entity select trigger) is the primitives'
+own 16px `--text-s`, and read-sheet `DetailField` values are `body-medium`, the
+same 16px, so a field reads at one size in its form and its read view. Neither
+is restyled inside a form. Hierarchy runs section title, field label, value,
+caption.
+
+- **No eyebrows.** `SectionLabel` (the `FormSection` title) is a sentence case
+  `body-small font-medium` title in primary ink on a `min-h-24` row, not an
+  uppercase tracked micro label. The sheet title and the spine's numbered
+  marker already carry the hierarchy. No mono uppercase micro labels inside
+  forms either; `label-micro` belongs to table headers.
+- **Lines only where they separate things of a different kind.** Kept: the
+  `FormSpine` rail, the hairline between plain `FormSection`s, and the
+  `CompositionCard` action row's top rule. Not drawn: rules between a caption
+  and its content, rules under headlines, doubled dividers, and borders or
+  tints around a derived value.
+- **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose.
+- **Spacing, one rhythm per level:** the form `space-y-20` between sections,
+  `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
+  derived blocks `gap-12` between their parts, key lines and captions
+  `gap-6`/`gap-8`, a label to its control `mb-6`.
 
 ### Label casing
 
@@ -177,11 +254,14 @@ symbols (`mL`, `ha`, `kg/m³`, `H:C`, `R₀`), and any term whose canonical form
 [CONTEXT.md](../CONTEXT.md) is capitalised — check the glossary before you
 rename a domain term.
 
-Page titles (`PageHeader`), `StatCard` titles, button text, dialog titles and
-side-sheet titles are **outside** this rule and keep their existing casing. One
-exception: where a dialog title or button **names an entity the operator just
-saw on a select**, the noun follows the select's label rather than the chrome's
-casing — "Feedstock type" on the select, "New feedstock type" as the quick-add
+Button text, submit labels, dialog and side-sheet titles, delete-confirm titles
+and `StatCard` titles follow the same rule ("Create storage bin", "Save changes",
+"Total customers"). Page titles (`PageHeader`) and sidebar navigation labels are
+**outside** it and keep their existing casing. Entity nouns are lowercase mid-label;
+glossary terms that are capitalised in CONTEXT.md (Sample, Removal, GHG Statement)
+keep their capital ("Create Sample"). Where a dialog title or button **names an
+entity the operator just saw on a select**, the noun follows the select's label
+rather than the chrome's casing — "Feedstock type" on the select, "New feedstock type" as the quick-add
 title, "Create feedstock type" on its submit button. One action, one name,
 through the whole flow. Those nouns live in `ENTITY_TYPE_LABELS`
 (`components/forms/entity-select/entity-labels.ts`) — the single source shared by
@@ -226,6 +306,17 @@ bare `YYYY-MM-DD` calendar values straight in; `formatDate` and
 `toLocaleDateString`, `Intl.DateTimeFormat`, or a custom date-fns pattern in a
 component, and never assemble a range by hand. Native date inputs and
 machine-facing API/export/PDF contracts keep their ISO formats.
+
+**Facility clock.** A physical event at a plant (a production run, and every
+output stock event: product placed, delivery, loss, count) reads on the
+facility's wall clock, never the viewer's, so everyone sees one time. Take the
+zone from `useFacilityClock(facilityId)` or `resolveFacilityTimezone`, then use
+`formatFacilityDateTime(value, timeZone)` (`Sep 15, 2026, 14:30`) or, for a
+day-only list column, `formatFacilityDay(value, timeZone)`. A server-computed
+facility day string (`YYYY-MM-DD`) goes through `formatDayString`. These read
+the zone through `Intl`, so a viewer inside their own daylight-saving change
+still sees the facility time; do not swap in `formatInTimeZone`. Input side:
+[forms.md](./forms.md#dates).
 
 ---
 
@@ -389,6 +480,42 @@ restore for free.
   (`src/components/certification/confirm-action-dialog.tsx`) — reuse it there
   instead of hand-rolling.
 
+### Choice controls — `src/components/forms`
+
+Three ways to pick one of a few options. Choose by what the choice does.
+
+| Control | Use when | Examples |
+|---|---|---|
+| `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | evidence method, GIS boundary entry, stock mode |
+| `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity |
+| `FormSelect` | Everything else: long or dynamic lists, secondary fields | timezone, currency, category |
+
+A one-option enum is a fixed value, not a control.
+
+Both controls are native radios in a `fieldset` with an `sr-only` legend, so
+the browser gives one tab stop and arrow keys that move and select. Do not add
+`role`, `tabIndex` or key handlers. The selected option carries a check glyph
+plus a heavier border (not colour alone; both survive forced-colors). Wire them
+like `FormSelect` (`{...register("field")}`) or controlled
+(`value` + `onValueChange`). Inside a `FormField`, give the control the same
+`id` and pass `legend` for the accessible name: the visible label stays
+`FormField`'s.
+
+Cards size to their group, not the viewport (CSS container queries): one
+column below about 272px, two columns above it (art beside the text from
+352px, hidden below), three at about 544px for three or more options with the
+art above the text, all rows equal height. Sheets
+are 360 to 640px wide, so give a card group the full row (`md:col-span-2` in a
+two-column grid) or it stacks. Write the consequence as the card caption, not
+as helper text. Art is decorative (`aria-hidden`), monoline, about 44x30, drawn
+in code.
+
+The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
+input is not the touch target: the whole label is, and `SegmentedControl`
+segments are at least 44px tall. The sheet header Simple/Detailed toggle
+(`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
+component.
+
 ### Other primitives — intent only, props at source
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
@@ -452,25 +579,43 @@ One vocabulary and one visual system for unmixed materials, all from `@/lib/mass
 (`@/components/ui/mass-pair`). **Never retype a moisture label, re-derive the
 split inline, or format a percentage by hand.**
 
-Blended biochar products use `ProductCompositionPreview` instead. It shows the
-conserved `Dry biochar` allocation and the mutually exclusive `Ingredients +
-water` remainder. Show measured finished-product moisture separately as
-delivery evidence; never use it to recalculate either composition mass.
+Blended biochar products use `ProductCompositionPreview` instead. The product
+form and the product read view pass `components` built by
+`biochar-products/product-composition-components.ts`: dry biochar, each
+ingredient's solids, one pooled water part and water added, so both surfaces
+split by one rule (the read view freezes each ingredient at its saved dry
+snapshot and reads at save precision). A surface that only knows the tracked
+dry biochar (an application) gets that against one `Ingredients + water`
+remainder. Show measured finished-product moisture separately as delivery
+evidence; never use it to recalculate a composition mass.
 
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
   `MoistureField` attaches to every moisture input.
-- **`MoistureSplit` variants:** `detail` (figures + bar + footnote — forms and
-  read side sheets) · `compact` (bar + one line) · `inline` (text only — table
-  cells, option labels). Missing moisture renders an explicit *unresolved*
-  state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
-  drives certification readiness, so its absence has to be visible.
+- **`MoistureSplit` variants:** `detail` (bar + key line + calculation table —
+  forms and read side sheets) · `compact` (figures + bar + one line) · `inline`
+  (text only — table cells, option labels). The `detail` surface carries **no
+  card, no frame and no tinted panel**: the bar sits directly under the wet-mass
+  and moisture inputs it describes and moves as they change, with one key line
+  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). The bar and key line
+  show at both levels, because they are what the two inputs mean, and
+  **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
+  words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
+  is no "Show calculation" disclosure on this surface, and `calculation={false}`
+  drops the table where the host surface owns one (the stock movement card: its
+  disclosure holds the FIFO draw, so the split contributes bar and key line
+  only). The bar names **dry solids**, not the tracked quantity: a blended
+  product bin holding 84 kg of dry solids holds 70 kg of dry biochar, and both
+  masses appear on the same card. Missing moisture renders
+  an explicit *unresolved* state (hatched dashed bar, "Moisture not recorded"),
+  never nothing — dry mass drives certification readiness, so its absence has
+  to be visible.
 - **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter and
   the `.moisture-water-hatch` void for water already present. When an operator
   records a positive amount of added water, a third segment uses solid
-  `--color-moisture-added-water`. The headline and moisture value then use the
-  final wet mass, while the bar still distinguishes the original water from the
-  added water. It does **not** take the production/infrastructure/distribution
+  `--color-moisture-added-water`, and the key line gains that swatch plus the
+  final moisture, while the bar still distinguishes the original water from the
+  added water. The ledger total is the final wet mass. It does **not** take the production/infrastructure/distribution
   accent, so the same moisture concept reads consistently across every area.
 - **Split figures are always kg** (`formatSplitMass` and `MassPair`), never the
   auto-tonne `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in
@@ -483,7 +628,9 @@ delivery evidence; never use it to recalculate either composition mass.
 
 Mass formatting more broadly: `formatMass` (auto-tonne, for a lone mass in a
 table or KPI) · `formatMassKg` (fixed kg, for related figures that must stay
-comparable) · `formatPercent` — all in `@/lib/format-utils`. The local `formatMass`/`formatKg`
+comparable; saved-record read views pass `{ digits: MASS_KG_STORAGE_DECIMALS }`
+from `@/config/numeric-storage` so a mass reads at the precision it was saved
+at) · `formatPercent` — all in `@/lib/format-utils`. The local `formatMass`/`formatKg`
 copies that shadowed them were removed; don't reintroduce one by copying a
 neighbouring component. A local helper is only acceptable when it formats a
 different quantity and is **named apart** so it cannot shadow the shared one —
@@ -661,10 +808,13 @@ header→content `mb-32`.
 
 ## Forms
 
-Owned entirely by [forms.md](./forms.md) — react-hook-form + Zod resolver,
-`FormSection` / `DetailSection`, the `space-y-20` (side sheet) and `space-y-24`
-(full page) rhythm, and the `@/schemas/helpers` numeric helpers. Read it before
-any form or schema work; nothing about forms is duplicated here.
+Form behaviour is owned by [forms.md](./forms.md): react-hook-form + Zod
+resolver, `FormSection` / `DetailSection`, the section rhythm, the Simple and
+Detailed levels and derived blocks, and the `@/schemas/helpers` numeric
+helpers. This doc owns only the form type set, lines and spacing
+([above](#form-type-lines-and-spacing)).
+
+Simple and Detailed differ only in explanation: see [forms.md](./forms.md#simple-and-detailed-presentation).
 
 ## Naming, file structure, React rules
 

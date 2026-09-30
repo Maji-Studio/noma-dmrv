@@ -4,10 +4,12 @@
  */
 
 import { z } from "zod";
+import { OUTPUT_STOCK_MODES, type OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
   emptyToNull,
   expectedUpdatedAtSchema,
   positiveMassKgSchema,
+  stockEventInstantSchema,
 } from "./helpers";
 
 // ============================================
@@ -68,6 +70,28 @@ export const STORAGE_LOCATION_TYPE_DESCRIPTIONS: Record<StorageLocationType, str
   product_bin: "Holds a packed, sellable product. It can be tied to one formulation.",
 };
 
+/**
+ * How an output bin holds its stock (plan 2026-09-28): split keeps every batch
+ * apart as a sub-bin; mix is one blended pile drawn pro-rata (ADR 0030).
+ */
+export const outputStockModes = OUTPUT_STOCK_MODES;
+
+/** How the bin form and the bin sheet name each mode. */
+export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
+  split: "Split: batches kept apart",
+  mix: "Mix: one blended pile",
+};
+
+/** Only biochar and product bins choose a stock mode. */
+export function isOutputBinType(type: StorageLocationType | undefined | null): boolean {
+  return type === "biochar_bin" || type === "product_bin";
+}
+
+const MIX_OUTPUT_BIN_MESSAGE = "Only biochar and product bins can hold one mixed pile.";
+
+/** When a split bin's batches were merged into one pile; empty until the operator picks one. */
+const mergedAtSchema = stockEventInstantSchema("Enter when the batches were merged.").or(z.literal("")).nullable().optional();
+
 const FORMULATION_PRODUCT_BIN_MESSAGE =
   "A formulation can only be assigned to a product bin";
 
@@ -103,6 +127,8 @@ export const storageLocationFormSchema = z.object({
   // an unassigned bin, which accepts pure biochar and is claimed by the first
   // formulation put into it (`data-access/biochar-products.ts`).
   formulationId: emptyToNull.or(z.string().uuid("Choose a valid formulation.")).nullable().optional(),
+  stockMode: z.enum(outputStockModes, { message: "Choose split or mix." }).optional(),
+  mergedAt: mergedAtSchema,
   storageMethod: z
     .string()
     .max(255, "Storage method must be less than 255 characters")
@@ -120,6 +146,9 @@ export const storageLocationFormSchema = z.object({
       path: ["formulationId"],
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
+  }
+  if (data.stockMode === "mix" && !isOutputBinType(data.type)) {
+    ctx.addIssue({ code: "custom", path: ["stockMode"], message: MIX_OUTPUT_BIN_MESSAGE });
   }
   if (isFeedstockBinType(data.type) && !data.feedstockTypeId) {
     ctx.addIssue({
@@ -159,6 +188,8 @@ export const updateStorageLocationSchema = z.object({
   capacityKg: positiveMassKgSchema().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
+  stockMode: z.enum(outputStockModes).optional(),
+  mergedAt: mergedAtSchema,
   storageMethod: z.string().max(255).optional().nullable(),
   storageDescription: z.string().max(1000).optional().nullable(),
   supplierReferenceId: z.string().max(100).optional().nullable(),
@@ -169,6 +200,9 @@ export const updateStorageLocationSchema = z.object({
       path: ["formulationId"],
       message: FORMULATION_PRODUCT_BIN_MESSAGE,
     });
+  }
+  if (data.stockMode === "mix" && data.type && !isOutputBinType(data.type)) {
+    ctx.addIssue({ code: "custom", path: ["stockMode"], message: MIX_OUTPUT_BIN_MESSAGE });
   }
   // Partial update: only flag an explicit clear (null). When feedstockTypeId is
   // omitted, the data-access layer validates the invariant against the merged

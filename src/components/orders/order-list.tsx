@@ -24,7 +24,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import {
   ORDER_FULFILLMENT_DISPLAY,
   orderFulfillmentStatuses,
@@ -35,6 +35,7 @@ import { PackageIcon, PlusIcon, TruckIcon, XIcon } from "@phosphor-icons/react/d
 import type { ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
 import { OrderForm } from "./order-form";
+import { orderSheetSections } from "./order-read-sections";
 
 // ============================================
 // Column Definitions
@@ -82,19 +83,17 @@ function createColumns(
       accessorKey: "deliveryCount",
       header: "Deliveries",
       cell: ({ row }) => {
-        const { deliveredCount, deliveryCount } = row.original;
+        const { deliveryCount } = row.original;
         return (
           <span
             className="inline-flex items-center justify-center min-w-[40px] px-8 py-2 bg-[var(--color-surface-light)] border border-[var(--color-border-tertiary)] text-[var(--text-s)] font-medium font-mono"
             title={
               deliveryCount > 0
-                ? `${deliveredCount} of ${deliveryCount} ${pluralize(deliveryCount, "delivery", "deliveries")} delivered`
+                ? `${deliveryCount} ${pluralize(deliveryCount, "delivery", "deliveries")}`
                 : "No deliveries scheduled"
             }
           >
-            {deliveryCount > 0
-              ? `${deliveredCount}/${deliveryCount}`
-              : MISSING_VALUE.none}
+            {deliveryCount > 0 ? deliveryCount : MISSING_VALUE.none}
           </span>
         );
       },
@@ -282,7 +281,7 @@ export function OrderList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Order" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create order" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -296,14 +295,14 @@ export function OrderList() {
         title="Orders"
         subtitle="Customer orders for biochar products"
         actions={
-          <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New Order</Button>
+          <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New order</Button>
         }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard title="Total Orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
-        <StatCard title="Total Deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
-        <StatCard title="Total Quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
+        <StatCard title="Total orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
+        <StatCard title="Total deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
+        <StatCard title="Total quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
       </div>
 
       <DataTable
@@ -374,8 +373,10 @@ export function OrderList() {
       </DataTable>
 
       {/* Unified Side Sheet */}
+      {/* Both modes: the form hides matching stock in Simple too. */}
       <EntitySideSheet
         numberedSections
+        detailToggle
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
@@ -387,56 +388,8 @@ export function OrderList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Order"
-        sections={
-          sideSheetEntity
-            ? [
-                {
-                  title: "Order information",
-                  fields: [
-                    { label: "Order date", value: formatDate(sideSheetEntity.orderDate) },
-                  ],
-                },
-                {
-                  title: "Customer details",
-                  fields: [
-                    { label: "Customer", value: sideSheetEntity.customerName },
-                    { label: "Customer location", value: sideSheetEntity.customerLocationName },
-                  ],
-                },
-                {
-                  title: "Product details",
-                  fields: [
-                    { label: "Formulation", value: sideSheetEntity.formulationName },
-                    { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
-                    { label: "Requested wet mass (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
-                    { label: "Value", value: sideSheetEntity.value },
-                    { label: "Currency", value: sideSheetEntity.currency },
-                  ],
-                },
-                {
-                  title: "Fulfillment",
-                  fields: [
-                    {
-                      label: "Fulfillment",
-                      value: (
-                        <StatusBadge
-                          status={ORDER_FULFILLMENT_DISPLAY[sideSheetEntity.fulfillmentStatus].badgeStatus}
-                          label={ORDER_FULFILLMENT_DISPLAY[sideSheetEntity.fulfillmentStatus].label}
-                        />
-                      ),
-                    },
-                    {
-                      label: "Delivered",
-                      value: sideSheetEntity.deliveryCount > 0
-                        ? `${sideSheetEntity.deliveredCount} of ${sideSheetEntity.deliveryCount}`
-                        : "No deliveries scheduled",
-                    },
-                  ],
-                },
-              ]
-            : undefined
-        }
+        editLabel="Edit order"
+        sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
       >
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
@@ -445,12 +398,12 @@ export function OrderList() {
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheetMode === "create" ? "Create Order" : "Save Changes"}
+          submitLabel={sideSheetMode === "create" ? "Create order" : "Save changes"}
         />
       </EntitySideSheet>
 
       {deleteError && <ServerError message={deleteError} />}
-      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete Order" message="Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} />
+      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message="Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} />
     </div>
   );
 }

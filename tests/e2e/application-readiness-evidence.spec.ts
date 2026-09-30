@@ -18,9 +18,10 @@ import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 import { DEC_ORG_ID } from "../../src/db/org-defaults";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "../../src/lib/certification/application-evidence";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 /**
- * Create Order → delivered Delivery → Application (all certify-relevant form
+ * Create order → delivered delivery → application (all certify-relevant form
  * fields filled, then switched to the legacy visual evidence method in the
  * fixture setup with NO photos uploaded) and return the
  * unique field identifier used to locate the row / DB record.
@@ -35,7 +36,7 @@ async function seedFormCompleteApplication(
   // Order
   await page.goto(`/orders?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
-  await page.click('button:has-text("New Order")');
+  await page.click('button:has-text("New order")');
   await waitForSideSheet(page);
   await page.fill('input[name="orderDate"]', today);
   await selectEntity(page, "Customer", seededData.customer.id, seededData.customer.name);
@@ -52,27 +53,26 @@ async function seedFormCompleteApplication(
   );
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "10000");
-  await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
+  await page.locator('[role="dialog"]').locator('button:has-text("Create order")').click();
   await waitForSideSheetClose(page);
 
   // Delivery (must be "delivered" before an application can reference it — #284)
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
-  await page.click('button:has-text("New Delivery")');
+  await page.click('button:has-text("New delivery")');
   await waitForSideSheet(page);
-  await page.fill('input[name="deliveryDate"]', today);
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
-  await page.fill('input[name="moistureContentPercent"]', "10");
-  await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
+  await fillStockMoisture(page, "delivery", "10");
+  await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
   await waitForSideSheetClose(page);
 
   // Application — every field the shared readiness decision requires for a
   // 200-year facility EXCEPT evidence: mass (wet + dry) and soil temperature.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
-  await page.click('button:has-text("New Application")');
+  await page.click('button:has-text("New application")');
   await waitForSideSheet(page);
   await page.fill('input[name="applicationDate"]', today);
 
@@ -99,7 +99,7 @@ async function seedFormCompleteApplication(
     page.getByRole("radio", { name: /Customer location/ }),
   ).toBeChecked();
 
-  await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
+  await page.locator('[role="dialog"]').locator('button:has-text("Create application")').click();
   await waitForSideSheetClose(page);
 
   return fieldIdentifier;

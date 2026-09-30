@@ -18,7 +18,7 @@ import { createDeliveryFn } from "./deliveries";
 const id = "00000000-0000-4000-8000-000000000001";
 const ctx: OrgContext = { userId: "user", organizationId: "org", orgRole: "admin", isPlatformAdmin: false };
 const common = { facilityId: id, storageLocationId: id, idempotencyKey: "stable-key", basisFingerprint: "stale-basis", moistureContentPercent: 20 };
-const product = { ...common, formulationId: id, placedAt: "2026-09-15", sourceBiocharStorageLocationId: id, status: "testing" as const, massKg: 100, waterAddedKg: 0, densityKgM3: null };
+const product = { ...common, formulationId: id, placedAt: "2026-09-15T12:00:00.000Z", sourceBiocharStorageLocationId: id, status: "testing" as const, massKg: 100, waterAddedKg: 0, densityKgM3: null };
 const delivery = { ...common, code: "DL-001", orderId: id, deliveryDate: new Date("2026-09-15T00:00:00Z"), status: "delivered" as const, deliveredWetMassKg: 100 };
 
 beforeEach(() => {
@@ -59,5 +59,43 @@ for (const action of [
     mocks.create.mockRejectedValue(new Error("internal failure"));
     expect(await action.call()).toEqual({ success: false, error: action.fallback });
     expect(mocks.log).toHaveBeenCalledWith(expect.objectContaining({ op: action.op }), action.log);
+  });
+});
+
+describe("delivery split-bin sources", () => {
+  const p1 = "00000000-0000-4000-8000-000000000002";
+  const p2 = "00000000-0000-4000-8000-000000000003";
+  // A split load carries a reading per sub-bin instead of one moisture.
+  const splitDelivery = { ...delivery, moistureContentPercent: undefined };
+
+  it("hands the ordered sub-bin readings to the writer in place of one moisture", async () => {
+    const sources = [{ layerId: p2, moisturePercent: 20 }, { layerId: p1, moisturePercent: 25 }];
+    mocks.create.mockResolvedValue({ id, code: "DL-001" });
+    expect(await createDeliveryFn({ ...splitDelivery, sources })).toMatchObject({ success: true });
+    expect(mocks.create).toHaveBeenCalledWith(ctx, expect.objectContaining({ sources, moistureContentPercent: undefined }));
+  });
+  it("refuses a sub-bin listed twice before posting", async () => {
+    const sources = [{ layerId: p1, moisturePercent: 20 }, { layerId: p1, moisturePercent: 25 }];
+    expect(await createDeliveryFn({ ...splitDelivery, sources })).toMatchObject({ success: false });
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("product creation split-bin sources", () => {
+  const r1 = "00000000-0000-4000-8000-000000000004";
+  const r2 = "00000000-0000-4000-8000-000000000005";
+  // A split biochar bin carries a reading per sub-bin instead of one biochar moisture.
+  const splitProduct = { ...product, moistureContentPercent: undefined };
+
+  it("hands the ordered run readings to the writer in place of one moisture", async () => {
+    const sources = [{ layerId: r2, moisturePercent: 20 }, { layerId: r1, moisturePercent: 10 }];
+    mocks.create.mockResolvedValue({ id, code: "BP-001" });
+    expect(await createBiocharProductFn({ ...splitProduct, sources })).toMatchObject({ success: true });
+    expect(mocks.create).toHaveBeenCalledWith(ctx, expect.objectContaining({ sources, moistureContentPercent: null }));
+  });
+  it("refuses a run listed twice, and a draw with neither moisture nor readings, before posting", async () => {
+    expect(await createBiocharProductFn({ ...splitProduct, sources: [{ layerId: r1, moisturePercent: 20 }, { layerId: r1, moisturePercent: 25 }] })).toMatchObject({ success: false });
+    expect(await createBiocharProductFn(splitProduct)).toMatchObject({ success: false });
+    expect(mocks.create).not.toHaveBeenCalled();
   });
 });

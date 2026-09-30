@@ -67,7 +67,7 @@ describe("FeedstockStats missing quantities", () => {
 
     const markup = renderToStaticMarkup(<FeedstockStats />);
 
-    expect(markup).toContain("Weighted Avg. Moisture");
+    expect(markup).toContain("Weighted avg. moisture");
     expect(markup).toContain("Totals cover all feedstock types.");
   });
 });

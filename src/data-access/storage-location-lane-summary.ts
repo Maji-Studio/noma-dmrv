@@ -6,15 +6,25 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { and, eq, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { deriveLaneStock } from "./lane-stock-derivation";
-import { getOutputBinDryBalance } from './output-stock';
+import { getOutputBinStocks, type OutputBinStock } from "./output-stock";
 import { requireOrgScope } from "./utils";
+
+/**
+ * Per-lane bin count and on-hand mass. A lane's `onHandKg` is null when any of
+ * its output bins has unresolved stock (a completed run without dry mass or end
+ * time, a product without placement or ingredient solids): the tile for that
+ * bin reads "unavailable", so the lane total cannot be known either. One such
+ * bin must never fail the whole list.
+ */
+export type StorageLocationLaneSummary = Record<
+  StorageLocationType,
+  { binCount: number; onHandKg: number | null }
+>;
 
 export async function getStorageLocationLaneSummary(
   ctx: OrgContext,
   options: { facilityId?: string; archived: boolean },
-): Promise<
-  Record<StorageLocationType, { binCount: number; onHandKg: number }>
-> {
+): Promise<StorageLocationLaneSummary> {
   requireOrgScope(ctx);
   const conditions: SQL[] = [
     eq(storageLocations.organizationId, ctx.organizationId),
@@ -36,22 +46,28 @@ export async function getStorageLocationLaneSummary(
   const laneStockById = new Map(
     laneStocks.map((stock) => [stock.storageLocationId, stock]),
   );
-  const summary: Record<
-    StorageLocationType,
-    { binCount: number; onHandKg: number }
-  > = {
+  const summary: StorageLocationLaneSummary = {
     feedstock_bin: { binCount: 0, onHandKg: 0 },
     biochar_bin: { binCount: 0, onHandKg: 0 },
     product_bin: { binCount: 0, onHandKg: 0 },
   };
 
+  // All-layers balance: the lane total conserves receipts placed later too.
+  const outputStocks: Map<string, OutputBinStock> = options.archived
+    ? new Map()
+    : await getOutputBinStocks(
+        ctx,
+        bins.filter((bin) => bin.type !== "feedstock_bin").map((bin) => bin.id),
+      );
   for (const bin of bins) {
     const stock = laneStockById.get(bin.id);
-    summary[bin.type].binCount += 1;
+    const lane = summary[bin.type];
+    lane.binCount += 1;
     if (bin.type === "feedstock_bin") {
-      summary[bin.type].onHandKg += stock?.feedstockStockWetKg ?? 0;
-    } else if (!options.archived) {
-      summary[bin.type].onHandKg += await getOutputBinDryBalance(ctx, bin.id);
+      lane.onHandKg = (lane.onHandKg ?? 0) + (stock?.feedstockStockWetKg ?? 0);
+    } else if (!options.archived && lane.onHandKg != null) {
+      const dryKg = outputStocks.get(bin.id)?.allLayersDryKg ?? null;
+      lane.onHandKg = dryKg == null ? null : lane.onHandKg + dryKg;
     }
   }
 
