@@ -148,17 +148,19 @@ export function SupplierList() {
     pageSize,
   });
   const deepLinkedSupplier = useSupplier(focusedSupplierId ?? "", !!focusedSupplierId);
-  const deepLinkedSideSheet =
-    focusedSupplierId && deepLinkedSupplier.data
-      ? {
-          entity: deepLinkedSupplier.data as SupplierWithRelations,
-          mode:
-            deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE
-              ? ("edit" as const)
-              : ("view" as const),
-        }
-      : null;
-  const sideSheet = sideSheetState ?? deepLinkedSideSheet;
+  // A deep-linked sheet opens on a copy of the supplier taken once, as openEdit
+  // does: a later refetch (a location save, a refused stale save) must not move
+  // expectedUpdatedAt forward under the operator's old draft (#768).
+  const [deepLinkSnapshotId, setDeepLinkSnapshotId] = useState<string | null>(null);
+  if (!focusedSupplierId && deepLinkSnapshotId) setDeepLinkSnapshotId(null);
+  if (focusedSupplierId && deepLinkedSupplier.data && !sideSheetState && deepLinkSnapshotId !== focusedSupplierId) {
+    setDeepLinkSnapshotId(focusedSupplierId);
+    setSideSheet({
+      entity: deepLinkedSupplier.data as SupplierWithRelations,
+      mode: deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE ? "edit" : "view",
+    });
+  }
+  const sideSheet = sideSheetState;
   const clearDeepLink = () => {
     void setFocusedSupplierId(null);
     void setDeepLinkMode(null);
@@ -174,7 +176,7 @@ export function SupplierList() {
   const handledInvalidSupplierIdRef = useRef<string | null>(null);
 
   // Clear a deep-linked `?supplier=` that cannot be opened (deleted or
-  // cross-org), with the same guard as the customer list.
+  // cross-org), with the same guard as the other list deep links.
   useEffect(() => {
     if (!focusedSupplierId) {
       handledInvalidSupplierIdRef.current = null;
