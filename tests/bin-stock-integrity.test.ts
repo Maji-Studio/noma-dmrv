@@ -35,6 +35,8 @@ import { deleteOutputProductFixtures, outputProductFixtureValues } from "./helpe
 import { deleteFeedstock, updateFeedstock } from "@/data-access/feedstocks";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { updateStorageLocation } from "@/data-access/storage-locations";
+import { updateStorageLocationSchema } from "@/schemas/storage-locations";
+import { cleanupPostedStock, postedStockFixture } from "./helpers/posted-output-stock-fixture";
 import { lockBinStock } from "@/data-access/lock-bin-stocks";
 import type { OrgContext } from "@/lib/auth/server";
 
@@ -168,6 +170,18 @@ async function seedFixture(intakeWetKg = INTAKE_WET_KG): Promise<Fixture> {
   };
 }
 
+async function insertOtherFacility(organizationId: string, tag: string): Promise<string> {
+  const [facility] = await db
+    .insert(facilities)
+    .values({
+      organizationId,
+      code: `E2E-BINT-F2-${tag}-${randomUUID().slice(0, 4).toUpperCase()}`,
+      name: `E2E Bin integrity other facility ${tag}`,
+    })
+    .returning({ id: facilities.id });
+  return facility.id;
+}
+
 async function recordLoss(fixture: Fixture, wetKg: number) {
   const [movement] = await db.insert(binMovements).values({
     organizationId: fixture.ctx.organizationId,
@@ -221,6 +235,7 @@ async function readBin(fixture: Fixture) {
     .select({
       name: storageLocations.name,
       type: storageLocations.type,
+      facilityId: storageLocations.facilityId,
       capacityKg: storageLocations.capacityKg,
       feedstockTypeId: storageLocations.feedstockTypeId,
     })
@@ -499,6 +514,79 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     ).rejects.toThrow(stockBlocksMessage("Storage type"));
 
     expect((await readBin(f)).type).toBe("feedstock_bin");
+  });
+
+  it("refuses a facility change while a feedstock bin holds stock", async () => {
+    const f = await fixture(PROBE_STOCK_WET_KG);
+    const otherFacilityId = await insertOtherFacility(f.ctx.organizationId, f.tag);
+
+    await expect(
+      updateStorageLocation(f.ctx, f.binId, { facilityId: otherFacilityId }),
+    ).rejects.toThrow(stockBlocksMessage("Facility"));
+
+    expect((await readBin(f)).facilityId).toBe(f.facilityId);
+  });
+
+  it("refuses a facility change on an emptied bin that keeps its history", async () => {
+    const f = await fixture(PROBE_STOCK_WET_KG);
+    await recordLoss(f, PROBE_STOCK_WET_KG);
+    const otherFacilityId = await insertOtherFacility(f.ctx.organizationId, f.tag);
+
+    await expect(
+      updateStorageLocation(f.ctx, f.binId, { facilityId: otherFacilityId }),
+    ).rejects.toThrow(historyBlocksMessage("Facility"));
+  });
+
+  it.each(["biochar", "product"] as const)(
+    "refuses a facility change while a %s bin holds stock",
+    async (lane) => {
+      const posted = await postedStockFixture({ stockKg: PROBE_STOCK_WET_KG });
+      try {
+        const binId = lane === "biochar" ? posted.source.id : posted.bin.id;
+        const otherFacilityId = await insertOtherFacility(posted.ctx.organizationId, posted.tag);
+
+        await expect(
+          updateStorageLocation(posted.ctx, binId, { facilityId: otherFacilityId }),
+        ).rejects.toThrow(stockBlocksMessage("Facility"));
+
+        const [bin] = await db
+          .select({ facilityId: storageLocations.facilityId })
+          .from(storageLocations)
+          .where(eq(storageLocations.id, binId));
+        expect(bin.facilityId).toBe(posted.facility.id);
+      } finally {
+        await cleanupPostedStock(posted);
+      }
+    },
+  );
+
+  it("moves an empty bin without history to another facility", async () => {
+    const f = await fixture(PROBE_STOCK_WET_KG);
+    const otherFacilityId = await insertOtherFacility(f.ctx.organizationId, f.tag);
+    const [empty] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: f.ctx.organizationId,
+        facilityId: f.facilityId,
+        code: `E2E-BINT-E-${f.tag}`,
+        name: `E2E Bin integrity empty ${f.tag}`,
+        type: "feedstock_bin",
+        feedstockTypeId: f.otherFeedstockTypeId,
+      })
+      .returning({ id: storageLocations.id });
+
+    const moved = await updateStorageLocation(f.ctx, empty.id, { facilityId: otherFacilityId });
+
+    expect(moved.facilityId).toBe(otherFacilityId);
+  });
+
+  it("does not let the update action carry a facility at all", () => {
+    const parsed = updateStorageLocationSchema.parse({
+      storageLocationId: randomUUID(),
+      facilityId: randomUUID(),
+    });
+    expect(parsed).not.toHaveProperty("facilityId");
+    expect(Object.keys(updateStorageLocationSchema.shape)).not.toContain("facilityId");
   });
 
   it("still saves a rename and other metadata on a stocked bin", async () => {

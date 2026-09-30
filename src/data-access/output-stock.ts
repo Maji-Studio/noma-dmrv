@@ -120,12 +120,16 @@ export function getBiocharOutputStockLayers(ctx: OrgContext, input: { storageLoc
  * mutation guards conserve all of it; draws use dated availability instead.
  */
 export async function getOutputBinAllLayersDryKg(ctx: OrgContext, storageLocationId: string, reader: Reader = db, options: ReadOptions = {}): Promise<number> {
+  return Number((await readOutputBinAllLayers(ctx, storageLocationId, reader, options)).allLayersDryKg);
+}
+
+/** Every layer of one output bin, including receipts placed after now, with the guard balance. */
+export async function readOutputBinAllLayers(ctx: OrgContext, storageLocationId: string, reader: Reader = db, options: ReadOptions = {}) {
   requireOrgScope(ctx);
   const [bin] = await reader.select({ facilityId: storageLocations.facilityId, type: storageLocations.type }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
   const input = { storageLocationId, facilityId: bin.facilityId, occurredAt: new Date().toISOString() };
-  const state = await getOutputStockLayers(ctx, bin.type === 'product_bin' ? 'product_bin' : 'biochar_bin', input, reader, options);
-  return Number(state.allLayersDryKg);
+  return getOutputStockLayers(ctx, bin.type === 'product_bin' ? 'product_bin' : 'biochar_bin', input, reader, options);
 }
 
 /** What an output bin holds now. Every figure is null when the bin's layers do not resolve. */

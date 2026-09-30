@@ -35,6 +35,8 @@ import {
 } from "./bin-stock-guards";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import { assertBinIdentityChangeAllowed } from "./storage-location-identity-guards";
+import { layersHoldMaterial } from "@/lib/output-stock";
+import { readOutputBinAllLayers } from "./output-stock";
 import { applyStockModeChange, initialStockMode } from "./output-bin-stock-mode";
 import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
 import {
@@ -549,8 +551,8 @@ export async function updateStorageLocation(
       ? effectiveFeedstockTypeId ?? null
       : null;
 
-    // These two columns select the bin's material lane, so a stocked bin keeps
-    // the setup its recorded stock and history were written against. The guard
+    // These columns select the bin's material lane and facility, so a stocked
+    // bin keeps the setup its recorded stock and history were written against. The guard
     // compares the two identities itself and returns when neither moved.
     await assertBinIdentityChangeAllowed(
       ctx,
@@ -559,10 +561,12 @@ export async function updateStorageLocation(
         id: storageLocationId,
         type: existing.type as StorageLocationType,
         feedstockTypeId: existing.feedstockTypeId,
+        facilityId: existing.facilityId,
       },
       {
         type: effectiveType as StorageLocationType,
         feedstockTypeId: normalizedFeedstockTypeId,
+        facilityId: data.facilityId ?? existing.facilityId,
       },
     );
 
@@ -654,6 +658,9 @@ export async function updateStorageLocation(
 // Archive Operations
 // ============================================
 
+const ARCHIVE_RESIDUAL_MATERIAL_MESSAGE =
+  "Cannot archive this storage bin while it still holds material. Record a stock count of zero to clear what is left, then archive it.";
+
 /**
  * Archive one storage bin without disturbing its operational history.
  */
@@ -693,6 +700,17 @@ export async function archiveStorageLocation(
       storageLocationId,
       lane,
     );
+    // Output bins can hold ingredient solids while the dry biochar balance
+    // reads 0.000 kg; a zero count clears both exactly.
+    if (
+      lane !== "feedstock" &&
+      !hasNonZeroStock(availableKg) &&
+      layersHoldMaterial(
+        (await readOutputBinAllLayers(ctx, storageLocationId, tx)).layers,
+      )
+    ) {
+      throw new SafeError(ARCHIVE_RESIDUAL_MATERIAL_MESSAGE);
+    }
     if (hasNonZeroStock(availableKg)) {
       throw new SafeError(
         `Cannot archive this storage bin while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
