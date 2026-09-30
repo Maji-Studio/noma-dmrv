@@ -41,10 +41,10 @@ export function FeedstockLossChange({ beforeKg, moisturePercent, lossKg, blocked
     <div
       role="group"
       aria-label={`Stock now ${beforeFigure}, ${beforeCaption}. After this loss ${afterKg === null ? "not known yet" : afterFigure}`}
-      className="grid grid-cols-[1fr_auto_1fr] items-center gap-8"
+      className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-8"
     >
-      <ChangeBlock label="In the bin now" figure={beforeFigure} caption={beforeCaption} muted />
-      <ArrowRightIcon size={ICON_PX} aria-hidden="true" className="text-[var(--color-icon-secondary)]" />
+      <ChangeBlock label="In the bin now" figure={beforeFigure} caption={beforeCaption} />
+      <ArrowRightIcon size={ICON_PX} aria-hidden="true" className="self-center text-[var(--color-icon-secondary)]" />
       <ChangeBlock label="After this loss" figure={afterFigure} caption="wet estimate" muted={afterKg === null} />
     </div>
   );
