@@ -11,7 +11,6 @@ import { Dialog } from "@base-ui/react/dialog";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { CertificationLegend } from "@/components/ui/certification-field-tag";
 
 /* -------------------------------------------------------------------------------------------------
  * SlideOverPanel.Root
@@ -164,7 +163,6 @@ function Content({
         // Base UI traps focus but does not stamp aria-modal; without it a
         // screen reader may keep browsing the inert page behind the sheet.
         aria-modal="true"
-        data-cert-scope=""
         className={cn(slideOverContentVariants({ size }), className)}
       >
         {children}
@@ -204,8 +202,6 @@ function Header({
     >
       <div className="flex flex-1 flex-col gap-4 min-w-0">
         {children}
-        {/* Shown only when the sheet holds a CERT chip (globals.css). */}
-        <CertificationLegend />
       </div>
       {actions && <div className="shrink-0">{actions}</div>}
       {showClose && (

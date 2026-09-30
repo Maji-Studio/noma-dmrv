@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { CertificationFieldTag, CertificationLegend } from "./index";
-import { SlideOverPanel } from "@/components/ui/slide-over-panel";
+import { CertificationFieldTag } from "./index";
 
 describe("CertificationFieldTag", () => {
   it("is a CERT chip with an accessible explanation", () => {
@@ -23,23 +22,3 @@ describe("CertificationFieldTag", () => {
   });
 });
 
-describe("CertificationLegend", () => {
-  it("shows the chip and its meaning, and is not itself a chip", () => {
-    const markup = renderToStaticMarkup(<CertificationLegend />);
-
-    expect(markup).toContain('data-cert-legend=""');
-    expect(markup).toContain("CERT");
-    expect(markup).toContain("Required for certification");
-    // A data-cert-field inside the legend would keep it visible in every sheet.
-    expect(markup).not.toContain("data-cert-field");
-  });
-
-  it("sits in every sheet header", () => {
-    const sheetHeader = renderToStaticMarkup(
-      <SlideOverPanel.Header showClose={false}>
-        <span>Title</span>
-      </SlideOverPanel.Header>,
-    );
-    expect(sheetHeader).toContain("data-cert-legend");
-  });
-});

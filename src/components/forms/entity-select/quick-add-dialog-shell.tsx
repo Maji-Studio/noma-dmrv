@@ -8,7 +8,6 @@
 
 import { useId } from "react";
 import { Modal, type ModalWidth } from "@/components/ui";
-import { CertificationLegend } from "@/components/ui/certification-field-tag";
 
 interface QuickAddDialogShellProps {
   isOpen: boolean;
@@ -59,8 +58,6 @@ export function QuickAddDialogShell({
           <h2 id={titleId} className="title-heading-3">
             {title}
           </h2>
-          {/* Shown only when the dialog holds a CERT chip (globals.css). */}
-          <CertificationLegend />
         </div>
 
         {/* Form content */}

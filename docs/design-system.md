@@ -244,12 +244,8 @@ caption.
   certification carries a "CERT" chip on its label row
   (`CertificationFieldTag`): neutral when no record is saved, orange with a
   warning mark when the saved record lacks it, green with a check when it has
-  it. It shows in Simple and Detailed alike. `SlideOverPanel.Header` and
-  `QuickAddDialogShell` carry `CertificationLegend` (the chip plus "Needed for
-  certification", on its own line), which a CSS `:has()` rule in `globals.css`
-  shows only when the enclosing `[data-cert-scope]` holds a `[data-cert-field]`
-  chip, so no form opts in. Pages outside a sheet (supplier and customer detail
-  tables) rely on the chip's own tooltip and screen-reader text.
+  it. It shows in Simple and Detailed alike. There is no sheet legend: the
+  chip explains itself through its tooltip and screen-reader text.
 - **Spacing, one rhythm per level:** the form `space-y-20` between sections,
   `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
   derived blocks `gap-12` between their parts, key lines and captions

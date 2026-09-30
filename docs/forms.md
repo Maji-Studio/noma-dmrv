@@ -300,7 +300,7 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 
 ### CERT chip status
 
-A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`), in Simple and Detailed alike. The sheet header explains it once ("Required for certification", see [design-system.md](./design-system.md#form-type-lines-and-spacing)). `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
+A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`), in Simple and Detailed alike. It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
 
 - create mode → `neutral` (neutral chip, no claim)
 - edit mode, saved value present → `satisfied` (green chip with a check)

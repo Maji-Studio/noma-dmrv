@@ -29,8 +29,8 @@ const STATUS_STYLES: Record<CertFieldStatus, string> = {
 
 /**
  * The chip's own explanation. The same wording is the accessible name of the
- * chip and the tooltip on hover; the sheet legend (`CertificationLegend`)
- * reuses the neutral wording so the three never disagree.
+ * chip and the tooltip on hover. There is no sheet legend (Kenji, 2026-09-30):
+ * the chip explains itself.
  */
 export const CERT_FIELD_STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
   neutral: "Required for certification",
@@ -38,8 +38,6 @@ export const CERT_FIELD_STATUS_DESCRIPTION: Record<CertFieldStatus, string> = {
   satisfied: "Required for certification. Provided.",
 };
 
-/** The legend's visible words; the chip beside it says "CERT". */
-const CERT_LEGEND_TEXT = CERT_FIELD_STATUS_DESCRIPTION.neutral;
 
 // Provided/not-provided must not be signalled by chip hue alone (WCAG 1.4.1);
 // the glyph is the non-colour marker. Assistive tech gets the sr-only string,
@@ -53,7 +51,7 @@ const STATUS_GLYPHS: Record<CertFieldStatus, ReactNode> = {
   satisfied: <CheckIcon size={CERT_CHIP_GLYPH_PX} weight="bold" aria-hidden />,
 };
 
-/** The chip's shape, shared by the field chip and the legend's decorative copy. */
+/** The chip's shape. */
 const CHIP_BASE = "body-caption inline-flex items-center border px-4 py-1";
 
 interface CertificationFieldTagProps {
@@ -104,30 +102,3 @@ export function CertificationFieldTag({
   );
 }
 
-/**
- * The one-line key for the chip, mounted in the sheet and dialog headers
- * (`SlideOverPanel.Header`, `QuickAddDialogShell`). It is hidden by CSS unless
- * the enclosing `[data-cert-scope]` contains a `[data-cert-field]` chip
- * (`src/app/globals.css`), so no form has to opt in and a chip that mounts
- * conditionally brings the legend with it. Its own chip is a decorative copy
- * with no `data-cert-field`, or the legend would always show itself.
- */
-export function CertificationLegend({ className }: { className?: string }) {
-  return (
-    <span
-      data-cert-legend=""
-      className={cn(
-        "items-center gap-6 body-caption text-[var(--color-text-tertiary)]",
-        className,
-      )}
-    >
-      <span
-        aria-hidden
-        className={cn(CHIP_BASE, STATUS_STYLES.neutral)}
-      >
-        {CERTIFICATION_FIELD_TAG_LABEL}
-      </span>
-      {CERT_LEGEND_TEXT}
-    </span>
-  );
-}
