@@ -29,7 +29,6 @@ export async function getOrganizationDefaults(
       defaultCurrency: organizationSettings.defaultCurrency,
       defaultCountry: organizationSettings.defaultCountry,
       defaultTimezone: organizationSettings.defaultTimezone,
-      defaultTripType: organizationSettings.defaultTripType,
       defaultEvidenceMethod: organizationSettings.defaultEvidenceMethod,
       defaultPackaging: organizationSettings.defaultPackaging,
     })
@@ -46,7 +45,6 @@ export async function getOrganizationDefaults(
       row.defaultCurrency as OrganizationDefaults["defaultCurrency"],
     defaultCountry: row.defaultCountry,
     defaultTimezone: row.defaultTimezone,
-    defaultTripType: row.defaultTripType,
     defaultEvidenceMethod: row.defaultEvidenceMethod,
     defaultPackaging: row.defaultPackaging,
   };
@@ -70,7 +68,6 @@ export async function upsertOrganizationDefaults(
       defaultCurrency: organizationSettings.defaultCurrency,
       defaultCountry: organizationSettings.defaultCountry,
       defaultTimezone: organizationSettings.defaultTimezone,
-      defaultTripType: organizationSettings.defaultTripType,
       defaultEvidenceMethod: organizationSettings.defaultEvidenceMethod,
       defaultPackaging: organizationSettings.defaultPackaging,
     });
@@ -84,7 +81,6 @@ export async function upsertOrganizationDefaults(
       row.defaultCurrency as OrganizationDefaults["defaultCurrency"],
     defaultCountry: row.defaultCountry,
     defaultTimezone: row.defaultTimezone,
-    defaultTripType: row.defaultTripType,
     defaultEvidenceMethod: row.defaultEvidenceMethod,
     defaultPackaging: row.defaultPackaging,
   };

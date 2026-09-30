@@ -192,7 +192,6 @@ export async function createDeliveryFn(
             validated.distanceSource,
           ),
           distanceNote: validated.distanceNote || null,
-          tripType: validated.tripType ?? undefined,
         });
       },
       CODE_CONFLICT_MESSAGES.delivery,
@@ -237,7 +236,6 @@ export async function updateDeliveryFn(
         validated.distanceSource,
       ),
       distanceNote: validated.distanceNote || null,
-      tripType: validated.tripType ?? undefined,
     });
 
     return { success: true, data: delivery };

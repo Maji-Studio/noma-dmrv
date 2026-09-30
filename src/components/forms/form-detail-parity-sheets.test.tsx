@@ -110,7 +110,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
   { file: "components/customers/customer-read-sections.tsx", name: "customer", sections: customerSheetSections(as({ name: "Customer", contactEmail: null, contactPhone: "+255", cropType: "Maize", address: null }), [location]) },
   { file: "components/deliveries/delivery-read-sections.tsx", name: "delivery", sections: deliverySheetSections(as({
     id: "delivery", facilityId: "facility", deliveryDate: new Date("2026-09-01T10:00:00Z"), status: "delivered", orderCode: "OR-001", deliveredWetMassKg: 100, moistureContentPercent: 20,
-    storageLocationId: "bin", massDryKg: 80, effectiveDistanceKm: 12, tripType: "round_trip", distanceKmOverride: 14, distanceNote: "Detour", effectiveDistanceSource: "manual",
+    storageLocationId: "bin", massDryKg: 80, effectiveDistanceKm: 12, distanceKmOverride: 14, distanceNote: "Detour", effectiveDistanceSource: "manual",
   }), FACILITIES) },
   { file: "components/facilities/facility-read-sections.tsx", name: "facility", sections: facilitySheetSections(as({
     id: "facility", name: "Mafinga", country: "TZ", timezone: "Africa/Dar_es_Salaam", location: "Mafinga", address: null, gpsLatitude: -8.3, gpsLongitude: 35.3,
@@ -121,7 +121,7 @@ const READ_SECTION_CASES: { file: string; name: string; sections: DetailPanelSec
     id: "type", name: "Maize cobs", code: "FT-001", category: "agricultural_residue", usage: "pyrolysis", archivedAt: null, isometricFeedstockTypeId: null, registryUrl: null, description: null,
   }), { facilityId: "facility", canManage: true }) },
   { file: "components/feedstocks/feedstock-read-sections.tsx", name: "feedstock delivery", sections: feedstockSheetSections(as({
-    id: "feedstock", deliveryDate: new Date("2026-08-01"), supplierName: "Supplier", vehiclePlateNumber: "T 123", transportDistanceKm: 20, transportTripType: "one_way", transportDistanceSource: "supplier_default",
+    id: "feedstock", deliveryDate: new Date("2026-08-01"), supplierName: "Supplier", vehiclePlateNumber: "T 123", transportDistanceKm: 20, transportDistanceSource: "supplier_default",
     feedstockTypeName: "Maize cobs", massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationCode: "FB-01", storageLocationName: "Feedstock bin", overrideJustification: null, notes: null,
   })) },
   { file: "components/formulations/formulation-read-sections.tsx", name: "formulation", sections: formulationSheetSections(as({

@@ -282,7 +282,6 @@ describe("derived transport-leg transaction boundaries", () => {
         allocations: [{ storageLocationId: bin.id, allocatedWetMassKg: 100 }],
         transportDistanceKm: 25,
         transportDistanceSource: "document",
-        transportTripType: "one_way",
       },
       async () => [feedstockCode],
     );
@@ -295,7 +294,6 @@ describe("derived transport-leg transaction boundaries", () => {
       .select({
         distanceKm: transportLegs.distanceKm,
         distanceSource: transportLegs.distanceSource,
-        tripType: transportLegs.tripType,
       })
       .from(transportLegs)
       .where(and(
@@ -306,7 +304,6 @@ describe("derived transport-leg transaction boundaries", () => {
     expect(derived).toEqual({
       distanceKm: 25,
       distanceSource: "document",
-      tripType: "one_way",
     });
 
     // With no explicit transport fields, a route-anchor change discards the
@@ -320,7 +317,6 @@ describe("derived transport-leg transaction boundaries", () => {
         originName: transportLegs.originName,
         distanceKm: transportLegs.distanceKm,
         distanceSource: transportLegs.distanceSource,
-        tripType: transportLegs.tripType,
       })
       .from(transportLegs)
       .where(and(
@@ -332,7 +328,6 @@ describe("derived transport-leg transaction boundaries", () => {
       originName: `New Route Source ${tag}`,
       distanceKm: 45,
       distanceSource: "map_estimate",
-      tripType: "one_way",
     });
 
     // An explicit override submitted with a reroute is authoritative. It must
@@ -348,7 +343,6 @@ describe("derived transport-leg transaction boundaries", () => {
         originName: transportLegs.originName,
         distanceKm: transportLegs.distanceKm,
         distanceSource: transportLegs.distanceSource,
-        tripType: transportLegs.tripType,
       })
       .from(transportLegs)
       .where(and(
@@ -360,7 +354,6 @@ describe("derived transport-leg transaction boundaries", () => {
       originName: `Override Supplier ${tag}`,
       distanceKm: 30,
       distanceSource: "document",
-      tripType: "one_way",
     });
   });
 

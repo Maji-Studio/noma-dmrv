@@ -23,7 +23,7 @@ import { ServerError } from "@/components/forms";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { formatDistanceKm, formatMass } from "@/lib/format-utils";
+import { formatDistanceKm, formatLegDistanceKm, formatMass, formatRoundTripKm } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import {
@@ -276,9 +276,10 @@ function summarizeJourney(
     .map((leg) => leg.loadMassKg)
     .filter((kg): kg is number => kg != null && Number.isFinite(kg));
 
+  // Every leg counts its round trip, so the journey total names both figures.
   const totalDistance =
     distances.length > 0
-      ? formatDistanceKm(distances.reduce((sum, km) => sum + km, 0))
+      ? formatLegDistanceKm(distances.reduce((sum, km) => sum + km, 0))
       : MISSING_VALUE.notRecorded;
   const distanceCaption =
     missingDistances > 0
@@ -332,7 +333,7 @@ function JourneyLeg({
     FALLBACK_METHOD_ICON;
   const EvidenceIcon = evidenceAttached ? FileTextIcon : FileDashedIcon;
   const evidenceLabel = evidenceAttached ? "Evidence attached" : "No evidence";
-  const hasDistance = leg.distanceKm != null;
+  const distanceKm = leg.distanceKm ?? null;
   const distanceSource = describeDistanceSource(leg.distanceSource);
 
   return (
@@ -347,12 +348,15 @@ function JourneyLeg({
         title={distanceSource}
       >
         <span className="sr-only">{`Leg to ${arrivalStopName}. `}</span>
-        {hasDistance ? (
+        {distanceKm != null ? (
           <>
             <span className="font-medium tabular-nums text-[var(--color-text-primary)]">
-              {formatDistanceKm(leg.distanceKm)}
+              {formatDistanceKm(distanceKm)}
             </span>{" "}
-            {formatMethodPhrase(leg.transportMethodType)}
+            {`one way ${formatMethodPhrase(leg.transportMethodType)} · `}
+            <span className="tabular-nums">
+              {formatRoundTripKm(distanceKm)}
+            </span>
           </>
         ) : (
           `${capitalize(formatMethodPhrase(leg.transportMethodType))}, distance not recorded`

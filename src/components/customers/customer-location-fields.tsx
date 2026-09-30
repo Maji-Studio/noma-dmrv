@@ -229,7 +229,7 @@ export function CustomerLocationFields({
               "distanceFromFacilityKm",
             )}
             certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance to this site. Return trips are doubled at emissions time; set the trip type on each delivery."
+            helperText="One-way road distance to this site. Every delivery counts the round trip, twice this distance, in emissions."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

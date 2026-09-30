@@ -148,7 +148,7 @@ const CREATE_CASES: FormCase[] = [
 const EDIT_CASES: FormCase[] = [
   { file: "components/feedstocks/feedstock-form.tsx", name: "feedstock delivery (edit)", element: <FeedstockForm onSubmit={noop} feedstock={as({
     id: "feedstock", facilityId: "facility", deliveryDate: DAY, supplierId: "supplier", supplierName: "Supplier", feedstockTypeId: "type", feedstockTypeName: "Maize cobs",
-    massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationId: "bin", transportDistanceKm: 20, transportTripType: "one_way", notes: null,
+    massWetKg: 1000, moistureContentPercent: 20, massDryKg: 800, storageLocationId: "bin", transportDistanceKm: 20, notes: null,
   })} /> },
   { file: "components/storage-locations/output-stock-form.tsx", name: "output stock correction (edit)", shows: "Preview bin", element: <OutputStockForm storageLocationId="bin" facilityId="facility" kind="count" onCancel={noop} onRecorded={noop} original={as({
     id: "00000000-0000-4000-8000-000000000001", deliveryId: null, kind: "count", occurredAt: "2026-09-22T12:00:00.000Z", recordedAt: "2026-09-22", actorName: null, reason: "Recorded",
@@ -166,7 +166,7 @@ const EDIT_CASES: FormCase[] = [
     id: "order", facilityId: "facility", customerId: "customer", customerLocationId: "location", formulationId: "formulation", orderDate: DAY, quantityKg: 2000, packaging: "loose", value: 500, currency: "TZS",
   })} /> },
   { file: "components/deliveries/delivery-form.tsx", name: "delivery (edit)", element: <DeliveryForm onSubmit={noop} delivery={as({
-    id: "delivery", facilityId: "facility", orderId: "order", storageLocationId: "bin", deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered", tripType: "one_way",
+    id: "delivery", facilityId: "facility", orderId: "order", storageLocationId: "bin", deliveryDate: DAY, deliveredWetMassKg: 100, moistureContentPercent: 20, status: "delivered",
   })} /> },
   { file: "components/applications/application-form.tsx", name: "application (edit)", element: <ApplicationForm onSubmit={noop} application={as({
     id: "application", deliveryId: "delivery", applicationDate: DAY, biocharAppliedTons: 5, fieldSizeHa: 1.5, evidenceMethod: "location",

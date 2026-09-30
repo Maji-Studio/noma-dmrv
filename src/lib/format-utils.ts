@@ -11,6 +11,7 @@
  */
 
 import { format, isValid, parseISO } from "date-fns";
+import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatFacilityTime, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
 
@@ -252,6 +253,22 @@ export function roundKmDisplay(km: number): string {
 export function formatDistanceKm(km: number | null | undefined): string {
   if (km == null) return MISSING_VALUE.notRecorded;
   return `${roundKmDisplay(km)} km`;
+}
+
+/**
+ * A leg's one-way distance with the round trip it counts in emissions, e.g.
+ * "240 km one way · 480 km round trip counted". Every leg counts its round
+ * trip (`@/lib/calculations/round-trip`), so wherever a leg distance is shown
+ * the counted figure sits beside what the operator entered.
+ */
+export function formatLegDistanceKm(oneWayKm: number | null | undefined): string {
+  if (oneWayKm == null) return MISSING_VALUE.notRecorded;
+  return `${formatDistanceKm(oneWayKm)} one way · ${formatRoundTripKm(oneWayKm)}`;
+}
+
+/** Just the counted part, "480 km round trip counted", for a one-way figure shown elsewhere. */
+export function formatRoundTripKm(oneWayKm: number): string {
+  return `${formatDistanceKm(countedRoundTripKm(oneWayKm))} round trip counted`;
 }
 
 export const BYTES_PER_KB = 1024;
