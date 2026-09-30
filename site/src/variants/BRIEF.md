@@ -69,3 +69,7 @@ Check with the scripts in the orchestrator's scratchpad (Node, Playwright; they 
 - `sweep.cjs <keys>`: overflow, console errors, prose characters per line, chain width and panel side, page height at 400 to 2560, plus screenshots in `shots/`.
 - `labels.cjs`: label line-box heights on chain and dense (pass your keys, e.g. `labels.cjs 6,8`). A line box of about 15px means an 11px font.
 - `scrollviz.cjs`: which diagrams scroll sideways at 1280, 1440 and 1920 (pass keys the same way). None may, at 1280 and above.
+
+## Verdict (Kenji, 2026-09-30)
+
+**Variant 12, "Apple hero, Vercel grid", is chosen.** Round 1 answered the question "what width and measure make this page readable": the page is bounded, with prose near 70 characters a line and each diagram's explanation beside it. Round 2 picked the composition: an open, unframed Apple hero over Vercel's framed grid of hairline cells. The prototype stays on this branch as the primary source; `feat/landing-site` gets a clean rebuild of variant 12, not these files.
