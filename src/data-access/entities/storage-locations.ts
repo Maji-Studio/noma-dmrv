@@ -3,12 +3,14 @@ import { getOutputBinStocks, getOutputBinStockView, type OutputBinStock } from '
 /** Storage-location options with live inventory subtitles. */
 
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   feedstocks,
   feedstockTypes,
+  formulations,
   productionRunFeedstockDraws,
   productionRuns,
   storageLocations
@@ -39,13 +41,20 @@ import {
 import { requireOrgScope } from "../utils";
 
 
-/** Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet, 249.6 kg dry biochar". */
-function outputBinStockSubtitle(stock: { estimatedWetMassKg: number | null; dryMassKg: number | null }): string {
-  return formatWetDryStock({
+/**
+ * Bin option subtitle, in the words of the selected bin's caption: "≈ 277 kg wet, 249.6 kg dry biochar".
+ * Product bins lead with their formulation so bins with similar names stay distinguishable.
+ */
+function outputBinStockSubtitle(
+  row: Pick<StorageLocationOptionRow, "type" | "formulationName">,
+  stock: { estimatedWetMassKg: number | null; dryMassKg: number | null },
+): string {
+  const stockText = formatWetDryStock({
     wetKg: stock.estimatedWetMassKg,
     dryKg: stock.dryMassKg,
     estimatedWet: true,
   });
+  return row.type === "product_bin" ? `${row.formulationName ?? PURE_BIOCHAR_LABEL} · ${stockText}` : stockText;
 }
 /** Feedstock bin option subtitle: type, held feedstock, wet stock, pending intake. */
 function formatFeedstockBinSubtitle(
@@ -182,6 +191,7 @@ interface StorageLocationOptionRow {
   heldFeedstockTypeName: string | null;
   heldFeedstockTypeUsage: string | null;
   feedstockTypeName: string | null;
+  formulationName: string | null;
   totalStoredWetKg: number;
   pendingStoredWetKg: number;
   totalConsumedKg: number;
@@ -196,6 +206,7 @@ export function toFeedstockBinEntityOption(
       stock?.feedstockStockWetKg ??
       row.totalStoredWetKg - row.totalConsumedKg,
     dryKg: stock?.feedstockEstimatedDryKg ?? null,
+    dryLabel: "dry feedstock" as const,
   };
   return {
     id: row.id,
@@ -217,8 +228,8 @@ function outputStockView(stock: OutputBinStock | undefined) {
   return { estimatedWetMassKg: stock?.estimatedWetMassKg ?? null, dryMassKg: stock?.availableDryKg ?? null };
 }
 
-function toOutputBinEntityOption(
-  row: Pick<StorageLocationOptionRow, "id" | "code" | "name">,
+export function toOutputBinEntityOption(
+  row: Pick<StorageLocationOptionRow, "id" | "code" | "name" | "type" | "formulationName">,
   stock: { estimatedWetMassKg: number | null; dryMassKg: number | null },
 ): EntityOption {
   return {
@@ -226,7 +237,7 @@ function toOutputBinEntityOption(
     code: row.code,
     name: row.name,
     remainingMass: { wetKg: stock.estimatedWetMassKg, dryKg: stock.dryMassKg },
-    subtitle: outputBinStockSubtitle(stock),
+    subtitle: outputBinStockSubtitle(row, stock),
   };
 }
 
@@ -337,6 +348,7 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       heldFeedstockTypeName: heldFeedstockTypes.name,
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
+      formulationName: formulations.name,
       totalStoredWetKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
       ),
@@ -356,6 +368,13 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       and(
         eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id),
         eq(heldFeedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      formulations,
+      and(
+        eq(storageLocations.formulationId, formulations.id),
+        eq(formulations.organizationId, ctx.organizationId),
       ),
     )
     .leftJoin(
@@ -412,6 +431,7 @@ export async function getStorageLocationById(
       heldFeedstockTypeName: heldFeedstockTypes.name,
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
+      formulationName: formulations.name,
       totalStoredWetKg: numericAggregate(
         sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredWetKg}, 0)`,
       ),
@@ -431,6 +451,13 @@ export async function getStorageLocationById(
       and(
         eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id),
         eq(heldFeedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      formulations,
+      and(
+        eq(storageLocations.formulationId, formulations.id),
+        eq(formulations.organizationId, ctx.organizationId),
       ),
     )
     .leftJoin(

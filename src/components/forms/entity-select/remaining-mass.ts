@@ -26,5 +26,5 @@ export function formatRemainingMass(
       : "Remaining now";
   const wet = formatPart(remainingMass.wetKg, "wet");
   if (!includeDryMass || !("dryKg" in remainingMass)) return `${lead}: ${wet}`;
-  return `${lead}: ${wet}, ${formatPart(remainingMass.dryKg ?? null, "dry biochar")}`;
+  return `${lead}: ${wet}, ${formatPart(remainingMass.dryKg ?? null, remainingMass.dryLabel ?? "dry biochar")}`;
 }

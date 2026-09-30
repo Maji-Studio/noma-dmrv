@@ -94,7 +94,8 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
               hideZero
               label={`Batches drawn by the ${subject}`}
               totalLabel="Dry biochar in this entry"
-              total={entry.dryMassKg}
+              // dryMassKg is signed (intakes are negative); the ledger needs the entry's size.
+              total={Math.abs(entry.dryMassKg)}
               segments={entry.allocations.map(allocation => ({ label: allocation.code, mass: allocation.dryMassKg, category: "dry-batch" as const }))}
             />
           </CalculationDisclosure>

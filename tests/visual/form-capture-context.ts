@@ -40,13 +40,13 @@ const ORG_CODE_QUERIES: Record<string, string> = {
   feedstockType: "select code from feedstock_types where organization_id = $1 order by code limit 1",
 };
 
-/** Facility-scoped first code per entity; $1 is the organization, $2 the facility. */
+/** Facility-scoped first code per entity; $1 is the organization, $2 the facility. Lists hide archived rows, so these skip them. */
 const FIRST_CODE_QUERIES: Record<string, string> = {
-  feedstock: "select code from feedstocks where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-  productionRun: "select code from production_runs where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-  product: "select code from biochar_products where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-  order: "select code from orders where organization_id = $1 and facility_id = $2 order by code desc limit 1",
-  delivery: "select code from deliveries where organization_id = $1 and facility_id = $2 order by code desc limit 1",
+  feedstock: "select code from feedstocks where organization_id = $1 and facility_id = $2 and archived_at is null order by code desc limit 1",
+  productionRun: "select code from production_runs where organization_id = $1 and facility_id = $2 and archived_at is null order by code desc limit 1",
+  product: "select code from biochar_products where organization_id = $1 and facility_id = $2 and archived_at is null order by code desc limit 1",
+  order: "select code from orders where organization_id = $1 and facility_id = $2 and archived_at is null order by code desc limit 1",
+  delivery: "select code from deliveries where organization_id = $1 and facility_id = $2 and archived_at is null order by code desc limit 1",
   application:
     "select a.code from applications a join deliveries d on d.id = a.delivery_id and d.organization_id = a.organization_id where a.organization_id = $1 and d.facility_id = $2 order by a.code desc limit 1",
   creditBatch: "select code from credit_batches where organization_id = $1 and facility_id = $2 order by code desc limit 1",
