@@ -14,10 +14,12 @@ import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIco
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
-import { formatRoundTripKm } from "@/lib/format-utils";
+import { ONE_WAY_CUE, formatRoundTripKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
+import { ControlUnitSuffix, unitEndPadding } from "@/components/forms/form-field";
+import { DISTANCE_UNIT } from "@/components/forms/distance-calc-field";
 import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
@@ -53,6 +55,7 @@ import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
+const DISTANCE_INPUT_STYLE = { paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) } as const;
 
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
@@ -525,7 +528,8 @@ export function FeedstockForm({
             >
               <FormField
                 id="transportDistanceKm"
-                label="One-way distance (km)"
+                label="Distance"
+                labelUnit={DISTANCE_UNIT}
                 error={errors.transportDistanceKm?.message}
                 certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
                 certifyStatus={transportDistanceCertStatus}
@@ -536,7 +540,8 @@ export function FeedstockForm({
                 }
               >
                 <div>
-                  <div className="relative">
+                  <div className="flex items-stretch gap-6">
+                  <div className="relative grow">
                     <FormInput
                       id="transportDistanceKm"
                       type="number"
@@ -548,7 +553,8 @@ export function FeedstockForm({
                         selectedDistanceSource === SUPPLIER_DEFAULT_DISTANCE_SOURCE
                       }
                       error={!!errors.transportDistanceKm}
-                      className={isDistanceOverride ? "pr-[104px]" : undefined}
+                      className="peer w-full"
+                      style={DISTANCE_INPUT_STYLE}
                       {...register("transportDistanceKm", {
                         setValueAs: numericValue,
                         onChange: (event) => {
@@ -568,6 +574,8 @@ export function FeedstockForm({
                         },
                       })}
                     />
+                    <ControlUnitSuffix unit={DISTANCE_UNIT} />
+                  </div>
                     {isDistanceOverride && (
                       <button
                         type="button"
@@ -575,22 +583,22 @@ export function FeedstockForm({
                         disabled={isSubmitting}
                         aria-label="Reset to suggested distance"
                         data-testid="transportDistanceKm-reset"
-                        className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
+                        className="flex shrink-0 items-center gap-6 px-8 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
                       >
                         <span className="body-caption">reset</span>
                         <ArrowCounterClockwiseIcon size={14} weight="bold" />
                       </button>
                     )}
                   </div>
-                  {countedTransportDistanceKm != null && (
-                    <p
-                      className="body-caption text-[var(--color-text-tertiary)] mt-6"
-                      data-testid="transport-distance-total"
-                      aria-live="polite"
-                    >
-                      {formatRoundTripKm(countedTransportDistanceKm)}
-                    </p>
-                  )}
+                  <p
+                    className="body-caption text-[var(--color-text-tertiary)] mt-6"
+                    data-testid="transport-distance-total"
+                    aria-live="polite"
+                  >
+                    {countedTransportDistanceKm != null
+                      ? formatRoundTripKm(countedTransportDistanceKm)
+                      : ONE_WAY_CUE}
+                  </p>
                 </div>
               </FormField>
             </ActionableFocusTarget>
@@ -603,7 +611,7 @@ export function FeedstockForm({
           icon={<PlantIcon size={14} weight="bold" />}
           fields={["feedstockTypeId", "totalWetMassKg", "moisturePercent"]}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={formControl}
               name="feedstockTypeId"

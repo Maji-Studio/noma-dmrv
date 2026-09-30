@@ -9,13 +9,6 @@ const ROUTES = [
     backLabel: "Back to credit batches",
     screenshot: "credit-batch-not-found.png",
   },
-  {
-    label: "supplier",
-    path: "/suppliers",
-    heading: "Supplier not found",
-    backLabel: "Back to suppliers",
-    screenshot: "supplier-not-found.png",
-  },
 ] as const;
 
 for (const route of ROUTES) {

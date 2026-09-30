@@ -4,8 +4,8 @@
  */
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import { UsersIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Supplier } from "@/db/schema";
@@ -13,6 +13,7 @@ import {
   useCreateSupplierWithLocations,
   useDeleteSupplier,
   useSuppliers,
+  useSupplier,
   useSupplierLocationsBySupplier,
   useUpdateSupplier,
 } from "@/hooks/use-suppliers";
@@ -35,6 +36,7 @@ import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM } from "@/lib/entity-deep-link";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { supplierSheetSections } from "./supplier-read-sections";
 
@@ -43,6 +45,7 @@ import { supplierSheetSections } from "./supplier-read-sections";
 // ============================================
 
 function createColumns(
+  onView: (supplier: SupplierWithRelations) => void,
   onEdit: (supplier: SupplierWithRelations) => void,
   onDelete: (supplierId: string) => void
 ): ColumnDef<SupplierWithRelations>[] {
@@ -52,12 +55,9 @@ function createColumns(
       meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
-        <Link
-          href={`/suppliers/${row.original.id}`}
-          className="font-medium text-[var(--clr-dark-purple)] hover:underline"
-        >
+        <span className="font-medium text-[var(--clr-dark-purple)]">
           {row.original.code}
-        </Link>
+        </span>
       ),
     },
     {
@@ -99,7 +99,7 @@ function createColumns(
           <RowActionsMenu
             label={`Actions for ${row.original.code}`}
             actions={[
-              { label: "Open details", href: `/suppliers/${row.original.id}` },
+              { label: "Open details", onSelect: () => onView(row.original) },
               { label: "Edit", onSelect: () => onEdit(row.original) },
               { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
             ]}
@@ -116,7 +116,16 @@ function createColumns(
 // ============================================
 
 export function SupplierList() {
-  const [sideSheet, setSideSheet] = useState<{
+  // Deep link (dashboard gap): ?supplier=<id>&mode=edit opens that supplier's sheet.
+  const [focusedSupplierId, setFocusedSupplierId] = useQueryState(
+    SUPPLIER_QUERY_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [sideSheetState, setSideSheet] = useState<{
     entity: SupplierWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
@@ -138,6 +147,24 @@ export function SupplierList() {
     page: currentPage,
     pageSize,
   });
+  const deepLinkedSupplier = useSupplier(focusedSupplierId ?? "", !!focusedSupplierId);
+  // A deep-linked sheet opens on a copy of the supplier taken once, as openEdit
+  // does: a later refetch (a location save, a refused stale save) must not move
+  // expectedUpdatedAt forward under the operator's old draft (#768).
+  const [deepLinkSnapshotId, setDeepLinkSnapshotId] = useState<string | null>(null);
+  if (!focusedSupplierId && deepLinkSnapshotId) setDeepLinkSnapshotId(null);
+  if (focusedSupplierId && deepLinkedSupplier.data && !sideSheetState && deepLinkSnapshotId !== focusedSupplierId) {
+    setDeepLinkSnapshotId(focusedSupplierId);
+    setSideSheet({
+      entity: deepLinkedSupplier.data as SupplierWithRelations,
+      mode: deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE ? "edit" : "view",
+    });
+  }
+  const sideSheet = sideSheetState;
+  const clearDeepLink = () => {
+    void setFocusedSupplierId(null);
+    void setDeepLinkMode(null);
+  };
   const sideSheetLocationsQuery = useSupplierLocationsBySupplier(
     sideSheet?.entity?.id ?? "",
     !!sideSheet?.entity,
@@ -146,6 +173,35 @@ export function SupplierList() {
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
   const toast = useToast();
+  const handledInvalidSupplierIdRef = useRef<string | null>(null);
+
+  // Clear a deep-linked `?supplier=` that cannot be opened (deleted or
+  // cross-org), with the same guard as the other list deep links.
+  useEffect(() => {
+    if (!focusedSupplierId) {
+      handledInvalidSupplierIdRef.current = null;
+      return;
+    }
+    if (deepLinkedSupplier.isLoading || deepLinkedSupplier.isFetching || deepLinkedSupplier.isPending) return;
+    if (handledInvalidSupplierIdRef.current === focusedSupplierId) return;
+    if (deepLinkedSupplier.isError || (deepLinkedSupplier.isSuccess && !deepLinkedSupplier.data)) {
+      handledInvalidSupplierIdRef.current = focusedSupplierId;
+      toast.error("Linked supplier could not be opened");
+      void setFocusedSupplierId(null);
+      void setDeepLinkMode(null);
+    }
+  }, [
+    deepLinkedSupplier.data,
+    deepLinkedSupplier.isError,
+    deepLinkedSupplier.isFetching,
+    deepLinkedSupplier.isLoading,
+    deepLinkedSupplier.isPending,
+    deepLinkedSupplier.isSuccess,
+    focusedSupplierId,
+    setDeepLinkMode,
+    setFocusedSupplierId,
+    toast,
+  ]);
 
   const suppliers = suppliersData?.items ?? [];
 
@@ -170,7 +226,7 @@ export function SupplierList() {
         supplier: data,
         locations: pendingLocations ?? [],
       });
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Supplier created.");
     } catch (error) {
       setCreateError(
@@ -190,7 +246,7 @@ export function SupplierList() {
         expectedUpdatedAt: sideSheet.entity.updatedAt,
         ...data,
       });
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Supplier updated.");
     } catch (error) {
       // The side sheet stays open on every failure, so the operator's draft
@@ -217,13 +273,13 @@ export function SupplierList() {
     }
   };
 
-  const openCreate = () => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
-  const openView = (supplier: SupplierWithRelations) => { setSideSheet({ entity: supplier, mode: "view" }); };
-  const openEdit = (supplier: SupplierWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
-  const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const openCreate = () => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openView = (supplier: SupplierWithRelations) => { clearDeepLink(); setSideSheet({ entity: supplier, mode: "view" }); };
+  const openEdit = (supplier: SupplierWithRelations) => { clearDeepLink(); setCreateError(null); setUpdateError(null); setSideSheet({ entity: supplier, mode: "edit" }); };
+  const closeSideSheet = () => { clearDeepLink(); setSideSheet(null); setCreateError(null); setUpdateError(null); };
   useOpenCreateIntent(openCreate);
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openView, openEdit, handleDelete);
 
   if (fetchError) {
     return (
@@ -343,7 +399,7 @@ export function SupplierList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) => setSideSheet(sideSheet ? { ...sideSheet, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit supplier"

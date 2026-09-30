@@ -48,17 +48,17 @@ function calculateTabStops(markup: string) {
 describe("DistanceCalcField accessibility", () => {
   it("describes the input by its short helper", () => {
     const input = inputTag(render({ helperText: "Road distance." }));
-    expect(input).toContain('aria-describedby="distanceKm-helper"');
+    expect(input).toMatch(/aria-describedby="distanceKm-helper( [^"]*)?"/);
   });
 
   it("describes the input by the error and marks it invalid", () => {
     const input = inputTag(render({ helperText: "Road distance.", error: "Enter a distance." }));
-    expect(input).toContain('aria-describedby="distanceKm-error"');
+    expect(input).toMatch(/aria-describedby="distanceKm-error( [^"]*)?"/);
     expect(input).toContain('aria-invalid="true"');
   });
 });
 
-describe("DistanceCalcField calculate button", () => {
+describe("DistanceCalcField estimate button", () => {
   const point = { lat: 1, lng: 2 };
 
   it("is a single tab stop when enabled", () => {
@@ -80,14 +80,14 @@ describe("DistanceCalcField calculate button", () => {
       const button = buttonTag(markup);
       expect(button).toContain('aria-busy="true"');
       expect(hasAttr(button, "disabled")).toBe(true);
-      expect(markup).toMatch(/<button[^>]*>.*Calculate<\/button>/);
+      expect(markup).toMatch(/<button[^>]*>.*Estimate<\/button>/);
     } finally {
       routeState.isPending = false;
     }
   });
 
-  it("labels the button Calculate", () => {
+  it("labels the button Estimate", () => {
     const markup = render({ origin: point, destination: point });
-    expect(markup).toMatch(/<button[^>]*>Calculate<\/button>/);
+    expect(markup).toMatch(/<button[^>]*>Estimate<\/button>/);
   });
 });

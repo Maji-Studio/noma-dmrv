@@ -697,11 +697,9 @@ Reference implementations: `facility-list.tsx`, `reactor-list.tsx`,
 
 Routes themselves are 5–10 line server wrappers — `src/app/(app)/orders/page.tsx`
 renders `src/components/orders/order-list.tsx`. The shell and all state live in
-that `"use client"` component, **not** in `page.tsx`. Detail routes usually
-redirect into the list's side sheet (`production-runs/[id]/page.tsx`,
-`credit-batches/[id]/page.tsx`); genuine detail pages follow
-`suppliers/[supplierId]/page.tsx` — `requireOrgContext` → uuid `safeParse` →
-`notFound()`, plus a sibling `not-found.tsx`.
+that `"use client"` component, **not** in `page.tsx`. Records open in their
+list's side sheet; detail routes only redirect there
+(`production-runs/[id]/page.tsx`, `credit-batches/[id]/page.tsx`).
 
 ```tsx
 <div className="container-max page-shell">

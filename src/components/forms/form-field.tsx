@@ -18,6 +18,28 @@ import { cn } from "@/lib/utils";
  */
 const UNIT_END_SPACE = "var(--spacing-24)";
 
+/** End padding that keeps typed text clear of a `unit` suffix. */
+export function unitEndPadding(unit: string): string {
+  return `calc(${unit.length}ch + ${UNIT_END_SPACE})`;
+}
+
+/**
+ * The unit shown inside the end of a control. Place it as a sibling after a
+ * `peer` control inside a `relative` wrapper. aria-hidden: the label carries
+ * the unit for screen readers.
+ */
+export function ControlUnitSuffix({ unit }: { unit: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-control-unit=""
+      className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[length:var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
+    >
+      {unit}
+    </span>
+  );
+}
+
 interface FormFieldProps {
   id: string;
   label: string;
@@ -43,6 +65,11 @@ interface FormFieldProps {
    * label needs no "(kg)". The accessible name keeps the unit.
    */
   unit?: string;
+  /**
+   * Unit that the control draws itself (beside another element, so FormField
+   * cannot wrap it). Only adds the sr-only " (unit)" to the label.
+   */
+  labelUnit?: string;
   required?: boolean;
   certifyRequired?: boolean;
   /**
@@ -113,7 +140,7 @@ function describeChild(
           className: cn(childProps.className, "peer"),
           style: {
             ...childProps.style,
-            paddingInlineEnd: `calc(${unit.length}ch + ${UNIT_END_SPACE})`,
+            paddingInlineEnd: unitEndPadding(unit),
           },
         }
       : {}),
@@ -129,6 +156,7 @@ export function FormField({
   hint,
   cue,
   unit,
+  labelUnit,
   required,
   certifyRequired,
   certifyStatus,
@@ -176,7 +204,7 @@ export function FormField({
         className="body-small font-medium text-[var(--color-text-secondary)]"
       >
         {label}
-        {unit && <span className="sr-only"> ({unit})</span>}
+        {(unit ?? labelUnit) && <span className="sr-only"> ({unit ?? labelUnit})</span>}
         {required && (
           <>
             <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
@@ -214,15 +242,7 @@ export function FormField({
       {unit ? (
         <div className="relative">
           {control}
-          {/* Part of the control's box, so the capture counts it as control
-              text. aria-hidden: the label carries the unit for screen readers. */}
-          <span
-            aria-hidden="true"
-            data-control-unit=""
-            className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[length:var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
-          >
-            {unit}
-          </span>
+          <ControlUnitSuffix unit={unit} />
         </div>
       ) : (
         control

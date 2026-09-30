@@ -79,19 +79,6 @@ async function binHistory(page: Page, ctx: CaptureContext, type: SeededBin["type
 
 const transportFeedstock: Surface[] = [
   {
-    id: "supplier.detail-page",
-    family: "transport-feedstock",
-    title: "Supplier detail page",
-    kind: "page",
-    mode: "read",
-    fill: "none",
-    skip: (ctx) => (ctx.supplier ? undefined : "no seeded supplier"),
-    open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `suppliers/${ctx.supplier!.id}`);
-      return page.locator("main");
-    },
-  },
-  {
     id: "supplier.location-add",
     family: "transport-feedstock",
     title: "Supplier location dialog (add)",
@@ -101,8 +88,9 @@ const transportFeedstock: Surface[] = [
     errors: true,
     skip: (ctx) => (ctx.supplier ? undefined : "no seeded supplier"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `suppliers/${ctx.supplier!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Add location");
+      await gotoRoute(page, ctx, "suppliers");
+      const sheet = await openEdit(page, await openRowSheet(page, ctx.supplier!.name));
+      return openDialogFromButton(sheet, page, "Add location");
     },
   },
   {
@@ -114,8 +102,9 @@ const transportFeedstock: Surface[] = [
     fill: "filled",
     skip: (ctx) => (ctx.supplier ? undefined : "no seeded supplier"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `suppliers/${ctx.supplier!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Edit");
+      await gotoRoute(page, ctx, "suppliers");
+      const sheet = await openEdit(page, await openRowSheet(page, ctx.supplier!.name));
+      return openDialogFromButton(sheet, page, /^Edit /);
     },
   },
   {

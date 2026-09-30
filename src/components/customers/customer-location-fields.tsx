@@ -1,5 +1,7 @@
 "use client";
 
+
+import { ONE_WAY_EACH_DELIVERY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import { useController, type UseFormReturn } from "react-hook-form";
 import {
   DistanceCalcField,
@@ -222,7 +224,7 @@ export function CustomerLocationFields({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <DistanceCalcField
             id={distanceId}
-            label="One-way distance from facility (per leg, km)"
+            label="Distance from facility"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField(
               "customerLocation",
@@ -230,6 +232,7 @@ export function CustomerLocationFields({
             )}
             certifyStatus={certStatus("distanceFromFacilityKm")}
             helperText="One-way road distance to this site. Every delivery counts the round trip, twice this distance, in emissions."
+            cue={oneWayDistanceCue(distanceFromFacilityKm, ONE_WAY_EACH_DELIVERY_CUE)}
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

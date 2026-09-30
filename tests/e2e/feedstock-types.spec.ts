@@ -57,7 +57,7 @@ test.describe("Feedstock Types UI CRUD", () => {
     // ── Create ────────────────────────────────────────────────────────────
     await page.click('button:has-text("New feedstock type")');
     await waitForSideSheet(page);
-    await page.selectOption("#usage", "pyrolysis");
+    await page.getByRole("radio", { name: "Pyrolysis", exact: true }).locator("..").click();
     await page.fill("#name", uniqueName);
     await page.selectOption("#category", "agricultural");
     await page

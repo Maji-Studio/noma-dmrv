@@ -569,7 +569,7 @@ describe("dashboard structural certification gaps", () => {
         key: "feedstockGps",
         metadata: "Supplier form · Location · 1 affected",
         count: 1,
-        href: `/suppliers/${fixture.missingGpsSupplierId}?facility=${fixture.gapFacilityId}`,
+        href: `/suppliers?facility=${fixture.gapFacilityId}&supplier=${fixture.missingGpsSupplierId}&mode=edit`,
       },
       {
         key: "transportEndpointGps",

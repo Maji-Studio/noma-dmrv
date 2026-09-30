@@ -1,22 +1,23 @@
 "use client";
 
 /**
- * DistanceCalcField — distance number input with an inline Calculate button that
+ * DistanceCalcField — distance number input with an inline Estimate button that
  * estimates the road distance between two resolved endpoints via the geo
  * server actions (map integration plan, Phase 1 §7).
  *
  * Provenance rules (plan decision 2):
- * - Calculate fill       → distanceSource = "map_estimate"
+ * - Estimate fill       → distanceSource = "map_estimate"
  * - hand-typed value     → distanceSource = "manual"
  * - cleared              → distanceSource = null
- * Calculate is enabled only when both endpoints have coordinates AND routing is
+ * Estimate is enabled only when both endpoints have coordinates AND routing is
  * configured server-side; when disabled, the tooltip names what's missing.
  */
 
+import { cn } from "@/lib/utils";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
-import { FormField } from "@/components/forms/form-field";
+import { ControlUnitSuffix, FormField, unitEndPadding } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { useGeoCapabilities, useRouteDistance } from "@/hooks/use-geo";
 import {
@@ -45,13 +46,16 @@ interface DistanceCalcFieldProps {
   distanceKm: number | null | undefined;
   distanceSource: DistanceSourceValue | null | undefined;
   onDistanceChange: (km: number | null, source: DistanceSourceValue | null) => void;
-  /** Resolved Calculate endpoints — null while the endpoint has no coordinates. */
+  /** Resolved Estimate endpoints — null while the endpoint has no coordinates. */
   origin: GeoPoint | null;
   destination: GeoPoint | null;
   /** Human endpoint names for the disabled explanation (e.g. "supplier position"). */
   originLabel: string;
   destinationLabel: string;
 }
+
+/** The distance unit, shown as the input suffix and in the accessible name. */
+export const DISTANCE_UNIT = "km";
 
 const ROUTING_UNAVAILABLE_MESSAGE =
   "Routing is not set up. Enter the distance by hand.";
@@ -88,11 +92,17 @@ function DistanceControl({
   return (
     <div>
       <div className="flex items-stretch gap-6">
-        <FormInput
-          {...inputProps}
-          aria-describedby={aria["aria-describedby"]}
-          {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
-        />
+        {/* The unit sits inside the input; the Estimate button beside it. */}
+        <div className="relative grow">
+          <FormInput
+            {...inputProps}
+            className={cn(inputProps.className, "peer w-full")}
+            style={{ paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) }}
+            aria-describedby={aria["aria-describedby"]}
+            {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
+          />
+          <ControlUnitSuffix unit={DISTANCE_UNIT} />
+        </div>
         {action}
       </div>
       {footer}
@@ -127,7 +137,7 @@ export function DistanceCalcField({
   const route = useRouteDistance();
 
   // Text draft so in-flight typing survives; resync when the value changes
-  // from outside (Calculate fill) — adjust-state-during-render pattern.
+  // from outside (Estimate fill) — adjust-state-during-render pattern.
   const [draft, setDraft] = useState(formatDistance(value));
   const [syncedValue, setSyncedValue] = useState(value);
   if (value !== syncedValue) {
@@ -136,7 +146,7 @@ export function DistanceCalcField({
   }
 
   const handleManualChange = (raw: string) => {
-    // A failed Calculate keeps isError until reset(), so the red message would sit
+    // A failed Estimate keeps isError until reset(), so the red message would sit
     // next to a hand-typed value the operator just fixed. Clear the mutation
     // itself, not only its rendering.
     if (route.isError) route.reset();
@@ -158,7 +168,7 @@ export function DistanceCalcField({
   const tooltipContent = !routingConfigured
     ? ROUTING_UNAVAILABLE_MESSAGE
     : missing.length > 0
-      ? `Calculate needs: ${missing.join(", ")}.`
+      ? `Estimate needs: ${missing.join(", ")}.`
       : `Estimate road distance ${originLabel} → ${destinationLabel}. The result stays editable.`;
 
   const handleCalc = () => {
@@ -182,6 +192,7 @@ export function DistanceCalcField({
       error={error ?? (route.isError ? route.error.message : undefined)}
       helperText={helperText}
       cue={cue}
+      labelUnit={DISTANCE_UNIT}
       required={required}
       certifyRequired={certifyRequired}
       certifyStatus={certifyStatus}
@@ -193,8 +204,7 @@ export function DistanceCalcField({
           step: "any",
           min: 0,
           placeholder: "e.g., 85",
-          className: "grow",
-          disabled,
+                    disabled,
           error: !!error,
           value: draft,
           onChange: (event) => handleManualChange(event.target.value),
@@ -216,10 +226,10 @@ export function DistanceCalcField({
                 className="h-40 px-12"
                 disabled={!canCalc}
                 busy={route.isPending}
-                aria-label={`Calculate road distance ${originLabel} to ${destinationLabel}`}
+                aria-label={`Estimate road distance ${originLabel} to ${destinationLabel}`}
                 onClick={handleCalc}
               >
-                Calculate
+                Estimate
               </Button>
             </span>
           </Tooltip>

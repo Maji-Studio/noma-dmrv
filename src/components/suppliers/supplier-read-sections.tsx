@@ -14,7 +14,7 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
   const locations = locationsQuery.data ?? [];
   return [
     {
-      title: "Required information",
+      title: "Supplier",
       fields: [
         { label: "Supplier name", value: supplier.name },
       ],
@@ -26,7 +26,7 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
           ? []
           : buildPartyLocationDetailFields(locations, {
               distanceLabel:
-                "One-way distance to facility (per leg, km)",
+                "Distance to facility (one way)",
               defaultLabel: "Default source location",
               positionLabel: "Source location position",
             }),
@@ -43,8 +43,8 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
       title: "Contact information",
       fields: [
         { label: "Contact name", value: supplier.contactName },
-        { label: "Contact email", value: supplier.contactEmail },
         { label: "Contact phone", value: supplier.contactPhone },
+        { label: "Contact email", value: supplier.contactEmail },
       ],
     },
     {

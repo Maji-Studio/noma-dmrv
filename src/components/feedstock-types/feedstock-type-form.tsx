@@ -12,6 +12,7 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { FormActions } from "@/components/forms/form-actions";
 import {
   feedstockTypeFormSchema,
@@ -316,16 +317,16 @@ export function FeedstockTypeForm({
               {selectedIsometricSummary}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-                <div className="space-y-10">
+                <div className="space-y-10 md:col-span-2">
                   <FormField
                     id="usage"
                     label="Usage"
                     error={errors.usage?.message}
                     required
                   >
-                    <FormSelect
+                    <SegmentedControl
                       id="usage"
-                      placeholder="Select usage..."
+                      legend="Usage"
                       disabled={isSubmitting}
                       error={!!errors.usage}
                       options={usageOptions}

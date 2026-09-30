@@ -15,6 +15,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM } from "@/lib/entity-deep-link";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
@@ -153,7 +154,11 @@ export function buildDashboardStructuralGaps(
   const facilityParams = new URLSearchParams({ facility: facilityId });
   const facilityQuery = `?${facilityParams.toString()}`;
   const supplierHref = counts.missingFeedstockGpsSupplierId
-    ? `/suppliers/${counts.missingFeedstockGpsSupplierId}${facilityQuery}`
+    ? `/suppliers?${new URLSearchParams({
+        facility: facilityId,
+        [SUPPLIER_QUERY_PARAM]: counts.missingFeedstockGpsSupplierId,
+        [ENTITY_DEEP_LINK_MODE_PARAM]: ENTITY_DEEP_LINK_EDIT_MODE,
+      }).toString()}`
     : `/suppliers${facilityQuery}`;
   return [
     {

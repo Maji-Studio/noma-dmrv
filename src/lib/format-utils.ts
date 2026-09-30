@@ -281,6 +281,19 @@ export function formatRoundTripKm(oneWayKm: number): string {
   return `${formatDistanceKm(countedRoundTripKm(oneWayKm))} round trip counted`;
 }
 
+/** Static cue for a one-way distance field: the counted round trip once a value exists. */
+export function oneWayDistanceCue(
+  oneWayKm: number | null | undefined,
+  emptyCue: string,
+): string {
+  return oneWayKm != null && Number.isFinite(oneWayKm) && oneWayKm > 0
+    ? formatRoundTripKm(oneWayKm)
+    : emptyCue;
+}
+
+export const ONE_WAY_EACH_DELIVERY_CUE = "One way. Each delivery counts the round trip.";
+export const ONE_WAY_CUE = "One way";
+
 export const BYTES_PER_KB = 1024;
 export const BYTES_PER_MB = 1024 * 1024;
 
