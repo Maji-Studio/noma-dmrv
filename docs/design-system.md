@@ -530,6 +530,11 @@ are 360 to 640px wide, so give a card group the full row (`md:col-span-2` in a
 two-column grid) or it stacks. Write the consequence as the card caption, not
 as helper text. Art is decorative (`aria-hidden`), monoline, about 44x30, drawn
 in code.
+Wide art (stock mode, 112x44) uses `stackArt` to sit above the text at every
+width. It is the one exception to monoline: filled grains in three fixed batch
+tones (`--stock-batch-*` in `globals.css`). It can play a loop on card hover and focus through CSS in
+`globals.css` ("Stock mode art"), gated by `prefers-reduced-motion`; the
+settled state is the static drawing.
 
 The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
 input is not the touch target: the whole label is, and `SegmentedControl`
