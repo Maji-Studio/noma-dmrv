@@ -15,6 +15,7 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import type {
   ApplicationEvidenceMethod,
 } from "@/schemas/applications";
+import { APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS } from "@/schemas/applications";
 import type { DocumentType } from "@/schemas/documents";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import { GisReferenceDialog } from "./gis-reference-dialog";
@@ -30,20 +31,19 @@ const METHOD_OPTIONS = [
     value: "location",
     title: "Customer location",
     art: <MapPinIcon size={METHOD_ART_SIZE} weight="bold" />,
-    description:
-      "Use the application GPS coordinates from the delivery's customer location.",
+    description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.location,
   },
   {
     value: "boundary",
     title: "GIS reference",
     art: <PolygonIcon size={METHOD_ART_SIZE} weight="bold" />,
-    description: "The field boundary as a GeoJSON file, drawn on a map.",
+    description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.boundary,
   },
   {
     value: "visual",
     title: "Visual evidence",
     art: <CameraIcon size={METHOD_ART_SIZE} weight="bold" />,
-    description: "Geotagged photos of each application stage.",
+    description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.visual,
     disabled: true,
     badge: "Available later",
   },

@@ -158,7 +158,7 @@ test.describe("Transport round trip (#852)", () => {
 
   test("organization defaults have no trip type setting", async ({ adminPage: page }) => {
     await page.goto("/settings/defaults");
-    await expect(page.getByText("Application evidence", { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole("group", { name: "Application evidence" })).toBeVisible({ timeout: 15000 });
     await expect(page.getByText(/trip type/i)).toHaveCount(0);
   });
 

@@ -2,12 +2,12 @@
  * OrganizationCertifierCredentials — the organization's write-only Isometric
  * keys. Every facility in the organization submits with them.
  *
- * The inputs are always on screen. Once keys are stored, each field is seeded
- * with a masked stand-in so the form reads as "filled" rather than empty, and
- * replacing a key is what it looks like: select the mask, type over it. A field
- * left at its mask is sent as `undefined`, which the data-access layer reads as
- * "keep the stored value" — so rotating only the access token does not mean
- * retyping the client secret.
+ * Once keys are stored, each one shows as "Ends 1a2b" (or "Saved") with a
+ * Replace action; only Replace opens an empty input, and "Keep saved key"
+ * closes it again. An untouched key keeps its mask in the form state and is
+ * sent as `undefined`, which the data-access layer reads as "keep the stored
+ * value" — so rotating only the access token does not mean retyping the client
+ * secret. With nothing stored, both inputs are on screen.
  *
  * There is no separate connect-and-test step. Saving IS the test: the action
  * stores the keys and then asks Isometric to list the organization's projects
@@ -24,8 +24,9 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { FormActions, FormField, FormInput } from "@/components/forms";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import type { CertifierCredentialsVerification } from "@/fn/certifier-credentials";
@@ -39,17 +40,19 @@ import {
   certifierCredentialsRotationSchema,
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
-import { formatDateTime } from "@/lib/format-utils";
 import { Notice } from "@/components/ui/notice";
 
 interface OrganizationCertifierCredentialsProps {
   organizationId: string;
   organizationName: string;
+  /** Lets a host (a dismissible modal) hold itself open while keys save. */
+  onSavingChange?: (saving: boolean) => void;
 }
 
 export function OrganizationCertifierCredentials({
   organizationId,
   organizationName,
+  onSavingChange,
 }: OrganizationCertifierCredentialsProps) {
   const statusQuery = useOrgCertifierCredentialsStatus(organizationId);
 
@@ -75,7 +78,7 @@ export function OrganizationCertifierCredentials({
       organizationId={organizationId}
       configured={configured}
       accessTokenLast4={status?.accessTokenLast4 ?? null}
-      updatedAt={status?.updatedAt ?? null}
+      onSavingChange={onSavingChange}
     />
   );
 }
@@ -84,24 +87,42 @@ function CredentialsForm({
   organizationId,
   configured,
   accessTokenLast4,
-  updatedAt,
+  onSavingChange,
 }: {
   organizationId: string;
   configured: boolean;
   accessTokenLast4: string | null;
-  updatedAt: Date | null;
+  onSavingChange?: (saving: boolean) => void;
 }) {
   const toast = useToast();
   const setCredentials = useSetOrgCertifierCredentials(organizationId);
   const [serverError, setServerError] = useState("");
   const [verification, setVerification] =
     useState<CertifierCredentialsVerification | null>(null);
+  // A saved key shows as "Ends 1a2b · Replace"; its input only appears once
+  // the operator asks to replace it. Untouched keys keep the mask, which the
+  // submit handler reads as "keep the stored value".
+  const [replacing, setReplacing] = useState({
+    accessToken: false,
+    clientSecret: false,
+  });
+
+  function startReplace(field: keyof typeof replacing) {
+    setValue(field, "");
+    setReplacing((current) => ({ ...current, [field]: true }));
+  }
+
+  function cancelReplace(field: keyof typeof replacing) {
+    setValue(field, CERTIFIER_CREDENTIAL_MASK);
+    setReplacing((current) => ({ ...current, [field]: false }));
+  }
 
   const {
     control,
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<CertifierCredentialsFormInput>({
     resolver: zodResolver(
@@ -121,18 +142,14 @@ function CredentialsForm({
     setServerError("");
     setVerification(null);
 
-    // An untouched mask — and a field cleared but never retyped — both mean
-    // "leave this one alone". Sending the mask would store bullets as a key.
-    const accessToken = changedValue(values.accessToken);
-    const clientSecret = changedValue(values.clientSecret);
-
-    if (!accessToken && !clientSecret) {
-      setServerError(
-        "Type over a key to replace it, then save. Nothing has changed yet.",
-      );
+    const submission = resolveCredentialSubmission(values);
+    if (!submission.ok) {
+      setServerError(submission.message);
       return;
     }
+    const { accessToken, clientSecret } = submission;
 
+    onSavingChange?.(true);
     try {
       const result = await setCredentials.mutateAsync({
         accessToken,
@@ -142,6 +159,7 @@ function CredentialsForm({
         accessToken: CERTIFIER_CREDENTIAL_MASK,
         clientSecret: CERTIFIER_CREDENTIAL_MASK,
       });
+      setReplacing({ accessToken: false, clientSecret: false });
       setVerification(result.verification);
       // The toast confirms the write; the panel below carries the connection
       // outcome, which is the part worth reading twice.
@@ -152,17 +170,13 @@ function CredentialsForm({
           ? error.message
           : "The Isometric keys were not saved. Try again.",
       );
+    } finally {
+      onSavingChange?.(false);
     }
   }
 
-  const savedCaption = configured
-    ? [
-        accessTokenLast4 ? `Ends ${accessTokenLast4}` : null,
-        updatedAt ? `saved ${formatDateTime(updatedAt)}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : undefined;
+  const tokenId = `isometric-access-token-${organizationId}`;
+  const secretId = `isometric-client-secret-${organizationId}`;
 
   return (
     <form
@@ -170,36 +184,30 @@ function CredentialsForm({
       className="content-measure-form flex flex-col gap-16"
     >
       <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
-        <FormField
-          id={`isometric-access-token-${organizationId}`}
+        <CredentialKeyField
+          id={tokenId}
           label="Access token"
+          savedText={accessTokenLast4 ? `Ends ${accessTokenLast4}` : "Saved"}
+          configured={configured}
+          replacing={replacing.accessToken}
           error={errors.accessToken?.message}
-          required={!configured}
-          cue={savedCaption}
-        >
-          <FormInput
-            id={`isometric-access-token-${organizationId}`}
-            type="password"
-            autoComplete="new-password"
-            disabled={setCredentials.isPending}
-            {...register("accessToken")}
-          />
-        </FormField>
-        <FormField
-          id={`isometric-client-secret-${organizationId}`}
+          disabled={setCredentials.isPending}
+          onReplace={() => startReplace("accessToken")}
+          onCancel={() => cancelReplace("accessToken")}
+          inputProps={register("accessToken")}
+        />
+        <CredentialKeyField
+          id={secretId}
           label="Client secret"
+          savedText="Saved"
+          configured={configured}
+          replacing={replacing.clientSecret}
           error={errors.clientSecret?.message}
-          required={!configured}
-          cue={configured ? "Saved" : undefined}
-        >
-          <FormInput
-            id={`isometric-client-secret-${organizationId}`}
-            type="password"
-            autoComplete="new-password"
-            disabled={setCredentials.isPending}
-            {...register("clientSecret")}
-          />
-        </FormField>
+          disabled={setCredentials.isPending}
+          onReplace={() => startReplace("clientSecret")}
+          onCancel={() => cancelReplace("clientSecret")}
+          inputProps={register("clientSecret")}
+        />
       </div>
 
       {verification && <VerificationNotice verification={verification} />}
@@ -213,6 +221,85 @@ function CredentialsForm({
         sticky={false}
       />
     </form>
+  );
+}
+
+/**
+ * One key. Saved and untouched it reads "Ends 1a2b" with a Replace action
+ * (only the last characters are ever shown, never the secret); replacing it
+ * swaps in an empty input with a way back to the saved key.
+ */
+function CredentialKeyField({
+  id,
+  label,
+  savedText,
+  configured,
+  replacing,
+  error,
+  disabled,
+  onReplace,
+  onCancel,
+  inputProps,
+}: {
+  id: string;
+  label: string;
+  savedText: string;
+  configured: boolean;
+  replacing: boolean;
+  error?: string;
+  disabled: boolean;
+  onReplace: () => void;
+  onCancel: () => void;
+  inputProps: UseFormRegisterReturn;
+}) {
+  const showSaved = configured && !replacing;
+  const noun = label.toLowerCase();
+
+  return (
+    <div className="flex flex-col gap-8">
+      <FormField id={id} label={label} error={error} required={!configured}>
+        {showSaved ? (
+          <div
+            id={id}
+            role="group"
+            aria-label={`${label}, saved`}
+            className="flex min-h-40 items-center justify-between gap-12"
+          >
+            <span className="body-small text-[var(--color-text-secondary)]">
+              {savedText}
+            </span>
+            <Button
+              type="button"
+              variant="weak"
+              size="small"
+              aria-label={`Replace ${noun}`}
+              onClick={onReplace}
+            >
+              Replace
+            </Button>
+          </div>
+        ) : (
+          <FormInput
+            id={id}
+            type="password"
+            autoComplete="new-password"
+            disabled={disabled}
+            {...inputProps}
+          />
+        )}
+      </FormField>
+      {configured && replacing && (
+        <Button
+          type="button"
+          variant="weak"
+          size="small"
+          className="self-start"
+          onClick={onCancel}
+        >
+          Keep saved key
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -231,6 +318,27 @@ function VerificationNotice({
       {verification.message}
     </Notice>
   );
+}
+
+export const NOTHING_CHANGED_MESSAGE =
+  "Select Replace on a key and enter the new one, then save. Nothing has changed yet.";
+
+/**
+ * What to send. An untouched mask — and a field cleared but never retyped —
+ * both mean "leave this one alone"; sending the mask would store bullets as a
+ * key. Nothing to send is an error, not a no-op save.
+ */
+export function resolveCredentialSubmission(
+  values: CertifierCredentialsFormInput,
+):
+  | { ok: true; accessToken?: string; clientSecret?: string }
+  | { ok: false; message: string } {
+  const accessToken = changedValue(values.accessToken);
+  const clientSecret = changedValue(values.clientSecret);
+  if (!accessToken && !clientSecret) {
+    return { ok: false, message: NOTHING_CHANGED_MESSAGE };
+  }
+  return { ok: true, accessToken, clientSecret };
 }
 
 /** `undefined` when the field still holds the mask or was left blank. */

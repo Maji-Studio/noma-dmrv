@@ -280,6 +280,17 @@ export function formatApplicationMethod(method: ApplicationMethod): string {
   return labels[method];
 }
 
+/** One-line consequence of each evidence method, shared by every card that offers the choice. */
+export const APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS: Record<
+  ApplicationEvidenceMethod,
+  string
+> = {
+  location:
+    "Use the application GPS coordinates from the delivery's customer location.",
+  boundary: "The field boundary as a GeoJSON file, drawn on a map.",
+  visual: "Geotagged photos of each application stage.",
+};
+
 export function formatApplicationEvidenceMethod(method: ApplicationEvidenceMethod): string {
   const labels: Record<ApplicationEvidenceMethod, string> = {
     location: "Customer location",

@@ -148,8 +148,10 @@ test.describe("First-run onboarding", () => {
         .getByRole("listitem")
         .filter({ hasText: ORG_NAME });
       await expect(organization).toBeVisible();
+      await expect(organization.getByText("Keys saved")).toBeVisible();
+      await organization.getByRole("button", { name: "Isometric keys" }).click();
       await expect(
-        organization.getByText("Ends 9999", { exact: false }),
+        adminPage.getByRole("dialog").getByText("Ends 9999", { exact: false }),
       ).toBeVisible();
 
       // 5. Finish → the guide takes over the dashboard body.
