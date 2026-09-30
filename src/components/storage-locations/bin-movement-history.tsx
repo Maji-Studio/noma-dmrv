@@ -2,10 +2,9 @@
 
 import {
   ArrowsClockwiseIcon,
-  ScalesIcon,
-  TrendDownIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { StockKindIcon } from "./stock-kind-icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBinMovements } from "@/hooks/use-bin-movements";
@@ -43,22 +42,14 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
         : "text-[var(--color-text-primary)]";
 
   return (
-    <li className="flex flex-col gap-6 border-b border-[var(--color-border-tertiary)] py-12 last:border-b-0">
+    <li className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-8">
         <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
-          {isLoss ? (
-            <TrendDownIcon
-              size={15}
-              weight="bold"
-              className="text-[var(--color-signal-red)]"
-            />
-          ) : (
-            <ScalesIcon
-              size={15}
-              weight="bold"
-              className="text-[var(--color-text-tertiary)]"
-            />
-          )}
+          <StockKindIcon
+            kind={isLoss ? "loss" : "count"}
+            size={16}
+            className={isLoss ? "text-[var(--color-signal-red)]" : "text-[var(--color-text-tertiary)]"}
+          />
           {isLoss ? "Loss" : "Stock-take"}
           <span className="body-caption text-[var(--color-text-tertiary)]">
             · {BIN_MOVEMENT_LANE_LABELS[movement.lane as BinMovementLane]}
@@ -139,7 +130,7 @@ export function BinMovementHistory({
           padding="sm"
         />
       ) : (
-        <ul className="flex flex-col">
+        <ul className="flex flex-col gap-20">
           {movements.map((movement) => (
             <MovementRow key={movement.id} movement={movement} />
           ))}

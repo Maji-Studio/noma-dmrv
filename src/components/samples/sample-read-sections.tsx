@@ -31,27 +31,16 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       ],
     },
     {
-      title: "Carbon analysis",
+      title: "Lab analysis",
       fields: [
-        { label: "Total carbon (%)", value: formatLabPercent(sample.totalCarbonPercent) },
-        { label: "Organic carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatLabPercent(sample.organicCarbonPercent) },
-        { label: "Inorganic carbon (%)", value: formatLabPercent(sample.inorganicCarbonPercent) },
-      ],
-    },
-    {
-      title: "Elemental analysis",
-      fields: [
-        { label: "Hydrogen (%)", value: formatLabPercent(sample.totalHydrogenPercent) },
-        { label: "Nitrogen (%)", value: formatLabPercent(sample.totalNitrogenPercent) },
-        { label: "Oxygen (%)", value: formatLabPercent(sample.totalOxygenPercent) },
-        { label: "Sulfur (%)", value: formatLabPercent(sample.totalSulfurPercent) },
-      ],
-    },
-    {
-      title: "Proximate analysis",
-      fields: [
-        { label: "Ash content (%)", value: formatLabPercent(sample.ashContentPercent) },
-        { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(sample.moistureContentPercent) },
+        { label: "Total carbon", value: formatLabPercent(sample.totalCarbonPercent) },
+        { label: "Organic carbon", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatLabPercent(sample.organicCarbonPercent) },
+        { label: "Inorganic carbon", value: formatLabPercent(sample.inorganicCarbonPercent) },
+        { label: "Ash content", value: formatLabPercent(sample.ashContentPercent) },
+        { label: "Hydrogen", value: formatLabPercent(sample.totalHydrogenPercent) },
+        { label: "Nitrogen", value: formatLabPercent(sample.totalNitrogenPercent) },
+        { label: "Oxygen", value: formatLabPercent(sample.totalOxygenPercent) },
+        { label: "Sulfur", value: formatLabPercent(sample.totalSulfurPercent) },
       ],
     },
     {
@@ -60,6 +49,7 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
         { label: "Bulk density (kg/m³)", value: sample.bulkDensityKgPerM3 },
         { label: "pH", value: sample.ph != null ? String(sample.ph) : null },
         { label: "Salt content (g/kg)", value: sample.saltContentGPerKg },
+        { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(sample.moistureContentPercent) },
       ],
     },
     {
@@ -74,8 +64,8 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       {
         title: "1000-year durability · R₀ reflectance",
         fields: [
-          { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(sample.randomReflectanceR0Percent) },
-          { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * PERCENT_SCALE) },
+          { label: "Mean random reflectance R₀", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(sample.randomReflectanceR0Percent) },
+          { label: "R₀ readings ≥ 2%", ...certificationDetailField("sample", "sReflectanceFraction"), value: sample.sReflectanceFraction == null ? null : formatLabPercent(sample.sReflectanceFraction * PERCENT_SCALE) },
           { label: "Measurement count", value: sample.r0MeasurementCount },
           { label: "R₀ analysis date", value: formatDate(sample.r0AnalysisDate) },
         ],
@@ -83,8 +73,8 @@ export function sampleSheetSections(sample: SampleWithRelations): DetailPanelSec
       {
         title: "TGA non-reactive carbon",
         fields: [
-          { label: "Reactive carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatLabPercent(sample.reactiveCarbonPercent) },
-          { label: "Residual (non-reactive) carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatLabPercent(sample.residualCarbonPercent) },
+          { label: "Reactive carbon", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatLabPercent(sample.reactiveCarbonPercent) },
+          { label: "Residual carbon", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatLabPercent(sample.residualCarbonPercent) },
           { label: "TGA analysis date", value: formatDate(sample.tgaAnalysisDate) },
         ],
       },
