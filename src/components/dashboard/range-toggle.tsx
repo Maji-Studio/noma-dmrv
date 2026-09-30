@@ -1,6 +1,6 @@
 /**
  * RangeToggle — the dashboard's period segmented control (Week / Month / All),
- * the inspiration mock's `.seg` recipe: joined mono uppercase buttons inside
+ * the inspiration mock's `.seg` recipe: joined buttons inside
  * one plum-20 hairline, active segment inverted to ink. Drives both the KPI
  * band and the hero's mass-flow chips.
  */
@@ -35,7 +35,7 @@ export function RangeToggle({ value, onChange }: RangeToggleProps) {
             aria-pressed={isActive}
             onClick={() => onChange(option.value)}
             className={[
-              "label-micro h-36 px-16 transition-colors",
+              "label-button h-36 px-16 transition-colors",
               index < RANGE_OPTIONS.length - 1
                 ? "border-r-[1.5px] border-[var(--clr-dark-purple-20)]"
                 : "",

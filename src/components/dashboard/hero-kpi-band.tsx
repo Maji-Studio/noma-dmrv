@@ -64,7 +64,7 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
     >
       {cells.map((kpi, index) => (
         <div key={kpi.key} className={`px-20 py-16 ${CELL_BORDERS(index)}`}>
-          <div className="font-[family-name:var(--font-mono)] text-[10px] font-medium uppercase leading-[1.2] tracking-[0.1em] text-[var(--clr-dark-purple-60)]">
+          <div className="text-[10px] font-medium leading-[1.2] text-[var(--clr-dark-purple-60)]">
             {kpi.label}
           </div>
           <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
