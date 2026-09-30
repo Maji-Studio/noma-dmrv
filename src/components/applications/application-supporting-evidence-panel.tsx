@@ -26,9 +26,11 @@ import {
 } from "./application-supporting-evidence";
 
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
-/** Consequence of saving straight away; behind the ⓘ so the panel stays short. */
+/** The consequence of saving straight away stays visible as the cue. */
+const UPLOAD_CUE = "Uploads are saved immediately. Closing does not discard them.";
+/** The rest of the explanation waits behind the ⓘ. */
 const UPLOAD_NOTE =
-  "Uploads are saved immediately. Closing this panel does not discard them. Evidence added after submission is excluded from the saved attempt until a new evidence review.";
+  "Evidence added after submission is excluded from the saved attempt until a new evidence review.";
 const SUPPORTING_EVIDENCE_ACCEPT = "image/*,application/pdf,.pdf";
 
 interface ApplicationSupportingEvidencePanelProps {
@@ -162,6 +164,7 @@ export function ApplicationSupportingEvidencePanel({
         <FormField
           id={uploadId}
           label="Images and PDFs"
+          cue={applicationId ? UPLOAD_CUE : undefined}
           helperText={applicationId ? UPLOAD_NOTE : undefined}
         >
           {upload}

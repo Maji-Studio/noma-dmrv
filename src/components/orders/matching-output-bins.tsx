@@ -2,9 +2,9 @@
 import { useId, useState } from "react";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Modal } from "@/components/ui";
-import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { pluralize } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
-import { SecondaryFigure } from "@/components/ui/secondary-figure";
+import { DerivedHeadline } from "@/components/forms";
 import { formatWetEstimate } from "@/components/storage-locations/stock-preview-shared";
 import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
@@ -19,21 +19,22 @@ const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
 
 /**
  * The row's figures. Wet leads, as an estimate, and counts only the bins that
- * have one: a partial sum is never presented as the total, and a headline never
- * switches to dry. The dry stock is a secondary line.
+ * have one; dry gets the same honesty. A partial sum is never presented as the
+ * total, the headline never switches to dry, and an unresolved figure is null
+ * so the muted "Not available" applies.
  */
-export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string; dry: string; dryKnown: boolean; binCount: number } {
+export function summarizeMatchingStock(bins: readonly MatchingOutputBin[]): { wet: string | null; dry: string | null; binCount: number } {
   const binCount = bins.length;
   const withWet = bins.filter(bin => bin.estimatedWetMassKg != null);
   const withDry = bins.filter(bin => bin.dryMassKg != null);
   const wetKg = withWet.reduce((sum, bin) => sum + (bin.estimatedWetMassKg ?? 0), 0);
   const dryKg = withDry.reduce((sum, bin) => sum + (bin.dryMassKg ?? 0), 0);
-  const wet = withWet.length === 0
-    ? MISSING_VALUE.notAvailable
-    : withWet.length === binCount
-      ? `≈ ${formatWetEstimate(wetKg)} kg wet`
-      : `≈ ${formatWetEstimate(wetKg)} kg wet in ${withWet.length} of ${binCount} bins`;
-  return { wet, dry: withDry.length === 0 ? MISSING_VALUE.notAvailable : formatMassKg(dryKg), dryKnown: withDry.length > 0, binCount };
+  const coverage = (known: number) => known === binCount ? "" : ` in ${known} of ${binCount} bins`;
+  return {
+    wet: withWet.length === 0 ? null : `≈ ${formatWetEstimate(wetKg)} kg wet${coverage(withWet.length)}`,
+    dry: withDry.length === 0 ? null : `${formatMassKg(dryKg)}${coverage(withDry.length)}`,
+    binCount,
+  };
 }
 
 /**
@@ -61,12 +62,12 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
         aria-haspopup="dialog"
         className="flex w-full items-center justify-between gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-10 text-left transition-colors duration-300 hover:border-[var(--color-border-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-interaction)]"
       >
-        <span className="flex min-w-0 flex-col gap-2">
-          <span className="body-small text-[var(--color-text-secondary)]">Available wet stock, estimate</span>
-          <span className="body-medium font-medium tabular-nums text-[var(--color-text-primary)]">{summary.wet}</span>
-          <SecondaryFigure label="Available dry stock" value={summary.dry} empty={!summary.dryKnown} />
-          <span className={STATUS_CLASS}>{`${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}. Tap to see each bin.`}</span>
-        </span>
+        <DerivedHeadline
+          label="Available wet stock, estimate"
+          value={summary.wet}
+          secondary={{ label: "Available dry stock", value: summary.dry }}
+          sub={`${summary.binCount} ${pluralize(summary.binCount, "bin", "bins")}`}
+        />
         <CaretRightIcon aria-hidden size={16} weight="bold" className="shrink-0 text-[var(--color-text-tertiary)]" />
       </button>
       <Modal isOpen={open} onClose={() => setOpen(false)} ariaLabelledBy={titleId} width="md">

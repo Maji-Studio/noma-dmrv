@@ -1,8 +1,8 @@
 /**
  * Delivery stock — which batches this delivery drew, by dry biochar.
  *
- * The bar is the answer: one block per batch drawn, with a key line naming each
- * batch and its dry mass, then the saved wet measurement as corrected. Both
+ * The saved wet measurement, as corrected, leads; then the bar with one block
+ * per batch drawn and a key line naming each batch and its dry mass. Both
  * levels show them. Detailed adds the ledger with each batch's share of the
  * total.
  *
@@ -14,11 +14,11 @@
  */
 "use client";
 import { CompositionCard, CompositionLedger } from "@/components/forms";
-import { formatCompositionMass } from "@/components/forms/composition-ledger";
 import { formatWetAtMoisture, StockRows } from "@/components/storage-locations/stock-figures";
 import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-run-groups";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import type { MassSegment } from "@/components/forms/composition-ledger";
+import { formatDryKeyMass } from "@/components/storage-locations/stock-preview-shared";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
 import { Notice } from "@/components/ui/notice";
@@ -28,11 +28,6 @@ const DELIVERY_STOCK_HINT =
   "These are the batches this delivery drew, by dry biochar. To change the measured masses, correct the original delivery entry in stock history.";
 /** Names the whole in the bar's accessible name and in the ledger's total row. */
 const TOTAL_LABEL = "Dry biochar";
-
-/** Batches are tracked dry, so the key says so. */
-function formatDryKeyMass(kg: number | null): string {
-  return `${formatCompositionMass(kg)} dry`;
-}
 
 export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId, wetMassKg, dryMassKg }: { deliveryId: string; storageLocationId: string | null; facilityId: string; wetMassKg: number | null; dryMassKg: number | null }) {
   const history = useOutputStockHistory(storageLocationId ?? "", !!storageLocationId);
@@ -58,6 +53,7 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
   return <>
     {history.error && <Notice tone="error">{history.error.message}</Notice>}
     <CompositionCard
+      ruleOnlyWithCalculation
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}
       actions={storageLocationId ? <OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} /> : undefined}

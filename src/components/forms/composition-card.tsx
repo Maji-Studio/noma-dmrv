@@ -43,6 +43,7 @@ export function CompositionCard({
   detail,
   calculation,
   actions,
+  ruleOnlyWithCalculation = false,
 }: {
   title: string;
   /** One sentence defining the block. Rendered as an InfoHint beside the caption. */
@@ -57,6 +58,8 @@ export function CompositionCard({
   calculation?: ReactNode;
   /** Other controls for this block, rendered in the action row after Show calculation. */
   actions?: ReactNode;
+  /** Draw the action row's rule only above the Show calculation control, so actions alone sit rule-free. */
+  ruleOnlyWithCalculation?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -89,9 +92,8 @@ export function CompositionCard({
           hidden={!showActionRow}
           className={cn(
             "flex flex-wrap items-center gap-x-8 gap-y-4",
-            // The rule divides the picture from the calculation control, so it
-            // only shows with that control (Detailed). Actions alone need none.
-            calculation && detailed && "border-t border-[var(--color-border-tertiary)] pt-8",
+            (!ruleOnlyWithCalculation || (calculation && detailed)) &&
+              "border-t border-[var(--color-border-tertiary)] pt-8",
           )}
         >
           {calculation && (

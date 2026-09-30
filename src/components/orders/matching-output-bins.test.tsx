@@ -41,6 +41,7 @@ describe("MatchingOutputBins", () => {
     expect(text).toContain("Available wet stock, estimate");
     expect(text).toContain("≈ 200 kg wet");
     expect(text).toContain("Available dry stock 170 kg");
+    expect(text).not.toContain("Tap to see");
     expect(text).toContain("2 bins");
     expect(html).not.toContain('role="article"');
   });
@@ -54,11 +55,19 @@ describe("MatchingOutputBins", () => {
     expect(summary.wet).toBe("≈ 170 kg wet in 2 of 3 bins");
     expect(summary.dry).toBe("200 kg");
   });
+  it("says how many bins a partial dry sum covers", () => {
+    const summary = summarizeMatchingStock([
+      { id: "a", code: "B1", name: "A", dryMassKg: 100, estimatedWetMassKg: 120 },
+      { id: "b", code: "B2", name: "B", dryMassKg: null, estimatedWetMassKg: 50 },
+      { id: "c", code: "B3", name: "C", dryMassKg: 30, estimatedWetMassKg: 10 },
+    ]);
+    expect(summary.dry).toBe("130 kg in 2 of 3 bins");
+    expect(summary.wet).toBe("≈ 180 kg wet");
+  });
   it("reads Not available when nothing resolves", () => {
     const summary = summarizeMatchingStock([{ id: "a", code: "B1", name: "A", dryMassKg: null, estimatedWetMassKg: null }]);
-    expect(summary.wet).toBe("Not available");
-    expect(summary.dry).toBe("Not available");
-    expect(summary.dryKnown).toBe(false);
+    expect(summary.wet).toBeNull();
+    expect(summary.dry).toBeNull();
   });
   it("explicitly permits an order without stock", () => {
     state.bins = [];
