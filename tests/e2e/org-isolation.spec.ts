@@ -151,17 +151,6 @@ test("organization domain data is isolated across lists, record URLs, and picker
   ).toBeVisible();
   await expect(orgB.page.getByText(orgABatch.code, { exact: true })).toHaveCount(0);
 
-  const supplierResponse = await orgB.page.goto(
-    `/suppliers/${seededData.supplier.id}`,
-  );
-  expect(supplierResponse?.status()).toBe(404);
-  await expect(
-    orgB.page.getByRole("heading", { name: "Supplier not found", exact: true }),
-  ).toBeVisible();
-  await expect(
-    orgB.page.getByText(seededData.supplier.name, { exact: true }),
-  ).toHaveCount(0);
-
   // The customer detail page is gone: the list's `?customer=` deep link must
   // not open another organization's customer either.
   await orgB.page.goto(`/customers?customer=${seededData.customer.id}`);

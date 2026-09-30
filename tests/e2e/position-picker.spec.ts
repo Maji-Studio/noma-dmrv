@@ -430,7 +430,11 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(customerEditDialog).toBeVisible();
     await customerEditDialog.getByRole("button", { name: "Close" }).click();
 
-    await page.goto(`/suppliers/${seededData.supplier.id}`);
+    // Suppliers manage locations inside their edit sheet; the dashboard gap
+    // link opens it with these params.
+    await page.goto(
+      `/suppliers?supplier=${seededData.supplier.id}&mode=edit`,
+    );
     await page.getByRole("button", { name: "Add location" }).click();
     await expect(
       page.getByRole("dialog", { name: "Add location" }),
