@@ -30,7 +30,7 @@ The code comment on `DetailedOnly` (`src/components/forms/form-detail-context.ts
 5. A small monoline illustration set drawn in code, used only in choice cards, empty states and onboarding.
 6. Samples: merge carbon, elemental and proximate into one section with unit suffixes. No fields hidden, per R1.
 7. Actions that save on their own open in an action modal: the facility registry connector and Method B setup.
-8. The PageHeader eyebrow stays at page level. The no-eyebrow rule applies inside forms, sheets and read views.
+8. The PageHeader eyebrow stays at page level. The no-eyebrow rule applies inside forms, sheets and read views. Widened (Kenji, 2026-09-30, "consistency is king"): list pages, table headers (DataTable included), the dashboard and the traceability chrome go sentence case too, and status chips use `StatusBadge`. Page-level eyebrows (PageHeader, traceability title and facility, dashboard facility) stay mono caps.
 9. Output-bin tiles lead with the wet estimate.
 10. Bugs first. Then the new primitives are piloted on loss/count and evidence method. Then one PR per family, with tests migrated in the same PR.
 
@@ -193,6 +193,7 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
 - Removal detail, GHG statement and customer detail move onto `DetailPanel`. That includes the customer detail table.
 - The eyebrow sweep inside forms, sheets and read views. The PageHeader stays, per decision 8.
 - The Removal submit step becomes one headline, 4 facts and one rule. The GHG period shows once, as a start → end strip.
+  - Kenji, 2026-09-30: every fact stays visible in both modes (R1). The step leads with one headline and 4 lead facts, and the other facts follow as a second group. Only explanation moves behind an ⓘ. The Technical details disclosure keeps its accordion border: it is a control, not a box.
 
 ### Phase 4. Illustrations and final rescan (1 PR plus a scan)
 

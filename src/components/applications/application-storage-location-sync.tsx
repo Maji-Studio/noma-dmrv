@@ -81,7 +81,7 @@ export function ApplicationStorageLocationSync({
 
       {view.externalStorageLocationId && (
         <div className="flex flex-col gap-2">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
             Registry ID
           </span>
           <span className="body-caption break-all font-mono text-[var(--color-text-primary)]">

@@ -73,6 +73,34 @@ export interface BatchLineageApplicationFact {
   };
 }
 
+/** A delivery's share of one run's biochar, shipped inside one product layer. */
+export interface BatchRunForwardDeliveryFact {
+  id: string;
+  code: string;
+  status: string | null;
+  deliveryDate: Date;
+  deliveredWetMassKg: number | null;
+  massDryKg: number | null;
+  /** This run's share of the shipped product layer (reversals netted). */
+  wetMassKg: number | null;
+  dryMassKg: number;
+}
+
+/** A product layer drawn from one run, and where that run's share shipped. */
+export interface BatchRunForwardProductFact {
+  id: string;
+  code: string;
+  status: string | null;
+  productionDate: Date;
+  massKg: number | null;
+  moistureContentPercent: number | null;
+  formulationName: string | null;
+  /** Null for a legacy lot whose recorded mass or moisture is missing. */
+  drawnWetMassKg: number | null;
+  drawnDryMassKg: number | null;
+  deliveries: BatchRunForwardDeliveryFact[];
+}
+
 export interface CreditBatchLineageFacts {
   batchId: string;
   productionRunIds: string[];
@@ -80,4 +108,9 @@ export interface CreditBatchLineageFacts {
   applications: BatchLineageApplicationFact[];
   applicationIds: string[];
   appliedWeightTons: number;
+  /**
+   * Per member run id: product layers drawn from it and their shipments.
+   * Loaded only with `includeRunForwards` (traceability roll-forwards).
+   */
+  runForwards?: Record<string, BatchRunForwardProductFact[]>;
 }

@@ -171,7 +171,7 @@ const StatCardContent = React.forwardRef<
         >
           <div className="flex flex-col gap-8">
             <div className="flex items-start justify-between gap-12">
-              <span className="label-micro text-[var(--color-text-secondary)]">
+              <span className="body-small font-medium text-[var(--color-text-secondary)]">
                 {title}
               </span>
               {icon && (
@@ -206,7 +206,7 @@ const StatCardContent = React.forwardRef<
       >
         <div className="flex items-start justify-between gap-12">
           <div className="flex flex-col gap-2 min-w-0">
-            <span className="label-micro text-[var(--color-text-secondary)]">
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">
               {title}
             </span>
             <span className="title-heading-3 tabular-nums tracking-tight text-[var(--color-text-primary)]">
