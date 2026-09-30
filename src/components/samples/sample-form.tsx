@@ -272,7 +272,7 @@ export function SampleForm({
         id="oToCOrgRatio"
         label="O:C org ratio"
         error={errors.oToCOrgRatio?.message}
-        cue="Enter the lab ratio, or derive it from O% and C_org%."
+        helperText="Enter the lab ratio, or derive it from O% and C_org%."
         certifyRequired={isSampleCertifyField("oToCOrgRatio")}
         certifyStatus={certStatus("oToCOrgRatio")}
       >
@@ -895,7 +895,7 @@ export function SampleForm({
                     id="residualCarbonPercent"
                     label="Residual carbon"
                     unit="%"
-                    cue="Enter this or reactive carbon."
+                    helperText="Enter this or reactive carbon."
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}

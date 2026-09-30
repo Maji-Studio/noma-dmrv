@@ -529,7 +529,7 @@ export function BiocharProductForm({
             required: true,
             disabled: isSubmitting,
             placeholder: "e.g. 2",
-            cue: "Typically 1 to 2% for biochar",
+            helperText: "Typically 1 to 2% for biochar",
             estimate: isEditMode ? undefined : sourceMoistureEstimate,
             reading: watchedMoisture,
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),

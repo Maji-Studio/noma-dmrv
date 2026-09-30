@@ -243,7 +243,7 @@ export function StorageLocationForm({
             label="Stock mode"
             hint={STOCK_MODE_HINT}
             error={errors.stockMode?.message}
-            cue={unmixing ? "Only an empty bin can switch to split." : merging ? "Switching back to split needs an empty bin." : undefined}
+            helperText={unmixing ? "Only an empty bin can switch to split." : merging ? "Switching back to split needs an empty bin." : undefined}
             required
           >
             <ChoiceCardGroup
