@@ -52,7 +52,7 @@ vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-ghg-statements");
 vi.mock("@/data-access/ghg-statement-reports");
-vi.mock("@/fn/certification/ghg-statement-reports", () => ({
+vi.mock("@/fn/certification/ghg-statement-report-core", () => ({
   assertGhgStatementReportFresh: vi.fn(),
   // Mints a fresh capability token and returns the link carrying it.
   issueVerifierReportUrl: vi.fn(
@@ -116,7 +116,7 @@ import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as ghgDA from "@/data-access/certifier-ghg-statements";
 import * as reportDA from "@/data-access/ghg-statement-reports";
-import * as reportActions from "@/fn/certification/ghg-statement-reports";
+import * as reportActions from "@/fn/certification/ghg-statement-report-core";
 import { makeClaimSubmissionDraftFake } from "./fixtures/fake-claim";
 import * as facilitiesDA from "@/data-access/facilities";
 import * as authServer from "@/lib/auth/server";

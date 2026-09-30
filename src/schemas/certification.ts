@@ -247,6 +247,21 @@ export type ApproveGhgStatementReportInput = z.infer<
   typeof approveGhgStatementReportSchema
 >;
 
+export const loadGhgStatementReportsSchema = z.object({
+  ghgStatementId: z.uuid(),
+});
+
+// Telemetry DataUploadSubmission (ADR 0006): publish a Removal's production
+// readings, and read back the latest attempt.
+export const submitTelemetrySchema = z.object({
+  removalId: z.uuid(),
+  confirmProduction: z.boolean().optional(),
+});
+
+export const loadTelemetrySubmissionStateSchema = z.object({
+  removalId: z.uuid(),
+});
+
 // Period-first GHG-statement creation. Isometric creates a statement from
 // only { project_id, end_on }; the user picks the period end and the server
 // reconciles the linked removals afterward.

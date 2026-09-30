@@ -1,5 +1,5 @@
-"use server";
-
+// Deliberately not a "use server" module: `withAction` is a helper that
+// action modules import, not an action the browser may call.
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { OrgContext } from "@/lib/auth/server";

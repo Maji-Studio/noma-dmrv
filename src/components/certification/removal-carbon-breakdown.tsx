@@ -45,10 +45,10 @@ export function RemovalCarbonBreakdown({
     <div className="flex flex-col gap-8">
       {query.data.value.durabilityComponent && (
         <div className="border border-[var(--color-border-secondary)] p-12">
-          <p className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          <p className="body-small text-[var(--color-text-secondary)]">
             Durability component
           </p>
-          <p className="mt-4 body-small text-[var(--color-text-secondary)]">
+          <p className="mt-4 body-medium text-[var(--color-text-primary)]">
             {query.data.value.durabilityComponent.label}
           </p>
           <p className="mt-4 break-all font-mono body-caption text-[var(--color-text-tertiary)]">

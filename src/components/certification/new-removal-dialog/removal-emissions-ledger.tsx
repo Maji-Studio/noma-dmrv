@@ -11,10 +11,15 @@ import {
   productionRunDeepLinkHref,
   traceabilityApplicationHref,
 } from "@/lib/certification/links";
+import { SectionLabel } from "@/components/forms/section-label";
+import { DetailField } from "@/components/ui/detail-panel";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatTonnes } from "@/lib/format-utils";
 
 const LINK_ICON_SIZE = 12;
+
+const LEDGER_NOTE =
+  "Estimated before project emissions and registry verification. Isometric calculates the final net value.";
 
 function inputValue(input: RemovalLedgerPreview["inputs"][number]): string {
   return input.magnitude == null
@@ -51,7 +56,7 @@ export function RemovalEmissionsLedger({
 }: RemovalEmissionsLedgerProps) {
   if (isLoading) {
     return (
-      <section className="border border-[var(--color-border-primary)] px-20 py-16">
+      <section>
         <p className="body-small text-[var(--color-text-tertiary)]">
           Preparing the carbon ledger…
         </p>
@@ -76,27 +81,23 @@ export function RemovalEmissionsLedger({
 
   return (
     <section
-      className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
-      aria-labelledby="removal-carbon-ledger-title"
+      className="flex flex-col gap-24"
+      aria-label="Carbon ledger"
     >
-      <div className="flex flex-col gap-4 px-20 py-16">
-        <h3 id="removal-carbon-ledger-title" className="body-medium font-medium">
-          Carbon ledger
-        </h3>
-        <p className="title-heading-2 tabular-nums text-[var(--color-text-primary)]">
-          {estimate == null
-            ? MISSING_VALUE.notAvailable
-            : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`}
-        </p>
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Estimated CO₂e stored before project emissions and registry verification.
-          Isometric calculates the final net value.
-        </p>
-      </div>
+      <SectionLabel hint={LEDGER_NOTE}>Carbon ledger</SectionLabel>
+      <DetailField
+        label="Estimated CO₂e stored"
+        value={
+          estimate == null
+            ? null
+            : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`
+        }
+        emptySituation="notYetComputed"
+      />
 
       {showAllocation && (
-        <div className="border-t border-[var(--color-border-tertiary)] px-20 py-12">
-          <p className="mb-8 body-small font-medium text-[var(--color-text-primary)]">
+        <div className="flex flex-col gap-8">
+          <p className="body-small font-medium text-[var(--color-text-primary)]">
             Emission allocation
           </p>
           <div
@@ -114,63 +115,58 @@ export function RemovalEmissionsLedger({
               style={{ width: `${(deliveryOnlyCount / claims.length) * 100}%` }}
             />
           </div>
-          <div className="mt-8 flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-tertiary)]">
+          <div className="flex flex-wrap gap-x-16 gap-y-4 body-caption text-[var(--color-text-tertiary)]">
             <span>{productionAndDeliveryCount} with production and delivery</span>
             <span>{deliveryOnlyCount} delivery only</span>
           </div>
         </div>
       )}
 
-      <div className="border-t border-[var(--color-border-tertiary)] px-20 py-12">
+      <div className="flex flex-col gap-8">
         <p className="body-small font-medium text-[var(--color-text-primary)]">
           Inputs included
         </p>
-      </div>
-      {ledger.inputsUnavailable || ledger.inputs.length === 0 ? (
-        <div className="border-t border-[var(--color-border-tertiary)] px-20 py-12">
+        {ledger.inputsUnavailable || ledger.inputs.length === 0 ? (
           <p className="body-small text-[var(--color-text-tertiary)]">
             {MISSING_VALUE.notAvailable}. Complete the source data checks to
             calculate these inputs.
           </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-left body-caption">
-            <thead className="text-[var(--color-text-tertiary)]">
-              <tr className="border-t border-[var(--color-border-tertiary)]">
-                <th className="px-20 py-8 font-normal">Component</th>
-                <th className="px-12 py-8 font-normal">Input</th>
-                <th className="px-20 py-8 text-right font-normal">Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ledger.inputs.map((input) => (
-                <tr
-                  key={input.id}
-                  className="border-t border-[var(--color-border-tertiary)]"
-                >
-                  <td className="px-20 py-8 text-[var(--color-text-secondary)]">
-                    {input.component}
-                  </td>
-                  <td className="px-12 py-8 text-[var(--color-text-primary)]">
-                    {input.input}
-                  </td>
-                  <td className="px-20 py-8 text-right font-mono tabular-nums text-[var(--color-text-primary)]">
-                    {inputValue(input)}
-                  </td>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[34rem] text-left body-caption">
+              <thead className="body-small font-medium text-[var(--color-text-secondary)]">
+                <tr>
+                  <th className="py-4 pr-12">Component</th>
+                  <th className="px-12 py-4">Input</th>
+                  <th className="py-4 pl-12 text-right">Value</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {ledger.inputs.map((input) => (
+                  <tr key={input.id}>
+                    <td className="py-4 pr-12 text-[var(--color-text-secondary)]">
+                      {input.component}
+                    </td>
+                    <td className="px-12 py-4 text-[var(--color-text-primary)]">
+                      {input.input}
+                    </td>
+                    <td className="py-4 pl-12 text-right font-mono tabular-nums text-[var(--color-text-primary)]">
+                      {inputValue(input)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {claims.length > 0 && (
-        <dl className="border-t border-[var(--color-border-primary)]">
+        <dl className="flex flex-col gap-6">
           {claims.map((claim) => (
             <div
               key={claim.creditBatchId}
-              className="flex items-baseline justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-8 first:border-t-0"
+              className="flex items-baseline justify-between gap-12"
             >
               <dt className="body-small text-[var(--color-text-secondary)]">
                 {claim.creditBatchCode} production emissions
@@ -194,8 +190,8 @@ export function RemovalEmissionsLedger({
         </dl>
       )}
 
-      <div className="border-t border-[var(--color-border-primary)] px-20 py-12">
-        <p className="mb-8 body-small font-medium text-[var(--color-text-primary)]">
+      <div className="flex flex-col gap-8">
+        <p className="body-small font-medium text-[var(--color-text-primary)]">
           Source records
         </p>
         <ul className="flex flex-col gap-6 body-caption text-[var(--color-text-secondary)]">

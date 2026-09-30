@@ -49,6 +49,16 @@ organizations, members, invitations, geoRouteCache. The **only** waiver is a
 match. You will trip this on queries joined off an already-scoped parent. Why:
 [adr/0010-shared-schema-org-column-tenancy.md](./adr/0010-shared-schema-org-column-tenancy.md).
 
+**Server Action boundary:** every export of a `"use server"` file is a public
+action the browser can call with any arguments, so it must never accept an
+`OrgContext` (or any object with `organizationId`, `orgRole` or
+`isPlatformAdmin`), a raw `organizationId`/`orgId`, a `db`/`tx` handle, or a
+`...args: Parameters<…>` passthrough, and it must not apply `requireOrgRole` /
+`requireOrgScope` to anything but the `withAction` callback's context. Put
+trusted-context code in a directive-free module (conventionally
+`src/fn/**/*-core.ts`). `pnpm check:server-action-exports` enforces this with
+the TypeScript type checker and has **no** waiver: fix the export instead.
+
 ## Style
 
 - **TypeScript strict** — avoid `any`; prefer `z.infer<typeof schema>` over hand-written types.
@@ -84,5 +94,6 @@ copy-pasteable walkthrough is [../TEMPLATE_USAGE.md](../TEMPLATE_USAGE.md) and t
 ## Before you commit
 
 `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm check:org-scoping` ·
+`pnpm check:server-action-exports` ·
 `pnpm check:spacing-scale` (and `pnpm test:e2e`
 when the change has a UI flow).

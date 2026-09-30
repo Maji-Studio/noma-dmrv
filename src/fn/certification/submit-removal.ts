@@ -87,10 +87,8 @@ import {
   safeRemovalSubmissionError,
   type RemovalExternalMutation,
 } from "./removal-submission-failure";
-import {
-  mirrorCandidateSourcesForSubmission,
-  resolveSourceBindingCandidates,
-} from "./sources";
+import { resolveSourceBindingCandidates } from "./source-candidates";
+import { mirrorCandidateSourcesForSubmission } from "./sources-mirror-core";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
