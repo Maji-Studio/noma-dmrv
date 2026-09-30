@@ -21,7 +21,7 @@ const BORDERED_BAND_CLASS =
   "flex items-center border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]";
 
 const BATCH_CODE_CLASS =
-  "min-w-0 truncate font-mono text-[11px] font-medium uppercase tracking-[0.1em]";
+  "min-w-0 truncate font-mono text-[11px] font-medium";
 
 interface BatchPickerProps {
   batches: CreditBatchWithRelations[];
@@ -153,7 +153,7 @@ export function BatchPicker({
 
           <DropdownMenu.Content side="bottom" align="start" className="py-0">
             <div style={{ width: BATCH_MENU_WIDTH_PX }}>
-              <div className="border-b border-[var(--clr-dark-purple-10)] px-12 py-8 font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[var(--clr-dark-purple-40)]">
+              <div className="border-b border-[var(--clr-dark-purple-10)] px-12 py-8 text-[9px] font-medium text-[var(--clr-dark-purple-40)]">
                 Credit batch · remembered per facility
               </div>
               <div

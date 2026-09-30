@@ -12,7 +12,7 @@ import {
  * `missing_data` matches the feedstock list ("Pending" colour, "Missing data"
  * label). Anything else falls back to a neutral badge with a readable label.
  */
-function toBadgeProps(status: string): { status: StatusValue; label?: string } {
+export function toBadgeProps(status: string): { status: StatusValue; label?: string } {
   if (status === "missing_data") {
     return { status: "pending", label: "Missing data" };
   }

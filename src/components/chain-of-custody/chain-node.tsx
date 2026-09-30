@@ -73,7 +73,7 @@ export function ChainNode({ data }: NodeProps) {
     >
       <div className="flex items-center justify-between gap-10 px-12 pt-12">
         <span
-          className="inline-flex min-w-0 items-center gap-6 font-mono text-[10px] font-medium uppercase tracking-[0.09em]"
+          className="inline-flex min-w-0 items-center gap-6 text-[10px] font-medium"
           style={{ color: accentInk }}
         >
           <Icon size={13} weight="bold" className="shrink-0" />
@@ -110,7 +110,7 @@ export function ChainNode({ data }: NodeProps) {
           {date ?? code}
         </p>
         {date ? (
-          <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--clr-dark-purple-40)]">
+          <p className="mt-4 font-mono text-[11px] text-[var(--clr-dark-purple-40)]">
             {code}
           </p>
         ) : null}
@@ -123,7 +123,7 @@ export function ChainNode({ data }: NodeProps) {
               key={`${row.label}:${row.value}`}
               className="flex items-baseline justify-between gap-12"
             >
-              <span className="whitespace-nowrap font-mono text-[9px] font-medium uppercase tracking-[0.07em] text-[var(--clr-dark-purple-40)]">
+              <span className="whitespace-nowrap text-[9px] font-medium text-[var(--clr-dark-purple-40)]">
                 {row.label}
               </span>
               <span className="text-right text-[12.5px] font-light leading-[1.3] break-words">

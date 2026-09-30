@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const BAND_CLASS =
   "flex h-40 items-center border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]";
 const CODE_CLASS =
-  "min-w-0 truncate font-mono text-[11px] font-medium uppercase tracking-[0.1em]";
+  "min-w-0 truncate font-mono text-[11px] font-medium";
 const TRIGGER_MAX_WIDTH_CLASS = "max-w-[260px]";
 const MENU_WIDTH_PX = 280;
 const MENU_MAX_HEIGHT_CLASS = "max-h-[320px]";
@@ -112,7 +112,7 @@ export function RunPicker({
 
         <DropdownMenu.Content side="bottom" align="start" className="py-0">
           <div style={{ width: MENU_WIDTH_PX }}>
-            <div className="border-b border-[var(--clr-dark-purple-10)] px-12 py-8 font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-[var(--clr-dark-purple-40)]">
+            <div className="border-b border-[var(--clr-dark-purple-10)] px-12 py-8 text-[9px] font-medium text-[var(--clr-dark-purple-40)]">
               Production run · narrows this batch
             </div>
             <div className={cn(MENU_MAX_HEIGHT_CLASS, "overflow-y-auto py-4")}>
