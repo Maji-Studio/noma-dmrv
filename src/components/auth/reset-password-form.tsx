@@ -17,7 +17,7 @@ import {
   ResolvedErrorRevalidator,
   ServerError,
 } from "@/components/forms";
-import { Notice } from "@/components/ui/notice";
+import { AuthLink, AuthResult } from "./auth-result";
 
 function ResetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -71,20 +71,14 @@ function ResetPasswordFormContent() {
   // Show error if no token in URL
   if (!token) {
     return (
-      <div className="space-y-24">
-        <Notice tone="error" title="Invalid reset link">
-          This password reset link is invalid or has expired. Request a new password reset.
-        </Notice>
-
-        <div className="text-center">
-          <Link
-            href="/forgot-password"
-            className="body-medium text-[var(--clr-dark-purple)] hover:underline"
-          >
-            Request new reset link
-          </Link>
-        </div>
-      </div>
+      <AuthResult
+        framed={false}
+        tone="error"
+        title="Invalid reset link"
+        footer={<AuthLink href="/forgot-password">Request new reset link</AuthLink>}
+      >
+        This password reset link is invalid or has expired. Request a new password reset.
+      </AuthResult>
     );
   }
 
@@ -92,11 +86,9 @@ function ResetPasswordFormContent() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
-        <div className="space-y-24">
-          <Notice tone="success" title="Password reset successful">
-            Your password has been reset. Redirecting to login...
-          </Notice>
-        </div>
+        <AuthResult framed={false} tone="success" title="Password reset">
+          Your password has been reset. Redirecting to login…
+        </AuthResult>
       ) : (
         <>
           <FormField

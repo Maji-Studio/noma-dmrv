@@ -8,7 +8,7 @@ import { getUser } from "@/lib/auth/server";
 import { AcceptInvitation } from "@/components/organizations/accept-invitation";
 import { InvitationBootstrapForm } from "@/components/organizations/invitation-bootstrap-form";
 import { getInvitationBootstrapState } from "@/fn/invitation-bootstrap";
-import { Notice } from "@/components/ui/notice";
+import { AuthLink, AuthResult } from "@/components/auth/auth-result";
 
 export default async function AcceptInvitationPage({
   params,
@@ -58,6 +58,18 @@ function InvitationCard({
   children?: ReactNode;
   error?: string;
 }) {
+  if (error) {
+    return (
+      <AuthResult
+        tone="error"
+        title="This invitation can't be used"
+        footer={<AuthLink href="/login">Back to login</AuthLink>}
+      >
+        {error}
+      </AuthResult>
+    );
+  }
+
   return (
     <div className="w-full max-w-[400px] mx-auto">
       <div className="mb-32 text-center">
@@ -67,11 +79,7 @@ function InvitationCard({
         </p>
       </div>
       <div className="bg-[var(--color-background-white)] border border-[var(--color-border-primary)] p-32 shadow-sm">
-        {error ? (
-          <Notice tone="error">{error}</Notice>
-        ) : (
-          children
-        )}
+        {children}
       </div>
     </div>
   );
