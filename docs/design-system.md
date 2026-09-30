@@ -226,8 +226,9 @@ caption.
   tints around a derived value.
 - **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose. A
   `FormField` keeps one visible `cue` line only for a unit, a limit or a
-  consequence, and a `unit` suffix inside the control replaces "(kg)" in the
-  label ([forms.md](./forms.md#components)).
+  consequence (plus three named exceptions listed in forms.md), and a `unit`
+  suffix inside the control replaces "(kg)" in the label
+  ([forms.md](./forms.md#components)).
 - **The ⓘ is a toggletip.** `InfoHint` opens on a tap or click, on hover and
   on keyboard focus; a press keeps it open until a second press, Escape or an
   outside press. Its 24px trigger sits beside the label, never inside the

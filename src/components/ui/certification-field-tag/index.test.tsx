@@ -29,7 +29,7 @@ describe("CertificationLegend", () => {
 
     expect(markup).toContain('data-cert-legend=""');
     expect(markup).toContain("CERT");
-    expect(markup).toContain("Needed for certification");
+    expect(markup).toContain("Required for certification");
     // A data-cert-field inside the legend would keep it visible in every sheet.
     expect(markup).not.toContain("data-cert-field");
   });
