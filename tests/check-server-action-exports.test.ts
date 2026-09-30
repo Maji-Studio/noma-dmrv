@@ -198,6 +198,27 @@ export async function localGuardAlias(input: any) {
   const check = requireOrgRole;
   check(input, "admin");
 }
+
+export async function parsedIntoCore(raw: string, reportId: string) {
+  return issueUrl(JSON.parse(raw), reportId);
+}
+
+export async function anyIntoCore(input: any) {
+  return issueUrl(input, "report");
+}
+
+export async function anyPropertyIntoCore(input: any) {
+  const wrapped = { scope: input };
+  return scopedUrl(wrapped);
+}
+
+export async function anyLiteralIntoCore(input: any) {
+  return scopedUrl({ scope: input });
+}
+
+function scopedUrl(args: { scope: OrgContext }) {
+  return issueUrl(args.scope, "report");
+}
 `;
 
 // Not a "use server" module: only the inline server functions are actions.
@@ -317,6 +338,19 @@ describe("check-server-action-exports", () => {
         expect(reasons(lineOf('check(input, "admin")'))).toEqual([
           expect.stringMatching(/requireOrgRole\(\) is applied to the parameter "input"/),
         ]);
+        // An `any` flows into a context slot without any cast.
+        for (const needle of [
+          "issueUrl(JSON.parse(raw), reportId)",
+          'issueUrl(input, "report")',
+          "scopedUrl(wrapped)",
+          "scopedUrl({ scope: input })",
+        ]) {
+          expect(reasons(lineOf(needle))).toEqual([
+            expect.stringMatching(/call argument/),
+          ]);
+        }
+        // A context parameter of a private helper is checked at its callers.
+        expect(reasons(lineOf('issueUrl(args.scope, "report")'))).toEqual([]);
       } finally {
         rmSync(bypassDir, { recursive: true, force: true });
       }

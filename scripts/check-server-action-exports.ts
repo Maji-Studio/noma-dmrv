@@ -41,12 +41,16 @@
  * value derived from a parameter other than withAction's session context, to
  * an `any` value, or (for assertions) to a value whose own type lacks that
  * shape: `core(input as OrgContext)`, `{ ...(input as OrgContext) }`,
- * `let ctx: OrgContext; ctx = input as OrgContext`. Guard callees are resolved
- * through import aliases and local aliases (`const check = requireOrgRole`).
+ * `let ctx: OrgContext; ctx = input as OrgContext`. It also fails on a call
+ * argument that implicitly converts an `any` (the value, or a property or
+ * array element of it) into a context-shaped parameter:
+ * `core(JSON.parse(raw))`, `core({ scope: input })` with `input: any`. Guard
+ * callees are resolved through import aliases and local aliases
+ * (`const check = requireOrgRole`).
  *
  * There is no waiver: fix the export, do not suppress it. `unknown`/`any`
- * inputs stay allowed because they are ordinary action input; casting one to a
- * context and guarding it is caught by the guard rule.
+ * inputs stay allowed because they are ordinary action input; turning one into
+ * a context, by cast, annotation, assignment or call argument, is caught.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
@@ -429,6 +433,59 @@ function isAnyType(type: ts.Type): boolean {
 }
 
 /**
+ * True when `valueType` puts an `any` where `targetType` expects a context
+ * shape: the value itself (`JSON.parse(raw)`) or a property or array element
+ * of it (`{ scope: input }`). TypeScript checks nothing across that `any`.
+ */
+function carriesAnyContext(
+  checker: ts.TypeChecker,
+  inspector: ParameterInspector,
+  valueType: ts.Type,
+  targetType: ts.Type,
+  seen = new Set<ts.Type>(),
+): boolean {
+  if (!inspector.describe(targetType)) return false;
+  if (isAnyType(valueType)) return true;
+  if (seen.has(valueType)) return false;
+  seen.add(valueType);
+  for (const value of withoutNullish(valueType)) {
+    for (const target of withoutNullish(targetType)) {
+      if (
+        (checker.isArrayType(value) || checker.isTupleType(value)) &&
+        (checker.isArrayType(target) || checker.isTupleType(target))
+      ) {
+        const [valueElement] = checker.getTypeArguments(value as ts.TypeReference);
+        const [targetElement] = checker.getTypeArguments(target as ts.TypeReference);
+        if (
+          valueElement &&
+          targetElement &&
+          carriesAnyContext(checker, inspector, valueElement, targetElement, seen)
+        ) {
+          return true;
+        }
+        continue;
+      }
+      for (const property of checker.getPropertiesOfType(target)) {
+        const valueProperty = checker.getPropertyOfType(value, property.name);
+        if (
+          valueProperty &&
+          carriesAnyContext(
+            checker,
+            inspector,
+            checker.getTypeOfSymbol(valueProperty),
+            checker.getTypeOfSymbol(property),
+            seen,
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Why giving `value` the type `targetType` manufactures an organization
  * context (or db handle) inside a server boundary, if it does. The value is
  * suspect when it derives from a parameter other than withAction's session
@@ -449,7 +506,7 @@ function contextConversion(
   if (isSessionContext(checker, value)) return null;
   if (sourceParameter(checker, value)) return reason;
   const valueType = checker.getTypeAtLocation(unwrapExpression(value));
-  if (isAnyType(valueType)) return reason;
+  if (carriesAnyContext(checker, inspector, valueType, targetType)) return reason;
   return isAssertion && !inspector.describe(valueType) ? reason : null;
 }
 
@@ -513,9 +570,46 @@ function checkContextConversions(
 }
 
 /**
+ * Call arguments convert implicitly: `core(JSON.parse(raw))` or
+ * `core({ scope: input })` with `input: any` hands the core a context no
+ * cast, annotation or guard ever touched. Parameter-derived values that are
+ * not `any` need a cast to fit a context slot, which the assertion rule
+ * catches, so only `any` is checked here.
+ */
+function checkCallArguments(
+  checker: ts.TypeChecker,
+  inspector: ParameterInspector,
+  call: ts.CallExpression | ts.NewExpression,
+  skip: ts.Expression | undefined,
+  report: Report,
+): void {
+  for (const argument of call.arguments ?? []) {
+    if (argument === skip || ts.isSpreadElement(argument)) continue;
+    const targetType = checker.getContextualType(argument);
+    if (
+      !targetType ||
+      isSessionContext(checker, argument) ||
+      !carriesAnyContext(
+        checker,
+        inspector,
+        checker.getTypeAtLocation(argument),
+        targetType,
+      )
+    ) {
+      continue;
+    }
+    report(
+      argument,
+      argument.getText(),
+      `call argument passes an \`any\` value into ${inspector.describe(targetType)}`,
+    );
+  }
+}
+
+/**
  * Checks a server boundary body (a "use server" module or an inline action):
- * guards applied to caller input, and casts or annotated locals that turn
- * caller input into an organization context.
+ * guards applied to caller input, and casts, annotated locals or `any` call
+ * arguments that turn caller input into an organization context.
  */
 function checkServerBody(
   checker: ts.TypeChecker,
@@ -525,12 +619,17 @@ function checkServerBody(
 ): void {
   const visit = (node: ts.Node): void => {
     checkContextConversions(checker, inspector, node, report);
+    if (ts.isNewExpression(node)) {
+      checkCallArguments(checker, inspector, node, undefined, report);
+    }
     if (ts.isCallExpression(node)) {
       const name = resolvedCalleeName(checker, node.expression);
       const [first] = node.arguments;
+      let guarded: ts.Expression | undefined;
       if (name && GUARD_NAMES.has(name) && first) {
         const parameter = sourceParameter(checker, first);
         if (parameter && !isSessionContextParameter(checker, parameter)) {
+          guarded = first;
           report(
             node,
             name,
@@ -538,6 +637,8 @@ function checkServerBody(
           );
         }
       }
+      // A guard finding already covers its first argument.
+      checkCallArguments(checker, inspector, node, guarded, report);
     }
     ts.forEachChild(node, visit);
   };
