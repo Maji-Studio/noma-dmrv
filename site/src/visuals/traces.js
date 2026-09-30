@@ -48,6 +48,9 @@ export function mountDense(root) {
 const MAPB = { lng0: 33.1, lng1: 36.2, lat0: -7.45, lat1: -9.55, W: 1000, H: 680 };
 const P = (lat, lng) => [((lng - MAPB.lng0) / (MAPB.lng1 - MAPB.lng0)) * MAPB.W, ((lat - MAPB.lat0) / (MAPB.lat1 - MAPB.lat0)) * MAPB.H];
 const TOWNS = [["Iringa", -7.77, 35.69], ["Mafinga", -8.3, 35.28], ["Makambako", -8.85, 34.83], ["Mbeya", -8.91, 33.46], ["Njombe", -9.33, 34.77]];
+// Map marker sizes (viewBox units) and the gap between a town dot and its label.
+const MARK = { plant: 26, sup: 15, app: 11 };
+const TOWN_GAP = 7;
 const MAP_IDLE = `<div class="nv-stage">How to read it</div><p>The same records, placed where they happened. Everything inside the plant collapses into one square.</p><p>Hover a <b>field</b> to see which sawmills its biochar came from. Hover a <b>sawmill</b> to see every field it ended up in.</p>`;
 export function mountMap(root) {
   root.dataset.legend = root.dataset.legend || "false";
@@ -65,7 +68,14 @@ export function mountMap(root) {
   });
   const road = (pts) => el("path", { class: "nv-road", d: pts.map((p, i) => (i ? "L" : "M") + P(p[0], p[1]).join(",")).join("") }, svg);
   road([[-7.77, 35.69], [-8.3, 35.28], [-8.85, 34.83], [-8.91, 33.46]]); road([[-8.85, 34.83], [-9.33, 34.77]]);
-  TOWNS.forEach(([n, la, ln]) => { const [x, y] = P(la, ln); el("circle", { cx: x, cy: y, r: 2.5, class: "nv-town-dot" }, svg); const t = el("text", { x: x + 7, y: y - 7, class: "nv-town" }, svg); t.textContent = n; });
+  // A town under the plant marker (Mafinga) gets its label above-right of the marker, clear of it, of "Plant" and of the sawmills to its left.
+  const [px, py] = P(PLANT.lat, PLANT.lng), clear = MARK.plant / 2 + TOWN_GAP / 2;
+  TOWNS.forEach(([n, la, ln]) => {
+    const [x, y] = P(la, ln), under = Math.abs(x - px) < clear && Math.abs(y - py) < clear;
+    el("circle", { cx: x, cy: y, r: 2.5, class: "nv-town-dot" }, svg);
+    const at = under ? { x: px + clear, y: py - clear } : { x: x + TOWN_GAP, y: y - TOWN_GAP };
+    el("text", { ...at, class: "nv-town" }, svg).textContent = n;
+  });
   const note = el("text", { x: 16, y: 664, class: "nv-town", "font-size": "11" }, svg); note.textContent = "Illustrative: Southern Highlands, Tanzania. Real towns, made-up suppliers and fields.";
   const plant = { id: "plant", st: "plant", code: "Mafinga plant", meta: ["All production, bins and blending happen here", "18 runs, 8 biochar bins"], lat: PLANT.lat, lng: PLANT.lng };
   const sups = dense.nodes.filter((n) => n.st === "sup"), apps = dense.nodes.filter((n) => n.st === "app");
@@ -79,7 +89,7 @@ export function mountMap(root) {
   });
   const nEls = new Map();
   mg.nodes.forEach((n) => {
-    const st = STAGES[n.st], s = n.st === "plant" ? 26 : n.st === "sup" ? 15 : 11;
+    const st = STAGES[n.st], s = MARK[n.st];
     const g = el("g", { class: `nv-node d-${st.dom}`, transform: `translate(${n.x - s / 2},${n.y - s / 2})`, "data-id": n.id, role: "button", tabindex: n.st === "app" ? "-1" : "0", "aria-label": `${st.label} ${n.code}` }, nG);
     el("rect", { class: "nv-hit", x: -5, y: -5, width: s + 10, height: s + 10 }, g);
     el("rect", { class: "nv-body", width: s, height: s, rx: 2 }, g);

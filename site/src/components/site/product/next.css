@@ -83,7 +83,7 @@
 .nd-connect > .nd-cap { margin-top: var(--space-4); }
 .nd--connections[data-anim="armed"] .nd-wire { stroke-dashoffset: 1; }
 .nd--connections[data-anim="armed"] .nd-hub { border-color: var(--nd-card-line); outline-color: transparent; }
-.nd--connections[data-anim="play"] .nd-wire { transition: stroke-dashoffset 700ms var(--ease-draw) calc(var(--k) * 200ms + 150ms); }
+.nd--connections[data-anim="play"] .nd-wire { transition: stroke-dashoffset 700ms var(--ease-draw) calc(var(--k) * var(--stagger) + 150ms); }
 .nd--connections[data-anim="play"] .nd-hub { transition: border-color var(--dur-base) var(--ease-out) 1250ms, outline-color var(--dur-base) var(--ease-out) 1250ms; }
 
 /* checks */

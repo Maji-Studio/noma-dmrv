@@ -39,9 +39,7 @@ const OPTIONS = [
         <dl class="os-spec">
           {o.spec.map(([k, v]) => <div><dt>{k}</dt><dd>{v}</dd></div>)}
         </dl>
-        <Button href={o.action.href} variant={o.action.variant}>
-          {o.action.label}{o.action.external && <span aria-hidden="true">↗</span>}
-        </Button>
+        <Button href={o.action.href} variant={o.action.variant} external={o.action.external}>{o.action.label}</Button>
       </section>
     ))}
   </div>

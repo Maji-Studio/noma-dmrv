@@ -52,7 +52,6 @@ export function mountTrace(root) {
     root.dataset.size = scale;
     drawGraph(svg, graph, { size: scale === "simple" ? LAYOUT.smallSize : LAYOUT.largeSize, glyphs: true, labels: scale === "simple", focusable: scale === "simple" });
     graph.edgeEls.forEach((p) => { p.setAttribute("pathLength", "1"); p.style.setProperty("--c", graph.byId.get(p._a).col); });
-    graph.nodeEls.forEach((g) => g.querySelector(".nv-body").setAttribute("rx", "0"));
     select.innerHTML = '<option value="">All connections</option>' + graph.nodes.map((n) => `<option value="${esc(n.id)}">${esc(n.code)}</option>`).join("");
     if (pinned && !graph.byId.has(pinned)) pinned = DEFAULT_RECORD;
   }

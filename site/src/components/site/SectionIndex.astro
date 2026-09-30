@@ -1,7 +1,12 @@
 ---
 /**
- * SectionIndex: sticky in-page index for pages with several sections. Highlights the section in view
- * (aria-current="true") and scrolls smoothly unless reduced motion is set.
+ * SectionIndex: sticky in-page index for pages with several sections. Marks the section in the
+ * tracking band (aria-current="true") and clears the mark above the first section and below the last.
+ * Scrolls smoothly unless reduced motion is set. When the list overflows (narrow screens), the hidden
+ * side fades out and the current item scrolls into view.
+ * The index owns the rule between itself and the first section, with cross marks on its bottom corners,
+ * so the first section keeps its default rule prop (site.css drops the doubled line). The script sits
+ * above the nav so the nav and the first section stay adjacent siblings for that selector.
  * Props:
  *   items: { id: string, label: string }[]   use PRODUCT_SECTIONS / WHY_SECTIONS from src/config.js
  *   label?: string   accessible name, default "On this page"
@@ -10,33 +15,72 @@
 import GridFrame from "./GridFrame.astro";
 const { items = [], label = "On this page" } = Astro.props;
 ---
-<nav class="sx" aria-label={label} data-section-index>
-  <GridFrame as="div" pad="none" cross={false}>
-    <ol>{items.map((item) => <li><a href={`#${item.id}`}>{item.label}</a></li>)}</ol>
-  </GridFrame>
-</nav>
 <script>
   import { reducedMotion } from "./motion.js";
+  // Tracking band: a strip 20% to 30% down the viewport. A section is current while it crosses it.
+  const BAND = "-20% 0px -70% 0px";
+  // Scroll slack (px) before an edge counts as "more to scroll".
+  const EDGE = 2;
   document.querySelectorAll("[data-section-index]").forEach((nav) => {
+    const list = nav.querySelector("ol");
     const links = [...nav.querySelectorAll("a")];
     const targets = links.map((a) => document.getElementById(a.hash.slice(1))).filter(Boolean);
-    const mark = (id) => links.forEach((a) => (a.hash === `#${id}` ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current")));
+    const behavior = () => (reducedMotion() ? "auto" : "smooth");
+
+    // Edge fades: flag each side that has more items hidden past it.
+    const edges = () => {
+      const max = list.scrollWidth - list.clientWidth;
+      nav.classList.toggle("sx--more-start", list.scrollLeft > EDGE);
+      nav.classList.toggle("sx--more-end", list.scrollLeft < max - EDGE);
+    };
+    // Bring the current item into the list's view without moving the page.
+    const reveal = (a) => {
+      if (list.scrollWidth <= list.clientWidth) return;
+      const off = a.getBoundingClientRect().left - list.getBoundingClientRect().left;
+      list.scrollTo({ left: list.scrollLeft + off - (list.clientWidth - a.offsetWidth) / 2, behavior: behavior() });
+    };
+    let current = null;
+    const mark = (id) => {
+      if (id === current) return;
+      current = id;
+      links.forEach((a) => {
+        if (a.hash === `#${id}`) { a.setAttribute("aria-current", "true"); reveal(a); }
+        else a.removeAttribute("aria-current");
+      });
+    };
+
+    list.addEventListener("scroll", edges, { passive: true });
+    // Back above the first section (a jump to the top fires no band change): return the list to its start.
+    addEventListener("scroll", () => {
+      if (!current && list.scrollLeft > 0 && targets[0]?.getBoundingClientRect().top > 0) list.scrollTo({ left: 0, behavior: behavior() });
+    }, { passive: true });
+    new ResizeObserver(edges).observe(list);
+    edges();
+
     links.forEach((a) => a.addEventListener("click", (e) => {
       const t = document.getElementById(a.hash.slice(1));
       if (!t) return;
       e.preventDefault();
-      t.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+      t.scrollIntoView({ behavior: behavior(), block: "start" });
       history.replaceState(null, "", a.hash);
       mark(t.id);
     }));
+
     if (!("IntersectionObserver" in window)) return;
+    // Sections are contiguous, so an empty band means the page is above the first or below the last.
+    const inBand = new Set();
     const io = new IntersectionObserver((entries) => {
-      const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (hit) mark(hit.target.id);
-    }, { rootMargin: "-20% 0px -70% 0px" });
+      entries.forEach((e) => (e.isIntersecting ? inBand.add(e.target) : inBand.delete(e.target)));
+      mark(targets.find((t) => inBand.has(t))?.id ?? null);
+    }, { rootMargin: BAND });
     targets.forEach((t) => io.observe(t));
   });
 </script>
+<nav class="sx" aria-label={label} data-section-index>
+  <GridFrame as="div" pad="none">
+    <ol>{items.map((item) => <li><a href={`#${item.id}`}>{item.label}</a></li>)}</ol>
+  </GridFrame>
+</nav>
 <style is:global>
   /* Keeps anchored sections clear of the sticky index. */
   html:has([data-section-index]) { scroll-padding-top: calc(var(--index-h) + var(--space-4)); }

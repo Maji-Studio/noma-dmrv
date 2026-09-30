@@ -69,7 +69,7 @@ export const copy = {
       ["Dry mass after a moisture change", "Recalculate every sheet it touches", "Calculated as you type"],
       ["Oldest-first draws across sub-bins", "Tracked in someone's head", "Planned and logged with each draw"],
       ["Evidence for each step", "Folders and email attachments", "Attached to the record it proves"],
-      ["Registry submission", "Rebuilt for every removal", "Bundled from the same records"],
+      ["Registry submission", "Rebuilt for every removal", "Prepared from the same records"],
     ],
   },
   registry: {

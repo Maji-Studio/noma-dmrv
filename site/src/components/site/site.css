@@ -63,6 +63,9 @@
 /* Buttons: square block CTA. */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-3); min-height: var(--btn-h); padding: 0 var(--space-5); border: var(--hairline) solid var(--cta); border-radius: var(--r-square); background: var(--cta); color: var(--cta-ink); font-size: var(--fs-ui); line-height: 1.2; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast); }
 .btn:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
+/* Current page (the nav's "Get started" on /get-started): the pressed fill plus the same hairline
+   underline the text links use for aria-current. */
+.btn[aria-current="page"] { background: var(--cta-hover); border-color: var(--cta-hover); text-decoration: underline; text-decoration-thickness: var(--hairline); text-underline-offset: 6px; }
 .btn--sm { min-height: var(--tap); padding: 0 var(--space-4); font-size: var(--fs-small); }
 .btn--secondary { background: transparent; color: var(--link); border-color: var(--rule-strong); }
 .btn--secondary:hover { background: var(--band-purple); border-color: var(--link); }
@@ -78,13 +81,29 @@
 /* Chip: square, for the Upcoming label */
 .chip { display: inline-flex; align-items: center; width: fit-content; padding: var(--space-1) var(--space-2); border: var(--hairline) solid var(--rule-strong); color: var(--accent); font-size: var(--fs-caption); line-height: 1.2; }
 
-/* Section index: sticky in-page nav for multi-section pages. */
-.sx { position: sticky; top: 0; z-index: 20; background: var(--page); }
+/* Section index: sticky in-page nav for multi-section pages. It owns the rule under it, with cross marks
+   on its bottom corners, so the first section after it drops its own top rule and crosses (no double line). */
+.sx { position: sticky; top: 0; z-index: 20; background: var(--page); --sx-fade: var(--space-7); --sx-fade-start: 0px; --sx-fade-end: 0px; }
 .sx .gf-in { border-bottom: var(--hairline) solid var(--rule); }
-.sx ol { display: flex; gap: var(--space-6); list-style: none; margin: 0; padding: 0; overflow-x: auto; scrollbar-width: none; }
+.sx .gf-in::before, .sx .gf-in::after { top: auto; bottom: calc(var(--cross-size) / -2 - var(--hairline) / 2); }
+.sx .gf-in::before { left: calc(var(--cross-size) / -2 - var(--hairline) / 2); }
+.sx .gf-in::after { right: calc(var(--cross-size) / -2 - var(--hairline) / 2); }
+.sx + .gf--rule > .gf-in { border-top-width: 0; }
+.sx + .gf--cross > .gf-in::before, .sx + .gf--cross > .gf-in::after { content: none; }
+/* The list scrolls out to the frame lines; a fade marks each side with more items past it. */
+.sx ol {
+  display: flex; gap: var(--space-6); list-style: none; margin: 0 calc(var(--frame-pad) * -1); padding: 0 var(--frame-pad); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--sx-fade-start), #000 calc(100% - var(--sx-fade-end)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--sx-fade-start), #000 calc(100% - var(--sx-fade-end)), transparent);
+}
+.sx ol::-webkit-scrollbar { display: none; }
+.sx--more-start { --sx-fade-start: var(--sx-fade); }
+.sx--more-end { --sx-fade-end: var(--sx-fade); }
+.sx li { flex: none; }
 .sx a { display: inline-flex; align-items: center; min-height: var(--index-h); font-size: var(--fs-small); color: var(--ink-2); text-decoration: none; white-space: nowrap; border-bottom: var(--hairline) solid transparent; }
 .sx a:hover { color: var(--ink); }
 .sx a[aria-current="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.sx a:focus-visible { outline-offset: -3px; }
 
 /* Footer */
 .site-footer .gf-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4) var(--space-7); padding-block: var(--space-6) var(--space-8); }

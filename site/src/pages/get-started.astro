@@ -45,7 +45,7 @@ const SPEC = [["Licence", "MIT"], ["Built with", "Next.js and PostgreSQL"], ["Se
       <div class="stack">
         <p class="t-lead">Run the MIT-licensed code on your own infrastructure. Inspect it, adapt it and contribute improvements.</p>
         <dl class="gsp-spec">{SPEC.map(([k, v]) => <div><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-        <Button href={GITHUB_URL} variant="secondary">View on GitHub<span aria-hidden="true">↗</span></Button>
+        <Button href={GITHUB_URL} variant="secondary" external>View on GitHub</Button>
       </div>
     </div>
   </GridFrame>

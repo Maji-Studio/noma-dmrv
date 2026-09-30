@@ -2,11 +2,11 @@
 // Each demo plays when its tab opens: CSS owns the timed parts (data-anim="armed" then "play"),
 // JS adds what CSS cannot do (values flying between cards, messages typing in). Reduced motion, no
 // IntersectionObserver or no JS: every demo shows its end state and nothing is ever hidden at rest.
-import { onFirstView, reducedMotion } from "../motion.js";
+import { motionToken, onFirstView, reducedMotion } from "../motion.js";
 
 const MS = {
   documents: 2300, reactor: 2000, telegram: 3400, connections: 1900, checks: 1900, // total per demo
-  flyStart: 350, fly: 750, flyGap: 300,          // documents
+  flyStart: 350, fly: 750,                       // documents; the gap between values is --stagger-slow
   typeStart: 250, perChar: 26, typing: 750,     // telegram
 };
 
@@ -23,6 +23,7 @@ function finish(demo) {
 
 // documents: each value leaves the ticket and lands in its field on the record.
 function flyValues(demo) {
+  const gap = parseFloat(motionToken("--stagger-slow")), easing = motionToken("--ease-draw");
   demo.querySelectorAll("[data-fly-to]").forEach((to, i) => {
     const from = demo.querySelector(`[data-fly-from="${to.dataset.flyTo}"]`);
     later(demo, () => {
@@ -37,10 +38,10 @@ function flyValues(demo) {
       const dx = b.left - a.left, dy = b.top - a.top;
       const run = flyer.animate(
         [{ transform: "translate(0, 0)" }, { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 28}px)`, offset: 0.5 }, { transform: `translate(${dx}px, ${dy}px)` }],
-        { duration: MS.fly, easing: "cubic-bezier(0.65, 0, 0.35, 1)", fill: "forwards" },
+        { duration: MS.fly, easing, fill: "forwards" },
       );
       run.onfinish = () => { to.classList.add("is-in"); flyer.remove(); };
-    }, MS.flyStart + i * MS.flyGap);
+    }, MS.flyStart + i * gap);
   });
 }
 

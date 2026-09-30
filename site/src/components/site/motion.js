@@ -6,9 +6,13 @@
 //   reveal(root?)                      arm every [data-reveal] under root (SiteShell calls it once)
 //   onFirstView(el, cb, options?)      run cb(el) once, when el first intersects (immediately if no IO)
 //   reducedMotion()                    true when the viewer prefers reduced motion
+//   motionToken(name)                  a motion token from tokens.css, for JS-driven animation
+//                                      (e.g. motionToken("--ease-draw"); parseFloat() it for ms values)
 //
 // Optional attribute: data-reveal-ms="2600" sets when "done" is applied (default 3000).
 export const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export const motionToken = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 export function onFirstView(el, cb, { threshold = 0.3, rootMargin = "0px 0px -8% 0px" } = {}) {
   if (!("IntersectionObserver" in window)) { cb(el); return; }
