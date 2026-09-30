@@ -129,11 +129,11 @@ export function RemovalEmissionsLedger({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[34rem] text-left body-caption">
-              <thead className="text-[var(--color-text-tertiary)]">
+              <thead className="body-small font-medium text-[var(--color-text-secondary)]">
                 <tr>
-                  <th className="py-4 pr-12 font-normal">Component</th>
-                  <th className="px-12 py-4 font-normal">Input</th>
-                  <th className="py-4 pl-12 text-right font-normal">Value</th>
+                  <th className="py-4 pr-12">Component</th>
+                  <th className="px-12 py-4">Input</th>
+                  <th className="py-4 pl-12 text-right">Value</th>
                 </tr>
               </thead>
               <tbody>

@@ -241,7 +241,7 @@ function CompiledReviewSections({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left body-caption">
-              <thead className="text-[var(--color-text-tertiary)]">
+              <thead className="body-small font-medium text-[var(--color-text-secondary)]">
                 <tr>
                   <th className="pr-12 pb-6">Registry field</th>
                   <th className="pr-12 pb-6">Source</th>
