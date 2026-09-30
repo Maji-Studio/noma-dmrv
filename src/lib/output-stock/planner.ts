@@ -56,6 +56,17 @@ export function layerRemainingSolidsKg(layer: OutputStockLayer): Rational {
   return layer.remainingSolidsKg ?? divide(rational(grams(layer.remainingDryBiocharKg), GRAMS_PER_KG), rational(established, established + grams(layer.ingredientDrySolidsKg)));
 }
 
+/**
+ * True when the layers still hold physical material: a positive dry-biochar
+ * gram balance, or exact solids above zero. Ingredient solids can outlast a
+ * display balance of 0.000 kg dry biochar, so the gram figure alone under-reads
+ * a blend. A count of zero clears both exactly. Archive and stock-mode changes
+ * share this one test of emptiness.
+ */
+export function layersHoldMaterial(layers: readonly OutputStockLayer[]): boolean {
+  return layers.some(layer => grams(layer.remainingDryBiocharKg) > BigInt(0) || (layer.remainingSolidsKg?.numerator ?? BigInt(0)) > BigInt(0));
+}
+
 /** Only canonical ISO 8601 UTC instants (`Date#toISOString`) are accepted, so string order is time order. */
 function canonicalInstant(value: string): string {
   const parsed = typeof value === 'string' ? Date.parse(value) : NaN;
