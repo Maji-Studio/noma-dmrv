@@ -1,11 +1,36 @@
 ---
-// Placeholder so the nav resolves. Phase 2 replaces this page.
+// Product: Trace · Bins and stock · Map · Evidence and reporting · What's next.
+// Section ids come from PRODUCT_SECTIONS in src/config.js (Home links to them).
 import SiteShell from "../components/site/SiteShell.astro";
-import GridFrame from "../components/site/GridFrame.astro";
+import SectionIndex from "../components/site/SectionIndex.astro";
+import GetStartedBand from "../components/site/GetStartedBand.astro";
+import ProductIntro from "../components/site/product/ProductIntro.astro";
+import TraceSection from "../components/site/product/TraceSection.astro";
+import BinsSection from "../components/site/product/BinsSection.astro";
+import MapSection from "../components/site/product/MapSection.astro";
+import EvidenceStage from "../components/site/product/EvidenceStage.astro";
+import NextTabs from "../components/site/product/NextTabs.astro";
+import { PRODUCT_SECTIONS } from "../config.js";
+import "../visuals/visuals.css";
+import "../components/site/product/product.css";
 ---
-<SiteShell current="product" title="Product | noma">
-  <GridFrame aria-labelledby="page-title" innerClass="stack">
-    <h1 id="page-title" class="t-display">Product</h1>
-    <p class="t-lead">Coming in this build.</p>
-  </GridFrame>
+<SiteShell
+  current="product"
+  title="Product | noma"
+  description="Follow biochar through the plant, keep the evidence with the work, and prepare reporting from the same records."
+>
+  <div class="pd">
+    <ProductIntro />
+    <SectionIndex items={PRODUCT_SECTIONS} />
+    <TraceSection />
+    <BinsSection />
+    <MapSection />
+    <EvidenceStage />
+    <NextTabs />
+    <GetStartedBand />
+  </div>
 </SiteShell>
+<script>
+  import { mountProductVisuals } from "../components/site/product/visuals.js";
+  mountProductVisuals();
+</script>

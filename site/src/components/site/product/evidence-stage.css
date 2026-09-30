@@ -1,0 +1,59 @@
+/* Evidence stage (EvidenceStage.astro): two schematics, check rows under each, one lit wire between.
+   Desktop: a three-column grid (record, link, registry). Under 960px it stacks: record, wire, registry. */
+.ev {
+  --ev-link: clamp(64px, 11vw, 176px);
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--ev-link) minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto; row-gap: var(--space-5);
+}
+.ev-art { display: block; width: 100%; height: auto; overflow: visible; fill: none; stroke: var(--stage-line); stroke-width: var(--stage-stroke); vector-effect: non-scaling-stroke; }
+.ev-art * { vector-effect: non-scaling-stroke; }
+.ev-art--record { grid-column: 1; grid-row: 1; }
+.ev-art--registry { grid-column: 3; grid-row: 1; }
+.ev-art-dim { stroke: var(--stage-line-dim); }
+.ev-led { fill: var(--stage-line-dim); stroke: none; }
+.ev-led--on { fill: var(--stage-ink); }
+.ev-field { stroke: var(--stage-line-dim); stroke-dasharray: 4 4; }
+.ev-field--on { stroke: var(--stage-lit); stroke-dasharray: none; fill: var(--stage-lit-fill); }
+
+/* The dim link between the schematics sits at the body's middle (y 124.5 of 220). */
+.ev-bridge { grid-column: 2; grid-row: 1; position: relative; }
+.ev .ev-bridge-line { position: absolute; left: 0; right: 0; top: 56.6%; }
+
+.ev-cap { display: flex; justify-content: space-between; gap: var(--space-4); padding-bottom: var(--space-3); border-bottom: var(--hairline) solid var(--stage-grid); font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono); text-transform: uppercase; color: var(--stage-ink-2); }
+.ev-cap span + span { color: var(--stage-ink-3); }
+.ev-cap--record { grid-column: 1; grid-row: 2; }
+.ev-cap--registry { grid-column: 3; grid-row: 2; }
+
+.ev-rows { display: grid; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
+.ev-rows--record { grid-column: 1; grid-row: 3; }
+.ev-rows--registry { grid-column: 3; grid-row: 3; }
+.ev-rows .stg-row--dim .stg-row-meta { color: var(--stage-ink-3); }
+.ev-rows .stg-row--lit .stg-row-meta { color: var(--stage-lit); }
+
+/* The lit wire: centred on the last (lit) row of both lists. */
+.ev .ev-wire--h { grid-column: 2; grid-row: 3; align-self: end; margin-bottom: calc(var(--stage-row-h) / 2 - var(--stage-stroke) / 2); z-index: 1; }
+.ev .ev-wire--v { display: none; }
+.ev-note { grid-column: 1 / -1; grid-row: 4; justify-self: end; margin-top: var(--space-5); font-size: var(--fs-caption); color: var(--stage-ink-3); }
+.ev-claim { max-width: var(--measure); font-size: var(--fs-small); color: var(--stage-ink-2); }
+
+/* Motion (the Stage's data-reveal states from motion.js). */
+[data-reveal="armed"] .ev-led--on { fill: var(--stage-line-dim); }
+[data-reveal="armed"] .ev-field--on { stroke: var(--stage-line-dim); stroke-dasharray: 4 4; fill: transparent; }
+[data-reveal="armed"] .ev-rows--registry .stg-row--lit .stg-row-meta { opacity: 0; }
+[data-reveal="play"] .ev-rows--registry .stg-row--lit .stg-row-meta { transition: opacity var(--dur-base) var(--ease-out) var(--ev-lit); }
+[data-reveal="play"] .ev-led--on { transition: fill var(--dur-base) var(--ease-out) var(--ev-at); }
+[data-reveal="play"] .ev-field--on { transition: stroke var(--dur-base) var(--ease-out) var(--ev-lit), fill var(--dur-base) var(--ease-out) var(--ev-lit); }
+
+@media (max-width: 960px) {
+  .ev { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 0; }
+  .ev > * { grid-column: 1; grid-row: auto; }
+  .ev-art--record { order: 1; max-width: 420px; }
+  .ev-cap--record { order: 2; margin-block: var(--space-5); }
+  .ev-rows--record { order: 3; }
+  .ev .ev-wire--v { order: 4; display: block; height: var(--space-9); margin-left: calc(var(--stage-icon-w) / 2 - var(--stage-stroke) / 2); }
+  .ev-rows--registry { order: 5; display: flex; flex-direction: column-reverse; }
+  .ev-cap--registry { order: 6; margin-block: var(--space-5); }
+  .ev-art--registry { order: 7; max-width: 420px; }
+  .ev .ev-bridge, .ev .ev-wire--h { display: none; }
+  .ev-note { order: 8; justify-self: start; }
+}

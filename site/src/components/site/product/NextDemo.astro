@@ -1,0 +1,88 @@
+---
+/**
+ * NextDemo: one upcoming concept demo, square and editorial. Content from the preview's
+ * upcoming-preview.astro, restyled. Each demo carries data-demo={kind}; next-demos.js plays it.
+ * Props:
+ *   kind: "documents" | "reactor" | "telegram" | "connections" | "checks"
+ * Hooks for the animation: [data-fly-from]/[data-fly-to] (documents), [data-type] (telegram),
+ * .nd-line (reactor), .nd-wire (connections), .nd-flag (checks). At rest every demo shows its end state.
+ */
+const { kind } = Astro.props;
+const TOOLS = ["Reactor data", "Your software", "AI tools"];
+---
+<div class:list={["nd", `nd--${kind}`]} data-demo={kind} role="group" aria-label="Concept preview with illustrative data">
+  {kind === "documents" && (
+    <div class="nd-docs">
+      <div class="nd-card nd-ticket">
+        <span class="nd-cap">Weighbridge ticket</span>
+        <strong class="nd-code">FD-2026-014</strong>
+        <p>Wood residues, Sawmill A</p>
+        <dl>
+          <div><dt>Net weight</dt><dd data-fly-from="wet">2,400 kg</dd></div>
+          <div><dt>Moisture</dt><dd data-fly-from="moisture">20%</dd></div>
+        </dl>
+        <span class="nd-doc-lines" aria-hidden="true"></span>
+      </div>
+      <div class="nd-card nd-record">
+        <span class="nd-cap">Ready for your review</span>
+        <strong class="nd-title">Feedstock delivery</strong>
+        <dl>
+          <div><dt>Wet mass</dt><dd><span data-fly-to="wet">2,400 kg</span></dd></div>
+          <div><dt>Moisture</dt><dd><span data-fly-to="moisture">20%</span></dd></div>
+        </dl>
+        <span class="nd-ok nd-last"><span aria-hidden="true">✓</span> Values extracted</span>
+      </div>
+    </div>
+  )}
+  {kind === "reactor" && (
+    <div class="nd-reading">
+      <div class="nd-row"><span>Reactor temperature</span><span class="nd-cap">Example reading</span></div>
+      <strong class="nd-big">612 <small>°C</small></strong>
+      <svg viewBox="0 0 480 110" aria-hidden="true" focusable="false">
+        <path class="nd-grid" d="M0 88H480M0 50H480M0 12H480" />
+        <path class="nd-line" pathLength="1" d="M0 96L28 93L56 75L85 79L115 54L144 60L175 39L206 45L238 27L268 33L298 30L328 25L358 32L389 23L420 28L450 24L480 28" />
+        <circle class="nd-end nd-last" cx="480" cy="28" r="4" />
+      </svg>
+      <div class="nd-row nd-cap"><span>09:00</span><span>Production run PR-043</span><span>11:00</span></div>
+    </div>
+  )}
+  {kind === "telegram" && (
+    <div class="nd-chat">
+      <span class="nd-cap">noma in Telegram</span>
+      <p class="nd-msg nd-msg--out" data-type>Delivery received. 2,400 kg of wood residues from Sawmill A.</p>
+      <div class="nd-msg nd-msg--in">
+        <span class="nd-typing" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="nd-msg-body">
+          <span class="nd-cap">Draft feedstock delivery</span>
+          <strong>2,400 kg, Sawmill A</strong>
+          <span>Add the moisture reading and weighbridge ticket to complete the record.</span>
+        </div>
+      </div>
+      <span class="nd-cap nd-last">A conversation becomes a record.</span>
+    </div>
+  )}
+  {kind === "connections" && (
+    <div class="nd-connect">
+      <ul class="nd-tools">{TOOLS.map((t) => <li><span class="nd-card">{t}</span></li>)}</ul>
+      <svg class="nd-wires" viewBox="0 0 300 40" aria-hidden="true" focusable="false">
+        <path class="nd-wire" pathLength="1" style="--k:0" d="M50 0V20H150V40" />
+        <path class="nd-wire" pathLength="1" style="--k:1" d="M150 0V40" />
+        <path class="nd-wire" pathLength="1" style="--k:2" d="M250 0V20H150V40" />
+      </svg>
+      <div class="nd-hub"><strong>noma</strong><span>One connected record</span></div>
+      <p class="nd-cap">Open API and MCP</p>
+    </div>
+  )}
+  {kind === "checks" && (
+    <div class="nd-checks">
+      <span class="nd-cap">Production run PR-043</span>
+      <strong class="nd-title">A reading worth checking.</strong>
+      <dl class="nd-values">
+        <div class="nd-value"><dt>Feedstock input</dt><dd>1,000 kg</dd></div>
+        <div class="nd-value nd-value--flag"><dt>Biochar output</dt><dd>1,200 kg</dd></div>
+      </dl>
+      <div class="nd-flag nd-last"><span aria-hidden="true">!</span><p>Biochar output is higher than the feedstock input.</p></div>
+      <p class="nd-cap">Review the source record before reporting.</p>
+    </div>
+  )}
+</div>

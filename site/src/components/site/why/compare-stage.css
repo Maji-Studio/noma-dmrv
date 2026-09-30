@@ -1,0 +1,64 @@
+/* /why stage: three columns, the centre lit (CompareStage.astro, CompareSchematic.astro).
+   End state is the rest state: outer columns dim, centre lit. [data-reveal="armed"] puts every column at a
+   neutral start; "play" settles the outer columns dim (at --settle) and lights the centre (each part at --at). */
+.wc { --wc-fig: 272px; /* schematic width, the same in every column */
+  --wc-sep: repeating-linear-gradient(180deg, var(--stage-line-dim) 0 var(--stage-dot), transparent var(--stage-dot) calc(var(--stage-dot) * 2.5));
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.wc-col { display: grid; grid-template-rows: auto 1fr auto; gap: var(--space-7); padding: var(--space-6) var(--space-7) var(--space-6); min-width: 0; }
+.wc-col:first-child { padding-left: 0; }
+.wc-col:last-child { padding-right: 0; }
+.wc-col + .wc-col { background: var(--wc-sep) left top / var(--stage-stroke) 100% no-repeat; }
+.wc-name { font-size: var(--fs-h3); line-height: 1.15; letter-spacing: var(--track-h3); color: var(--stage-ink); }
+.wc-figure { display: flex; align-items: center; }
+.wc-svg { display: block; width: 100%; max-width: var(--wc-fig); height: auto; overflow: visible; fill: none; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.wc-pair { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); list-style: none; margin: 0; padding: 0; font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono); text-transform: uppercase; }
+.wc-verdict { display: flex; align-items: center; gap: var(--space-3); color: var(--stage-ink); }
+
+/* Schematic strokes */
+.wc-frame, .wc-line { stroke: var(--stage-line); }
+.wc-dash { stroke: var(--stage-line); stroke-dasharray: 5 4; }
+.wc-sheet { fill: var(--stage); }
+.wc-node { stroke: var(--stage-lit); fill: var(--stage-lit-fill); }
+.wc-node--end { fill: var(--stage-lit); }
+.wc-draw { stroke: var(--stage-lit); stroke-dasharray: 1; stroke-dashoffset: 0; }
+.wc-draw--dot { stroke-dasharray: 2 4; }
+.wc-doc { stroke: var(--stage-lit); }
+
+/* Dim columns at rest */
+.wc-col--dim .wc-name, .wc-col--dim .wc-verdict { color: var(--stage-ink-3); }
+.wc-col--dim :is(.wc-frame, .wc-line, .wc-dash) { stroke: var(--stage-line-dim); }
+
+/* Start state */
+[data-reveal="armed"] .wc-col--dim .wc-name, [data-reveal="armed"] .wc-col--dim .wc-verdict { color: var(--stage-ink-2); }
+[data-reveal="armed"] .wc-col--dim :is(.wc-frame, .wc-line, .wc-dash) { stroke: var(--stage-line); }
+[data-reveal="armed"] .wc-col--lit .wc-name, [data-reveal="armed"] .wc-col--lit .wc-verdict { color: var(--stage-ink-3); }
+[data-reveal="armed"] .wc-col--lit :is(.wc-frame, .wc-line) { stroke: var(--stage-line-dim); }
+[data-reveal="armed"] .wc-node { stroke: var(--stage-line-dim); fill: transparent; }
+[data-reveal="armed"] .wc-draw { stroke-dashoffset: 1; }
+[data-reveal="armed"] :is(.wc-draw--dot, .wc-doc) { opacity: 0; }
+[data-reveal="armed"] .wc-verdict .stg-mark { opacity: 0; transform: scale(0.4); }
+
+/* Play */
+[data-reveal="play"] .wc-col--dim :is(.wc-name, .wc-verdict) { transition: color var(--dur-draw) var(--ease-out) var(--settle); }
+[data-reveal="play"] .wc-col--dim :is(.wc-frame, .wc-line, .wc-dash) { transition: stroke var(--dur-draw) var(--ease-out) var(--settle); }
+[data-reveal="play"] .wc-col--lit :is(.wc-name, .wc-frame, .wc-line) { transition: color var(--dur-base) var(--ease-out) var(--light), stroke var(--dur-base) var(--ease-out) var(--light); }
+[data-reveal="play"] .wc-node { transition: stroke var(--dur-base) var(--ease-out) var(--at), fill var(--dur-base) var(--ease-out) var(--at); }
+[data-reveal="play"] .wc-node--end { animation: wc-pulse calc(var(--dur-draw) * 1.4) var(--ease-out) var(--at) 1 both; }
+[data-reveal="play"] .wc-draw { transition: stroke-dashoffset var(--dur-base) var(--ease-draw) var(--at); }
+[data-reveal="play"] :is(.wc-draw--dot, .wc-doc) { transition: opacity var(--dur-base) var(--ease-out) var(--at); }
+[data-reveal="play"] .wc-verdict { transition: color var(--dur-base) var(--ease-out) var(--at); }
+[data-reveal="play"] .wc-verdict .stg-mark { transition: opacity var(--dur-base) var(--ease-out) var(--at), transform var(--dur-base) var(--ease-out) var(--at); }
+@keyframes wc-pulse {
+  0% { filter: drop-shadow(0 0 0 var(--stage-lit)); }
+  50% { filter: drop-shadow(0 0 var(--space-3) var(--stage-lit)); }
+  100% { filter: drop-shadow(0 0 var(--space-1) var(--stage-lit-glow)); }
+}
+.wc-node--end { filter: drop-shadow(0 0 var(--space-1) var(--stage-lit-glow)); }
+
+@media (max-width: 860px) {
+  .wc { grid-template-columns: minmax(0, 1fr); }
+  .wc-col, .wc-col:first-child, .wc-col:last-child { padding: var(--space-7) 0; gap: var(--space-5); }
+  .wc-col:first-child { padding-top: 0; }
+  .wc-col + .wc-col { background: repeating-linear-gradient(90deg, var(--stage-line-dim) 0 var(--stage-dot), transparent var(--stage-dot) calc(var(--stage-dot) * 2.5)) left top / 100% var(--stage-stroke) no-repeat; }
+  .wc-svg { max-width: 240px; }
+}

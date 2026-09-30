@@ -1,0 +1,82 @@
+---
+/**
+ * EvidenceStage (#evidence): the Product page's one keynote stage. A production run's reactor on the left
+ * with its evidence as check rows; a registry submission on the right with the fields it needs. One
+ * evidence row is lit and wired across to its matching submission row; the rest stay dim.
+ * Choreography (one playhead): the dim link between the two schematics draws, the left rows tick top to
+ * bottom, the dotted wire draws from the weighbridge ticket, then the feedstock mass row lights.
+ * Stacks vertically under 960px (left rows, a vertical wire, then the submission rows). No props.
+ */
+import Stage from "../stage/Stage.astro";
+import StageCheckRow from "../stage/StageCheckRow.astro";
+import StageConnector from "../stage/StageConnector.astro";
+import TextLink from "../TextLink.astro";
+import "./evidence-stage.css";
+
+// Delays in ms from the moment the stage plays. The lit pair is last on both sides, as in the keynote.
+const T = { rows: [350, 650, 950], wire: 1250, wireDur: 850, lit: 2100 };
+const RECORD = [
+  { label: "Moisture reading", mark: "check", meta: "12%" },
+  { label: "Lab result", mark: "unknown", meta: "Missing", dim: true },
+  { label: "Weighbridge ticket", mark: "check", meta: "2,400 kg", lit: true },
+];
+const REGISTRY = [
+  { label: "Moisture content", mark: "unknown" },
+  { label: "Carbon content", mark: "unknown" },
+  { label: "Feedstock mass", mark: "check", meta: "2,400 kg", lit: true },
+];
+const ms = (n) => `${n}ms`;
+const ALT = "Diagram with illustrative records. On the left, production run PR-043 and its evidence: a moisture reading of 12%, recorded; a lab result, missing; and a weighbridge ticket for 2,400 kg, recorded and highlighted. A dotted line connects the weighbridge ticket to the registry submission on the right, where the feedstock mass field is filled with 2,400 kg. The submission's moisture content and carbon content fields are still open; carbon content waits on the missing lab result.";
+---
+<Stage
+  id="evidence"
+  kicker="Evidence and reporting"
+  title="Keep the evidence with the record."
+  lead="Attach weighbridge tickets, transport documents, photos and lab results where they belong. See what is missing as you prepare a submission."
+  alt={ALT}
+  revealMs={T.lit + 900}
+>
+  <div class="ev" style={`--ev-lit:${ms(T.lit)}`}>
+    <svg class="ev-art ev-art--record" viewBox="0 0 460 220" preserveAspectRatio="xMidYMid meet">
+      <path d="M44 4H132L114 30H62Z" />
+      <rect x="376" y="4" width="28" height="26" />
+      <rect x="1" y="30" width="458" height="189" />
+      {[41, 100, 159].map((y, i) => (
+        <g>
+          <rect x="12" y={y} width="436" height="50" />
+          <path class="ev-art-dim" d={`M30 ${y + 25}q10-10 20 0t20 0t20 0t20 0t20 0`} />
+          {[398, 414, 430].map((x, k) => <circle class:list={["ev-led", k === i && "ev-led--on"]} style={`--ev-at:${ms(200 + i * 150)}`} cx={x} cy={y + 25} r="4.5" />)}
+        </g>
+      ))}
+    </svg>
+    <div class="ev-bridge"><StageConnector variant="dotted" length="100%" class="ev-bridge-line" /></div>
+    <svg class="ev-art ev-art--registry" viewBox="0 0 460 220" preserveAspectRatio="xMidYMid meet">
+      <rect x="1" y="30" width="458" height="189" />
+      <path d="M1 62H459" />
+      {[22, 38, 54].map((x) => <circle class="ev-led" cx={x} cy="46" r="4.5" />)}
+      {[84, 124, 164].map((y, i) => (
+        <g>
+          <path class="ev-art-dim" d={`M24 ${y + 12}H96`} />
+          <rect class:list={["ev-field", i === 2 && "ev-field--on"]} x="120" y={y} width="316" height="24" />
+        </g>
+      ))}
+    </svg>
+
+    <p class="ev-cap ev-cap--record"><span>Production run</span><span>PR-043</span></p>
+    <p class="ev-cap ev-cap--registry"><span>Registry submission</span><span>In development</span></p>
+
+    <ul class="ev-rows ev-rows--record">
+      {RECORD.map((r, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} state={r.lit ? "lit" : r.dim ? "dim" : "default"} delay={ms(T.rows[i])} />)}
+    </ul>
+    <StageConnector variant="dotted" state="lit" cap="ring" length="100%" delay={ms(T.wire)} duration={ms(T.wireDur)} class="ev-wire ev-wire--h" />
+    <StageConnector variant="dotted" direction="v" state="lit" cap="ring" delay={ms(T.wire)} duration={ms(T.wireDur)} class="ev-wire ev-wire--v" />
+    <ul class="ev-rows ev-rows--registry">
+      {REGISTRY.map((r, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} dashed state={r.lit ? "lit" : "dim"} delay={ms(r.lit ? T.lit : T.rows[i] + 150)} />)}
+    </ul>
+    <p class="ev-note">Illustrative records</p>
+  </div>
+  <Fragment slot="after">
+    <p class="ev-claim">The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.</p>
+    <TextLink href="/get-started" tone="stage">Book a walkthrough</TextLink>
+  </Fragment>
+</Stage>

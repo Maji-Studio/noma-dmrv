@@ -1,0 +1,48 @@
+---
+/**
+ * CompareSchematic: the small outlined drawing at the top of each column on the /why stage.
+ * Props:
+ *   kind: "sheet" | "noma" | "paper"
+ *   light?: number   ms into the playhead when the centre starts to light (CompareStage passes it)
+ * Stroke colours come from the column state in compare-stage.css (dim columns vs the lit centre).
+ * noma's connectors and nodes carry --at (ms into the stage's playhead) so they draw and light in order.
+ */
+const { kind, light: LIGHT = 1300 } = Astro.props;
+const at = (ms) => `--at:${ms}ms`;
+---
+<svg class={`wc-svg wc-svg--${kind}`} viewBox="0 0 240 168" aria-hidden="true" focusable="false">
+  {kind === "sheet" && <>
+    <rect class="wc-frame" x="1" y="1" width="238" height="166" />
+    <path class="wc-line" d="M1 24H239" />
+    <rect class="wc-line" x="12" y="8" width="22" height="9" />
+    <path class="wc-dash" d="M12 34H228V128H12Z M52 34V128 M112 34V128 M172 34V128 M12 53H228 M12 72H228 M12 91H228 M12 110H228" />
+    <rect class="wc-line" x="12" y="140" width="46" height="16" />
+    <rect class="wc-dash" x="64" y="140" width="46" height="16" />
+    <rect class="wc-dash" x="116" y="140" width="46" height="16" />
+  </>}
+  {kind === "noma" && <>
+    <rect class="wc-frame" x="1" y="1" width="238" height="166" />
+    <path class="wc-line" d="M1 24H239" />
+    <circle class="wc-line" cx="14" cy="12.5" r="3" /><circle class="wc-line" cx="25" cy="12.5" r="3" /><circle class="wc-line" cx="36" cy="12.5" r="3" />
+    <path class="wc-draw" pathLength="1" style={at(LIGHT + 200)} d="M42 54C68 54 68 84 94 84" />
+    <path class="wc-draw" pathLength="1" style={at(LIGHT + 200)} d="M42 114C68 114 68 84 94 84" />
+    <path class="wc-draw" pathLength="1" style={at(LIGHT + 500)} d="M114 84H146" />
+    <path class="wc-draw" pathLength="1" style={at(LIGHT + 800)} d="M166 84H198" />
+    <path class="wc-draw wc-draw--dot" pathLength="1" style={at(LIGHT + 1000)} d="M104 94V130" />
+    <path class="wc-draw wc-draw--dot" pathLength="1" style={at(LIGHT + 1100)} d="M208 94V130" />
+    <rect class="wc-node" style={at(LIGHT)} x="22" y="44" width="20" height="20" />
+    <rect class="wc-node" style={at(LIGHT + 100)} x="22" y="104" width="20" height="20" />
+    <rect class="wc-node" style={at(LIGHT + 400)} x="94" y="74" width="20" height="20" />
+    <rect class="wc-node" style={at(LIGHT + 700)} x="146" y="74" width="20" height="20" />
+    <rect class="wc-node wc-node--end" style={at(LIGHT + 1000)} x="198" y="74" width="20" height="20" />
+    <path class="wc-doc" style={at(LIGHT + 1200)} d="M97 130H107L111 134V150H97Z M201 130H211L215 134V150H201Z" />
+  </>}
+  {kind === "paper" && <>
+    <rect class="wc-dash wc-sheet" x="62" y="4" width="136" height="146" />
+    <rect class="wc-dash wc-sheet" x="50" y="11" width="136" height="148" />
+    <path class="wc-frame wc-sheet" d="M38 18H154L174 38V166H38Z" />
+    <path class="wc-line" d="M154 18V38H174" />
+    <path class="wc-line" d="M54 52H122 M54 68H154 M54 84H146 M54 100H154 M54 116H132" />
+    <path class="wc-line" d="M54 146C62 138 68 150 76 142S90 140 96 146" />
+  </>}
+</svg>

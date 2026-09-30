@@ -1,0 +1,36 @@
+---
+/**
+ * CompareTable: the full noma vs spreadsheet comparison from src/content/copy.js, as an editorial table
+ * under the /why stage. The registry row is worded to match the registry line (submission is not
+ * available yet), and the registry note sits under the table. No props.
+ */
+import { copy } from "../../../content/copy.js";
+import GridFrame from "../GridFrame.astro";
+const { title, columns, rows } = copy.compare;
+// copy.js says "Bundled from the same records"; production submission does not exist yet.
+const HONEST = { "Registry submission": "Prepared from the same records" };
+const curl = (t) => t.replaceAll("'", "’");
+const REGISTRY_NOTE = "The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.";
+---
+<GridFrame class="cmp" pad="none" flush aria-labelledby="cmp-title">
+  <div class="why-head">
+    <h3 id="cmp-title" class="t-h2">{title}.</h3>
+    <p class="t-lead">Five jobs a biochar plant does every week, and how each one is done in a spreadsheet and in noma.</p>
+  </div>
+  <table class="cmp-table">
+    <caption class="sr-only">{title}: how each job is done in a spreadsheet and in noma.</caption>
+    <thead>
+      <tr><th scope="col">The job</th><th scope="col">{columns[0]}</th><th scope="col" class="cmp-noma">{columns[1]}</th></tr>
+    </thead>
+    <tbody>
+      {rows.map(([job, sheet, noma]) => (
+        <tr>
+          <th scope="row">{curl(job)}</th>
+          <td data-label={columns[0]}>{curl(sheet)}</td>
+          <td data-label={columns[1]} class="cmp-noma">{curl(HONEST[job] || noma)}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+  <p class="t-caption cmp-note">{REGISTRY_NOTE}</p>
+</GridFrame>

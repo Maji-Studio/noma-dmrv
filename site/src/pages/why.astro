@@ -1,11 +1,30 @@
 ---
-// Placeholder so the nav resolves. Phase 2 replaces this page.
+// Why noma: who it's for, noma vs spreadsheets (the page's one stage), open source, and Mafinga.
+// Section ids come from WHY_SECTIONS in src/config.js; Home links to them.
+import { WHY_SECTIONS } from "../config.js";
 import SiteShell from "../components/site/SiteShell.astro";
-import GridFrame from "../components/site/GridFrame.astro";
+import SectionIndex from "../components/site/SectionIndex.astro";
+import GetStartedBand from "../components/site/GetStartedBand.astro";
+import WhyIntro from "../components/site/why/WhyIntro.astro";
+import WhoFor from "../components/site/why/WhoFor.astro";
+import CompareStage from "../components/site/why/CompareStage.astro";
+import CompareTable from "../components/site/why/CompareTable.astro";
+import OpenSource from "../components/site/why/OpenSource.astro";
+import Mafinga from "../components/site/why/Mafinga.astro";
 ---
-<SiteShell current="why" title="Why noma | noma">
-  <GridFrame aria-labelledby="page-title" innerClass="stack">
-    <h1 id="page-title" class="t-display">Why noma</h1>
-    <p class="t-lead">Coming in this build.</p>
-  </GridFrame>
+<SiteShell
+  current="why"
+  title="Why noma | noma"
+  description="Who noma is for, how it compares with spreadsheets and paper records, and how you can run the open-source code."
+>
+  <WhyIntro />
+  <SectionIndex items={WHY_SECTIONS} />
+  <WhoFor />
+  <div id="spreadsheets">
+    <CompareStage />
+    <CompareTable />
+  </div>
+  <OpenSource />
+  <Mafinga />
+  <GetStartedBand />
 </SiteShell>

@@ -1,0 +1,74 @@
+/* Product page (/product): intro, section heads, trace cells, and the editorial restyle of the shared
+   bins and map visuals. Page-scoped: every selector starts with a .pd- class. Values come from tokens.css. */
+.pd { --pd-side: clamp(260px, 24vw, 320px); }
+
+/* Intro: same rhythm as Home's hero copy. */
+.pd-intro { display: grid; gap: var(--space-6); padding: var(--section) var(--frame-pad) var(--space-8); }
+.pd-intro h1 { max-width: 14ch; }
+.pd-intro-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--gap); align-items: end; margin-top: var(--space-5); }
+.pd-intro-row .actions { justify-content: flex-end; }
+
+/* Section head: headline left, lead right, like Home's tour head. */
+.pd-head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: end; padding: var(--section) var(--frame-pad) var(--space-8); }
+.pd-head h2 { max-width: 14ch; }
+
+/* Trace: two cells under the explorer, one per direction. */
+.pd-trace-cells { border-top: var(--hairline) solid var(--rule); }
+.pd-trace-cells > * { display: grid; gap: var(--space-4); align-content: start; }
+.pd-dir { display: flex; align-items: center; gap: var(--space-3); color: var(--accent); font-size: var(--fs-ui); }
+.pd-dir svg { width: var(--space-8); height: var(--space-4); fill: none; stroke: currentColor; stroke-width: 1.25; }
+.pd-trace-btn { justify-self: start; min-height: var(--tap); padding: 0; border: 0; background: none; color: var(--link); font-size: var(--fs-ui); text-decoration: underline; text-decoration-thickness: var(--hairline); text-decoration-color: var(--link-rule); text-underline-offset: 6px; cursor: pointer; }
+.pd-trace-btn:hover { text-decoration-color: currentColor; }
+
+/* Visual panels: paper surface between hairlines, edge to edge inside the frame. */
+.pd-panel { background: var(--paper); border-top: var(--hairline) solid var(--rule); }
+.pd-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3) var(--space-6); padding: var(--space-4) var(--frame-pad) var(--space-5); border-top: var(--hairline) solid var(--rule); }
+.pd-foot p { max-width: var(--measure); font-size: var(--fs-small); color: var(--ink-2); }
+
+/* Bins visual, restyled square: controls across the top, bin left, before/after readout right. */
+.pd-bins { padding: var(--space-7) var(--frame-pad); }
+.pd-bins .nv-bins { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-areas: "ctrl ctrl" "art read" "legend read"; gap: var(--space-5) var(--gap); align-items: start; }
+.pd-bins .nv-bin-ctrl { grid-area: ctrl; gap: var(--space-5) var(--space-6); padding-bottom: var(--space-5); border-bottom: var(--hairline) solid var(--rule); }
+.pd-bins .nv-scroll { grid-area: art; }
+.pd-bins .nv-bin-legend { grid-area: legend; gap: var(--space-2) var(--space-5); font-size: var(--fs-caption); }
+.pd-bins .nv-bin-legend i { border-radius: var(--r-square); }
+.pd-bins .nv-bin-read { grid-area: read; gap: var(--space-3); }
+.pd-bins .nv-bin-ctrl label { font-size: var(--fs-small); gap: var(--space-2); }
+.pd-bins .nv-bin-ctrl input[type="range"] { accent-color: var(--accent); }
+.pd-bins .nv-seg { border: var(--hairline) solid var(--rule-strong); border-radius: var(--r-square); padding: 0; gap: 0; background: var(--paper); }
+.pd-bins .nv-seg button { min-height: var(--tap); border-radius: var(--r-square); padding: 0 var(--space-4); font-size: var(--fs-small); }
+.pd-bins .nv-seg button + button { border-left: var(--hairline) solid var(--rule-strong); }
+.pd-bins .nv-seg button[aria-pressed="true"] { background: var(--cta); color: var(--cta-ink); font-weight: 300; }
+.pd-bins .nv-btn { min-height: var(--tap); padding: 0 var(--space-4); border: var(--hairline) solid var(--cta); border-radius: var(--r-square); background: var(--cta); color: var(--cta-ink); font-size: var(--fs-small); font-weight: 300; }
+.pd-bins .nv-btn:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
+.pd-bins .nv-sq { rx: 0; }
+.pd-bins .nv-ba-box, .pd-bins .nv-ba-mini { border-radius: var(--r-square); border: var(--hairline) solid var(--rule); }
+.pd-bins .nv-ba-box { background: var(--page); padding: var(--space-3) var(--space-4); }
+.pd-bins .nv-ba-box b { font-weight: 300; font-size: var(--fs-h3); letter-spacing: var(--track-h3); line-height: 1.15; }
+.pd-bins .nv-ba-box small, .pd-bins .nv-ba-mini .nv-hint { color: var(--ink-2); }
+.pd-bins .nv-ba-mini b { font-weight: 300; }
+.pd-bins .nv-ba { align-items: stretch; }
+.pd-bins .nv-ba-arrow { align-self: center; }
+.pd-bins .nv-ba-layers { display: grid; gap: 0; border-top: var(--hairline) solid var(--rule); }
+.pd-bins .nv-ba-layers .nv-ba-mini { border: 0; border-bottom: var(--hairline) solid var(--rule); padding: var(--space-2) 0; background: none; }
+.pd-bins .nv-ba-mini > span:first-child { flex: 1; color: var(--ink-2); }
+.pd-bins .nv-label { text-transform: none; letter-spacing: 0; font-weight: 300; font-size: var(--fs-caption); color: var(--ink-2); }
+
+/* Map visual, restyled: square, hairlines, sentence-case labels in the side panel. */
+.pd-map .nv-viz { grid-template-columns: minmax(0, 1fr) var(--pd-side); border: 0; border-radius: var(--r-square); background: var(--paper); }
+.pd-map .nv-side { padding: var(--space-6) var(--space-5); gap: var(--space-4); background: linear-gradient(var(--band-purple), var(--band-purple)), var(--paper); border-left: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.pd-map .nv-stage, .pd-map .nv-label { text-transform: none; letter-spacing: 0; font-weight: 300; font-size: var(--fs-caption); color: var(--ink-2); }
+.pd-map .nv-code { font-family: var(--f-sans); font-weight: 300; font-size: var(--fs-h3); letter-spacing: var(--track-h3); line-height: 1.1; }
+.pd-map .nv-counts span { border-radius: var(--r-square); border-color: var(--rule); }
+.pd-map .nv-node .nv-body { rx: 0; }
+
+@media (max-width: 860px) {
+  .pd-map .nv-viz { grid-template-columns: minmax(0, 1fr); }
+  .pd-map .nv-side { border-left: 0; border-top: var(--hairline) solid var(--rule); }
+  .pd-bins .nv-bins { grid-template-columns: minmax(0, 1fr); grid-template-areas: "ctrl" "art" "legend" "read"; }
+}
+@media (max-width: 760px) {
+  .pd-intro-row, .pd-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+  .pd-intro-row .actions { justify-content: flex-start; }
+  .pd-bins { padding-block: var(--space-6); }
+}

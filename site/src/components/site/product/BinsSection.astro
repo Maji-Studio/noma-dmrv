@@ -1,0 +1,22 @@
+---
+/**
+ * BinsSection (#bins): the shared bins visual (data-visual="bins"), restyled square. The draw plays once
+ * when the visual scrolls into view; the play button, bin type and sliders keep working. No props.
+ */
+import GridFrame from "../GridFrame.astro";
+---
+<GridFrame id="bins" pad="none" flush aria-labelledby="bins-title">
+  <div class="pd-head">
+    <h2 id="bins-title" class="t-h2">Know what’s in the bin.</h2>
+    <div class="stack-tight">
+      <p class="t-lead">Keep track of material as it is stored, mixed and drawn. Explore how wet and dry quantities change in this example.</p>
+    </div>
+  </div>
+  <div class="pd-panel">
+    <div class="pd-bins"><div data-visual="bins" data-pd-bins></div></div>
+    <div class="pd-foot">
+      <p>A split bin draws the oldest layer first. A mix bin draws from every layer in proportion. The water leaves with the biochar, so the truck carries more than the dry figure.</p>
+      <p class="t-caption">One square is 10 kg of dry biochar. Illustrative records.</p>
+    </div>
+  </div>
+</GridFrame>

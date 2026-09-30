@@ -1,0 +1,129 @@
+/* "What's next" tabs (NextTabs.astro) and the five concept demos (NextDemo.astro). Square, hairlines.
+   Demo motion states (data-anim, set by next-demos.js): armed = start, play/typing = running,
+   none or done = end state. Every rule that hides something is scoped to armed/play/typing. */
+.nx { --nd-card-line: var(--rule-strong); --nd-demo-min: 440px; --nd-max: 520px; --nd-bar: 2px; --nd-dot: 6px; --nd-hub-ring: 3px; --nd-lift: 6px; }
+.nx-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: var(--hairline) solid var(--rule); }
+.nx-tab { position: relative; min-height: var(--btn-h); padding: var(--space-3) var(--space-5); border: 0; border-right: var(--hairline) solid var(--rule); background: none; color: var(--ink-2); font-size: var(--fs-ui); text-align: left; cursor: pointer; transition: color var(--dur-fast), background-color var(--dur-fast); }
+.nx-tab:last-child { border-right: 0; }
+.nx-tab:hover { color: var(--ink); background: var(--band-purple); }
+.nx-tab[aria-selected="true"] { color: var(--ink); background: var(--paper); box-shadow: inset 0 var(--nd-bar) 0 var(--accent); }
+.nx-tab:focus-visible { outline-offset: -3px; }
+
+.nx-panel { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--hairline); background: var(--rule); border-top: var(--hairline) solid var(--rule); }
+.nx-panel:focus-visible { outline-offset: -3px; }
+.nx-copy { display: grid; gap: var(--space-4); align-content: start; padding: var(--space-8) var(--frame-pad); background: var(--page); }
+.nx-copy .t-h3 { margin-top: var(--space-3); }
+.nx-stage { display: grid; place-items: center; min-height: var(--nd-demo-min); padding: var(--space-8) var(--frame-pad); background: linear-gradient(var(--band-purple), var(--band-purple)), var(--page); min-width: 0; }
+.nx-note { padding: var(--space-4) var(--frame-pad) var(--space-6); border-top: var(--hairline) solid var(--rule); }
+
+/* Demo primitives */
+.nd { position: relative; width: 100%; max-width: var(--nd-max); font-size: var(--fs-small); line-height: 1.5; }
+.nd-card { display: grid; gap: var(--space-3); padding: var(--space-5); background: var(--paper); border: var(--hairline) solid var(--nd-card-line); }
+.nd-cap { font-size: var(--fs-caption); color: var(--ink-2); }
+.nd-code { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-ui); }
+.nd-title { font-size: var(--fs-h3); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1.15; }
+.nd dl { display: grid; margin: 0; }
+.nd dl > div { display: flex; justify-content: space-between; gap: var(--space-3); padding-block: var(--space-2); border-bottom: var(--hairline) solid var(--rule); }
+.nd dt { color: var(--ink-2); }
+.nd dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* documents */
+.nd-docs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.nd-record { margin-top: var(--space-8); }
+.nd-doc-lines { min-height: var(--space-6); background: repeating-linear-gradient(transparent 0 6px, var(--rule) 6px 7px); }
+.nd-record dd span { display: inline-block; padding: 0 var(--space-1); background: var(--clr-rose-40); }
+.nd-ok { color: var(--ok); font-size: var(--fs-caption); }
+.nd-flyer { position: absolute; z-index: 2; padding: 0 var(--space-1); background: var(--clr-rose-40); color: var(--ink); font-size: var(--fs-small); line-height: 1.5; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; outline: var(--hairline) solid var(--accent); }
+.nd--documents:is([data-anim="armed"], [data-anim="play"]) [data-fly-to]:not(.is-in) { visibility: hidden; }
+
+/* reactor */
+.nd-reading { display: grid; gap: var(--space-4); }
+.nd-row { display: flex; justify-content: space-between; gap: var(--space-3); }
+.nd-big { font-size: var(--fs-h2); font-weight: 300; letter-spacing: var(--track-h2); line-height: 1; }
+.nd-big small { font-size: var(--fs-h3); color: var(--ink-2); letter-spacing: 0; }
+.nd-reading svg { display: block; width: 100%; height: auto; overflow: visible; }
+.nd-grid { fill: none; stroke: var(--rule); stroke-width: 1; }
+.nd-line { fill: none; stroke: var(--prod); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.nd-end { fill: var(--prod); }
+.nd--reactor[data-anim="armed"] .nd-line { stroke-dashoffset: 1; }
+.nd--reactor[data-anim="play"] .nd-line { transition: stroke-dashoffset 1400ms var(--ease-draw) 150ms; }
+.nd--reactor { --nd-last: 1450ms; }
+
+/* telegram */
+.nd-chat { display: grid; gap: var(--space-3); max-width: 400px; margin-inline: auto; }
+.nd-msg { max-width: 88%; padding: var(--space-3) var(--space-4); background: var(--paper); border: var(--hairline) solid var(--rule); line-height: 1.6; }
+.nd-msg--out { justify-self: end; background: var(--infra-bg); }
+.nd-msg--in { position: relative; justify-self: start; }
+.nd-msg-body { display: grid; gap: var(--space-1); }
+.nd-msg-body strong { font-weight: 700; }
+.nd-rest { visibility: hidden; }
+.nd-typing { display: none; position: absolute; left: var(--space-4); top: 50%; gap: var(--space-1); transform: translateY(-50%); }
+.nd-typing i { width: var(--nd-dot); height: var(--nd-dot); border-radius: 50%; background: var(--ink-3); animation: nd-dot 900ms var(--ease-out) infinite; }
+.nd-typing i:nth-child(2) { animation-delay: 150ms; }
+.nd-typing i:nth-child(3) { animation-delay: 300ms; }
+@keyframes nd-dot { 0%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+.nd--telegram[data-anim="armed"] .nd-msg--out { color: transparent; }
+.nd--telegram:is([data-anim="armed"], [data-anim="play"]:not(.is-replied)) .nd-msg--in { opacity: 0; }
+.nd--telegram[data-anim="typing"] .nd-typing { display: flex; }
+.nd--telegram[data-anim="typing"] .nd-msg-body { visibility: hidden; }
+.nd--telegram[data-anim="play"].is-replied .nd-msg-body { animation: nd-in var(--dur-base) var(--ease-out) both; }
+.nd--telegram:is([data-anim="typing"], [data-anim="play"]:not(.is-replied)) .nd-last { opacity: 0; }
+.nd--telegram { --nd-last: 350ms; }
+@keyframes nd-in { from { opacity: 0; transform: translateY(var(--nd-lift)); } }
+
+/* connections */
+.nd-connect { display: grid; justify-items: center; }
+.nd-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; list-style: none; margin: 0; padding: 0; text-align: center; }
+.nd-tools .nd-card { display: inline-block; padding: var(--space-3) var(--space-4); font-size: var(--fs-caption); }
+.nd-wires { display: block; width: 100%; height: auto; }
+.nd-wire { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.nd-hub { display: grid; justify-items: center; padding: var(--space-4) var(--space-8); background: var(--paper); border: var(--hairline) solid var(--accent); outline: var(--nd-hub-ring) solid var(--clr-purple-10); }
+.nd-hub strong { font-size: var(--fs-brand); font-weight: 700; letter-spacing: var(--track-brand); line-height: 1.1; }
+.nd-hub span { font-size: var(--fs-caption); color: var(--ink-2); }
+.nd-connect > .nd-cap { margin-top: var(--space-4); }
+.nd--connections[data-anim="armed"] .nd-wire { stroke-dashoffset: 1; }
+.nd--connections[data-anim="armed"] .nd-hub { border-color: var(--nd-card-line); outline-color: transparent; }
+.nd--connections[data-anim="play"] .nd-wire { transition: stroke-dashoffset 700ms var(--ease-draw) calc(var(--k) * 200ms + 150ms); }
+.nd--connections[data-anim="play"] .nd-hub { transition: border-color var(--dur-base) var(--ease-out) 1250ms, outline-color var(--dur-base) var(--ease-out) 1250ms; }
+
+/* checks */
+.nd-checks { display: grid; gap: var(--space-4); }
+.nd-values { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); }
+.nd .nd-values > div { display: grid; justify-content: start; gap: var(--space-1); }
+.nd-value dd { font-size: var(--fs-h3); font-weight: 300; letter-spacing: var(--track-h3); }
+.nd-value--flag dd { color: var(--warn); }
+.nd-flag { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--paper); border: var(--hairline) solid var(--warn); border-left-width: var(--nd-bar); color: var(--warn); }
+.nd-flag > span { display: grid; place-items: center; flex: none; width: var(--space-5); height: var(--space-5); border: var(--hairline) solid currentColor; border-radius: 50%; font-size: var(--fs-caption); }
+.nd--checks[data-anim="armed"] .nd-value { opacity: 0; }
+.nd--checks[data-anim="armed"] .nd-value--flag dd { color: var(--ink); }
+.nd--checks[data-anim="play"] .nd-value { transition: opacity var(--dur-base) var(--ease-out) 150ms; }
+.nd--checks[data-anim="play"] .nd-value--flag { transition-delay: 400ms; }
+.nd--checks[data-anim="play"] .nd-value--flag dd { transition: color var(--dur-base) var(--ease-out) 950ms; }
+.nd--checks[data-anim="armed"] .nd-flag { transform: translateY(var(--nd-lift)); }
+.nd--checks[data-anim="play"] .nd-flag { transition: opacity var(--dur-base) var(--ease-out) var(--nd-last), transform var(--dur-base) var(--ease-out) var(--nd-last); }
+.nd--checks { --nd-last: 1250ms; }
+.nd--documents { --nd-last: 1550ms; }
+
+/* The last element of each demo (the result) appears last. */
+.nd[data-anim="armed"] .nd-last { opacity: 0; }
+.nd[data-anim="play"] .nd-last { transition: opacity var(--dur-base) var(--ease-out) var(--nd-last, 1200ms); }
+
+/* Stacked without JS: panels in a column. Tabbed: only the selected panel shows (hidden attribute). */
+@media (max-width: 760px) {
+  .nx-list { grid-template-columns: minmax(0, 1fr); }
+  .nx-tab { border-right: 0; border-bottom: var(--hairline) solid var(--rule); padding-inline: var(--frame-pad); }
+  .nx-tab:last-child { border-bottom: 0; }
+  .nx-tab[aria-selected="true"] { box-shadow: inset var(--nd-bar) 0 0 var(--accent); }
+  .nx-panel { grid-template-columns: minmax(0, 1fr); }
+  .nx-copy { padding-block: var(--space-7); }
+  .nx-stage { min-height: 0; padding: var(--space-7) var(--frame-pad); }
+  .nd-docs { gap: var(--space-3); }
+  .nd-card { padding: var(--space-4); }
+  .nd-record { margin-top: var(--space-6); }
+  .nd-tools .nd-card { padding: var(--space-2); }
+}
+@media (max-width: 520px) {
+  .nd-docs { grid-template-columns: minmax(0, 1fr); }
+  .nd-ticket { margin-right: var(--space-8); }
+  .nd-record { margin: calc(var(--space-5) * -1) 0 0 var(--space-8); position: relative; }
+}

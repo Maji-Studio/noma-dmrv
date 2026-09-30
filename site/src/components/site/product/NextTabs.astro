@@ -1,0 +1,53 @@
+---
+/**
+ * NextTabs (#next): the five upcoming concept demos as tabs. Each panel has the Upcoming chip, a title,
+ * a line of text and its demo; the demo plays when its tab opens (and on first view for the open tab).
+ * Without JS the tablist stays hidden and all five panels show in a column. No props.
+ * Keyboard: arrow keys move between tabs and open them, Home and End jump to the first and last.
+ */
+import GridFrame from "../GridFrame.astro";
+import Chip from "../Chip.astro";
+import NextDemo from "./NextDemo.astro";
+import "./next.css";
+
+const UPCOMING = [
+  { kind: "documents", tab: "Documents", title: "Read documents into records.", text: "Use weighbridge tickets and lab reports to fill in records, ready for your review." },
+  { kind: "reactor", tab: "Reactor readings", title: "Bring in reactor readings.", text: "Record temperature and energy data from your reactor without entering each reading by hand." },
+  { kind: "telegram", tab: "Telegram", title: "Record work through Telegram.", text: "Log deliveries, production runs and readings from a chat." },
+  { kind: "connections", tab: "Connections", title: "Connect your other tools.", text: "Use an open API and MCP to work with noma’s records from other software and AI tools." },
+  { kind: "checks", tab: "Checks", title: "Catch unusual readings earlier.", text: "Use AI checks to flag values that need a closer look before reporting." },
+];
+---
+<GridFrame id="next" pad="none" flush aria-labelledby="next-title">
+  <div class="pd-head">
+    <h2 id="next-title" class="t-h2">What we’re building next.</h2>
+    <div class="stack-tight">
+      <p class="t-lead">Less manual work. More connected records.</p>
+      <p class="t-body t-muted">Explore the planned document capture, reactor readings, Telegram, API and AI features.</p>
+    </div>
+  </div>
+  <div class="nx" data-next-tabs>
+    <div class="nx-list" role="tablist" aria-label="Upcoming features" hidden>
+      {UPCOMING.map((u, i) => (
+        <button type="button" role="tab" id={`nx-tab-${u.kind}`} aria-controls={`nx-panel-${u.kind}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? "0" : "-1"} class="nx-tab">
+          {u.tab}
+        </button>
+      ))}
+    </div>
+    {UPCOMING.map((u) => (
+      <section class="nx-panel" id={`nx-panel-${u.kind}`} aria-labelledby={`nx-title-${u.kind}`} data-kind={u.kind}>
+        <div class="nx-copy">
+          <Chip>Upcoming</Chip>
+          <h3 id={`nx-title-${u.kind}`} class="t-h3">{u.title}</h3>
+          <p class="t-body t-muted">{u.text}</p>
+        </div>
+        <div class="nx-stage"><NextDemo kind={u.kind} /></div>
+      </section>
+    ))}
+    <p class="nx-note t-caption">These features are planned. The previews illustrate how they could work.</p>
+  </div>
+</GridFrame>
+<script>
+  import { mountNextTabs } from "./next-demos.js";
+  document.querySelectorAll("[data-next-tabs]").forEach((root) => mountNextTabs(root));
+</script>

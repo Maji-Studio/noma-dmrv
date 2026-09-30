@@ -1,0 +1,72 @@
+---
+/**
+ * WhoFor: the three audiences as editorial rows. Each row pairs the audience with the question it
+ * brings, then three things noma does for it. No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+const REGISTRY_NOTE = "The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.";
+const AUDIENCES = [
+  {
+    id: "producers",
+    name: "Biochar producers",
+    role: "Record the work at the plant and in the field.",
+    question: "What’s in this bin, and where did the last draw go?",
+    facts: [
+      "Record deliveries, production runs, bin draws and applications as the work happens.",
+      "Split and mix bins do the arithmetic. Each draw is logged with mass, moisture, time and who did it.",
+      "Attach weighbridge tickets, photos and transport documents to the record they belong to.",
+    ],
+    link: { label: "See bins and stock", href: "/product#bins" },
+  },
+  {
+    id: "managers",
+    name: "Carbon or MRV managers",
+    role: "Prepare the reporting from what the plant recorded.",
+    question: "Which removals are ready, and what is still missing?",
+    facts: [
+      "Trace any application back to its feedstock, or a production run forward to its fields.",
+      "Energy, transport and lab records sit on the same trace as the mass.",
+      "See what each removal is missing before you prepare a submission.",
+    ],
+    note: REGISTRY_NOTE,
+    link: { label: "See evidence and reporting", href: "/product#evidence" },
+  },
+  {
+    id: "verifiers",
+    name: "Verifiers",
+    role: "Check the figures against the evidence.",
+    question: "Where does this number come from?",
+    facts: [
+      "Follow a figure back to the records and the evidence behind it.",
+      "Dry biochar is carried from bin to field, so the mass is not re-estimated at each step.",
+      "Every calculation is in the open-source code, so you can read the math.",
+    ],
+    link: { label: "Open source and ownership", href: "#open-source" },
+  },
+];
+---
+<GridFrame id="who" class="who" pad="none" flush aria-labelledby="who-title">
+  <div class="why-head">
+    <h2 id="who-title" class="t-h2">Who it’s for.</h2>
+    <p class="t-lead">The people who record biochar, the people who report on it and the people who check it. Each one reads the same trace for a different reason.</p>
+  </div>
+  <ul class="who-rows">
+    {AUDIENCES.map((a) => (
+      <li class="who-row">
+        <div class="who-name stack-tight">
+          <h3 id={`who-${a.id}`} class="t-h3">{a.name}</h3>
+          <p class="t-body t-muted">{a.role}</p>
+        </div>
+        <div class="who-body">
+          <p class="who-question">“{a.question}”</p>
+          <ul class="who-facts">{a.facts.map((f) => <li class="t-body">{f}</li>)}</ul>
+          <div class="who-foot">
+            {a.note && <p class="t-caption">{a.note}</p>}
+            <TextLink href={a.link.href}>{a.link.label}</TextLink>
+          </div>
+        </div>
+      </li>
+    ))}
+  </ul>
+</GridFrame>
