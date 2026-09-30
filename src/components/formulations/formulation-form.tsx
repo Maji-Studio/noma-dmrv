@@ -323,9 +323,10 @@ export function FormulationForm({
               <div className="md:col-start-3">
                 <FormField
                   id="biocharPercent"
-                  label="Volume share (%)"
+                  label="Volume share"
+                  unit="%"
                   error={errors.biocharPercent?.message}
-                  helperText={
+                  cue={
                     autoBalance ? "Auto-fills the remaining share" : undefined
                   }
                 >
@@ -399,7 +400,8 @@ export function FormulationForm({
 
                 <FormField
                   id={`ingredients.${index}.sharePercent`}
-                  label="Volume share (%)"
+                  label="Volume share"
+                  unit="%"
                   error={errors.ingredients?.[index]?.sharePercent?.message}
                 >
                   <FormInput

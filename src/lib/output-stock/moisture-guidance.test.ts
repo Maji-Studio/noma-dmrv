@@ -6,7 +6,7 @@ const ZONE = 'Africa/Dar_es_Salaam';
 describe('moistureReadingGuidance', () => {
   it('shows the estimate as one line and never proposes a value', () => {
     expect(moistureReadingGuidance({ moisturePercent: 29.43, basisText: 'From the reading on Sep 15, 2026, 14:30.' }, null))
-      .toEqual({ helperText: 'Estimated moisture: 29.4%', basisText: 'From the reading on Sep 15, 2026, 14:30.', warning: undefined });
+      .toEqual({ cue: 'Estimated moisture: 29.4%', basisText: 'From the reading on Sep 15, 2026, 14:30.', warning: undefined });
   });
 
   it('warns, without blocking, when a reading is more than five points from the estimate', () => {
@@ -18,7 +18,7 @@ describe('moistureReadingGuidance', () => {
   });
 
   it('has nothing to say without an estimate', () => {
-    expect(moistureReadingGuidance(null, 40)).toEqual({ helperText: undefined, basisText: undefined, warning: undefined });
+    expect(moistureReadingGuidance(null, 40)).toEqual({ cue: undefined, basisText: undefined, warning: undefined });
   });
 });
 

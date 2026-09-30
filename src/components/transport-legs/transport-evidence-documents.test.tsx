@@ -65,7 +65,7 @@ describe("TransportEvidencePanel chrome", () => {
     expect(html).not.toContain("Transport evidence</h3>");
     expect(html).not.toContain("border-t");
     expect(html).toContain('aria-label="Transport evidence"');
-    expect(html).not.toContain("CERT");
+    expect(html).not.toContain("data-cert-field");
   });
 
   it("titles the delivery panel as delivery evidence", () => {
@@ -80,7 +80,7 @@ describe("TransportEvidencePanel chrome", () => {
     expect(html).toContain("Delivery evidence</h3>");
     expect(html).toContain("No delivery evidence");
     expect(html).toContain("No documents are attached.");
-    expect(html).not.toContain("CERT");
+    expect(html).not.toContain("data-cert-field");
   });
 });
 

@@ -51,7 +51,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
             : null,
         },
         {
-          label: "Biochar product applied (kg)",
+          label: "Biochar product applied",
           ...certificationDetailField("application", "biocharAppliedTons"),
           value: application.biocharAppliedTons != null
             ? formatApplicationKgFromTons(application.biocharAppliedTons)

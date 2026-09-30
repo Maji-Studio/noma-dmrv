@@ -279,7 +279,7 @@ test.describe("Feedstock UI CRUD", () => {
     ).toHaveCount(0);
   });
 
-  test("explains the CERT badge on hover instead of leaving it bare (Phase 1, §6)", async ({
+  test("explains the certification seal once in the sheet header and on hover", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -290,30 +290,63 @@ test.describe("Feedstock UI CRUD", () => {
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
-    // The explanation ships as an always-on sr-only string for assistive tech
-    // (one per CERT chip). Hovering a chip mounts a visible tooltip carrying the
-    // SAME text — so the previously-unexplained "CERT" chip is legible to
-    // sighted users too. The tooltip portals to <body> (outside the dialog), so
-    // the robust signal is a page-scoped count that grows by exactly one.
-    const explanationOnPage = page.getByText("Required for certification", {
-      exact: true,
-    });
-    // waitForSideSheet resolves on dialog attach, not form paint — retry until
-    // the first sr-only explanation exists (the chips mount in one commit)
-    // before snapshotting the non-retrying count.
-    await expect(explanationOnPage.first()).toBeAttached();
+    const seals = dialog.locator("[data-cert-field]");
+    await expect(seals.first()).toBeVisible();
+    // The header legend shows because the sheet holds at least one seal.
+    await expect(dialog.locator("[data-cert-legend]")).toBeVisible();
+    await expect(dialog.locator("[data-cert-legend]")).toHaveText("Required for certification");
+
+    // Each seal carries the same explanation as an sr-only string; hovering a
+    // seal mounts a tooltip with it. The tooltip portals to <body>, so count
+    // page-wide matches.
+    const explanationOnPage = page.getByText("Required for certification", { exact: true });
     const beforeHover = await explanationOnPage.count();
-    expect(beforeHover).toBeGreaterThan(0);
-
-    // The CERT chip is the sr-only text's parent span (the tooltip trigger);
-    // hover a chip that lives inside the dialog so it isn't under the overlay.
-    const chipInDialog = dialog
-      .getByText("Required for certification", { exact: true })
-      .first()
-      .locator("xpath=..");
-    await chipInDialog.hover();
-
+    await seals.first().hover();
     await expect(explanationOnPage).toHaveCount(beforeHover + 1);
+  });
+
+  test("the ⓘ opens on a click, closes on a second click and on Escape, and never focuses the field", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.click('button:has-text("New feedstock")');
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    const trigger = dialog.locator("[data-toggletip-trigger]").first();
+    await expect(trigger).toBeVisible();
+    // The explanation is the trigger's description: a FormField ⓘ points at
+    // the field's screen-reader copy, any other ⓘ carries aria-description.
+    const descriptionId = await trigger.getAttribute("aria-describedby");
+    const explanation = (
+      descriptionId
+        ? await page.locator(`[id="${descriptionId}"]`).textContent()
+        : await trigger.getAttribute("aria-description")
+    )?.trim() ?? "";
+    expect(explanation.length).toBeGreaterThan(0);
+
+    // The popup has no tooltip role; count matches of its text page-wide.
+    const copies = page.getByText(explanation, { exact: true });
+    const closedCount = await copies.count();
+
+    await trigger.click();
+    await expect(copies).toHaveCount(closedCount + 1);
+    // The trigger sits outside the <label>, so the press stays on the trigger.
+    await expect(trigger).toBeFocused();
+
+    // Moving the pointer away keeps a pressed tip open; a second press closes it.
+    await page.mouse.move(0, 0);
+    await expect(copies).toHaveCount(closedCount + 1);
+    await trigger.click();
+    await expect(copies).toHaveCount(closedCount);
+
+    await trigger.click();
+    await expect(copies).toHaveCount(closedCount + 1);
+    await page.keyboard.press("Escape");
+    await expect(copies).toHaveCount(closedCount);
   });
 
   test("view mode shows transport evidence read-only; edit mode has upload controls", async ({

@@ -437,7 +437,7 @@ export function BiocharProductForm({
       />
       <FormSpine control={control}>
       <FormSection title="Placement" icon={<CalendarIcon size={14} weight="bold" />} fields={["placedAt"]}>
-        <FormField id="placedAt" label="Mixing and placement time" required error={errors.placedAt?.message} helperText={placementClock.hint}>
+        <FormField id="placedAt" label="Mixing and placement time" required error={errors.placedAt?.message} cue={placementClock.hint}>
           <EventTimeInput control={control} name="placedAt" id="placedAt" timeZone={placementClock.timeZone} disabled={isSubmitting || isEditMode} />
         </FormField>
       </FormSection>
@@ -532,7 +532,7 @@ export function BiocharProductForm({
             required: true,
             disabled: isSubmitting,
             placeholder: "e.g. 2",
-            helperText: "Typically 1 to 2% for biochar",
+            cue: "Typically 1 to 2% for biochar",
             estimate: isEditMode ? undefined : sourceMoistureEstimate,
             reading: watchedMoisture,
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),

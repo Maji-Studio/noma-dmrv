@@ -190,7 +190,10 @@ test.describe("First-run onboarding", () => {
         name: "Add location",
       });
       await expect(locationDialog).toBeVisible();
-      const locationName = locationDialog.getByLabel("Location name");
+      // By role: the field's ⓘ button is named "More about Location name".
+      const locationName = locationDialog.getByRole("textbox", {
+        name: "Location name",
+      });
       await expect(locationName).toBeVisible();
       await locationName.fill("CU Source Site");
       await locationDialog.getByLabel("Country").fill("Tanzania");

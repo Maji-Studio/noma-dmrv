@@ -198,14 +198,16 @@ export function FacilityCertifierForm({
     }
   };
 
-  const templateHelperText = (() => {
+  // Why the list is empty stays visible; what the default does is explanation.
+  const templateCue = (() => {
     if (!watchedProjectId) return "Pick a project to load templates.";
     if (templatesLoading) return "Loading templates…";
     if (templateOptions.length === 0) {
       return "This project has no Removal templates.";
     }
-    return "Used as the default when submitting credit batches.";
+    return undefined;
   })();
+  const templateHelperText = "Used as the default when submitting credit batches.";
 
   const showProjectDetails = !!watchedProjectId;
 
@@ -276,6 +278,7 @@ export function FacilityCertifierForm({
             id="defaultRemovalTemplateId"
             label="Default Removal template"
             error={errors.defaultRemovalTemplateId?.message}
+            cue={templateCue}
             helperText={templateHelperText}
           >
             <FormSelect

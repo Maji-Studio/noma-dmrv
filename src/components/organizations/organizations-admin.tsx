@@ -150,7 +150,7 @@ export function OrganizationsAdmin() {
             id="org-owner-email"
             label="Owner email"
             error={errors.ownerEmail?.message}
-            helperText="Must be an existing user account; they become the org Owner."
+            cue="Must be an existing user account; they become the org Owner."
             required
           >
             <FormInput

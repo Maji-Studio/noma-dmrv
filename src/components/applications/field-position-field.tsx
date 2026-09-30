@@ -10,10 +10,10 @@ const MODE_OPTIONS: readonly { value: FieldPositionMode; label: string }[] = [
   { value: "manual", label: "Set manually" },
 ];
 
-const MODE_HELPER: Record<FieldPositionMode, string> = {
-  derive: "Follows the delivery destination, and updates if you change it.",
-  manual: "Search an address, click the map, or type the coordinates.",
-};
+/** Deriving has a consequence the operator needs to see: the position moves with the delivery. */
+const DERIVE_CUE = "Follows the delivery destination, and updates if you change it.";
+/** Entering by hand only needs an explanation, behind the ⓘ. */
+const MANUAL_HELPER = "Search an address, click the map, or type the coordinates.";
 
 export interface DerivedPosition {
   gpsLatitude: number;
@@ -84,7 +84,8 @@ export function FieldPositionField({
         <FormField
           id="fieldPositionMode"
           label="Field position"
-          helperText={MODE_HELPER[mode]}
+          cue={mode === "derive" ? DERIVE_CUE : undefined}
+          helperText={mode === "manual" ? MANUAL_HELPER : undefined}
         >
           <FormSelect
             id="fieldPositionMode"

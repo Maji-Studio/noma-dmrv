@@ -402,7 +402,7 @@ export function ProductionRunForm({
             id="status"
             label="Status"
             error={errors.status?.message}
-            helperText="Mark finished runs Complete before certification."
+            cue="Mark finished runs Complete before certification."
             certifyRequired
             certifyStatus={runStatusCertStatus}
           >
@@ -439,7 +439,7 @@ export function ProductionRunForm({
             id="startDate"
             label="Start date"
             error={errors.startDate?.message}
-            helperText={timezoneHelperText}
+            cue={timezoneHelperText}
             required
           >
             <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />

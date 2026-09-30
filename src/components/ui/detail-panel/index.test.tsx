@@ -112,13 +112,13 @@ describe("DetailField pending contract", () => {
     expect(markup).toContain('aria-busy="true"');
   });
 
-  it("keeps the CERT chip neutral until the value settles", () => {
+  it("keeps the certification seal neutral until the value settles", () => {
     const markup = renderToStaticMarkup(
       <DetailField label="Distance" value={null} certifyRequired pending />,
     );
 
-    expect(markup).not.toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).not.toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
   });
 
   it("names the omission once the field stops pending", () => {
@@ -150,7 +150,7 @@ describe("DetailField certification status", () => {
       <DetailField label="Distance" value="25 km" certifyRequired />,
     );
 
-    expect(markup).toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="satisfied"');
   });
 
   it("renders absent saved values with the missing treatment", () => {
@@ -158,7 +158,7 @@ describe("DetailField certification status", () => {
       <DetailField label="Distance" value={null} certifyRequired />,
     );
 
-    expect(markup).toContain("--st-wait-border");
+    expect(markup).toContain('data-cert-field="missing"');
   });
 
   it.each(Object.values(MISSING_VALUE))(
@@ -168,8 +168,8 @@ describe("DetailField certification status", () => {
         <DetailField label="Distance" value={value} certifyRequired />,
       );
 
-      expect(markup).toContain("--st-wait-border");
-      expect(markup).not.toContain("--st-ok-border");
+      expect(markup).toContain('data-cert-field="missing"');
+      expect(markup).not.toContain('data-cert-field="satisfied"');
     },
   );
 
@@ -185,8 +185,8 @@ describe("DetailField certification status", () => {
         />,
       );
 
-      expect(markup).toContain("--st-wait-border");
-      expect(markup).not.toContain("--st-ok-border");
+      expect(markup).toContain('data-cert-field="missing"');
+      expect(markup).not.toContain('data-cert-field="satisfied"');
     },
   );
 
@@ -204,8 +204,8 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
     expect(markup).toContain('data-empty="true"');
   });
 
@@ -219,8 +219,8 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
   });
 
   it("accepts an explicit present signal for values it cannot read", () => {
@@ -233,8 +233,8 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-ok-border");
-    expect(markup).not.toContain("--st-wait-border");
+    expect(markup).toContain('data-cert-field="satisfied"');
+    expect(markup).not.toContain('data-cert-field="missing"');
   });
 
   it("accepts an explicit composite-requirement override", () => {
@@ -247,8 +247,8 @@ describe("DetailField certification status", () => {
       />,
     );
 
-    expect(markup).toContain("--st-wait-border");
-    expect(markup).not.toContain("--st-ok-border");
+    expect(markup).toContain('data-cert-field="missing"');
+    expect(markup).not.toContain('data-cert-field="satisfied"');
   });
 });
 
@@ -294,18 +294,18 @@ describe("DetailSpine", () => {
 });
 
 describe("DetailField secondary line", () => {
-  it("reads a second figure under the value with its own CERT status", () => {
+  it("reads a second figure under the value with its own certification status", () => {
     const present = renderToStaticMarkup(
       <DetailField label="Biochar product applied (kg)" value="5,000 kg" secondary={{ label: "Dry biochar applied", value: "4,000 kg", certifyRequired: true }} />,
     );
     expect(present).toContain("Dry biochar applied");
     expect(present).toContain("4,000 kg");
-    expect(present).toContain("--st-ok-border");
+    expect(present).toContain('data-cert-field="satisfied"');
 
     const missing = renderToStaticMarkup(
       <DetailField label="Biochar product applied (kg)" value="5,000 kg" secondary={{ label: "Dry biochar applied", value: null, certifyRequired: true }} />,
     );
     expect(missing).toContain(MISSING_VALUE.notRecorded);
-    expect(missing).toContain("--st-wait-border");
+    expect(missing).toContain('data-cert-field="missing"');
   });
 });

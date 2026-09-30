@@ -15,6 +15,17 @@
   display: none;
 }
 
+/* CERT legend: the sheet or dialog header explains the certification seal once,
+   and only when that sheet or dialog holds a seal. :has() keeps every form out
+   of it (no registration, no opt-in) and follows seals that mount later. */
+[data-cert-legend] {
+  display: none;
+}
+
+[data-cert-scope]:has([data-cert-field]) [data-cert-legend] {
+  display: flex;
+}
+
 .slide-over-panel-popup[data-ending-style] {
   transform: translateX(100%);
 }

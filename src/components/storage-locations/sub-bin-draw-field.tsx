@@ -126,7 +126,7 @@ function ReadingRow({ id, subBin, aside, raw, onChange, timeZone, disabled, show
         required
         error={error}
         warning={guidance.warning}
-        helperText={guidance.helperText}
+        cue={guidance.cue}
         hint={guidance.basisText ? <>{guidance.basisText} {MOISTURE_BASIS_HINT}</> : MOISTURE_BASIS_HINT}
         aside={aside}
       >
