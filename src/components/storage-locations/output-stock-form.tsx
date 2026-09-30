@@ -65,14 +65,16 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     : { ...values, sources: undefined, moisturePercent: kind === "count" && wetMassKg === 0 ? null : values.moisturePercent });
   // Until every reached sub-bin is read there is nothing to preview. A split
   // correction waits for its rows: without them the server would quietly
-  // replay the saved readings at the new weight.
-  // A correction's estimate must leave out the entry it replaces, which only its own preview does.
-  const { preview, input, estimate, gate, basisFingerprint } = useOutputDrawDraft({
-    draw, singleMoistureReady: !splitOriginal,
-    buildInput: () => candidate.success ? candidate.data : null,
-    estimateFor: original ? null : { storageLocationId, facilityId, occurredAt: values.occurredAt },
+  // replay the saved readings at the new weight. A correction's estimate must
+  // leave out the entry it replaces, which only its own preview does, so it
+  // skips the bin lookup but keeps the facility clock.
+  const { preview, input, estimate, gate, beginSubmit } = useOutputDrawDraft({
+    draw, singleMoistureReady: !splitOriginal, moisturePercent: candidate.success ? candidate.data.moisturePercent : null,
+    entry: candidate.success ? candidate.data : null,
+    estimateFor: { storageLocationId: original ? null : storageLocationId, facilityId, occurredAt: values.occurredAt },
+    writeReadings: (sources) => setValue("sources", sources),
   });
-  const { canSave, submitDisabled } = gate();
+  const { canSave, submitDisabled, basisFingerprint } = gate();
   // Names the entry in the preview's caption. A replaced loss or delivery is
   // still wet mass removed from the bin; a replaced count is still a count.
   const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";
@@ -91,7 +93,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   return <form onSubmit={(event) => {
     event.stopPropagation();
     setAttempted(true);
-    setValue("sources", draw.active ? draw.sources ?? undefined : undefined);
+    beginSubmit();
     return submit(event);
   }} className="space-y-20">
     <ResolvedErrorRevalidator control={control} trigger={trigger} />

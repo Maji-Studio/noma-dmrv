@@ -303,16 +303,19 @@ export function BiocharProductForm({
     occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null, wetKg: requestedBiocharKg,
   });
   const [attempted, setAttempted] = useState(false);
-  const { preview: sourcePreview, estimate: sourceMoistureEstimate, readingsReady, gate, basisFingerprint: sourceBasisFingerprint } = useOutputDrawDraft({
+  const { preview: sourcePreview, estimate: sourceMoistureEstimate, readingsReady, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: isEditMode,
     singleMoistureReady: watchedMoisture != null,
-    buildInput: (sources) => !isEditMode && sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0 ? {
-      storageLocationId: sourceBiocharStorageLocationId,
-      facilityId: selectedFacilityId,
-      occurredAt: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
-      ...(sources ? { sources } : { moisturePercent: Number(watchedMoisture) }),
-    } : null,
-    estimateFor: !isEditMode && sourceBiocharStorageLocationId ? { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId, occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null } : null,
+    moisturePercent: Number(watchedMoisture),
+    entry: sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0
+      ? { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId, kind: "production_draw", occurredAt: String(watchedPlacedAt), wetMassKg: requestedBiocharKg }
+      : null,
+    estimateFor: { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId, occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null },
+    // A split draw saves its sub-bins and readings; the biochar moisture is derived on save.
+    writeReadings: (sources, split) => {
+      setValue("sources", sources);
+      if (split) setValue("moistureContentPercent", undefined);
+    },
   });
   // A split draw's biochar moisture is its overall 1 − solids ÷ wet, from the preview.
   const biocharMoisture = draw.active ? sourcePreview.data?.movementMoisturePercent ?? null : watchedMoisture;
@@ -329,7 +332,7 @@ export function BiocharProductForm({
     waterAddedKg: Number(watchedWaterAddedKg), ingredientBins: watchedIngredientBins?.map(ingredient => ({ ...ingredient, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : Number.NaN })),
   } : null);
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
-  const { canSave, submitDisabled } = gate(affectedBinsUnavailable);
+  const { canSave, submitDisabled, basisFingerprint } = gate({ unavailable: affectedBinsUnavailable, basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint });
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
   const refreshStockPreview = sourcePreview.refetch;
   useEffect(() => {
@@ -361,7 +364,7 @@ export function BiocharProductForm({
     // mutation hooks invalidate `outputStockKeys.all`, which refreshes both previews.
     await onSubmit({
       ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
-      basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint ?? sourceBasisFingerprint ?? data.basisFingerprint,
+      basisFingerprint: basisFingerprint ?? data.basisFingerprint,
       idempotencyKey,
     });
   });
@@ -424,9 +427,7 @@ export function BiocharProductForm({
       )}
       <form id={formId} onSubmit={(event) => {
         setAttempted(true);
-        // A split draw saves its sub-bins and readings; the biochar moisture is derived on save.
-        setValue("sources", draw.active ? draw.sources ?? undefined : undefined);
-        if (draw.active) setValue("moistureContentPercent", undefined);
+        beginSubmit();
         return handleFormSubmit(event);
       }} className="space-y-20">
       <ZeroSourceBiocharWarning

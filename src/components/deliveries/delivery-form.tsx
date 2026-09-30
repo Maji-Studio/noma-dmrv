@@ -245,17 +245,21 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     occurredAt: watchDate ? String(watchDate) : null, wetKg: wetMass,
   });
   const [attempted, setAttempted] = useState(false);
-  const { preview: stockPreview, estimate: moistureEstimate, gate, basisFingerprint } = useOutputDrawDraft({
+  const { preview: stockPreview, estimate: moistureEstimate, gate, beginSubmit } = useOutputDrawDraft({
     draw, bypass: isEditMode,
     singleMoistureReady: Number.isFinite(moisture) && moisture >= 0 && moisture < 100,
-    buildInput: (sources) => !isEditMode && watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass) ? {
-      storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery",
-      occurredAt: String(watchDate), wetMassKg: wetMass,
-      ...(sources ? { sources } : { moisturePercent: moisture }),
-    } : null,
-    estimateFor: !isEditMode && watchBinId ? { storageLocationId: watchBinId, facilityId: formFacilityId, occurredAt: watchDate ? String(watchDate) : null } : null,
+    moisturePercent: moisture,
+    entry: watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass)
+      ? { storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery", occurredAt: String(watchDate), wetMassKg: wetMass }
+      : null,
+    estimateFor: { storageLocationId: watchBinId, facilityId: formFacilityId, occurredAt: watchDate ? String(watchDate) : null },
+    // A split load saves its sub-bins and readings; its overall moisture is derived on save.
+    writeReadings: (sources, split) => {
+      setValue("sources", sources);
+      if (split) setValue("moistureContentPercent", undefined);
+    },
   });
-  const { canSave, submitDisabled } = gate();
+  const { canSave, submitDisabled, basisFingerprint } = gate();
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
 
@@ -296,9 +300,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       <FormSpine control={control}>
       <form id={formId} onSubmit={(event) => {
         setAttempted(true);
-        // A split load saves its sub-bins and readings; its overall moisture is derived on save.
-        setValue("sources", draw.active ? draw.sources ?? undefined : undefined);
-        if (draw.active) setValue("moistureContentPercent", undefined);
+        beginSubmit();
         return submitDelivery(event);
       }} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />

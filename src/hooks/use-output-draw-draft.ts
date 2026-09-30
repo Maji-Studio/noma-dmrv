@@ -11,16 +11,20 @@ interface OutputDrawDraftOptions {
   draw: ReturnType<typeof useSubBinDraw>;
   /** The form's single-moisture reading is usable; only read when the draw is not split. */
   singleMoistureReady: boolean;
+  /** The entry's own fields once complete, or null. The hook adds the readings. */
+  entry: Omit<OutputStockPreviewInput, "sources" | "moisturePercent"> | null;
+  /** The single moisture reading, sent when the draw is not split. */
+  moisturePercent?: number | null;
   /**
-   * The preview input once the form's own fields are complete, or null.
-   * Called only when the readings are ready; `sources` is set exactly when the
-   * draw is split, so the form spreads `sources` or its single moisture.
+   * What the moisture field's estimate reads. A null bin skips the bin balance
+   * but keeps the facility, so a preview's own estimate is still shown on the
+   * facility clock.
    */
-  buildInput: (sources: Sources | null) => OutputStockPreviewInput | null;
-  /** Bin, facility and time for the moisture field's estimate; null when the field has none. */
-  estimateFor: { storageLocationId: string; facilityId: string | null | undefined; occurredAt: string | null | undefined } | null;
-  /** The form saves without a preview (an edit of a saved entry). */
+  estimateFor: { storageLocationId: string | null | undefined; facilityId: string | null | undefined; occurredAt: string | null | undefined };
+  /** Saves without a preview (an edit of a saved entry): no input, no estimate, always savable. */
   bypass?: boolean;
+  /** Writes the draw's readings into the form just before its submit runs; `split` is true for a split draw. */
+  writeReadings: (sources: Sources | undefined, split: boolean) => void;
 }
 
 /**
@@ -32,22 +36,30 @@ interface OutputDrawDraftOptions {
  * which invalidate `outputStockKeys.all`.
  *
  * `readingsReady` is returned so a form can gate a second preview on the same
- * readings; that preview is created after this hook, so its unavailability
- * enters the gate as `gate(extraUnavailable)`.
+ * readings; that preview is created after this hook, so it enters the gate as
+ * `gate({ unavailable, basisFingerprint })` and its basis wins.
  */
-export function useOutputDrawDraft({ draw, singleMoistureReady, buildInput, estimateFor, bypass = false }: OutputDrawDraftOptions) {
+export function useOutputDrawDraft({ draw, singleMoistureReady, entry, moisturePercent, estimateFor, bypass = false, writeReadings }: OutputDrawDraftOptions) {
   const readingsReady = draw.active ? draw.sources !== null : draw.usesSingleMoisture && singleMoistureReady;
   // Save stays pressable while a reached row is empty, so pressing it names the missing reading.
   const awaitingReadings = draw.active && draw.sources === null && !draw.untickCode && !draw.needsTick;
-  const input = readingsReady ? buildInput(draw.active ? draw.sources : null) : null;
+  const readings = draw.active ? { sources: draw.sources ?? undefined } : { moisturePercent };
+  const input = !bypass && readingsReady && entry ? { ...entry, ...readings } : null;
   const preview = useOutputStockPreview(input);
-  const estimate = useOutputMoistureEstimate(draw.active || !estimateFor ? null : estimateFor.storageLocationId, estimateFor?.facilityId, estimateFor?.occurredAt, preview.data?.moistureEstimate);
+  const estimate = useOutputMoistureEstimate(bypass || draw.active ? null : estimateFor.storageLocationId, estimateFor.facilityId, estimateFor.occurredAt, preview.data?.moistureEstimate);
   const previewReady = !!input && !!preview.data && !preview.isFetching && !preview.error && !preview.data.blockingMessage;
-  /** `extraUnavailable`: another preview the save also waits on is missing, fetching, failed or blocked. */
-  function gate(extraUnavailable = false) {
-    const canSave = bypass || (previewReady && !extraUnavailable);
-    // The button stays pressable while a reached row is empty, so pressing it names the missing reading.
-    return { canSave, submitDisabled: !canSave && !awaitingReadings };
+  /** `extra`: another preview the save also waits on, and the basis it saves against. */
+  function gate(extra?: { unavailable: boolean; basisFingerprint?: string }) {
+    const canSave = bypass || (previewReady && !extra?.unavailable);
+    return {
+      canSave,
+      // The button stays pressable while a reached row is empty, so pressing it names the missing reading.
+      submitDisabled: !canSave && !awaitingReadings,
+      basisFingerprint: extra?.basisFingerprint ?? preview.data?.basisFingerprint,
+    };
   }
-  return { preview, input, estimate, readingsReady, gate, basisFingerprint: preview.data?.basisFingerprint };
+  function beginSubmit() {
+    writeReadings(draw.active ? draw.sources ?? undefined : undefined, draw.active);
+  }
+  return { preview, input, estimate, readingsReady, gate, beginSubmit };
 }
