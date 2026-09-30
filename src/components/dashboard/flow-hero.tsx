@@ -104,7 +104,7 @@ export function FlowHero({
                 aria-pressed={isActive}
                 onClick={() => setView(option.value)}
                 className={[
-                  "label-button border-[1.5px] border-[var(--ink)] px-12 py-8 transition-colors",
+                  "text-[11px] font-medium border-[1.5px] border-[var(--ink)] px-12 py-8 transition-colors",
                   isActive
                     ? "bg-[var(--ink)] text-[var(--paper)]"
                     : "bg-transparent text-[var(--ink)] hover:bg-[var(--sea)]",

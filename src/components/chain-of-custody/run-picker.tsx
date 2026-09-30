@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const BAND_CLASS =
   "flex h-40 items-center border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]";
 const CODE_CLASS =
-  "min-w-0 truncate font-mono text-[11px] font-medium";
+  "min-w-0 truncate text-[11px] font-medium";
 const TRIGGER_MAX_WIDTH_CLASS = "max-w-[260px]";
 const MENU_WIDTH_PX = 280;
 const MENU_MAX_HEIGHT_CLASS = "max-h-[320px]";

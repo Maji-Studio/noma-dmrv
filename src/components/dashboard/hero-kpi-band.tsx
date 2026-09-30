@@ -64,13 +64,13 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
     >
       {cells.map((kpi, index) => (
         <div key={kpi.key} className={`px-20 py-16 ${CELL_BORDERS(index)}`}>
-          <div className="text-[10px] font-medium leading-[1.2] text-[var(--clr-dark-purple-60)]">
+          <div className="body-caption text-[var(--clr-dark-purple-60)]">
             {kpi.label}
           </div>
           <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
             {formatValue(kpi)}
             {kpi.value != null && (
-              <span className="ml-4 font-[family-name:var(--font-mono)] text-[11px] font-medium text-[var(--clr-dark-purple-60)]">
+              <span className="ml-4 body-caption font-medium text-[var(--clr-dark-purple-60)]">
                 {kpi.unit}
                 {kpi.deltaPercent != null && (
                   <span
@@ -88,7 +88,7 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
               </span>
             )}
           </div>
-          <div className="mt-4 font-[family-name:var(--font-mono)] text-[10px] leading-[1.4] tracking-[0.02em] text-[var(--color-text-tertiary)]">
+          <div className="mt-4 body-caption text-[var(--color-text-tertiary)]">
             {kpi.detail}
           </div>
         </div>

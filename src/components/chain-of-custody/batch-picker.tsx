@@ -21,7 +21,7 @@ const BORDERED_BAND_CLASS =
   "flex items-center border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)]";
 
 const BATCH_CODE_CLASS =
-  "min-w-0 truncate font-mono text-[11px] font-medium";
+  "min-w-0 truncate text-[11px] font-medium";
 
 interface BatchPickerProps {
   batches: CreditBatchWithRelations[];
