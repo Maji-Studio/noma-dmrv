@@ -22,7 +22,7 @@ import { copy as c } from "../../content/copy.js";
     <Hero />
 
     <Section id="trace" band="purple" title={c.dense.title} lead={c.dense.lead} split>
-      <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
+      <VisualFrame visual="dense" attrs={{ "data-jump": "true", "data-side": "below" }} caption={c.captions.dense} />
       <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
     </Section>
 

@@ -40,7 +40,7 @@ import { copy as c } from "../../content/copy.js";
       <span class="node" aria-hidden="true"></span>
       <header class="head"><h2>{c.dense.title}</h2><p class="lead">{c.dense.lead}</p></header>
       <div class="field">
-        <VisualFrame visual="dense" attrs={{ "data-jump": "true" }} caption={c.captions.dense} />
+        <VisualFrame visual="dense" attrs={{ "data-jump": "true", "data-side": "below" }} caption={c.captions.dense} />
         <div class="shots">{c.dense.screenshots.map((s, i) => <ScreenshotFrame caption={s.caption} alt={s.alt} src={s.src} width={s.width} height={s.height} lead={i === 0} />)}</div>
       </div>
     </section>
@@ -156,10 +156,13 @@ import { copy as c } from "../../content/copy.js";
   :root[data-layout="5"] .feat-title + p { font-size: var(--fs-body); max-width: 44ch; }
 
   /* Mid widths: the prose column would squeeze the diagrams, so every section runs its heading over the field, like the dense trace. */
-  @media (min-width: 861px) and (max-width: 1439px) {
+  @media (min-width: 861px) and (max-width: 1679px) {
     :root[data-layout="5"] .s:not(.hero) > .head { position: static; grid-column: 2 / -1; grid-template-columns: minmax(0, var(--prose)) minmax(0, 1fr); column-gap: var(--field-gap); align-items: end; }
     :root[data-layout="5"] .s:not(.hero) > .field { grid-column: 2 / -1; grid-row: 3; margin-top: clamp(28px, 3vw, 44px); }
     :root[data-layout="5"] .s:not(.hero) > .node { grid-row: 1 / span 3; }
+    /* The hero chain would drop under its 760px minimum beside the panel: panel goes under the diagram. */
+    :root[data-layout="5"] [data-visual="chain"].nv-viz { grid-template-columns: minmax(0, 1fr); }
+    :root[data-layout="5"] [data-visual="chain"] .nv-side { --sp-start: var(--gutter); border-left: 0; border-top: var(--rule); }
   }
 
   /* Below the two-column layout: one clean column, no spine. */

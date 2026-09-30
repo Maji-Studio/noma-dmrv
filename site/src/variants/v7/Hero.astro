@@ -16,7 +16,7 @@ import FactLine from "../../components/FactLine.astro";
       </div>
       <div class="panel"><FactLine figures={c.proof.figures} /></div>
     </div>
-    <VisualFrame visual="chain" caption={c.captions.chain} />
+    <VisualFrame visual="chain" caption={c.captions.chain} attrs={{ "data-side": "below" }} />
     <LogoStrip label={c.proof.label} logos={c.proof.logos} />
   </div>
 </section>
