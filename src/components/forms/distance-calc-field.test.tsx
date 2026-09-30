@@ -58,7 +58,7 @@ describe("DistanceCalcField accessibility", () => {
   });
 });
 
-describe("DistanceCalcField calculate button", () => {
+describe("DistanceCalcField estimate button", () => {
   const point = { lat: 1, lng: 2 };
 
   it("is a single tab stop when enabled", () => {
@@ -80,14 +80,14 @@ describe("DistanceCalcField calculate button", () => {
       const button = buttonTag(markup);
       expect(button).toContain('aria-busy="true"');
       expect(hasAttr(button, "disabled")).toBe(true);
-      expect(markup).toMatch(/<button[^>]*>.*Calculate<\/button>/);
+      expect(markup).toMatch(/<button[^>]*>.*Estimate<\/button>/);
     } finally {
       routeState.isPending = false;
     }
   });
 
-  it("labels the button Calculate", () => {
+  it("labels the button Estimate", () => {
     const markup = render({ origin: point, destination: point });
-    expect(markup).toMatch(/<button[^>]*>Calculate<\/button>/);
+    expect(markup).toMatch(/<button[^>]*>Estimate<\/button>/);
   });
 });

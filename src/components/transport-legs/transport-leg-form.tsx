@@ -1,6 +1,7 @@
 "use client";
 
 import { useForm, useWatch } from "react-hook-form";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DistanceCalcField,
@@ -151,10 +152,12 @@ export function TransportLegForm({
         hint="We record distance and cargo mass; Isometric applies the transport emissions factor."
       >
         <div className="flex flex-col gap-16">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+          {/* From → To: the two names read as one pair; the arrow only shows
+              when they sit side by side. */}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-16">
             <FormField
               id="originName"
-              label="Origin name"
+              label="From"
               error={errors.originName?.message}
             >
               <FormInput
@@ -164,9 +167,15 @@ export function TransportLegForm({
                 {...register("originName")}
               />
             </FormField>
+            <ArrowRightIcon
+              size={16}
+              weight="bold"
+              aria-hidden="true"
+              className="hidden sm:block mt-[calc(var(--spacing-24)+var(--spacing-12))] text-[var(--color-text-tertiary)]"
+            />
             <FormField
               id="destinationName"
-              label="Destination name"
+              label="To"
               error={errors.destinationName?.message}
             >
               <FormInput
@@ -182,7 +191,7 @@ export function TransportLegForm({
               each preview, search box, and the lat/lng pair. */}
           <PositionPicker
             idPrefix="origin"
-            label="Origin position"
+            label="From position"
             accent="orange"
             latitude={originLat ?? null}
             longitude={originLng ?? null}
@@ -196,7 +205,7 @@ export function TransportLegForm({
           />
           <PositionPicker
             idPrefix="destination"
-            label="Destination position"
+            label="To position"
             accent="pink"
             latitude={destinationLat ?? null}
             longitude={destinationLng ?? null}
@@ -212,7 +221,7 @@ export function TransportLegForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <DistanceCalcField
             id="distanceKm"
-            label="One-way distance (km)"
+            label="Distance"
             // Every leg counts its round trip; show what the entry counts.
             cue={
               distanceKm != null && Number.isFinite(distanceKm) && distanceKm > 0

@@ -222,7 +222,7 @@ export function CustomerLocationFields({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <DistanceCalcField
             id={distanceId}
-            label="One-way distance from facility (per leg, km)"
+            label="Distance from facility"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField(
               "customerLocation",

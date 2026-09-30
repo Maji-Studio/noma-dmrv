@@ -26,7 +26,7 @@ export function supplierSheetSections(supplier: SupplierWithRelations, locations
           ? []
           : buildPartyLocationDetailFields(locations, {
               distanceLabel:
-                "One-way distance to facility (per leg, km)",
+                "Distance to facility",
               defaultLabel: "Default source location",
               positionLabel: "Source location position",
             }),

@@ -196,7 +196,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       .fill(String(SEED_SUPPLIER_POINT.lng));
 
     const calcButton = dialog.getByRole("button", {
-      name: /Calculate road distance/i,
+      name: /Estimate road distance/i,
     });
     await expect(calcButton).toBeEnabled();
     await calcButton.click();
@@ -231,7 +231,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
 
     // New location has no coordinates yet → CALC must be disabled.
     const calcButton = dialog.getByRole("button", {
-      name: /Calculate road distance/i,
+      name: /Estimate road distance/i,
     });
     await expect(calcButton).toBeDisabled();
 
@@ -278,10 +278,10 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       dialog.getByRole("spinbutton", { name: "Default soil temperature (°C)" })
     ).toBeVisible();
     const distanceInput = dialog.getByRole("spinbutton", {
-      name: "One-way distance from facility (per leg, km)",
+      name: "Distance from facility",
     });
     const calcButton = dialog.getByRole("button", {
-      name: /Calculate road distance selected facility to application site position/i,
+      name: /Estimate road distance selected facility to application site position/i,
     });
     await expect(distanceInput).toBeVisible();
     await expect(calcButton).toBeEnabled();

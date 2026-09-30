@@ -212,7 +212,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                   </th>
                   <th className="px-16 py-12 text-left">
                     <span className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                      One-way distance to facility (per leg, km)
+                      Distance to facility
                       <CertificationFieldTag />
                     </span>
                   </th>

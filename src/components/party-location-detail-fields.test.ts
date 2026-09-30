@@ -4,7 +4,7 @@ import { buildPartyLocationDetailFields } from "./party-location-detail-fields";
 
 /** Mirrors the customer-list call site verbatim (customer-list.tsx). */
 const options = {
-  distanceLabel: "One-way distance from facility (per leg, km)",
+  distanceLabel: "Distance from facility",
   defaultLabel: "Default destination",
   positionLabel: "Application site position",
   descriptionLabel: "Site description",
@@ -24,7 +24,7 @@ describe("buildPartyLocationDetailFields", () => {
       "Application site position latitude",
       "Application site position longitude",
       "Default soil temperature (°C)",
-      "One-way distance from facility (per leg, km)",
+      "Distance from facility",
       "Default destination",
     ]);
     expect(

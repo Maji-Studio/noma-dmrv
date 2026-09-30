@@ -53,6 +53,8 @@ import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
+/** End padding that keeps typed digits clear of the "km" suffix. */
+const DISTANCE_INPUT_STYLE = { paddingInlineEnd: "calc(2ch + var(--spacing-24))" } as const;
 
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
@@ -525,7 +527,7 @@ export function FeedstockForm({
             >
               <FormField
                 id="transportDistanceKm"
-                label="One-way distance (km)"
+                label="Distance"
                 error={errors.transportDistanceKm?.message}
                 certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
                 certifyStatus={transportDistanceCertStatus}
@@ -536,7 +538,8 @@ export function FeedstockForm({
                 }
               >
                 <div>
-                  <div className="relative">
+                  <div className="flex items-stretch gap-6">
+                  <div className="relative grow">
                     <FormInput
                       id="transportDistanceKm"
                       type="number"
@@ -548,7 +551,9 @@ export function FeedstockForm({
                         selectedDistanceSource === SUPPLIER_DEFAULT_DISTANCE_SOURCE
                       }
                       error={!!errors.transportDistanceKm}
-                      className={isDistanceOverride ? "pr-[104px]" : undefined}
+                      className="peer w-full"
+                      style={DISTANCE_INPUT_STYLE}
+                      aria-describedby="transportDistanceKm-unit"
                       {...register("transportDistanceKm", {
                         setValueAs: numericValue,
                         onChange: (event) => {
@@ -568,6 +573,17 @@ export function FeedstockForm({
                         },
                       })}
                     />
+                    <span
+                      aria-hidden="true"
+                      data-control-unit=""
+                      className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[length:var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
+                    >
+                      km
+                    </span>
+                    <span id="transportDistanceKm-unit" className="sr-only">
+                      Kilometres
+                    </span>
+                  </div>
                     {isDistanceOverride && (
                       <button
                         type="button"
@@ -575,7 +591,7 @@ export function FeedstockForm({
                         disabled={isSubmitting}
                         aria-label="Reset to suggested distance"
                         data-testid="transportDistanceKm-reset"
-                        className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
+                        className="flex shrink-0 items-center gap-6 px-8 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
                       >
                         <span className="body-caption">reset</span>
                         <ArrowCounterClockwiseIcon size={14} weight="bold" />
