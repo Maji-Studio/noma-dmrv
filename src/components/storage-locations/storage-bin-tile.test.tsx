@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
 import type { StorageLocationWithFacility } from '@/data-access/storage-locations';
 const preview = vi.hoisted(() => vi.fn(() => ({ data: undefined, error: undefined })));
-vi.mock('@/hooks/use-output-stock', () => ({ useOutputStockPreview: preview }));
+vi.mock('@/hooks/use-output-stock', () => ({ useOutputStockBalance: preview }));
 vi.mock('@/components/ui', () => ({ RowActionsMenu: () => null }));
 import { StorageBinTile } from './storage-bin-tile';
 

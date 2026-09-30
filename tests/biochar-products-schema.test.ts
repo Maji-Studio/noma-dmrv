@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  biocharProductEntrySchema,
   biocharProductFilterSchema,
   biocharProductFormSchema,
 } from "@/schemas/biochar-products";
@@ -7,7 +8,7 @@ import {
 // productionDate is intentionally absent: a biochar product's production date is
 // the selected source bin's oldest allocated run date, derived server-side.
 const validBiocharProductInput = {
-  placedAt: "2026-09-01",
+  placedAt: "2026-09-01T12:00:00.000Z",
   idempotencyKey: "product-request",
   basisFingerprint: "product-preview",
   facilityId: "11111111-1111-4111-8111-111111111111",
@@ -36,7 +37,7 @@ describe("biocharProductFormSchema", () => {
   });
 
   it("rejects an invalid calendar placement date", () => {
-    const result = biocharProductFormSchema.safeParse({ ...validBiocharProductInput, placedAt: "2026-02-30" });
+    const result = biocharProductFormSchema.safeParse({ ...validBiocharProductInput, placedAt: "2026-02-30T12:00:00.000Z" });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues).toEqual(
@@ -69,12 +70,22 @@ describe("biocharProductFormSchema", () => {
       expect(issuePaths).toContain("sourceBiocharStorageLocationId");
       expect(issuePaths).toContain("storageLocationId");
       expect(issuePaths).toContain("massKg");
-      expect(issuePaths).toContain("moistureContentPercent");
       expect(issuePaths).toContain("waterAddedKg");
       expect(issueMessages.get("massKg")).toBe("Biochar wet mass is required");
-      expect(issueMessages.get("moistureContentPercent")).toBe("Required");
       expect(issueMessages.get("waterAddedKg")).toBe("Required");
     }
+  });
+
+  it("requires the biochar moisture unless a split draw reads each sub-bin", () => {
+    const missing = biocharProductEntrySchema.safeParse({ ...validBiocharProductInput, moistureContentPercent: null });
+    expect(missing.success).toBe(false);
+    if (!missing.success) {
+      expect(missing.error.issues).toEqual([expect.objectContaining({ path: ["moistureContentPercent"], message: "Required" })]);
+    }
+    const layerId = "55555555-5555-4555-8555-555555555555";
+    expect(biocharProductEntrySchema.safeParse({ ...validBiocharProductInput, moistureContentPercent: undefined, sources: [{ layerId, moisturePercent: 30 }] }).success).toBe(true);
+    const repeated = biocharProductEntrySchema.safeParse({ ...validBiocharProductInput, sources: [{ layerId, moisturePercent: 30 }, { layerId, moisturePercent: 31 }] });
+    expect(repeated.success).toBe(false);
   });
 
   it("accepts zero water added as an explicit required value", () => {

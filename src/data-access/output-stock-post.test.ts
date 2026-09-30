@@ -10,7 +10,7 @@ vi.mock('./transport-legs', () => ({ lockBiocharTransportRouteTopology: mocks.lo
 import { withOutputStockPosting } from './output-stock-post';
 
 const ctx = { organizationId: 'org', userId: 'operator', orgRole: 'owner' as const, isPlatformAdmin: false };
-const input = { storageLocationId: 'source', facilityId: 'facility', physicalDate: '2026-09-14', kind: 'delivery' as const,
+const input = { storageLocationId: 'source', facilityId: 'facility', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'delivery' as const,
   wetMassKg: 100, moisturePercent: 10, idempotencyKey: 'request', basisFingerprint: 'basis', reason: 'Delivery D-1' };
 const order = (mock: ReturnType<typeof vi.fn>) => mock.mock.invocationCallOrder[0];
 

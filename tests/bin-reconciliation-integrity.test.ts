@@ -69,7 +69,7 @@ beforeAll(async () => {
 });
 
 import { postedStockFixture, cleanupPostedStock, productInput, postProduct, postDelivery, deliveryInput, postMeasurement } from "./helpers/posted-output-stock-fixture";
-import { getOutputBinDryBalance } from "@/data-access/output-stock";
+import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { postOutputStock } from "@/data-access/output-stock-post";
 import { recordStockTakeMovement } from "@/data-access/bin-movements";
@@ -86,14 +86,14 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     await db.insert(feedstocks).values({ organizationId: f.ctx.organizationId, facilityId: f.facility.id, code: `E2E-FS-${f.tag}`,
       status: "complete", storageLocationId: bin.id, feedstockTypeId: f.ingredientType.id, massWetKg: 100, massDryKg: 100, moistureContentPercent: 0, deliveryDate: new Date("2026-09-01") });
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
-    const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30 }] } });
+    const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30, moistureContentPercent: 0 }] } });
     const [deletion, stockTake] = await Promise.allSettled([
       deleteBiocharProduct(f.ctx, product.id),
       recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" }),
     ]);
     expect(deletion.status).toBe("rejected"); expect(stockTake.status).toBe("fulfilled");
     expect((await getStorageLocationWithFacility(f.ctx, bin.id)).feedstockInventory.currentWetMassKg).toBe(50);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(70);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(70);
   });
 
   it("serializes a stock-take against a concurrent production-run feedstock draw", async () => {
@@ -312,7 +312,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const results = await Promise.allSettled(inputs.map(input => createDelivery(f.ctx, input)));
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBe(10);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(10);
   });
 
   it("waits for the source-bin advisory lock before locking source production rows", async () => {
@@ -354,7 +354,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
   it("serializes explicit delivery correction with a commercial order shrink", async () => {
     const f = await postedFixture(); const delivery = await postDelivery(f, 60);
     const [allocation] = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
-    const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, physicalDate: "2026-09-14", kind: "delivery" as const, wetMassKg: 80, moisturePercent: 0, correctsMovementId: allocation.movementId };
+    const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T12:00:00.000Z", kind: "delivery" as const, wetMassKg: 80, moisturePercent: 0, correctsMovementId: allocation.movementId };
     const preview = await previewOutputStock(f.ctx, input);
     const results = await Promise.allSettled([
       postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
@@ -362,6 +362,6 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
-    expect(await getOutputBinDryBalance(f.ctx, f.bin.id)).toBeGreaterThanOrEqual(0);
+    expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBeGreaterThanOrEqual(0);
   });
 });

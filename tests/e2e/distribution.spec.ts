@@ -12,6 +12,7 @@ import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { deliveryStatuses } from "../../src/schemas/deliveries";
 import { selectEntity, selectEntityByText } from "./fixtures/page-helpers";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 // ============================================
 // Test Constants
@@ -36,7 +37,7 @@ async function createOrderViaUi(
     page.locator("aside").getByText(seededData.facility.name, { exact: false })
   ).toBeVisible({ timeout: 15000 });
 
-  await page.click('button:has-text("New Order")');
+  await page.click('button:has-text("New order")');
   await page.waitForSelector('[role="dialog"]', { timeout: 15000 });
 
   await page.fill('input[name="orderDate"]', "2026-03-02");
@@ -62,7 +63,7 @@ async function createOrderViaUi(
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', quantityKg);
   await selectEntity(page, "Formulation", seededData.formulation.id);
-  await page.click('button[type="submit"]:has-text("Create Order")');
+  await page.click('button[type="submit"]:has-text("Create order")');
   await page.waitForSelector('[role="dialog"]', {
     state: "hidden",
     timeout: 10000,
@@ -78,15 +79,15 @@ async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
     timeout: 10000,
   });
 
-  await page.click('button:has-text("New Delivery")');
+  await page.click('button:has-text("New delivery")');
   await page.waitForSelector('[role="dialog"]', { timeout: 8000 });
 
-  await page.fill('input[name="deliveryDate"]', "2026-03-02");
+  await page.fill('input[name="deliveryDate"]', "2026-03-02T12:00");
   await selectEntityByText(page, "Order", seededData.customer.name);
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "95");
-  await page.fill('input[name="moistureContentPercent"]', "10");
-  await page.click('button[type="submit"]:has-text("Create Delivery")');
+  await fillStockMoisture(page, "delivery", "10");
+  await page.click('button[type="submit"]:has-text("Create delivery")');
   await page.waitForSelector('[role="dialog"]', {
     state: "hidden",
     timeout: 10000,
@@ -198,7 +199,7 @@ test.describe("Order + Delivery UI CRUD", () => {
     );
     await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
     const saveButton = adminPage.locator(
-      'button[type="submit"]:has-text("Save Changes")'
+      'button[type="submit"]:has-text("Save changes")'
     );
     await expect(saveButton).toBeVisible({ timeout: 8000 });
     await saveButton.click();

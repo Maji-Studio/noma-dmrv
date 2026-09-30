@@ -1,7 +1,6 @@
-import { storageLocations } from '@/db/schema';
-import { getOutputBinStockView } from './output-stock';
 /**
- * Shared per-location stock derivation for the feedstock and biochar lanes.
+ * Shared per-location stock derivation for the feedstock lane, plus the
+ * all-time biochar allocated to products from each source bin.
  *
  * Stock stays unclamped: a negative value is an operational reconciliation
  * signal. Callers inside a transaction must supply that transaction so every
@@ -42,11 +41,8 @@ export interface LaneStockDerivation {
   feedstockStockWetKg: number;
   /** Intake-moisture estimate only. Never use as an availability limit. */
   feedstockEstimatedDryKg: number | null;
-  biocharProducedKg: number;
+  /** All-time wet biochar allocated to products from this source bin. */
   biocharAllocatedKg: number;
-  biocharMovementDeltaKg: number;
-  biocharStockKg: number | null;
-  productMovementDeltaKg: number;
 }
 
 export interface DeriveLaneStockOptions {
@@ -115,7 +111,6 @@ export async function deriveLaneStock(
     intakeRows,
     runConsumptionRows,
     ingredientConsumptionRows,
-    outputRows,
     legacyAllocationRows,
     sourceAllocationRows,
     movementRows,
@@ -216,28 +211,6 @@ export async function deriveLaneStock(
         : executor
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
-          total: sumNumeric(productionRuns.biocharOutputKg),
-        })
-        .from(productionRuns)
-        .where(
-          and(
-            inArray(
-              productionRuns.biocharStorageLocationId,
-              options.storageLocationIds,
-            ),
-            eq(productionRuns.organizationId, ctx.organizationId),
-            ne(
-              productionRuns.status,
-              CANCELLED_PRODUCTION_RUN_STATUS,
-            ),
-          ),
-        )
-        .groupBy(productionRuns.biocharStorageLocationId),
-      feedstockOnly
-        ? Promise.resolve([])
-        : executor
-        .select({
-          storageLocationId: productionRuns.biocharStorageLocationId,
           total: numericAggregate(
             sql<number>`COALESCE(SUM(${sourceBiocharMassKgSql(
               biocharProducts.massKg,
@@ -276,7 +249,6 @@ export async function deriveLaneStock(
       executor
         .select({
           storageLocationId: binMovements.storageLocationId,
-          lane: binMovements.lane,
           totalDeltaKg: sumNumeric(binMovements.massDeltaKg),
         })
         .from(binMovements)
@@ -287,9 +259,10 @@ export async function deriveLaneStock(
               options.storageLocationIds,
             ),
             eq(binMovements.organizationId, ctx.organizationId),
+            eq(binMovements.lane, "feedstock"),
           ),
         )
-        .groupBy(binMovements.storageLocationId, binMovements.lane),
+        .groupBy(binMovements.storageLocationId),
     ]);
 
   const byLocation = new Map<string, LaneStockDerivation>(
@@ -303,11 +276,7 @@ export async function deriveLaneStock(
         feedstockMovementDeltaKg: 0,
         feedstockStockWetKg: 0,
         feedstockEstimatedDryKg: 0,
-        biocharProducedKg: 0,
         biocharAllocatedKg: 0,
-        biocharMovementDeltaKg: 0,
-        biocharStockKg: 0,
-        productMovementDeltaKg: 0,
       },
     ]),
   );
@@ -339,12 +308,6 @@ export async function deriveLaneStock(
       stock.feedstockConsumedWetKg += row.totalWet;
     }
   }
-  for (const row of outputRows) {
-    const stock = row.storageLocationId
-      ? byLocation.get(row.storageLocationId)
-      : undefined;
-    if (stock) stock.biocharProducedKg = row.total;
-  }
   for (const row of legacyAllocationRows) {
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
@@ -359,14 +322,7 @@ export async function deriveLaneStock(
   }
   for (const row of movementRows) {
     const stock = byLocation.get(row.storageLocationId);
-    if (!stock) continue;
-    if (row.lane === "feedstock") {
-      stock.feedstockMovementDeltaKg = row.totalDeltaKg;
-    } else if (row.lane === "biochar") {
-      stock.biocharMovementDeltaKg = row.totalDeltaKg;
-    } else {
-      stock.productMovementDeltaKg = row.totalDeltaKg;
-    }
+    if (stock) stock.feedstockMovementDeltaKg = row.totalDeltaKg;
   }
 
   for (const stock of byLocation.values()) {
@@ -382,18 +338,7 @@ export async function deriveLaneStock(
           ? stock.feedstockStockWetKg *
             (stock.feedstockIntakeDryKg / stock.feedstockIntakeWetKg)
           : null;
-    stock.biocharStockKg =
-      stock.biocharProducedKg -
-      stock.biocharAllocatedKg +
-      stock.biocharMovementDeltaKg;
   }
 
-  if (!feedstockOnly) {
-    const bins = await executor.select({ id: storageLocations.id }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), inArray(storageLocations.id, options.storageLocationIds), eq(storageLocations.type, 'biochar_bin'), isNull(storageLocations.archivedAt)));
-    for (const bin of bins) {
-      const stock = byLocation.get(bin.id);
-      if (stock) stock.biocharStockKg = (await getOutputBinStockView(ctx, bin.id, executor)).dryMassKg;
-    }
-  }
   return [...byLocation.values()];
 }

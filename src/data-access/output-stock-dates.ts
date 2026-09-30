@@ -5,7 +5,7 @@ import { SafeError } from '@/lib/errors';
 import { and, eq, sql, type SQLWrapper } from 'drizzle-orm';
 import { requireOrgScope } from './utils';
 
-/** Convert a UTC timestamp without time zone to its facility date, independent of the DB session zone. */
+/** A UTC timestamp without time zone as its facility calendar day ("YYYY-MM-DD"), independent of the DB session zone. */
 export function facilityTimestampDateExpr(timestamp: SQLWrapper, timezone: SQLWrapper) {
   return sql<string | null>`(${timestamp} at time zone 'UTC' at time zone ${timezone})::date::text`;
 }

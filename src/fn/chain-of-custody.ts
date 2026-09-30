@@ -23,6 +23,7 @@ import { withAction } from "./with-action";
 
 const applicationIdSchema = z.uuid();
 const creditBatchIdSchema = z.uuid();
+const productionRunIdSchema = z.uuid().nullish();
 
 export async function getChainOfCustodyFn(
   applicationId: string
@@ -70,12 +71,16 @@ export async function getCreditBatchChainFn(
 }
 
 export async function getCreditBatchChainGeoFn(
-  creditBatchId: string
+  creditBatchId: string,
+  productionRunId?: string | null
 ): Promise<ActionResult<ChainOfCustodyGeoData>> {
   return withAction(
     async (ctx) => {
       const validatedId = creditBatchIdSchema.parse(creditBatchId);
-      return getCreditBatchChainGeoData(ctx, validatedId);
+      const validatedRunId = productionRunIdSchema.parse(productionRunId);
+      return getCreditBatchChainGeoData(ctx, validatedId, {
+        productionRunId: validatedRunId,
+      });
     },
     {
       zodErrorPrefix: "Invalid credit batch ID",

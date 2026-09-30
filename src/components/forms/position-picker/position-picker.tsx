@@ -38,7 +38,7 @@ const PositionPickerMap = dynamic(() => import("./position-picker-map"), {
       className="flex h-full w-full items-center justify-center bg-[var(--color-background-light)]"
       data-testid="position-picker-map-loading"
     >
-      <span className="label-button uppercase text-[var(--color-text-tertiary)]">
+      <span className="body-small text-[var(--color-text-tertiary)]">
         Loading map…
       </span>
     </div>
@@ -53,7 +53,7 @@ export interface PositionValue {
 interface PositionPickerProps {
   /** Prefix for the generated input ids (e.g. "gps" → "gps-latitude"). */
   idPrefix: string;
-  /** Panel title (mono-uppercase). */
+  /** Panel title, sentence case. */
   label?: string;
   latitude: number | null | undefined;
   longitude: number | null | undefined;
@@ -143,9 +143,9 @@ export function PositionPicker({
 
   return (
     <div className="border-[1.5px] border-[var(--clr-dark-purple)]">
-      {/* Panel head — hairline chrome, mono-uppercase microcopy */}
+      {/* Panel head: the field label style, then one caption cue */}
       <div className="flex items-baseline justify-between border-b border-[var(--clr-dark-purple-30)] px-12 py-8">
-        <span className="label-button uppercase text-[var(--color-text-primary)]">
+        <span className="body-small font-medium text-[var(--color-text-secondary)]">
           {label}
           {required && (
             <>
@@ -156,7 +156,7 @@ export function PositionPicker({
             </>
           )}
         </span>
-        <span className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+        <span className="body-caption text-[var(--color-text-tertiary)]">
           Search · click map · type
         </span>
       </div>
@@ -196,7 +196,7 @@ export function PositionPicker({
             className="flex h-[120px] flex-col items-center justify-center gap-6 border border-dashed border-[var(--clr-dark-purple-30)] bg-[var(--color-background-light)] px-16 text-center"
             data-testid="position-picker-no-map"
           >
-            <span className="label-button uppercase text-[var(--color-text-secondary)]">
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">
               Map preview unavailable
             </span>
             <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -248,7 +248,7 @@ export function PositionPicker({
 
         {point && routingConfigured && resolvedLabel && (
           <p
-            className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]"
+            className="body-caption text-[var(--color-text-tertiary)]"
             data-testid="position-picker-resolved-label"
           >
             ≈ {resolvedLabel}

@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { MISSING_VALUE } from "./copy-utils";
+import { MASS_KG_STORAGE_DECIMALS } from "@/config/numeric-storage";
 import {
   formatCo2e,
   formatDayString,
   formatDistanceKm,
+  formatFacilityDateTime,
   formatFacilityDateTimeWithOffset,
   formatFileSize,
   formatMass,
@@ -60,6 +62,43 @@ describe("formatFacilityDateTimeWithOffset", () => {
   });
 });
 
+describe("facility clock under the viewer's daylight-saving change", () => {
+  const originalTz = process.env.TZ;
+  afterEach(() => {
+    process.env.TZ = originalTz;
+  });
+
+  // 02:30 on 2026-03-08 in Dar es Salaam (UTC+3, no DST) is 23:30Z the day
+  // before. New York skips 02:00 to 03:00 that morning, so date-fns-tz, which
+  // builds a Date from the facility wall clock in the viewer's zone, read it
+  // as 03:30. Two viewer zones and both sides of the fold pin the facility
+  // reading independent of the process clock.
+  const DAR = "Africa/Dar_es_Salaam";
+  const SPRING_GAP_INSTANT = "2026-03-07T23:30:00.000Z";
+  const AUTUMN_FOLD_INSTANT = "2026-10-31T22:30:00.000Z";
+
+  it.each(["America/New_York", "UTC", "Europe/Zurich"])(
+    "reads the facility wall clock when the viewer is on %s",
+    viewerZone => {
+      process.env.TZ = viewerZone;
+      expect(formatFacilityDateTime(SPRING_GAP_INSTANT, DAR)).toBe("Mar 8, 2026, 02:30");
+      expect(formatFacilityDateTimeWithOffset(new Date(SPRING_GAP_INSTANT), DAR)).toBe("2026-03-08 02:30 +03:00");
+      expect(formatFacilityDateTime(AUTUMN_FOLD_INSTANT, DAR)).toBe("Nov 1, 2026, 01:30");
+    },
+  );
+
+  it("renders the facility offset on each side of the facility's own change", () => {
+    process.env.TZ = "Africa/Dar_es_Salaam";
+    expect(formatFacilityDateTimeWithOffset(new Date("2026-03-08T06:59:00.000Z"), "America/New_York")).toBe("2026-03-08 01:59 -05:00");
+    expect(formatFacilityDateTimeWithOffset(new Date("2026-03-08T07:00:00.000Z"), "America/New_York")).toBe("2026-03-08 03:00 -04:00");
+  });
+
+  it("keeps the missing-value tokens", () => {
+    expect(formatFacilityDateTime(null, DAR)).toBe(MISSING_VALUE.notRecorded);
+    expect(formatFacilityDateTime("not a time", DAR)).toBe(MISSING_VALUE.notAvailable);
+  });
+});
+
 describe("formatDayString", () => {
   it("formats a YYYY-MM-DD day without reparsing into an instant", () => {
     expect(formatDayString("2026-08-01")).toBe("Aug 1, 2026");
@@ -109,5 +148,13 @@ describe("formatCo2e", () => {
 describe("formatPercent", () => {
   it("preserves requested lab precision", () => {
     expect(formatPercent(1.96, { digits: 2 })).toBe("1.96%");
+  });
+});
+
+describe("formatMassKg explicit storage precision", () => {
+  it("retains gram precision without changing the default display", () => {
+    expect(formatMassKg(125.125, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("125.125 kg");
+    expect(formatMassKg(125.125)).toBe("125.1 kg");
+    expect(formatMassKg(0.001, { digits: MASS_KG_STORAGE_DECIMALS })).toBe("0.001 kg");
   });
 });

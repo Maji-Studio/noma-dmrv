@@ -16,24 +16,24 @@ import type { DocumentType } from "@/schemas/documents";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import { GisReferenceDialog } from "./gis-reference-dialog";
 import { GisReferenceSummary } from "./gis-reference-summary";
-import { RadioCardGroup } from "./radio-card-group";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 
 const GIS_BOUNDARY_DOC_TYPE: DocumentType = "gis_boundary";
 
 const METHOD_OPTIONS = [
   {
-    key: "location",
+    value: "location",
     title: "Customer location",
     description:
       "Use the application GPS coordinates from the delivery's customer location.",
   },
   {
-    key: "boundary",
+    value: "boundary",
     title: "GIS reference",
     description: "The field boundary as a GeoJSON file, drawn on a map.",
   },
   {
-    key: "visual",
+    value: "visual",
     title: "Visual evidence",
     description: "Geotagged photos of each application stage.",
     disabled: true,
@@ -117,7 +117,7 @@ function GisReferenceField({
         <MapTrifoldIcon size={20} weight="bold" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="body-medium font-medium text-[var(--color-text-primary)]">
+        <span className="body-small font-medium text-[var(--color-text-primary)]">
           Add GIS reference
         </span>
         <span className="body-small text-[var(--color-text-tertiary)]">
@@ -176,13 +176,13 @@ export function ApplicationEvidencePanel({
   return (
     <div className="flex flex-col gap-16">
       {!readOnly && (
-        <RadioCardGroup
-          label="Evidence method"
+        <ChoiceCardGroup
+          legend="Evidence method"
           value={mode}
           options={METHOD_OPTIONS}
           disabled={disabled}
-          onChange={(key) =>
-            onModeChange?.(key as ApplicationEvidenceMethod)
+          onValueChange={(next) =>
+            onModeChange?.(next as ApplicationEvidenceMethod)
           }
         />
       )}

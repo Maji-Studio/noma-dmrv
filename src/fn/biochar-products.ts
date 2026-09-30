@@ -147,6 +147,7 @@ export async function createBiocharProductFn(
           storageLocationId: validated.storageLocationId || null,
           massKg: validated.massKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
+          sources: validated.sources,
           densityKgM3: validated.densityKgM3 ?? null,
           waterAddedKg: validated.waterAddedKg ?? null,
           composition,

@@ -8,6 +8,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 
 export default function VerifyEmailPage() {
   // Get email from sessionStorage on mount (set during set-password flow)
@@ -48,9 +49,9 @@ export default function VerifyEmailPage() {
   return (
     <div className="w-full max-w-[400px] mx-auto">
       <div className="mb-32 text-center">
-        <div className="w-16 h-16 mx-auto mb-24 bg-[var(--clr-dark-purple-10)] rounded-full flex items-center justify-center">
+        <div className="w-64 h-64 mx-auto mb-24 bg-[var(--clr-dark-purple-10)] rounded-full flex items-center justify-center">
           <svg
-            className="w-8 h-8 text-[var(--clr-dark-purple)]"
+            className="w-32 h-32 text-[var(--clr-dark-purple)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -89,23 +90,11 @@ export default function VerifyEmailPage() {
         </div>
 
         {resendSuccess && (
-          <div
-            className="p-16 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)] body-small"
-            role="status"
-            aria-live="polite"
-          >
-            Verification email sent. Check your inbox.
-          </div>
+          <Notice tone="success">Verification email sent. Check your inbox.</Notice>
         )}
 
         {error && (
-          <div
-            className="p-16 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)] body-small"
-            role="alert"
-            aria-live="polite"
-          >
-            {error}
-          </div>
+          <Notice tone="error">{error}</Notice>
         )}
 
         <div className="pt-16 border-t border-[var(--color-border-tertiary)]">

@@ -1,9 +1,10 @@
 import { test, expect, selectEntity, waitForFacilityHydration } from "./fixtures";
 import {
-  FIFO_BROWSER_DATE,
+  FIFO_BROWSER_TIME,
   readOutputStockBrowserFixture,
   seedOutputStockBrowserFixture,
 } from "./helpers/output-stock-browser-fixture";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 const FLOW_TIMEOUT_MS = 180_000;
 const LOSS_REASON = "E2E parent form spill";
@@ -17,9 +18,18 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await page.getByPlaceholder("Search by code or name…").fill(fixture.bin.code);
   await page.getByText(fixture.bin.name, { exact: true }).first().click();
   await page.getByRole("button", { name: "Record loss", exact: true }).click();
-  await page.locator("#physicalDate").fill(FIFO_BROWSER_DATE);
+  // The movement mode is a segmented control: native radios, arrow keys switch it.
+  const lossMode = page.getByRole("radio", { name: "Record loss", exact: true });
+  const countMode = page.getByRole("radio", { name: "Reconcile stock", exact: true });
+  await expect(lossMode).toBeChecked();
+  await lossMode.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(countMode).toBeChecked();
+  await lossMode.locator("..").click();
+  await expect(lossMode).toBeChecked();
+  await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill("120");
-  await page.locator("#stock-moisture").fill("30");
+  await fillStockMoisture(page, "stock", "30");
   await page.locator("#stock-reason").fill(LOSS_REASON);
   await page.getByRole("button", { name: "Record loss", exact: true }).last().click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -28,16 +38,18 @@ test("saving a history correction keeps the containing delivery form unsaved", a
 
   await page.goto(`/deliveries?facility=${fixture.facility.id}`);
   await waitForFacilityHydration(page, fixture.facility.name);
-  await page.getByRole("button", { name: "New Delivery", exact: true }).click();
-  await page.locator("#deliveryDate").fill(FIFO_BROWSER_DATE);
+  await page.getByRole("button", { name: "New delivery", exact: true }).click();
+  await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", fixture.order.id, fixture.order.code);
   await page.locator("#storageLocationId").selectOption(fixture.bin.id);
   await page.locator("#deliveredWetMassKg").fill("10");
-  await page.locator("#moistureContentPercent").fill("30");
-  const create = page.getByRole("button", { name: "Create Delivery", exact: true });
+  await fillStockMoisture(page, "delivery", "30");
+  const create = page.getByRole("button", { name: "Create delivery", exact: true });
   await expect(create).toBeEnabled();
+  // The preview and its history trigger show at both levels.
+  await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
   await page.getByRole("region", { name: "Stock preview", exact: true })
-    .getByRole("button", { name: "More info", exact: true }).first().click();
+    .getByRole("button", { name: "Stock history", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });
   await history.locator("article").filter({ hasText: LOSS_REASON })
     .getByRole("button", { name: "Correct entry", exact: true }).click();

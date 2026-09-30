@@ -107,6 +107,7 @@ export function FormEntitySelect<
       required={required}
     >
       <EntitySelect
+        id={id}
         entityType={entityType}
         value={field.value}
         onChange={(value) => {

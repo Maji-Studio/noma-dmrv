@@ -18,11 +18,11 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import {
   deriveSourceBiocharMassKg,
-  GRAMS_PER_KILOGRAM,
   toPersistedMassGrams,
 } from "@/lib/biochar-composition/composition";
 import { formatCount } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
+import { solidsAtMoistureKg } from "@/lib/output-stock/exact";
 import { DUPLICATE_FORMULATION_INGREDIENT_MESSAGE } from "@/schemas/biochar-products";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { assertFeedstockWetDrawWithinStock } from "./feedstock-wet-stock";
@@ -238,9 +238,10 @@ export function getCompositionIngredientDraws(
 }
 
 /**
- * Freeze each ingredient's dry-mass withdrawal from the selected bin's
- * weighted remaining basis or explicit operator moisture. `massKg` stays the operator's wet/as-received mass;
- * the derived fields are server-owned allocation facts persisted in JSONB.
+ * Freeze each ingredient's dry solids from the moisture the operator measured
+ * for the material used. `massKg` stays the operator's wet/as-received mass;
+ * the derived fields are server-owned allocation facts persisted in JSONB,
+ * with the bin's weighted remaining estimate the operator saw beside the field.
  * Call only while the caller holds every ingredient bin's stock lock.
  */
 export async function resolveCompositionIngredientMassBasis(
@@ -249,7 +250,7 @@ export async function resolveCompositionIngredientMassBasis(
   composition: Record<string, unknown> | null | undefined,
   previousComposition?: Record<string, unknown> | null,
   excludeProductId?: string,
-  physicalDate?: string,
+  occurredAt?: string,
 ): Promise<Record<string, unknown>> {
   requireOrgScope(ctx);
   const ingredients = getCompositionIngredientObjects(composition);
@@ -272,7 +273,7 @@ export async function resolveCompositionIngredientMassBasis(
   ];
 
   const basisByBin = new Map(await Promise.all(storageLocationIds.map(async id =>
-    [id, await getIngredientMoistureBasis(ctx, id, physicalDate, tx, excludeProductId)] as const,
+    [id, await getIngredientMoistureBasis(ctx, id, occurredAt, tx, excludeProductId)] as const,
   )));
 
   return {
@@ -298,23 +299,21 @@ export async function resolveCompositionIngredientMassBasis(
       );
       if (previousSnapshot) {
         return { ...ingredient, ...previousSnapshot,
-          moistureSource: previousIngredientsByKey.get(massSnapshotKey(ingredient))?.moistureSource,
-          moistureSourceSnapshot: previousIngredientsByKey.get(massSnapshotKey(ingredient))?.moistureSourceSnapshot };
+          moistureEstimate: previousIngredientsByKey.get(massSnapshotKey(ingredient))?.moistureEstimate ?? null };
       }
       const storageLocationId =
         typeof ingredient.storageLocationId === "string"
           ? ingredient.storageLocationId
           : null;
       const basis = storageLocationId ? basisByBin.get(storageLocationId) : null;
-      const override = ingredient.moistureSource === 'operator_override' || !storageLocationId;
-      const moisture = override ? ingredient.moistureContentPercent : basis?.moisturePercent;
+      const moisture = ingredient.moistureContentPercent;
       if (typeof moisture !== 'number' || !Number.isFinite(moisture) || moisture < 0 || moisture > 100) {
-        throw new SafeError('Every positive ingredient requires moisture. Enter an override when the bin estimate is unavailable.');
+        throw new SafeError('Enter the measured moisture for every ingredient added.');
       }
       return { ...ingredient, moistureContentPercent: moisture,
-        moistureSource: override ? 'operator_override' : 'weighted_remaining',
-        moistureSourceSnapshot: override ? { kind: 'operator_override' } : { kind: "weighted_remaining", wetMassKg: basis!.wetMassKg, dryMassKg: basis!.dryMassKg },
-        massDryKg: Math.round(wetMassKg * (override ? 1 - moisture / 100 : basis!.dryMassKg / basis!.wetMassKg) * GRAMS_PER_KILOGRAM) / GRAMS_PER_KILOGRAM };
+        moistureEstimate: basis ? { moisturePercent: basis.moisturePercent, wetMassKg: basis.wetMassKg, dryMassKg: basis.dryMassKg } : null,
+        // Exact, so the snapshot check round(wet × (1 − moisture ÷ 100), 3) agrees on half-gram ties.
+        massDryKg: Number(solidsAtMoistureKg(String(wetMassKg), String(moisture))) };
 
     }),
   };

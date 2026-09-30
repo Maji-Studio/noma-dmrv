@@ -31,10 +31,17 @@ vi.mock("@/data-access/certifier-storage-locations", async (importOriginal) => (
   replaceMissingStorageLocationRegistration: mocks.replaceRegistration,
   setStorageLocationDrift: mocks.setDrift,
 }));
-vi.mock("@/lib/isometric/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/isometric/client")>()),
-  getIsometricClientForOrg: vi.fn(async () => mocks.client),
-}));
+vi.mock("@/lib/isometric/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/isometric/client")>();
+  // List reads walk the real paginate over the stubbed `get`.
+  const paged = actual.createIsometricClientFromTransport(
+    (_method, path, options) => mocks.client.get(path, options),
+  );
+  return {
+    ...actual,
+    getIsometricClientForOrg: vi.fn(async () => ({ ...paged, ...mocks.client })),
+  };
+});
 vi.mock("@/db", () => ({
   withDedicatedSessionAdvisoryLock: mocks.withLock,
 }));

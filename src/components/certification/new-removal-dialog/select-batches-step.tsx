@@ -33,6 +33,7 @@ import {
 } from "@/lib/certification/facility-setup-gaps";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { SelectableBatch } from "@/fn/certification";
+import { Notice } from "@/components/ui/notice";
 
 interface SelectBatchesStepProps {
   batches: SelectableBatch[];
@@ -281,21 +282,11 @@ export function SelectBatchesStep({
         facilitySetupGaps.map((gap) => {
           const copy = setupGapCopy(gap);
           return (
-            <div
+            <Notice
               key={gap.kind}
-              className="flex items-start gap-12 border-l-4 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8"
-            >
-              <WarningIcon
-                size={16}
-                weight="fill"
-                aria-hidden
-                className="mt-px shrink-0 text-[var(--color-signal-orange-strong)]"
-              />
-              <div className="flex flex-col gap-2">
-                <span className="body-small text-[var(--color-text-primary)]">
-                  {copy.message}
-                </span>
-                {copy.action && (
+              tone="warning"
+              action={
+                copy.action && (
                   <Link
                     href={certificationSettingsHref(facilityId)}
                     className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
@@ -303,9 +294,11 @@ export function SelectBatchesStep({
                     {copy.action.label}
                     <ArrowSquareOutIcon size={12} aria-hidden />
                   </Link>
-                )}
-              </div>
-            </div>
+                )
+              }
+            >
+              {copy.message}
+            </Notice>
           );
         })}
 

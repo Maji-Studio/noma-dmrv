@@ -157,10 +157,23 @@ export interface DataTableProps<TData, TValue> extends VariantProps<typeof table
   // Styling
   className?: string;
   containerClassName?: string;
-  // Custom row id
+  // Custom row id. Defaults to the record's own `id` (see `recordRowId`).
   getRowId?: (row: TData, index: number) => string;
   // Children (toolbar, pagination)
   children?: React.ReactNode;
+}
+
+/**
+ * Key a row by its record's `id` when it has one, falling back to its
+ * position. A position key makes React remount a row whenever a refetch moves
+ * it (a search narrowing the list moves a match to the top), which tears down
+ * any row menu open inside it (#798).
+ */
+export function recordRowId<TData>(row: TData, index: number): string {
+  const id = (row as { id?: unknown } | null | undefined)?.id;
+  if (typeof id === "string" && id.length > 0) return id;
+  if (typeof id === "number") return String(id);
+  return String(index);
 }
 
 /* ------------------------------------------------------------------ */
@@ -210,7 +223,7 @@ function DataTableRoot<TData, TValue>({
   variant,
   size,
   // Custom row id
-  getRowId,
+  getRowId = recordRowId,
   // Children
   children,
 }: DataTableProps<TData, TValue>) {

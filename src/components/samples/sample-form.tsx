@@ -16,7 +16,8 @@
  * 3. Elemental analysis - H, N, O, S percentages
  * 4. Proximate analysis - ash, moisture
  * 5. Physical properties - bulkDensity, pH, saltContent
- * 6. Stability ratios - H:C ratio, O:C ratio (durability tier shown, from the batch)
+ * 6. Stability ratios - O:C ratio entered, H:C and O:C derived (durability tier
+ *    shown, inherited from the batch)
  * (+2 conditional, 1000-year batches) R₀ reflectance · TGA non-reactive carbon
  * 7. Nutrient claims (conditional) - P, K, Mg, Ca, Fe
  * 8. Evidence & documents
@@ -45,6 +46,7 @@ import {
   getSampleCarbonReconciliationErrors,
   type SampleFormData,
 } from "@/schemas/samples";
+import { SampleDerivedRatios } from "./sample-derived-ratios";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
 import { SampleNutrientFields } from "./sample-nutrient-fields";
@@ -264,29 +266,10 @@ export function SampleForm({
     liveCarbonErrors.inorganicCarbonPercent ??
     errors.inorganicCarbonPercent?.message;
 
-  // The H:Corg / O:Corg input pair stays visible for both durability tiers.
+  // O:Corg is the only typed ratio; H:Corg is always derived, so it reads as a
+  // figure in the derived line below rather than as an input nobody can edit.
   const stabilityRatioFields = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
-      <FormField
-        id="hToCOrgRatio"
-        label="H:C org ratio"
-        error={errors.hToCOrgRatio?.message}
-        helperText="Auto-calculated from H% and C_org%"
-        certifyRequired={isSampleCertifyField("hToCOrgRatio")}
-        certifyStatus={certStatus("hToCOrgRatio")}
-      >
-        <FormInput
-          id="hToCOrgRatio"
-          type="number"
-          step="any"
-          placeholder="Auto-calculated"
-          disabled
-          readOnly
-          value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
-          error={!!errors.hToCOrgRatio}
-        />
-      </FormField>
-
       <FormField
         id="oToCOrgRatio"
         label="O:C org ratio"
@@ -368,6 +351,7 @@ export function SampleForm({
                   control={control}
                   render={({ field }) => (
                     <EntitySelect
+                      id="creditBatchId"
                       entityType="creditBatch"
                       value={field.value}
                       onChange={field.onChange}
@@ -770,6 +754,18 @@ export function SampleForm({
 
               {stabilityRatioFields}
 
+              <SampleDerivedRatios
+                hToCOrgRatio={calculatedHToCRatio}
+                oToCOrgRatio={resolvedOToCRatio}
+                hydrogenPercent={(watchedHydrogenPercent as number | null) ?? null}
+                oxygenPercent={(watchedOxygenPercent as number | null) ?? null}
+                organicCarbonPercent={(watchedOrganicCarbonPercent as number | null) ?? null}
+                oToCFromLab={(watchedOToCOrgRatio as number | null | undefined) != null}
+                error={errors.hToCOrgRatio?.message}
+                certifyRequired={isSampleCertifyField}
+                certifyStatus={certStatus}
+              />
+
               <SampleEligibilityAdvisory
                 hToCOrgRatio={calculatedHToCRatio}
                 oToCOrgRatio={resolvedOToCRatio}
@@ -788,6 +784,7 @@ export function SampleForm({
                   <FormField
                     id="randomReflectanceR0Percent"
                     label="Mean random reflectance R₀ (%)"
+                    required
                     error={errors.randomReflectanceR0Percent?.message}
                     certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
                     certifyStatus={certStatus("randomReflectanceR0Percent")}
@@ -808,6 +805,7 @@ export function SampleForm({
                   <FormField
                     id="sReflectanceFraction"
                     label="R₀ readings at or above 2% (%)"
+                    required
                     helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
                     error={errors.sReflectanceFraction?.message}
                     certifyRequired={isSampleCertifyField("sReflectanceFraction")}
@@ -905,6 +903,7 @@ export function SampleForm({
                   <FormField
                     id="residualCarbonPercent"
                     label="Residual (non-reactive) carbon (%)"
+                    helperText="Enter this or reactive carbon."
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}

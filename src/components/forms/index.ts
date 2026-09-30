@@ -15,6 +15,8 @@ export {
 } from "./mass-moisture-fields";
 export { FormTextarea } from "./form-textarea";
 export { FormSelect } from "./form-select";
+export { ChoiceCardGroup, type ChoiceCardOption, type ChoiceCardGroupProps } from "./choice-card-group";
+export { SegmentedControl, type SegmentedOption, type SegmentedControlProps } from "./segmented-control";
 export {
   FormFileUpload,
   type DeferredFileEntry,
@@ -47,3 +49,10 @@ export {
   type QuickAddDialogProps,
   type UseEntityOptionsParams,
 } from "./entity-select";
+
+export { FormDetailToggle, type FormDetailLevel } from "./form-detail-toggle";
+export { FormDetailProvider, FormDetailControl, DetailedOnly, DETAIL_EXPLANATION_ATTR, useFormDetailLevel } from "./form-detail-context";
+
+export { CompositionCard } from "./composition-card";
+export { DerivedHeadline } from "./derived-headline";
+export { CompositionLedger } from "./composition-ledger";

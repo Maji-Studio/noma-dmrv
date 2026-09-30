@@ -67,8 +67,8 @@ function VerifyEmailCallbackContent() {
     return (
       <div className="w-full max-w-md mx-auto">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-24">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--clr-dark-purple)]" />
+          <div className="w-64 h-64 mx-auto mb-24">
+            <div className="animate-spin rounded-full h-64 w-64 border-b-2 border-[var(--clr-dark-purple)]" />
           </div>
           <h1 className="title-heading-2 mb-16">Verifying your email</h1>
           <p className="body-medium text-[var(--color-text-secondary)]">
@@ -83,9 +83,9 @@ function VerifyEmailCallbackContent() {
     return (
       <div className="w-full max-w-md mx-auto">
         <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-24 bg-[var(--color-status-success-bg)] rounded-full flex items-center justify-center">
+          <div className="w-64 h-64 mx-auto mb-24 bg-[var(--color-status-success-bg)] rounded-full flex items-center justify-center">
             <svg
-              className="w-8 h-8 text-[var(--color-status-success)]"
+              className="w-32 h-32 text-[var(--color-status-success)]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -119,9 +119,9 @@ function VerifyEmailCallbackContent() {
   return (
     <div className="w-full max-w-md mx-auto">
       <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-24 bg-[var(--color-signal-red)]/10 rounded-full flex items-center justify-center">
+        <div className="w-64 h-64 mx-auto mb-24 bg-[var(--color-signal-red)]/10 rounded-full flex items-center justify-center">
           <svg
-            className="w-8 h-8 text-[var(--color-signal-red)]"
+            className="w-32 h-32 text-[var(--color-signal-red)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -168,7 +168,7 @@ export default function VerifyEmailCallbackPage() {
     <Suspense
       fallback={
         <div className="w-full max-w-md mx-auto text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--clr-dark-purple)] mx-auto" />
+          <div className="animate-spin rounded-full h-64 w-64 border-b-2 border-[var(--clr-dark-purple)] mx-auto" />
         </div>
       }
     >

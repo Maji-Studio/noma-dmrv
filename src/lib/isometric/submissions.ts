@@ -1,4 +1,5 @@
 import type { IsometricClient } from "./client";
+import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 
 // Reconciliation lookups stop after the first hit, so request the smallest
@@ -81,18 +82,19 @@ export function listGhgEntryComponentAttributions(
 // 5xx and the remote entity may already exist, look it up by the
 // supplier_reference_id we wrote at insert time. Stops after the first hit
 // instead of paginating to exhaustion.
-async function findBySupplierRef<T>(
+function findBySupplierRef<T extends { id: string }>(
   client: IsometricClient,
   path: string,
   ref: string,
 ): Promise<T | null> {
-  for await (const node of client.paginate<T>(path, {
-    query: { supplier_reference_id: ref },
-    pageSize: SUPPLIER_REF_LOOKUP_PAGE_SIZE,
-  })) {
-    return node;
-  }
-  return null;
+  return findRegistryRecord<T>(client, path, {
+    match: "first",
+    where: () => true,
+    paginate: {
+      query: { supplier_reference_id: ref },
+      pageSize: SUPPLIER_REF_LOOKUP_PAGE_SIZE,
+    },
+  });
 }
 
 export function findGhgEntryBySupplierRef(

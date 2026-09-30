@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 
+vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/components/ui/slide-over-panel", () => {
   const Root = ({
     children,
@@ -45,6 +46,7 @@ const storageLocation: StorageLocationWithFacility = {
   organizationId: "00000000-0000-4000-8000-000000000002",
   code: "FB-001",
   name: "North hopper",
+  stockMode: "split",
   type: "feedstock_bin",
   capacityKg: null,
   storageMethod: null,
@@ -137,6 +139,8 @@ describe("BinReconcileSheet", () => {
 });
 
 vi.mock("@/hooks/use-output-stock", () => ({
+  useOutputSubBins: () => ({ data: undefined, error: null }),
+  useOutputStockBalance: () => ({ data: undefined }),
   useOutputStockPreview: () => ({ data: undefined, isFetching: false, refetch: vi.fn() }),
   usePostOutputStock: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));

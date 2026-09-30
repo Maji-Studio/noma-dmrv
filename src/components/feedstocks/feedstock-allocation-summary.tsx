@@ -34,7 +34,7 @@ export function FeedstockAllocationSummary({
   const unallocatedKg = hasDeliveredMass ? deliveredKg - allocatedKg : 0;
 
   return (
-    <div className="border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-12 py-8">
+    <div>
       <p className="body-small text-[var(--color-text-secondary)]">
         <span className="font-medium text-[var(--color-text-primary)]">
           {formatMassKg(allocatedKg)}

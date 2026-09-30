@@ -156,7 +156,7 @@ export function ApplicationSupportingEvidencePanel({
         <div className="flex flex-col gap-8">
           <div className="flex items-center gap-8">
             <FileIcon size={18} weight="bold" />
-            <h4 className="body-medium font-medium">Images and PDFs</h4>
+            <h4 className="body-small font-medium">Images and PDFs</h4>
           </div>
           {applicationId && <p className="body-caption text-[var(--color-text-secondary)]">Uploads are saved immediately. Closing this panel does not discard them. Evidence added after submission is excluded from the saved attempt until a new evidence review.</p>}
           {upload}
@@ -182,7 +182,7 @@ export function ApplicationSupportingEvidencePanel({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deleteId}
-          title="Delete Supporting Evidence"
+          title="Delete supporting evidence"
           message="Are you sure you want to delete this supporting file?"
           onConfirm={handleDelete}
           onCancel={() => {

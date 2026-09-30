@@ -230,3 +230,11 @@ p,
   letter-spacing: var(--text-label-input--letter-spacing);
   margin: 0;
 }
+
+/* Weight override. The type classes above are unlayered, so they beat every
+   Tailwind utility (utilities live in a cascade layer). This one rule sits
+   after them with equal specificity, so `body-small font-medium` renders
+   medium while margins, sizes and families keep the type class values. */
+.font-medium {
+  font-weight: var(--font-weight-medium);
+}

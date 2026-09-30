@@ -13,7 +13,7 @@
  * submission for test 2) directly via Drizzle, then drive the UI
  * assertions. The actual link/edit dialog is exercised by
  * `tests/isometric-mapping-lock.test.ts` (unit) and
- * `tests/isometric-sandbox.integration.test.ts` (live API).
+ * `tests/isometric-sandbox-health.integration.test.ts` (live API).
  *
  * `loadFacilityCertifierMapping` always reads from Isometric
  * (`listProjects` + `listGhgEntryTemplates(externalProjectId)`), so the

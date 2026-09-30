@@ -88,3 +88,19 @@ export function splitCumulativeGrams(total: bigint, weights: readonly bigint[]):
   }
   return shares;
 }
+
+/**
+ * Dry solids of a wet mass at a moisture, rounded half up to the gram in exact
+ * decimals: `round(wet × (1 − moisture ÷ 100), 3)` as PostgreSQL numeric does.
+ * Float arithmetic disagrees on half-gram ties (1.005 kg at 30% is 0.7035 kg).
+ */
+export function solidsAtMoistureKg(wetKg: Decimal, moisturePercent: Decimal): string {
+  const fraction = subtract(rational(BigInt(1)), divide(decimal(moisturePercent), rational(BigInt(100))));
+  return kilograms(round(multiply(multiply(decimal(wetKg), fraction), rational(GRAMS_PER_KG))));
+}
+
+/** Fixed-point digits kept when a ratio becomes a display number, so huge coprime denominators never overflow to NaN. */
+const NUMBER_SCALE = BigInt(10) ** BigInt(12);
+export function rationalToNumber(value: Rational): number {
+  return Number(value.numerator * NUMBER_SCALE / value.denominator) / Number(NUMBER_SCALE);
+}

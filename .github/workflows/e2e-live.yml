@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+# 1Password CLI installed by load-secrets-action. Pinned so a new CLI release
+# cannot change secret loading unannounced; bump it deliberately (docs/security.md).
+env:
+  OP_CLI_VERSION: "2.39.0"
+
 jobs:
   playwright-live:
     runs-on: ubuntu-latest
@@ -73,9 +78,10 @@ jobs:
           persist-credentials: false
 
       - name: Load Isometric secrets from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env staging/ISOMETRIC_ACCESS_TOKEN

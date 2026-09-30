@@ -276,6 +276,33 @@ export function formatWetDryMass({
 }
 
 /**
+ * Stock pair in the words of the selected bin caption, for option subtitles
+ * and captions: "2,500 kg wet, 1,500 kg dry biochar". An estimated wet figure
+ * reads "≈ 2,500 kg wet"; a missing figure keeps its side and names the gap
+ * ("dry biochar not available").
+ */
+export function formatWetDryStock({
+  wetKg,
+  dryKg,
+  estimatedWet = false,
+  missing = MISSING_VALUE.notAvailable,
+}: {
+  wetKg: number | null | undefined;
+  dryKg: number | null | undefined;
+  estimatedWet?: boolean;
+  missing?: string;
+}): string {
+  const gap = missing.toLowerCase();
+  const recorded = (kg: number | null | undefined): kg is number =>
+    kg != null && Number.isFinite(kg);
+  const wet = recorded(wetKg)
+    ? `${estimatedWet ? "≈ " : ""}${formatSplitMass(wetKg)} wet`
+    : `wet ${gap}`;
+  const dry = recorded(dryKg) ? `${formatSplitMass(dryKg)} dry biochar` : `dry biochar ${gap}`;
+  return `${wet}, ${dry}`;
+}
+
+/**
  * Screen-reader sentence for a split, spelled out in full because the bar's
  * geometry carries the meaning visually and conveys nothing to a screen reader.
  */

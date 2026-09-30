@@ -12,7 +12,7 @@
 
 import { format, isValid, parseISO } from "date-fns";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { formatFacilityTime, parseLocalDateString } from "@/lib/date-utils";
+import { formatFacilityTime, parseLocalDateString, SHORT_MONTH_NAMES } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
@@ -55,11 +55,6 @@ export function formatDate(value: DateValue): string {
   return date ? format(date, DATE_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
-const SHORT_MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-] as const;
-
 /**
  * Format an already-resolved `YYYY-MM-DD` day string for display ("Aug 1, 2026")
  * WITHOUT reparsing it into an instant — the parts are read directly, so a
@@ -86,6 +81,26 @@ export function formatDateTime(value: DateValue): string {
   if (!value) return MISSING_VALUE.notRecorded;
   const date = parseDateValue(value);
   return date ? format(date, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+}
+
+/**
+ * Format an instant in house style ("Sep 15, 2026, 14:30") on a facility's
+ * wall clock. Output stock event times always read on the facility clock.
+ */
+export function formatFacilityDateTime(value: Date | string | null | undefined, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_TIME_FORMAT) : MISSING_VALUE.notAvailable;
+}
+
+/**
+ * Format an instant's calendar day ("Sep 15, 2026") on a facility's wall
+ * clock, for a list column that shows a stock event's day without its time.
+ */
+export function formatFacilityDay(value: Date | string | null | undefined, timeZone: string): string {
+  if (!value) return MISSING_VALUE.notRecorded;
+  const date = typeof value === "string" ? new Date(value) : value;
+  return isValid(date) ? formatFacilityTime(date, timeZone, DATE_FORMAT) : MISSING_VALUE.notAvailable;
 }
 
 /** Format an instant in a facility's timezone with its numeric UTC offset. */
@@ -149,11 +164,13 @@ export function formatMass(kg: number | null | undefined): string {
  * "900 kg" in the same readout would make them incomparable. Everywhere a lone
  * mass is shown, prefer `formatMass`.
  *
+ * Pass `digits` when a saved-record view needs the storage precision
+ * (`MASS_KG_STORAGE_DECIMALS`).
  * Note the precision difference as well as the unit one — see `formatMass`.
  */
-export function formatMassKg(kg: number | null | undefined): string {
+export function formatMassKg(kg: number | null | undefined, opts?: { digits?: number }): string {
   if (kg == null || Number.isNaN(kg)) return MISSING_VALUE.notRecorded;
-  return `${kg.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_MAX_FRACTION_DIGITS })} kg`;
+  return `${kg.toLocaleString(undefined, { maximumFractionDigits: opts?.digits ?? MASS_KG_MAX_FRACTION_DIGITS })} kg`;
 }
 
 /**

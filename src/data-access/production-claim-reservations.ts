@@ -12,6 +12,7 @@ import {
 } from "@/lib/certification/submission-metadata";
 import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
+import { rejectDraftSubmission } from "./submission-rejection";
 import { requireOrgScope } from "./utils";
 
 type SubmissionRow = Pick<
@@ -244,22 +245,10 @@ export async function rejectSubmissionAndReleaseProductionClaims(
     if (!exactDraftAttempt && !alreadyDefinitive) return;
 
     if (exactDraftAttempt) {
-      await tx
-        .update(certificationSubmissions)
-        .set({
-          status: "rejected",
-          lockedAt: null,
-          updatedAt: sql`now()`,
-          metadata: sql`(coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) - ${SUBMISSION_METADATA_KEYS.lastAttemptOutcome}::text - ${SUBMISSION_METADATA_KEYS.externalMutation}::text) || jsonb_build_object(${SUBMISSION_METADATA_KEYS.lastError}::text, ${args.errorMessage}::text)`,
-        })
-        .where(
-          and(
-            eq(certificationSubmissions.id, args.submissionId),
-            eq(certificationSubmissions.status, "draft"),
-            eq(certificationSubmissions.lockedAt, args.expectedLockedAt),
-            eq(certificationSubmissions.organizationId, ctx.organizationId),
-          ),
-        );
+      await rejectDraftSubmission(ctx, tx, args.submissionId, {
+        errorMessage: args.errorMessage,
+        expectedLockedAt: args.expectedLockedAt,
+      });
     }
     await tx
       .update(creditBatches)

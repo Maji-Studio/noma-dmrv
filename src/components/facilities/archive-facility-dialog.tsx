@@ -15,8 +15,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, Modal } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
 import { useFacilityArchiveImpact } from "@/hooks/use-facilities";
 
 interface ArchiveFacilityDialogProps {
@@ -152,18 +152,11 @@ export function ArchiveFacilityDialog({
           )}
 
           {impact?.hasRegistrySubmissions && (
-            <div className="flex items-start gap-8 border border-[var(--clr-orange-20)] bg-[var(--clr-orange-10)] p-12">
-              <WarningIcon
-                size={18}
-                weight="bold"
-                className="mt-2 shrink-0 text-[var(--clr-orange)]"
-              />
-              <p className="body-small text-[var(--color-text-primary)]">
-                This facility has Removals or GHG Statements submitted to the
-                certifier registry. Archiving hides them here but does not
-                change anything on the registry.
-              </p>
-            </div>
+            <Notice tone="warning">
+              This facility has Removals or GHG Statements submitted to the
+              certifier registry. Archiving hides them here but does not
+              change anything on the registry.
+            </Notice>
           )}
 
           {requiresTypedCode && (

@@ -5,6 +5,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import type { MethodBEligibility } from "@/lib/certification/method-b-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { formatCount } from "@/lib/copy-utils";
+import { Notice } from "@/components/ui/notice";
 
 interface CreditBatchSamplingControlProps {
   visible: boolean;
@@ -33,17 +34,13 @@ export function CreditBatchSamplingControl({
 
   if (isEditMode) {
     return (
-      <div
-        className="flex flex-col gap-4 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
+      <Notice
+        tone="info"
+        title={`Sampling: ${value === "unsampled" ? "Unsampled" : "Sampled"}`}
         data-testid="sampling-read-only"
       >
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          Sampling: {value === "unsampled" ? "Unsampled" : "Sampled"}
-        </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          Fixed when the credit batch was created and cannot be changed.
-        </span>
-      </div>
+        Fixed when the credit batch was created and cannot be changed.
+      </Notice>
     );
   }
 

@@ -189,7 +189,7 @@ export function TransportEvidenceDocuments({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={!!deletingId}
-          title="Delete Document"
+          title="Delete document"
           message="Are you sure you want to delete this document? The file will be removed from storage."
           onConfirm={handleDeleteConfirm}
           onCancel={() => {
@@ -233,7 +233,7 @@ export function TransportEvidencePanel({
     >
       <div className="flex items-center gap-6">
         {!embedded && (
-          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          <h3 className="body-small font-medium text-[var(--color-text-primary)]">
             {heading}
           </h3>
         )}

@@ -37,10 +37,8 @@ interface TransportLegFormProps {
   errorMessage?: string;
 }
 
-const transportMethodOptions = selectableTransportMethods.map((m) => ({
-  value: m,
-  label: m.charAt(0).toUpperCase() + m.slice(1),
-}));
+const formatTransportMethod = (method: string) =>
+  method.charAt(0).toUpperCase() + method.slice(1);
 
 const MIN_LOAD_MASS_KG = 0.000001;
 const isTransportLegCertifyField = (field: string) =>
@@ -128,6 +126,10 @@ export function TransportLegForm({
   const destinationLat = useWatch({ control, name: "destinationGpsLatitude" }) as number | null | undefined;
   const destinationLng = useWatch({ control, name: "destinationGpsLongitude" }) as number | null | undefined;
   const distanceKm = useWatch({ control, name: "distanceKm" }) as number | null | undefined;
+  // A saved leg keeps its own method; new legs default to the one selectable method.
+  const transportMethod =
+    (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
+    selectableTransportMethods[0];
 
   const originPoint =
     originLat != null && originLng != null ? { lat: originLat, lng: originLng } : null;
@@ -257,19 +259,18 @@ export function TransportLegForm({
               {...register("distanceSource")}
             />
           </FormField>
-          <FormField
-            id="transportMethodType"
-            label="Transport method"
-            required
-            error={errors.transportMethodType?.message}
-          >
-            <FormSelect
-              id="transportMethodType"
-              options={transportMethodOptions}
-              error={!!errors.transportMethodType}
-              {...register("transportMethodType")}
-            />
+          {/* Road is the only method the registry accepts, so it is a fixed
+              value: shown as text, still submitted through the hidden input. */}
+          <FormField id="transportMethodType-value" label="Transport method">
+            <output
+              id="transportMethodType-value"
+              className="block body-medium"
+              data-testid="transportMethodType-value"
+            >
+              {formatTransportMethod(transportMethod)}
+            </output>
           </FormField>
+          <input type="hidden" {...register("transportMethodType")} />
           <FormField
             id="tripType"
             label="Trip type"

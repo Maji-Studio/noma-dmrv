@@ -111,4 +111,31 @@ describe("CompiledSubmissionReview", () => {
     expect(html).not.toContain("version 0");
     expect(html).not.toContain("local estimate");
   });
+
+  it("shows preparation blockers when nothing could be compiled", () => {
+    const html = renderToStaticMarkup(
+      <CompiledSubmissionReview
+        isLoading={false}
+        error={null}
+        onRetry={vi.fn()}
+        compilation={{
+          review: null,
+          blockers: [
+            "Configure organization Isometric credentials before submitting.",
+          ],
+          warnings: [],
+          snapshot: null,
+          compilationHash: null,
+          estimatedStoredCo2eTonnes: null,
+          estimateMissingInputs: [],
+        }}
+      />,
+    );
+
+    expect(html).toContain(
+      "Configure organization Isometric credentials before submitting.",
+    );
+    expect(html).toContain("Refresh review");
+    expect(html).not.toContain("could not be prepared");
+  });
 });

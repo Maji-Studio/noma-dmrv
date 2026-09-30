@@ -1,7 +1,6 @@
 import { db } from '@/db';
 import { deliveries, drivers, facilities, orders, storageLocations, vehicles, type Delivery } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { formatUtcDate } from '@/lib/date-utils';
 import { SafeError } from '@/lib/errors';
 import { createDeliverySchema, updateDeliverySchema } from '@/schemas/deliveries';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -17,8 +16,8 @@ import { assertSameOrg, requireOrgScope } from './utils';
 export async function createDelivery(ctx: OrgContext, raw: z.input<typeof createDeliverySchema>): Promise<Delivery> {
   requireOrgScope(ctx);
   const data = createDeliverySchema.parse(raw);
-  const input = { storageLocationId: data.storageLocationId, facilityId: data.facilityId, physicalDate: formatUtcDate(data.deliveryDate), kind: 'delivery' as const,
-    wetMassKg: data.deliveredWetMassKg!, moisturePercent: data.moistureContentPercent, basisFingerprint: data.basisFingerprint, idempotencyKey: data.idempotencyKey, reason: `Delivery ${data.code}` };
+  const input = { storageLocationId: data.storageLocationId, facilityId: data.facilityId, occurredAt: data.deliveryDate.toISOString(), kind: 'delivery' as const,
+    wetMassKg: data.deliveredWetMassKg!, moisturePercent: data.moistureContentPercent, sources: data.sources, basisFingerprint: data.basisFingerprint, idempotencyKey: data.idempotencyKey, reason: `Delivery ${data.code}` };
   const payload = Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'code'));
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
@@ -39,7 +38,8 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
       moistureContentPercent: data.moistureContentPercent, driverId: data.driverId, vehicleId: data.vehicleId,
       distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote, tripType: data.tripType ?? 'return' }).returning();
     const posted = await post({ deliveryId: delivery.id });
-    const [saved] = await tx.update(deliveries).set({ massDryKg: posted.preview.removedDryKg }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
+    // A split-bin load stores its overall moisture, 1 − solids ÷ wet, from the per-sub-bin readings.
+    const [saved] = await tx.update(deliveries).set({ massDryKg: posted.preview.removedDryKg, moistureContentPercent: posted.moisturePercent }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
     await syncBiocharProductTransportLegs(ctx, tx, posted.preview.allocations.map(a => a.layerId));
     return saved;
   } });
@@ -58,7 +58,7 @@ export async function updateDelivery(ctx: OrgContext, deliveryId: string, raw: O
     for (const key of ['orderId', 'facilityId', 'storageLocationId', 'deliveredWetMassKg', 'moistureContentPercent'] as const) {
       if (data[key] !== undefined && data[key] !== existing[key]) throw new SafeError('Use Correct entry in bin history and enter a reason to change posted stock.');
     }
-    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('Use Correct entry in bin history to change the physical date.');
+    if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('Use Correct entry in bin history to change the delivery time.');
     const [saved] = await tx.update(deliveries).set({ code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
       distanceSource: data.distanceSource, distanceNote: data.distanceNote, tripType: data.tripType ?? undefined, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);

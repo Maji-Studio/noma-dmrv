@@ -172,12 +172,12 @@ describe(
       distanceKmOverride?: number,
     ) {
       const source = await preparePureOutputProductFixture(db, productId);
-      const preview = await previewOutputStock(ctx, { kind: "delivery", facilityId: fixture.facilityId, storageLocationId: source.storageLocationId, physicalDate: "2026-07-19", wetMassKg: massKg, moisturePercent: 0 });
+      const preview = await previewOutputStock(ctx, { kind: "delivery", facilityId: fixture.facilityId, storageLocationId: source.storageLocationId, occurredAt: "2026-07-19T12:00:00.000Z", wetMassKg: massKg, moisturePercent: 0 });
       const delivery = await createDelivery(ctx, {
         code: `DL-${codeSuffix}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
         orderId: fixture.orderId,
         facilityId: fixture.facilityId,
-        deliveryDate: new Date("2026-07-19T00:00:00Z"),
+        deliveryDate: new Date("2026-07-19T12:00:00.000Z"),
         storageLocationId: source.storageLocationId,
         idempotencyKey: crypto.randomUUID(),
         basisFingerprint: preview.basisFingerprint,

@@ -813,6 +813,27 @@
       "when": 1789401835774,
       "tag": "0115_round_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1790664963088,
+      "tag": "0116_output_stock_event_times",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1790668137464,
+      "tag": "0117_output_bin_stock_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1790671434827,
+      "tag": "0118_output_moisture_readings",
+      "breakpoints": true
     }
   ]
 }

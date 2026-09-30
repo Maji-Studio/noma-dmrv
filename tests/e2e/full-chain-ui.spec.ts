@@ -27,6 +27,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eq, ilike, inArray } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 // ============================================
 // Full Chain Smoke Test
@@ -385,15 +386,15 @@ test.describe("Full Chain UI Smoke Test", () => {
 
     try {
     // ─── 1. FACILITY ───────────────────────────────────────
-    await test.step("Create Facility", async () => {
+    await test.step("Create facility", async () => {
       await page.goto("/facilities");
       await page.waitForLoadState("networkidle");
 
-      await page.click('button:has-text("New Facility")');
+      await page.click('button:has-text("New facility")');
       await waitForSideSheet(page);
       const facilityDialog = page
         .getByRole("dialog")
-        .filter({ has: page.getByRole("button", { name: "Create Facility" }) });
+        .filter({ has: page.getByRole("button", { name: "Create facility" }) });
 
       await page.fill('input[name="name"]', `Chain Facility ${runId}`);
       await page.fill('input[name="country"]', "Tanzania");
@@ -405,7 +406,7 @@ test.describe("Full Chain UI Smoke Test", () => {
         .click();
 
       await facilityDialog
-        .getByRole("button", { name: "Create Facility" })
+        .getByRole("button", { name: "Create facility" })
         .click();
       await facilityDialog.waitFor({ state: "hidden", timeout: 10000 });
 
@@ -427,18 +428,18 @@ test.describe("Full Chain UI Smoke Test", () => {
     });
 
     // ─── 2. REACTOR ────────────────────────────────────────
-    await test.step("Create Reactor", async () => {
+    await test.step("Create reactor", async () => {
       await page.goto(`/reactors?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
-      await page.click('button:has-text("New Reactor")');
+      await page.click('button:has-text("New reactor")');
       await waitForSideSheet(page);
 
       await page.fill('input[name="identifier"]', `Chain Reactor ${runId}`);
       await page.selectOption('select[name="reactorType"]', "fixed-bed");
       await page.fill('input[name="capacityTph"]', "500");
 
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Reactor")').click();
+      await page.locator('[role="dialog"]').locator('button:has-text("Create reactor")').click();
       await waitForSideSheetClose(page);
 
       // Search for the new reactor (list may be paginated)
@@ -451,12 +452,12 @@ test.describe("Full Chain UI Smoke Test", () => {
     });
 
     // ─── 3. PRODUCTION RUN ─────────────────────────────────
-    await test.step("Create Production Run", async () => {
+    await test.step("Create production run", async () => {
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
       const existingRunCodes = await getListedActionCodes(page);
 
-      await page.click('button:has-text("New Production Run")');
+      await page.click('button:has-text("New production run")');
       await waitForSideSheet(page);
 
       await page.selectOption('select[name="status"]', "running");
@@ -489,7 +490,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="biocharOutputKg"]', "10");
       await page.fill('input[name="biocharMoisturePercent"]', "10");
 
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
+      await page.locator('[role="dialog"]').locator('button:has-text("Create production run")').click();
       await waitForSideSheetClose(page);
       const createdRunCode = await getCreatedActionCode(
         page,
@@ -514,7 +515,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.selectOption('select[name="status"]', "complete");
       await page
         .locator('[role="dialog"]')
-        .getByRole("button", { name: "Save Changes" })
+        .getByRole("button", { name: "Save changes" })
         .click();
       await waitForSideSheetClose(page);
 
@@ -525,11 +526,11 @@ test.describe("Full Chain UI Smoke Test", () => {
     });
 
     // ─── 4. ORDER ──────────────────────────────────────────
-    await test.step("Create Order", async () => {
+    await test.step("Create order", async () => {
       await page.goto(`/orders?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
-      await page.click('button:has-text("New Order")');
+      await page.click('button:has-text("New order")');
       await waitForSideSheet(page);
 
       await page.fill('input[name="orderDate"]', today);
@@ -553,7 +554,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.selectOption('select[name="packaging"]', "loose");
       await page.fill('input[name="quantityKg"]', "100");
 
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
+      await page.locator('[role="dialog"]').locator('button:has-text("Create order")').click();
       await waitForSideSheetClose(page);
 
       // Scope to the table body so the #264 customer-filter <select> options
@@ -567,14 +568,13 @@ test.describe("Full Chain UI Smoke Test", () => {
     });
 
     // ─── 5. DELIVERY ───────────────────────────────────────
-    await test.step("Create Delivery", async () => {
+    await test.step("Create delivery", async () => {
       await page.goto(`/deliveries?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
-      await page.click('button:has-text("New Delivery")');
+      await page.click('button:has-text("New delivery")');
       await waitForSideSheet(page);
 
-      await page.fill('input[name="deliveryDate"]', today);
       // Applications require a delivered delivery (issue #284)
 
       // Select the first available order (FormEntitySelect, not a native <select>)
@@ -582,9 +582,9 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
 
       await page.fill('input[name="deliveredWetMassKg"]', "95");
-      await page.fill('input[name="moistureContentPercent"]', "10");
+      await fillStockMoisture(page, "delivery", "10");
 
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
+      await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
       await waitForSideSheetClose(page);
 
       await expect(
@@ -593,11 +593,11 @@ test.describe("Full Chain UI Smoke Test", () => {
     });
 
     // ─── 6. APPLICATION ────────────────────────────────────
-    await test.step("Create Application", async () => {
+    await test.step("Create application", async () => {
       await page.goto(`/applications?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
-      await page.click('button:has-text("New Application")');
+      await page.click('button:has-text("New application")');
       await waitForSideSheet(page);
 
       await page.fill('input[name="applicationDate"]', today);
@@ -616,7 +616,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="fieldIdentifier"]', `E2E-Field-${runId}`);
       await page.fill('input[name="cropType"]', "maize");
 
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
+      await page.locator('[role="dialog"]').locator('button:has-text("Create application")').click();
       await waitForSideSheetClose(page);
 
       await expect(
@@ -625,11 +625,11 @@ test.describe("Full Chain UI Smoke Test", () => {
     });
 
     // ─── 7. CREDIT BATCH ───────────────────────────────────
-    await test.step("Create Credit Batch", async () => {
+    await test.step("Create credit batch", async () => {
       await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
 
-      await page.click('button:has-text("New Credit Batch")');
+      await page.click('button:has-text("New credit batch")');
       await waitForSideSheet(page);
 
       await page.fill('input[name="startDate"]', productionRunDate);
@@ -637,7 +637,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);
 
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
+      await page.locator('[role="dialog"]').locator('button:has-text("Create credit batch")').click();
       await waitForSideSheetClose(page);
 
       await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });

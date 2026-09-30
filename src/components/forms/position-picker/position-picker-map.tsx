@@ -266,7 +266,7 @@ export default function PositionPickerMap({
         className="flex h-full flex-col items-center justify-center gap-6 bg-[var(--color-background-light)] px-16 text-center"
         data-testid="position-picker-map-failed"
       >
-        <span className="label-button uppercase text-[var(--color-text-secondary)]">
+        <span className="body-small font-medium text-[var(--color-text-secondary)]">
           Map preview unavailable
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">

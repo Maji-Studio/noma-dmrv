@@ -1,6 +1,7 @@
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { formatWetDryMass } from "@/lib/mass-moisture";
+import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { formatDayString, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
+import { formatWetDryStock } from "@/lib/mass-moisture";
 import { formatRemainingMass } from "@/components/forms/entity-select/remaining-mass";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
@@ -15,6 +16,8 @@ export interface ApplicationDeliveryOption {
   code: string;
   status: DeliveryStatus;
   deliveryDate: Date | string;
+  /** The delivery's calendar day on its facility clock ("YYYY-MM-DD"). */
+  deliveryDay?: string | null;
   orderCode: string | null;
   formulationName: string | null;
   productBinName: string | null;
@@ -113,43 +116,28 @@ export function applicationKgToTons(value: number | null | undefined): number | 
 /** Kept as a named re-export so the application surfaces keep one import site. */
 export const formatKg = formatMassKg;
 
-function formatDeliveryDate(value: Date | string): string {
-  return formatDate(value);
+/**
+ * The delivery's calendar day on its facility clock, never the viewer's. The
+ * server resolves `deliveryDay` in the facility zone; a delivery without one
+ * (no facility row) falls back to the zone a missing facility resolves to.
+ */
+export function formatApplicationDeliveryDay(delivery: Pick<ApplicationDeliveryOption, "deliveryDate" | "deliveryDay">): string {
+  return delivery.deliveryDay
+    ? formatDayString(delivery.deliveryDay)
+    : formatFacilityDay(delivery.deliveryDate, DEFAULT_FACILITY_TIMEZONE);
 }
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {
   if (delivery.deliveredWetMassKg != null) {
-    return formatWetDryMass({
-      wetKg: delivery.deliveredWetMassKg,
-      dryKg: delivery.massDryKg,
-      moisturePercent: delivery.moistureContentPercent,
-      wetLabel: "Wet biochar product",
-      dryLabel: "Dry biochar",
-      separator: " | ",
-      unitSpacing: "compact",
-    });
+    return formatWetDryStock({ wetKg: delivery.deliveredWetMassKg, dryKg: delivery.massDryKg });
   }
 
   if (delivery.massDryKg != null) {
-    return formatWetDryMass({
-      wetKg: null,
-      dryKg: delivery.massDryKg,
-      wetLabel: "Wet biochar product",
-      dryLabel: "Dry biochar",
-      separator: " | ",
-      unitSpacing: "compact",
-    });
+    return formatWetDryStock({ wetKg: null, dryKg: delivery.massDryKg });
   }
 
   if (delivery.orderQuantityKg != null) {
-    return formatWetDryMass({
-      wetKg: delivery.orderQuantityKg,
-      dryKg: null,
-      wetLabel: "Wet biochar product",
-      dryLabel: "Dry biochar",
-      separator: " | ",
-      unitSpacing: "compact",
-    });
+    return formatWetDryStock({ wetKg: delivery.orderQuantityKg, dryKg: null });
   }
 
   return null;
@@ -159,7 +147,7 @@ export function formatApplicationDeliveryOptionLabel(delivery: ApplicationDelive
   return [
     delivery.productBinName,
     delivery.formulationName,
-    formatDeliveryDate(delivery.deliveryDate),
+    formatApplicationDeliveryDay(delivery),
     getApplicationDeliveryMassLabel(delivery),
   ]
     .filter(Boolean)

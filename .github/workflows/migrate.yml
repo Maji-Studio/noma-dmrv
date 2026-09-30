@@ -36,6 +36,11 @@ concurrency:
   group: database-management-${{ github.ref }}
   cancel-in-progress: false
 
+# 1Password CLI installed by load-secrets-action. Pinned so a new CLI release
+# cannot change secret loading unannounced; bump it deliberately (docs/security.md).
+env:
+  OP_CLI_VERSION: "2.39.0"
+
 jobs:
   # ── Staging pipeline (push to staging only) ────────────────────────────
   migrate-staging:
@@ -50,9 +55,10 @@ jobs:
           persist-credentials: false
 
       - name: Load staging database secret from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
@@ -92,9 +98,10 @@ jobs:
           persist-credentials: false
 
       - name: Load staging database secret from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
@@ -137,9 +144,10 @@ jobs:
           persist-credentials: false
 
       - name: Load production database secret from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
@@ -188,9 +196,10 @@ jobs:
           persist-credentials: false
 
       - name: Load production bootstrap secrets from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
@@ -243,9 +252,10 @@ jobs:
           persist-credentials: false
 
       - name: Load staging database + admin secrets from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
@@ -324,9 +334,10 @@ jobs:
           persist-credentials: false
 
       - name: Load staging database + admin secrets from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
@@ -379,9 +390,10 @@ jobs:
           persist-credentials: false
 
       - name: Load production database + admin secrets from 1Password
-        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        uses: 1password/load-secrets-action@70062d7a876d3eb6334754fa26efd2fbd90c32f2 # v5.0.1
         with:
           export-env: true
+          version: ${{ env.OP_CLI_VERSION }}
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL

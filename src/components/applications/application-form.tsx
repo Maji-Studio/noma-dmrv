@@ -12,8 +12,8 @@
 "use client";
 
 import { nullableNumericValue, numericValue } from "@/lib/form-utils";
-import { formatLocalDate } from "@/lib/date-utils";
-import { formatDate } from "@/lib/format-utils";
+import { formatLocalDate, formatUtcDate } from "@/lib/date-utils";
+import { formatDayString } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect, useState } from "react";
@@ -165,12 +165,12 @@ export function ApplicationForm({
       : formatLocalDate(new Date()),
     deliveryId: application?.deliveryId ?? "",
     biocharAppliedTons: applicationTonsToKg(application?.biocharAppliedTons) ?? undefined,
-    fieldSizeHa: application?.fieldSizeHa ?? undefined,
+    fieldSizeHa: application?.fieldSizeHa ?? "",
     fieldIdentifier: application?.fieldIdentifier ?? "",
     cropType: application?.cropType ?? "",
     gpsLatitude: application?.gpsLatitude ?? undefined,
     gpsLongitude: application?.gpsLongitude ?? undefined,
-    applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? undefined,
+    applicationMethodType: (application?.applicationMethodType as ApplicationMethod) ?? "",
     // The visual path remains UI-locked, but existing records keep their
     // declared evidence method when another field is edited.
     evidenceMethod: resolveApplicationEvidenceMethodDefault(
@@ -178,8 +178,8 @@ export function ApplicationForm({
       organizationDefaults.defaultEvidenceMethod,
     ),
     gisBoundary: application?.gisBoundary ?? null,
-    soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? undefined,
-    soilTemperatureC: application?.soilTemperatureC ?? undefined,
+    soilTemperatureSource: (application?.soilTemperatureSource as SoilTemperatureSource) ?? "",
+    soilTemperatureC: application?.soilTemperatureC ?? null,
   };
 
   const {
@@ -202,7 +202,7 @@ export function ApplicationForm({
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
-  const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
+  const defaultSubmitLabel = isEditMode ? "Update application" : "Create application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
@@ -369,16 +369,15 @@ export function ApplicationForm({
     }
 
     // Custody ordering (issue #284): the server rejects this too — surface a
-    // field error here instead of a generic server error. Day-string compare
-    // keeps both sides on local-date granularity.
+    // field error here instead of a generic server error. Both sides compare
+    // the typed day with the delivery's day on its facility clock.
     if (
-      selectedDelivery &&
-      formatLocalDate(data.applicationDate) <
-        formatLocalDate(new Date(selectedDelivery.deliveryDate))
+      selectedDelivery?.deliveryDay &&
+      formatUtcDate(data.applicationDate) < selectedDelivery.deliveryDay
     ) {
       setError("applicationDate", {
         type: "manual",
-        message: `Application date cannot be before the delivery date (${formatDate(selectedDelivery.deliveryDate)})`,
+        message: `Application date cannot be before the delivery date (${formatDayString(selectedDelivery.deliveryDay)})`,
       });
       return;
     }

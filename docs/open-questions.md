@@ -248,26 +248,6 @@ Pure starter residue; org scoping came later via ADR 0010.
   carry a client-supplied operation id the server records and a retry can look
   up, or whether the retry-and-duplicate risk stays with the operator.
 
-### A negative feedstock bin has no repair path (`stock/negative-feedstock-bin-repair`, opened 2026-09-17)
-
-- **Decision (2026-09-17):** a stock take is the one sanctioned repair for a
-  bin whose derived lane sits below zero, and the intake-edit refusal should
-  lead the operator to it.
-- **Observed:** the app cannot do that today.
-  `src/data-access/bin-movements.ts:recordStockTakeMovement` refuses any count
-  above the derived stock ("Stock-takes can only confirm or reduce
-  inventory"), so a bin at -30 kg refuses every count of 0 kg or more.
-  `src/components/storage-locations/bin-reconcile-sheet.tsx:BinReconcileSheet`
-  renders only the loss form for a `feedstock_bin`; no feedstock count form
-  exists, and a loss only deepens the shortfall.
-  `src/data-access/feedstock-bin-stock-integrity.ts:assertFeedstockBinLanesNotNegative`
-  therefore names the blocking runs and products and no repair.
-- **Resolve via:** decide whether a stock take may raise a feedstock lane
-  (relax the increase guard for negative lanes, or add an explicit "correction"
-  movement kind with its own justification), then build the feedstock count
-  form in the reconcile sheet, and point the refusal copy and the feedstock
-  edit sheet at it. Until then the refusal stays a review instruction.
-
 ### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
 
 - **Rule:** every updater behind an edit form checks `expectedUpdatedAt`
@@ -485,6 +465,30 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
+### Should the credit batch durability field say "capped"? (`forms/durability-estimate-label`, opened 2026-09-29)
+
+- **Observed:** `src/components/credit-batches/credit-batch-view.tsx:creditBatchSheetSections`
+  shows the capped durable fraction at both detail levels as "Durability
+  estimate". The raw value, whether the cap applied, and the preview component
+  and formula sit in the section's Detailed-only explanation.
+- In Simple the reader sees the capped figure without the raw one beside it, so
+  "Capped durability estimate" could read as unexplained there, while plain
+  "Durability estimate" hides that a cap may have lowered it.
+- **Resolve via:** Kenji picks the label; change the one field label and the
+  credit batch tests (S).
+
+### Is the global Simple/Detailed toggle still worth its place? (`forms/detail-toggle-value`, opened 2026-09-29)
+
+- **Observed:** since Simple and Detailed differ only in explanation
+  ([`forms.md`](./forms.md#simple-and-detailed-presentation)), the toggle in
+  `src/components/forms/form-detail-context.tsx:FormDetailControl` only reveals
+  calculation rows, basis captions and provenance. Storage bin sheets
+  (`src/components/storage-locations/storage-location-list.tsx:StorageLocationList`)
+  already dropped it because it switched nothing there.
+- **Resolve via:** decide whether to keep the toggle per sheet, replace it with
+  inline "Show calculation" disclosures only, or remove it; the parity guards in
+  `src/components/forms/form-detail-parity*.test.tsx` hold either way (M).
+
 ### Only the GHG statement report PDF renders deterministic bytes (`certification/ledger-pdf-determinism`, opened 2026-08-06)
 
 - **Observed:** @react-pdf/pdfkit writes each compressed object when its own
@@ -534,7 +538,7 @@ companion inherits this file's schema, invariants, and resolution rules.
 ### Sample transport is mapped locally but no longer seen in the live template (`isometric/sample-transport-template-drift`, opened 2026-08-21, `needs-registry-check`)
 
 - **Observed:** the live sandbox check in
-  `tests/isometric-sandbox.integration.test.ts` ("resolves every transport
+  `tests/isometric-sandbox-health.integration.test.ts` ("resolves every transport
   category to mass_distance") once required three
   `mass_distance_based_ci_emissions` components. It was relaxed to the two it
   actually found (feedstock and biochar transport) when the scheduled live
@@ -564,12 +568,12 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
 
 ## Product bins & formulations
 
-### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implementation pending
+### Output-bin FIFO and physical composition (`product-mass/dry-biochar-lineage`, opened 2026-08-04, `needs-registry-check`) — implemented in #759; split and mix bins agreed 2026-09-28
 
 - **Accepted design:** [ADR 0029](./adr/0029-output-bin-stock-is-dry-biochar-drawn-fifo.md)
   and the [implementation plan](./plans/2026-09-14-fifo-bin-accounting.md)
   replace `src/data-access/delivery-dry-biochar.ts:deriveDeliveryDryBiocharKg`
-  and `src/data-access/biochar-product-source-allocations.ts:planBiocharProductSourceAllocations` under [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756).
+  and `src/data-access/biochar-product-source-allocations.ts:planBiocharProductSourceAllocations` under [#756](https://github.com/Maji-Studio/noma-dmrv/issues/756), shipped in [#759](https://github.com/Maji-Studio/noma-dmrv/pull/759).
   Orders reserve nothing; completed deliveries post measured FIFO dry withdrawals. Applications retain proportional truck shares via `src/lib/biochar-mass-accounting.ts:allocateTrackedDryBiocharKg`.
 - **Reconciliation and corrections:** compare counted and tracked solids using
   the count's moisture. Show dry losses explicitly. Retain linked corrections
@@ -578,6 +582,24 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   composition, editable ingredient-moisture evidence, and the PDD method against
   the pinned Biochar v1.1 and Agricultural Soils v1.1. FIFO attribution alone
   does not establish actual composition if material is remixed.
+- **Split and mix bins (2026-09-28):** the [plan](./plans/2026-09-28-split-and-mix-bins.md),
+  the ADR 0029 amendment and [ADR 0030](./adr/0030-mix-bins-draw-pro-rata.md) replace
+  assumed oldest-first loading with operator-recorded draw order in physically
+  separate sub-bins, and add pro-rata mix piles. The PDD still has to describe
+  both practices, how a mix pile's homogeneity is shown (the Agricultural Soils
+  module requires it per Storage Batch), and the per-removal moisture-reading
+  method. The module requires lab moisture per production batch and says nothing
+  about removal readings.
+- **Mix-bin credit hold (2026-09-29):** until the PDD covers mixing,
+  `MIX_BIN_REMOVALS_CREDITABLE` (`src/config/output-stock.ts`) is `false`, and
+  `src/data-access/mix-bin-credit-hold.ts` keeps applications drawn pro-rata
+  from a mix bin (directly, or through a product made from a mix biochar bin)
+  out of credit-batch slices. The application sheet says why. Flip the switch
+  once the PDD is accepted, then reconcile the credit-batch slices of the held
+  applications: flipping it alone does not re-slice them.
+- **Merge time is not correctable (2026-09-29):** a split-to-mix merge posts a
+  movement at the chosen "Merged at" time, and history has no Correct entry for
+  it. A wrong merge time needs a data fix until merges get a correction path.
 - **Deferred:** all whole and partial bin-to-bin transfers remain in
   [#34](https://github.com/Maji-Studio/noma-dmrv/issues/34). Transfers must preserve
   provenance and atomically update both bins; destination ordering is to be
@@ -625,6 +647,21 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   [#313](https://github.com/Maji-Studio/noma-dmrv/issues/313) — either keep the
   refusal and point operators at archive plus a new bin, or allow the change on
   an emptied bin and define what happens to the history that still names it.
+
+### Lane totals count receipts the bin tiles do not show yet (`product-bins/lane-total-future-receipts`, opened 2026-09-29) — **decision pending**
+
+- An output bin has two dry figures (`outputStockBalance` in
+  `src/lib/output-stock/layer-projection.ts`). `allLayersDryKg` counts every
+  layer, including a run or product placed later than now. `availableDryKg`
+  counts only layers placed by now.
+- The storage list's lane summary adds `allLayersDryKg`, while each bin's tile
+  and every selector shows `availableDryKg`. After a future-dated receipt, the
+  lane total is higher than the sum of its tiles.
+- Guards must keep the all-layers balance, so a later receipt is never drawn
+  twice or archived away. The lane total is display only.
+- **Resolve via:** a product call on what the lane total means. Either it
+  switches to `availableDryKg` so it matches the tiles, or it keeps the
+  all-layers figure and labels the difference.
 
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 
@@ -787,6 +824,8 @@ bound); these are the decisions it deliberately did not make.
   `production-incident-form`, `production-sample-form` and
   `components/samples/sample-form` render in the browser zone (the
   production-run side sheet was moved to the facility zone on 2026-07-25).
+  Output stock events (placement, delivery, loss, count) follow the facility
+  zone since 2026-09-29 (`EventTimeInput`, `formatFacilityDateTime`).
 - **Resolve via:** decide one project-wide rule — instants are constructed and
   rendered in the facility zone, date-only values stay pinned to UTC (issue #46)
   — then apply it to the remaining sites and add a lint or test guard so a
@@ -804,30 +843,6 @@ bound); these are the decisions it deliberately did not make.
 - **Resolve via:** confirm with Isometric whether one project may carry
   concurrent per-site statements for the same period; if yes, replace the guard
   with per-facility period scoping, if no, keep it and say so in the copy (M).
-
-### `formatInTimeZone` is not process-zone independent (`dates/format-in-time-zone-gap`)
-
-- `formatFacilityTime` and `formatFacilityDate` (`src/lib/date-utils.ts`) render
-  through date-fns-tz's `formatInTimeZone`, which builds a `Date` whose **local**
-  components equal the target zone's wall clock. When the machine's own zone
-  skips that wall clock, the `Date` rolls forward and the reader lies —
-  empirically `formatInTimeZone(2026-03-07T23:30Z, "Africa/Dar_es_Salaam")`
-  returns `03:30` instead of `02:30` under `TZ=America/New_York`.
-- It only bites when the viewer's (or server's) zone skips the same wall clock on
-  the same date, so it is rare — but the affected readers are load-bearing: the
-  production-run edit read-back
-  (`src/components/production-runs/production-run-timing.ts:productionRunTimingDefaults`),
-  and the facility-local sampling day in `src/fn/samples`,
-  `src/fn/certification/durability-readiness`,
-  `src/lib/certification/durability-batch-summary` and
-  `src/lib/certification/evidence-ledger/durability-build-model`, which feeds
-  registry-facing durability gates.
-- `combineDateAndTime` in the same module already avoids this by reading the zone
-  with `Intl.DateTimeFormat.formatToParts` (`wallClockIn`) instead — the likely
-  fix shape.
-- **Resolve via:** re-implement `formatFacilityTime` / `formatFacilityDate` on
-  `wallClockIn`-style `formatToParts` output, then pin it with a regression test
-  run under a process zone that skips the rendered wall clock (S).
 
 ### Should CERT-field rules vary by pinned protocol version? (`certification/version-flexible-cert-fields`)
 
@@ -859,11 +874,12 @@ bound); these are the decisions it deliberately did not make.
   "Most/least on hand" is missing from that list, and it is the sort an operator
   asks for first when deciding where to put a delivery.
 - It is missing because on-hand mass is not a column. `binCurrentMassKg` reads
-  the enriched row, and that enrichment runs **after** pagination: feedstock and
-  biochar stock come from `deriveLaneStock` (several aggregates over feedstocks,
-  production runs, production-run feedstocks, biochar products and bin
-  movements), and product stock additionally subtracts delivered mass. Sorting
-  on it means replicating all of that inside the paginated query.
+  the enriched row, and that enrichment runs **after** pagination: feedstock
+  stock comes from `deriveLaneStock` (aggregates over feedstocks, production-run
+  draws, product ingredients and feedstock bin movements), and biochar and
+  product bin stock comes from the dry-biochar FIFO layers
+  (`getOutputBinStocks`, ADR 0029). Sorting on it means replicating both
+  inside the paginated query.
 - Sorting the page in the client is not a substitute: it would order the twenty
   rows already fetched, so a nearly-full bin on page 3 would never rise to
   page 1. The board deliberately does no client-side re-sort for this reason.

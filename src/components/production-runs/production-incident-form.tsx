@@ -110,7 +110,7 @@ export function ProductionIncidentForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
-            id="operatorId"
+            id="incident-operatorId"
             label="Operator"
             error={errors.operatorId?.message}
           >
@@ -119,6 +119,7 @@ export function ProductionIncidentForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="incident-operatorId"
                   entityType="operator"
                   value={field.value ?? ""}
                   onChange={field.onChange}
@@ -131,7 +132,7 @@ export function ProductionIncidentForm({
           </FormField>
 
           <FormField
-            id="reactorId"
+            id="incident-reactorId"
             label="Reactor"
             error={errors.reactorId?.message}
           >
@@ -140,6 +141,7 @@ export function ProductionIncidentForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="incident-reactorId"
                   entityType="reactor"
                   value={field.value ?? ""}
                   onChange={field.onChange}
@@ -205,7 +207,7 @@ export function ProductionIncidentForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitLabel={isEditMode ? "Save Changes" : "Add Incident"}
+        submitLabel={isEditMode ? "Save changes" : "Add incident"}
       />
     </form>
   );

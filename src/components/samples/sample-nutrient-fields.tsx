@@ -63,7 +63,7 @@ export function SampleNutrientFields({
           disabled={isSubmitting}
           {...enabledRegistration}
         />
-        <span className="body-medium text-[var(--color-text-primary)]">
+        <span className="body-small text-[var(--color-text-primary)]">
           Enable nutrient claims
         </span>
       </label>

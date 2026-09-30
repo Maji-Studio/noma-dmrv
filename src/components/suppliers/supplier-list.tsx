@@ -33,12 +33,10 @@ import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
-import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
-import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
-import { SupplierLocationsReadState } from "./supplier-locations-read-state";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { supplierSheetSections } from "./supplier-read-sections";
 
 // ============================================
 // Column Definitions
@@ -144,7 +142,6 @@ export function SupplierList() {
     sideSheet?.entity?.id ?? "",
     !!sideSheet?.entity,
   );
-  const sideSheetLocations = sideSheetLocationsQuery.data ?? [];
   const createSupplier = useCreateSupplierWithLocations();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
@@ -242,7 +239,7 @@ export function SupplierList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Supplier" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create supplier" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create" ? undefined : sideSheetEntity?.name || undefined;
@@ -256,7 +253,7 @@ export function SupplierList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Supplier
+            New supplier
           </Button>
         }
       />
@@ -264,7 +261,7 @@ export function SupplierList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Suppliers"
+          title="Total suppliers"
           value={totalSuppliers}
           icon={<UsersIcon size={24} weight="bold" />}
           description="Biomass feedstock providers"
@@ -331,7 +328,7 @@ export function SupplierList() {
       {/* Delete Confirm Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingSupplierId}
-        title="Delete Supplier"
+        title="Delete supplier"
         message="Are you sure you want to delete this supplier? This action cannot be undone. Note: Suppliers with associated feedstock deliveries cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -349,60 +346,8 @@ export function SupplierList() {
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Supplier"
-        sections={sideSheetEntity ? [
-          {
-            title: "Required information",
-            fields: [
-              { label: "Supplier name", value: sideSheetEntity.name },
-            ],
-          },
-          {
-            title: "Locations",
-            fields:
-              sideSheetLocationsQuery.data === undefined
-                ? []
-                : buildPartyLocationDetailFields(sideSheetLocations, {
-                    distanceLabel:
-                      "One-way distance to facility (per leg, km)",
-                    defaultLabel: "Default source location",
-                    positionLabel: "Source location position",
-                  }),
-            content: (
-              <SupplierLocationsReadState
-                isPending={sideSheetLocationsQuery.isPending}
-                isError={sideSheetLocationsQuery.isError}
-                isRetrying={sideSheetLocationsQuery.isFetching}
-                onRetry={() => void sideSheetLocationsQuery.refetch()}
-              />
-            ),
-          },
-          {
-            title: "Contact information",
-            fields: [
-              { label: "Contact name", value: sideSheetEntity.contactName },
-              { label: "Contact email", value: sideSheetEntity.contactEmail },
-              { label: "Contact phone", value: sideSheetEntity.contactPhone },
-            ],
-          },
-          {
-            title: "Sourcing information",
-            fields: [
-              { label: "Location", value: sideSheetEntity.location },
-              { label: "Source region", value: sideSheetEntity.sourceRegion },
-              { label: "Address", value: sideSheetEntity.address },
-              buildSupplierFallbackDistanceField({
-                defaultLocationDistanceKm:
-                  sideSheetLocations.find((location) => location.isDefault)
-                    ?.distanceFromFacilityKm ?? null,
-                legacySupplierDistanceKm:
-                  sideSheetEntity.distanceToFacilityKm,
-                locationsLoaded:
-                  sideSheetLocationsQuery.data !== undefined,
-              }),
-            ],
-          },
-        ] : undefined}
+        editLabel="Edit supplier"
+        sections={sideSheetEntity ? supplierSheetSections(sideSheetEntity, sideSheetLocationsQuery) : undefined}
       >
         <SupplierForm
           key={sideSheetEntity?.id ?? "create"}
@@ -412,7 +357,7 @@ export function SupplierList() {
           onCancel={closeSideSheet}
           isSubmitting={createSupplier.isPending || updateSupplier.isPending}
           errorMessage={createError || updateError || undefined}
-          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Supplier"}
+          submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save changes" : "Create supplier"}
         />
       </EntitySideSheet>
     </div>

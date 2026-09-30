@@ -30,6 +30,10 @@ import {
 } from "./chain-of-custody-geo";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
+import {
+  EMPTY_CREDIT_BATCH_WARNING,
+  NO_LINEAGE_FOR_SELECTED_RUN,
+} from "@/lib/chain-of-custody/copy";
 
 export interface CreditBatchChainBatch {
   id: string;
@@ -129,7 +133,7 @@ export async function getCreditBatchChainData(
 
   const warnings = mergeLineageWarnings(lineages);
   if (lineages.length === 0) {
-    warnings.push("This credit batch has no member applications yet.");
+    warnings.push(EMPTY_CREDIT_BATCH_WARNING);
   }
 
   const sankey = buildBatchSankey(lineages.map(({ chain }) => chain));
@@ -155,17 +159,26 @@ export async function getCreditBatchChainData(
  * `ChainOfCustodyGeoData` — nodes and legs deduped by id (shared runs / lots /
  * feedstocks collapse), warnings deduped — so the Carbon Transit map consumes
  * the batch exactly like a single application.
+ *
+ * `productionRunId` narrows the roll-up to lineages flowing through that run,
+ * the same subset the page's Run filter shows in the DAG and Sankey.
  */
 export async function getCreditBatchChainGeoData(
   ctx: OrgContext,
   creditBatchId: string,
+  options: { productionRunId?: string | null } = {},
 ): Promise<ChainOfCustodyGeoData> {
   requireOrgScope(ctx);
 
-  const { batch, lineages } = await resolveBatchScope(
+  const { batch, lineages: batchLineages } = await resolveBatchScope(
     ctx,
     creditBatchId,
   );
+  const lineages = options.productionRunId
+    ? batchLineages.filter(
+        ({ chain }) => chain.productionRun?.id === options.productionRunId,
+      )
+    : batchLineages;
 
   const payloads = await Promise.all(
     lineages.map(({ chain }) => projectChainOfCustodyGeoData(ctx, chain)),
@@ -177,7 +190,11 @@ export async function getCreditBatchChainGeoData(
       facility,
       nodes: [],
       legs: [],
-      warnings: ["This credit batch has no member applications yet."],
+      warnings: [
+        options.productionRunId && batchLineages.length > 0
+          ? NO_LINEAGE_FOR_SELECTED_RUN
+          : EMPTY_CREDIT_BATCH_WARNING,
+      ],
     };
   }
 

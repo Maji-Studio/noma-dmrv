@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { PaperclipIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, PaperclipIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormFileUpload, FormSection } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { Button } from "@/components/ui/button";
@@ -57,8 +57,7 @@ export function SampleEvidenceSection({
       __spine={__spine}
     >
       <p className="body-small text-[var(--color-text-secondary)]">
-        Attach the lab report before submitting the Removal. Saved lab reports
-        are included automatically with the Sample carbon measurements.
+        Attach the lab report before submitting the Removal.
       </p>
       {isEditMode && sample ? (
         <div className="flex flex-col gap-12">
@@ -139,25 +138,45 @@ export function SampleTransportSection({
                   Retry transport legs
                 </Button>
               </div>
-              {deferredLegs.map((leg, index) => (
-                <div
-                  key={`${leg.originName ?? "origin"}-${leg.destinationName ?? "destination"}-${index}`}
-                  className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
-                >
-                  <span className="body-small text-[var(--color-text-primary)]">
-                    {leg.originName || "Origin"} → {leg.destinationName || "Destination"} · {leg.distanceKm} km
-                  </span>
-                  <Button
-                    type="button"
-                    variant="noOutline"
-                    size="small"
-                    onClick={() => onDeferredLegsChange?.(deferredLegs.filter((_, itemIndex) => itemIndex !== index))}
-                    disabled={isSubmitting}
+              <ul className="border-t border-[var(--color-border-tertiary)]">
+                {deferredLegs.map((leg, index) => (
+                  <li
+                    key={`${leg.originName ?? "origin"}-${leg.destinationName ?? "destination"}-${index}`}
+                    className="flex items-start justify-between gap-12 border-b border-[var(--color-border-tertiary)] py-12"
                   >
-                    Remove
-                  </Button>
-                </div>
-              ))}
+                    <div className="min-w-0 flex-1 space-y-6">
+                      <div className="flex flex-wrap items-center gap-x-8 gap-y-2 body-small font-medium text-[var(--color-text-primary)]">
+                        <span>{leg.originName || "Origin"}</span>
+                        <ArrowRightIcon
+                          size={14}
+                          weight="bold"
+                          className="shrink-0 text-[var(--color-icon-secondary)]"
+                          aria-hidden
+                        />
+                        <span className="sr-only">to</span>
+                        <span>{leg.destinationName || "Destination"}</span>
+                      </div>
+                      <dl className="flex flex-wrap gap-x-16 gap-y-4 body-caption">
+                        <div className="flex items-baseline gap-4">
+                          <dt className="text-[var(--color-text-tertiary)]">Distance</dt>
+                          <dd className="tabular-nums text-[var(--color-text-secondary)]">
+                            {leg.distanceKm} km
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="noOutline"
+                      size="small"
+                      onClick={() => onDeferredLegsChange?.(deferredLegs.filter((_, itemIndex) => itemIndex !== index))}
+                      disabled={isSubmitting}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           <TransportLegsEditor

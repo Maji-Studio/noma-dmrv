@@ -1,0 +1,3 @@
+CREATE TYPE "public"."output_stock_mode" AS ENUM('split', 'mix');--> statement-breakpoint
+ALTER TABLE "storage_locations" ADD COLUMN "stock_mode" "output_stock_mode" DEFAULT 'split' NOT NULL;--> statement-breakpoint
+ALTER TABLE "storage_locations" ADD CONSTRAINT "storage_locations_mix_output_bin_only" CHECK ("storage_locations"."type" <> 'feedstock_bin' or "storage_locations"."stock_mode" = 'split');

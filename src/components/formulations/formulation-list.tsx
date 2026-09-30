@@ -27,6 +27,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
+import { formatRatio, formulationSheetSections } from "./formulation-read-sections";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -35,11 +36,6 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 // ============================================
 // Helpers
 // ============================================
-
-function formatRatio(ratio: number | null): string {
-  if (ratio === null || ratio === undefined) return MISSING_VALUE.notRecorded;
-  return `${(ratio * 100).toFixed(0)}%`;
-}
 
 function formatIngredientsSummary(
   ingredients: FormulationWithIngredients["ingredients"]
@@ -238,56 +234,9 @@ export function FormulationList() {
     );
   }
 
-  // Build view sections for side sheet
-  const viewSections = (() => {
-    if (sideSheet?.mode !== "view" || !sideSheet.entity) return undefined;
-    const entity = sideSheet.entity;
-
-    const ingredientCount = entity.ingredients?.length ?? 0;
-    const ingredientFields = ingredientCount > 0
-      ? entity.ingredients.flatMap((ingredient, index) => {
-          const prefix = ingredientCount > 1 ? `Ingredient ${index + 1}` : "Ingredient";
-          return [
-            {
-              label: `${prefix} · Blend material`,
-              value: ingredient.feedstockType.name,
-            },
-            {
-              label: `${prefix} · volume share (%)`,
-              value: formatRatio(ingredient.ratio),
-            },
-          ];
-        })
-      : [];
-
-    return [
-      {
-        title: "Required information",
-        fields: [
-          { label: "Formulation name", value: entity.name },
-        ],
-      },
-      {
-        title: "Blend composition by volume",
-        fields: [
-          {
-            label: "Biochar · volume share (%)",
-            value: formatRatio(entity.biocharRatio),
-          },
-          ...ingredientFields,
-        ],
-        content: ingredientCount === 0 ? (
-          <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No blend feedstock types are added. This is a pure-biochar formulation.
-          </p>
-        ) : undefined,
-      },
-      {
-        title: "Additional information",
-        fields: [{ label: "Description", value: entity.description }],
-      },
-    ];
-  })();
+  const viewSections = sideSheet?.mode === "view" && sideSheet.entity
+    ? formulationSheetSections(sideSheet.entity)
+    : undefined;
 
   return (
     <div className="container-max page-shell">
@@ -298,7 +247,7 @@ export function FormulationList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Formulation
+            New formulation
           </Button>
         }
       />
@@ -306,7 +255,7 @@ export function FormulationList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Formulations"
+          title="Total formulations"
           value={totalFormulations}
           icon={<ListChecksIcon size={24} weight="bold" />}
           description="Biochar product recipes"
@@ -371,7 +320,7 @@ export function FormulationList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingFormulationId}
-        title="Delete Formulation"
+        title="Delete formulation"
         message="Are you sure you want to delete this formulation? This action cannot be undone. Note: Formulations with associated biochar products cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -382,13 +331,15 @@ export function FormulationList() {
       />
 
       <EntitySideSheet
+        detailToggle="form"
+        detailScope={sideSheet?.entity?.id ?? "create"}
         open={!!sideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
-        title={sideSheet?.mode === "create" ? "Create Formulation" : (sideSheet?.entity?.code ?? "")}
+        title={sideSheet?.mode === "create" ? "Create formulation" : (sideSheet?.entity?.code ?? "")}
         subtitle={sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name}
-        editLabel="Edit Formulation"
+        editLabel="Edit formulation"
         sections={viewSections}
       >
         <FormulationForm
@@ -398,7 +349,7 @@ export function FormulationList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Formulation"}
+          submitLabel={sideSheet?.mode === "edit" ? "Save changes" : "Create formulation"}
         />
       </EntitySideSheet>
     </div>

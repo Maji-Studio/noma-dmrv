@@ -12,11 +12,12 @@
  *   });
  *
  * so `createDatapoint` / `createGhgEntry` / `createGhgStatement` /
- * `createMeasurementSample` /
- * `findGhgEntryBySupplierRef` / `findDatapointBySupplierRef` /
- * `findDraftGhgStatementsByPeriod` run for REAL against a registry-shaped
- * counterparty — supplier-reference query semantics and pagination are
- * exercised, not simulated. `IsometricApiError` and the generated types are
+ * `createMeasurementSample` / `createProductionBatch` /
+ * `createBiocharApplication` / `createStorageLocation` and their
+ * supplier-reference finders run for REAL against a registry-shaped
+ * counterparty. The fake replaces only the transport: the client, including
+ * its page cap and cursor checks, is the real one from
+ * `createIsometricClientFromTransport`. `IsometricApiError` and the generated types are
  * passed through from the actual module so `instanceof` checks in
  * `performRegistryCreate` keep working.
  *
@@ -34,11 +35,7 @@
  * Deliberately small: only the routes the certification pipelines touch.
  * Grow it per-test, never speculatively.
  */
-import type {
-  IsometricClient,
-  IsometricRequestOptions,
-  PaginateOptions,
-} from "@/lib/isometric/client";
+import type { IsometricRequestOptions } from "@/lib/isometric/client";
 import type { GhgStatementStatus } from "@/lib/isometric/ghg-statements";
 
 type ClientModule = typeof import("@/lib/isometric/client");
@@ -105,6 +102,7 @@ export class FakeIsometricRegistry {
   readonly productionBatches: FakeRegistryRecord[] = [];
   readonly ghgEntries: FakeRegistryRecord[] = [];
   readonly biocharApplications: FakeRegistryRecord[] = [];
+  readonly storageLocations: FakeRegistryRecord[] = [];
   readonly sources: FakeRegistryRecord[] = [];
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
@@ -293,6 +291,26 @@ export class FakeIsometricRegistry {
     if (method === "POST" && path === "/measurement_samples") {
       return this.createMeasurementSample(body, ApiError);
     }
+    if (method === "POST" && path === "/production_batches") {
+      return this.create(this.productionBatches, "prb", body, ApiError);
+    }
+    if (method === "POST" && path === "/biochar_applications") {
+      return this.create(this.biocharApplications, "bse", body, ApiError);
+    }
+    const projectStorageLocations = path.match(
+      /^\/projects\/([^/]+)\/storage_locations(?:\/([^/]+))?$/,
+    );
+    if (projectStorageLocations) {
+      return this.routeStorageLocations(
+        method,
+        path,
+        decodeURIComponent(projectStorageLocations[1]),
+        projectStorageLocations[2] && decodeURIComponent(projectStorageLocations[2]),
+        query,
+        body,
+        ApiError,
+      );
+    }
     if (method === "POST" && path === "/ghg_entries") {
       return this.create(this.ghgEntries, "gge", body, ApiError);
     }
@@ -398,9 +416,21 @@ export class FakeIsometricRegistry {
       );
       return undefined;
     }
+    if (method === "GET" && path === "/biochar_applications") {
+      return paginateSlice(this.filterRecords(this.biocharApplications, query), query);
+    }
     const deletedBiocharApplication = path.match(
       /^\/biochar_applications\/([^/]+)$/,
     );
+    if (method === "GET" && deletedBiocharApplication) {
+      return this.findById(
+        this.biocharApplications,
+        decodeURIComponent(deletedBiocharApplication[1]),
+        method,
+        path,
+        ApiError,
+      );
+    }
     if (method === "DELETE" && deletedBiocharApplication) {
       this.removeById(
         this.biocharApplications,
@@ -522,17 +552,53 @@ export class FakeIsometricRegistry {
     );
   }
 
+  private routeStorageLocations(
+    method: string,
+    path: string,
+    projectId: string,
+    storageLocationId: string | undefined,
+    query: Record<string, unknown>,
+    body: unknown,
+    ApiError: ApiErrorCtor,
+  ): unknown {
+    const inProject = this.storageLocations.filter(
+      (location) => location.project_id === projectId,
+    );
+    if (method === "POST" && !storageLocationId) {
+      return this.create(
+        this.storageLocations,
+        "slc",
+        { ...(body as Record<string, unknown>), project_id: projectId },
+        ApiError,
+        inProject,
+      );
+    }
+    if (method === "GET" && !storageLocationId) {
+      return paginateSlice(this.filterRecords(inProject, query), query);
+    }
+    if (method === "GET" && storageLocationId) {
+      return this.findById(inProject, storageLocationId, method, path, ApiError);
+    }
+    throw new ApiError(
+      `FakeIsometricRegistry: no fake route for ${method} ${path}`,
+      404,
+      { errors: [{ detail: "no fake route" }] },
+      "http",
+    );
+  }
+
   private create(
     collection: FakeRegistryRecord[],
     prefix: string,
     body: unknown,
     ApiError: ApiErrorCtor,
+    uniqueWithin: FakeRegistryRecord[] = collection,
   ): FakeRegistryRecord {
     const payload = (body ?? {}) as Record<string, unknown>;
     const supplierRef = payload.supplier_reference_id;
     if (
       typeof supplierRef === "string" &&
-      collection.some((record) => record.supplier_reference_id === supplierRef)
+      uniqueWithin.some((record) => record.supplier_reference_id === supplierRef)
     ) {
       // Registry-shaped invariant: a supplier reference is unique. A pipeline
       // that POSTs again instead of reconciling hits this, not a duplicate.
@@ -721,51 +787,7 @@ export function createFakeClientModule(actual: ClientModule): ClientModule {
       actual.IsometricApiError,
     ) as Promise<T>;
 
-  async function* paginate<T>(
-    path: string,
-    options: PaginateOptions = {},
-  ): AsyncGenerator<T> {
-    const { pageSize = DEFAULT_PAGE_SIZE, query, ...rest } = options;
-    let after: string | undefined;
-    while (true) {
-      const page = await request<Page<T>>("GET", path, {
-        ...rest,
-        query: { ...query, first: pageSize, after },
-      });
-      for (const node of page.nodes ?? []) yield node;
-      if (!page.page_info?.has_next_page || !page.page_info.end_cursor) return;
-      after = page.page_info.end_cursor;
-    }
-  }
-
-  async function paginateAll<T>(
-    path: string,
-    options: PaginateOptions = {},
-  ): Promise<T[]> {
-    const out: T[] = [];
-    for await (const node of paginate<T>(path, options)) out.push(node);
-    return out;
-  }
-
-  const client: IsometricClient = {
-      request: request as IsometricClient["request"],
-      get: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
-        request<T>("GET", path, options),
-      post: <T = unknown>(
-        path: string,
-        body?: unknown,
-        options?: IsometricRequestOptions,
-      ) => request<T>("POST", path, { ...options, body }),
-      patch: <T = unknown>(
-        path: string,
-        body?: unknown,
-        options?: IsometricRequestOptions,
-      ) => request<T>("PATCH", path, { ...options, body }),
-      delete: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
-        request<T>("DELETE", path, options),
-      paginate,
-      paginateAll,
-  };
+  const client = actual.createIsometricClientFromTransport(request);
 
   return {
     ...actual,

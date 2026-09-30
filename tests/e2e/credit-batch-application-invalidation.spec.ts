@@ -30,6 +30,7 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 import type { Page } from "@playwright/test";
+import { fillStockMoisture } from "./helpers/stock-moisture";
 
 async function createApplicationForLineage(
   page: Page,
@@ -40,7 +41,7 @@ async function createApplicationForLineage(
   await page.goto(`/orders?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
   await waitForFacilityHydration(page, seededData.facility.name);
-  await page.click('button:has-text("New Order")');
+  await page.click('button:has-text("New order")');
   await waitForSideSheet(page);
 
   await page.fill('input[name="orderDate"]', today);
@@ -59,29 +60,28 @@ async function createApplicationForLineage(
   );
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "10000");
-  await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
+  await page.locator('[role="dialog"]').locator('button:has-text("Create order")').click();
   await waitForSideSheetClose(page);
 
   // Delivery, already delivered (applications require a delivered delivery).
   await page.goto(`/deliveries?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
   await waitForFacilityHydration(page, seededData.facility.name);
-  await page.click('button:has-text("New Delivery")');
+  await page.click('button:has-text("New delivery")');
   await waitForSideSheet(page);
 
-  await page.fill('input[name="deliveryDate"]', today);
   await selectFirstEntity(page, "Order");
   await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
   await page.fill('input[name="deliveredWetMassKg"]', "10000");
-  await page.fill('input[name="moistureContentPercent"]', "10");
-  await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
+  await fillStockMoisture(page, "delivery", "10");
+  await page.locator('[role="dialog"]').locator('button:has-text("Create delivery")').click();
   await waitForSideSheetClose(page);
 
   // Application against that delivery: 5000 kg (5 tonnes) initially.
   await page.goto(`/applications?facility=${seededData.facility.id}`);
   await page.waitForLoadState("networkidle");
   await waitForFacilityHydration(page, seededData.facility.name);
-  await page.click('button:has-text("New Application")');
+  await page.click('button:has-text("New application")');
   await waitForSideSheet(page);
 
   await page.fill('input[name="applicationDate"]', today);
@@ -95,7 +95,7 @@ async function createApplicationForLineage(
   }
   await page.fill('input[name="biocharAppliedTons"]', "5000");
   await page.fill('input[name="fieldSizeHa"]', "2");
-  await page.locator('[role="dialog"]').locator('button:has-text("Create Application")').click();
+  await page.locator('[role="dialog"]').locator('button:has-text("Create application")').click();
   await waitForSideSheetClose(page);
 }
 
@@ -135,10 +135,10 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     const applicationRow = page.locator("table tbody tr[tabindex='0']").first();
     await applicationRow.click();
     await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit Application" }).click();
+    await page.getByRole("button", { name: "Edit application" }).click();
 
     await page.fill('input[name="biocharAppliedTons"]', "3000");
-    await page.locator('[role="dialog"]').locator('button:has-text("Update Application")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Update application")').click();
     await waitForSideSheetClose(page);
 
     // Back to /credit-batches, again via client-side nav — no page.reload(),

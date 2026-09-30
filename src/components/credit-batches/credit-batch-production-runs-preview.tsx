@@ -1,7 +1,6 @@
 import {
   ArrowsClockwiseIcon,
   FactoryIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import type { CreditBatchProductionRunOption } from "@/data-access/credit-batche
 import { formatDate } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { Notice } from "@/components/ui/notice";
 
 export interface RetainedProductionRunPreview {
   id: string;
@@ -142,26 +142,13 @@ export function CreditBatchProductionRunsPreview({
       </SectionLabel>
 
       {!isReady ? (
-        <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            Select a feedstock type and set the production window to load runs.
-          </span>
-        </div>
+        <Notice tone="info">
+          Select a feedstock type and set the production window to load runs.
+        </Notice>
       ) : isError ? (
-        <div
-          role="alert"
-          className="flex items-start gap-10 border-l-2 border-[var(--st-bad)] bg-[var(--st-bad-bg)] px-16 py-12"
-        >
-          <WarningCircleIcon
-            size={16}
-            weight="fill"
-            aria-hidden
-            className="mt-1 shrink-0 text-[var(--st-bad)]"
-          />
-          <div className="flex flex-1 items-center justify-between gap-12">
-            <span className="body-small text-[var(--st-bad)]">
-              Couldn&apos;t load production runs for this window. Try again.
-            </span>
+        <Notice
+          tone="error"
+          action={
             <Button
               type="button"
               variant="noOutline"
@@ -172,17 +159,17 @@ export function CreditBatchProductionRunsPreview({
               <ArrowsClockwiseIcon size={14} aria-hidden />
               Retry
             </Button>
-          </div>
-        </div>
+          }
+        >
+          Couldn&apos;t load production runs for this window. Try again.
+        </Notice>
       ) : isLoading ? (
-        <div
-          className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
+        <span
+          className="body-small text-[var(--color-text-tertiary)]"
           aria-busy
         >
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            Loading production runs…
-          </span>
-        </div>
+          Loading production runs…
+        </span>
       ) : !hasVisibleRows ? (
         <EmptyState
           icon={<FactoryIcon size={32} weight="bold" aria-hidden />}

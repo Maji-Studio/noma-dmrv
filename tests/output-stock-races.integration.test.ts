@@ -41,22 +41,22 @@ async function postedTruck() {
   const f = await parents();
   const product = await createBiocharProduct(f.ctx, await withProductStockFingerprint(f.ctx, {
     code: `E2E-RACE-P-${f.tag}`, facilityId: f.facility.id, formulationId: f.recipe.id,
-    placedAt: '2026-09-10', sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id,
+    placedAt: '2026-09-10T12:00:00.000Z', sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id,
     massKg: 1500, moistureContentPercent: 10, waterAddedKg: 0,
     idempotencyKey: randomUUID(),
     composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id,
-      massKg: 500, moistureContentPercent: 60, moistureSource: 'operator_override' }] },
+      massKg: 500, moistureContentPercent: 60 }] },
   }));
   const order = await createOrder(f.ctx, {
     code: `E2E-RACE-O-${f.tag}`, facilityId: f.facility.id, customerId: f.customer.id,
     formulationId: f.recipe.id, orderDate: new Date('2026-09-12'), quantityKg: 2000, packaging: 'loose',
   });
-  const input = { storageLocationId: f.bin.id, facilityId: f.facility.id, physicalDate: '2026-09-14',
+  const input = { storageLocationId: f.bin.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z',
     kind: 'delivery' as const, wetMassKg: 1000, moisturePercent: 30 };
   const preview = await previewOutputStock(f.ctx, input);
   const delivery = await createDelivery(f.ctx, {
     code: `E2E-RACE-D-${f.tag}`, orderId: order.id, facilityId: f.facility.id,
-    deliveryDate: new Date('2026-09-14'), storageLocationId: f.bin.id,
+    deliveryDate: new Date('2026-09-14T12:00:00.000Z'), storageLocationId: f.bin.id,
     deliveredWetMassKg: input.wetMassKg, moistureContentPercent: input.moisturePercent,
     idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint,
   });
@@ -131,7 +131,7 @@ describe('output stock dependency races', () => {
 
   it('blocks ordinary source changes after a count with no allocation rows', async () => {
     const f = await parents();
-    const input = { storageLocationId: f.source.id, facilityId: f.facility.id, physicalDate: '2026-09-14',
+    const input = { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt: '2026-09-14T12:00:00.000Z',
       kind: 'count' as const, wetMassKg: 1500, moisturePercent: 0 };
     const preview = await previewOutputStock(f.ctx, input);
     expect(preview.removedDryKg).toBe(0);

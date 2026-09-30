@@ -14,6 +14,8 @@ import { cleanupOutputStockFixture } from "./output-stock-cleanup";
 
 export type PostedStockParents = Awaited<ReturnType<typeof seedOutputStockParents>>;
 export const STOCK_DATE = "2026-09-14";
+/** Stock events happen at noon UTC on STOCK_DATE, after every fixture placement. */
+export const STOCK_TIME = `${STOCK_DATE}T12:00:00.000Z`;
 
 /** Stock tests post through the real writer; only upstream production facts are seeded. */
 export async function postedStockFixture(options: { quantityKg?: number; stockKg?: number } = {}) {
@@ -27,7 +29,7 @@ export async function postedStockFixture(options: { quantityKg?: number; stockKg
 
 export async function productInput(f: PostedStockParents, changes: Partial<CreateBiocharProductInput> = {}): Promise<CreateBiocharProductInput> {
   const data = { code: `E2E-STOCK-P-${randomUUID().toUpperCase()}`, facilityId: f.facility.id, formulationId: f.pure.id,
-    placedAt: "2026-09-12", sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id,
+    placedAt: "2026-09-12T12:00:00.000Z", sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id,
     massKg: 100, moistureContentPercent: 0, waterAddedKg: 0, ...changes };
   return withProductStockFingerprint(f.ctx, { ...data, idempotencyKey: changes.idempotencyKey ?? randomUUID() });
 }
@@ -35,15 +37,15 @@ export async function postProduct(f: PostedStockParents, changes: Partial<Create
   return createBiocharProduct(f.ctx, await productInput(f, changes));
 }
 export async function deliveryInput(f: Awaited<ReturnType<typeof postedStockFixture>>, wetMassKg: number, moisturePercent = 0) {
-  const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, physicalDate: STOCK_DATE, kind: "delivery", wetMassKg, moisturePercent });
+  const preview = await previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "delivery", wetMassKg, moisturePercent });
   return { code: `E2E-STOCK-D-${randomUUID().toUpperCase()}`, facilityId: f.facility.id, orderId: f.order.id, storageLocationId: f.bin.id,
-    deliveryDate: new Date(STOCK_DATE), deliveredWetMassKg: wetMassKg, moistureContentPercent: moisturePercent, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint };
+    deliveryDate: new Date(STOCK_TIME), deliveredWetMassKg: wetMassKg, moistureContentPercent: moisturePercent, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint };
 }
 export async function postDelivery(f: Awaited<ReturnType<typeof postedStockFixture>>, wetMassKg: number, moisturePercent = 0) {
   return createDelivery(f.ctx, await deliveryInput(f, wetMassKg, moisturePercent));
 }
 export async function postMeasurement(f: PostedStockParents, changes: Partial<OutputStockPreviewInput> & Pick<OutputStockPreviewInput, "kind" | "wetMassKg">) {
-  const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, physicalDate: STOCK_DATE, moisturePercent: 0, ...changes };
+  const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, moisturePercent: 0, ...changes };
   const preview = await previewOutputStock(f.ctx, input);
   return postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E stock contract measurement" });
 }

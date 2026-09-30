@@ -47,6 +47,7 @@ import {
   feedstocks,
   orders,
   productionRunFeedstocks,
+  outputStockMoistureReadings,
   productionRuns,
   productionProcesses,
   reactors,
@@ -360,6 +361,9 @@ async function cleanupLineageFixture(fixture: LineageFixture): Promise<void> {
         .delete(certifierGhgStatements)
         .where(eq(certifierGhgStatements.id, fixture.ghgStatementId));
     }
+    await tx
+      .delete(outputStockMoistureReadings)
+      .where(eq(outputStockMoistureReadings.productionRunId, fixture.productionRunId));
     await tx
       .delete(productionRuns)
       .where(eq(productionRuns.id, fixture.productionRunId));
@@ -770,7 +774,7 @@ describe("certification lineage guards", () => {
           makeTestOrgContext(TEST_USER_ID),
           await withProductStockFingerprint(makeTestOrgContext(TEST_USER_ID), {
             code: `BP-LOCKED-${tag}`,
-            placedAt: "2026-07-01",
+            placedAt: "2026-07-01T12:00:00.000Z",
             formulationId,
             facilityId: fixture.facilityId,
             sourceBiocharStorageLocationId: sourceBin.id,

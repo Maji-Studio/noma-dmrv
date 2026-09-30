@@ -116,6 +116,8 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   CloudIcon: () => null,
   FileIcon: () => null,
   WarningCircleIcon: () => null,
+  InfoIcon: () => null,
+  WarningIcon: () => null,
 }));
 vi.mock("./panel-layout", () => ({
   Section: ({ children }: { children?: ReactNode }) => (

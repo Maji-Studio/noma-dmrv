@@ -5,12 +5,13 @@
  */
 "use client";
 
+import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { toDateInputValue } from "@/lib/date-utils";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useState } from "react";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine, FormTextarea, makeCertFieldStatus, MoistureField, ResolvedErrorRevalidator, WetMassField } from "@/components/forms";
+import { EventTimeInput } from "@/components/forms/event-time-input";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
@@ -19,10 +20,13 @@ import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
+import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
+import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
+import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { deliveryFormSchema, type DeliveryFormData } from "@/schemas/deliveries";
 import {
@@ -78,6 +82,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
   const formFacilityId = delivery?.facilityId ?? contextFacilityId;
+  const deliveryClock = useFacilityClock(formFacilityId);
   // Organization operating defaults seed create mode only; an existing record
   // always wins. Warmed once per session in FacilityProvider, so this is a
   // cache read rather than a round trip on open.
@@ -96,10 +101,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     idempotencyKey,
     basisFingerprint: "pending-preview",
     orderId: delivery?.orderId ?? "",
-    deliveryDate: toDateInputValue(delivery?.deliveryDate),
+    deliveryDate: (delivery?.deliveryDate ? new Date(delivery.deliveryDate) : new Date()).toISOString(),
     status: "delivered" as const,
-    deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
-    moistureContentPercent: delivery?.moistureContentPercent ?? undefined,
+    // Match the registered empty values so focusing the header is not an edit.
+    deliveredWetMassKg: delivery?.deliveredWetMassKg ?? null,
+    moistureContentPercent: (delivery?.moistureContentPercent ?? "") as number | string | undefined,
+    // Set on save for a split-bin load, from the sub-bin reading rows.
+    sources: undefined as DeliveryFormData["sources"],
     storageLocationId: delivery?.storageLocationId ?? "",
     driverId: delivery?.driverId ?? undefined,
     vehicleId: delivery?.vehicleId ?? undefined,
@@ -238,10 +246,21 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const matchingBins = useMatchingOutputBins(formFacilityId ?? "", selectedOrder?.formulationId ?? "");
   const wetMass = Number(watchWetMass);
   const moisture = watchMoisture === "" || watchMoisture == null ? NaN : Number(watchMoisture);
-  const stockPreview = useOutputStockPreview(!isEditMode && watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass) && Number.isFinite(moisture) && moisture >= 0 && moisture < 100 ? {
+  // A split product bin takes one reading per sub-bin the load reaches.
+  const draw = useSubBinDraw({
+    bin: !isEditMode && watchBinId && formFacilityId ? { storageLocationId: watchBinId, facilityId: formFacilityId } : null,
+    occurredAt: watchDate ? String(watchDate) : null, wetKg: wetMass,
+  });
+  const [attempted, setAttempted] = useState(false);
+  const readingsReady = draw.active ? draw.sources !== null : draw.usesSingleMoisture && Number.isFinite(moisture) && moisture >= 0 && moisture < 100;
+  // Create stays pressable while a reached row is empty, so pressing it names the missing reading.
+  const awaitingReadings = draw.active && draw.sources === null && !draw.untickCode && !draw.needsTick;
+  const stockPreview = useOutputStockPreview(!isEditMode && watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass) && readingsReady ? {
     storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery",
-    physicalDate: String(watchDate), wetMassKg: wetMass, moisturePercent: moisture,
+    occurredAt: String(watchDate), wetMassKg: wetMass,
+    ...(draw.active ? { sources: draw.sources! } : { moisturePercent: moisture }),
   } : null);
+  const moistureEstimate = useOutputMoistureEstimate(isEditMode || draw.active ? null : watchBinId, formFacilityId, watchDate ? String(watchDate) : null, stockPreview.data?.moistureEstimate);
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
 
@@ -250,9 +269,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     if (errorMessage && !isEditMode) void refreshStockPreview();
   }, [errorMessage, isEditMode, refreshStockPreview]);
 
-  const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
+  const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
-  const handleFormSubmit = handleSubmit(async (data) => {
+  const submitDelivery = handleSubmit(async (data) => {
     if (!isEditMode && (!stockPreview.data || stockPreview.isFetching || stockPreview.data.blockingMessage)) return;
     const normalized = data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
     try {
@@ -277,7 +296,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     // override so the sticky CTA row keeps its own layout (see sample-form).
     <div className="space-y-20">
       <FormSpine control={control}>
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+      <form id={formId} onSubmit={(event) => {
+        setAttempted(true);
+        // A split load saves its sub-bins and readings; its overall moisture is derived on save.
+        setValue("sources", draw.active ? draw.sources ?? undefined : undefined);
+        if (draw.active) setValue("moistureContentPercent", undefined);
+        return submitDelivery(event);
+      }} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Delivery Information Section */}
       <FormSection
@@ -286,14 +311,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveryDate", "orderId", "storageLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery date" error={errors.deliveryDate?.message} required>
-            <FormInput
-              id="deliveryDate"
-              type="date"
-              disabled={isSubmitting || isEditMode}
-              error={!!errors.deliveryDate}
-              {...register("deliveryDate")}
-            />
+          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required helperText={deliveryClock.hint}>
+            <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" timeZone={deliveryClock.timeZone} disabled={isSubmitting || isEditMode} />
           </FormField>
 
         </div>
@@ -323,8 +342,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <FormField id="storageLocationId" label="Actual source bin" required error={errors.storageLocationId?.message}>
           <FormSelect id="storageLocationId" placeholder="Select matching source bin..." disabled={isSubmitting || isEditMode} options={(matchingBins.data ?? []).map(bin => ({ value: bin.id, label: bin.name }))} {...register("storageLocationId")} />
         </FormField>
-        {matchingBins.error && <p role="alert">{matchingBins.error.message}</p>}
-        {isEditMode && delivery?.storageLocationId && <div className="space-y-8"><p className="body-small">To change stock measurements, open More info and correct the original delivery entry. Saved stock history is preserved.</p><OutputStockHistory storageLocationId={delivery.storageLocationId} facilityId={formFacilityId ?? ""} /></div>}
+        {matchingBins.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{matchingBins.error.message}</p>}
       </FormSection>
 
       {/* Mass & Moisture Section */}
@@ -348,19 +366,31 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               setValueAs: nullableNumericValue,
             })}
           />
-          <MoistureField
+          {draw.usesSingleMoisture && <MoistureField
             id="moistureContentPercent"
             materialLabel="Biochar product"
             error={errors.moistureContentPercent?.message}
             required
             disabled={isSubmitting || isEditMode}
             placeholder="e.g. 20"
+            estimate={isEditMode ? undefined : moistureEstimate}
+            reading={watchMoisture}
             registration={register("moistureContentPercent")}
-          />
+          />}
+          {/* The composition cards belong to the same grid as the two inputs
+              above them, so they align to the field columns and inherit the
+              row rhythm instead of stacking on a second spacing scale. The
+              wrapper drops out while every child is hidden (before a bin and
+              mass give a preview), so it adds no empty grid row under the inputs. */}
+          <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
+            {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting} showErrors={attempted} />}
+            {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
+            {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
+            {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
+            {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
+          </div>
         </div>
-        {stockPreview.isFetching && <p role="status">Refreshing stock preview...</p>}
-        {stockPreview.error && <p role="alert">{stockPreview.error.message}</p>}
-        {stockPreview.data && <OutputStockPreview preview={stockPreview.data} moreInfo={<OutputStockHistory storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
       </FormSection>
 
       {/* Transport Section */}
@@ -473,7 +503,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitDisabled={!isEditMode && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.data.blockingMessage)}
+        submitDisabled={!isEditMode && !awaitingReadings && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.data.blockingMessage)}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />
