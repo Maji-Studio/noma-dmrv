@@ -19,6 +19,7 @@
  * value is code-like — the record code, coordinates, a measurement.
  */
 
+import { ChainStatusBadge } from "../chain-status-badge";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
@@ -37,7 +38,6 @@ import { Button } from "@/components/ui/button";
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
-import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import { cn } from "@/lib/utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import type { ChainNodeSheetNode } from "../chain-node-sheet";
@@ -61,7 +61,6 @@ const WASH_MIX_PCT = 8;
 const HEADER_ICON_PX = 13;
 const CLOSE_ICON_PX = 12;
 const ACTION_ICON_PX = 12;
-const STATUS_DOT_PX = 6;
 /** Centred glyph column in the From→To thread; also the thread's own width. */
 const STOP_COL_PX = 20;
 const STOP_ICON_PX = 13;
@@ -133,21 +132,6 @@ function coordinateLine(geoNode: ChainGeoNode): string | null {
 // ---------------------------------------------------------------------------
 // Panel pieces
 // ---------------------------------------------------------------------------
-
-/** The sheet's status pill, compacted for the panel header. */
-function StatusPill({ status }: { status: string | null | undefined }) {
-  if (!status) return null;
-  return (
-    <span
-      className="inline-flex shrink-0 items-center gap-4 whitespace-nowrap border-[1.5px] border-current px-4 py-2 font-mono text-[8px] font-medium uppercase tracking-[0.09em]"
-      data-status-state={getStatusState(status)}
-      style={{ color: getStatusStateColor(status) }}
-    >
-      <span aria-hidden className="bg-current" style={{ width: STATUS_DOT_PX, height: STATUS_DOT_PX }} />
-      {status.replaceAll("_", " ")}
-    </span>
-  );
-}
 
 /** Section title, on the same full-bleed grid as the rows under it. */
 function SectionLabel({ children }: { children: string }) {
@@ -285,7 +269,7 @@ export function RecordDetailPanel({
             <span className="truncate">{label}</span>
           </span>
           <span className="flex shrink-0 items-center gap-8">
-            <StatusPill status={status} />
+            <ChainStatusBadge status={status} />
             {/* The panel's only dismissal, so it gets a real hit target rather
                 than the bare glyph. `-mr-8` keeps the icon optically on the
                 header's padding edge while the button extends past it. */}

@@ -8,13 +8,13 @@
  * rollback" to drill into that member's lineage.
  */
 
+import { ChainStatusBadge } from "./chain-status-badge";
 import { useState } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailRow, DetailSection } from "@/components/ui/detail-panel";
-import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import type { LineageDetailRow } from "./use-chain-graph";
 
 export interface ChainNodeSheetNode {
@@ -41,20 +41,6 @@ interface ChainNodeSheetProps {
   onViewRecord?: () => void;
   /** Drill the batch roll-up into this application's rollback. */
   onTrace?: () => void;
-}
-
-function StatusPill({ status }: { status: string | null | undefined }) {
-  if (!status) return null;
-  return (
-    <span
-      className="inline-flex items-center gap-6 whitespace-nowrap border-[1.5px] border-current px-6 py-2 font-mono text-[9px] font-medium uppercase tracking-[0.09em]"
-      data-status-state={getStatusState(status)}
-      style={{ color: getStatusStateColor(status) }}
-    >
-      <span aria-hidden className="size-[6px] bg-current" />
-      {status.replaceAll("_", " ")}
-    </span>
-  );
 }
 
 export function ChainNodeSheet({
@@ -86,7 +72,7 @@ export function ChainNodeSheet({
               <Icon size={13} weight="bold" className="shrink-0" />
               <span className="truncate">{label}</span>
             </span>
-            <StatusPill status={status} />
+            <ChainStatusBadge status={status} />
           </div>
           <SlideOverPanel.Title>{code}</SlideOverPanel.Title>
           {date ? <SlideOverPanel.Description>{date}</SlideOverPanel.Description> : null}
