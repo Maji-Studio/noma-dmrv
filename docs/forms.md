@@ -197,7 +197,8 @@ and shown on the facility clock, like production runs
   not shifted: the field value stays empty, the typed time stays visible, and
   the input says why under itself (`eventTimeRefusal`).
 - `useFacilityClock(facilityId)` (`src/hooks/use-facility-context.ts`) gives
-  `{ timeZone, hint }`; pass `hint` as the `FormField` `helperText`.
+  `{ timeZone, hint }`; pass `hint` as the `FormField` `cue` (which clock the
+  time is on is a unit the operator needs while typing).
 - `stockEventInstantSchema()` (`@/schemas/helpers`) validates the wire value.
 - Read surfaces format it on the same clock; see
   [design-system.md](./design-system.md#date-and-time-display).
@@ -206,7 +207,11 @@ and shown on the facility clock, like production runs
 
 All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — read it for the full surface; TypeScript carries the prop signatures. Only the non-obvious contracts are documented here.
 
-- **`FormField`** — `hint` (ⓘ icon) is for explanatory prose; `helperText` is for **short**, always-visible cues and auto-collapses into the hint treatment past `INLINE_HELPER_MAX_CHARS`. Long text in `helperText` is a mistake. Keep existing short cues ("Typically 1 to 2% for biochar"); do not blank them to tidy a form. The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or hint.
+- **`FormField`** — three kinds of help, one rule: **the ⓘ holds explanations; a `cue` stays visible only for a unit, a limit or a consequence** the operator needs while typing.
+  - `hint` and `helperText` both render behind the ⓘ beside the label (hint first), whatever their length. They also reach screen readers as the control's description. Definitions, examples, "why we ask" and scope notes ("Seeds new orders.") go here.
+  - `cue` is one visible `body-caption` line under the control: "0 to 100% of wet mass", "Minimum 8 characters", "Only an empty bin can switch to split.", "Facility time: Africa/Dar es Salaam", "1,200 kg available from this delivery". It is tagged by hand at the call site; never move an explanation into it to make it visible. An error or warning replaces it while shown.
+  - `unit` renders a suffix inside the end of the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; it is piloted on applied product mass and formulation shares, and each family pass migrates its own labels (and the read-view mirror, whose value already carries the unit).
+  - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a seal or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
 - **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. For server validation targeting a field, use RHF `setError('root.serverError', …)`.
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
 - **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`), loss / count the segmented one (`bin-reconcile-sheet.tsx`).
@@ -289,17 +294,17 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 ```
 
 - `fields` names the section's owned fields and scopes the live subscription. Its only job is to turn the marker **red** when one of those fields has a surfaced validation error (after blur or submit).
-- The marker is the **step number** and stays a number through every state — orientation, never a completion claim. The spine deliberately says nothing about whether a section is "done": a green completion tick conflated process progress with certification readiness and read as misleading. Readiness is a field-level concern carried by the CERT chips.
+- The marker is the **step number** and stays a number through every state — orientation, never a completion claim. The spine deliberately says nothing about whether a section is "done": a green completion tick conflated process progress with certification readiness and read as misleading. Readiness is a field-level concern carried by the certification seals.
 - Field-less sections render as plain numbered orientation steps — use them for previews and recaps, not required input.
 - Conditional sections may mount/unmount; numbering derives from rendered order and stays contiguous.
 
-### CERT chip status
+### Certification seal status
 
-`FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
+A field with `certifyRequired` carries the certification seal: a 14px Phosphor seal on its label row (`CertificationFieldTag`), in Simple and Detailed alike. The sheet header explains it once ("Required for certification", see [design-system.md](./design-system.md#form-type-lines-and-spacing)). `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the seal shows. The seal reflects the record's **saved** state, frozen — it does not flip while the user types:
 
-- create mode → `neutral` (no claim)
-- edit mode, saved value present → `satisfied` (green)
-- edit mode, saved value missing → `missing` (orange)
+- create mode → `neutral` (plain seal, no claim)
+- edit mode, saved value present → `satisfied` (green, checked seal)
+- edit mode, saved value missing → `missing` (orange, warning seal)
 
 Derive it with `makeCertFieldStatus(savedValues)`, passing the form's `defaultValues` in edit mode (or `undefined` while creating):
 
@@ -413,7 +418,7 @@ you read.
   suffixes, never by hiding.
 - **Dry figures are data.** A read view shows dry biochar or dry solids as a
   `secondary` line under the wet figure (`DetailField`, `DerivedHeadline`,
-  both through `SecondaryFigure`), CERT chip included. A stock balance such as
+  both through `SecondaryFigure`), certification seal included. A stock balance such as
   available dry stock does the same. In a movement preview the dry before and
   after pair stays part of the calculation.
 
