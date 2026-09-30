@@ -50,6 +50,10 @@ const ROLE_OPTIONS = [
   { value: "member", label: "Member" },
 ] as const;
 
+const ROLE_LABELS: Record<string, string> = Object.fromEntries(
+  ROLE_OPTIONS.map((option) => [option.value, option.label]),
+);
+
 type InviteForm = z.infer<typeof inviteMemberSchema>;
 
 export function OrganizationSettings({ canManage }: { canManage: boolean }) {
@@ -266,8 +270,8 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                         aria-label={`Role for ${member.email}`}
                       />
                     ) : (
-                      <span className="body-caption capitalize text-[var(--color-text-secondary)]">
-                        {member.role}
+                      <span className="body-caption text-[var(--color-text-secondary)]">
+                        {ROLE_LABELS[member.role] ?? member.role}
                       </span>
                     )}
                     {canManage && (
@@ -314,8 +318,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                 <OrganizationRosterRow
                   key={invite.id}
                   primary={invite.email}
-                  secondary={invite.role}
-                  secondaryClassName="capitalize"
+                  secondary={ROLE_LABELS[invite.role] ?? invite.role}
                   actions={
                     <Button
                       type="button"

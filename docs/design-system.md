@@ -508,7 +508,7 @@ Three ways to pick one of a few options. Choose by what the choice does.
 | Control | Use when | Examples |
 |---|---|---|
 | `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | evidence method, GIS boundary entry, stock mode |
-| `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity |
+| `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity, order packaging |
 | `FormSelect` | Everything else: long or dynamic lists, secondary fields | timezone, currency, category |
 
 A one-option enum is a fixed value, not a control.
@@ -541,6 +541,10 @@ input is not the touch target: the whole label is, and `SegmentedControl`
 segments are at least 44px tall. The sheet header Simple/Detailed toggle
 (`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
 component.
+
+### AuthResult — `src/components/auth`
+
+The one outcome screen for auth pages (check your email, email verified, verification failed, invitation not usable, password reset done). `tone` is `pending`, `info`, `success` or `error` and picks the 32px glyph and tint; one title, one message (the only announced part: `alert` for errors, `status` otherwise). `actions` are full-width buttons or `AuthPrimaryLink`; `footer` is quiet navigation (`AuthLink`) and always last. `framed={false}` drops the page card and renders the title as an h2, for use inside a card that already has an h1.
 
 ### Other primitives — intent only, props at source
 

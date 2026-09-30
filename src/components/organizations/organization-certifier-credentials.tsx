@@ -2,12 +2,12 @@
  * OrganizationCertifierCredentials — the organization's write-only Isometric
  * keys. Every facility in the organization submits with them.
  *
- * The inputs are always on screen. Once keys are stored, each field is seeded
- * with a masked stand-in so the form reads as "filled" rather than empty, and
- * replacing a key is what it looks like: select the mask, type over it. A field
- * left at its mask is sent as `undefined`, which the data-access layer reads as
- * "keep the stored value" — so rotating only the access token does not mean
- * retyping the client secret.
+ * Once keys are stored, each one shows as "Ends 1a2b" (or "Saved") with a
+ * Replace action; only Replace opens an empty input, and "Keep saved key"
+ * closes it again. An untouched key keeps its mask in the form state and is
+ * sent as `undefined`, which the data-access layer reads as "keep the stored
+ * value" — so rotating only the access token does not mean retyping the client
+ * secret. With nothing stored, both inputs are on screen.
  *
  * There is no separate connect-and-test step. Saving IS the test: the action
  * stores the keys and then asks Isometric to list the organization's projects
@@ -142,17 +142,12 @@ function CredentialsForm({
     setServerError("");
     setVerification(null);
 
-    // An untouched mask — and a field cleared but never retyped — both mean
-    // "leave this one alone". Sending the mask would store bullets as a key.
-    const accessToken = changedValue(values.accessToken);
-    const clientSecret = changedValue(values.clientSecret);
-
-    if (!accessToken && !clientSecret) {
-      setServerError(
-        "Type over a key to replace it, then save. Nothing has changed yet.",
-      );
+    const submission = resolveCredentialSubmission(values);
+    if (!submission.ok) {
+      setServerError(submission.message);
       return;
     }
+    const { accessToken, clientSecret } = submission;
 
     onSavingChange?.(true);
     try {
@@ -268,7 +263,7 @@ function CredentialKeyField({
             id={id}
             role="group"
             aria-label={`${label}, saved`}
-            className="flex min-h-[40px] items-center justify-between gap-12"
+            className="flex min-h-40 items-center justify-between gap-12"
           >
             <span className="body-small text-[var(--color-text-secondary)]">
               {savedText}
@@ -323,6 +318,27 @@ function VerificationNotice({
       {verification.message}
     </Notice>
   );
+}
+
+export const NOTHING_CHANGED_MESSAGE =
+  "Select Replace on a key and enter the new one, then save. Nothing has changed yet.";
+
+/**
+ * What to send. An untouched mask — and a field cleared but never retyped —
+ * both mean "leave this one alone"; sending the mask would store bullets as a
+ * key. Nothing to send is an error, not a no-op save.
+ */
+export function resolveCredentialSubmission(
+  values: CertifierCredentialsFormInput,
+):
+  | { ok: true; accessToken?: string; clientSecret?: string }
+  | { ok: false; message: string } {
+  const accessToken = changedValue(values.accessToken);
+  const clientSecret = changedValue(values.clientSecret);
+  if (!accessToken && !clientSecret) {
+    return { ok: false, message: NOTHING_CHANGED_MESSAGE };
+  }
+  return { ok: true, accessToken, clientSecret };
 }
 
 /** `undefined` when the field still holds the mask or was left blank. */
