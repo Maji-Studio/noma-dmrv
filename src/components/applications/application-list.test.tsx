@@ -30,6 +30,8 @@ vi.mock("@/components/ui/toast", () => ({
 }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   MapPinIcon: () => <span />,
+  PolygonIcon: () => <span />,
+  CameraIcon: () => <span />,
   PlusIcon: () => <span />,
   LeafIcon: () => <span />,
   XIcon: () => <span />,
