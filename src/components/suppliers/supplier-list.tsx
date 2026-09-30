@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import { UsersIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
@@ -171,6 +171,35 @@ export function SupplierList() {
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
   const toast = useToast();
+  const handledInvalidSupplierIdRef = useRef<string | null>(null);
+
+  // Clear a deep-linked `?supplier=` that cannot be opened (deleted or
+  // cross-org), with the same guard as the customer list.
+  useEffect(() => {
+    if (!focusedSupplierId) {
+      handledInvalidSupplierIdRef.current = null;
+      return;
+    }
+    if (deepLinkedSupplier.isLoading || deepLinkedSupplier.isFetching || deepLinkedSupplier.isPending) return;
+    if (handledInvalidSupplierIdRef.current === focusedSupplierId) return;
+    if (deepLinkedSupplier.isError || (deepLinkedSupplier.isSuccess && !deepLinkedSupplier.data)) {
+      handledInvalidSupplierIdRef.current = focusedSupplierId;
+      toast.error("Linked supplier could not be opened");
+      void setFocusedSupplierId(null);
+      void setDeepLinkMode(null);
+    }
+  }, [
+    deepLinkedSupplier.data,
+    deepLinkedSupplier.isError,
+    deepLinkedSupplier.isFetching,
+    deepLinkedSupplier.isLoading,
+    deepLinkedSupplier.isPending,
+    deepLinkedSupplier.isSuccess,
+    focusedSupplierId,
+    setDeepLinkMode,
+    setFocusedSupplierId,
+    toast,
+  ]);
 
   const suppliers = suppliersData?.items ?? [];
 
