@@ -25,7 +25,7 @@ import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@p
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
-import { FormSelect } from "@/components/forms/form-select";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import {
   EntitySelect,
   StorageLocationQuickAddDialog,
@@ -377,6 +377,42 @@ export function ProductionRunForm({
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
 
+        <FormField
+          id="status"
+          label="Status"
+          error={errors.status?.message}
+          helperText="Mark finished runs Complete before certification."
+          certifyRequired
+          certifyStatus={runStatusCertStatus}
+        >
+          <SegmentedControl
+            id="status"
+            legend="Run status"
+            options={statusOptions}
+            disabled={isSubmitting}
+            error={!!errors.status}
+            {...register("status")}
+          />
+        </FormField>
+
+        {watchedStatus === "cancelled" && (
+          <FormField
+            id="cancellationReason"
+            label="Cancellation reason"
+            error={errors.cancellationReason?.message}
+            required
+            helperText="Explain why this run did not take place."
+          >
+            <FormTextarea
+              id="cancellationReason"
+              rows={3}
+              disabled={isSubmitting}
+              error={!!errors.cancellationReason}
+              {...register("cancellationReason")}
+            />
+          </FormField>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
             <Controller
@@ -398,41 +434,24 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField
-            id="status"
-            label="Status"
-            error={errors.status?.message}
-            cue="Mark finished runs Complete before certification."
-            certifyRequired
-            certifyStatus={runStatusCertStatus}
-          >
-            <FormSelect
-              id="status"
-              disabled={isSubmitting}
-              error={!!errors.status}
-              options={statusOptions}
-              {...register("status")}
+          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
+            <Controller
+              name="operatorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  id="operatorId"
+                  entityType="operator"
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                  placeholder="Select operator..."
+                  disabled={isSubmitting}
+                  error={!!errors.operatorId}
+                />
+              )}
             />
           </FormField>
         </div>
-
-        {watchedStatus === "cancelled" && (
-          <FormField
-            id="cancellationReason"
-            label="Cancellation reason"
-            error={errors.cancellationReason?.message}
-            required
-            helperText="Explain why this run did not take place."
-          >
-            <FormTextarea
-              id="cancellationReason"
-              rows={3}
-              disabled={isSubmitting}
-              error={!!errors.cancellationReason}
-              {...register("cancellationReason")}
-            />
-          </FormField>
-        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
@@ -495,25 +514,6 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
-            <Controller
-              name="operatorId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  id="operatorId"
-                  entityType="operator"
-                  value={field.value || undefined}
-                  onChange={field.onChange}
-                  placeholder="Select operator..."
-                  disabled={isSubmitting}
-                  error={!!errors.operatorId}
-                />
-              )}
-            />
-          </FormField>
-        </div>
       </FormSection>
 
       {/* ── Feedstock & processing ── */}

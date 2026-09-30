@@ -7,6 +7,7 @@ import {
   FormActions,
   FormField,
   FormInput,
+  FormSection,
   PositionPicker,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
@@ -135,6 +136,7 @@ export function FacilityForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
+      <FormSection title="Site" divider={false}>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField id="name" label="Facility name" error={errors.name?.message} required>
           <FormInput
@@ -159,7 +161,7 @@ export function FacilityForm({
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 gap-y-20">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="timezone"
           label="Timezone"
@@ -186,9 +188,7 @@ export function FacilityForm({
             error={!!errors.timezone}
           />
         </FormField>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField id="location" label="Location" error={errors.location?.message}>
           <FormInput
             id="location"
@@ -199,18 +199,18 @@ export function FacilityForm({
             {...register("location")}
           />
         </FormField>
-
-        <FormField id="address" label="Address" error={errors.address?.message}>
-          <FormInput
-            id="address"
-            type="text"
-            placeholder="e.g., Industrial Zone, Plot 42"
-            disabled={isSubmitting}
-            error={!!errors.address}
-            {...register("address")}
-          />
-        </FormField>
       </div>
+
+      <FormField id="address" label="Address" error={errors.address?.message}>
+        <FormInput
+          id="address"
+          type="text"
+          placeholder="e.g., Industrial Zone, Plot 42"
+          disabled={isSubmitting}
+          error={!!errors.address}
+          {...register("address")}
+        />
+      </FormField>
 
       <PositionPicker
         idPrefix="gps"
@@ -226,7 +226,9 @@ export function FacilityForm({
         longitudeError={errors.gpsLongitude?.message}
         disabled={isSubmitting}
       />
+      </FormSection>
 
+      <FormSection title="Contact">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField id="contactEmail" label="Contact email" error={errors.contactEmail?.message}>
           <FormInput
@@ -251,6 +253,9 @@ export function FacilityForm({
         </FormField>
       </div>
 
+      </FormSection>
+
+      <FormSection title="Certification">
       <div className="grid grid-cols-1 gap-y-20">
         <FormField
           id="durabilityOption"
@@ -279,6 +284,7 @@ export function FacilityForm({
       {isEditMode && facility && (
         <FacilityIsometricConnector facilityId={facility.id} />
       )}
+      </FormSection>
 
       <FormActions
         control={control}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useStockAvailability } from "@/hooks/use-stock-availability";
 import {
   binStockOverdrawInlineMessage,
+  formatStockLimitKg,
   isStockOverdraw,
 } from "@/lib/stock-overdraw";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
@@ -133,6 +134,7 @@ export function ProductionRunFeedstockDrawRow({
             id={`feedstockDraws.${index}.wetMassKg`}
             label="Wet mass (kg)"
             error={resolvedWetMassError}
+            cue={availability?.availableKg != null ? `${formatStockLimitKg(availability.availableKg)} available ${productionRunId ? "to this run" : "in this bin"}` : undefined}
             hint="As-received weight from this bin, water included."
             required
           >

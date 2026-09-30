@@ -28,6 +28,7 @@ import { Pool } from "pg";
 import { eq, ilike, inArray } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+import { chooseRunStatus } from "./helpers/run-status";
 
 // ============================================
 // Full Chain Smoke Test
@@ -460,7 +461,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("New production run")');
       await waitForSideSheet(page);
 
-      await page.selectOption('select[name="status"]', "running");
+      await chooseRunStatus(page, "running");
 
       await selectEntityById(
         page,
@@ -512,7 +513,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await waitForSideSheet(page);
       await page.fill('input[name="endDate"]', productionRunDate);
       await page.fill('input[name="endTime"]', "12:00");
-      await page.selectOption('select[name="status"]', "complete");
+      await chooseRunStatus(page, "complete");
       await page
         .locator('[role="dialog"]')
         .getByRole("button", { name: "Save changes" })

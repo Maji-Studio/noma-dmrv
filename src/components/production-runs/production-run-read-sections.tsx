@@ -3,6 +3,7 @@ import { certificationDetailField } from "@/lib/certification/certify-field-regi
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
+import { flowBarWidthPercent, flowScaleKg } from "./production-run-flow-scale";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
@@ -28,11 +29,12 @@ export function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
 }
 
 export function productionRunSheetSections(run: ProductionRunWithRelations, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
+  // Feedstock in and biochar out are drawn to one mass scale, as in the form.
+  const scaleKg = flowScaleKg(run.totalFeedstockWetMassKg, run.biocharOutputKg);
   return [
     {
       title: "Run setup",
       fields: [
-        { label: "Reactor", value: run.reactorIdentifier },
         {
           label: "Status",
           value: <RunStatusBadge status={run.status} />,
@@ -44,8 +46,9 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
         ...(run.status === "cancelled"
           ? [{ label: "Cancellation reason", value: run.cancellationReason }]
           : []),
-        ...buildProductionRunWindowDetailFields(run, facilities),
+        { label: "Reactor", value: run.reactorIdentifier },
         { label: "Operator", value: run.operatorName },
+        ...buildProductionRunWindowDetailFields(run, facilities),
       ],
     },
     {
@@ -67,6 +70,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
           moisturePercent={run.feedstockMoisturePercent}
           dryMassKg={run.feedstockMassDryKg}
           materialLabel="Feedstock"
+          barWidthPercent={flowBarWidthPercent(run.totalFeedstockWetMassKg, scaleKg)}
         />
       ),
     },
@@ -86,6 +90,7 @@ export function productionRunSheetSections(run: ProductionRunWithRelations, faci
           moisturePercent={run.biocharMoisturePercent}
           dryMassKg={run.biocharDryMassKg}
           materialLabel="Biochar"
+          barWidthPercent={flowBarWidthPercent(run.biocharOutputKg, scaleKg)}
         />
       ),
     },
