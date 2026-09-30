@@ -10,6 +10,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { useOrgCertifierCredentialsStatus } from "@/hooks/use-certifier-credentials";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { FormActions, FormField, FormInput } from "@/components/forms";
@@ -27,6 +30,79 @@ import {
 } from "./organization-roster-list";
 
 type CreateForm = z.infer<typeof createOrganizationSchema>;
+
+interface OrganizationAdminRowProps {
+  org: { id: string; name: string; slug: string; memberCount: number };
+  entering: boolean;
+  onEnter: () => void;
+}
+
+/**
+ * One organization: name and counts, a keys status pill, and the write-only
+ * keys form in a modal so the directory stays a list, not a stack of forms.
+ */
+function OrganizationAdminRow({ org, entering, onEnter }: OrganizationAdminRowProps) {
+  const [keysOpen, setKeysOpen] = useState(false);
+  const status = useOrgCertifierCredentialsStatus(org.id);
+  const titleId = `org-keys-title-${org.id}`;
+
+  return (
+    <>
+      <OrganizationRosterRow
+        primary={org.name}
+        secondary={
+          <>
+            {org.slug} · {org.memberCount} member
+            {org.memberCount === 1 ? "" : "s"}
+          </>
+        }
+        actions={
+          <>
+            {status.data && (
+              <StatusBadge
+                status={status.data.configured ? "verified" : "pending"}
+                label={status.data.configured ? "Keys saved" : "No keys"}
+              />
+            )}
+            <Button
+              type="button"
+              variant="weak"
+              size="small"
+              onClick={() => setKeysOpen(true)}
+            >
+              Isometric keys
+            </Button>
+            <Button
+              type="button"
+              variant="weak"
+              size="small"
+              onClick={onEnter}
+              busy={entering}
+            >
+              Enter
+            </Button>
+          </>
+        }
+      />
+      <Modal
+        isOpen={keysOpen}
+        onClose={() => setKeysOpen(false)}
+        ariaLabelledBy={titleId}
+        width="md"
+      >
+        <div className="flex flex-col gap-16">
+          <h2 id={titleId} className="title-heading-3">
+            Isometric keys for {org.name}
+          </h2>
+          <OrganizationCertifierCredentials
+            organizationId={org.id}
+            organizationName={org.name}
+          />
+        </div>
+      </Modal>
+    </>
+  );
+}
 
 export function OrganizationsAdmin() {
   const toast = useToast();
@@ -84,32 +160,11 @@ export function OrganizationsAdmin() {
         ) : (
           <OrganizationRosterList>
             {organizations.map((org) => (
-              <OrganizationRosterRow
+              <OrganizationAdminRow
                 key={org.id}
-                primary={org.name}
-                secondary={
-                  <>
-                    {org.slug} · {org.memberCount} member
-                    {org.memberCount === 1 ? "" : "s"}
-                  </>
-                }
-                actions={
-                  <Button
-                    type="button"
-                    variant="weak"
-                    size="small"
-                    onClick={() => enterOrg(org.id)}
-                    busy={enteringId === org.id}
-                  >
-                    Enter
-                  </Button>
-                }
-                details={
-                  <OrganizationCertifierCredentials
-                    organizationId={org.id}
-                    organizationName={org.name}
-                  />
-                }
+                org={org}
+                entering={enteringId === org.id}
+                onEnter={() => enterOrg(org.id)}
               />
             ))}
           </OrganizationRosterList>
