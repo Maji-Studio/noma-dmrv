@@ -24,8 +24,8 @@ function ReviewSection({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-8 border-t border-[var(--color-border-tertiary)] pt-12">
-      <h5 className="label-micro text-[var(--color-text-tertiary)]">
+    <section className="flex flex-col gap-8">
+      <h5 className="body-small font-medium text-[var(--color-text-primary)]">
         {title}
       </h5>
       {children}

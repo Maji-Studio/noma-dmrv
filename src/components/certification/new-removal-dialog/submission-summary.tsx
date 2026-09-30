@@ -10,7 +10,6 @@
  */
 "use client";
 
-import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowSquareOutIcon,
@@ -21,6 +20,9 @@ import {
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { DerivedHeadline } from "@/components/forms/derived-headline";
+import { DetailField } from "@/components/ui/detail-panel";
+import { InfoHint } from "@/components/ui/tooltip";
 import { EnvBanner } from "../env-banner";
 import { CompilationWarnings } from "./compilation-notices";
 import {
@@ -35,12 +37,6 @@ import { Notice } from "@/components/ui/notice";
 
 const STATE_ICON_SIZE = 20;
 const BATCH_LINK_ICON_SIZE = 12;
-
-const VERDICT_RULE: Record<SubmitState, string> = {
-  ready: "border-[var(--st-ok)]",
-  loading: "border-[var(--st-run)]",
-  blocked: "border-[var(--st-bad)]",
-};
 
 type SubmissionSummaryProps = SubmissionFactsInput & {
   facilityId: string;
@@ -122,20 +118,8 @@ function RegistryFactLink({
   );
 }
 
-/**
- * Label/value ledger row — the same idiom as `carbon-breakdown.tsx`, with the
- * hairline and padding these rows need inside a bordered panel.
- */
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-baseline justify-between gap-x-16 gap-y-2 border-t border-[var(--color-border-tertiary)] px-20 py-8">
-      <dt className="body-small text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="body-small text-right text-[var(--color-text-primary)]">
-        {children}
-      </dd>
-    </div>
-  );
-}
+const CALCULATION_NOTE =
+  "Isometric calculates stored and net CO₂e after submission.";
 
 export function SubmissionSummary({
   facilityId,
@@ -151,10 +135,25 @@ export function SubmissionSummary({
     ? `${facts.projectLabel} (${facts.environmentLabel})`
     : "Not linked";
 
+  const batchesValue = (
+    <span className="flex flex-col gap-2">
+      {facts.batches.map((batch) => (
+        <span key={batch.id} className="inline-flex items-center gap-8">
+          {facts.batchCount > 1 && (
+            <span className="font-mono text-[var(--color-text-tertiary)]">
+              {batchDryTons(batch)}
+            </span>
+          )}
+          <BatchLink batch={batch} facilityId={facilityId} />
+        </span>
+      ))}
+    </span>
+  );
+
   return (
-    <div className="flex flex-col gap-16">
+    <div className="flex flex-col gap-24">
       <div
-        className={`flex items-start gap-12 border-l-2 py-4 pl-12 ${VERDICT_RULE[facts.state]}`}
+        className="flex items-start gap-12"
         role={facts.state === "blocked" ? "alert" : "status"}
       >
         <span className="mt-2">
@@ -182,27 +181,22 @@ export function SubmissionSummary({
         </Notice>
       )}
 
-      <section className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-        <div className="flex flex-col gap-4 px-20 py-16">
-          <span className="body-small text-[var(--color-text-secondary)]">
+      <DerivedHeadline
+        label={
+          <>
             You are sending
-          </span>
-          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
-            <span className="title-heading-2 font-mono text-[var(--color-text-primary)]">
-              {facts.dryTons}
-            </span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Biochar, dry mass
-            </span>
-          </div>
-          <span className="body-caption text-[var(--color-text-tertiary)]">
-            Isometric calculates stored and net CO₂e after submission.
-          </span>
-        </div>
+            <InfoHint label="About the CO₂e figures">{CALCULATION_NOTE}</InfoHint>
+          </>
+        }
+        value={facts.dryTons}
+        sub="Biochar, dry mass"
+      />
 
-        <dl className="flex flex-col">
-          <Fact label="Destination">
-            {externalProjectId ? (
+      <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+        <DetailField
+          label="Destination"
+          value={
+            externalProjectId ? (
               <RegistryFactLink
                 href={isometricRegistry.certifyProject({
                   environment,
@@ -213,10 +207,13 @@ export function SubmissionSummary({
               />
             ) : (
               destinationLabel
-            )}
-          </Fact>
-          <Fact label="Facility">
-            {externalProjectId && externalFacilityId ? (
+            )
+          }
+        />
+        <DetailField
+          label="Facility"
+          value={
+            externalProjectId && externalFacilityId ? (
               <RegistryFactLink
                 href={isometricRegistry.facility({
                   environment,
@@ -228,10 +225,26 @@ export function SubmissionSummary({
               />
             ) : (
               facilityName
-            )}
-          </Fact>
-          {externalProjectId && (
-            <Fact label="Storage sites">
+            )
+          }
+        />
+        <DetailField
+          label="Reporting window"
+          value={facts.reportingWindowLabel ?? "Not compiled yet"}
+        />
+        <DetailField
+          label={facts.batchCount === 1 ? "Credit batch" : "Credit batches"}
+          value={batchesValue}
+        />
+      </div>
+
+      {/* Read data stays visible in both modes (R1): the remaining facts sit
+          under the four lead facts as a quieter group, without row rules. */}
+      <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
+        {externalProjectId && (
+          <DetailField
+            label="Storage sites"
+            value={
               <RegistryFactLink
                 href={isometricRegistry.storageSites({
                   environment,
@@ -240,41 +253,22 @@ export function SubmissionSummary({
                 label="View in Isometric"
                 ariaLabel="Open storage sites in Isometric in a new tab"
               />
-            </Fact>
-          )}
-          <Fact label="Reporting window">
-            {facts.reportingWindowLabel ?? "Not compiled yet"}
-          </Fact>
-          <Fact
-            label={facts.batchCount === 1 ? "Credit batch" : "Credit batches"}
-          >
-            <span className="flex flex-col items-end gap-2">
-              {facts.batches.map((batch) => (
-                <span key={batch.id} className="inline-flex items-center gap-8">
-                  {facts.batchCount > 1 && (
-                    <span className="font-mono text-[var(--color-text-tertiary)]">
-                      {batchDryTons(batch)}
-                    </span>
-                  )}
-                  <BatchLink batch={batch} facilityId={facilityId} />
-                </span>
-              ))}
-            </span>
-          </Fact>
-          <Fact label="Traced back to">
-            {countLabel(facts.runCount, "production run")},{" "}
-            {countLabel(facts.applicationCount, "application")}
-          </Fact>
-          <Fact label="Durability">{facts.durabilityLabel}</Fact>
-          <Fact label="Sampling">{facts.samplingLabel}</Fact>
-          {facts.pendingDocuments > 0 && (
-            <Fact label="Registry value sources">
-              The app uploads {countLabel(facts.pendingDocuments, "file")} when
-              you submit
-            </Fact>
-          )}
-        </dl>
-      </section>
+            }
+          />
+        )}
+        <DetailField
+          label="Traced back to"
+          value={`${countLabel(facts.runCount, "production run")}, ${countLabel(facts.applicationCount, "application")}`}
+        />
+        <DetailField label="Durability" value={facts.durabilityLabel} />
+        <DetailField label="Sampling" value={facts.samplingLabel} />
+        {facts.pendingDocuments > 0 && (
+          <DetailField
+            label="Registry value sources"
+            value={`The app uploads ${countLabel(facts.pendingDocuments, "file")} when you submit`}
+          />
+        )}
+      </div>
 
       {facts.checksAttention > 0 && (
         <SubmissionChecks checks={checks} facilityId={facilityId} />
