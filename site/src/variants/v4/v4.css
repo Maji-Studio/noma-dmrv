@@ -93,3 +93,5 @@
   :root[data-layout="4"] .nv-morph, :root[data-layout="4"] .nv-morph-wrap { min-width: 0; }
   :root[data-layout="4"] .nv-m-chip .f, :root[data-layout="4"] .nv-m-chip .v, :root[data-layout="4"] .nv-m-chip .e { overflow-wrap: anywhere; }
 }
+/* Header bar and footer share the content column's edges (one edge system). */
+:root[data-layout="4"] :is(.bar, .foot > .inner) { max-width: calc(var(--page-max) + var(--gutter) * 2); margin-inline: auto; }
