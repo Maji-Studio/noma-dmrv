@@ -49,6 +49,7 @@ const statusLabels = {
   complete: "Complete",
   failed: "Failed",
   cancelled: "Cancelled",
+  archived: "Archived",
   void: "Void",
   method_a: "Method A",
   method_b: "Method B",
