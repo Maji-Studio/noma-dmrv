@@ -510,7 +510,11 @@ two-column grid) or it stacks. Write the consequence as the card caption, not
 as helper text. Art is decorative (`aria-hidden`), monoline, about 44x30, drawn
 in code (`trip-type-choice.tsx` is the reference).
 
-The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it.
+The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
+input is not the touch target: the whole label is, and `SegmentedControl`
+segments are at least 44px tall. The sheet header Simple/Detailed toggle
+(`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
+component.
 
 ### Other primitives — intent only, props at source
 

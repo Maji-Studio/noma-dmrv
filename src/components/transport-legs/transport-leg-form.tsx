@@ -272,7 +272,7 @@ export function TransportLegForm({
             </output>
           </FormField>
           <input type="hidden" {...register("transportMethodType")} />
-          <div className="md:col-span-2">
+          <div className="sm:col-span-2">
             <FormField
               id="tripType"
               label="Trip type"

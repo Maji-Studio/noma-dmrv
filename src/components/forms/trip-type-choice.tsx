@@ -2,7 +2,8 @@
 
 /**
  * TripTypeChoice: the one trip type control shared by the transport leg,
- * feedstock, delivery and organization defaults forms. Return doubles the
+ * feedstock and delivery record forms. The organization default in settings
+ * stays a plain select: it is a default, not a per-record consequence. Return doubles the
  * distance in emissions accounting, so the consequence is the visible caption
  * on each card, with a small route drawing beside it.
  */
