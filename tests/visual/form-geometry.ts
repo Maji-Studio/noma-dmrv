@@ -214,7 +214,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     styleMap.set(key, entry);
     const letters = text.replace(/[^A-Za-z]/g, "");
     const literalCaps = letters.length >= LITERAL_CAPS_MIN_LETTERS && letters === letters.toUpperCase() && !/\d/.test(text);
-    if (style.textTransform === "uppercase" || tracking !== "0" || literalCaps) {
+    // The CERT chip is a deliberate marker, not an uppercase label.
+    const certMarker = parent.closest("[data-cert-field]") !== null;
+    if (!certMarker && (style.textTransform === "uppercase" || tracking !== "0" || literalCaps)) {
       uppercaseOrTracked.push({ text, key });
     }
   }

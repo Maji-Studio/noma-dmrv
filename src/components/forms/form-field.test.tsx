@@ -103,8 +103,8 @@ describe("FormField unit suffix", () => {
   });
 });
 
-describe("FormField certification seal", () => {
-  it("renders the seal on the label row and describes the control with it", () => {
+describe("FormField CERT chip", () => {
+  it("renders the CERT chip on the label row and describes the control with it", () => {
     const markup = renderToStaticMarkup(
       <FormField id="distance" label="Distance" certifyRequired certifyStatus="missing">
         <input id="distance" />
@@ -114,6 +114,6 @@ describe("FormField certification seal", () => {
     expect(markup).toContain('data-cert-field="missing"');
     expect(markup).toContain('<span id="distance-cert" class="sr-only">Required for certification. Not provided.</span>');
     expect(markup).toContain('aria-describedby="distance-cert"');
-    expect(markup).not.toContain(">CERT<");
+    expect(markup).toContain("CERT<");
   });
 });
