@@ -13,12 +13,14 @@
  * the block's own action, shown at both levels.
  */
 "use client";
-import { CompositionCard, CompositionLedger } from "@/components/forms";
+import { CompositionCard, CompositionLedger, DerivedHeadline } from "@/components/forms";
+import { formatCompositionMass } from "@/components/forms/composition-ledger";
+import { formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-run-groups";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import type { MassSegment } from "@/components/forms/composition-ledger";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
-import { formatWetAtMoisture, StockRows } from "@/components/storage-locations/stock-figures";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
 import { Notice } from "@/components/ui/notice";
 
@@ -27,6 +29,11 @@ const DELIVERY_STOCK_HINT =
   "These are the batches this delivery drew, by dry biochar. To change the measured masses, correct the original delivery entry in stock history.";
 /** Names the whole in the bar's accessible name and in the ledger's total row. */
 const TOTAL_LABEL = "Dry biochar";
+
+/** Batches are tracked dry, so the key says so. */
+function formatDryKeyMass(kg: number | null): string {
+  return `${formatCompositionMass(kg)} dry`;
+}
 
 export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId, wetMassKg, dryMassKg }: { deliveryId: string; storageLocationId: string | null; facilityId: string; wetMassKg: number | null; dryMassKg: number | null }) {
   const history = useOutputStockHistory(storageLocationId ?? "", !!storageLocationId);
@@ -40,6 +47,8 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
     category: "dry-batch",
     fill: batchAccentFill(index),
   }));
+  const wetKg = current ? current.wetMassKg : wetMassKg;
+  const moisturePercent = current?.moisturePercent ?? null;
   const drawn = segments.filter(segment => (segment.mass ?? 0) > 0);
   const groups: SourceRunGroup[] = allocations
     .filter(allocation => allocation.runs.length > 0)
@@ -53,18 +62,19 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}
       calculation={groups.length > 0 ? <SourceRunGroups label="Source production runs per delivered batch" groups={groups} /> : undefined}
-      actions={storageLocationId ? <OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} /> : undefined}
+      // The saved wet measurement as corrected leads: it is the one number the
+      // delivery's own field can no longer show.
+      headline={<DerivedHeadline label="Wet mass" value={formatMassKg(wetKg)} sub={moisturePercent == null ? undefined : `At ${formatMoisturePercent(moisturePercent)} moisture`} />}
       detail={<CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />}
     >
       {history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the batch breakdown</p>}
+      {/* The batches and the way into their history sit together, so the block
+          reads as one figure, one picture and one link. */}
       {drawn.length > 0 && <div className="space-y-8">
         <SegmentBar label={TOTAL_LABEL} segments={drawn} />
-        <SegmentKey segments={drawn} />
+        <SegmentKey segments={drawn} format={formatDryKeyMass} />
       </div>}
-      {/* Figures, not prose. The wet row is the saved measurement as
-          corrected, which is the one number the delivery's own field can no
-          longer show. */}
-      <StockRows label="Delivery stock figures" rows={[{ label: "Wet mass", value: formatWetAtMoisture(current ? current.wetMassKg : wetMassKg, current?.moisturePercent ?? null) }]} />
+      {storageLocationId && <div><OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} /></div>}
     </CompositionCard>
   </>;
 }
