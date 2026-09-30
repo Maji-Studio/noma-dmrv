@@ -35,6 +35,7 @@ import {
   DEFAULT_PROTOCOL_LABEL,
   DEFAULT_PROTOCOL_SLUG,
 } from "@/config/certification";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { EnvBanner } from "./env-banner";
 import { Notice } from "@/components/ui/notice";
 
@@ -59,25 +60,25 @@ export function FacilityIsometricConnector({
     !!facilityId,
   );
   const viewerCanManage = summary?.viewerCanManage ?? false;
-  const { data, isLoading } = useFacilityCertifierMapping(
+  const { data, isLoading, error } = useFacilityCertifierMapping(
     facilityId,
     viewerCanManage,
   );
+  // Owned here so the modal can refuse to close while a save is in flight.
+  const saveMutation = useSaveFacilityCertifierMapping();
   const [isOpen, setIsOpen] = useState(false);
   const titleId = useId();
 
   if (!viewerCanManage) return null;
 
-  const mapping = data?.mapping ?? null;
-  const projectName = mapping
-    ? (data?.availableProjects.find((p) => p.id === mapping.externalProjectId)
-        ?.name ?? mapping.externalProjectId)
-    : null;
+  const projectLabel = connectedProjectLabel(data);
   const status = isLoading
     ? "Loading…"
-    : projectName
-      ? `Connected to ${projectName}`
-      : "Not linked";
+    : error || !data
+      ? MISSING_VALUE.notAvailable
+      : projectLabel
+        ? `Connected to ${projectLabel}`
+        : MISSING_VALUE.notSet;
 
   return (
     <div className="flex items-center justify-between gap-12">
@@ -95,24 +96,48 @@ export function FacilityIsometricConnector({
       <Modal
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
+        dismissible={!saveMutation.isPending}
         ariaLabelledBy={titleId}
         width="md"
       >
-        <ConnectorBody facilityId={facilityId} titleId={titleId} />
+        <ConnectorBody
+          facilityId={facilityId}
+          titleId={titleId}
+          saveMutation={saveMutation}
+        />
       </Modal>
     </div>
+  );
+}
+
+type FacilityCertifierMappingData = NonNullable<
+  ReturnType<typeof useFacilityCertifierMapping>["data"]
+>;
+
+/** The connected project's name (its id when the name is unknown), or null when none is linked. */
+function connectedProjectLabel(
+  data: FacilityCertifierMappingData | undefined,
+): string | null {
+  const mapping = data?.mapping;
+  if (!mapping) return null;
+  return (
+    data.availableProjects.find((p) => p.id === mapping.externalProjectId)
+      ?.name ?? mapping.externalProjectId
   );
 }
 
 function ConnectorBody({
   facilityId,
   titleId,
-}: FacilityIsometricConnectorProps & { titleId: string }) {
+  saveMutation,
+}: FacilityIsometricConnectorProps & {
+  titleId: string;
+  saveMutation: ReturnType<typeof useSaveFacilityCertifierMapping>;
+}) {
   const { data, isLoading, error } = useFacilityCertifierMapping(
     facilityId,
     true,
   );
-  const saveMutation = useSaveFacilityCertifierMapping();
   const toast = useToast();
 
   // null = untouched (select shows the currently-connected project).
@@ -188,9 +213,6 @@ function ConnectorBody({
   const selected = selectedProjectId ?? currentProjectId;
   const isDirty = !!selected && selected !== currentProjectId;
 
-  const connectedProjectName = mapping
-    ? (availableProjects.find((p) => p.id === currentProjectId)?.name ?? null)
-    : null;
 
   // Other facilities already linked to the selected project → sharing needs an
   // explicit opt-in before save (parity with FacilityCertifierDialog).
@@ -266,7 +288,7 @@ function ConnectorBody({
         <p className="body-small text-[var(--color-text-secondary)]">
           Connected to{" "}
           <span className="body-small-bold text-[var(--color-text-primary)]">
-            {connectedProjectName ?? currentProjectId}
+            {connectedProjectLabel(data)}
           </span>{" "}
           ·{" "}
           <a

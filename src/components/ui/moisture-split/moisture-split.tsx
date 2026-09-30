@@ -443,6 +443,7 @@ export function MoistureSplit({
       <div className={`flex flex-col gap-6 ${className}`}>
         <UnresolvedBar
           height={variant === "compact" ? COMPACT_BAR_HEIGHT : BAR_HEIGHT}
+          widthPercent={variant === "compact" ? undefined : barWidthPercent}
         />
         <p
           className="body-caption text-[var(--color-text-tertiary)]"

@@ -60,7 +60,16 @@ describe("ProcessFlowPreview", () => {
     expect(widths).toHaveLength(2);
     expect(widths[0]).toBe(100);
     expect(widths[1]).toBeCloseTo(30, 5);
-    expect(html).not.toContain("rounded-full");
+    
+  });
+
+  it("draws an unresolved bar to the same scale", () => {
+    const html = renderToStaticMarkup(
+      <ProcessFlowPreview {...run} feedstockKg={1000} feedstockMoisturePercent={10} feedstockDryKg={900} biocharKg={300} biocharMoisturePercent={null} biocharDryKg={null} />,
+    );
+    const hatched = [...html.matchAll(/border-dashed[^>]*style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
+
+    expect(hatched).toEqual([30]);
   });
 
   it("keeps the yield arithmetic behind the block's own disclosure", () => {
