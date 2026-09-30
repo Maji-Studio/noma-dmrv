@@ -219,7 +219,7 @@ export function FormField({
           <span
             aria-hidden="true"
             data-control-unit=""
-            className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
+            className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[length:var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
           >
             {unit}
           </span>
