@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormFileUpload, ServerError } from "@/components/forms";
+import { FormField, FormFileUpload, ServerError } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -27,6 +26,9 @@ import {
 } from "./application-supporting-evidence";
 
 const ENTITY_TYPE = "application" satisfies DocumentEntityType;
+/** Consequence of saving straight away; behind the ⓘ so the panel stays short. */
+const UPLOAD_NOTE =
+  "Uploads are saved immediately. Closing this panel does not discard them. Evidence added after submission is excluded from the saved attempt until a new evidence review.";
 const SUPPORTING_EVIDENCE_ACCEPT = "image/*,application/pdf,.pdf";
 
 interface ApplicationSupportingEvidencePanelProps {
@@ -85,6 +87,10 @@ export function ApplicationSupportingEvidencePanel({
       );
     }
   };
+
+  const uploadId = applicationId
+    ? `application-${applicationId}-supporting-evidence-upload`
+    : "application-create-supporting-evidence-upload";
 
   const upload = applicationId ? (
     <FormFileUpload
@@ -153,14 +159,13 @@ export function ApplicationSupportingEvidencePanel({
       ) : null}
 
       {!readOnly && (
-        <div className="flex flex-col gap-8">
-          <div className="flex items-center gap-8">
-            <FileIcon size={18} weight="bold" />
-            <h4 className="body-small font-medium">Images and PDFs</h4>
-          </div>
-          {applicationId && <p className="body-caption text-[var(--color-text-secondary)]">Uploads are saved immediately. Closing this panel does not discard them. Evidence added after submission is excluded from the saved attempt until a new evidence review.</p>}
+        <FormField
+          id={uploadId}
+          label="Images and PDFs"
+          helperText={applicationId ? UPLOAD_NOTE : undefined}
+        >
           {upload}
-        </div>
+        </FormField>
       )}
 
       {!readOnly && applicationId && deferredAttachments && (

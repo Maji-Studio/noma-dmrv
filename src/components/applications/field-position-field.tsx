@@ -1,12 +1,13 @@
 "use client";
 
-import { FormField, FormSelect, PositionPicker } from "@/components/forms";
+import { FormField, PositionPicker } from "@/components/forms";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import type { PositionValue } from "@/components/forms";
 
 export type FieldPositionMode = "derive" | "manual";
 
 const MODE_OPTIONS: readonly { value: FieldPositionMode; label: string }[] = [
-  { value: "derive", label: "Derive from customer" },
+  { value: "derive", label: "From customer" },
   { value: "manual", label: "Set manually" },
 ];
 
@@ -87,17 +88,14 @@ export function FieldPositionField({
           cue={mode === "derive" ? DERIVE_CUE : undefined}
           helperText={mode === "manual" ? MANUAL_HELPER : undefined}
         >
-          <FormSelect
+          <SegmentedControl
             id="fieldPositionMode"
+            legend="Field position"
             disabled={disabled}
             options={MODE_OPTIONS}
             value={mode}
-            onChange={(event) =>
-              applyFieldPositionMode(
-                event.target.value as FieldPositionMode,
-                onModeChange,
-                onDerive,
-              )
+            onValueChange={(next) =>
+              applyFieldPositionMode(next as FieldPositionMode, onModeChange, onDerive)
             }
           />
         </FormField>
