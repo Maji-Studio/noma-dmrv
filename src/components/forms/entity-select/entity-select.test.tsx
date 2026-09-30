@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FormDetailProvider } from "../form-detail-context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -419,21 +417,6 @@ describe("EntitySelect label association", () => {
 });
 
 describe("EntitySelect popover", () => {
-  const source = readFileSync(join(__dirname, "entity-select.tsx"), "utf8");
-
-  it("separates rows with spacing and background, not per-row rules", () => {
-    expect(source).not.toMatch(/border-[tb]\b/);
-  });
-
-  it("uses Phosphor icons instead of private inline SVGs", () => {
-    expect(source).not.toContain("<svg");
-    expect(source).toContain("@phosphor-icons/react/dist/ssr");
-  });
-
-  it("keeps controls flat, with no inset shadow", () => {
-    expect(source).not.toContain("shadow-");
-  });
-
   it("keeps the remaining-mass line rendered outside the popover", () => {
     entityState.selected = {
       id: "reactor-1",

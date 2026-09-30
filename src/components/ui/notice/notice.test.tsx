@@ -2,9 +2,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { Notice, type NoticeTone } from "./index";
 
-const html = (tone: NoticeTone, extra = {}) =>
+const html = (tone: NoticeTone) =>
   renderToStaticMarkup(
-    <Notice tone={tone} {...extra}>
+    <Notice tone={tone}>
       Saving changes the stock.
     </Notice>,
   );
@@ -23,10 +23,6 @@ describe("Notice", () => {
     expect(renderToStaticMarkup(<Notice>Check this.</Notice>)).toContain(
       'data-tone="warning"',
     );
-  });
-
-  it("lets a caller downgrade the role", () => {
-    expect(html("error", { role: "status" })).toContain('role="status"');
   });
 
   it("hides the icon from assistive tech", () => {

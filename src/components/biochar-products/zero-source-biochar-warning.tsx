@@ -11,5 +11,5 @@ export function ZeroSourceBiocharWarning({
 }: ZeroSourceBiocharWarningProps) {
   if (sourceBiocharMassKg !== 0) return null;
 
-  return <Notice tone="error">{ZERO_SOURCE_BIOCHAR_WARNING}</Notice>;
+  return <Notice tone="warning">{ZERO_SOURCE_BIOCHAR_WARNING}</Notice>;
 }

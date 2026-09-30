@@ -59,15 +59,12 @@ export interface NoticeProps
   title?: ReactNode;
   /** A link or button that resolves the notice, shown after the text. */
   action?: ReactNode;
-  /** Override the tone's default live-region role. */
-  role?: "status" | "alert";
 }
 
 export function Notice({
   tone = "warning",
   title,
   action,
-  role,
   className,
   children,
   ...props
@@ -77,7 +74,7 @@ export function Notice({
 
   return (
     <div
-      role={role ?? config.role}
+      role={config.role}
       data-tone={tone}
       className={cn(
         "flex flex-wrap items-start gap-x-8 gap-y-8",

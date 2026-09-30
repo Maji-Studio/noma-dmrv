@@ -27,9 +27,7 @@ export function ResultPanel({
   // rather than claiming a creation that did not happen.
   const alreadyExisted = outcome === "existing";
   // Resolving to an existing statement is informational, not a success, so it
-  // takes the status ramp's in-progress step rather than the success one. The
-  // ramp is the semantic layer for feedback accents; `--clr-*` is the raw
-  // palette and must not be reached for from a component.
+  // is an info Notice rather than a success one.
   return (
     <div className="flex flex-col gap-16">
       <Notice

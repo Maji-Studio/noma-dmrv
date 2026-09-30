@@ -8,7 +8,7 @@ describe("ZeroSourceBiocharWarning", () => {
       <ZeroSourceBiocharWarning sourceBiocharMassKg={0} />,
     );
 
-    expect(html).toContain('role="alert"');
+    expect(html).toContain('role="status"');
     expect(html).toContain("0 kg of source biochar");
     expect(html).toContain("cannot be ordered");
     expect(html).toContain("credit batch");
