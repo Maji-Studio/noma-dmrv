@@ -16,6 +16,7 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+import { chooseRunStatus } from "./helpers/run-status";
 
 const PRODUCTION_RUN_DATE = "2025-06-15";
 
@@ -30,7 +31,7 @@ async function createProductionRunForCreditBatch(
   await page.click('button:has-text("New production run")');
   await waitForSideSheet(page);
 
-  await page.selectOption('select[name="status"]', "running");
+  await chooseRunStatus(page, "running");
   await selectEntity(
     page,
     "Reactor",
@@ -76,7 +77,7 @@ async function createProductionRunForCreditBatch(
   await waitForSideSheet(page);
   await page.fill('input[name="endDate"]', date);
   await page.fill('input[name="endTime"]', "12:00");
-  await page.selectOption('select[name="status"]', "complete");
+  await chooseRunStatus(page, "complete");
   await page
     .locator('[role="dialog"]')
     .getByRole("button", { name: "Save changes" })

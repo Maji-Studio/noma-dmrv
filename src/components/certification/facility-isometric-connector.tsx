@@ -1,8 +1,8 @@
 /**
  * FacilityIsometricConnector
- * Lightweight inline registry connector for the facility edit form: shows the
- * facility's Isometric link status and lets an admin pick a project and
- * connect in place. Deliberately minimal — only the project link
+ * Registry connector for the facility edit form: one row with the facility's
+ * Isometric link status and a Manage button that opens a modal where an admin
+ * picks a project and connects. Deliberately minimal — only the project link
  * (`externalProjectId`) is editable here; template / facility-id / protocol
  * binding stays in Certification → Settings (linked in the header). Saving
  * goes through the same admin-gated `saveFacilityCertifierMapping` action as
@@ -20,9 +20,9 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { FormField, FormInput, FormSelect, ServerError } from "@/components/forms";
 import {
@@ -48,6 +48,7 @@ interface FacilityIsometricConnectorProps {
   facilityId: string;
 }
 
+/** Status row plus the modal that holds the connect controls. */
 export function FacilityIsometricConnector({
   facilityId,
 }: FacilityIsometricConnectorProps) {
@@ -58,9 +59,58 @@ export function FacilityIsometricConnector({
     !!facilityId,
   );
   const viewerCanManage = summary?.viewerCanManage ?? false;
-  const { data, isLoading, error } = useFacilityCertifierMapping(
+  const { data, isLoading } = useFacilityCertifierMapping(
     facilityId,
     viewerCanManage,
+  );
+  const [isOpen, setIsOpen] = useState(false);
+  const titleId = useId();
+
+  if (!viewerCanManage) return null;
+
+  const mapping = data?.mapping ?? null;
+  const projectName = mapping
+    ? (data?.availableProjects.find((p) => p.id === mapping.externalProjectId)
+        ?.name ?? mapping.externalProjectId)
+    : null;
+  const status = isLoading
+    ? "Loading…"
+    : projectName
+      ? `Connected to ${projectName}`
+      : "Not linked";
+
+  return (
+    <div className="flex items-center justify-between gap-12">
+      <div className="min-w-0">
+        <p className="body-small font-medium text-[var(--color-text-secondary)]">
+          Registry connection
+        </p>
+        <p className="body-small truncate text-[var(--color-text-primary)]">
+          {status}
+        </p>
+      </div>
+      <Button type="button" variant="default" onClick={() => setIsOpen(true)}>
+        Manage
+      </Button>
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        ariaLabelledBy={titleId}
+        width="md"
+      >
+        <ConnectorBody facilityId={facilityId} titleId={titleId} />
+      </Modal>
+    </div>
+  );
+}
+
+function ConnectorBody({
+  facilityId,
+  titleId,
+}: FacilityIsometricConnectorProps & { titleId: string }) {
+  const { data, isLoading, error } = useFacilityCertifierMapping(
+    facilityId,
+    true,
   );
   const saveMutation = useSaveFacilityCertifierMapping();
   const toast = useToast();
@@ -78,11 +128,11 @@ export function FacilityIsometricConnector({
   // minimal connector must gather it. Advanced binding stays in Settings.
   const [facilityIdInput, setFacilityIdInput] = useState("");
 
-  if (!viewerCanManage) return null;
-
   const header = (
-    <div className="flex items-center justify-between gap-12">
-      <h3 className="title-chapter-title">Isometric Certify</h3>
+    <div className="flex flex-col gap-4 pr-40">
+      <h2 id={titleId} className="title-heading-3">
+        Isometric Certify
+      </h2>
       <Link
         href={settingsHref(facilityId)}
         className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
@@ -358,7 +408,7 @@ function ConnectorShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-16 border-t border-[var(--color-border-secondary)] pt-20">
+    <div className="flex flex-col gap-16">
       {header}
       {children}
     </div>

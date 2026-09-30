@@ -2,20 +2,19 @@
  * The run as a journey: where the material came from, what it passed through,
  * where it ended up.
  *
- * Three stops on a rail, source bins to reactor to destination bin, and the two
+ * Three stops, source bins to reactor to destination bin, and the two
  * segments between them carry the masses. The first segment is the feedstock
  * going in, drawn as its moisture split so the dry matter the yield is measured
  * on is visible rather than implied. The second is the biochar coming out, the
- * same way. The yield is the block's one headline figure, above the rail.
+ * same way. The yield is the block's one headline figure, above the stops.
  *
- * It replaces a three-box recap that read as three unrelated cards: a run is a
- * sequence, so it is drawn as one, and it reuses the transport journey's shape
- * (nodes on a rail, the leg between them) because an operator has already
- * learnt to read that on the delivery and sample sheets. A transport leg keeps
- * its box because it is a record with its own actions; a segment here is only
- * derived figures, so it sits flat on the rail.
+ * The two bars share one mass scale: the heavier wet mass fills the row and
+ * the other is drawn in proportion, so 1,000 kg in and 300 kg out look like it.
+ * There is no rail: the section spine around the block is already a timeline,
+ * and a second one beside it read as two competing sequences. The order of the
+ * stops and their names carry the sequence.
  *
- * Both levels show the yield headline and the rail. Detailed adds only the
+ * Both levels show the yield headline and the stops. Detailed adds only the
  * yield arithmetic behind Show calculation. Both bases
  * are honest: when either dry mass is missing the whole equation falls back to
  * wet mass and says so in the yield's own label, rather than mixing a dry
@@ -33,6 +32,8 @@ import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { StockRows, type StockRow } from "@/components/storage-locations/stock-figures";
 
 const YIELD_DIGITS = 1;
+/** Smallest share of the row a resolved bar is drawn at, so a tiny output stays visible. */
+const MIN_FLOW_BAR_PERCENT = 6;
 
 const PROCESS_FLOW_HINT =
   "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses.";
@@ -85,6 +86,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
   const basis = resolveBasis(props);
   // Until a yield resolves there is no basis to name, only the figure missing.
   const yieldLabel = basis.yieldPercent === null ? "Yield" : `${basis.dry ? "Dry" : "Wet"} yield`;
+  const scaleKg = Math.max(feedstockKg ?? 0, biocharKg ?? 0);
 
   return (
     <CompositionCard
@@ -97,7 +99,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
       calculation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
     >
       {/* The block's own section already carries the name. */}
-      <ol>
+      <ol className="space-y-16">
         <FlowStop name={sourceBinName} placeholder="Select source bin">
           <FlowSegment
             label="Feedstock in"
@@ -105,6 +107,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
             moisturePercent={feedstockMoisturePercent}
             dryMassKg={feedstockDryKg}
             materialLabel="Feedstock"
+            scaleKg={scaleKg}
           />
         </FlowStop>
         <FlowStop name={reactorName} placeholder="Select reactor">
@@ -114,6 +117,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
             moisturePercent={biocharMoisturePercent}
             dryMassKg={biocharDryKg}
             materialLabel="Biochar"
+            scaleKg={scaleKg}
           />
         </FlowStop>
         <FlowStop name={destinationBinName} placeholder="Select destination bin" />
@@ -123,42 +127,40 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
 }
 
 /**
- * A stop on the rail: the node, the line down to the next stop, the stop's name
- * and the segment leaving it. The final stop has no segment, so it has no line.
+ * A stop: its name, then the segment leaving it. The final stop has no segment.
  *
- * An unselected stop still gets a node. The rail is the shape of a run whether
- * or not its bins are picked yet, and the placeholder says which field to fill.
+ * An unselected stop still shows, with the placeholder naming which field to
+ * fill, so the shape of a run is visible before its bins are picked.
  */
 function FlowStop({ name, placeholder, children }: { name: string | null; placeholder: string; children?: ReactNode }) {
   return (
-    <li className="flex gap-12">
-      <div className="flex flex-col items-center" aria-hidden="true">
-        <span className="mt-6 size-8 shrink-0 rounded-full bg-[var(--color-text-primary)]" />
-        {children && <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />}
-      </div>
-      <div className={`min-w-0 flex-1 space-y-8 ${children ? "pb-16" : ""}`}>
-        <p className={`body-small font-medium ${name ? "" : "text-[var(--color-text-tertiary)]"}`}>{name ?? placeholder}</p>
-        {children}
-      </div>
+    <li className="min-w-0 space-y-8">
+      <p className={`body-small font-medium ${name ? "" : "text-[var(--color-text-tertiary)]"}`}>{name ?? placeholder}</p>
+      {children}
     </li>
   );
 }
 
 /**
  * The segment between two stops: what travelled it, how much of it, and the
- * split between the dry matter and the water. It sits flat on the rail with no
- * box of its own: the rail line already joins it to the stops either side, and
- * a frame around derived figures would only decorate them. The mass stays
+ * split between the dry matter and the water. It sits flat with no box of its
+ * own: a frame around derived figures would only decorate them. The mass stays
  * pinned right against the wrapping label, the way a transport leg pins its
  * distance.
  */
-function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel }: {
+function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel, scaleKg }: {
   label: string;
   massKg: number | null;
   moisturePercent: number | null;
   dryMassKg: number | null;
   materialLabel: string;
+  /** The heavier of the two wet masses: the mass that fills the row. */
+  scaleKg: number;
 }) {
+  const barWidthPercent =
+    massKg !== null && scaleKg > 0
+      ? Math.max((massKg / scaleKg) * PERCENT_SCALE, MIN_FLOW_BAR_PERCENT)
+      : undefined;
   return (
     <div className="space-y-8">
       <div className="flex items-baseline justify-between gap-8">
@@ -167,7 +169,7 @@ function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel 
             field that is missing, and "Not recorded wet" reads as a value. */}
         {massKg !== null && <span className="shrink-0 body-small font-medium tabular-nums">{formatMassKg(massKg)} wet</span>}
       </div>
-      <MoistureSplit calculation={false} wetMassKg={massKg} moisturePercent={moisturePercent} dryMassKg={dryMassKg} materialLabel={materialLabel} />
+      <MoistureSplit calculation={false} barWidthPercent={barWidthPercent} wetMassKg={massKg} moisturePercent={moisturePercent} dryMassKg={dryMassKg} materialLabel={materialLabel} />
     </div>
   );
 }

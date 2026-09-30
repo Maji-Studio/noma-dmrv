@@ -53,6 +53,16 @@ describe("ProcessFlowPreview", () => {
     expect(rendered.indexOf("Biochar out")).toBeLessThan(rendered.indexOf("Biochar July"));
   });
 
+  it("draws both bars to one mass scale, with no rail beside the stops", () => {
+    const html = renderToStaticMarkup(<ProcessFlowPreview {...run} feedstockKg={1000} feedstockDryKg={900} biocharKg={300} biocharDryKg={270} />);
+    const widths = [...html.matchAll(/role="img"[^>]*style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
+
+    expect(widths).toHaveLength(2);
+    expect(widths[0]).toBe(100);
+    expect(widths[1]).toBeCloseTo(30, 5);
+    expect(html).not.toContain("rounded-full");
+  });
+
   it("keeps the yield arithmetic behind the block's own disclosure", () => {
     const html = renderToStaticMarkup(<ProcessFlowPreview {...run} />);
 

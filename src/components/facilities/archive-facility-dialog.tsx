@@ -121,12 +121,21 @@ export function ArchiveFacilityDialog({
               Checking attached data…
             </p>
           ) : impactParts.length > 0 ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-8">
               <p className="body-small text-[var(--color-text-secondary)]">
                 Also archives {dependentRecordTotal} dependent{" "}
-                {dependentRecordTotal === 1 ? "record" : "records"}:{" "}
-                {impactParts.join(", ")}.
+                {dependentRecordTotal === 1 ? "record" : "records"}:
               </p>
+              <ul className="flex flex-wrap gap-8" aria-label="Records archived with this facility">
+                {impactParts.map((part) => (
+                  <li
+                    key={part}
+                    className="border border-[var(--color-border-secondary)] bg-[var(--color-surface-light)] px-8 py-2 body-small text-[var(--color-text-primary)] tabular-nums"
+                  >
+                    {part}
+                  </li>
+                ))}
+              </ul>
               {emptyParts.length > 0 && (
                 <p className="body-small text-[var(--color-text-tertiary)]">
                   Checked, none found: {emptyParts.join(", ")}.
