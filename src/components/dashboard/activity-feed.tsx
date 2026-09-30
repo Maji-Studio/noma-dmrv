@@ -20,7 +20,7 @@ export function ActivityFeed({ activity }: ActivityFeedProps) {
     <DashboardPanel
       title="Recent activity"
       meta={
-        <span className="label-micro text-[var(--color-text-tertiary)]">
+        <span className="body-caption text-[var(--color-text-tertiary)]">
           Latest {activity.length}
         </span>
       }
@@ -44,7 +44,7 @@ export function ActivityFeed({ activity }: ActivityFeedProps) {
                 href={item.href}
                 className="group grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-12 py-12"
               >
-                <span className="label-micro whitespace-nowrap text-[var(--color-text-tertiary)]">
+                <span className="body-caption whitespace-nowrap text-[var(--color-text-tertiary)]">
                   {formatDate(item.dateIso.slice(0, 10))}
                 </span>
                 <span className="body-small truncate text-[var(--color-text-primary)]">

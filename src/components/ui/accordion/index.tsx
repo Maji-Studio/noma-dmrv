@@ -115,7 +115,7 @@ function Trigger({
     >
       <span
         className={cn(
-          "text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide",
+          "text-[var(--text-s)] font-medium text-[var(--color-text-secondary)]",
           labelClassName,
         )}
       >

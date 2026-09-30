@@ -662,7 +662,7 @@ export default function CarbonTransitMap({
         className="cvm-field flex h-full flex-col items-center justify-center gap-6 px-16 text-center"
         data-testid="carbon-viewer-no-map"
       >
-        <span className="label-button uppercase text-[var(--color-text-secondary)]">
+        <span className="body-small font-medium text-[var(--color-text-secondary)]">
           Map unavailable
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -682,7 +682,7 @@ export default function CarbonTransitMap({
       />
       {!MAPTILER_KEY && !satOn ? (
         <div
-          className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 font-mono text-[9.5px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
+          className="absolute bottom-16 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-10 py-6 text-[9.5px] font-medium text-[var(--clr-dark-purple-60)]"
           data-testid="carbon-viewer-no-basemap-note"
         >
           Basemap unavailable. Ask an Admin to configure the map service.

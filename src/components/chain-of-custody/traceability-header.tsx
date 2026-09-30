@@ -23,7 +23,7 @@ const SEGMENT_GROUP_CLASS =
   "flex items-stretch border-[1.5px] border-[var(--clr-dark-purple-20)]";
 const SEGMENT_BUTTON_CLASS =
   "flex cursor-pointer items-center border-r-[1.5px] border-[var(--clr-dark-purple-20)] " +
-  "px-12 font-mono text-[11px] font-medium uppercase tracking-[0.06em] last:border-r-0";
+  "px-12 text-[11px] font-medium last:border-r-0";
 const SEGMENT_ACTIVE_CLASS =
   "bg-[var(--clr-dark-purple)] text-[var(--color-background-white)]";
 const SEGMENT_IDLE_CLASS =
@@ -118,7 +118,7 @@ export function TraceabilityHeader({
           variant="default"
           onClick={onBackToBatch}
           data-testid="chain-back-to-batch"
-          className="border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] text-[11px] tracking-[0.06em] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
+          className="border-[1.5px] border-[var(--clr-dark-purple-20)] px-[14px] text-[11px] text-[var(--clr-dark-purple-60)] hover:text-[var(--clr-dark-purple)]"
         >
           <ArrowLeftIcon size={14} weight="bold" />
           Batch roll-up

@@ -1,9 +1,9 @@
 "use client";
 
+import { ChainStatusBadge } from "./chain-status-badge";
 import type { Icon } from "@phosphor-icons/react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
-import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import type { LineageDetailRow } from "./use-chain-graph";
 
 export interface ChainNodeData {
@@ -27,27 +27,6 @@ export interface ChainNodeData {
   /** Batch DAG application card — click drills into the rollback. */
   drillable?: boolean;
   [key: string]: unknown;
-}
-
-function formatStatus(status: string) {
-  return status.replaceAll("_", " ");
-}
-
-function StatusPill({ status }: { status: string | null | undefined }) {
-  if (!status) {
-    return null;
-  }
-
-  return (
-    <span
-      className="inline-flex items-center gap-6 whitespace-nowrap border-[1.5px] border-current px-6 py-2 font-mono text-[9px] font-medium uppercase tracking-[0.09em]"
-      data-status-state={getStatusState(status)}
-      style={{ color: getStatusStateColor(status) }}
-    >
-      <span aria-hidden className="size-[6px] bg-current" />
-      {formatStatus(status)}
-    </span>
-  );
 }
 
 export function ChainNode({ data }: NodeProps) {
@@ -94,14 +73,14 @@ export function ChainNode({ data }: NodeProps) {
     >
       <div className="flex items-center justify-between gap-10 px-12 pt-12">
         <span
-          className="inline-flex min-w-0 items-center gap-6 font-mono text-[10px] font-medium uppercase tracking-[0.09em]"
+          className="inline-flex min-w-0 items-center gap-6 text-[10px] font-medium"
           style={{ color: accentInk }}
         >
           <Icon size={13} weight="bold" className="shrink-0" />
           <span className="truncate">{label}</span>
         </span>
         <span className="flex shrink-0 items-center gap-8">
-          <StatusPill status={status} />
+          <ChainStatusBadge status={status} />
           {/* Hover affordance — open the record / trace the rollback. */}
           {interactive ? (
             drillable ? (
@@ -131,7 +110,7 @@ export function ChainNode({ data }: NodeProps) {
           {date ?? code}
         </p>
         {date ? (
-          <p className="mt-4 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--clr-dark-purple-40)]">
+          <p className="mt-4 font-mono text-[11px] text-[var(--clr-dark-purple-40)]">
             {code}
           </p>
         ) : null}
@@ -144,7 +123,7 @@ export function ChainNode({ data }: NodeProps) {
               key={`${row.label}:${row.value}`}
               className="flex items-baseline justify-between gap-12"
             >
-              <span className="whitespace-nowrap font-mono text-[9px] font-medium uppercase tracking-[0.07em] text-[var(--clr-dark-purple-40)]">
+              <span className="whitespace-nowrap text-[9px] font-medium text-[var(--clr-dark-purple-40)]">
                 {row.label}
               </span>
               <span className="text-right text-[12.5px] font-light leading-[1.3] break-words">

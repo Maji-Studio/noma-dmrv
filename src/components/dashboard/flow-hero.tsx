@@ -87,7 +87,7 @@ export function FlowHero({
 
       {/* Head — title + smart-view segmented control. */}
       <div className="flex flex-wrap items-center justify-between gap-16 border-b border-[var(--color-border-tertiary)] px-20 py-16">
-        <h2 className="label-micro text-[var(--color-text-primary)]">
+        <h2 className="body-small font-medium text-[var(--color-text-primary)]">
           Traceability: supplier to soil
         </h2>
         <div
@@ -104,7 +104,7 @@ export function FlowHero({
                 aria-pressed={isActive}
                 onClick={() => setView(option.value)}
                 className={[
-                  "label-micro border-[1.5px] border-[var(--ink)] px-12 py-8 transition-colors",
+                  "body-caption font-medium border-[1.5px] border-[var(--ink)] px-12 py-8 transition-colors",
                   isActive
                     ? "bg-[var(--ink)] text-[var(--paper)]"
                     : "bg-transparent text-[var(--ink)] hover:bg-[var(--sea)]",
@@ -171,7 +171,7 @@ export function FlowHero({
               </p>
               <Link
                 href={`/feedstocks?facility=${encodeURIComponent(facilityId)}`}
-                className="label-micro mt-16 inline-block border-[1.5px] border-[var(--ink)] px-16 py-12 transition-colors hover:bg-[var(--ink)] hover:text-[var(--paper)]"
+                className="label-button mt-16 inline-block border-[1.5px] border-[var(--ink)] px-16 py-12 transition-colors hover:bg-[var(--ink)] hover:text-[var(--paper)]"
               >
                 Add your first feedstock →
               </Link>
@@ -185,7 +185,7 @@ export function FlowHero({
         {LEGEND.map((entry) => (
           <span
             key={entry.label}
-            className="flex items-center gap-6 font-[family-name:var(--font-mono)] text-[9.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
+            className="flex items-center gap-6 text-[9.5px] text-[var(--clr-dark-purple-60)]"
           >
             <span
               className="h-8 w-8 rounded-full"
@@ -195,7 +195,7 @@ export function FlowHero({
             {entry.label}
           </span>
         ))}
-        <span className="flex items-center gap-6 font-[family-name:var(--font-mono)] text-[9.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">
+        <span className="flex items-center gap-6 text-[9.5px] text-[var(--clr-dark-purple-60)]">
           <span
             className="w-16 border-t-[1.5px] border-dashed border-[var(--clr-dark-purple-50)]"
             aria-hidden

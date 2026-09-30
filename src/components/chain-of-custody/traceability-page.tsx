@@ -176,8 +176,8 @@ function ChainFlowGraph({
     <div className="h-full w-full">
       {warnings.length > 0 ? (
         <div className="absolute top-16 left-16 z-10 max-w-[480px] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
-          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--st-wait)]">
-            Missing Links
+          <p className="text-[10px] font-medium text-[var(--st-wait)]">
+            Missing links
           </p>
           <ul className="mt-8 flex flex-col gap-6">
             {warnings.map((warning) => (

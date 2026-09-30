@@ -12,6 +12,7 @@
  * by the shared DAG node-id convention.
  */
 
+import { ChainStatusBadge } from "../chain-status-badge";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
   TrailNodeEvidence,
@@ -23,6 +24,7 @@ import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { formatDate, formatDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { humanizeEnum } from "@/lib/copy-utils";
 import {
   FileIcon,
   FlaskIcon,
@@ -225,8 +227,8 @@ function StepEvidence({ evidence }: { evidence: TrailNodeEvidence | undefined })
             <p className="body-small break-words text-[var(--color-text-primary)]">
               {doc.fileName}
             </p>
-            <p className="body-caption uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
-              {doc.documentType.replaceAll("_", " ")}
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              {humanizeEnum(doc.documentType)}
             </p>
           </div>
         </li>
@@ -296,10 +298,10 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
     >
       <div className="mx-auto max-w-[760px] px-24 py-24">
         <div className="mb-16 flex items-center justify-between gap-16">
-          <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+          <p className="body-caption text-[var(--color-text-tertiary)]">
             Custody trail · {steps.length} steps
           </p>
-          <p className="flex items-center gap-6 body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)]">
+          <p className="flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">
             <SealCheckIcon size={14} />
             {evidence?.totalCount ?? 0} attesting records
           </p>
@@ -333,7 +335,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
                   <div className="flex flex-wrap items-baseline justify-between gap-x-16 gap-y-4 border-b border-[var(--color-border-secondary)] px-16 py-10">
                     <div className="flex items-baseline gap-10">
                       <span
-                        className="font-mono text-[11px] font-medium uppercase tracking-[0.08em]"
+                        className="text-[11px] font-medium"
                         style={{ color: style.accentInk }}
                       >
                         {style.label}
@@ -341,11 +343,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
                       <span className="font-mono text-[13px] text-[var(--color-text-primary)]">
                         {step.code}
                       </span>
-                      {step.status ? (
-                        <span className="body-caption uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
-                          {step.status.replaceAll("_", " ")}
-                        </span>
-                      ) : null}
+                      <ChainStatusBadge status={step.status} />
                     </div>
                     <span className="font-mono text-[12px] text-[var(--color-text-secondary)]">
                       {formatStepDate(step.date)}

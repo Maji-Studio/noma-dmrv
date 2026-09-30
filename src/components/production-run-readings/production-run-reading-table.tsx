@@ -90,7 +90,7 @@ export function ProductionRunReadingTable({
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       {/* Header */}
       <div className="flex items-center justify-between gap-12">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
           Imported readings{readingCount > 0 ? ` (${readingCount})` : ""}
         </h3>
         {!readOnly && readingCount > 0 && (
@@ -124,7 +124,7 @@ export function ProductionRunReadingTable({
                 scrolls past the capped height. bg matches the side-sheet paper
                 so rows don't bleed through behind it. */}
             <thead className="sticky top-0 z-10 bg-[var(--color-background-white)]">
-              <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
+              <tr className="border-b border-[var(--color-border-primary)] text-left body-small text-[var(--color-text-secondary)]">
                 <th className="py-8 pr-12 font-medium">
                   Time ({timeZone.replace(/_/g, " ")})
                 </th>

@@ -59,7 +59,7 @@ const CarbonTransitMap = dynamic(() => import("./carbon-transit-map"), {
       className="flex h-full w-full items-center justify-center bg-[var(--color-background-light)]"
       data-testid="carbon-viewer-map-loading"
     >
-      <span className="label-button uppercase text-[var(--color-text-tertiary)]">
+      <span className="body-small font-medium text-[var(--color-text-tertiary)]">
         Loading map…
       </span>
     </div>

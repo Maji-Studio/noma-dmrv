@@ -50,7 +50,7 @@ function SourceNode({ input }: { input: RemovalTemplateDiagnosticInput }) {
           : "border-[var(--clr-dark-purple-20)]"
       }`}
     >
-      <span className="label-micro text-[var(--color-text-tertiary)]">
+      <span className="body-caption text-[var(--color-text-tertiary)]">
         noma dMRV source
       </span>
       <span className="body-small break-words text-[var(--color-text-primary)]">
@@ -84,7 +84,7 @@ function Wire({
         className="hidden min-w-0 flex-col items-stretch justify-center gap-4 md:flex"
       >
         {transform && (
-          <span className="label-micro text-center break-words text-[var(--color-text-tertiary)]">
+          <span className="body-caption text-center break-words text-[var(--color-text-tertiary)]">
             {transform}
           </span>
         )}
@@ -105,7 +105,7 @@ function Wire({
       <div aria-hidden className="flex items-center gap-8 pl-12 md:hidden">
         <ArrowDownIcon size={12} weight="bold" style={{ color }} />
         {transform && (
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
             {transform}
           </span>
         )}
@@ -130,7 +130,7 @@ function DestinationNode({
       }}
     >
       <span className="flex items-center justify-between gap-8">
-        <span className="label-micro text-[var(--color-text-tertiary)]">
+        <span className="body-caption text-[var(--color-text-tertiary)]">
           Isometric input
         </span>
         <CaretDownIcon
@@ -167,7 +167,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
       </summary>
       <div className="mt-6 grid gap-x-16 gap-y-8 border-[1.5px] border-dashed border-[var(--clr-dark-purple-20)] px-12 py-10 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             Expected
           </span>
           <span className="body-caption text-[var(--color-text-secondary)]">
@@ -176,7 +176,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
           </span>
         </div>
         <div className="flex flex-col gap-2">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             Transform
           </span>
           <span className="body-caption text-[var(--color-text-secondary)]">
@@ -184,7 +184,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
           </span>
         </div>
         <div className="flex flex-col gap-2">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             Evidence role
           </span>
           <span className="body-caption text-[var(--color-text-secondary)]">
@@ -192,7 +192,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
           </span>
         </div>
         <div className="flex flex-col gap-2 sm:col-span-2">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             Submission wire path
           </span>
           <span className="body-caption font-mono break-all text-[var(--color-text-secondary)]">
@@ -200,7 +200,7 @@ function WireRow({ input }: { input: RemovalTemplateDiagnosticInput }) {
           </span>
         </div>
         <div className="flex flex-col gap-4 sm:col-span-2">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             Status
           </span>
           <span className="flex flex-wrap items-center gap-8">
@@ -244,7 +244,7 @@ export function RemovalTemplateMappingView({
         <section key={group.rawId} className="flex flex-col gap-10">
           <div className="flex flex-wrap items-baseline justify-between gap-8">
             <div>
-              <p className="label-micro text-[var(--color-text-tertiary)]">
+              <p className="body-caption text-[var(--color-text-tertiary)]">
                 Template group
               </p>
               <h4 className="body-large text-[var(--color-text-primary)]">

@@ -47,7 +47,7 @@ export function ApplicationCard({
       <div className="flex flex-1 flex-col gap-16 p-20">
         {/* Header: code badge */}
         <div className="flex items-center gap-12">
-          <span className="inline-flex items-center gap-6 border border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-pink)]">
+          <span className="inline-flex items-center gap-6 border border-[var(--clr-rose-20)] bg-[var(--clr-rose-10)] px-10 py-4 text-[11px] font-medium text-[var(--clr-pink)]">
             <PlantIcon size={12} weight="bold" />
             {application.code}
           </span>

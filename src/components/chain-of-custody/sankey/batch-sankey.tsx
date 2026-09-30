@@ -275,7 +275,7 @@ function SankeyDiagramNode({ data }: NodeProps) {
                 x={textX}
                 y={28}
                 textAnchor={anchor}
-                className="fill-[var(--color-text-primary)] font-mono text-[13px] font-medium uppercase tracking-[0.08em]"
+                className="fill-[var(--color-text-primary)] text-[13px] font-medium"
               >
                 {column.label}
               </text>
@@ -291,7 +291,7 @@ function SankeyDiagramNode({ data }: NodeProps) {
                 x={textX}
                 y={66}
                 textAnchor={anchor}
-                className="fill-[var(--color-text-tertiary)] font-mono text-[11px] uppercase tracking-[0.06em]"
+                className="fill-[var(--color-text-tertiary)] text-[11px]"
               >
                 {column.count} {column.count === 1 ? "record" : "records"}
               </text>
@@ -353,7 +353,7 @@ function SankeyDiagramNode({ data }: NodeProps) {
                     x={exitTextX}
                     y={exitTop + EXIT_STUB_H + 16}
                     textAnchor={exitAnchor}
-                    className="font-mono text-[11px] font-medium uppercase tracking-[0.06em]"
+                    className="text-[11px] font-medium"
                     fill={tone}
                   >
                     {exit.label}
@@ -415,11 +415,11 @@ function SankeyTooltip({
       data-testid="sankey-tooltip"
     >
       <div className="flex items-center justify-between gap-8 border-b border-[var(--clr-dark-purple-10)] px-[14px] py-10">
-        <span className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]">
+        <span className="text-[10px] font-medium text-[var(--clr-dark-purple-60)]">
           {isColumn ? "Flow column" : "Labeled exit"}
         </span>
         {!isColumn && selection.exit.tone === "alert" ? (
-          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.08em] text-[var(--color-signal-red)]">
+          <span className="text-[9px] font-medium text-[var(--color-signal-red)]">
             Alert
           </span>
         ) : null}
@@ -435,7 +435,7 @@ function SankeyTooltip({
           {share != null ? ` · ${share}% of intake` : ""}
         </p>
         {isColumn ? (
-          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
+          <p className="text-[10px] text-[var(--color-text-tertiary)]">
             {selection.column.count}{" "}
             {selection.column.count === 1 ? "record" : "records"}
           </p>
@@ -449,7 +449,7 @@ function SankeyTooltip({
       {href ? (
         <Link
           href={href}
-          className="flex items-center gap-6 border-t border-[var(--clr-dark-purple-10)] px-[14px] py-10 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple)] hover:bg-[var(--clr-dark-purple-1)]"
+          className="flex items-center gap-6 border-t border-[var(--clr-dark-purple-10)] px-[14px] py-10 text-[10px] font-medium text-[var(--clr-dark-purple)] hover:bg-[var(--clr-dark-purple-1)]"
           data-testid="sankey-tooltip-details"
         >
           See details
@@ -570,7 +570,7 @@ export function BatchSankey({ sankey, batchCode }: BatchSankeyProps) {
       {/* Out of the column-title row — bottom-right, clear of the controls. */}
       {sankey.warnings.length > 0 ? (
         <div className="absolute bottom-16 right-16 z-10 max-w-[480px] border-[1.5px] border-dashed border-[var(--st-wait)] bg-[var(--paper)] p-12">
-          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--st-wait)]">
+          <p className="text-[10px] font-medium text-[var(--st-wait)]">
             Mass balance inconsistencies
           </p>
           <ul className="mt-8 flex flex-col gap-6">

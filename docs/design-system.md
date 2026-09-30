@@ -110,8 +110,8 @@ applied **through shared components** (StatCard, DataTable frame, Card, entity
 cards), never as per-page classes. Falls out of this:
 
 - **Tables never sit flush on the field** — DataTable renders as a framed panel
-  (toolbar inside, pagination as the footer row); headers are mono uppercase
-  `.label-micro` on the `--sea` wash; rows separate with `--row-divider`,
+  (toolbar inside, pagination as the footer row); headers are sentence case
+  `body-small font-medium` in secondary ink on the `--sea` wash; rows separate with `--row-divider`,
   **no zebra striping**.
 - **Elevated surfaces (side sheets, menus, dialogs) are pure `--paper` with a
   full-ink `--hair` border and no shadow** — scrim + border do the elevation.
@@ -177,7 +177,7 @@ the `FormField` id (`FormEntitySelect` does) so the field label names it.
 Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
-- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase table headers)
+- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons)
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
@@ -219,7 +219,9 @@ caption.
   `body-small font-medium` title in primary ink on a `min-h-24` row, not an
   uppercase tracked micro label. The sheet title and the spine's numbered
   marker already carry the hierarchy. No mono uppercase micro labels inside
-  forms either; `label-micro` belongs to table headers.
+  forms, sheets, dialogs or read views either (accordion triggers, side
+  panels, settings panes). Table headers everywhere (DataTable and hand-rolled
+  tables) are one style: sentence case `body-small font-medium` in secondary ink. The `PageHeader` area eyebrow is the one exception.
 - **Lines only where they separate things of a different kind.** Kept: the
   `FormSpine` rail, the hairline between plain `FormSection`s, and the
   `CompositionCard` action row's top rule. Not drawn: rules between a caption

@@ -23,6 +23,7 @@ export const ENTITY_STATUS_STATES = {
   draft: "neutral",
   superseded: "neutral",
   cancelled: "neutral",
+  archived: "neutral",
   missing_data: "neutral",
   no_deliveries: "neutral",
   method_a: "neutral",

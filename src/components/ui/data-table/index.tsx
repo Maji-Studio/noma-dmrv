@@ -399,9 +399,8 @@ function DataTableRoot<TData, TValue>({
                         key={header.id}
                         scope="col"
                         className={cn(
-                          // Mono uppercase micro-label — every label is GT Flexa
-                          // Mono Medium per the Maji DS (incl. table headers).
-                          "label-micro py-10 px-12 text-left text-[var(--color-text-secondary)]",
+                          // One table header style: sentence case body-small medium.
+                          "body-small font-medium py-10 px-12 text-left text-[var(--color-text-secondary)]",
                           isSortable && "cursor-pointer select-none hover:bg-[var(--clr-dark-purple-5)]",
                           header.column.columnDef.meta?.nowrap && "whitespace-nowrap",
                           header.column.columnDef.meta?.stickyEnd &&

@@ -23,8 +23,8 @@ export function SetupStrip({ progress, onExpand }: SetupStripProps) {
       className="flex flex-wrap items-center justify-between gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-12 gap-y-8">
-        <span className="label-micro text-[var(--color-text-tertiary)]">
-          Setup · {doneCount}/{total}
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          Setup, {doneCount} of {total}
         </span>
         <ol className="flex flex-wrap items-center gap-x-8 gap-y-4">
           {steps.map((step) => (

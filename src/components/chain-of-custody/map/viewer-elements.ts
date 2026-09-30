@@ -6,7 +6,9 @@
  */
 
 import { formatLegDistanceCompactKm, formatLegDistanceKm } from "@/lib/format-utils";
-import { getStatusState, getStatusStateColor } from "@/lib/status-state";
+import { STATUS_STATE_BADGE_CLASSES, getStatusState } from "@/lib/status-state";
+import { statusLabels } from "@/components/ui/status-badge";
+import { toBadgeProps } from "../chain-status-badge";
 import type { LineageDetailRow } from "../use-chain-graph";
 import type { ViewerMarkerKind } from "./viewer-constants";
 
@@ -88,9 +90,12 @@ export function createPopupCardElement(input: PopupCardInput): HTMLDivElement {
   if (input.status) {
     const pill = document.createElement("span");
     pill.className = "cvm-card-pill";
-    pill.dataset.statusState = getStatusState(input.status);
-    pill.style.color = getStatusStateColor(input.status);
-    pill.textContent = input.status.replaceAll("_", " ");
+    const badge = toBadgeProps(input.status);
+    const state = getStatusState(badge.status);
+    // Same classes and label vocabulary as the StatusBadge in the panels.
+    pill.className = `cvm-card-pill ${STATUS_STATE_BADGE_CLASSES[state]}`;
+    pill.dataset.statusState = state;
+    pill.textContent = badge.label ?? statusLabels[badge.status];
     head.appendChild(pill);
   }
   card.appendChild(head);

@@ -259,7 +259,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         {/* The select shows a value ("Recent activity"), not what it acts on,
             so this one control does need a label. */}
         <label className="flex flex-col gap-6">
-          <span className="label-micro text-[var(--color-text-tertiary)]">Sort by</span>
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">Sort by</span>
           <select
             value={sortValue}
             onChange={(event) => onSortChange(event.target.value)}
@@ -421,7 +421,7 @@ function RailFilter({
             <meta.Icon size={16} weight="bold" />
           </span>
         )}
-        <span className={`label-micro ${isActive ? "" : "opacity-80"}`}>
+        <span className={`body-small font-medium ${isActive ? "" : "opacity-80"}`}>
           {binTypeFilterLabel(filter)}
         </span>
       </span>
