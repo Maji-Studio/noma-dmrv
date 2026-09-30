@@ -13,7 +13,6 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { ChoiceCardGroup } from "./choice-card-group";
 import { FormField } from "./form-field";
 import { SegmentedControl } from "./segmented-control";
-import { TripTypeChoice } from "./trip-type-choice";
 
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
@@ -22,6 +21,10 @@ const OPTIONS = [
   { value: "a", title: "Alpha", description: "First." },
   { value: "b", title: "Beta", description: "Second.", disabled: true },
   { value: "c", title: "Gamma" },
+] as const;
+const TRIP_OPTIONS = [
+  { value: "return", title: "Return" },
+  { value: "one_way", title: "One-way" },
 ] as const;
 const SEGMENTS = [
   { value: "loss", label: "Record loss" },
@@ -94,7 +97,7 @@ describe("react-hook-form", () => {
     onForm(form);
     return (
       <FormField id="tripType" label="Trip type" error={form.formState.errors.tripType?.message}>
-        <TripTypeChoice id="tripType" error={!!form.formState.errors.tripType} {...form.register("tripType")} />
+        <ChoiceCardGroup legend="Trip type" options={TRIP_OPTIONS} id="tripType" error={!!form.formState.errors.tripType} {...form.register("tripType")} />
       </FormField>
     );
   }

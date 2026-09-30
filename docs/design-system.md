@@ -486,7 +486,7 @@ Three ways to pick one of a few options. Choose by what the choice does.
 
 | Control | Use when | Examples |
 |---|---|---|
-| `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | trip type (`TripTypeChoice`), evidence method, stock mode |
+| `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | evidence method, GIS boundary entry, stock mode |
 | `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity |
 | `FormSelect` | Everything else: long or dynamic lists, secondary fields | timezone, currency, category |
 
@@ -508,7 +508,7 @@ art above the text, all rows equal height. Sheets
 are 360 to 640px wide, so give a card group the full row (`md:col-span-2` in a
 two-column grid) or it stacks. Write the consequence as the card caption, not
 as helper text. Art is decorative (`aria-hidden`), monoline, about 44x30, drawn
-in code (`trip-type-choice.tsx` is the reference).
+in code.
 
 The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
 input is not the touch target: the whole label is, and `SegmentedControl`

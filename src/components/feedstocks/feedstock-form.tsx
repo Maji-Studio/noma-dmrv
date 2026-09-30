@@ -18,7 +18,7 @@ import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, TripTypeChoice, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
@@ -31,7 +31,7 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { roundTripDistanceFactor, type TripTypeValue } from "@/schemas/trip-type";
+import { roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
 import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
@@ -540,21 +540,20 @@ export function FeedstockForm({
               />
             </FormField>
 
-            <div className="md:col-span-2">
-              <FormField
+            <FormField
+              id="transportTripType"
+              label="Trip type"
+              error={errors.transportTripType?.message}
+              hint="Return counts the entered distance twice; One-way counts it once."
+            >
+              <FormSelect
                 id="transportTripType"
-                label="Trip type"
-                error={errors.transportTripType?.message}
-                hint="Choose One-way only with an evidenced onward destination."
-              >
-                <TripTypeChoice
-                  id="transportTripType"
-                  disabled={isSubmitting}
-                  error={!!errors.transportTripType}
-                  {...register("transportTripType")}
-                />
-              </FormField>
-            </div>
+                options={TRIP_TYPE_OPTIONS}
+                disabled={isSubmitting}
+                error={!!errors.transportTripType}
+                {...register("transportTripType")}
+              />
+            </FormField>
 
             <ActionableFocusTarget
               target="transport-route"

@@ -69,17 +69,9 @@ test.describe("Transport trip type (#316)", () => {
 
     // Compact distance copy + global option label + Return default.
     await expect(dialog.getByText("Distance (km)")).toBeVisible();
-    const returnTrip = dialog.getByRole("radio", { name: /^Return/ });
-    const oneWay = dialog.getByRole("radio", { name: /^One-way/ });
-    await expect(returnTrip).toBeChecked();
-    await expect(oneWay).not.toBeChecked();
-
-    // Native radio group: one tab stop, arrow keys move and select.
-    await returnTrip.focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(oneWay).toBeChecked();
-    await page.keyboard.press("ArrowLeft");
-    await expect(returnTrip).toBeChecked();
+    const tripType = dialog.locator('select[name="transportTripType"]');
+    await expect(tripType).toHaveValue("return");
+    await expect(tripType.locator('option[value="one_way"]')).toHaveText("One-way");
 
     // Minimal valid feedstock. The distance is required for a persistable
     // derived leg — trip type rides on that leg, so without a distance there
@@ -111,8 +103,7 @@ test.describe("Transport trip type (#316)", () => {
     );
 
     // Override to One-way, then save.
-    await oneWay.locator("..").click();
-    await expect(oneWay).toBeChecked();
+    await tripType.selectOption("one_way");
     await expect(dialog.getByTestId("transport-distance-total")).toHaveCount(0);
     await dialog.locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
@@ -124,8 +115,8 @@ test.describe("Transport trip type (#316)", () => {
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit feedstock" }).click();
     await expect(
-      page.getByRole("dialog").getByRole("radio", { name: /^One-way/ })
-    ).toBeChecked({ timeout: 15000 });
+      page.locator('[role="dialog"] select[name="transportTripType"]')
+    ).toHaveValue("one_way", { timeout: 15000 });
   });
 
   test("delivery form defaults to Return and persists a One-way override", async ({
@@ -148,15 +139,15 @@ test.describe("Transport trip type (#316)", () => {
     await expect(
       dialog.getByText("One-way distance (per leg, km)")
     ).toBeVisible();
-    const oneWay = dialog.getByRole("radio", { name: /^One-way/ });
-    await expect(dialog.getByRole("radio", { name: /^Return/ })).toBeChecked();
+    const tripType = dialog.locator('select[name="tripType"]');
+    await expect(tripType).toHaveValue("return");
 
     await page.fill('input[name="deliveryDate"]', `${FUTURE_DATE}T12:00`);
     await selectEntityByText(page, "Order", seededData.customer.name);
     await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
     await fillStockMoisture(page, "delivery", "10");
-    await oneWay.locator("..").click();
+    await tripType.selectOption("one_way");
     await page.click('button[type="submit"]:has-text("Create delivery")');
     await waitForSideSheetClose(page);
 
@@ -167,8 +158,8 @@ test.describe("Transport trip type (#316)", () => {
     await waitForSideSheet(page);
     await page.getByRole("button", { name: "Edit delivery" }).click();
     await expect(
-      page.getByRole("dialog").getByRole("radio", { name: /^One-way/ })
-    ).toBeChecked({ timeout: 15000 });
+      page.locator('[role="dialog"] select[name="tripType"]')
+    ).toHaveValue("one_way", { timeout: 15000 });
   });
 
   test("supplier and customer-location forms carry the one-way (per leg) distance copy", async ({
