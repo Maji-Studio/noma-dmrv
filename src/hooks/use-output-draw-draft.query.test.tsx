@@ -11,6 +11,9 @@ vi.mock("./use-output-moisture-estimate", () => ({ useOutputMoistureEstimate: ()
 type Draw = Parameters<typeof useOutputDrawDraft>[0]["draw"];
 const draw = { active: false, sources: null, usesSingleMoisture: true, untickCode: null, needsTick: false } as unknown as Draw;
 const entry = { storageLocationId: "bin-1", facilityId: "fac-1", occurredAt: "2026-09-30T10:00:00.000Z", kind: "delivery" as const, wetMassKg: 10 };
+// React Query batches its observer notifications onto a later tick, so each
+// step lets that tick run inside act before reading the hook.
+const flushQueryNotifications = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 const okPreview = { success: true, data: { basisFingerprint: "basis-1", blockingMessage: null, moistureEstimate: null } };
 
 describe("useOutputDrawDraft with React Query", () => {
@@ -28,10 +31,12 @@ describe("useOutputDrawDraft with React Query", () => {
     expect(out.gate().canSave).toBe(false);
 
     await act(async () => { resolveFirst(okPreview); });
+    await flushQueryNotifications();
     expect(out.gate()).toMatchObject({ canSave: true, basisFingerprint: "basis-1" });
 
     mocks.preview.mockResolvedValueOnce({ success: false, error: "Stock changed" });
     await act(async () => { await out.preview.refetch(); });
+    await flushQueryNotifications();
     expect(out.preview.data).toBeDefined();
     expect(out.preview.error).toBeTruthy();
     expect(out.gate().canSave).toBe(false);
