@@ -619,7 +619,7 @@ export function FeedstockForm({
           icon={<PlantIcon size={14} weight="bold" />}
           fields={["feedstockTypeId", "totalWetMassKg", "moisturePercent"]}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <div className="grid grid-cols-1 gap-x-16 gap-y-20">
             <FormEntitySelect
               control={formControl}
               name="feedstockTypeId"
