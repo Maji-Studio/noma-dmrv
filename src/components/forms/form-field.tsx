@@ -46,7 +46,7 @@ interface FormFieldProps {
   required?: boolean;
   certifyRequired?: boolean;
   /**
-   * Saved-state of the certification field. It colours the seal (orange when
+   * Saved-state of the certification field. It colours the CERT chip (orange when
    * the saved record is missing this field, green when present). Defaults to
    * neutral. Only meaningful when `certifyRequired` is set.
    */
@@ -148,7 +148,7 @@ export function FormField({
   const showCue = hasText(cue) && !error && !showWarning;
 
   // Point the control at whichever message is rendered below it, then the
-  // explanation behind the ⓘ, then the certification seal.
+  // explanation behind the ⓘ, then the CERT chip.
   const describedBy =
     [
       error ? errorId : showWarning ? warningId : showCue ? cueId : undefined,
@@ -166,7 +166,7 @@ export function FormField({
 
   // Keep the info icon a sibling of the label, not a child — a button
   // inside a <label> would forward its clicks to the field control.
-  // Top-align so a wrapped multi-line label keeps the seal / ⓘ icon
+  // Top-align so a wrapped multi-line label keeps the CERT chip / ⓘ icon
   // beside its first line instead of floating them in the vertical
   // middle of the wrapped text.
   const labelRow = (spacing: string) => (
@@ -185,7 +185,7 @@ export function FormField({
         )}
       </label>
       {certifyRequired && (
-        // The 24px row centres the 14px seal on the ⓘ's line.
+        // The 24px row centres the CERT chip on the ⓘ's line.
         <span className="inline-flex min-h-24 items-center">
           <CertificationFieldTag status={certifyStatus} descriptionId={certId} />
         </span>

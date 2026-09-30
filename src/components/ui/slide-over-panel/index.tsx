@@ -204,7 +204,7 @@ function Header({
     >
       <div className="flex flex-1 flex-col gap-4 min-w-0">
         {children}
-        {/* Shown only when the sheet holds a certification seal (globals.css). */}
+        {/* Shown only when the sheet holds a CERT chip (globals.css). */}
         <CertificationLegend />
       </div>
       {actions && <div className="shrink-0">{actions}</div>}

@@ -1079,10 +1079,10 @@ operational tradeoff, and this is not a registry requirement we verified.
 
 ### The asterisk half of the requiredness legend is undecided (`ui/requiredness-legend`) — DR-015
 
-The certification half shipped with form cleanup Phase 1a: the CERT chip is a
-seal glyph, and `CertificationLegend` explains it once in the sheet or dialog
-header whenever that sheet holds a seal (see `docs/design-system.md`). Still
-open: whether the same legend also explains the red asterisk (blocks
-**saving**), and whether the legend stays on its own line under the sheet
-title or moves beside the subtitle (about 18px of height). **Resolve via:** a
+The certification half shipped with form cleanup Phase 1a: `CertificationLegend`
+explains the CERT chip once in the sheet or dialog header whenever that sheet
+holds a chip (see `docs/design-system.md`; the interim seal glyph was reverted
+to the chip on Kenji's call, 2026-09-30, and the legend stays on its own line
+under the sheet title). Still open: whether the same legend also explains the
+red asterisk (blocks **saving**). **Resolve via:** a
 product-owner call on both, then extend `CertificationLegend`.

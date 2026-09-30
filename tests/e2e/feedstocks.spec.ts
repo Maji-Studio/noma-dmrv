@@ -294,7 +294,7 @@ test.describe("Feedstock UI CRUD", () => {
     await expect(seals.first()).toBeVisible();
     // The header legend shows because the sheet holds at least one seal.
     await expect(dialog.locator("[data-cert-legend]")).toBeVisible();
-    await expect(dialog.locator("[data-cert-legend]")).toHaveText("Required for certification");
+    await expect(dialog.locator("[data-cert-legend]")).toHaveText("CERTNeeded for certification");
 
     // Each seal carries the same explanation as an sr-only string; hovering a
     // seal mounts a tooltip with it. The tooltip portals to <body>, so count

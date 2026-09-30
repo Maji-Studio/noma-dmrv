@@ -59,7 +59,7 @@ export function QuickAddDialogShell({
           <h2 id={titleId} className="title-heading-3">
             {title}
           </h2>
-          {/* Shown only when the dialog holds a certification seal (globals.css). */}
+          {/* Shown only when the dialog holds a CERT chip (globals.css). */}
           <CertificationLegend />
         </div>
 

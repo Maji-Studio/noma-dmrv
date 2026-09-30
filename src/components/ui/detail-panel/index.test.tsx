@@ -112,7 +112,7 @@ describe("DetailField pending contract", () => {
     expect(markup).toContain('aria-busy="true"');
   });
 
-  it("keeps the certification seal neutral until the value settles", () => {
+  it("keeps the CERT chip neutral until the value settles", () => {
     const markup = renderToStaticMarkup(
       <DetailField label="Distance" value={null} certifyRequired pending />,
     );
