@@ -13,10 +13,9 @@
  * the block's own action, shown at both levels.
  */
 "use client";
-import { CompositionCard, CompositionLedger, DerivedHeadline } from "@/components/forms";
+import { CompositionCard, CompositionLedger } from "@/components/forms";
 import { formatCompositionMass } from "@/components/forms/composition-ledger";
-import { formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
+import { formatWetAtMoisture, StockRows } from "@/components/storage-locations/stock-figures";
 import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-run-groups";
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import type { MassSegment } from "@/components/forms/composition-ledger";
@@ -62,14 +61,14 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}
       calculation={groups.length > 0 ? <SourceRunGroups label="Source production runs per delivered batch" groups={groups} /> : undefined}
-      // The saved wet measurement as corrected leads: it is the one number the
-      // delivery's own field can no longer show.
-      headline={<DerivedHeadline label="Wet mass" value={formatMassKg(wetKg)} sub={moisturePercent == null ? undefined : `At ${formatMoisturePercent(moisturePercent)} moisture`} />}
       detail={<CompositionLedger hideZero label="Delivered batches" totalLabel={TOTAL_LABEL} total={current ? current.dryMassKg : dryMassKg} segments={segments} />}
     >
+      {/* The saved wet measurement as corrected leads: it is the one number the
+          delivery's own field can no longer show. Then the batches and the way
+          into their history, so the block reads as one figure, one picture and
+          one link. */}
+      <StockRows label="Delivery stock figures" rows={[{ label: "Wet mass", value: formatWetAtMoisture(wetKg, moisturePercent) }]} />
       {history.isLoading && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Loading the batch breakdown</p>}
-      {/* The batches and the way into their history sit together, so the block
-          reads as one figure, one picture and one link. */}
       {drawn.length > 0 && <div className="space-y-8">
         <SegmentBar label={TOTAL_LABEL} segments={drawn} />
         <SegmentKey segments={drawn} format={formatDryKeyMass} />
