@@ -27,7 +27,7 @@ export function DashboardPanel({
       ].join(" ")}
     >
       <div className="flex items-center justify-between gap-16 border-b border-[var(--color-border-tertiary)] px-20 py-16">
-        <h2 className="label-micro min-w-0 truncate text-[var(--color-text-primary)]">
+        <h2 className="body-small font-medium min-w-0 truncate text-[var(--color-text-primary)]">
           {title}
         </h2>
         <span className="flex-none whitespace-nowrap">{meta}</span>

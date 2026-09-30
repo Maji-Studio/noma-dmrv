@@ -199,7 +199,7 @@ export function ProductionSampleTable({
         <div className="overflow-x-auto">
           <table className="w-full body-small">
             <thead>
-              <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
+              <tr className="border-b border-[var(--color-border-primary)] text-left body-small text-[var(--color-text-secondary)]">
                 <th className="py-8 pr-12 font-medium">Code</th>
                 <th className="py-8 pr-12 font-medium">Time</th>
                 <th className="py-8 pr-12 font-medium">Temp</th>
