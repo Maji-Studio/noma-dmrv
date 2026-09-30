@@ -43,7 +43,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
         : "text-[var(--color-text-primary)]";
 
   return (
-    <li className="flex flex-col gap-6 border-b border-[var(--color-border-tertiary)] py-12 last:border-b-0">
+    <li className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-8">
         <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
           {isLoss ? (
@@ -139,7 +139,7 @@ export function BinMovementHistory({
           padding="sm"
         />
       ) : (
-        <ul className="flex flex-col">
+        <ul className="flex flex-col gap-20">
           {movements.map((movement) => (
             <MovementRow key={movement.id} movement={movement} />
           ))}

@@ -4,7 +4,6 @@ import { FormDetailProvider, FormDetailControl } from "@/components/forms/form-d
 import {
   FormField,
   FormInput,
-  FormTextarea,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";

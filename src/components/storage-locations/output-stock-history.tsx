@@ -7,7 +7,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Modal } from "@/components/ui/modal";
 import { InfoHint } from "@/components/ui/tooltip";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { useFacilityClock } from "@/hooks/use-facility-context";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
@@ -71,14 +70,14 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
       <article id={`output-movement-${entry.id}`} className="min-w-0 flex-1 space-y-8 pb-24">
         <div className="flex items-center justify-between gap-12">
           <h4 className="flex min-w-0 items-center gap-6">
-            <StockChip emphasis>{kindLabel}</StockChip>
+            <span className="body-small font-medium text-[var(--color-text-primary)]">{kindLabel}</span>
             {reversed && <StockChip>Reversed</StockChip>}
           </h4>
           <span className="body-caption tabular-nums whitespace-nowrap text-[var(--color-text-tertiary)]">{formatFacilityDateTime(entry.occurredAt, timeZone)}</span>
         </div>
         {MODE_CHANGE_CAPTIONS[entry.kind]
           ? <p className="body-caption text-[var(--color-text-secondary)]">{MODE_CHANGE_CAPTIONS[entry.kind]}</p>
-          : entry.moistureReset ? <MoistureResetChange reset={entry.moistureReset} named={false} /> : <StockRows label={`${kindLabel} figures`} rows={rows} />}
+          : entry.moistureReset ? <MoistureResetChange reset={entry.moistureReset} named={false} /> : <StockRows inline label={`${kindLabel} figures`} rows={rows} />}
         {reversedEntry && (
           <p className="body-caption text-[var(--color-text-secondary)]">
             Reverses the entry recorded {formatFacilityDateTime(reversedEntry.occurredAt, timeZone)}.
@@ -86,7 +85,7 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
         )}
         {entry.reason && !MODE_CHANGE_CAPTIONS[entry.kind] && <p className="body-caption text-[var(--color-text-secondary)]">{entry.reason}</p>}
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Recorded {formatFacilityDateTime(entry.recordedAt, timeZone)} by {entry.actorName ?? MISSING_VALUE.notRecorded}
+          Recorded {formatFacilityDateTime(entry.recordedAt, timeZone)}{entry.actorName ? ` by ${entry.actorName}` : ""}
         </p>
         {entry.allocations.length > 0 && (
           <CalculationDisclosure subject={subject}>
@@ -101,7 +100,7 @@ function HistoryEntry({ entry, kindLabel, reversedEntry, reversed, correctable, 
           </CalculationDisclosure>
         )}
         {correctable && (
-          <Button type="button" variant="noOutline" className="min-h-44 gap-8 px-8 normal-case" onClick={onCorrect}>
+          <Button type="button" variant="noOutline" className="-ml-8 min-h-44 gap-8 px-8 normal-case" onClick={onCorrect}>
             <PencilSimpleIcon size={16} aria-hidden="true" />
             <span className="body-caption normal-case">Correct entry</span>
           </Button>
@@ -130,7 +129,7 @@ export function OutputStockHistory({ storageLocationId, facilityId, movementId, 
   const timeline = shown.filter(entry => !foldedIntoReplacement(entry));
   return <>
     <Button type="button" variant={compact ? "noOutline" : "default"} className={compact ? "min-h-44 gap-8 px-8 normal-case" : undefined} onClick={() => setOpen(true)}>{compact && <ClockCounterClockwiseIcon size={18} aria-hidden="true" />}<span className={compact ? "body-caption normal-case" : undefined}>{triggerLabel}</span></Button>
-    <Modal isOpen={open} onClose={() => { setOpen(false); setOriginal(undefined); }} ariaLabel="Stock history" width="lg">
+    <Modal isOpen={open} onClose={() => { setOpen(false); setOriginal(undefined); }} ariaLabel="Stock history" width="md">
       <FormDetailProvider scope={`${open}:${original?.id}`} enabled={!!original}>
       <div className="space-y-20">
         <div className="flex items-center justify-between gap-12 pr-24">
