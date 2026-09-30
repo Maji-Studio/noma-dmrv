@@ -4,10 +4,10 @@
 
 ## Amendment (2026-09-28) — split bins, moisture readings, mix bins
 
-Agreed with Kenji in the [split and mix bins plan](../plans/2026-09-28-split-and-mix-bins.md). Where this conflicts with the decision below, the amendment wins. Not implemented yet.
+Agreed with Kenji in the [split and mix bins plan](../plans/2026-09-28-split-and-mix-bins.md). Where this conflicts with the decision below, the amendment wins. Implemented: split bins and readings in #829 to #832, mix bins in #839.
 
 - **Stock mode.** Output bins are Split (default, today's behaviour) or Mix. Mix bins draw pro-rata under [ADR 0030](./0030-mix-bins-draw-pro-rata.md).
-- **Split bins are physical.** Layers are physically separate sub-bins. For delivery, loss and product-creation draws, the operator ticks sub-bins and sets the order they were emptied; oldest first is only the default. Each sub-bin in the draw has its own measured moisture, with one load weight: every sub-bin except the last is emptied at its reading, and the last takes the rest. Insufficient stock still blocks the whole action. Counts stay whole-bin, and corrections reuse the saved order and readings.
+- **Split bins are physical.** Layers are physically separate sub-bins. For delivery, loss and product-creation draws, the operator ticks sub-bins and sets the order they were emptied; oldest first is only the default. Each sub-bin in the draw has its own measured moisture, with one load weight: every sub-bin except the last is emptied at its reading, and the last takes the rest. Insufficient stock still blocks the whole action. Counts stay whole-bin. A correction starts from the saved sub-bins, order and readings and may change them (amended 2026-09-29).
 - **Readings reset moisture.** Replaces "Departure readings do not update the remaining pile's moisture or wet estimate". A measured reading now sets the estimated moisture, and so the wet estimate, of the sub-bin or mix pile it describes. It's shown before and after in the preview and logged as its own history row. Dry biochar is unaffected.
 - **No prefilled moisture.** Replaces the ingredient-moisture prefill. Every moisture field in stock forms (delivery, loss, count, product creation, ingredients) is required and starts empty. The current estimate is shown as a hint, and a reading that differs from it by more than a configured margin raises an advisory warning. Ingredient snapshots record a measured value.
 - **Time.** Layer placement and stock events carry date and time; FIFO order and eligibility compare instants.
