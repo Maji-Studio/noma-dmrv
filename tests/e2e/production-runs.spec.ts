@@ -28,6 +28,7 @@ import {
   storageLocations,
 } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { chooseRunStatus } from "./helpers/run-status";
 
 const FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR =
   'input[name="feedstockDraws.0.wetMassKg"]';
@@ -42,7 +43,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await page.getByRole("button", { name: "New production run" }).click();
     await waitForSideSheet(page);
 
-    await page.selectOption('select[name="status"]', "draft");
+    await chooseRunStatus(page, "draft");
 
     await selectEntity(
       page,
@@ -137,7 +138,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
       const existingCodes = await getListedActionCodes(page);
       await page.getByRole("button", { name: "New production run" }).click();
       await waitForSideSheet(page);
-      await page.locator('select[name="status"]').selectOption("draft");
+      await chooseRunStatus(page, "draft");
       await selectEntity(
         page,
         "Reactor",
@@ -379,7 +380,7 @@ async function openRunForm(
   ).toBeVisible();
   await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
-  await page.selectOption('select[name="status"]', window.status ?? "running");
+  await chooseRunStatus(page, window.status ?? "running");
   await selectEntity(
     page,
     "Reactor",
@@ -508,7 +509,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       "#feedstockDraws-error",
     );
 
-    await dialog.locator('select[name="status"]').selectOption("complete");
+    await chooseRunStatus(dialog, "complete");
     await dialog
       .getByRole("button", { name: "Remove feedstock source 1" })
       .click();
@@ -542,7 +543,10 @@ test.describe("Production Run lifecycle (#254)", () => {
     await waitForSideSheet(page);
 
     await expect(
-      page.locator('[role="dialog"] select[name="status"] option'),
+      page.locator('[role="dialog"] input[type="radio"][name="status"]'),
+    ).toHaveCount(4);
+    await expect(
+      page.locator('[role="dialog"] label:has(input[name="status"])'),
     ).toHaveText(["Draft", "Running", "Complete", "Cancelled"]);
   });
 
@@ -657,7 +661,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     );
     await dialog.locator(FIRST_FEEDSTOCK_DRAW_WET_MASS_SELECTOR).fill("50");
     await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
-    await dialog.locator('select[name="status"]').selectOption("failed");
+    await chooseRunStatus(dialog, "failed");
     await saveEdit(page);
     await waitForSideSheetClose(page);
 
@@ -877,7 +881,7 @@ test.describe("Production Run end-time editing", () => {
     await editCreatedRun();
     await page.fill('input[name="endDate"]', "2025-06-05");
     await page.fill('input[name="endTime"]', "12:00");
-    await page.selectOption('select[name="status"]', "complete");
+    await chooseRunStatus(page, "complete");
     await saveEdit(page);
     await waitForSideSheetClose(page);
 
@@ -908,7 +912,7 @@ test.describe("Production Run end-time editing", () => {
     await editCreatedRun();
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2025-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("13:00");
-    await expect(dialog.locator('select[name="status"]')).toHaveValue("complete");
+    await expect(dialog.locator('input[name="status"][value="complete"]')).toBeChecked();
   });
 
   test("create form has no clear-end-time control", async ({

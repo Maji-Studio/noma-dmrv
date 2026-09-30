@@ -26,6 +26,7 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
+import { chooseRunStatus } from "./helpers/run-status";
 
 const PRODUCTION_RUNS_URL = "/production-runs";
 const BIOCHAR_PRODUCTS_URL = "/biochar-products";
@@ -62,7 +63,7 @@ async function openRunFormWithSource(
   await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
 
-  await page.selectOption('select[name="status"]', "draft");
+  await chooseRunStatus(page, "draft");
   await selectEntity(
     page,
     "Reactor",
@@ -105,7 +106,7 @@ async function openCompleteRunForm(
   await page.getByRole("button", { name: "New production run" }).click();
   await waitForSideSheet(page);
 
-  await page.selectOption('select[name="status"]', "running");
+  await chooseRunStatus(page, "running");
   await selectEntity(
     page,
     "Reactor",
@@ -168,7 +169,7 @@ async function createCompleteRun(
   await editRunByCode(page, runCode, "endTime");
   await page.fill('input[name="endDate"]', RUN_DATE);
   await page.fill('input[name="endTime"]', RUN_END_TIME);
-  await page.selectOption('select[name="status"]', "complete");
+  await chooseRunStatus(page, "complete");
   await saveEdit(page);
   await waitForSideSheetClose(page);
   return runCode;

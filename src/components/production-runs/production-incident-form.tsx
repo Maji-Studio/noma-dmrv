@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { formatLocalDateTime } from "@/lib/date-utils";
 import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
 import { FormTextarea } from "@/components/forms/form-textarea";
-import { FormSelect } from "@/components/forms/form-select";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { EntitySelect } from "@/components/forms/entity-select";
 import {
   productionIncidentFormSchema,
@@ -98,8 +98,9 @@ export function ProductionIncidentForm({
             error={errors.severity?.message}
             required
           >
-            <FormSelect
+            <SegmentedControl
               id="severity"
+              legend="Severity"
               disabled={isSubmitting}
               error={!!errors.severity}
               options={severityOptions}
