@@ -66,11 +66,9 @@ export function AuthResult({
   framed = true,
 }: AuthResultProps) {
   const { tint, icon } = TONE_STYLES[tone];
-  const live = tone === "error" ? "alert" : "status";
 
   return (
     <div
-      role={live}
       className={cn(
         "flex flex-col items-center gap-16 text-center",
         framed &&
@@ -90,7 +88,10 @@ export function AuthResult({
         <h2 className="title-heading-2">{title}</h2>
       )}
       {children && (
-        <div className="body-medium text-[var(--color-text-secondary)]">
+        <div
+          role={tone === "error" ? "alert" : "status"}
+          className="body-medium text-[var(--color-text-secondary)]"
+        >
           {children}
         </div>
       )}

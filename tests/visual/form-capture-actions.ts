@@ -650,6 +650,23 @@ const settingsAuth: Surface[] = [
       return dialog;
     },
   },
+  {
+    id: "settings.organizations-keys",
+    family: "settings-auth-onboarding",
+    title: "Organizations: Isometric keys dialog",
+    kind: "dialog",
+    mode: "form",
+    fill: "filled",
+    open: async (page, ctx) => {
+      await gotoRoute(page, ctx, "admin/organizations");
+      const trigger = page.getByRole("button", { name: "Isometric keys" }).first();
+      if ((await trigger.count()) === 0) return "no organization row to open";
+      await trigger.click();
+      const dialog = lastDialog(page);
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+  },
   ...(
     [
       ["members", "settings/organization"],

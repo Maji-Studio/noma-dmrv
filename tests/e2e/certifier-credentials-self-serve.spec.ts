@@ -62,8 +62,8 @@ test.describe("Isometric credentials self-service", () => {
       await organization.getByRole("button", { name: "Isometric keys" }).click();
       const keys = page.getByRole("dialog");
       await expect(keys.getByText("Ends 4321", { exact: false })).toBeVisible();
-      await expect(keys.getByLabel("Access token")).toHaveCount(0);
-      await expect(keys.getByRole("button", { name: "Replace" })).toHaveCount(2);
+      await expect(keys.locator('input[type="password"]')).toHaveCount(0);
+      await expect(keys.getByRole("button", { name: /^Replace/ })).toHaveCount(2);
       await page.keyboard.press("Escape");
 
       await db
@@ -106,6 +106,7 @@ test.describe("Isometric credentials self-service", () => {
       page.getByRole("heading", { name: "Certifier", exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel("Access token")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Save keys" })).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Link Isometric project" }),
     ).toHaveCount(0);

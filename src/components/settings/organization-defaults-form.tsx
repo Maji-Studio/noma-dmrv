@@ -13,15 +13,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
 import {
+  ChoiceCardGroup,
   FormActions,
   FormField,
   FormInput,
+  FormSection,
   FormSelect,
+  SegmentedControl,
   ServerError,
 } from "@/components/forms";
-import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
-import { FormSection } from "@/components/forms/form-section";
-import { SegmentedControl } from "@/components/forms/segmented-control";
 import { EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -36,6 +36,7 @@ import {
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import {
+  APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS,
   formatApplicationEvidenceMethod,
   isSelectableApplicationEvidenceMethod,
   selectableApplicationEvidenceMethods,
@@ -60,20 +61,12 @@ const TIMEZONE_OPTIONS = timezones.map((zone) => ({
   label: formatTimezoneLabel(zone),
 }));
 
-const EVIDENCE_METHOD_CAPTIONS: Record<
-  (typeof selectableApplicationEvidenceMethods)[number],
-  string
-> = {
-  location: "Uses the customer's saved location.",
-  boundary: "Uses a field boundary file or map drawing.",
-};
-
 // A default evidence method decides which evidence every new application asks
 // for, so it is a card choice with its consequence spelled out.
 const EVIDENCE_METHOD_OPTIONS = selectableApplicationEvidenceMethods.map((method) => ({
   value: method,
   title: formatApplicationEvidenceMethod(method),
-  description: EVIDENCE_METHOD_CAPTIONS[method],
+  description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS[method],
 }));
 
 const PACKAGING_LABELS: Record<PackagingType, string> = {
@@ -169,10 +162,10 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="content-measure-preview flex flex-col gap-20"
+      className="content-measure-preview flex flex-col gap-24"
     >
       <FormSection title="Region and currency" divider={false}>
-        <div className="grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-16 gap-y-16 sm:grid-cols-2">
         <FormField
           id="default-currency"
           label="Currency"

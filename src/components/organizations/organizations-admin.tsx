@@ -43,6 +43,7 @@ interface OrganizationAdminRowProps {
  */
 function OrganizationAdminRow({ org, entering, onEnter }: OrganizationAdminRowProps) {
   const [keysOpen, setKeysOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const status = useOrgCertifierCredentialsStatus(org.id);
   const titleId = `org-keys-title-${org.id}`;
 
@@ -60,7 +61,7 @@ function OrganizationAdminRow({ org, entering, onEnter }: OrganizationAdminRowPr
           <>
             {status.data && (
               <StatusBadge
-                status={status.data.configured ? "verified" : "pending"}
+                status={status.data.configured ? "ready" : "draft"}
                 label={status.data.configured ? "Keys saved" : "No keys"}
               />
             )}
@@ -87,6 +88,8 @@ function OrganizationAdminRow({ org, entering, onEnter }: OrganizationAdminRowPr
       <Modal
         isOpen={keysOpen}
         onClose={() => setKeysOpen(false)}
+        dismissible={!saving}
+        dismissOnClickOutside={!saving}
         ariaLabelledBy={titleId}
         width="md"
       >
@@ -97,6 +100,7 @@ function OrganizationAdminRow({ org, entering, onEnter }: OrganizationAdminRowPr
           <OrganizationCertifierCredentials
             organizationId={org.id}
             organizationName={org.name}
+            onSavingChange={setSaving}
           />
         </div>
       </Modal>

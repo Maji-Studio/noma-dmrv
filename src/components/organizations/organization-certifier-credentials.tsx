@@ -24,7 +24,7 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { FormActions, FormField, FormInput } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
@@ -45,11 +45,14 @@ import { Notice } from "@/components/ui/notice";
 interface OrganizationCertifierCredentialsProps {
   organizationId: string;
   organizationName: string;
+  /** Lets a host (a dismissible modal) hold itself open while keys save. */
+  onSavingChange?: (saving: boolean) => void;
 }
 
 export function OrganizationCertifierCredentials({
   organizationId,
   organizationName,
+  onSavingChange,
 }: OrganizationCertifierCredentialsProps) {
   const statusQuery = useOrgCertifierCredentialsStatus(organizationId);
 
@@ -75,6 +78,7 @@ export function OrganizationCertifierCredentials({
       organizationId={organizationId}
       configured={configured}
       accessTokenLast4={status?.accessTokenLast4 ?? null}
+      onSavingChange={onSavingChange}
     />
   );
 }
@@ -83,10 +87,12 @@ function CredentialsForm({
   organizationId,
   configured,
   accessTokenLast4,
+  onSavingChange,
 }: {
   organizationId: string;
   configured: boolean;
   accessTokenLast4: string | null;
+  onSavingChange?: (saving: boolean) => void;
 }) {
   const toast = useToast();
   const setCredentials = useSetOrgCertifierCredentials(organizationId);
@@ -148,6 +154,7 @@ function CredentialsForm({
       return;
     }
 
+    onSavingChange?.(true);
     try {
       const result = await setCredentials.mutateAsync({
         accessToken,
@@ -168,11 +175,11 @@ function CredentialsForm({
           ? error.message
           : "The Isometric keys were not saved. Try again.",
       );
+    } finally {
+      onSavingChange?.(false);
     }
   }
 
-  const tokenSaved = configured && !replacing.accessToken;
-  const secretSaved = configured && !replacing.clientSecret;
   const tokenId = `isometric-access-token-${organizationId}`;
   const secretId = `isometric-client-secret-${organizationId}`;
 
@@ -182,60 +189,30 @@ function CredentialsForm({
       className="content-measure-form flex flex-col gap-16"
     >
       <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
-        {tokenSaved ? (
-          <SavedKey
-            label="Access token"
-            saved={accessTokenLast4 ? `Ends ${accessTokenLast4}` : "Saved"}
-            onReplace={() => startReplace("accessToken")}
-          />
-        ) : (
-          <div className="flex flex-col gap-8">
-            <FormField
-              id={tokenId}
-              label="Access token"
-              error={errors.accessToken?.message}
-              required={!configured}
-            >
-              <FormInput
-                id={tokenId}
-                type="password"
-                autoComplete="new-password"
-                disabled={setCredentials.isPending}
-                {...register("accessToken")}
-              />
-            </FormField>
-            {configured && (
-              <CancelReplace onClick={() => cancelReplace("accessToken")} />
-            )}
-          </div>
-        )}
-        {secretSaved ? (
-          <SavedKey
-            label="Client secret"
-            saved="Saved"
-            onReplace={() => startReplace("clientSecret")}
-          />
-        ) : (
-          <div className="flex flex-col gap-8">
-            <FormField
-              id={secretId}
-              label="Client secret"
-              error={errors.clientSecret?.message}
-              required={!configured}
-            >
-              <FormInput
-                id={secretId}
-                type="password"
-                autoComplete="new-password"
-                disabled={setCredentials.isPending}
-                {...register("clientSecret")}
-              />
-            </FormField>
-            {configured && (
-              <CancelReplace onClick={() => cancelReplace("clientSecret")} />
-            )}
-          </div>
-        )}
+        <CredentialKeyField
+          id={tokenId}
+          label="Access token"
+          savedText={accessTokenLast4 ? `Ends ${accessTokenLast4}` : "Saved"}
+          configured={configured}
+          replacing={replacing.accessToken}
+          error={errors.accessToken?.message}
+          disabled={setCredentials.isPending}
+          onReplace={() => startReplace("accessToken")}
+          onCancel={() => cancelReplace("accessToken")}
+          inputProps={register("accessToken")}
+        />
+        <CredentialKeyField
+          id={secretId}
+          label="Client secret"
+          savedText="Saved"
+          configured={configured}
+          replacing={replacing.clientSecret}
+          error={errors.clientSecret?.message}
+          disabled={setCredentials.isPending}
+          onReplace={() => startReplace("clientSecret")}
+          onCancel={() => cancelReplace("clientSecret")}
+          inputProps={register("clientSecret")}
+        />
       </div>
 
       {verification && <VerificationNotice verification={verification} />}
@@ -252,38 +229,82 @@ function CredentialsForm({
   );
 }
 
-/** A stored key: only its last characters are ever shown, never the secret. */
-function SavedKey({
+/**
+ * One key. Saved and untouched it reads "Ends 1a2b" with a Replace action
+ * (only the last characters are ever shown, never the secret); replacing it
+ * swaps in an empty input with a way back to the saved key.
+ */
+function CredentialKeyField({
+  id,
   label,
-  saved,
+  savedText,
+  configured,
+  replacing,
+  error,
+  disabled,
   onReplace,
+  onCancel,
+  inputProps,
 }: {
+  id: string;
   label: string;
-  saved: string;
+  savedText: string;
+  configured: boolean;
+  replacing: boolean;
+  error?: string;
+  disabled: boolean;
   onReplace: () => void;
+  onCancel: () => void;
+  inputProps: UseFormRegisterReturn;
 }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <span className="body-small font-medium text-[var(--color-text-primary)]">
-        {label}
-      </span>
-      <div className="flex items-center justify-between gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-surface-light)] px-12 py-8">
-        <span className="body-small text-[var(--color-text-secondary)]">
-          {saved}
-        </span>
-        <Button type="button" variant="weak" size="small" onClick={onReplace}>
-          Replace
-        </Button>
-      </div>
-    </div>
-  );
-}
+  const showSaved = configured && !replacing;
+  const noun = label.toLowerCase();
 
-function CancelReplace({ onClick }: { onClick: () => void }) {
   return (
-    <Button type="button" variant="weak" size="small" onClick={onClick} className="self-start">
-      Keep saved key
-    </Button>
+    <div className="flex flex-col gap-8">
+      <FormField id={id} label={label} error={error} required={!configured}>
+        {showSaved ? (
+          <div
+            id={id}
+            role="group"
+            aria-label={`${label}, saved`}
+            className="flex min-h-[40px] items-center justify-between gap-12"
+          >
+            <span className="body-small text-[var(--color-text-secondary)]">
+              {savedText}
+            </span>
+            <Button
+              type="button"
+              variant="weak"
+              size="small"
+              aria-label={`Replace ${noun}`}
+              onClick={onReplace}
+            >
+              Replace
+            </Button>
+          </div>
+        ) : (
+          <FormInput
+            id={id}
+            type="password"
+            autoComplete="new-password"
+            disabled={disabled}
+            {...inputProps}
+          />
+        )}
+      </FormField>
+      {configured && replacing && (
+        <Button
+          type="button"
+          variant="weak"
+          size="small"
+          className="self-start"
+          onClick={onCancel}
+        >
+          Keep saved key
+        </Button>
+      )}
+    </div>
   );
 }
 

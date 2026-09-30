@@ -9,6 +9,7 @@ import { AcceptInvitation } from "@/components/organizations/accept-invitation";
 import { InvitationBootstrapForm } from "@/components/organizations/invitation-bootstrap-form";
 import { getInvitationBootstrapState } from "@/fn/invitation-bootstrap";
 import { AuthLink, AuthResult } from "@/components/auth/auth-result";
+import { SignOutAndReturn } from "@/components/auth/sign-out-and-return";
 
 export default async function AcceptInvitationPage({
   params,
@@ -33,7 +34,17 @@ export default async function AcceptInvitationPage({
   // for anonymous visitors, so any active session must be signed out first.
   if (user && user.email.toLowerCase() !== invitation.email.toLowerCase()) {
     return (
-      <InvitationCard error="Sign out, then sign in with the invited email address." />
+      <AuthResult
+        tone="error"
+        title="Signed in with a different email"
+        actions={
+          <SignOutAndReturn returnTo={`/accept-invitation/${id}`}>
+            Sign out
+          </SignOutAndReturn>
+        }
+      >
+        Sign out, then sign in with the invited email address.
+      </AuthResult>
     );
   }
 

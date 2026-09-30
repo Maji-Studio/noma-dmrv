@@ -55,7 +55,7 @@ test.describe("Organization operating defaults", () => {
 
     await currency.selectOption("KES");
     // Order packaging is a segmented control (native radios).
-    await page.getByRole("radio", { name: "Bagged" }).check({ force: true });
+    await page.getByText("Bagged", { exact: true }).click();
     await page.getByRole("button", { name: "Save defaults" }).click();
 
     await expect(page.getByText("Operating defaults saved.")).toBeVisible();
