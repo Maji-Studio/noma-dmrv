@@ -1,6 +1,6 @@
 # Form cleanup
 
-**Owner:** Kenji Nguyen · **Status:** approved 2026-09-29; Phase 0 in progress · **Last reviewed:** 2026-09-29
+**Owner:** Kenji Nguyen · **Status:** approved 2026-09-29; Phase 0 shipped, Phase 1 in progress · **Last reviewed:** 2026-09-30
 
 Audit, patterns and decisions: [Noma form cleanup page](https://claude.ai/artifact/Mfd8PEovxmGWqBt9jMKh9C). Five code audits covered about 70 create, edit and read surfaces. gpt-6-astra cross-checked the result, and every refuted claim is listed on that page.
 
@@ -200,6 +200,19 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
 - The full rescan with all three instruments.
 - Update `docs/design-system.md` with sections on choice controls, Simple and Detailed, and illustrations. Then archive this plan.
 
+### Review backlog (Kenji, 2026-09-30)
+
+From the before/after review of Phase 0 and the Phase 1 checkpoints. Each item goes into the Phase 2 family named in brackets.
+
+- **Simple is for fast data entry on a phone.** Someone entering data on a phone may not need the explanation, only the fields. That is why the toggle stays (Q3). It fits R1: Simple drops explanation, never data.
+- **Available stock** [downstream]: order create, edit and read show available stock as a bar, legend, dry line, caption and history link. Show one total instead (≈ 200 kg wet). Tapping it opens a modal with the single bins, reusing the bin cards.
+- **Delivery stock block** [downstream]: on the delivery read sheet, the stock bar, its legend, the wet mass row, the rule and the Stock history link read as a jumble. Regroup them into one block.
+- **Blend bar** [stock]: drop the green "Total 100%." line. When the shares don't add up, show the gap in the bar itself (an unfilled remainder) and say what is missing. Also fix the create layout, where the lone volume share field sits right-aligned beside an empty column.
+- **Process flow** [production]: every bar has the same width, so 1,000 kg in looks the same as 300 kg out. Scale bar length to mass, or find another proportional picture. Drop the inner timeline rail that runs inside the section spine (two timelines side by side).
+- **Two-line labels** [transport]: labels such as "One-way distance to facility (per leg, km)" wrap beside the CERT mark and the ⓘ. Shorten them and move the unit into the `unit` suffix (1a), so no label wraps next to a one-line neighbour.
+- **Trip type** [1b, fixed in its PR]: the org default keeps the dropdown, since cards there looked wrong. In the record forms, Return and One-way sit side by side.
+- **Derived transport on the product read sheet** shows in Simple since #847. Check it on staging.
+
 ## Risks
 
 - **Height.** Cards and suffix wrappers add height in 360 to 640px sheets. The harness checks every card group at the real sheet width before it merges.
@@ -211,5 +224,5 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
 
 - **Q1.** Dry biochar and dry solids are data. Read views show them in both modes as a secondary line under the wet figure. In form previews, the dry pair stays part of the calculation (Detailed).
 - **Q2.** R1 is strict. There are no "Add X" reveals for fillable fields.
-- **Q3.** Keep the global toggle, and revisit after 0b.
+- **Q3.** Keep the global toggle. Settled 2026-09-30: Simple serves fast data entry on a phone.
 - **Q4.** Kenji approves the codex-computer-use runs with full access.
