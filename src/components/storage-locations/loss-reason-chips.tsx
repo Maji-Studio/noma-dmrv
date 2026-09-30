@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, type ComponentProps } from "react";
+import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormTextarea } from "@/components/forms";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +45,7 @@ export const LossReasonChips = forwardRef<HTMLTextAreaElement, ReasonProps>(
               aria-pressed={active === preset}
               onClick={() => onPick(reasonWithPreset(value, preset))}
               className={cn(
-                "body-small min-h-32 border px-12 transition-colors duration-300",
+                "body-small inline-flex min-h-32 items-center gap-6 border px-12 transition-colors duration-300",
                 "border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--color-text-secondary)]",
                 "hover:border-[var(--color-border-primary)]",
                 "aria-pressed:border-[var(--color-interaction)] aria-pressed:bg-[var(--color-background-interaction-light)] aria-pressed:text-[var(--color-text-primary)]",
@@ -52,6 +53,8 @@ export const LossReasonChips = forwardRef<HTMLTextAreaElement, ReasonProps>(
                 "disabled:opacity-60",
               )}
             >
+              {/* The mark says "picked" without relying on colour. */}
+              {active === preset && <CheckIcon aria-hidden size={12} weight="bold" className="shrink-0" />}
               {preset}
             </button>
           ))}
