@@ -418,12 +418,9 @@ async function submitRemovalCore(
   const reviewedBuild = reviewedCompilation.transportPlan;
   assertReviewedCompilationHash(expectedCompilationHash, reviewedBuild);
 
-  // The mirror re-derives the candidate set from the same submission context
-  // rather than trusting a candidate list; the reviewed-hash re-assert below
-  // still catches an evidence set that moved in between.
   await mirrorCandidateSourcesForSubmission(orgCtx, {
     removalId,
-    submissionContext: ctx,
+    candidateSourceDocuments: reviewedBuild.candidateSourceDocuments,
   });
 
   // Compile again from persisted mappings. Only this strict artifact can be

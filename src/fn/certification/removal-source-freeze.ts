@@ -5,13 +5,8 @@ import {
   BLOCKING_SUBMISSION_STATUSES,
   type LocalSubmissionStatus,
 } from "@/lib/certification/status";
-import type { OrgContext } from "@/lib/auth/server";
-import type { RemovalSubmissionContext } from "./certify-context-core";
 import { readRemovalCandidateSources } from "./removal-snapshot-readers";
-import {
-  collectCandidateSourceDocumentsForRemoval,
-  type CandidateSourceDocument,
-} from "./source-candidates";
+import type { CandidateSourceDocument } from "./source-candidates";
 
 const SOURCE_FROZEN_SUBMISSION_STATUSES = new Set<LocalSubmissionStatus>(
   BLOCKING_SUBMISSION_STATUSES,
@@ -66,38 +61,5 @@ export function filterCandidateSourcesForSubmissionLifecycle(
         (candidate) => [candidate.documentId, candidate],
       ),
     ).values(),
-  );
-}
-
-/** The slice of the submission context that decides a Removal's Source candidates. */
-export type SubmissionSourceCandidateContext = Pick<
-  RemovalSubmissionContext,
-  "lineages" | "memberBatches" | "batchesWithSamples" | "latestSubmission"
->;
-
-/**
- * The Source candidates a Removal submission owns: documents reachable from the
- * submission context's live lineage, passed through the lifecycle freeze
- * above. Evidence planning and the submission mirror both derive candidates
- * here, so the mirror never trusts a candidate tuple handed to it.
- */
-export async function collectSubmissionSourceCandidates(
-  orgCtx: OrgContext,
-  removalId: string,
-  ctx: SubmissionSourceCandidateContext,
-): Promise<CandidateSourceDocument[]> {
-  return filterCandidateSourcesForSubmissionLifecycle(
-    await collectCandidateSourceDocumentsForRemoval(orgCtx, {
-      removalId,
-      lineages: ctx.lineages,
-      memberBatches: ctx.memberBatches,
-      memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
-        batch.samples.map((sample) => ({
-          id: sample.id,
-          code: sample.sampleCode,
-        })),
-      ),
-    }),
-    ctx.latestSubmission,
   );
 }

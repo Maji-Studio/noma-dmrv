@@ -8,10 +8,11 @@
  * `./sources`; the submit pipeline and the evidence-ledger generator call this
  * module directly.
  *
- * The Source candidate (its binding and lineage label, which become the
- * Source description) is always derived here from server state: the live
- * lineage walk for a single document, or the submission context's candidate
- * set for the submission mirror. No caller can hand in a candidate tuple.
+ * The exported single-document mirror always derives its Source candidate
+ * (binding and lineage label, which become the Source description) from the
+ * live lineage walk and enforces the Removal lifecycle by default. Only the
+ * submission mirror below passes a pre-derived candidate, and that path stays
+ * private to this module.
  */
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
@@ -64,11 +65,8 @@ import {
   loadCandidateDocumentsForRemovalForUser,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
+  type CandidateSourceDocument,
 } from "./source-candidates";
-import {
-  collectSubmissionSourceCandidates,
-  type SubmissionSourceCandidateContext,
-} from "./removal-source-freeze";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
 const DOCUMENT_NOT_AVAILABLE_MESSAGE =
@@ -80,7 +78,7 @@ export interface MirrorResult {
   recovered: boolean;
 }
 
-/** What the Source description is built from, always derived server-side. */
+/** What the Source description is built from; always server-derived. */
 interface ServerDerivedCandidate {
   binding: ClassifiedRemovalSource | null;
   lineageLabel: string | null;
@@ -186,32 +184,30 @@ export async function mirrorDocumentToSourceForUser(
 }
 
 /**
- * Ensures every Source candidate the Removal submission owns has a persisted
- * Isometric Source mapping before the Removal snapshot is compiled.
- * Submission is the owning workflow for this transition; operators should not
- * have to mirror files one at a time in the UI.
+ * Ensures every candidate evidence document has a persisted Isometric Source
+ * mapping before the Removal snapshot is compiled. Submission is the owning
+ * workflow for this transition; operators should not have to mirror files one
+ * at a time in the UI.
  *
- * The candidate set is re-derived from the submission context, including the
- * immutable snapshot tuple of a blocking submission (which may no longer pass
- * today's live eligibility rule), rather than accepted from the caller. The
- * lifecycle guard is skipped because submission itself owns that transition
- * (fresh post-supersede evidence and deterministic generated ledgers).
+ * Trusted seam: `candidateSourceDocuments` must be the reviewed, server-derived
+ * candidate set of the submit pipeline (`compileRemovalSubmission`), which may
+ * include immutable snapshot tuples that no longer pass today's live
+ * eligibility rule. Only documents in that set are mirrored, and the lifecycle
+ * guard is skipped because submission owns that transition. This module has no
+ * "use server" directive, so no client can reach it.
  */
 export async function mirrorCandidateSourcesForSubmission(
   orgCtx: OrgContext,
   args: {
     removalId: string;
-    submissionContext: SubmissionSourceCandidateContext;
+    candidateSourceDocuments: CandidateSourceDocument[];
   },
 ): Promise<void> {
-  requireOrgRole(orgCtx, "admin");
-  const candidates = await collectSubmissionSourceCandidates(
-    orgCtx,
-    args.removalId,
-    args.submissionContext,
-  );
   const candidateByDocumentId = new Map(
-    candidates.map((candidate) => [candidate.documentId, candidate]),
+    args.candidateSourceDocuments.map((candidate) => [
+      candidate.documentId,
+      candidate,
+    ]),
   );
   const candidateDocumentIds = Array.from(candidateByDocumentId.keys()).sort();
   if (candidateDocumentIds.length === 0) return;
@@ -227,6 +223,7 @@ export async function mirrorCandidateSourcesForSubmission(
     if (mirroredDocumentIds.has(documentId)) continue;
     const candidate = candidateByDocumentId.get(documentId);
     if (!candidate) continue;
+    requireOrgRole(orgCtx, "admin");
     await mirrorDerivedCandidate(
       orgCtx,
       { removalId: args.removalId, documentId },

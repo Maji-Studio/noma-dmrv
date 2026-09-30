@@ -133,7 +133,6 @@ import {
   mirrorCandidateSourcesForSubmission,
   mirrorDocumentToSourceForUser,
 } from "@/fn/certification/sources-mirror-core";
-import type { SubmissionSourceCandidateContext } from "@/fn/certification/removal-source-freeze";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
 
 const SUPPLIER_REF = buildSourceSupplierRef(DOCUMENT_ID);
@@ -143,24 +142,6 @@ const SUBMISSION_CANDIDATE: CandidateSourceDocument = {
   biocharApplicationId: "biochar-application-test",
 };
 
-/** The submission context the mirror derives its candidates from. */
-function submissionContext(
-  overrides: Partial<SubmissionSourceCandidateContext> = {},
-): SubmissionSourceCandidateContext {
-  return {
-    lineages: [
-      {
-        application: { id: APPLICATION_ID, code: "APP-001" },
-        delivery: { id: DELIVERY_ID, code: "DEL-001" },
-        feedstocks: [],
-      },
-    ],
-    memberBatches: [{ id: CREDIT_BATCH_ID, code: "CB-001" }],
-    batchesWithSamples: [],
-    latestSubmission: null,
-    ...overrides,
-  } as unknown as SubmissionSourceCandidateContext;
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -362,7 +343,10 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
 
     await mirrorCandidateSourcesForSubmission(
       makeTestOrgContext(USER_ID),
-      { removalId: REMOVAL_ID, submissionContext: submissionContext() },
+      {
+        removalId: REMOVAL_ID,
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
+      },
     );
 
     expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
@@ -375,19 +359,46 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     );
   });
 
-  it("mirrors only candidates derived from the submission context", async () => {
-    // Nothing in the Removal's lineage carries a document and no submission
-    // froze one, so there is nothing a caller could get mirrored.
-    vi.mocked(documentsDA.listDocumentsForEntity).mockResolvedValue([]);
+  it("mirrors only the reviewed candidates, not documents attached since review", async () => {
+    // A second document joined the lineage after the reviewed compilation.
+    // The submission mirror must not create a Source for it; the reviewed-hash
+    // re-assert aborts the submission instead.
+    vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
+      async (_orgCtx, entityType, entityId) =>
+        entityType === "application" && entityId === APPLICATION_ID
+          ? ([
+              DOCUMENT_FIXTURE,
+              { ...DOCUMENT_FIXTURE, id: STALE_DOCUMENT_ID },
+            ] as never)
+          : ([] as never),
+    );
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
+      id: EXISTING_SOURCE_ID,
+      is_public: false,
+    } as never);
+    vi.mocked(isometric.requestSignedUploadUrl).mockResolvedValue({
+      kind: "already_uploaded",
+    });
 
     await mirrorCandidateSourcesForSubmission(
       makeTestOrgContext(USER_ID),
-      { removalId: REMOVAL_ID, submissionContext: submissionContext() },
+      {
+        removalId: REMOVAL_ID,
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
+      },
     );
 
-    expect(documentsDA.getDocumentById).not.toHaveBeenCalled();
-    expect(isometric.createSource).not.toHaveBeenCalled();
-    expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();
+    expect(documentsDA.getDocumentById).toHaveBeenCalledTimes(1);
+    expect(documentsDA.getDocumentById).toHaveBeenCalledWith(
+      makeTestOrgContext(USER_ID),
+      DOCUMENT_ID,
+    );
+    expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledTimes(1);
+    expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ documentId: STALE_DOCUMENT_ID }),
+      expect.anything(),
+    );
   });
 
   it("refuses a trusted mirror of a document outside the Removal's lineage", async () => {
@@ -420,11 +431,11 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     expect(isometric.createSource).not.toHaveBeenCalled();
   });
 
-  it("mirrors a frozen snapshot candidate that no longer passes live discovery", async () => {
+  it("lets the submission-owned mirror seam rebuild live evidence after supersede", async () => {
     vi.mocked(
       submissionsDA.getLatestSubmissionWithExecutor,
     ).mockResolvedValue({
-      status: "submitted",
+      status: "superseded",
       lockedAt: null,
     } as never);
     vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
@@ -435,25 +446,15 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       kind: "already_uploaded",
     });
     // The immutable snapshot candidate no longer passes live discovery. The
-    // submission seam must still mirror it (a supersede of the submitted
-    // Removal) without weakening org/document ownership or storage
-    // validation. The candidate comes from the stored snapshot, not the caller.
+    // submission seam must still mirror it without weakening org/document
+    // ownership or storage validation.
     vi.mocked(documentsDA.listDocumentsForEntity).mockResolvedValue([]);
 
     await mirrorCandidateSourcesForSubmission(
       makeTestOrgContext(USER_ID),
       {
         removalId: REMOVAL_ID,
-        submissionContext: submissionContext({
-          latestSubmission: {
-            status: "submitted",
-            lockedAt: null,
-            metadata: {},
-            payloadSnapshot: {
-              semantic: { candidateSources: [SUBMISSION_CANDIDATE] },
-            },
-          } as never,
-        }),
+        candidateSourceDocuments: [SUBMISSION_CANDIDATE],
       },
     );
 
@@ -462,6 +463,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       expect.objectContaining({ documentId: DOCUMENT_ID }),
       expect.anything(),
     );
+    expect(documentsDA.listDocumentsForEntity).not.toHaveBeenCalled();
   });
 
   it("authorizes a Sample lab report discovered for the member batch", async () => {
@@ -502,19 +504,17 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     expect(sampleCandidate?.lineageEntity.entityLabel).toBe("Sample LAB-001");
     if (!sampleCandidate) throw new Error("Expected Sample Source candidate.");
 
-    vi.mocked(documentsDA.listDocumentsForEntity).mockClear();
     await mirrorCandidateSourcesForSubmission(
       makeTestOrgContext(USER_ID),
       {
         removalId: REMOVAL_ID,
-        submissionContext: submissionContext({
-          batchesWithSamples: [
-            {
-              creditBatchId: CREDIT_BATCH_ID,
-              samples: [{ id: SAMPLE_ID, sampleCode: "LAB-001" }],
-            },
-          ] as never,
-        }),
+        candidateSourceDocuments: [
+          {
+            documentId: sampleCandidate.document.id,
+            binding: sampleCandidate.binding,
+            biocharApplicationId: sampleCandidate.biocharApplicationId,
+          },
+        ],
       },
     );
 

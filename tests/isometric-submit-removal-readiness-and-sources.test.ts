@@ -481,9 +481,10 @@ describe("submitRemoval — Source binding gate", () => {
       sourcesMirror.mirrorCandidateSourcesForSubmission,
     ).toHaveBeenCalledWith(
       expect.any(Object),
-      // The mirror re-derives candidates from the loaded submission context
-      // instead of accepting the reviewed candidate list.
-      { removalId: REMOVAL_ID, submissionContext: ctx },
+      {
+        removalId: REMOVAL_ID,
+        candidateSourceDocuments: candidates,
+      },
     );
     const submittedSemantic = (
       storedRows[0].payloadSnapshot as {
