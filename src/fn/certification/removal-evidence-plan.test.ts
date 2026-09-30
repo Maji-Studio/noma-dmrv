@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./sources", () => ({
+vi.mock("./source-candidates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./source-candidates")>()),
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
   resolveSourceBindingCandidates: vi.fn(),
 }));
@@ -10,7 +11,7 @@ import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import { planRemovalEvidence } from "./removal-evidence-plan";
-import * as sources from "./sources";
+import * as sources from "./source-candidates";
 
 const ORG_CONTEXT = {
   userId: "removal-evidence-plan-user",

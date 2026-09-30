@@ -59,7 +59,7 @@ import {
 import {
   assertGhgStatementReportFresh,
   issueVerifierReportUrl,
-} from "./ghg-statement-reports";
+} from "./ghg-statement-report-core";
 import {
   assertProductionConfirmed,
   GHG_STATEMENT_ENTITY_TYPE,
