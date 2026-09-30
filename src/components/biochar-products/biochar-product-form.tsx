@@ -52,7 +52,7 @@ import {
 } from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon, CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
+import { CubeIcon, FactoryIcon, ListChecksIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { AffectedBinNotices } from "./affected-bin-notices";
@@ -436,17 +436,14 @@ export function BiocharProductForm({
         sourceBiocharMassKg={initialSourceBiocharMassKg}
       />
       <FormSpine control={control}>
-      <FormSection title="Placement" icon={<CalendarIcon size={14} weight="bold" />} fields={["placedAt"]}>
-        <FormField id="placedAt" label="Mixing and placement time" required error={errors.placedAt?.message} cue={placementClock.hint}>
-          <EventTimeInput control={control} name="placedAt" id="placedAt" timeZone={placementClock.timeZone} disabled={isSubmitting || isEditMode} />
-        </FormField>
-      </FormSection>
-
       <FormSection
         title="Source"
         icon={<FactoryIcon size={14} weight="bold" />}
-        fields={["sourceBiocharStorageLocationId", "massKg", "moistureContentPercent"]}
+        fields={["placedAt", "sourceBiocharStorageLocationId", "massKg", "moistureContentPercent"]}
       >
+        <FormField id="placedAt" label="Mixing and placement time" required error={errors.placedAt?.message} cue={placementClock.hint}>
+          <EventTimeInput control={control} name="placedAt" id="placedAt" timeZone={placementClock.timeZone} disabled={isSubmitting || isEditMode} />
+        </FormField>
         <FormField
           id="sourceBiocharStorageLocationId"
           label="Biochar bin"

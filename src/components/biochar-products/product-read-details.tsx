@@ -122,12 +122,9 @@ export function productSheetSections(product: BiocharProductWithRelations, timeZ
   const composition = savedProductComposition(product);
   return [
     {
-      title: "Placement",
-      fields: [{ label: "Mixing and placement time", value: formatFacilityDateTime(product.placedAt, timeZone) }],
-    },
-    {
       title: "Source",
       fields: [
+        { label: "Mixing and placement time", value: formatFacilityDateTime(product.placedAt, timeZone) },
         {
           label: "Source biochar bin",
           value: product.sourceBiocharStorageLocation?.name ?? product.linkedProductionRun?.biocharStorageLocationName,
