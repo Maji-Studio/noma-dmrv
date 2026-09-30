@@ -27,6 +27,16 @@ application → batch directly gives the wrong set.
 If a link is missing the page still renders the available lineage and shows a
 warning card explaining where the rollback stops.
 
+**Roll-forwards** fill the other direction: one per member run
+(`src/data-access/chain-of-custody-roll-forward.ts`), walking run → product
+layers (`biochar_product_source_allocations`) → deliveries (net product-layer
+shipments from `deliveryProductAllocations`, reversals already netted). A batch
+with no application yet therefore still renders DAG and Map, ending wherever the
+biochar is now. The client merges roll-forwards **after** the rollbacks and only
+adds nodes and edges the rollbacks lack, so applied masses are never summed with
+drawn or shipped masses. Sankey stays application-scoped and shows a message
+until something is applied.
+
 ## Invariants
 
 - **Credit-batch roll-up and accounting reads go through
@@ -100,6 +110,7 @@ inside batch context, with a "Batch roll-up" button back.
 | Data Access | `src/data-access/credit-batch-accounting.ts` | Consolidated `loadCreditBatchRollups` (shallow lineage) and `loadCreditBatchAccounting` (full preview) |
 | Data Access | `src/data-access/chain-of-custody.ts` | Upstream lineage for one application |
 | Data Access | `src/data-access/chain-of-custody-batch.ts` | Batch roll-up — loads shallow accounting once and projects via `projectChainOfCustodyFromBatchFacts` |
+| Data Access | `src/data-access/chain-of-custody-roll-forward.ts` | Member runs' roll-forwards (run → products → deliveries) |
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
 | Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by DAG node id |
 | Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
