@@ -1,8 +1,8 @@
 /**
  * Drawings for the stock mode cards. Split: three small bins, one batch each.
  * Mix: one bin holding the same three batches blended. Decorative: the card
- * hides the art slot from assistive tech. The loop that plays on hover, focus
- * and selection lives in globals.css under "Stock mode art" (class names here
+ * hides the art slot from assistive tech. The loop that plays on hover and focus
+ * lives in globals.css under "Stock mode art" (class names here
  * must match it); without motion the art shows its full, settled state.
  */
 
@@ -16,44 +16,80 @@ const BIN_TOP = 10;
 const BIN_BOTTOM = 40;
 const BIN_STROKE = 1.5;
 
-/** Split: three bins, each with an inner fill for its batch. */
+/** Split: three bins, each holding one batch's grains. */
 const SPLIT_BIN_WIDTH = 30;
 const SPLIT_BIN_GAP = 8;
 const SPLIT_BIN_START = 4;
 const SPLIT_TONES = ["a", "b", "c"] as const;
-const FILL_INSET = 2.5;
+const SPLIT_COLUMNS = 6;
+/** The bin a split removal draws from (the middle one). */
+const SPLIT_DRAWN_BIN = 1;
 const FILL_TOP = BIN_TOP + 2;
-const FILL_HEIGHT = BIN_BOTTOM - FILL_TOP - 1;
 const CHIP_WIDTH = 12;
 const CHIP_HEIGHT = 5;
 const CHIP_START_Y = FILL_TOP + 2;
 
-/** Mix: one wide bin filled with a fixed grid of grains in the three tones. */
+/** Mix: one wide bin, the same grains blended. */
 const MIX_BIN_X = 20;
 const MIX_BIN_WIDTH = 72;
+const MIX_COLUMNS = 16;
 const GRAIN_SIZE = 2.6;
 const GRAIN_STEP_X = 4;
 const GRAIN_STEP_Y = 4.6;
-const GRAIN_COLUMNS = 16;
 const GRAIN_ROWS = 6;
 /** Rows at the top leave with a draw. */
 const DRAWN_ROWS = 2;
+
+type Tone = (typeof SPLIT_TONES)[number];
 
 function binPath(x: number, width: number): string {
   return `M${x} ${BIN_TOP} V${BIN_BOTTOM} H${x + width} V${BIN_TOP}`;
 }
 
-const GRAINS = Array.from({ length: GRAIN_ROWS * GRAIN_COLUMNS }, (_, index) => {
-  const column = index % GRAIN_COLUMNS;
-  const row = Math.floor(index / GRAIN_COLUMNS);
-  return {
-    key: index,
-    tone: SPLIT_TONES[(column * 7 + row * 5 + column * row) % SPLIT_TONES.length],
-    x: MIX_BIN_X + 3.5 + column * GRAIN_STEP_X,
-    y: FILL_TOP + 1 + row * GRAIN_STEP_Y,
-    drawn: row < DRAWN_ROWS,
-  };
-});
+/** A grid of grains centred in a bin; `toneAt` picks each grain's batch, `drawable` whether its top rows leave with a draw. */
+function grainGrid(binX: number, binWidth: number, columns: number, toneAt: (column: number, row: number) => Tone, drawable: boolean) {
+  const inset = (binWidth - ((columns - 1) * GRAIN_STEP_X + GRAIN_SIZE)) / 2;
+  return Array.from({ length: GRAIN_ROWS * columns }, (_, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      key: `${binX}-${index}`,
+      tone: toneAt(column, row),
+      x: binX + inset + column * GRAIN_STEP_X,
+      y: FILL_TOP + 1 + row * GRAIN_STEP_Y,
+      drawn: drawable && row < DRAWN_ROWS,
+    };
+  });
+}
+
+const splitBinX = (index: number) => SPLIT_BIN_START + index * (SPLIT_BIN_WIDTH + SPLIT_BIN_GAP);
+
+const SPLIT_GRAINS = SPLIT_TONES.flatMap((tone, index) =>
+  grainGrid(splitBinX(index), SPLIT_BIN_WIDTH, SPLIT_COLUMNS, () => tone, index === SPLIT_DRAWN_BIN),
+);
+
+const MIX_GRAINS = grainGrid(
+  MIX_BIN_X,
+  MIX_BIN_WIDTH,
+  MIX_COLUMNS,
+  (column, row) => SPLIT_TONES[(column * 7 + row * 5 + column * row) % SPLIT_TONES.length],
+  true,
+);
+
+function Grains({ grains }: { grains: ReturnType<typeof grainGrid> }) {
+  return grains.map((grain) => (
+    <rect
+      key={grain.key}
+      className={`stock-grain stock-grain-${grain.tone}${grain.drawn ? " stock-grain-top" : ""}`}
+      x={grain.x}
+      y={grain.y}
+      width={GRAIN_SIZE}
+      height={GRAIN_SIZE}
+      stroke="none"
+      style={{ fill: `var(--stock-batch-${grain.tone})` }}
+    />
+  ));
+}
 
 function StockArt({ mode, children }: { mode: "split" | "mix"; children: ReactNode }) {
   return (
@@ -75,35 +111,22 @@ function StockArt({ mode, children }: { mode: "split" | "mix"; children: ReactNo
   );
 }
 
-/** Three bins side by side, one batch each. A removal lifts from the middle one only. */
+/** Three bins side by side, one batch each. A removal takes from the middle one only. */
 export function SplitPilesArt() {
   return (
     <StockArt mode="split">
-      {SPLIT_TONES.map((tone, index) => {
-        const x = SPLIT_BIN_START + index * (SPLIT_BIN_WIDTH + SPLIT_BIN_GAP);
-        return (
-          <g key={tone}>
-            <rect
-              className={`stock-fill stock-fill-${tone}`}
-              x={x + FILL_INSET}
-              y={FILL_TOP}
-              width={SPLIT_BIN_WIDTH - FILL_INSET * 2}
-              height={FILL_HEIGHT}
-              stroke="none"
-              style={{ fill: `var(--stock-batch-${tone})` }}
-            />
-            <path d={binPath(x, SPLIT_BIN_WIDTH)} />
-          </g>
-        );
-      })}
+      <Grains grains={SPLIT_GRAINS} />
+      {SPLIT_TONES.map((tone, index) => (
+        <path key={tone} d={binPath(splitBinX(index), SPLIT_BIN_WIDTH)} />
+      ))}
       <rect
         className="stock-chip"
-        x={SPLIT_BIN_START + SPLIT_BIN_WIDTH + SPLIT_BIN_GAP + (SPLIT_BIN_WIDTH - CHIP_WIDTH) / 2}
+        x={splitBinX(SPLIT_DRAWN_BIN) + (SPLIT_BIN_WIDTH - CHIP_WIDTH) / 2}
         y={CHIP_START_Y}
         width={CHIP_WIDTH}
         height={CHIP_HEIGHT}
         stroke="none"
-        style={{ fill: "var(--stock-batch-b)" }}
+        style={{ fill: `var(--stock-batch-${SPLIT_TONES[SPLIT_DRAWN_BIN]})` }}
       />
     </StockArt>
   );
@@ -114,18 +137,7 @@ export function MixPileArt() {
   const stripeWidth = CHIP_WIDTH / SPLIT_TONES.length;
   return (
     <StockArt mode="mix">
-      {GRAINS.map((grain) => (
-        <rect
-          key={grain.key}
-          className={`stock-grain stock-grain-${grain.tone}${grain.drawn ? " stock-grain-top" : ""}`}
-          x={grain.x}
-          y={grain.y}
-          width={GRAIN_SIZE}
-          height={GRAIN_SIZE}
-          stroke="none"
-          style={{ fill: `var(--stock-batch-${grain.tone})` }}
-        />
-      ))}
+      <Grains grains={MIX_GRAINS} />
       <path d={binPath(MIX_BIN_X, MIX_BIN_WIDTH)} />
       <g className="stock-chip">
         {SPLIT_TONES.map((tone, index) => (
