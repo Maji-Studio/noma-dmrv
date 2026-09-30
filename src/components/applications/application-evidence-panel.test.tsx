@@ -37,6 +37,13 @@ vi.mock("@/components/forms", () => ({
       data-resolves-document-type={!!resolveDocumentType}
     />
   ),
+  FormField: ({ label, helperText, children }: { label: string; helperText?: string; children?: ReactNode }) => (
+    <div>
+      <span>{label}</span>
+      {helperText && <span>{helperText}</span>}
+      {children}
+    </div>
+  ),
   ServerError: ({ message }: { message: string }) => <p>{message}</p>,
 }));
 vi.mock("@/components/forms/failed-deferred-attachments", () => ({

@@ -4,12 +4,13 @@
  */
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import { UsersIcon, PlusIcon, MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Customer } from "@/db/schema";
 import {
+  useCustomerWithRelations,
   useCreateCustomerWithLocations,
   useDeleteCustomer,
   useCustomerLocations,
@@ -35,6 +36,7 @@ import type { CustomerWithRelations } from "@/data-access/customers";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { toSaveErrorMessage } from "@/lib/stale-version";
+import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
 
@@ -43,6 +45,7 @@ import { Notice } from "@/components/ui/notice";
 // ============================================
 
 function createColumns(
+  onView: (customer: CustomerWithRelations) => void,
   onEdit: (customer: CustomerWithRelations) => void,
   onDelete: (customerId: string) => void
 ): ColumnDef<CustomerWithRelations>[] {
@@ -52,12 +55,9 @@ function createColumns(
       meta: { nowrap: true },
       header: "Code",
       cell: ({ row }) => (
-        <Link
-          href={`/customers/${row.original.id}`}
-          className="font-medium text-[var(--clr-dark-purple)] hover:underline"
-        >
+        <span className="font-medium text-[var(--clr-dark-purple)]">
           {row.original.code}
-        </Link>
+        </span>
       ),
     },
     {
@@ -91,7 +91,7 @@ function createColumns(
           <RowActionsMenu
             label={`Actions for ${row.original.code}`}
             actions={[
-              { label: "Open details", href: `/customers/${row.original.id}` },
+              { label: "Open details", onSelect: () => onView(row.original) },
               { label: "Edit", onSelect: () => onEdit(row.original) },
               { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
             ]}
@@ -109,6 +109,13 @@ function createColumns(
 
 export function CustomerList() {
   // UI state
+  // `?customer=<id>` deep-links the view sheet (credit-batch convention); local
+  // state handles sheets opened by clicks.
+  const [focusedCustomerId, setFocusedCustomerId] = useQueryState(
+    CUSTOMER_DEEP_LINK_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const handledInvalidCustomerIdRef = useRef<string | null>(null);
   const [sideSheet, setSideSheet] = useState<{
     entity: CustomerWithRelations | null;
     mode: SideSheetMode;
@@ -130,9 +137,21 @@ export function CustomerList() {
     page: currentPage,
     pageSize,
   });
+  const focusedCustomer = useCustomerWithRelations(focusedCustomerId ?? "");
+  const deepLinkedSideSheet =
+    focusedCustomerId && focusedCustomer.data
+      ? ({
+          entity: {
+            ...focusedCustomer.data,
+            locationCount: focusedCustomer.data.locations.length,
+          },
+          mode: "view",
+        } as const)
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
   const { data: sideSheetLocations = [] } = useCustomerLocations(
-    sideSheet?.entity?.id ?? "",
-    !!sideSheet?.entity,
+    displaySideSheet?.entity?.id ?? "",
+    !!displaySideSheet?.entity,
   );
   const createCustomer = useCreateCustomerWithLocations();
   const updateCustomer = useUpdateCustomer();
@@ -163,6 +182,7 @@ export function CustomerList() {
   const openView = (customer: CustomerWithRelations) => {
     setCreateError(null);
     setUpdateError(null);
+    void setFocusedCustomerId(customer.id);
     setSideSheet({ entity: customer, mode: "view" });
   };
 
@@ -173,11 +193,38 @@ export function CustomerList() {
   };
 
   const closeSideSheet = () => {
+    void setFocusedCustomerId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
   };
   useOpenCreateIntent(openCreate);
+
+  // Clear a deep-linked `?customer=` that cannot be opened (deleted or
+  // cross-org), with the same guard as the credit-batch list.
+  useEffect(() => {
+    if (!focusedCustomerId) {
+      handledInvalidCustomerIdRef.current = null;
+      return;
+    }
+    if (focusedCustomer.isLoading || focusedCustomer.isFetching || focusedCustomer.isPending) return;
+    if (handledInvalidCustomerIdRef.current === focusedCustomerId) return;
+    if (focusedCustomer.isError || (focusedCustomer.isSuccess && !focusedCustomer.data)) {
+      handledInvalidCustomerIdRef.current = focusedCustomerId;
+      toast.error("Linked customer could not be opened");
+      void setFocusedCustomerId(null);
+    }
+  }, [
+    focusedCustomer.data,
+    focusedCustomer.isError,
+    focusedCustomer.isFetching,
+    focusedCustomer.isLoading,
+    focusedCustomer.isPending,
+    focusedCustomer.isSuccess,
+    focusedCustomerId,
+    setFocusedCustomerId,
+    toast,
+  ]);
 
   // Handlers
   const handleCreate = async (data: CustomerFormData, pendingLocations?: PendingLocation[]) => {
@@ -201,14 +248,14 @@ export function CustomerList() {
   };
 
   const handleUpdate = async (data: CustomerFormData) => {
-    if (!sideSheet?.entity) return;
+    if (!displaySideSheet?.entity) return;
     setUpdateError(null);
     try {
       await updateCustomer.mutateAsync({
-        customerId: sideSheet.entity.id,
+        customerId: displaySideSheet.entity.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        expectedUpdatedAt: displaySideSheet.entity.updatedAt,
         ...data,
       });
       setSideSheet(null);
@@ -234,7 +281,7 @@ export function CustomerList() {
     }
   };
 
-  const columns = createColumns(openEdit, handleDelete);
+  const columns = createColumns(openView, openEdit, handleDelete);
 
   if (fetchError) {
     return (
@@ -247,9 +294,9 @@ export function CustomerList() {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create customer" : sideSheetEntity?.code ?? "";
@@ -357,7 +404,7 @@ export function CustomerList() {
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) => setSideSheet(displaySideSheet ? { entity: displaySideSheet.entity, mode } : null)}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit customer"
@@ -369,7 +416,7 @@ export function CustomerList() {
       >
         <CustomerForm
           key={sideSheetEntity?.id ?? "create"}
-          customer={sideSheet?.entity as Customer | undefined}
+          customer={displaySideSheet?.entity as Customer | undefined}
           customerId={sideSheetEntity && sideSheetMode === "edit" ? sideSheetEntity.id : undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}

@@ -2,7 +2,7 @@
  * Figures and wording the stock preview blocks share: the movement block, the
  * load block and the availability block read a bin the same way.
  */
-import type { MassSegment } from "@/components/forms/composition-ledger";
+import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
@@ -38,6 +38,11 @@ export function batchSegments(allocations: readonly OutputStockBalanceView[]): M
 }
 
 /** Whole kilograms without the unit, for the muted before figure of a pair. */
+/** Key figures under a wet headline: batches are tracked dry, so they say so. */
+export function formatDryKeyMass(kg: number | null): string {
+  return `${formatCompositionMass(kg)} dry`;
+}
+
 export function formatWetEstimate(kg: number): string {
   return kg.toLocaleString(undefined, { maximumFractionDigits: WET_ESTIMATE_DIGITS });
 }

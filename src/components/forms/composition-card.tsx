@@ -26,6 +26,7 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
 import { useId, useState, type ReactNode } from "react";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export function CompositionCard({
   detail,
   calculation,
   actions,
+  ruleOnlyWithCalculation = false,
 }: {
   title: string;
   /** One sentence defining the block. Rendered as an InfoHint beside the caption. */
@@ -56,6 +58,8 @@ export function CompositionCard({
   calculation?: ReactNode;
   /** Other controls for this block, rendered in the action row after Show calculation. */
   actions?: ReactNode;
+  /** Draw the action row's rule only above the Show calculation control, so actions alone sit rule-free. */
+  ruleOnlyWithCalculation?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -86,7 +90,11 @@ export function CompositionCard({
       {hasActions && (
         <div
           hidden={!showActionRow}
-          className="flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-[var(--color-border-tertiary)] pt-8"
+          className={cn(
+            "flex flex-wrap items-center gap-x-8 gap-y-4",
+            (!ruleOnlyWithCalculation || (calculation && detailed)) &&
+              "border-t border-[var(--color-border-tertiary)] pt-8",
+          )}
         >
           {calculation && (
             <Button

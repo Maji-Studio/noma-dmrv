@@ -398,20 +398,15 @@ const productionSite: Surface[] = [
   },
 ];
 
+/** The customer sheet (deep-linked by `?customer=`) switched to its edit form, where locations are managed. */
+async function customerEditSheet(page: Page, ctx: CaptureContext): Promise<Locator> {
+  await gotoRoute(page, ctx, `customers?customer=${ctx.customer!.id}`);
+  const sheet = page.getByRole("dialog").first();
+  await sheet.getByRole("button", { name: "Edit customer", exact: true }).click();
+  return sheet;
+}
+
 const downstream: Surface[] = [
-  {
-    id: "customer.detail-page",
-    family: "downstream",
-    title: "Customer detail page",
-    kind: "page",
-    mode: "read",
-    fill: "none",
-    skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
-    open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return page.locator("main");
-    },
-  },
   {
     id: "customer.location-add",
     family: "downstream",
@@ -422,8 +417,8 @@ const downstream: Surface[] = [
     errors: true,
     skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Add location");
+      const sheet = await customerEditSheet(page, ctx);
+      return openDialogFromButton(sheet, page, "Add location");
     },
   },
   {
@@ -435,8 +430,8 @@ const downstream: Surface[] = [
     fill: "filled",
     skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Edit");
+      const sheet = await customerEditSheet(page, ctx);
+      return openDialogFromButton(sheet, page, /^Edit /);
     },
   },
   {
@@ -457,7 +452,7 @@ const downstream: Surface[] = [
     id: "credit-batch.method-b",
     family: "downstream",
     title: "Method B setup (credit batch create)",
-    kind: "sheet",
+    kind: "dialog",
     mode: "form",
     fill: "empty",
     skip: (ctx) =>
@@ -472,8 +467,7 @@ const downstream: Surface[] = [
       await settle(page, sheet);
       const setup = sheet.getByRole("button", { name: "Set up Method-B prerequisites", exact: true });
       if ((await setup.count()) === 0) return "Method B setup is not offered for the first feedstock type (eligibility or prerequisites already recorded)";
-      await setup.click();
-      return sheet;
+      return openDialogFromButton(sheet, page, "Set up Method-B prerequisites");
     },
   },
   {
