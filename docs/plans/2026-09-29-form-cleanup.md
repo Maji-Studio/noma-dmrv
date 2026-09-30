@@ -193,6 +193,7 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
 - Removal detail, GHG statement and customer detail move onto `DetailPanel`. That includes the customer detail table.
 - The eyebrow sweep inside forms, sheets and read views. The PageHeader stays, per decision 8.
 - The Removal submit step becomes one headline, 4 facts and one rule. The GHG period shows once, as a start → end strip.
+  - Kenji, 2026-09-30: every fact stays visible in both modes (R1). The step leads with one headline and 4 lead facts, and the other facts follow as a second group. Only explanation moves behind an ⓘ. The Technical details disclosure keeps its accordion border: it is a control, not a box.
 
 ### Phase 4. Illustrations and final rescan (1 PR plus a scan)
 

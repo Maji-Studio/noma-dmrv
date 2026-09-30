@@ -26,7 +26,8 @@ import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { hasExactGhgEntryMembership } from "@/lib/certification/ghg-statement-breakdown";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { DetailField, DetailSection } from "@/components/ui/detail-panel";
+import { PeriodStrip } from "./ghg-statement-period-strip";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { GhgStatementWorkflow } from "./ghg-statement-workflow";
@@ -69,15 +70,6 @@ export function canUseGhgStatementRegistryActions(query: {
   return !query.error;
 }
 
-function statementPeriod(item: GhgStatementListItem): string {
-  if (item.remotePeriodMissing) return "No period set";
-  const { reportingPeriodStartOn } = item.statement;
-  const reportingPeriodEndOn = item.effectiveReportingPeriodEndOn;
-  return reportingPeriodStartOn
-    ? formatDateRange(reportingPeriodStartOn, reportingPeriodEndOn)
-    : `Ends ${formatDate(reportingPeriodEndOn)}`;
-}
-
 export function GhgStatementDetailSheet({
   item,
   isProduction,
@@ -85,14 +77,11 @@ export function GhgStatementDetailSheet({
   open,
   onClose,
 }: GhgStatementDetailSheetProps) {
-  const period = statementPeriod(item);
-
   return (
     <SlideOverPanel.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <SlideOverPanel.Content size="default">
         <SlideOverPanel.Header showClose>
           <SlideOverPanel.Title>GHG Statement</SlideOverPanel.Title>
-          <SlideOverPanel.Description>{period}</SlideOverPanel.Description>
         </SlideOverPanel.Header>
 
         <DetailState
@@ -219,29 +208,31 @@ function DetailState({
           <Notice tone="warning">{STALE_DETAIL_WARNING}</Notice>
         )}
 
-        <section
-          aria-labelledby="ghg-statement-status"
-          className="border-y border-[var(--color-border-secondary)] py-12"
-        >
-          <div className="flex items-center justify-between gap-12">
-            <h3
-              id="ghg-statement-status"
-              className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]"
-            >
-              Statement status
-            </h3>
-            <StatusBadge status={derived.value} label={derived.label} />
-          </div>
-        </section>
+        <DetailSection title="Statement status" divider={false}>
+          {item.remotePeriodMissing ? (
+            <DetailField
+              label="Reporting period"
+              value="No period set"
+              valuePresent={false}
+            />
+          ) : (
+            <PeriodStrip
+              start={statement.reportingPeriodStartOn ?? null}
+              end={item.effectiveReportingPeriodEndOn}
+            />
+          )}
+          <DetailField
+            label="Status"
+            value={<StatusBadge status={derived.value} label={derived.label} />}
+            valuePresent
+          />
+        </DetailSection>
 
         {remote && remote.ghg_entry_ids.length > 0 && (
           <GhgStatementCarbonBreakdown query={breakdownQuery} />
         )}
 
-        <section className="flex flex-col gap-8">
-          <h3 className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Workflow
-          </h3>
+        <DetailSection title="Workflow">
           <GhgStatementWorkflow
             reportsQuery={reportsQuery}
             created={created}
@@ -264,7 +255,7 @@ function DetailState({
             }
             submitLabel={isResubmit ? "Resubmit" : "Submit"}
           />
-        </section>
+        </DetailSection>
 
         {remote && (
           <p className="body-small text-[var(--color-text-secondary)]">
