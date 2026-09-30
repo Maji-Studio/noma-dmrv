@@ -101,6 +101,20 @@ function Tooltip({ content, children, side = "top", className }: TooltipProps) {
   );
 }
 
+/** The text of an explanation node, for `aria-description`. */
+function plainText(node: React.ReactNode): string {
+  const collect = (value: React.ReactNode): string => {
+    if (value == null || typeof value === "boolean") return "";
+    if (typeof value === "string" || typeof value === "number") return String(value);
+    if (Array.isArray(value)) return value.map(collect).join("");
+    if (React.isValidElement(value)) {
+      return collect((value.props as { children?: React.ReactNode }).children);
+    }
+    return "";
+  };
+  return collect(node).replace(/\s+/g, " ").trim();
+}
+
 interface InfoHintProps {
   /** The explanation. Plain text or inline markup, no controls or links. */
   children: React.ReactNode;
@@ -113,7 +127,7 @@ interface InfoHintProps {
   /**
    * Id of an element that already carries the same explanation for assistive
    * tech (FormField's screen-reader copy). The trigger points at it instead
-   * of rendering a second hidden copy.
+   * of describing itself with a plain-text copy.
    */
   descriptionId?: string;
 }
@@ -124,8 +138,11 @@ interface InfoHintProps {
  * closes it. The trigger is its own 24px button: keep it outside any `<label>`,
  * or a tap on it would also focus or toggle the labelled control.
  *
- * Screen readers get the explanation as the button's description
- * (`aria-describedby`), so it is announced on focus without opening anything.
+ * Screen readers get the explanation as the button's description, announced
+ * on focus without opening anything: `aria-describedby` when the caller
+ * already renders it (`descriptionId`), otherwise `aria-description` with its
+ * plain text. No hidden copy goes into the DOM, so a heading or caption that
+ * holds an ⓘ keeps its own text.
  */
 function InfoHint({
   children,
@@ -135,50 +152,43 @@ function InfoHint({
   className,
   descriptionId,
 }: InfoHintProps) {
-  const ownDescriptionId = React.useId();
   const [state, setState] = React.useState<ToggletipState>(TOGGLETIP_CLOSED);
 
   return (
-    <>
-      <BaseTooltip.Provider delay={OPEN_DELAY_MS} closeDelay={CLOSE_DELAY_MS}>
-        <BaseTooltip.Root
-          open={state.open}
-          onOpenChange={(next, details) =>
-            setState((current) => applyTooltipOpenChange(current, next, details.reason))
+    <BaseTooltip.Provider delay={OPEN_DELAY_MS} closeDelay={CLOSE_DELAY_MS}>
+      <BaseTooltip.Root
+        open={state.open}
+        onOpenChange={(next, details) =>
+          setState((current) => applyTooltipOpenChange(current, next, details.reason))
+        }
+      >
+        <BaseTooltip.Trigger
+          render={
+            <button
+              type="button"
+              aria-label={label}
+              aria-describedby={descriptionId}
+              aria-description={descriptionId == null ? plainText(children) || undefined : undefined}
+              data-toggletip-trigger=""
+              onClick={() => setState(pressToggletip)}
+              className={cn(
+                "inline-flex shrink-0 items-center justify-center align-middle",
+                // WCAG 2.5.8 floor: the hit area stays 24px however small the glyph
+                // is, so the hint is reachable on touch.
+                "min-w-24 min-h-24",
+                "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]",
+                "transition-colors cursor-help",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1",
+                className
+              )}
+            />
           }
         >
-          <BaseTooltip.Trigger
-            render={
-              <button
-                type="button"
-                aria-label={label}
-                aria-describedby={descriptionId ?? ownDescriptionId}
-                data-toggletip-trigger=""
-                onClick={() => setState(pressToggletip)}
-                className={cn(
-                  "inline-flex shrink-0 items-center justify-center align-middle",
-                  // WCAG 2.5.8 floor: the hit area stays 24px however small the glyph
-                  // is, so the hint is reachable on touch.
-                  "min-w-24 min-h-24",
-                  "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]",
-                  "transition-colors cursor-help",
-                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1",
-                  className
-                )}
-              />
-            }
-          >
-            <InfoIcon size={size} weight="bold" aria-hidden />
-          </BaseTooltip.Trigger>
-          <TooltipPopup side={side}>{children}</TooltipPopup>
-        </BaseTooltip.Root>
-      </BaseTooltip.Provider>
-      {descriptionId == null && (
-        <span id={ownDescriptionId} hidden>
-          {children}
-        </span>
-      )}
-    </>
+          <InfoIcon size={size} weight="bold" aria-hidden />
+        </BaseTooltip.Trigger>
+        <TooltipPopup side={side}>{children}</TooltipPopup>
+      </BaseTooltip.Root>
+    </BaseTooltip.Provider>
   );
 }
 

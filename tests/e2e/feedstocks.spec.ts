@@ -318,9 +318,14 @@ test.describe("Feedstock UI CRUD", () => {
     const dialog = page.locator('[role="dialog"]');
     const trigger = dialog.locator("[data-toggletip-trigger]").first();
     await expect(trigger).toBeVisible();
+    // The explanation is the trigger's description: a FormField ⓘ points at
+    // the field's screen-reader copy, any other ⓘ carries aria-description.
     const descriptionId = await trigger.getAttribute("aria-describedby");
-    expect(descriptionId).toBeTruthy();
-    const explanation = (await page.locator(`[id="${descriptionId}"]`).textContent())?.trim() ?? "";
+    const explanation = (
+      descriptionId
+        ? await page.locator(`[id="${descriptionId}"]`).textContent()
+        : await trigger.getAttribute("aria-description")
+    )?.trim() ?? "";
     expect(explanation.length).toBeGreaterThan(0);
 
     // The popup has no tooltip role; count matches of its text page-wide.

@@ -231,7 +231,12 @@ caption.
 - **The ⓘ is a toggletip.** `InfoHint` opens on a tap or click, on hover and
   on keyboard focus; a press keeps it open until a second press, Escape or an
   outside press. Its 24px trigger sits beside the label, never inside the
-  `<label>`, and its text is the trigger's `aria-describedby` description. Use
+  `<label>`, and its text is the trigger's description: `aria-describedby` to
+  FormField's screen-reader copy, or `aria-description` elsewhere. It adds no
+  hidden copy to the DOM, so a heading holding an ⓘ keeps its own text. Its
+  name is "More about <label>", so in specs locate the control by role
+  (`getByRole("textbox", { name })`), not `getByLabel`, which also matches the
+  ⓘ. Use
   the plain `Tooltip` only for hover extras that are also available another
   way (the seal's own explanation, a disabled button's reason).
 - **Certification is a seal, explained once.** A field required for
