@@ -281,7 +281,8 @@ export function TransportLegForm({
           <input type="hidden" {...register("transportMethodType")} />
           <FormField
             id="loadMassKg"
-            label="Load mass (kg)"
+            label="Load mass"
+            unit="kg"
             required
             error={errors.loadMassKg?.message}
             helperText="Mass moved on this leg. Used to weight transport emissions."
