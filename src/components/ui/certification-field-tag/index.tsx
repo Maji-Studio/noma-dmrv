@@ -52,9 +52,11 @@ const STATUS_GLYPHS: Record<CertFieldStatus, ReactNode> = {
   satisfied: <CheckIcon size={12} weight="bold" aria-hidden />,
 };
 
+/** The chip's shape, shared by the field chip and the legend's decorative copy. */
+const CHIP_BASE = "body-caption inline-flex items-center border px-4 py-1";
+
 interface CertificationFieldTagProps {
   className?: string;
-  label?: string;
   description?: string;
   /** Saved-state colour. Defaults to `neutral` (no claim). */
   status?: CertFieldStatus;
@@ -67,7 +69,6 @@ interface CertificationFieldTagProps {
 
 export function CertificationFieldTag({
   className,
-  label = CERTIFICATION_FIELD_TAG_LABEL,
   description,
   status = "neutral",
   descriptionId,
@@ -88,13 +89,14 @@ export function CertificationFieldTag({
           // static position against <html>; inside a wide, horizontally-scrolled
           // table its border-box lands far to the right and inflates the document
           // scroll width, producing page-level horizontal scroll on mobile.
-          "relative body-caption inline-flex items-center gap-2 border px-4 py-1",
+          "relative gap-2",
+          CHIP_BASE,
           STATUS_STYLES[status],
           className,
         )}
       >
         {STATUS_GLYPHS[status]}
-        {label}
+        {CERTIFICATION_FIELD_TAG_LABEL}
         <span id={descriptionId} className="sr-only">{explanation}</span>
       </span>
     </Tooltip>
@@ -120,10 +122,7 @@ export function CertificationLegend({ className }: { className?: string }) {
     >
       <span
         aria-hidden
-        className={cn(
-          "body-caption inline-flex items-center border px-4 py-1",
-          STATUS_STYLES.neutral,
-        )}
+        className={cn(CHIP_BASE, STATUS_STYLES.neutral)}
       >
         {CERTIFICATION_FIELD_TAG_LABEL}
       </span>
