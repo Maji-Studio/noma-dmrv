@@ -193,7 +193,7 @@ export function CreditBatchProductionRunsPreview({
               ...(unavailableRunIds.length > 0
                 ? [`${unavailableRunIds.length} retained`]
                 : []),
-            ].join(", ")}
+            ].join(" · ")}
           </p>
           {summary}
           <div className="grid grid-cols-1 gap-8">
