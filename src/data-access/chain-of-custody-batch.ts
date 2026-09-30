@@ -31,7 +31,7 @@ import {
   type ChainOfCustodyGeoData,
 } from "./chain-of-custody-geo";
 import {
-  loadRunRollForwards,
+  projectRunRollForwards,
   type ChainRunRollForward,
 } from "./chain-of-custody-roll-forward";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
@@ -102,9 +102,11 @@ async function resolveBatchScope(
     throw new SafeError("Credit batch not found");
   }
 
-  const accounting = (await loadCreditBatchRollups(ctx, [creditBatchId]))[
-    creditBatchId
-  ];
+  const accounting = (
+    await loadCreditBatchRollups(ctx, [creditBatchId], {
+      includeRunForwards: true,
+    })
+  )[creditBatchId];
   if (!accounting) {
     throw new SafeError("Credit batch accounting could not be loaded");
   }
@@ -118,7 +120,7 @@ async function resolveBatchScope(
     ),
   }));
   const applicationIds = facts.applicationIds;
-  const rollForwards = await loadRunRollForwards(ctx, facts.runs);
+  const rollForwards = projectRunRollForwards(facts);
   return { batch, applicationIds, lineages, rollForwards };
 }
 

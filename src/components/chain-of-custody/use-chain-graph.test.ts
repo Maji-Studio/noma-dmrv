@@ -450,6 +450,44 @@ describe("roll-forwards", () => {
     expect(
       edges.some((graphEdge) => graphEdge.id === "production-run:run-1->biochar-product:product-2"),
     ).toBe(true);
+    // run-1 fans out to an applied edge and a recorded edge: no share is honest.
+    for (const target of ["biochar-product:product-1", "biochar-product:product-2"]) {
+      expect(
+        edges.find((graphEdge) => graphEdge.id === `production-run:run-1->${target}`)?.data?.pctLabel,
+      ).toBeNull();
+    }
+  });
+
+  it("keeps branch shares within one mass basis", () => {
+    const forward = rollForward("run-1");
+    forward.products = [rollForwardProduct("product-1"), rollForwardProduct("product-2")];
+    forward.products[1].drawnDryMassKg = 190;
+    forward.products[1].drawnWetMassKg = 200;
+
+    const { edges } = useBatchChainGraph(undefined, [forward]);
+
+    expect(
+      edges.find((graphEdge) => graphEdge.id === "production-run:run-1->biochar-product:product-1")?.data?.pctLabel,
+    ).toBe("75%");
+    expect(
+      edges.find((graphEdge) => graphEdge.id === "production-run:run-1->biochar-product:product-2")?.data?.pctLabel,
+    ).toBe("25%");
+  });
+
+  it("sums two member runs' shares of one shipment", () => {
+    const first = rollForward("run-1");
+    const second = rollForward("run-2");
+    for (const [forward, dryMassKg, wetMassKg] of [[first, 300, 320], [second, 80, 80]] as const) {
+      const product = rollForwardProduct("product-1");
+      product.deliveries = [{ delivery: { ...lineage().delivery, id: "delivery-9" }, wetMassKg, dryMassKg }];
+      forward.products = [product];
+    }
+
+    const { edges } = useBatchChainGraph(undefined, [first, second]);
+
+    const shipped = edges.filter((graphEdge) => graphEdge.id === "biochar-product:product-1->delivery:delivery-9");
+    expect(shipped).toHaveLength(1);
+    expect(shipped[0].data).toMatchObject({ mass: 0.38, kgLabel: "Wet: 400 kg · Dry: 380 kg" });
   });
 });
 

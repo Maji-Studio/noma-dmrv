@@ -27,10 +27,14 @@ application → batch directly gives the wrong set.
 If a link is missing the page still renders the available lineage and shows a
 warning card explaining where the rollback stops.
 
-**Roll-forwards** fill the other direction: one per member run
-(`src/data-access/chain-of-custody-roll-forward.ts`), walking run → product
-layers (`biochar_product_source_allocations`) → deliveries (net product-layer
-shipments from `deliveryProductAllocations`, reversals already netted). A batch
+**Roll-forwards** fill the other direction: one per member run, walking run →
+product layers (`biochar_product_source_allocations`) → deliveries (the run's own
+share of each shipped layer from `output_stock_run_allocations`, reversals
+netted, so a blended product never credits one run with another's biochar). The
+facts load inside the consolidated roll-up loader
+(`loadCreditBatchRollups(..., { includeRunForwards: true })`, via
+`credit-batch-run-forward-facts.ts`); `chain-of-custody-roll-forward.ts` only
+projects them. A batch
 with no application yet therefore still renders DAG and Map, ending wherever the
 biochar is now. The client merges roll-forwards **after** the rollbacks and only
 adds nodes and edges the rollbacks lack, so applied masses are never summed with
@@ -46,8 +50,8 @@ until something is applied.
   lineage, and applied-weight facts for shallow consumers such as traceability,
   detail, and certification context; `loadCreditBatchAccounting()` adds sample
   chemistry and CO₂e preview assembly for full accounting consumers.
-  `chain-of-custody-batch.ts` projects the traceability payload from the shallow
-  loader instead of resolving lineage itself. Do not recreate the deleted
+  `chain-of-custody-batch.ts` projects the traceability payload (rollbacks and
+  roll-forwards) from the shallow loader instead of resolving lineage itself. Do not recreate the deleted
   `credit-batch-lineage-facts.ts` or `credit-batch-previews.ts` seams, and do not
   thread preloaded facts through public signatures; either move a projection into
   the consolidated module or call the appropriate loader.
@@ -71,8 +75,8 @@ until something is applied.
 
 Header: one **command bar** (`traceability-header.tsx`) — page eyebrow, a
 **credit batch dropdown** (`batch-picker.tsx`), a **production-run filter**
-(`run-picker.tsx`) whose options derive from the loaded batch's lineages, never
-an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
+(`run-picker.tsx`) whose options derive from the loaded batch's rollbacks and
+roll-forwards (so runs with nothing applied are listed), never an unscoped fetch, the back-to-roll-up button, the kg/% and view segments, and
 the facility code. The run filter narrows the whole roll-up (DAG, Map, and a
 client-side recomputed Sankey — every figure derives from the filtered lineages)
 and deep-links as `?run=`.
@@ -86,8 +90,9 @@ application-only. With both `?batch=` and `?application=` the page is a drill-do
 inside batch context, with a "Batch roll-up" button back.
 
 - **Credit batch (roll-up)** — segments `DAG | Map | Sankey`:
-  - **DAG** — member runs' lineages merged into one fan-out; nodes/edges dedupe by
-    id so a shared production run appears once. Application cards drill down
+  - **DAG** — member rollbacks merged into one fan-out, then roll-forwards for
+    whatever they lack; nodes/edges dedupe by id so a shared production run
+    appears once. Application cards drill down
     instead of navigating.
   - **Map** — the merged geo payload (nodes/legs deduped the same way).
   - **Sankey** — honest dry-mass balance, dry kg end to end, every loss an explicit
@@ -110,7 +115,8 @@ inside batch context, with a "Batch roll-up" button back.
 | Data Access | `src/data-access/credit-batch-accounting.ts` | Consolidated `loadCreditBatchRollups` (shallow lineage) and `loadCreditBatchAccounting` (full preview) |
 | Data Access | `src/data-access/chain-of-custody.ts` | Upstream lineage for one application |
 | Data Access | `src/data-access/chain-of-custody-batch.ts` | Batch roll-up — loads shallow accounting once and projects via `projectChainOfCustodyFromBatchFacts` |
-| Data Access | `src/data-access/chain-of-custody-roll-forward.ts` | Member runs' roll-forwards (run → products → deliveries) |
+| Data Access | `src/data-access/credit-batch-run-forward-facts.ts` | Run-forward facts, loaded only inside `loadCreditBatchRollups` |
+| Data Access | `src/data-access/chain-of-custody-roll-forward.ts` | Projects member runs' roll-forwards (run → products → deliveries) |
 | Data Access | `src/data-access/chain-of-custody-geo.ts` | Geo payload (node coordinates + transport legs) |
 | Data Access | `src/data-access/chain-of-custody-trail.ts` | Trail evidence joins keyed by DAG node id |
 | Pure lib | `src/lib/chain-of-custody/sankey.ts` | `buildBatchSankey` — dedupe + mass-balance aggregation |
@@ -134,6 +140,9 @@ token and contrast rules are owned by [docs/design-system.md](design-system.md).
   focused node's full connected lineage — ancestors + descendants via
   `reachableNodeIds` — stays full strength, everything else dims.
 - Product-to-delivery edges show the selected applications' allocated shares.
+  An edge only a roll-forward reaches shows the member runs' net shipped share
+  instead. Branch % is computed within one mass basis (applied vs recorded); a
+  fan that mixes both shows no %.
   Orders describe requested wet mass; they do not reserve stock or identify a
   product layer. Stock balances come from the output ledger, never from
   subtracting order quantity from product creation mass.

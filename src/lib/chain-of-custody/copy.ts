@@ -6,6 +6,10 @@ export const EMPTY_CREDIT_BATCH_WARNING =
 export const NO_APPLICATION_YET_WARNING =
   "No application in this credit batch yet. The roll-up stops where the biochar is now.";
 
+/** Run filter: the selected run has nothing applied, even if others do. */
+export const NO_RUN_APPLICATION_YET_WARNING =
+  "Nothing from this production run is applied yet. The roll-up stops where the biochar is now.";
+
 /** Sankey: the mass balance runs to applications, so it needs at least one. */
 export const NO_APPLICATION_SANKEY_MESSAGE =
   "Nothing is applied yet, so there is no mass balance to show. Open DAG or Map to see where the biochar is now.";

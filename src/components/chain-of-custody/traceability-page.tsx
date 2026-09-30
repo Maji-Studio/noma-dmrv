@@ -62,8 +62,8 @@ import {
 import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
 import {
   NO_APPLICATION_SANKEY_MESSAGE,
-  NO_APPLICATION_YET_WARNING,
   NO_LINEAGE_FOR_SELECTED_RUN,
+  NO_RUN_APPLICATION_YET_WARNING,
 } from "@/lib/chain-of-custody/copy";
 
 const nodeTypes: NodeTypes = {
@@ -462,7 +462,7 @@ export function TraceabilityPage() {
   // out-of-scope applications into the narrowed view).
   const batchWarnings = selectedRunId
     ? (filteredBatchLineages?.length ?? 0) === 0
-      ? [NO_APPLICATION_YET_WARNING]
+      ? [NO_RUN_APPLICATION_YET_WARNING]
       : Array.from(
           new Set(
             (filteredBatchLineages ?? []).flatMap((lineage) =>
@@ -734,7 +734,7 @@ export function TraceabilityPage() {
       return <LoadingState label="Loading batch roll-up..." />;
     }
     if (!batchData) return null;
-    if (batchData.rollForwards.length === 0 && batchView !== "sankey") {
+    if (batchData.rollForwards.length === 0) {
       return (
         <CenteredMessage>
           This credit batch has no member production runs yet, so there is
