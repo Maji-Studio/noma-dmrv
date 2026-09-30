@@ -26,13 +26,13 @@ The code comment on `DetailedOnly` (`src/components/forms/form-detail-context.ts
 1. ⓘ holds explanations. A short visible `cue` stays for units, limits and consequences, tagged by hand.
 2. CERT becomes a 14px seal glyph on the label row, explained once in the sheet header. Missing and satisfied keep their colours.
 3. The red asterisk stays on required fields, since about 62 of 225 fields are required. The 1000-year reflectance fields that miss it get fixed.
-4. Choice cards only where the choice has a consequence: trip type, stock mode, sampling, durability tier, GHG report source, evidence method, source visibility. Segmented controls for short equal options: loss/count, storage type, run status, incident severity, packaging, field position mode, feedstock usage. Selects for everything else. A one-option enum becomes a fixed value.
+4. Choice cards only where the choice has a consequence: stock mode, sampling, durability tier, GHG report source, evidence method, source visibility. Segmented controls for short equal options: loss/count, storage type, run status, incident severity, packaging, field position mode, feedstock usage. Selects for everything else. A one-option enum becomes a fixed value.
 5. A small monoline illustration set drawn in code, used only in choice cards, empty states and onboarding.
 6. Samples: merge carbon, elemental and proximate into one section with unit suffixes. No fields hidden, per R1.
 7. Actions that save on their own open in an action modal: the facility registry connector and Method B setup.
 8. The PageHeader eyebrow stays at page level. The no-eyebrow rule applies inside forms, sheets and read views.
 9. Output-bin tiles lead with the wet estimate.
-10. Bugs first. Then the new primitives are piloted on loss/count and trip type. Then one PR per family, with tests migrated in the same PR.
+10. Bugs first. Then the new primitives are piloted on loss/count and evidence method. Then one PR per family, with tests migrated in the same PR.
 
 ### R3. Existing form contract
 
@@ -150,7 +150,7 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
 ### Phase 1. Primitives, piloted (3 PRs)
 
 - **1a. `FormField`:** a `cue` prop, a `unit` suffix, and helperText always going to the ⓘ, after the 36 short helpers are classified. InfoHint becomes a toggletip: it opens on tap and keeps its 24px trigger outside the label. CERT becomes a glyph with a sheet-header legend.
-- **1b. `ChoiceCardGroup` and `SegmentedControl`:** built on native radios with arrow-key roving, a selection mark beyond colour, container-aware columns and an art slot. Piloted on loss/count and on trip type in all four forms. `transport-trip-type.spec.ts` and the other specs that call `selectOption` on those selects get migrated in the same PR.
+- **1b. `ChoiceCardGroup` and `SegmentedControl`:** built on native radios with arrow-key roving, a selection mark beyond colour, container-aware columns and an art slot. Piloted on loss/count (segmented) and on the application evidence method (cards, replacing `RadioCardGroup`). The specs that drive those controls get migrated in the same PR. Trip type is out: #852 removes the One-way option, so every leg counts as a round trip.
 - **1c. `Notice`, flat controls, and the EntitySelect popover:** `Notice` replaces 6 warning styles. Flat controls drop the inset shadow. The EntitySelect popover loses its per-row rules and switches to Phosphor.
 
 ### Phase 2. Family passes (5 PRs, at most 2 in parallel, each with its own worktree, database and port)
@@ -210,7 +210,7 @@ From the before/after review of Phase 0 and the Phase 1 checkpoints. Each item g
 - **Blend bar** [stock]: drop the green "Total 100%." line. When the shares don't add up, show the gap in the bar itself (an unfilled remainder) and say what is missing. Also fix the create layout, where the lone volume share field sits right-aligned beside an empty column.
 - **Process flow** [production]: every bar has the same width, so 1,000 kg in looks the same as 300 kg out. Scale bar length to mass, or find another proportional picture. Drop the inner timeline rail that runs inside the section spine (two timelines side by side).
 - **Two-line labels** [transport]: labels such as "One-way distance to facility (per leg, km)" wrap beside the CERT mark and the ⓘ. Shorten them and move the unit into the `unit` suffix (1a), so no label wraps next to a one-line neighbour.
-- **Trip type** [1b, fixed in its PR]: the org default keeps the dropdown, since cards there looked wrong. In the record forms, Return and One-way sit side by side.
+- **Trip type** goes away entirely (#852): every leg counts as a round trip, so there is no choice left to design.
 - **Derived transport on the product read sheet** shows in Simple since #847. Check it on staging.
 
 ## Risks
