@@ -6,6 +6,7 @@ import {
   BoatIcon,
   FileDashedIcon,
   FileTextIcon,
+  MapPinIcon,
   PathIcon,
   PencilSimpleIcon,
   PipeIcon,
@@ -116,6 +117,7 @@ const TRANSPORT_METHOD_PHRASES: Record<TransportMethodValue, string> = {
   aircraft: "by air",
 };
 
+const STOP_ICON_PX = 16;
 const METHOD_ICON_PX = 16;
 const EVIDENCE_ICON_PX = 16;
 const MENU_ICON_PX = 16;
@@ -417,7 +419,7 @@ function JourneyLeg({
  * add/edit dialog. Pass `readOnly` for the view-mode summary.
  *
  * Every mount is a 390px side sheet, so the legs read as stops on a rail rather
- * than as a table: consecutive legs share a stop, which is what the operator
+ * than as a table (no rail): consecutive legs share a stop, which is what the operator
  * recorded, and each leg sits as a one-line box between the two stops it joins.
  * Long stop names wrap; the load, evidence icon and actions menu stay pinned
  * right.
@@ -607,25 +609,16 @@ export function TransportLegsEditor({
                   .transportEvidenceDocumentCount,
               );
             return (
-              <li key={stop.key} className="flex gap-12">
-                <div
-                  className="flex flex-col items-center"
-                  aria-hidden="true"
-                >
-                  <span className="mt-6 size-8 shrink-0 rounded-full bg-[var(--color-text-primary)]" />
-                  {!isFinalStop && (
-                    <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    "min-w-0 flex-1 space-y-8",
-                    !isFinalStop && "pb-16",
-                  )}
-                >
-                  <p className="body-small font-medium text-[var(--color-text-primary)]">
-                    {stop.name}
-                  </p>
+              <li key={stop.key} className={cn("space-y-8", !isFinalStop && "pb-16")}>
+                <p className="flex items-start gap-8 body-small font-medium text-[var(--color-text-primary)]">
+                  <MapPinIcon
+                    size={STOP_ICON_PX}
+                    className="mt-2 shrink-0 text-[var(--color-text-tertiary)]"
+                    aria-hidden
+                  />
+                  <span className="min-w-0">{stop.name}</span>
+                </p>
+                <div className="min-w-0 space-y-8 pl-24">
                   {leg && (
                     <JourneyLeg
                       leg={leg}
