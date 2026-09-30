@@ -253,7 +253,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
       if (!isVisible(child)) continue;
       const style = getComputedStyle(child);
       if (style.position === "absolute" && child.getAttribute("aria-hidden") !== null) continue;
-      const leaf = child.children.length === 0 || child.matches(CONTROL_SELECTOR) || child.tagName === "svg";
+      // A choice card or segment is one box: measuring its caption text instead
+      // would drop the card's own padding and border from the gap below it.
+      const leaf = child.children.length === 0 || child.matches(CONTROL_SELECTOR) || child.tagName === "svg" || child.matches("label:has(> input[type=radio])");
       if (!leaf) continue;
       const rect = child.getBoundingClientRect();
       top = Math.min(top, rect.top);

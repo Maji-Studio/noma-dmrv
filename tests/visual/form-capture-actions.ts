@@ -457,7 +457,7 @@ const downstream: Surface[] = [
     id: "credit-batch.method-b",
     family: "downstream",
     title: "Method B setup (credit batch create)",
-    kind: "sheet",
+    kind: "dialog",
     mode: "form",
     fill: "empty",
     skip: (ctx) =>
@@ -472,8 +472,7 @@ const downstream: Surface[] = [
       await settle(page, sheet);
       const setup = sheet.getByRole("button", { name: "Set up Method-B prerequisites", exact: true });
       if ((await setup.count()) === 0) return "Method B setup is not offered for the first feedstock type (eligibility or prerequisites already recorded)";
-      await setup.click();
-      return sheet;
+      return openDialogFromButton(sheet, page, "Set up Method-B prerequisites");
     },
   },
   {
