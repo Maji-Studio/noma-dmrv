@@ -1,4 +1,6 @@
-import { postedStockFixture, cleanupPostedStock } from "./helpers/posted-output-stock-fixture";
+import { getOutputBinAllLayersDryKg, readOutputBinAllLayers } from "@/data-access/output-stock";
+import { layersHoldMaterial } from "@/lib/output-stock";
+import { postedStockFixture, postMeasurement, cleanupPostedStock } from "./helpers/posted-output-stock-fixture";
 import { postOutputStock } from "@/data-access/output-stock-post";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -30,6 +32,10 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
+/** 10 kg of pure biochar, drawn at 10% moisture so 0.0001 kg of solids (under a gram) is left. */
+const RESIDUAL_STOCK_KG = 10;
+const RESIDUAL_LOSS_WET_KG = 11.111;
+const RESIDUAL_MOISTURE_PERCENT = 10;
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 const CONCURRENCY_TEST_TIMEOUT_MS = 10_000;
 
@@ -219,6 +225,24 @@ describe("storage location archive", () => {
       const preview = await previewOutputStock(fixture.ctx, input);
       await postOutputStock(fixture.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E archive empty bin" });
       await expect(archiveStorageLocation(fixture.ctx, binId)).resolves.toMatchObject({ archivedAt: expect.any(Date) });
+    } finally { await cleanupPostedStock(fixture); }
+  });
+
+  it("blocks archiving a bin whose solids outlast a 0.000 kg dry biochar balance until a zero count clears them", async () => {
+    const fixture = await postedStockFixture({ stockKg: RESIDUAL_STOCK_KG });
+    try {
+      await postMeasurement(fixture, { kind: "loss", storageLocationId: fixture.bin.id, wetMassKg: RESIDUAL_LOSS_WET_KG, moisturePercent: RESIDUAL_MOISTURE_PERCENT });
+      const stock = await getOutputBinAllLayersDryKg(fixture.ctx, fixture.bin.id);
+      expect(stock).toBe(0);
+      const { layers } = await readOutputBinAllLayers(fixture.ctx, fixture.bin.id);
+      expect(layersHoldMaterial(layers)).toBe(true);
+
+      await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id)).rejects.toThrow(/record a stock count of zero/i);
+
+      await postMeasurement(fixture, { kind: "count", storageLocationId: fixture.bin.id, wetMassKg: 0, moisturePercent: undefined });
+      const cleared = await readOutputBinAllLayers(fixture.ctx, fixture.bin.id);
+      expect(layersHoldMaterial(cleared.layers)).toBe(false);
+      await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id)).resolves.toMatchObject({ archivedAt: expect.any(Date) });
     } finally { await cleanupPostedStock(fixture); }
   });
 

@@ -199,7 +199,7 @@ export const updateStorageLocationSchema = z.object({
     .optional(),
   name: z.string().trim().min(1).max(255).optional(),
   type: z.enum(storageLocationTypes).optional(),
-  facilityId: z.string().uuid().optional(),
+  // No facilityId: a bin never changes facility through the update action.
   capacityKg: positiveMassKgSchema().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
