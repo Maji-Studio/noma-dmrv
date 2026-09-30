@@ -38,7 +38,7 @@ export function DashboardAttentionRow({
         className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-12 py-12"
       >
         <span className="flex min-w-0 flex-col gap-2">
-          <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
             {metadata}
           </span>
           <span className="body-small text-[var(--color-text-primary)]">

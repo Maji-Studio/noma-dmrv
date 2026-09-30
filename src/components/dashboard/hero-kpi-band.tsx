@@ -70,26 +70,31 @@ export function HeroKpiBand({ kpis, isLoading }: HeroKpiBandProps) {
           <div className="mt-6 text-[26px] font-bold leading-[1.15] text-[var(--ink)]">
             {formatValue(kpi)}
             {kpi.value != null && (
-              <span className="ml-4 body-caption font-medium text-[var(--clr-dark-purple-60)]">
-                {kpi.unit}
-                {kpi.deltaPercent != null && (
-                  <span
-                    className="ml-6"
-                    style={{
-                      color:
-                        Math.round(kpi.deltaPercent) >= 0
-                          ? "var(--st-ok)"
-                          : "var(--st-wait)",
-                    }}
-                  >
-                    {formatDelta(kpi.deltaPercent)}
-                  </span>
-                )}
+              // The type class resets margins, so the gap sits on a wrapper.
+              <span className="ml-4">
+                <span className="body-caption font-medium text-[var(--clr-dark-purple-60)]">
+                  {kpi.unit}
+                  {kpi.deltaPercent != null && (
+                    <span
+                      className="ml-6"
+                      style={{
+                        color:
+                          Math.round(kpi.deltaPercent) >= 0
+                            ? "var(--st-ok)"
+                            : "var(--st-wait)",
+                      }}
+                    >
+                      {formatDelta(kpi.deltaPercent)}
+                    </span>
+                  )}
+                </span>
               </span>
             )}
           </div>
-          <div className="mt-4 body-caption text-[var(--color-text-tertiary)]">
-            {kpi.detail}
+          <div className="mt-4">
+            <p className="body-caption text-[var(--color-text-tertiary)]">
+              {kpi.detail}
+            </p>
           </div>
         </div>
       ))}
