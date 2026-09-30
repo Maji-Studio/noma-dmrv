@@ -18,6 +18,15 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await page.getByPlaceholder("Search by code or name…").fill(fixture.bin.code);
   await page.getByText(fixture.bin.name, { exact: true }).first().click();
   await page.getByRole("button", { name: "Record loss", exact: true }).click();
+  // The movement mode is a segmented control: native radios, arrow keys switch it.
+  const lossMode = page.getByRole("radio", { name: "Record loss", exact: true });
+  const countMode = page.getByRole("radio", { name: "Reconcile stock", exact: true });
+  await expect(lossMode).toBeChecked();
+  await lossMode.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(countMode).toBeChecked();
+  await lossMode.locator("..").click();
+  await expect(lossMode).toBeChecked();
   await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill("120");
   await fillStockMoisture(page, "stock", "30");

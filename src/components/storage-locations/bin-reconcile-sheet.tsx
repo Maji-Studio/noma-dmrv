@@ -8,7 +8,7 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
-import { Button } from "@/components/ui";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { useToast } from "@/components/ui/toast";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -39,8 +39,15 @@ import { OutputStockForm } from "./output-stock-form";
 const LOSS_CONFLICT_MESSAGE =
   "A loss from this form is already recorded. Check the reconciliation history before you submit again.";
 
+type OutputKind = "loss" | "count";
+
+const MOVEMENT_OPTIONS = [
+  { value: "loss", label: "Record loss" },
+  { value: "count", label: "Reconcile stock" },
+] as const;
+
 interface BinReconcileSheetProps {
-  initialKind?: "loss" | "count";
+  initialKind?: OutputKind;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   storageLocation: StorageLocationWithFacility | null;
@@ -241,7 +248,7 @@ export function BinReconcileSheet({
   storageLocation,
   onRecorded,
 }: BinReconcileSheetProps) {
-  const [outputKind, setOutputKind] = useState<"loss" | "count">(initialKind);
+  const [outputKind, setOutputKind] = useState<OutputKind>(initialKind);
   const close = () => onOpenChange(false);
   const handleRecorded = () => {
     onRecorded?.();
@@ -282,10 +289,12 @@ export function BinReconcileSheet({
               </> : <>
                 {/* Which mode the sheet is in has to be readable at a glance:
                     the two forms differ only in their labels otherwise. */}
-                <div className="flex gap-12" role="group" aria-label="Movement to record">
-                  <Button variant={outputKind === "loss" ? "default" : "weak"} aria-pressed={outputKind === "loss"} onClick={() => setOutputKind("loss")}>Record loss</Button>
-                  <Button variant={outputKind === "count" ? "default" : "weak"} aria-pressed={outputKind === "count"} onClick={() => setOutputKind("count")}>Reconcile stock</Button>
-                </div>
+                <SegmentedControl
+                  legend="Movement to record"
+                  options={MOVEMENT_OPTIONS}
+                  value={outputKind}
+                  onValueChange={(next) => setOutputKind(next as OutputKind)}
+                />
                 <OutputStockForm key={`${storageLocation.id}-${outputKind}`} storageLocationId={storageLocation.id} facilityId={storageLocation.facilityId} kind={outputKind} onCancel={close} onRecorded={handleRecorded} />
               </> }
             </div>
