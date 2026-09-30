@@ -1,0 +1,38 @@
+---
+/**
+ * TraceExplorer: the interactive biochar trace (illustrative records), square and editorial.
+ * Hover previews a record's upstream and downstream path; click, Enter or the arrow keys pin it;
+ * the select mirrors the pinned record. Edges draw in on first view; a pinned record lights its path.
+ * Props:
+ *   id?: string    id on the root (for anchors)
+ *   class?: string merged onto the root
+ * Uses src/visuals/core.js for the graph and src/components/site/motion.js for first view.
+ */
+import "../../../visuals/visuals.css";
+import "./trace.css";
+import { COLUMNS } from "./trace-data.js";
+const { id, class: className } = Astro.props;
+---
+<div id={id} class:list={["tx", className]} data-trace role="region" aria-label="Interactive biochar trace">
+  <div class="tx-bar">
+    <p class="tx-title">Follow the biochar <span>Upstream and downstream.</span></p>
+    <div class="tx-switch" role="group" aria-label="Operation size">
+      <button type="button" data-scale="simple" aria-pressed="true">Simple example</button>
+      <button type="button" data-scale="large" aria-pressed="false">Larger operation</button>
+    </div>
+  </div>
+  <div class="tx-columns" aria-hidden="true">{COLUMNS.map((c) => <span>{c}</span>)}</div>
+  <p class="tx-hint">Swipe across the trace, or choose a record below.</p>
+  <div class="tx-scroll"><svg class="tx-graph" viewBox="0 0 1080 300" role="group" aria-label="Select a biochar record to trace its origins and destinations"></svg></div>
+  <div class="tx-tools">
+    <label>Explore a record <select data-trace-select></select></label>
+    <button type="button" class="tx-text-button" data-clear-trace>Show all connections</button>
+    <span class="t-caption">Illustrative records</span>
+  </div>
+  <div class="tx-record" aria-live="polite" data-record-detail></div>
+  <noscript><p class="tx-noscript">Enable JavaScript to explore this example. noma links feedstock, production, storage, deliveries and applications in both directions.</p></noscript>
+</div>
+<script>
+  import { mountTrace } from "./trace-explorer.js";
+  document.querySelectorAll("[data-trace]").forEach((root) => mountTrace(root));
+</script>

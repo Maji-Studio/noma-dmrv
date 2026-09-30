@@ -1,0 +1,18 @@
+---
+/**
+ * Button: square block CTA. Renders <a> when href is set, otherwise <button>.
+ * Props:
+ *   href?: string
+ *   variant?: "primary" | "secondary" | "stage"   default "primary" (purple block); "stage" is for dark bands
+ *   size?: "md" | "sm"   default "md"
+ *   type?: "button" | "submit"   for <button>, default "button"
+ *   class?: string       merged with the component classes (one class attribute, never two)
+ *   ...rest              any other attribute (aria-*, data-*, target) is passed through
+ * Label: default slot. Wherever the action is the walkthrough form, the label is "Book a walkthrough".
+ */
+const { href, variant = "primary", size = "md", type = "button", class: className, ...rest } = Astro.props;
+const classes = ["btn", variant !== "primary" && `btn--${variant}`, size === "sm" && "btn--sm", className];
+---
+{href
+  ? <a href={href} class:list={classes} {...rest}><slot /></a>
+  : <button type={type} class:list={classes} {...rest}><slot /></button>}

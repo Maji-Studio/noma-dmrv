@@ -1,0 +1,43 @@
+/* Home stage: the trace as a keynote timeline (TraceStage.astro). */
+.ts { --label-col: clamp(160px, 16vw, 220px); --ease-draw: linear; font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono); text-transform: uppercase; }
+.ts-summary { display: grid; grid-template-columns: var(--label-col) minmax(0, 1fr); align-items: center; }
+.ts-summary-label { font-family: var(--f-sans); font-weight: 300; font-size: var(--fs-lead); letter-spacing: 0; text-transform: none; color: var(--stage-ink); }
+.ts-track { position: relative; display: flex; align-items: center; height: var(--space-8); background: var(--stage-band); }
+.ts-tick { position: absolute; left: 0; top: 30%; bottom: 30%; width: var(--stage-stroke); background: var(--stage-line); }
+.ts-track-dot { position: absolute; left: calc(var(--x) * 1%); top: 50%; transform: translate(-50%, -50%); }
+.ts-divider { margin-block: var(--space-7); }
+.ts-body { position: relative; margin-left: var(--label-col); }
+.ts-guide { position: absolute; top: calc(var(--space-7) * -2); bottom: 0; left: calc(var(--x) * 1%); }
+.ts-rows { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ts-row { display: flex; align-items: center; gap: var(--space-4); min-height: var(--space-7); padding-left: calc(var(--at) * 1%); }
+.ts-row--flip { flex-direction: row-reverse; padding-left: 0; padding-right: calc((100 - var(--at) - var(--span)) * 1%); }
+.ts-mark { display: flex; align-items: center; flex: none; }
+.ts-row:not(:has(.stg-dot)) .ts-mark { width: calc(var(--span) / (100 - var(--at)) * 100%); }
+.ts-row--flip:not(:has(.stg-dot)) .ts-mark { width: calc(var(--span) / (var(--at) + var(--span)) * 100%); }
+.ts-mark .stg-conn { flex: 1 1 auto; --c: var(--stage-ink-3); }
+.ts-row .ts-mark .stg-dot { margin-left: calc(var(--stage-dot-size) / -2); }
+.ts-row--flip .ts-mark .stg-dot { margin-left: 0; margin-right: calc(var(--stage-dot-size) / -2); }
+.ts-text { background: var(--stage); padding-inline: var(--space-2); display: flex; flex-wrap: nowrap; gap: var(--space-1) var(--space-4); white-space: nowrap; }
+.ts-row--flip .ts-text { justify-content: flex-end; }
+.ts-label { color: var(--stage-ink); }
+.ts-meta { color: var(--stage-ink-3); }
+.ts-row--lit .ts-label { color: var(--stage-lit); }
+.ts-legend { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); align-items: center; list-style: none; margin: var(--space-8) 0 0; padding: var(--space-5) 0 0; border-top: var(--hairline) solid var(--stage-grid); color: var(--stage-ink-3); }
+.ts-legend li { display: flex; align-items: center; gap: var(--space-3); }
+.ts-legend-dot { width: var(--stage-dot-sm); height: var(--stage-dot-sm); border-radius: 50%; background: var(--stage-ink-3); }
+.ts-legend .stg-conn { --c: var(--stage-ink-3); }
+.ts-legend-note { margin-left: auto; text-transform: none; font-family: var(--f-sans); font-weight: 300; letter-spacing: 0; font-size: var(--fs-caption); }
+
+@media (max-width: 1000px) {
+  .ts-summary { display: none; }
+  .ts-divider { display: none; }
+  .ts-rows { margin-left: 0; gap: 0; }
+  .ts-row, .ts-row--flip { flex-direction: row; padding: 0; gap: var(--space-4); min-height: var(--space-8); border-top: var(--hairline) solid var(--stage-grid); }
+  .ts-row .ts-mark, .ts-row--flip .ts-mark { width: var(--space-7) !important; justify-content: center; }
+  .ts-row .ts-mark .stg-dot, .ts-row--flip .ts-mark .stg-dot { margin: 0; }
+  .ts-row--flip .ts-text { justify-content: flex-start; }
+  .ts-text { white-space: normal; flex-wrap: wrap; }
+  .ts-body { margin-left: 0; }
+  .ts-guide { display: none; }
+  .ts-legend-note { margin-left: 0; width: 100%; }
+}

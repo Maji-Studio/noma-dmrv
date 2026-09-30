@@ -1,0 +1,25 @@
+---
+/** HomeHero: headline, lead and the interactive trace, edge to edge inside the frame. No props. */
+import GridFrame from "../GridFrame.astro";
+import Button from "../Button.astro";
+import TextLink from "../TextLink.astro";
+import TraceExplorer from "../trace/TraceExplorer.astro";
+import "./home.css";
+---
+<GridFrame class="home-hero" rule={true} pad="none" flush aria-labelledby="home-title">
+  <div class="home-hero-copy">
+    <p class="t-category">Biochar MRV software</p>
+    <h1 id="home-title" class="t-display">Trace your biochar, from feedstock to application.</h1>
+    <div class="home-hero-intro">
+      <div class="stack-tight">
+        <p class="t-lead">See where it came from, what happened during production, and where it went.</p>
+        <p class="t-body t-muted">noma connects your material records and supporting evidence, in both directions.</p>
+      </div>
+      <div class="actions">
+        <Button href="/get-started">Book a walkthrough</Button>
+        <TextLink href="/product">See the product</TextLink>
+      </div>
+    </div>
+  </div>
+  <TraceExplorer />
+</GridFrame>

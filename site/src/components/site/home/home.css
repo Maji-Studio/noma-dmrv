@@ -1,0 +1,29 @@
+/* Home page sections. Shared pieces live in site.css; the stage in trace-stage.css. */
+.home-hero-copy { display: grid; gap: var(--space-6); padding: var(--section) var(--frame-pad) var(--space-8); }
+.home-hero-copy h1 { max-width: 16ch; }
+.home-hero-intro { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--gap); align-items: end; margin-top: var(--space-5); }
+.home-hero-intro .actions { justify-content: flex-end; }
+
+.tour-head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: end; padding: var(--section) var(--frame-pad) var(--space-8); }
+.tour-head h2 { max-width: 18ch; }
+.tour-cells { border-top: var(--hairline) solid var(--rule); }
+.tour-cell { display: grid; gap: var(--space-4); align-content: start; }
+.tour-cell .t-h3 { margin-top: var(--space-5); }
+.tour-glyph { width: var(--glyph-w); height: auto; fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+.tour-glyph-fill { stroke: var(--clr-purple-40); }
+.tour-glyph-soft { stroke: var(--clr-purple-20); }
+.tour-glyph-dash { stroke-dasharray: 3 4; }
+.tour-glyph-lit { stroke: var(--clr-pink); fill: var(--clr-rose-40); }
+
+.proof-cells > .proof-figure { margin: 0; padding: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.proof-figure img { display: block; width: 100%; height: 100%; min-height: var(--photo-min); object-fit: cover; }
+.proof-figure figcaption { padding: var(--space-3) var(--frame-pad); }
+.proof-cells > .proof-copy { align-content: center; padding-block: var(--section); }
+
+.next-open .gf-cells > .next-cell { background: linear-gradient(var(--band-rose), var(--band-rose)), var(--page); }
+
+@media (max-width: 760px) {
+  .home-hero-intro, .tour-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+  .home-hero-intro .actions { justify-content: flex-start; }
+  .proof-cells > .proof-copy { padding-block: var(--space-8); }
+}

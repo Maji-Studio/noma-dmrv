@@ -1,0 +1,36 @@
+---
+/**
+ * Stage: full-bleed dark keynote band. One idea per stage, huge Light type, lots of empty stage,
+ * a schematic diagram built from the Stage* primitives, ONE element lit in --stage-lit.
+ * Props:
+ *   id?: string
+ *   title: string          the one idea, rendered as the heading
+ *   titleTag?: "h2" | "h3"  default "h2"
+ *   kicker?: string        short sentence-case line above the title (no uppercase outside diagrams)
+ *   lead?: string          one or two sentences under the title
+ *   alt: string            text alternative for the diagram; the diagram itself is aria-hidden
+ *   layout?: "stack" | "split"   title above the diagram (default) or title left, diagram right
+ *   reveal?: boolean       default true: the diagram plays its draw-in when it scrolls into view
+ *   revealMs?: number      total choreography length in ms, default 3000
+ *   frame?: boolean        default true: carries the page's hairline frame through the band, dimmed
+ * Slots: default = the diagram; "after" = content under the diagram (a link, a note).
+ * Choreography: primitives take `index` (stagger slot) and `delay`; see stage.css for the states.
+ */
+import "./stage.css";
+const { id, title, titleTag: H = "h2", kicker, lead, alt, layout = "stack", reveal = true, revealMs, frame = true } = Astro.props;
+const uid = id || `stage-${Math.random().toString(36).slice(2, 8)}`;
+---
+<section id={id} class:list={["stg", `stg--${layout}`, frame && "stg--frame"]} aria-labelledby={`${uid}-title`} data-reveal={reveal ? "" : undefined} data-reveal-ms={revealMs}>
+  <div class="stg-in">
+    <div class="stg-copy">
+      {kicker && <p class="stg-kicker">{kicker}</p>}
+      <H class="stg-title" id={`${uid}-title`}>{title}</H>
+      {lead && <p class="stg-lead">{lead}</p>}
+    </div>
+    <figure class="stg-figure" aria-describedby={`${uid}-alt`}>
+      <div class="stg-diagram" aria-hidden="true"><slot /></div>
+      <figcaption class="sr-only" id={`${uid}-alt`}>{alt}</figcaption>
+    </figure>
+    {Astro.slots.has("after") && <div class="stg-after"><slot name="after" /></div>}
+  </div>
+</section>

@@ -1,36 +1,18 @@
 ---
-// PROTOTYPE: five landing variants on one route, switchable with ?variant=A..E and the floating bar.
-// Question: which page structure should the noma landing page use? (docs/plans/2026-09-29-landing-page.md)
-import "../styles/tokens.css";
-import "../visuals/visuals.css";
-import PrototypeSwitcher from "../components/PrototypeSwitcher.astro";
-import VariantA from "../variants/VariantA.astro";
-import VariantB from "../variants/VariantB.astro";
-import VariantC from "../variants/VariantC.astro";
-import VariantD from "../variants/VariantD.astro";
-import VariantE from "../variants/VariantE.astro";
-const VARIANTS = [
-  { key: "A", name: "Approved draft" },
-  { key: "B", name: "Follow one tonne" },
-  { key: "C", name: "Map first" },
-  { key: "D", name: "Workbench" },
-  { key: "E", name: "Removal dossier" },
-];
+// Home: a short tour. Each block links deeper into /product and /why (anchor ids in src/config.js).
+import SiteShell from "../components/site/SiteShell.astro";
+import HomeHero from "../components/site/home/HomeHero.astro";
+import TraceStage from "../components/site/home/TraceStage.astro";
+import TourGrid from "../components/site/home/TourGrid.astro";
+import ProofBlock from "../components/site/home/ProofBlock.astro";
+import NextAndOpen from "../components/site/home/NextAndOpen.astro";
+import GetStartedBand from "../components/site/GetStartedBand.astro";
 ---
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>noma, open-source biochar dMRV by MAJI</title>
-    <meta name="description" content="Trace every tonne of biochar, from feedstock to certification. Open-source digital monitoring, reporting and verification for biochar producers." />
-  </head>
-  <body>
-    <div data-variant-key="A"><VariantA /></div>
-    <div data-variant-key="B" hidden><VariantB /></div>
-    <div data-variant-key="C" hidden><VariantC /></div>
-    <div data-variant-key="D" hidden><VariantD /></div>
-    <div data-variant-key="E" hidden><VariantE /></div>
-    <PrototypeSwitcher variants={VARIANTS} />
-    <script>import "../lib/switch.js";</script>
-  </body>
-</html>
+<SiteShell current="home" title="noma, trace your biochar from feedstock to application">
+  <HomeHero />
+  <TraceStage />
+  <TourGrid />
+  <ProofBlock />
+  <NextAndOpen />
+  <GetStartedBand />
+</SiteShell>

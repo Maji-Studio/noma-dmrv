@@ -1,6 +1,6 @@
 # Variant brief (PROTOTYPE)
 
-Five landing page variants live on one route (`site/src/pages/index.astro`), switchable with `?variant=A..E`. The question the prototype answers: **which page structure should the noma landing page use?** Variants must differ in layout, information hierarchy and primary affordance, not in colour or copy.
+Five landing page variants live on one route (`site/src/pages/variants.astro`, served at `/variants`), switchable with `?variant=A..E`. The question the prototype answers: **which page structure should the noma landing page use?** Variants must differ in layout, information hierarchy and primary affordance, not in colour or copy.
 
 ## Read first
 

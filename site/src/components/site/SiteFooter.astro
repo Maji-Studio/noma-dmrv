@@ -1,0 +1,19 @@
+---
+/**
+ * SiteFooter: brand, page links, the Mafinga line and GitHub. No props.
+ */
+import { BRAND, NAV, NAV_CTA, GITHUB_URL } from "../../config.js";
+import GridFrame from "./GridFrame.astro";
+---
+<footer class="site-footer">
+  <GridFrame as="div" pad="none">
+    <a class="brand" href="/" aria-label={`${BRAND.name} home`}><b>{BRAND.name}</b><span>{BRAND.by}</span></a>
+    <nav aria-label="Footer">
+      <ul>
+        {[...NAV, NAV_CTA].map((item) => <li><a href={item.href}>{item.label}</a></li>)}
+        <li><a href={GITHUB_URL}>GitHub</a></li>
+      </ul>
+    </nav>
+    <p>Built with Dark Earth Carbon in Mafinga, Tanzania.</p>
+  </GridFrame>
+</footer>

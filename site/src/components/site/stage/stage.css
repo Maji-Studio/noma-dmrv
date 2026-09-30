@@ -1,0 +1,89 @@
+/* Stage: dark keynote band and its diagram primitives. States: default, dim, lit (one per stage).
+   Motion: [data-reveal] on .stg is armed by motion.js. "armed" = start state, "play" = transitions run,
+   no attribute value (no JS, reduced motion) or "done" = end state. Content is never hidden at rest. */
+.stg { position: relative; background: var(--stage); color: var(--stage-ink); padding-block: var(--stage-pad); overflow: hidden; }
+.stg-in { position: relative; width: min(100% - var(--gutter) * 2, var(--wrap)); margin-inline: auto; padding-inline: var(--frame-pad); }
+.stg--frame .stg-in { border-inline: var(--hairline) solid var(--stage-grid); margin-block: calc(var(--stage-pad) * -1); padding-block: var(--stage-pad); }
+.stg--frame .stg-in::before, .stg--frame .stg-in::after {
+  content: ""; position: absolute; top: calc(var(--cross-size) / -2); width: var(--cross-size); height: var(--cross-size); pointer-events: none;
+  background: linear-gradient(var(--stage-line), var(--stage-line)) center / var(--hairline) 100% no-repeat, linear-gradient(var(--stage-line), var(--stage-line)) center / 100% var(--hairline) no-repeat;
+}
+.stg--frame .stg-in::before { left: calc(var(--cross-size) / -2 - var(--hairline) / 2); }
+.stg--frame .stg-in::after { right: calc(var(--cross-size) / -2 - var(--hairline) / 2); }
+.stg-copy { display: grid; gap: var(--space-5); }
+.stg-kicker { font-size: var(--fs-ui); color: var(--stage-ink-3); }
+.stg-title { font-size: var(--fs-stage); font-weight: 300; line-height: var(--lh-display); letter-spacing: var(--track-display); color: var(--stage-ink); max-width: 12ch; }
+.stg-lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--stage-ink-2); max-width: 40ch; }
+.stg-figure { margin: var(--space-9) 0 0; min-width: 0; }
+.stg-after { margin-top: var(--space-8); display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6); align-items: center; }
+.stg--split .stg-in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--gap); align-items: center; }
+.stg--split .stg-figure { margin: 0; }
+.stg--split .stg-after { grid-column: 1 / -1; margin-top: 0; }
+@media (max-width: 860px) { .stg--split .stg-in { grid-template-columns: minmax(0, 1fr); } .stg-figure { margin-top: var(--space-8); } }
+
+/* Stagger: every primitive gets --at from its index and delay. */
+.stg-row, .stg-conn, .stg-dot, .stg-fade { --at: calc(var(--i, 0) * var(--stagger) + var(--delay, 0ms)); }
+
+/* Mark */
+.stg-mark { width: var(--stage-mark); height: var(--stage-mark); display: block; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.stg-mark-cut { stroke: var(--stage); stroke-width: 1.8; }
+
+/* Check row */
+.stg-row { display: grid; grid-template-columns: var(--stage-icon-w) minmax(0, 1fr) auto; align-items: center; min-height: var(--stage-row-h); border: var(--stage-stroke) solid var(--stage-line); background: var(--stage-raise); color: var(--stage-ink); font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono); text-transform: uppercase; }
+.stg-row-icon { display: grid; place-items: center; align-self: stretch; border-right: var(--stage-stroke) solid var(--stage-line); color: var(--stage-ink); }
+.stg-row-label { padding-inline: var(--space-4); min-width: 0; }
+.stg-row-meta { padding-inline: var(--space-4); color: var(--stage-ink-3); }
+.stg-row--dashed, .stg-row--dashed .stg-row-icon { border-style: dashed; }
+.stg-row--dim { color: var(--stage-ink-3); border-color: var(--stage-line-dim); background: transparent; }
+.stg-row--dim .stg-row-icon { color: var(--stage-ink-3); border-color: var(--stage-line-dim); }
+.stg-row--lit { border-color: var(--stage-lit); background: var(--stage-lit-fill); }
+.stg-row--lit .stg-row-icon { border-color: var(--stage-lit); }
+
+/* Connector */
+.stg-conn { --c: var(--stage-line); position: relative; display: block; flex: none; }
+.stg-conn--h { height: var(--stage-stroke); width: var(--len, auto); }
+.stg-conn--v { width: var(--stage-stroke); height: var(--len, auto); }
+.stg-conn--fill.stg-conn--h { flex: 1 1 auto; min-width: 0; }
+.stg-conn--fill.stg-conn--v { align-self: stretch; }
+.stg-conn--dim { --c: var(--stage-line-dim); }
+.stg-conn--lit { --c: var(--stage-lit); }
+.stg-conn--solid { background: var(--c); }
+.stg-conn--h.stg-conn--dashed { background: repeating-linear-gradient(90deg, var(--c) 0 var(--stage-dash), transparent var(--stage-dash) calc(var(--stage-dash) * 1.8)); }
+.stg-conn--v.stg-conn--dashed { background: repeating-linear-gradient(180deg, var(--c) 0 var(--stage-dash), transparent var(--stage-dash) calc(var(--stage-dash) * 1.8)); }
+.stg-conn--h.stg-conn--dotted { background: repeating-linear-gradient(90deg, var(--c) 0 var(--stage-dot), transparent var(--stage-dot) calc(var(--stage-dot) * 2.5)); }
+.stg-conn--v.stg-conn--dotted { background: repeating-linear-gradient(180deg, var(--c) 0 var(--stage-dot), transparent var(--stage-dot) calc(var(--stage-dot) * 2.5)); }
+.stg-conn--cap-ring::after, .stg-conn--cap-dot::after { content: ""; position: absolute; width: var(--stage-cap); height: var(--stage-cap); border-radius: 50%; border: var(--stage-stroke) solid var(--c); background: var(--stage); }
+.stg-conn--cap-dot::after { background: var(--c); }
+.stg-conn--h::after { right: calc(var(--stage-cap) / -2); top: 50%; transform: translateY(-50%); }
+.stg-conn--v::after { bottom: calc(var(--stage-cap) / -2); left: 50%; transform: translateX(-50%); }
+
+/* Dot */
+.stg-dot { display: inline-block; flex: none; width: var(--stage-dot-size); height: var(--stage-dot-size); border-radius: 50%; border: var(--stage-stroke) solid var(--stage-line); background: var(--stage); }
+.stg-dot--sm { width: var(--stage-dot-sm); height: var(--stage-dot-sm); }
+.stg-dot--dim { border-color: var(--stage-line-dim); }
+.stg-dot--on { background: var(--stage-ink); border-color: var(--stage-ink); }
+.stg-dot--lit { background: var(--stage-lit); border-color: var(--stage-lit); box-shadow: 0 0 0 var(--stage-halo) var(--stage-lit-glow); }
+.stg-dot--ring { border-color: var(--stage-lit); }
+
+/* Motion: start state ("armed") */
+.stg-draw-h, .stg-draw-v { clip-path: inset(calc(var(--stage-bleed) * -1)); }
+[data-reveal="armed"] .stg-draw-h { clip-path: inset(calc(var(--stage-bleed) * -1) 100% calc(var(--stage-bleed) * -1) calc(var(--stage-bleed) * -1)); }
+[data-reveal="armed"] .stg-draw-v { clip-path: inset(calc(var(--stage-bleed) * -1) calc(var(--stage-bleed) * -1) 100% calc(var(--stage-bleed) * -1)); }
+[data-reveal="armed"] :is(.stg-dot--on, .stg-dot--lit, .stg-dot--ring) { background: var(--stage); border-color: var(--stage-line-dim); box-shadow: none; }
+[data-reveal="armed"] .stg-row .stg-mark { opacity: 0; transform: scale(0.4); }
+[data-reveal="armed"] .stg-row--lit { border-color: var(--stage-line); background: var(--stage-raise); }
+[data-reveal="armed"] .stg-row--lit .stg-row-icon { border-color: var(--stage-line); }
+[data-reveal="armed"] .stg-fade { opacity: 0; }
+
+/* Motion: transitions ("play") */
+[data-reveal="play"] :is(.stg-draw-h, .stg-draw-v) { transition: clip-path var(--dur-draw) var(--ease-draw) var(--at); }
+[data-reveal="play"] .stg-dot { transition: background-color var(--dur-base) var(--ease-out) var(--at), border-color var(--dur-base) var(--ease-out) var(--at), box-shadow var(--dur-base) var(--ease-out) var(--at); }
+[data-reveal="play"] .stg-dot--lit { animation: stg-pulse calc(var(--dur-draw) * 1.6) var(--ease-out) var(--at) 1 both; }
+[data-reveal="play"] .stg-row .stg-mark { transition: opacity var(--dur-base) var(--ease-out) var(--at), transform var(--dur-base) var(--ease-out) var(--at); }
+[data-reveal="play"] :is(.stg-row--lit, .stg-row--lit .stg-row-icon) { transition: border-color var(--dur-base) var(--ease-out) var(--at), background-color var(--dur-base) var(--ease-out) var(--at); }
+[data-reveal="play"] .stg-fade { transition: opacity var(--dur-base) var(--ease-out) var(--at); }
+@keyframes stg-pulse {
+  0% { box-shadow: 0 0 0 0 var(--stage-lit); }
+  55% { box-shadow: 0 0 0 var(--stage-pulse) transparent; }
+  100% { box-shadow: 0 0 0 var(--stage-halo) var(--stage-lit-glow); }
+}

@@ -1,0 +1,14 @@
+---
+/**
+ * TextLink: underlined editorial link, 44px tap height.
+ * Props:
+ *   href: string
+ *   tone?: "page" | "stage"   default "page"; "stage" for dark bands
+ *   external?: boolean        appends a small ↗ (for GitHub and other sites)
+ *   class?: string            merged, one class attribute
+ *   ...rest                   passed to the <a>
+ * Label: default slot. No trailing arrows on internal links.
+ */
+const { href, tone = "page", external = false, class: className, ...rest } = Astro.props;
+---
+<a href={href} class:list={["tl", tone === "stage" && "tl--stage", className]} {...rest}><slot />{external && <span aria-hidden="true">↗</span>}</a>

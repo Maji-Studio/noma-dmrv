@@ -1,0 +1,73 @@
+---
+/**
+ * TraceStage: Home's keynote stage. One application's biochar as a dot-and-dash timeline, played by a
+ * single playhead: the summary track draws left to right, each step's row draws when the playhead
+ * reaches it, the dots light in sequence, and the application dot lights in the accent last.
+ * Grammar: dot = a record at a moment, solid line = time in place, dashes = transport. No props.
+ */
+import Stage from "../stage/Stage.astro";
+import StageConnector from "../stage/StageConnector.astro";
+import StageDot from "../stage/StageDot.astro";
+import TextLink from "../TextLink.astro";
+import "./trace-stage.css";
+
+// Positions are percent of the track. `at` is where the step starts, `span` how long it lasts.
+const STEPS = [
+  { kind: "dot", label: "Feedstock delivery", code: "FD-001", qty: "1,000 kg wet", at: 0 },
+  { kind: "solid", label: "Production run", code: "PR-001", qty: "270 kg dry", at: 3, span: 17 },
+  { kind: "solid", label: "Mix bin", code: "Two runs", qty: "540 kg dry", at: 22, span: 28 },
+  { kind: "dot", label: "Biochar product", code: "540 kg dry", qty: "", at: 58 },
+  { kind: "dashed", label: "Delivery", code: "DL-001", qty: "270 kg dry", at: 62, span: 22, flip: true },
+  { kind: "lit", label: "Application", code: "Coffee field", qty: "270 kg dry", at: 100, flip: true },
+];
+const LEGEND = [["dot", "Record"], ["solid", "Time in place"], ["dashed", "Transport"]];
+const when = (p) => `calc(var(--dur-stage) * ${p} / 100)`;
+const markAt = (s) => (s.kind === "dot" || s.kind === "lit" ? s.at : s.at + s.span);
+const ALT = "Timeline of illustrative records for one application: feedstock delivery FD-001, 1,000 kg wet; production run PR-001, 270 kg of dry biochar; mix bin holding 540 kg dry from two runs; biochar product, 540 kg dry; delivery DL-001, 270 kg dry; application on the coffee field, 270 kg dry.";
+---
+<Stage
+  id="trace-stage"
+  kicker="The trace"
+  title="Every step leaves a record."
+  lead="One field’s biochar, from the weighbridge to the soil. Each step is its own record, with the quantity and the evidence behind it."
+  alt={ALT}
+  revealMs={4200}
+>
+  <div class="ts">
+    <div class="ts-summary">
+      <span class="ts-summary-label stg-fade">Coffee field</span>
+      <div class="ts-track">
+        <span class="ts-tick"></span>
+        <StageConnector variant="solid" length="100%" duration="var(--dur-stage)" class="ts-track-line" />
+        {STEPS.map((s) => <StageDot state={s.kind === "lit" ? "lit" : "on"} size="sm" delay={when(markAt(s))} class="ts-track-dot" style={`--x:${markAt(s)}`} />)}
+      </div>
+    </div>
+    <StageConnector variant="dotted" state="dim" draw={false} class="ts-divider" />
+    <div class="ts-body">
+    {STEPS.map((s) => <StageConnector variant="dotted" direction="v" state="dim" class="ts-guide" style={`--x:${markAt(s)}`} delay={when(markAt(s))} duration="var(--dur-base)" />)}
+    <ol class="ts-rows">
+      {STEPS.map((s) => (
+        <li class:list={["ts-row", s.flip && "ts-row--flip", s.kind === "lit" && "ts-row--lit"]} style={`--at:${s.at};--span:${s.span || 0}`}>
+          <span class="ts-mark">
+            {s.kind === "dot" || s.kind === "lit"
+              ? <StageDot state={s.kind === "lit" ? "lit" : "on"} delay={when(s.at)} />
+              : <StageConnector variant={s.kind} length="100%" delay={when(s.at)} duration={when(s.span)} />}
+          </span>
+          <span class="ts-text stg-fade" style={`--delay:${when(s.at)}`}>
+            <span class="ts-label">{s.label}</span>
+            <span class="ts-meta">{s.code}</span>
+            {s.qty && <span class="ts-meta">{s.qty}</span>}
+          </span>
+        </li>
+      ))}
+    </ol>
+    </div>
+    <ul class="ts-legend">
+      {LEGEND.map(([kind, label]) => (
+        <li>{kind === "dot" ? <span class="ts-legend-dot"></span> : <StageConnector variant={kind} length="var(--space-6)" draw={false} />}<span>{label}</span></li>
+      ))}
+      <li class="ts-legend-note">Illustrative records</li>
+    </ul>
+  </div>
+  <TextLink slot="after" href="/product#trace" tone="stage">Explore the trace</TextLink>
+</Stage>

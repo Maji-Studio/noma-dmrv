@@ -42,6 +42,106 @@
   /* map */
   --map-land: #fbf1ee; --map-line: rgba(72, 11, 115, 0.13);
 
+  /* app tints (globals.css) used by the editorial site */
+  --clr-purple-5: rgba(72, 11, 115, 0.05);
+  --clr-purple-10: rgba(72, 11, 115, 0.1);
+  --clr-purple-20: rgba(72, 11, 115, 0.2);
+  --clr-purple-30: rgba(72, 11, 115, 0.3);
+  --clr-purple-40: rgba(72, 11, 115, 0.4);
+  --clr-rose-20: rgba(255, 178, 210, 0.2);
+  --clr-rose-40: rgba(255, 178, 210, 0.4);
+  --clr-dark-purple-70: rgba(15, 2, 26, 0.7);
+
+  /* editorial site (src/components/site). Plan: src/components/site/README.md */
+  --rule: var(--clr-purple-20);             /* hairline grid frame and section rules */
+  --rule-strong: var(--clr-purple-40);
+  --hairline: 1px;
+  --cross: var(--clr-purple-40);            /* cross marks where frame rules meet */
+  --cross-size: 11px;
+  --band-rose: var(--clr-rose-20);
+  --band-purple: var(--clr-purple-5);
+  --cta: var(--clr-purple);                 /* square block CTA */
+  --cta-hover: var(--clr-dark-purple);
+  --cta-ink: var(--paper);
+  --link: var(--clr-purple);
+  --link-rule: var(--clr-purple-30);
+  --r-square: 0;
+
+  --wrap: 1240px;                           /* content max width; visuals may bleed wider */
+  --gutter: clamp(12px, 4vw, 72px);        /* page edge to frame line */
+  --frame-pad: clamp(16px, 4.5vw, 72px);    /* frame line to content */
+  --section: clamp(72px, 8vw, 136px);
+  --gap: clamp(28px, 6vw, 96px);
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px;
+  --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
+  --measure: 52ch;                          /* about 70 real characters in GT Flexa */
+  --tap: 44px;
+  --header-h: 84px;
+  --btn-h: 56px;
+  --index-h: 52px;
+  --glyph-w: 160px;
+  --photo-min: 360px;
+
+  /* type scale: GT Flexa Light 300 display, tight tracking */
+  --fs-display: clamp(46px, 6.6vw, 108px);
+  --fs-h2: clamp(34px, 4.4vw, 68px);
+  --fs-h3: clamp(24px, 2.2vw, 32px);
+  --fs-stage: clamp(40px, 5.6vw, 92px);
+  --fs-lead: clamp(18px, 1.45vw, 22px);
+  --fs-body: 18px;
+  --fs-ui: 15px;
+  --fs-small: 14px;
+  --fs-caption: 12px;
+  --fs-micro: 10px;
+  --fs-mono: 12px;
+  --fs-brand: 28px;
+  --track-brand: -0.04em;
+  --lh-display: 1.01;
+  --lh-heading: 1.06;
+  --lh-body: 1.6;
+  --track-display: -0.06em;
+  --track-h2: -0.05em;
+  --track-h3: -0.03em;
+  --track-mono: 0.04em;
+
+  /* stage: dark keynote bands. Everything dim, ONE element lit. */
+  --stage: var(--clr-dark-purple);
+  --stage-raise: rgba(255, 249, 247, 0.035); /* row and band fills */
+  --stage-band: rgba(255, 249, 247, 0.06);
+  --stage-grid: rgba(255, 249, 247, 0.08);   /* frame lines carried into the stage */
+  --stage-line: rgba(255, 249, 247, 0.3);    /* thin grey outlines */
+  --stage-line-dim: rgba(255, 249, 247, 0.16);
+  --stage-ink: #fff9f7;
+  --stage-ink-2: rgba(255, 249, 247, 0.74);
+  --stage-ink-3: rgba(255, 249, 247, 0.52);  /* dim labels, still AA on --stage */
+  --stage-lit: var(--clr-rose);              /* the single lit accent */
+  --stage-lit-fill: rgba(72, 11, 115, 0.62);
+  --stage-lit-glow: rgba(255, 178, 210, 0.28);
+  --stage-stroke: 1.5px;
+  --stage-dash: 6px;
+  --stage-dot: 2px;
+  --stage-pad: clamp(88px, 11vw, 176px);
+  --stage-row-h: 56px;
+  --stage-icon-w: 56px;
+  --stage-mark: 20px;
+  --stage-dot-size: 14px;
+  --stage-dot-sm: 10px;
+  --stage-cap: 9px;
+  --stage-halo: 5px;
+  --stage-pulse: 20px;
+  --stage-bleed: 12px;                       /* room for caps and halos when a line is clipped */
+  --fs-stage-label: clamp(12px, 1.05vw, 14px);
+
+  /* motion: one orchestrated moment per page */
+  --dur-fast: 160ms;
+  --dur-base: 320ms;
+  --dur-draw: 900ms;
+  --dur-stage: 2600ms;                       /* one stage's full playhead */
+  --stagger: 200ms;
+  --stagger-slow: 300ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
+
   --f-sans: "GT Flexa", "Helvetica Neue", Arial, sans-serif;
   --f-mono: "GT Flexa Mono", ui-monospace, Menlo, Consolas, monospace;
   --r: 6px;

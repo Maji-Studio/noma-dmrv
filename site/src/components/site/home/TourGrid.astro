@@ -1,0 +1,32 @@
+---
+/** TourGrid: the short tour. Four cells, each linking to its Product section. No props. */
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import TourGlyph from "./TourGlyph.astro";
+const BLOCKS = [
+  { kind: "trace", title: "Follow the material.", text: "Trace an application back to its sources, or see where a production run’s biochar ended up. Follow the connections through storage, mixing and delivery.", link: "Explore the trace", href: "/product#trace" },
+  { kind: "bins", title: "Know what’s in the bin.", text: "Keep track of material as it is stored, mixed and drawn, with wet and dry quantities at every step.", link: "See bins and stock", href: "/product#bins" },
+  { kind: "evidence", title: "Keep the evidence with the record.", text: "Attach weighbridge tickets, transport documents, photos and lab results where they belong. See what is missing as you prepare a submission.", note: "The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.", link: "See evidence and reporting", href: "/product#evidence" },
+  { kind: "map", title: "See where it went.", text: "Connect suppliers, production and application sites. Select a field to trace its sources, or a supplier to see the destinations.", link: "Open the map", href: "/product#map" },
+];
+---
+<GridFrame class="tour" pad="none" flush aria-labelledby="tour-title">
+  <div class="tour-head">
+    <h2 id="tour-title" class="t-h2">One operation. Connected records.</h2>
+    <div class="stack-tight">
+      <p class="t-lead">Follow material through the plant, keep the evidence with the work, and prepare your reporting from the same records.</p>
+      <TextLink href="/why#spreadsheets">Compare it with a spreadsheet</TextLink>
+    </div>
+  </div>
+  <div class="gf-cells tour-cells" style="--cols:2">
+    {BLOCKS.map((b) => (
+      <article class="tour-cell" aria-labelledby={`tour-${b.kind}`}>
+        <TourGlyph kind={b.kind} />
+        <h3 id={`tour-${b.kind}`} class="t-h3">{b.title}</h3>
+        <p class="t-body t-muted">{b.text}</p>
+        {b.note && <p class="t-caption">{b.note}</p>}
+        <TextLink href={b.href}>{b.link}</TextLink>
+      </article>
+    ))}
+  </div>
+</GridFrame>

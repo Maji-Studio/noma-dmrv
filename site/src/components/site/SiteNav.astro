@@ -1,0 +1,26 @@
+---
+/**
+ * SiteNav: flat header nav (Home, Product, Why noma) plus the "Get started" primary button.
+ * Props:
+ *   current?: string   nav key from src/config.js NAV / NAV_CTA; that link gets aria-current="page"
+ * Login renders only when SHOW_LOGIN is true in src/config.js.
+ */
+import { BRAND, NAV, NAV_CTA, SHOW_LOGIN, LOGIN_URL } from "../../config.js";
+import GridFrame from "./GridFrame.astro";
+import Button from "./Button.astro";
+import TextLink from "./TextLink.astro";
+const { current } = Astro.props;
+const here = (key) => (key === current ? "page" : undefined);
+---
+<header class="site-header">
+  <GridFrame as="div" rule={false} cross={false} pad="none">
+    <a class="brand" href="/" aria-label={`${BRAND.name} home`}><b>{BRAND.name}</b><span>{BRAND.by}</span></a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>{NAV.map((item) => <li><a href={item.href} aria-current={here(item.key)}>{item.label}</a></li>)}</ul>
+    </nav>
+    <div class="site-header-actions">
+      {SHOW_LOGIN && <TextLink href={LOGIN_URL}>Log in</TextLink>}
+      <Button href={NAV_CTA.href} size="sm" aria-current={here(NAV_CTA.key)}>{NAV_CTA.label}</Button>
+    </div>
+  </GridFrame>
+</header>

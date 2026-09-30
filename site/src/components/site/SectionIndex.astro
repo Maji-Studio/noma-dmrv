@@ -1,0 +1,43 @@
+---
+/**
+ * SectionIndex: sticky in-page index for pages with several sections. Highlights the section in view
+ * (aria-current="true") and scrolls smoothly unless reduced motion is set.
+ * Props:
+ *   items: { id: string, label: string }[]   use PRODUCT_SECTIONS / WHY_SECTIONS from src/config.js
+ *   label?: string   accessible name, default "On this page"
+ * Place it directly after the page intro; each section needs the matching id.
+ */
+import GridFrame from "./GridFrame.astro";
+const { items = [], label = "On this page" } = Astro.props;
+---
+<nav class="sx" aria-label={label} data-section-index>
+  <GridFrame as="div" pad="none" cross={false}>
+    <ol>{items.map((item) => <li><a href={`#${item.id}`}>{item.label}</a></li>)}</ol>
+  </GridFrame>
+</nav>
+<script>
+  import { reducedMotion } from "./motion.js";
+  document.querySelectorAll("[data-section-index]").forEach((nav) => {
+    const links = [...nav.querySelectorAll("a")];
+    const targets = links.map((a) => document.getElementById(a.hash.slice(1))).filter(Boolean);
+    const mark = (id) => links.forEach((a) => (a.hash === `#${id}` ? a.setAttribute("aria-current", "true") : a.removeAttribute("aria-current")));
+    links.forEach((a) => a.addEventListener("click", (e) => {
+      const t = document.getElementById(a.hash.slice(1));
+      if (!t) return;
+      e.preventDefault();
+      t.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+      history.replaceState(null, "", a.hash);
+      mark(t.id);
+    }));
+    if (!("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (hit) mark(hit.target.id);
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    targets.forEach((t) => io.observe(t));
+  });
+</script>
+<style is:global>
+  /* Keeps anchored sections clear of the sticky index. */
+  html:has([data-section-index]) { scroll-padding-top: calc(var(--index-h) + var(--space-4)); }
+</style>

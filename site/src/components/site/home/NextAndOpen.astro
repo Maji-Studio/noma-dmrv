@@ -1,0 +1,25 @@
+---
+/** NextAndOpen: the Upcoming teaser (links to /product#next) beside the open-source line. No props. */
+import { GITHUB_URL } from "../../../config.js";
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import Chip from "../Chip.astro";
+---
+<GridFrame class="next-open" pad="none" flush>
+  <div class="gf-cells" style="--cols:2">
+    <section class="next-cell stack" aria-labelledby="next-title">
+      <Chip>Upcoming</Chip>
+      <h2 id="next-title" class="t-h3">What we’re building next.</h2>
+      <p class="t-body t-muted">Read documents into records, bring in reactor readings, record work through Telegram, connect your other tools and catch unusual readings earlier.</p>
+      <TextLink href="/product#next">See what’s next</TextLink>
+    </section>
+    <section class="open-cell stack" aria-labelledby="open-title">
+      <h2 id="open-title" class="t-h3">Open source. Yours to inspect and run.</h2>
+      <p class="t-body t-muted">Review the code and calculations. Host noma yourself, or talk to us about managed hosting.</p>
+      <div class="actions">
+        <TextLink href="/why#open-source">Open source and ownership</TextLink>
+        <TextLink href={GITHUB_URL} external>View on GitHub</TextLink>
+      </div>
+    </section>
+  </div>
+</GridFrame>

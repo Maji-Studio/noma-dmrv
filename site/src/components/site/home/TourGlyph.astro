@@ -1,0 +1,26 @@
+---
+/**
+ * TourGlyph: small line drawing for a tour block, drawn in the accent hairline.
+ * Props: kind: "trace" | "bins" | "evidence" | "map"
+ */
+const { kind } = Astro.props;
+---
+<svg class="tour-glyph" viewBox="0 0 160 72" aria-hidden="true" focusable="false">
+  {kind === "trace" && <>
+    <path d="M24 36C48 36 48 18 72 18M24 36C48 36 48 54 72 54M88 18C112 18 112 36 136 36M88 54C112 54 112 36 136 36" />
+    <rect x="8" y="28" width="16" height="16" /><rect x="72" y="10" width="16" height="16" /><rect x="72" y="46" width="16" height="16" /><rect x="136" y="28" width="16" height="16" class="tour-glyph-lit" />
+  </>}
+  {kind === "bins" && <>
+    <path d="M14 10V64H50V10M62 10V64H98V10M110 10V64H146V10" />
+    <path d="M18 58H46M18 52H46M66 58H94M66 52H94M66 46H94M66 40H94M114 58H142M114 52H142M114 46H142" class="tour-glyph-fill" />
+  </>}
+  {kind === "evidence" && <>
+    <path d="M40 6H104L120 22V68H40Z M104 6V22H120" />
+    <circle cx="56" cy="34" r="4" /><path d="M66 34H106" /><circle cx="56" cy="46" r="4" /><path d="M66 46H106" /><circle cx="56" cy="58" r="4" class="tour-glyph-lit" /><path d="M66 58H96" class="tour-glyph-dash" />
+  </>}
+  {kind === "map" && <>
+    <path d="M30 40C30 22 58 12 80 16C104 20 128 26 130 42C132 58 104 66 78 64C52 62 30 58 30 40Z M50 40C50 30 66 26 80 28C96 30 110 34 110 42C110 50 94 54 80 54C64 54 50 50 50 40Z" class="tour-glyph-soft" />
+    <path d="M18 60Q60 20 84 38Q108 56 146 14" class="tour-glyph-dash" />
+    <rect x="12" y="54" width="12" height="12" /><rect x="78" y="32" width="12" height="12" /><rect x="140" y="8" width="12" height="12" class="tour-glyph-lit" />
+  </>}
+</svg>
