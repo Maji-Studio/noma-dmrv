@@ -1,10 +1,10 @@
 ---
 name: codex-computer-use
-description: Ask Codex CLI (gpt-6-astra, low reasoning) to run local app verification that needs computer use — browser automation, screenshots, app launching, or independent runtime inspection. This is the DEFAULT tool for verifying UI behavior in this project — use it to test a flow, verify UI behavior, inspect the running app, capture screenshots, or confirm implemented behavior. Fall back to the claude-in-chrome MCP tools if codex fails or the task needs the user's own logged-in browser session.
+description: Ask Codex CLI (gpt-6.1-sol, high reasoning) to run local app verification that needs computer use — browser automation, screenshots, app launching, or independent runtime inspection. This is the DEFAULT tool for verifying UI behavior in this project — use it to test a flow, verify UI behavior, inspect the running app, capture screenshots, or confirm implemented behavior. Fall back to the claude-in-chrome MCP tools if codex fails or the task needs the user's own logged-in browser session.
 ---
 
 Delegate **local app verification** (browser automation, screenshots, app launch, runtime
-inspection) to the Codex CLI (gpt-6-astra, low reasoning) with computer use. This is the **default** way to
+inspection) to the Codex CLI (gpt-6.1-sol, high reasoning) with computer use. This is the **default** way to
 verify UI behavior in this project; **claude-in-chrome is the fallback**. Codex output is
 **evidence, not authority** — read the report and screenshots and judge them yourself.
 
@@ -22,7 +22,7 @@ or acting on real accounts/data).
   approves the prompt. Read-only codex runs (`-s read-only`) are unaffected.
 - Locate the binary with the PATH-then-bundle fallback and always call it via `"$CODEX"`:
   ```bash
-  CODEX="$(command -v codex || echo "/Applications/Codex.app/Contents/Resources/codex")"
+  CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"
   ```
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
   `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
@@ -46,7 +46,7 @@ or acting on real accounts/data).
 3. **Run non-interactively:**
    ```bash
    "$CODEX" exec \
-     -m gpt-6-astra -c 'model_reasoning_effort="low"' \
+     -m gpt-6.1-sol -c 'model_reasoning_effort="high"' \
      -C "$PWD" \
      --add-dir "$ARTIFACT_DIR" \
      -s danger-full-access \
