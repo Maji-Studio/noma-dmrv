@@ -9,10 +9,10 @@
  */
 "use client";
 
-import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { formatMassKg } from "@/lib/format-utils";
 import { backdatedNotice } from "@/lib/output-stock/messages";
 import type { AffectedStockPreview } from "@/types/output-stock";
+import { Notice } from "@/components/ui/notice";
 
 type Blocker = NonNullable<AffectedStockPreview["blockers"]>[number];
 
@@ -53,13 +53,13 @@ export function AffectedBinNotices({
   return (
     <div className="flex flex-col gap-6" aria-live="polite">
       {preview.discrepancySolidsKg > 0 && (
-        <StockNotice>
+        <Notice>
           Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.
-        </StockNotice>
+        </Notice>
       )}
-      {backdated && <StockNotice>{backdated}</StockNotice>}
+      {backdated && <Notice>{backdated}</Notice>}
       {!hideBlockingMessage && preview.blockingMessage && (
-        <StockNotice tone="error" role="alert">{preview.blockingMessage}</StockNotice>
+        <Notice tone="error">{preview.blockingMessage}</Notice>
       )}
       {blockers.length > 0 && (
         <ul aria-label={`Records blocking ${preview.binName}`} className="flex flex-wrap gap-x-12 gap-y-4 body-caption">

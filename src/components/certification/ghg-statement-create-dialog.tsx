@@ -31,7 +31,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import {
   ClipboardTextIcon,
-  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Button, EmptyState, Modal } from "@/components/ui";
@@ -66,6 +65,7 @@ import {
   CERTIFICATION_ACCORDION_LABEL,
   CERTIFICATION_ACCORDION_TRIGGER,
 } from "./certification-accordion-styles";
+import { Notice } from "@/components/ui/notice";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -700,18 +700,10 @@ function StepPreview({
           </span>
         </div>
         {inPeriod.length === 0 ? (
-          <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-orange)] bg-[var(--st-wait-bg)] pl-12 pr-12 py-8">
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
-            />
-            <p className="body-small text-[var(--color-text-primary)]">
-              No submitted Removals fall in this period. Submit one or choose
-              an end date that includes one.
-            </p>
-          </div>
+          <Notice tone="warning">
+            No submitted Removals fall in this period. Submit one or choose an
+            end date that includes one.
+          </Notice>
         ) : (
           <RemovalBatchesAccordion
             facilityId={facilityId}

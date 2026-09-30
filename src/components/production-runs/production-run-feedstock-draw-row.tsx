@@ -97,6 +97,7 @@ export function ProductionRunFeedstockDrawRow({
           required
         >
           <EntitySelect
+            id={`feedstockDraws.${index}.storageLocationId`}
             entityType="storageLocation"
             value={storageLocationId}
             onChange={onStorageLocationChange}

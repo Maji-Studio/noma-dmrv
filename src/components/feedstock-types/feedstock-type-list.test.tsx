@@ -67,6 +67,10 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   LeafIcon: () => <span />,
   PlusIcon: () => <span />,
   SealCheckIcon: () => <span data-icon="isometric" />,
+  InfoIcon: () => null,
+  WarningIcon: () => null,
+  WarningCircleIcon: () => null,
+  CheckCircleIcon: () => null,
 }));
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button>{children}</button>,

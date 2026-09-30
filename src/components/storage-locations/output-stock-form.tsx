@@ -17,8 +17,9 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { OutputStockHistory } from "./output-stock-history";
 import { OutputStockPreview, type StockEntryKind } from "./output-stock-preview";
-import { formatWetAtMoisture, InlineMassChange, StockNotice, StockRows } from "./stock-figures";
+import { formatWetAtMoisture, InlineMassChange, StockRows } from "./stock-figures";
 import { SubBinDrawField } from "./sub-bin-draw-field";
+import { Notice } from "@/components/ui/notice";
 
 interface Props {
   storageLocationId: string;
@@ -113,9 +114,9 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
           {draw.usesSingleMoisture && !splitOriginal && <MoistureField id="stock-moisture" required={!(kind === "count" && wetMassKg === 0)} disabled={mutation.isPending} error={errors.moisturePercent?.message} helperText="Enter less than 100%. A zero count does not need moisture." estimate={estimate} reading={values.moisturePercent} registration={register("moisturePercent", { setValueAs: toNumberOrNull })} />}
         </div>
         {draw.active && <SubBinDrawField draw={draw} timeZone={clock.timeZone} idPrefix="stock" disabled={mutation.isPending} showErrors={attempted} />}
-        {draw.query.error && <StockNotice tone="error" role="alert">{draw.query.error.message}</StockNotice>}
+        {draw.query.error && <Notice tone="error">{draw.query.error.message}</Notice>}
         {preview.isFetching && <p role="status" className="body-caption text-[var(--color-text-secondary)]">Refreshing the stock preview</p>}
-        {preview.error && <StockNotice tone="error" role="alert">{preview.error.message}</StockNotice>}
+        {preview.error && <Notice tone="error">{preview.error.message}</Notice>}
         {preview.data && <OutputStockPreview variant="movement" preview={preview.data} entry={{ kind: entryKind, wetMassKg: input?.wetMassKg }} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={storageLocationId} facilityId={facilityId} />} renderBlocker={blocker => blocker.entity === "binMovement" ? <OutputStockHistory key={blocker.id} storageLocationId={storageLocationId} facilityId={facilityId} movementId={blocker.id} triggerLabel={`Open ${blocker.code}`} /> : undefined} />}
       </FormSection>
       <FormSection title="Reason" fields={["reason"]}>

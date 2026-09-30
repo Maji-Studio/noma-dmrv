@@ -17,6 +17,7 @@ import {
   ResolvedErrorRevalidator,
   ServerError,
 } from "@/components/forms";
+import { Notice } from "@/components/ui/notice";
 
 function ResetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -71,16 +72,9 @@ function ResetPasswordFormContent() {
   if (!token) {
     return (
       <div className="space-y-24">
-        <div
-          className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
-          role="alert"
-        >
-          <h3 className="body-bold mb-16">Invalid reset link</h3>
-          <p className="body-small">
-            This password reset link is invalid or has expired. Request a new
-            password reset.
-          </p>
-        </div>
+        <Notice tone="error" title="Invalid reset link">
+          This password reset link is invalid or has expired. Request a new password reset.
+        </Notice>
 
         <div className="text-center">
           <Link
@@ -99,18 +93,9 @@ function ResetPasswordFormContent() {
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
         <div className="space-y-24">
-          <div
-            className="p-24 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)]"
-            role="status"
-            aria-live="polite"
-          >
-            <h3 className="body-bold mb-16">
-              Password reset successful
-            </h3>
-            <p className="body-small">
-              Your password has been reset. Redirecting to login...
-            </p>
-          </div>
+          <Notice tone="success" title="Password reset successful">
+            Your password has been reset. Redirecting to login...
+          </Notice>
         </div>
       ) : (
         <>

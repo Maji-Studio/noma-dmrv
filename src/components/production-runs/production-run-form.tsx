@@ -384,6 +384,7 @@ export function ProductionRunForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="reactorId"
                   entityType="reactor"
                   value={field.value}
                   onChange={field.onChange}
@@ -501,6 +502,7 @@ export function ProductionRunForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="operatorId"
                   entityType="operator"
                   value={field.value || undefined}
                   onChange={field.onChange}
@@ -667,6 +669,7 @@ export function ProductionRunForm({
             control={control}
             render={({ field }) => (
               <EntitySelect
+                id="biocharStorageLocationId"
                 entityType="storageLocation"
                 value={field.value || undefined}
                 onChange={field.onChange}

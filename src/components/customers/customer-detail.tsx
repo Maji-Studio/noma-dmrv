@@ -18,6 +18,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { CustomerLocationDialog } from "./customer-location-dialog";
 import type { EditableCustomerLocation } from "./customer-location-form";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { Notice } from "@/components/ui/notice";
 
 interface CustomerDetailProps {
   customerId: string;
@@ -52,11 +53,9 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
 
   if (error || !customer) {
     return (
-      <div className="p-32 border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10">
-        <p className="body-medium text-[var(--color-signal-red)]">
-          {error instanceof Error ? error.message : "The customer could not be loaded. Refresh the page and try again."}
-        </p>
-      </div>
+      <Notice tone="error">
+        {error instanceof Error ? error.message : "The customer could not be loaded. Refresh the page and try again."}
+      </Notice>
     );
   }
 

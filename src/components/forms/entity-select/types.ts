@@ -43,6 +43,8 @@ export type EntityType =
   | "creditBatch";
 
 export interface EntitySelectProps {
+  /** Id of the trigger; a wrapping FormField passes its own so the label names the control. */
+  id?: string;
   /** The type of entity to select */
   entityType: EntityType;
   /** Current selected value (entity ID) */

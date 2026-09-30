@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
 
 interface SupplierLocationsReadStateProps {
   isPending: boolean;
@@ -15,22 +16,21 @@ export function SupplierLocationsReadState({
 }: SupplierLocationsReadStateProps) {
   if (isError) {
     return (
-      <div
-        className="flex flex-col gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10 sm:flex-row sm:items-center sm:justify-between"
-        role="alert"
+      <Notice
+        tone="warning"
+        action={
+          <Button
+            variant="weak"
+            size="small"
+            busy={isRetrying}
+            onClick={onRetry}
+          >
+            Retry
+          </Button>
+        }
       >
-        <span className="body-caption text-[var(--color-text-secondary)]">
-          Supplier locations unavailable. Retry to load saved locations.
-        </span>
-        <Button
-          variant="weak"
-          size="small"
-          busy={isRetrying}
-          onClick={onRetry}
-        >
-          Retry
-        </Button>
-      </div>
+        Supplier locations unavailable. Retry to load saved locations.
+      </Notice>
     );
   }
 

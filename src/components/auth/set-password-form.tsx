@@ -14,6 +14,7 @@ import {
   ResolvedErrorRevalidator,
   ServerError,
 } from "@/components/forms";
+import { Notice } from "@/components/ui/notice";
 
 function SetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -74,16 +75,9 @@ function SetPasswordFormContent() {
   if (!token) {
     return (
       <div className="space-y-24">
-        <div
-          className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
-          role="alert"
-        >
-          <h3 className="body-bold mb-16">Invalid invitation link</h3>
-          <p className="body-small">
-            This invitation link is invalid or has expired. Ask your Admin for
-            a new invitation.
-          </p>
-        </div>
+        <Notice tone="error" title="Invalid invitation link">
+          This invitation link is invalid or has expired. Ask your Admin for a new invitation.
+        </Notice>
 
         <div className="text-center">
           <Link
@@ -102,19 +96,9 @@ function SetPasswordFormContent() {
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
         <div className="space-y-24">
-          <div
-            className="p-24 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)]"
-            role="status"
-            aria-live="polite"
-          >
-            <h3 className="body-bold mb-16">
-              Password set
-            </h3>
-            <p className="body-small">
-              Your password is set. Verify your email address to complete your
-              account setup. You are being redirected.
-            </p>
-          </div>
+          <Notice tone="success" title="Password set">
+            Your password is set. Verify your email address to complete your account setup. You are being redirected.
+          </Notice>
         </div>
       ) : (
         <>

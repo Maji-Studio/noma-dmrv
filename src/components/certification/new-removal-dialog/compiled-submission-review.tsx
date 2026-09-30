@@ -7,6 +7,7 @@ import {
   CompilationBlockers,
   CompilationWarnings,
 } from "./compilation-notices";
+import { Notice } from "@/components/ui/notice";
 
 interface CompiledSubmissionReviewProps {
   compilation: RemovalCompilationView | null;
@@ -110,18 +111,17 @@ export function CompiledSubmissionReview({
 
   if (error || !compilation) {
     return (
-      <div
-        className="flex items-center justify-between gap-12 border border-[var(--st-bad-border)] px-16 py-12"
-        role="alert"
+      <Notice
+        tone="error"
+        action={
+          <Button variant="weak" onClick={onRetry}>
+            Retry review
+          </Button>
+        }
       >
-        <p className="body-small text-[var(--color-text-primary)]">
-          Submission details could not be prepared. Retry the review before
-          submitting.
-        </p>
-        <Button variant="weak" onClick={onRetry}>
-          Retry review
-        </Button>
-      </div>
+        Submission details could not be prepared. Retry the review before
+        submitting.
+      </Notice>
     );
   }
 

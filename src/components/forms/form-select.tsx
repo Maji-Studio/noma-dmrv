@@ -20,7 +20,6 @@ export const FormSelect = forwardRef<HTMLSelectElement, FormSelectProps>(
         ref={ref}
         className={cn(
           "flex h-40 w-full border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-all focus-visible:outline-none focus-visible:border-[var(--color-interaction)] focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)] disabled:cursor-not-allowed disabled:opacity-50 rounded-none appearance-none cursor-pointer",
-          "shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]",
           "bg-no-repeat bg-[right_var(--spacing-12)_center] bg-[length:16px_16px]",
           `bg-[url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6L8 10L12 6' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")]`,
           error && "border-[var(--color-signal-red)]",

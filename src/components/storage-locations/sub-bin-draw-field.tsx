@@ -16,9 +16,9 @@ import { moistureReadingGuidance, outputMoistureFieldEstimate } from "@/lib/outp
 import type { SubBinRow } from "@/lib/output-stock/sub-bin-draw";
 import { STORED_PERCENT_INPUT_STEP } from "@/schemas/helpers";
 import type { OutputSubBin } from "@/types/output-stock";
-import { StockNotice } from "./stock-figures";
 import { formatWetEstimate } from "./stock-preview-shared";
 import { SubBinOrderDialog } from "./sub-bin-order-dialog";
+import { Notice } from "@/components/ui/notice";
 
 const PERCENT_MAX = 100;
 
@@ -64,14 +64,14 @@ export function SubBinDrawField({ draw, timeZone, idPrefix, disabled, showErrors
       </div>
       {/* The refusal sits next to the Change control that fixes it. */}
       {draw.untickCode && (
-        <StockNotice tone="error" role="alert">
+        <Notice tone="error">
           This load is used up before it reaches {draw.untickCode}. Untick it under Change.
-        </StockNotice>
+        </Notice>
       )}
       {draw.needsTick && (
-        <StockNotice tone="error" role="alert">
+        <Notice tone="error">
           This load is more than the ticked sub-bins hold. Tick another sub-bin under Change.
-        </StockNotice>
+        </Notice>
       )}
       {/* Readings line up under the wet mass field that drives them. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">

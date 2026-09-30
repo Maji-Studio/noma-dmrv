@@ -20,7 +20,6 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowSquareOutIcon,
-  CheckCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
@@ -55,6 +54,7 @@ import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 import { allowsRemovalSubmission } from "./resume-state";
 import { RemovalEmissionsLedger } from "./removal-emissions-ledger";
+import { Notice } from "@/components/ui/notice";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
@@ -249,22 +249,11 @@ export function SubmitStep({
       : null;
     return (
       <div className="flex flex-col gap-24">
-        <div className="flex items-start gap-12 border-l-2 border-[var(--st-ok)] pl-12 py-4">
-          <CheckCircleIcon
-            size={20}
-            weight="fill"
-            aria-hidden
-            className="mt-px shrink-0 text-[var(--st-ok)]"
-          />
-          <div className="flex flex-col gap-4">
-            <span className="body-medium text-[var(--color-text-primary)]">
-              Removal submitted to the registry.
-            </span>
-            <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
-              {submitMutation.data.externalId} · v{submitMutation.data.version}
-            </span>
-          </div>
-        </div>
+        <Notice tone="success" title="Removal submitted to the registry.">
+          <span className="font-mono">
+            {submitMutation.data.externalId} · v{submitMutation.data.version}
+          </span>
+        </Notice>
         <SubmissionProgress
           kind="removal"
           updates={progressUpdates}

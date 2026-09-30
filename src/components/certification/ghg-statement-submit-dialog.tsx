@@ -41,6 +41,7 @@ import {
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { ProductionConfirmation } from "./production-confirmation";
 import { SubmissionProgress } from "./submission-progress";
+import { Notice } from "@/components/ui/notice";
 
 const STEPS: StepFlowStep[] = [
   { key: "report", label: "Report", description: "Choose the attachment" },
@@ -485,12 +486,7 @@ function GhgStatementSubmitDialogContent({
         ) : (
           <>
             {!canSubmit && generationUnavailableReason && (
-              <p
-                className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
-                role="status"
-              >
-                {generationUnavailableReason}
-              </p>
+              <Notice tone="warning">{generationUnavailableReason}</Notice>
             )}
             <StepFlow
               orientation="vertical"

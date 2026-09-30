@@ -87,7 +87,6 @@ export function TimezoneCombobox({
             "flex h-40 w-full border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] pl-36 pr-36 text-[var(--color-text-primary)] text-[var(--text-s)] transition-all",
             "placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:border-[var(--color-interaction)] focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)]",
             "disabled:cursor-not-allowed disabled:opacity-50 rounded-none",
-            "shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]",
             error && "border-[var(--color-signal-red)]",
           )}
         />

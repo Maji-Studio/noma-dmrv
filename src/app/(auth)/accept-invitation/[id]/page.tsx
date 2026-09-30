@@ -8,6 +8,7 @@ import { getUser } from "@/lib/auth/server";
 import { AcceptInvitation } from "@/components/organizations/accept-invitation";
 import { InvitationBootstrapForm } from "@/components/organizations/invitation-bootstrap-form";
 import { getInvitationBootstrapState } from "@/fn/invitation-bootstrap";
+import { Notice } from "@/components/ui/notice";
 
 export default async function AcceptInvitationPage({
   params,
@@ -67,9 +68,7 @@ function InvitationCard({
       </div>
       <div className="bg-[var(--color-background-white)] border border-[var(--color-border-primary)] p-32 shadow-sm">
         {error ? (
-          <p className="body-small text-[var(--st-bad)] border border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] p-12">
-            {error}
-          </p>
+          <Notice tone="error">{error}</Notice>
         ) : (
           children
         )}

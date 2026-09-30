@@ -22,6 +22,7 @@ import type { GhgStatementReportView } from "@/fn/certification/ghg-statement-re
 import { CheckRow } from "./check-row";
 import { DisclosureSummary } from "./disclosure-summary";
 import type { WorkflowStepModel } from "./ghg-statement-workflow-state";
+import { Notice } from "@/components/ui/notice";
 
 type ReportsQuery = ReturnType<typeof useGhgStatementReports>;
 interface GhgStatementWorkflowProps {
@@ -192,24 +193,23 @@ export function GhgStatementWorkflow({
       </ol>
 
       {reportsQuery.error && (
-        <div
-          className="flex flex-wrap items-center justify-between gap-8 border border-[var(--color-border-secondary)] p-12"
-          role="status"
+        <Notice
+          tone="warning"
+          action={
+            <Button
+              size="small"
+              variant="default"
+              busy={reportsQuery.isFetching}
+              onClick={() => void reportsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          }
         >
-          <span className="body-caption text-[var(--color-text-secondary)]">
-            {reportsRefreshFailed
-              ? "Reports could not be refreshed. Showing the last loaded versions."
-              : "Reports could not be loaded."}
-          </span>
-          <Button
-            size="small"
-            variant="default"
-            busy={reportsQuery.isFetching}
-            onClick={() => void reportsQuery.refetch()}
-          >
-            Retry
-          </Button>
-        </div>
+          {reportsRefreshFailed
+            ? "Reports could not be refreshed. Showing the last loaded versions."
+            : "Reports could not be loaded."}
+        </Notice>
       )}
 
       {reports.length > 1 && (

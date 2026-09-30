@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   CheckCircleIcon,
   UploadSimpleIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -13,6 +12,7 @@ import { useNormalizeGisBoundary } from "@/hooks/use-gis-boundary";
 import { cn } from "@/lib/utils";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import { RadioCardGroup } from "./radio-card-group";
+import { Notice } from "@/components/ui/notice";
 
 const DIALOG_TITLE_ID = "gis-reference-dialog-title";
 const FILE_INPUT_ID = "gis-reference-file";
@@ -289,17 +289,7 @@ function DialogBody({
 
 function DialogError({ message }: { message: string }) {
   return (
-    <p
-      role="alert"
-      className="flex items-start gap-6 border border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] px-12 py-10 body-small text-[var(--color-text-primary)]"
-    >
-      <WarningCircleIcon
-        size={16}
-        weight="bold"
-        className="mt-1 shrink-0 text-[var(--st-bad)]"
-      />
-      {message}
-    </p>
+    <Notice tone="error">{message}</Notice>
   );
 }
 

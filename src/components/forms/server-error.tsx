@@ -1,9 +1,10 @@
 /**
  * ServerError component
- * Displays server-side errors in an alert box with design system styling
+ * Displays server-side errors as a blocking Notice (tinted, role="alert").
  */
 
 import type { ReactNode } from "react";
+import { Notice } from "@/components/ui/notice";
 
 interface ServerErrorProps {
   message?: string;
@@ -15,13 +16,9 @@ export function ServerError({ message, action }: ServerErrorProps) {
   if (!message) return null;
 
   return (
-    <div
-      className="flex flex-col items-start gap-12 p-16 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)] body-small"
-      role="alert"
-      aria-live="polite"
-    >
-      <span>{message}</span>
-      {action}
-    </div>
+    <Notice tone="error">
+      <p>{message}</p>
+      {action && <div className="mt-8">{action}</div>}
+    </Notice>
   );
 }

@@ -381,3 +381,49 @@ describe("EntitySelect open option display", () => {
     expect(html).not.toContain("RE-001");
   });
 });
+
+describe("EntitySelect label association", () => {
+  const renderLabelled = (id?: string) =>
+    renderToStaticMarkup(
+      <div>
+        <label htmlFor="reactor-field">Reactor</label>
+        <EntitySelect
+          id={id}
+          entityType="reactor"
+          onChange={() => undefined}
+          placeholder="Select reactor"
+        />
+      </div>,
+    );
+
+  it("gives the combobox trigger the field id so the label names it", () => {
+    const html = renderLabelled("reactor-field");
+    const trigger = html.match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
+
+    expect(html).toContain('for="reactor-field"');
+    expect(trigger).toContain('id="reactor-field"');
+    // aria-label outranks a native label in the name computation, so it must
+    // not be set when a label points at the trigger.
+    expect(trigger).not.toContain("aria-label");
+  });
+
+  it("falls back to the placeholder as the name when no id is supplied", () => {
+    const trigger =
+      renderLabelled().match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
+
+    expect(trigger).toContain('aria-label="Select reactor"');
+    expect(trigger).not.toContain(" id=");
+  });
+});
+
+describe("EntitySelect popover", () => {
+  it("keeps the remaining-mass line rendered outside the popover", () => {
+    entityState.selected = {
+      id: "reactor-1",
+      code: "BIN-01",
+      name: "North product bin",
+      remainingMass: { wetKg: 3_000, dryKg: 2_900 },
+    };
+    expect(render("reactor-1")).toContain("3,000");
+  });
+});

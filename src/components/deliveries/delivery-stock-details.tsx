@@ -18,8 +18,9 @@ import { SourceRunGroups, type SourceRunGroup } from "@/components/forms/source-
 import { SegmentBar, SegmentKey, batchAccentFill } from "@/components/ui/segment-bar";
 import type { MassSegment } from "@/components/forms/composition-ledger";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
-import { formatWetAtMoisture, StockNotice, StockRows } from "@/components/storage-locations/stock-figures";
+import { formatWetAtMoisture, StockRows } from "@/components/storage-locations/stock-figures";
 import { useOutputStockHistory } from "@/hooks/use-output-stock";
+import { Notice } from "@/components/ui/notice";
 
 /** The definition the ledger cannot show as a figure. */
 const DELIVERY_STOCK_HINT =
@@ -47,7 +48,7 @@ export function DeliveryStockDetails({ deliveryId, storageLocationId, facilityId
       runs: allocation.runs.map(run => ({ id: run.productionRunId, code: run.code, dryMassKg: run.dryMassKg })),
     }));
   return <>
-    {history.error && <StockNotice tone="error" role="alert">{history.error.message}</StockNotice>}
+    {history.error && <Notice tone="error">{history.error.message}</Notice>}
     <CompositionCard
       title="Delivery stock"
       hint={DELIVERY_STOCK_HINT}

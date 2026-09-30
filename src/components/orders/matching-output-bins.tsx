@@ -1,11 +1,11 @@
 "use client";
 import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
-import { StockNotice } from "@/components/storage-locations/stock-figures";
 import type { MatchingOutputBin } from "@/types/output-stock";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useMatchingOutputBins, useOutputStockBalance } from "@/hooks/use-output-stock";
 import { PackageIcon } from "@phosphor-icons/react/dist/ssr";
+import { Notice } from "@/components/ui/notice";
 
 /** Status lines under a block: caption size, secondary ink. */
 const STATUS_CLASS = "body-caption text-[var(--color-text-secondary)]";
@@ -22,7 +22,7 @@ export function MatchingOutputBins({ facilityId, formulationId }: { facilityId: 
   if (!formulationId) return null;
   return <section className="flex flex-col gap-16" aria-label="Matching storage bins">
     {bins.isLoading && <p role="status" className={STATUS_CLASS}>Loading matching bins</p>}
-    {bins.error && <StockNotice tone="error" role="alert">{bins.error.message}</StockNotice>}
+    {bins.error && <Notice tone="error">{bins.error.message}</Notice>}
     {bins.data?.length === 0 && <EmptyState icon={<PackageIcon size={32} />} title="No matching stock" description="You can save this order now and record its delivery when stock is available." padding="sm" />}
     {bins.data && bins.data.length > 0 && <div className="flex flex-col gap-20">
       {bins.data.map(bin => <MatchingOutputBinCard key={bin.id} bin={bin} facilityId={facilityId} />)}

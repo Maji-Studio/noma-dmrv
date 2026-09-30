@@ -11,8 +11,9 @@ import type { AffectedStockPreview as Preview } from "@/types/output-stock";
 import { useState, type ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { OutputStockAllocations } from "./output-stock-availability";
-import { InlineMassChange, StockBalanceChange, StockNotice, StockRows, type StockRow } from "./stock-figures";
+import { InlineMassChange, StockBalanceChange, StockRows, type StockRow } from "./stock-figures";
 import { batchSegments, binLabel, capitalize, dryingNotice, movementDirection, SPLIT_MATERIAL_LABEL, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
+import { Notice } from "@/components/ui/notice";
 
 /**
  * What this movement does to one bin, on the surfaces that show several bins at
@@ -51,7 +52,7 @@ export function StockLoadCard({ preview, actions }: { preview: Preview; actions?
         <p className="body-caption text-[var(--color-text-secondary)]">{enteredCaption(preview)}</p>
         <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />
       </div>}
-      {notice && <StockNotice>{notice}</StockNotice>}
+      {notice && <Notice>{notice}</Notice>}
       {preview.blockingMessage === null && preview.moistureReset && <MoistureResetChange reset={preview.moistureReset} />}
       <StockBalanceChange label={headline.label} beforeKg={headline.before} afterKg={headline.after} />
     </CompositionCard>

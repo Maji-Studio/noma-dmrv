@@ -44,6 +44,7 @@ import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
+import { Notice } from "@/components/ui/notice";
 
 // Which blocking notice (if any) the list shows above the table. Precedence:
 // a failed summary beats everything, an unlinked facility beats the
@@ -113,18 +114,18 @@ export function CreateGateNotice({
 }) {
   if (!notice) return null;
   return (
-    <div className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
+    <Notice tone="warning">
       {notice === "mappingFailed" ? (
-        <p className="body-small text-[var(--color-signal-orange-strong)]">
+        <p>
           Isometric project link unavailable. Refresh to retry.
         </p>
       ) : notice === "unlinked" ? (
-        <p className="body-small text-[var(--color-signal-orange-strong)]">
+        <p>
           Link this facility to an Isometric project in Settings before creating
           a statement.
         </p>
       ) : (
-        <p className="body-small text-[var(--color-signal-orange-strong)]">
+        <p>
           This Isometric project is linked to {linkedFacilityCount} noma
           facilities. A GHG Statement covers every facility on the project. Link
           each facility to a dedicated Isometric project in{" "}
@@ -137,7 +138,7 @@ export function CreateGateNotice({
           before creating a statement.
         </p>
       )}
-    </div>
+    </Notice>
   );
 }
 
@@ -380,22 +381,23 @@ function ListBody({ facilityId }: { facilityId: string }) {
         />
 
         {query.error && (
-          <p
-            className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
-            role="status"
+          <Notice
+            tone="warning"
+            action={
+              <Button
+                variant="noOutline"
+                size="small"
+                className="min-h-44"
+                onClick={() => void query.refetch()}
+                busy={query.isFetching}
+              >
+                Retry
+              </Button>
+            }
           >
             GHG Statements could not be refreshed. Showing the last loaded
-            statements.{" "}
-            <Button
-              variant="noOutline"
-              size="small"
-              className="min-h-44"
-              onClick={() => void query.refetch()}
-              busy={query.isFetching}
-            >
-              Retry
-            </Button>
-          </p>
+            statements.
+          </Notice>
         )}
 
         <DataTable
