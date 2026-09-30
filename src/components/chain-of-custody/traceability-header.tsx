@@ -16,7 +16,7 @@ const FACILITY_MAX_WIDTH_CLASS = "max-w-[180px]";
 // against the overridden 10px size, so switching that token to an absolute
 // length would restore the full h1 line box and blow up the header row height.
 const EYEBROW_CLASS =
-  "shrink-0 !text-[10px] !font-medium " +
+  "shrink-0 !font-mono !text-[10px] !font-medium uppercase !tracking-[0.14em] " +
   "text-[var(--clr-dark-purple-40)]";
 
 const SEGMENT_GROUP_CLASS =
@@ -184,7 +184,7 @@ export function TraceabilityHeader({
             title={facility.name}
             className={cn(
               FACILITY_MAX_WIDTH_CLASS,
-              "truncate pl-4 text-[10px] font-medium text-[var(--clr-dark-purple-60)]"
+              "truncate pl-4 font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]"
             )}
           >
             {facility.name}
