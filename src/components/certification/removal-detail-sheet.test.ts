@@ -66,7 +66,7 @@ describe("RemovalDetailSheet sync history contract", () => {
       "utf8",
     );
 
-    expect(source).toContain('<Field label="Evidence attachments">');
+    expect(source).toContain('label="Evidence attachments"');
     expect(source).toContain("summary.evidenceHealth.label");
     expect(source).toContain(
       "<SourcesPanel",

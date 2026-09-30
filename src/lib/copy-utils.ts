@@ -98,6 +98,12 @@ export function isMissingValueCopy(value: unknown): boolean {
   return missingValueSituation(value) !== null;
 }
 
+/** Turn a snake_case enum value into a sentence case label: `in_transit` → "In transit". */
+export function humanizeEnum(value: string): string {
+  const text = value.replaceAll("_", " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /**
  * Return the natural noun for a count.
  *

@@ -61,7 +61,7 @@ export function CompositionLedger({ label, totalLabel, total, segments, hideZero
   const rows = hideZero && carrying.length > 0 ? carrying : segments;
   return <table className="w-full body-caption tabular-nums">
       <caption className="sr-only">{label}. Every mini bar uses the total mass as its scale.</caption>
-      <thead><tr className={ROW}><th scope="col" className="w-auto py-8 text-left font-normal">Component</th><th scope="col" className="py-8 pl-12 text-right font-normal whitespace-nowrap">Mass</th><th scope="col" className="py-8 pl-12 text-right font-normal whitespace-nowrap">% of total</th></tr></thead>
+      <thead><tr className={ROW}><th scope="col" className="w-auto py-8 text-left body-small font-medium text-[var(--color-text-secondary)]">Component</th><th scope="col" className="py-8 pl-12 text-right body-small font-medium text-[var(--color-text-secondary)] whitespace-nowrap">Mass</th><th scope="col" className="py-8 pl-12 text-right body-small font-medium text-[var(--color-text-secondary)] whitespace-nowrap">% of total</th></tr></thead>
       <tbody>{rows.map((segment) => <tr key={segment.label} className={ROW}>
         <th scope="row" className="w-auto py-8 text-left font-normal"><span>{segment.label}</span><MiniBar segment={segment} total={denominator} /></th>
         <td className="py-8 pl-12 text-right align-top whitespace-nowrap">{formatCompositionMass(segment.mass)}</td>

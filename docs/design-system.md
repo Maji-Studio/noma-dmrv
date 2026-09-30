@@ -33,9 +33,10 @@ Read these first. Each one fails quietly rather than loudly.
   an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
   **44px is on the scale** because it is the minimum touch target; six controls
   had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
-  One sanctioned exception: the inline `InfoHint` glyph keeps a 24px hit area
-  (the WCAG 2.5.8 floor) — a 44px box on an in-text hint would break label-row
-  alignment wherever it appears.
+  Two sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
+  inline `InfoHint` glyph, and the icon-only `IsometricLink` beside the ID it
+  opens. A 44px box on either would break label-row alignment wherever it
+  appears.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -109,8 +110,8 @@ applied **through shared components** (StatCard, DataTable frame, Card, entity
 cards), never as per-page classes. Falls out of this:
 
 - **Tables never sit flush on the field** — DataTable renders as a framed panel
-  (toolbar inside, pagination as the footer row); headers are mono uppercase
-  `.label-micro` on the `--sea` wash; rows separate with `--row-divider`,
+  (toolbar inside, pagination as the footer row); headers are sentence case
+  `body-small font-medium` in secondary ink on the `--sea` wash; rows separate with `--row-divider`,
   **no zebra striping**.
 - **Elevated surfaces (side sheets, menus, dialogs) are pure `--paper` with a
   full-ink `--hair` border and no shadow** — scrim + border do the elevation.
@@ -176,7 +177,7 @@ the `FormField` id (`FormEntitySelect` does) so the field label names it.
 Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
-- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase table headers)
+- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons)
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
@@ -218,7 +219,9 @@ caption.
   `body-small font-medium` title in primary ink on a `min-h-24` row, not an
   uppercase tracked micro label. The sheet title and the spine's numbered
   marker already carry the hierarchy. No mono uppercase micro labels inside
-  forms either; `label-micro` belongs to table headers.
+  forms, sheets, dialogs or read views either (accordion triggers, side
+  panels, settings panes). Table headers everywhere (DataTable and hand-rolled
+  tables) are one style: sentence case `body-small font-medium` in secondary ink. The `PageHeader` area eyebrow is the one exception.
 - **Lines only where they separate things of a different kind.** Kept: the
   `FormSpine` rail, the hairline between plain `FormSection`s, and the
   `CompositionCard` action row's top rule. Not drawn: rules between a caption

@@ -47,7 +47,7 @@ export function CreditBatchCard({
         {/* The lifecycle lives in the footer rail; keep the header to identity
             and actions so status is expressed only once. */}
         <div className="flex items-start justify-between gap-12">
-          <span className="inline-flex items-center gap-6 border border-[var(--clr-dark-purple-20)] bg-[var(--clr-dark-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-dark-purple)]">
+          <span className="inline-flex items-center gap-6 border border-[var(--clr-dark-purple-20)] bg-[var(--clr-dark-purple-10)] px-10 py-4 text-[11px] font-medium text-[var(--clr-dark-purple)]">
             <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>

@@ -154,11 +154,7 @@ function createColumns(
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => (
-        <StatusBadge
-          status={row.original.status === "complete" ? "complete" : "pending"}
-          label={row.original.status === "complete" ? "Complete" : "Missing data"}
-          size="small"
-        />
+        <StatusBadge status={row.original.status} size="small" />
       ),
     },
     {
