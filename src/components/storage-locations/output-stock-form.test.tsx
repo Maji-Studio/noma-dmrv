@@ -4,7 +4,7 @@ import { type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { OutputStockPreviewInput, OutputStockHistoryEntry } from "@/types/output-stock";
 
-const mocks = vi.hoisted(() => ({ mutate: vi.fn(), refetch: vi.fn(), input: null as OutputStockPreviewInput | null }));
+const mocks = vi.hoisted(() => ({ mutate: vi.fn(), refetch: vi.fn(), input: null as OutputStockPreviewInput | null, error: null as Error | null }));
 vi.mock("@/hooks/use-facility-context", () => ({ useFacilityClock: () => ({ timeZone: "UTC", hint: "Facility time: UTC" }) }));
 vi.mock("@/hooks/use-output-stock", () => ({
   useOutputSubBins: () => ({ data: undefined, error: null }),
@@ -12,7 +12,7 @@ vi.mock("@/hooks/use-output-stock", () => ({
   usePostOutputStock: () => ({ mutateAsync: mocks.mutate, isPending: false }),
   useOutputStockPreview: (input: OutputStockPreviewInput | null) => {
     mocks.input = input;
-    return { data: { basisFingerprint: "current-basis", blockingMessage: null }, isFetching: false, refetch: mocks.refetch };
+    return { data: { basisFingerprint: "current-basis", blockingMessage: null }, isFetching: false, error: mocks.error, refetch: mocks.refetch };
   },
 }));
 vi.mock("@/components/forms/mass-moisture-fields", () => ({
@@ -23,7 +23,7 @@ vi.mock("./output-stock-preview", () => ({ OutputStockPreview: ({ moreInfo }: { 
 vi.mock("@/components/forms", async () => {
   const actual = await vi.importActual<typeof import("@/components/forms")>("@/components/forms");
   const Wrapper = ({ children }: { children: ReactNode }) => <div>{children}</div>;
-  return { ...actual, FormSpine: Wrapper, FormSection: Wrapper, FormField: Wrapper, FormInput: "input", FormTextarea: "textarea", ResolvedErrorRevalidator: () => null, FormActions: ({ errorMessage }: { errorMessage?: string }) => <div>{errorMessage}</div> };
+  return { ...actual, FormSpine: Wrapper, FormSection: Wrapper, FormField: Wrapper, FormInput: "input", FormTextarea: "textarea", ResolvedErrorRevalidator: () => null, FormActions: ({ errorMessage, submitDisabled }: { errorMessage?: string; submitDisabled?: boolean }) => <div data-submit-disabled={String(!!submitDisabled)}>{errorMessage}</div> };
 });
 vi.mock("./output-stock-history", () => ({ OutputStockHistory: ({ storageLocationId }: { storageLocationId: string }) => <button data-history-bin={storageLocationId}>More info</button> }));
 import { OutputStockForm } from "./output-stock-form";
@@ -79,5 +79,20 @@ describe("OutputStockForm", () => {
     expect(mocks.mutate.mock.calls[1][0].idempotencyKey).toBe(first.idempotencyKey);
     expect(recorded).toHaveBeenCalledOnce();
     await act(async () => renderer.unmount());
+  });
+  it("disables save and refuses submit when a refetch failed and left stale preview data", async () => {
+    mocks.mutate.mockReset().mockResolvedValue({ id: "saved" });
+    mocks.error = new Error("Preview unavailable");
+    let renderer!: ReactTestRenderer;
+    try {
+      await act(async () => { renderer = create(<OutputStockForm storageLocationId="00000000-0000-4000-8000-000000000002" facilityId="00000000-0000-4000-8000-000000000003" kind="count" original={original} onCancel={vi.fn()} onRecorded={vi.fn()} />); });
+      expect(renderer.root.findByProps({ "data-submit-disabled": "true" })).toBeTruthy();
+      await act(async () => { renderer.root.findByType("textarea").props.onChange({ target: { name: "reason", value: "Verified empty bin" }, type: "change" }); });
+      await act(async () => { await renderer.root.findByType("form").props.onSubmit({ stopPropagation: vi.fn(), preventDefault: vi.fn(), persist: vi.fn() }); });
+      expect(mocks.mutate).not.toHaveBeenCalled();
+    } finally {
+      mocks.error = null;
+      await act(async () => renderer.unmount());
+    }
   });
 });
