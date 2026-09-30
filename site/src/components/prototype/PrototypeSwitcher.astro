@@ -22,14 +22,14 @@ const next = VARIANTS[(i + 1) % VARIANTS.length];
   </div>
 )}
 <script>
-  const bar = document.querySelector("[data-proto-bar]");
+  const bar = document.querySelector<HTMLElement>("[data-proto-bar]");
   if (bar) {
-    const go = (href) => { location.href = href + location.hash; };
-    bar.querySelector("[data-proto-select]").addEventListener("change", (e) => go(e.target.value));
+    const go = (href: string | undefined) => { if (href) location.href = href + location.hash; };
+    bar.querySelector<HTMLSelectElement>("[data-proto-select]")?.addEventListener("change", (e) => go((e.currentTarget as HTMLSelectElement).value));
     document.addEventListener("keydown", (e) => {
-      const t = e.target;
+      const t = e.target instanceof Element ? e.target : null;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (t.closest && t.closest("input, textarea, select, [contenteditable], svg, [data-visual], [role='slider']")) return;
+      if (t?.closest("input, textarea, select, [contenteditable], svg, [data-visual], [role='slider']")) return;
       if (e.key === "ArrowLeft") go(bar.dataset.prev);
       if (e.key === "ArrowRight") go(bar.dataset.next);
     });
