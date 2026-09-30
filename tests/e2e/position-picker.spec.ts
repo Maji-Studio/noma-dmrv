@@ -273,8 +273,9 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await page.getByRole("option", { name: DODOMA.label }).click();
     await expect(latitudeInput).not.toHaveValue(String(DAR.lat));
     await expect(longitudeInput).not.toHaveValue(String(DAR.lng));
+    // By role: the field's ⓘ button is named "More about Default soil temperature (°C)".
     await expect(
-      dialog.getByLabel("Default soil temperature (°C)")
+      dialog.getByRole("spinbutton", { name: "Default soil temperature (°C)" })
     ).toBeVisible();
     const distanceInput = dialog.getByRole("spinbutton", {
       name: "One-way distance from facility (per leg, km)",
@@ -389,7 +390,10 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       seededData.facility.id
     );
 
-    await dialog.getByLabel("Location name").fill("E2E Supplier Site");
+    // By role: the field's ⓘ button is named "More about Location name".
+    await dialog
+      .getByRole("textbox", { name: "Location name" })
+      .fill("E2E Supplier Site");
     await dialog.getByLabel("Country").fill("Tanzania");
     await dialog
       .getByLabel("Address / description")

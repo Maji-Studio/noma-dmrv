@@ -616,7 +616,7 @@ function GhgStatementSubmitDialogContent({
                         <FormField
                           id="externalReportUrl"
                           label="External report URL"
-                          helperText="The verifier must be able to open this controlled document."
+                          cue="The verifier must be able to open this controlled document."
                           required
                           error={errors.externalReportUrl?.message}
                         >

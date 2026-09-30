@@ -211,7 +211,7 @@ export function PositionPicker({
             id={`${idPrefix}-latitude`}
             label="GPS latitude"
             error={latitudeError}
-            helperText="-90 to 90"
+            cue="-90 to 90"
             required={required}
           >
             <FormInput
@@ -230,7 +230,7 @@ export function PositionPicker({
             id={`${idPrefix}-longitude`}
             label="GPS longitude"
             error={longitudeError}
-            helperText="-180 to 180"
+            cue="-180 to 180"
             required={required}
           >
             <FormInput

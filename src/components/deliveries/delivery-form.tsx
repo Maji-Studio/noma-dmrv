@@ -285,8 +285,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   // All three branches describe the same quantity — the one-way facility ›
   // destination distance the field's own label names — so none of them
   // re-qualifies it. Round-trip doubling is the Trip type field's job.
+  // Why the field is empty stays visible (a cue); the other branches explain.
+  const distanceCue = watchOrderId ? undefined : "Select an order to load the destination's stored distance.";
   const distanceHelperText = !watchOrderId
-    ? "Select an order to load the destination's stored distance."
+    ? undefined
     : storedDistanceKm == null
       ? "This destination has no stored distance. Add one to the customer location, or enter a distance for this delivery."
       : "Facility › destination distance. Edit only when routing differs.";
@@ -311,7 +313,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveryDate", "orderId", "storageLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required helperText={deliveryClock.hint}>
+          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required cue={deliveryClock.hint}>
             <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" timeZone={deliveryClock.timeZone} disabled={isSubmitting || isEditMode} />
           </FormField>
 
@@ -415,6 +417,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             label="One-way distance (per leg, km)"
             error={errors.distanceKmOverride?.message}
             helperText={distanceHelperText}
+            cue={distanceCue}
           >
             <FormInput
               id="distanceKmOverride"

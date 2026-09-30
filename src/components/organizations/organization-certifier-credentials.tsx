@@ -175,7 +175,7 @@ function CredentialsForm({
           label="Access token"
           error={errors.accessToken?.message}
           required={!configured}
-          helperText={savedCaption}
+          cue={savedCaption}
         >
           <FormInput
             id={`isometric-access-token-${organizationId}`}
@@ -190,7 +190,7 @@ function CredentialsForm({
           label="Client secret"
           error={errors.clientSecret?.message}
           required={!configured}
-          helperText={configured ? "Saved" : undefined}
+          cue={configured ? "Saved" : undefined}
         >
           <FormInput
             id={`isometric-client-secret-${organizationId}`}

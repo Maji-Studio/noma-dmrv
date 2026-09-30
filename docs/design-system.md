@@ -203,7 +203,7 @@ use at most four text styles:
 
 | Style | Classes | Used for |
 |---|---|---|
-| Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, helper cues, calculation rows' labels |
+| Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, `FormField` cues, calculation rows' labels |
 | Label | `body-small font-medium` | field labels (secondary ink) and section titles (primary ink) |
 | Value | `body-small` | figures in a derived block's rows (`StockRows`) |
 | Headline figure | `body-large font-medium` | the one `DerivedHeadline` figure per block |
@@ -224,7 +224,31 @@ caption.
   `CompositionCard` action row's top rule. Not drawn: rules between a caption
   and its content, rules under headlines, doubled dividers, and borders or
   tints around a derived value.
-- **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose.
+- **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose. A
+  `FormField` keeps one visible `cue` line only for a unit, a limit or a
+  consequence, and a `unit` suffix inside the control replaces "(kg)" in the
+  label ([forms.md](./forms.md#components)).
+- **The ⓘ is a toggletip.** `InfoHint` opens on a tap or click, on hover and
+  on keyboard focus; a press keeps it open until a second press, Escape or an
+  outside press. Its 24px trigger sits beside the label, never inside the
+  `<label>`, and its text is the trigger's description: `aria-describedby` to
+  FormField's screen-reader copy, or `aria-description` elsewhere. It adds no
+  hidden copy to the DOM, so a heading holding an ⓘ keeps its own text. Its
+  name is "More about <label>", so in specs locate the control by role
+  (`getByRole("textbox", { name })`), not `getByLabel`, which also matches the
+  ⓘ. Use
+  the plain `Tooltip` only for hover extras that are also available another
+  way (the seal's own explanation, a disabled button's reason).
+- **Certification is a seal, explained once.** A field required for
+  certification carries a 14px Phosphor seal on its label row
+  (`CertificationFieldTag`): plain when no record is saved, orange with a
+  warning mark when the saved record lacks it, green with a check when it has
+  it. It shows in Simple and Detailed alike. `SlideOverPanel.Header` and
+  `QuickAddDialogShell` carry `CertificationLegend` ("Required for
+  certification"), which a CSS `:has()` rule in `globals.css` shows only when
+  the enclosing `[data-cert-scope]` holds a `[data-cert-field]` seal, so no form
+  opts in. Pages outside a sheet (supplier and customer detail tables) rely on
+  the seal's own tooltip and screen-reader text.
 - **Spacing, one rhythm per level:** the form `space-y-20` between sections,
   `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
   derived blocks `gap-12` between their parts, key lines and captions
@@ -348,7 +372,7 @@ Three seams carry it:
   `valuePresent`.
 - **Loading is not absence.** A value whose query has not settled passes
   `pending` instead. The field renders the shared skeleton in the value slot,
-  keeps its CERT chip neutral, and counts as neither empty nor provided, so a
+  keeps its certification seal neutral, and counts as neither empty nor provided, so a
   field waiting on a second query never reads as an operator omission.
   `valuePresent` covers unreadable values that have settled, never in-flight
   ones. A surface with its own markup (the supplier detail header) resolves

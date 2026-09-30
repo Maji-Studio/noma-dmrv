@@ -122,6 +122,8 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
     "[role=switch]",
     "[role=slider]",
     "[data-presentation-control]",
+    // A FormField unit suffix renders inside the control's box.
+    "[data-control-unit]",
   ].join(",");
 
   const clean = (value: string | null | undefined) =>
@@ -461,8 +463,9 @@ export function measureFormGeometry(args: MeasureArgs): Geometry {
   }
 
   /* --------------------------------------------------------------- Prose */
-  const helpers = all.filter((el) => el.matches("p[id$='-helper']"));
-  const paragraphs = all.filter((el) => el.tagName === "P" && !el.matches("[id$='-helper'], [id$='-error'], [role=alert]") && !inControl(el) && !insideFormActions(el) && clean(el.textContent).length >= MIN_PARAGRAPH_CHARS);
+  // A FormField `cue` is the visible helper caption since explanations moved to the ⓘ.
+  const helpers = all.filter((el) => el.matches("p[id$='-helper'], p[id$='-cue']"));
+  const paragraphs = all.filter((el) => el.tagName === "P" && !el.matches("[id$='-helper'], [id$='-cue'], [id$='-error'], [role=alert]") && !inControl(el) && !insideFormActions(el) && clean(el.textContent).length >= MIN_PARAGRAPH_CHARS);
   const proseSamples = [...helpers, ...paragraphs].slice(0, SAMPLE_LIMIT * 2).map((el) => clean(el.textContent));
 
   /* ------------------------------------------------------ R1 inventories */
