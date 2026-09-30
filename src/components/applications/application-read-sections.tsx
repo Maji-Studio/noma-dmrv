@@ -2,7 +2,6 @@
 import { ApplicationAllocationShares } from "./application-allocation-shares";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui";
-import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate } from "@/lib/format-utils";
 import { formatApplicationEvidenceMethod, formatApplicationMethod, formatSoilTemperatureSource, type ApplicationEvidenceMethod, type ApplicationMethod, type SoilTemperatureSource } from "@/schemas/applications";
@@ -14,6 +13,7 @@ import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { ApplicationListItem } from "@/data-access/applications";
 import type { ApplicationDeliveryOption } from "./mass-utils";
+import { Notice } from "@/components/ui/notice";
 
 /** What the sheet knows besides the application: its delivery, the certification lock query and the facility durability. */
 export interface ApplicationSheetContext {
@@ -66,7 +66,7 @@ export function applicationSheetSections(application: ApplicationListItem, conte
         },
       ],
       content: application.heldOutOfCredits
-        ? <StockNotice>{MIX_BIN_CREDIT_HOLD_NOTICE}</StockNotice>
+        ? <Notice>{MIX_BIN_CREDIT_HOLD_NOTICE}</Notice>
         : undefined,
     },
     ...(application.allocationShares.length > 0 ? [{

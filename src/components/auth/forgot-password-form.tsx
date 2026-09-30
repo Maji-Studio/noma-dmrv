@@ -11,6 +11,7 @@ import {
   type ForgotPasswordFormData,
 } from "@/schemas/auth";
 import { FormField, FormInput, ServerError } from "@/components/forms";
+import { Notice } from "@/components/ui/notice";
 
 export function ForgotPasswordForm() {
   const [success, setSuccess] = useState(false);
@@ -51,17 +52,9 @@ export function ForgotPasswordForm() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
       {success ? (
         <div className="space-y-24">
-          <div
-            className="p-24 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)]"
-            role="status"
-            aria-live="polite"
-          >
-            <h3 className="body-bold mb-16">Check your email</h3>
-            <p className="body-small">
-              If an account exists with that email address, we&apos;ve sent a
-              password reset link. Check your inbox and follow the instructions.
-            </p>
-          </div>
+          <Notice tone="success" title="Check your email">
+            If an account exists with that email address, we&apos;ve sent a password reset link. Check your inbox and follow the instructions.
+          </Notice>
 
           <div className="text-center">
             <Link

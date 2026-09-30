@@ -83,7 +83,11 @@ describe("OrderForm customer field", () => {
   it("renders a searchable combobox instead of a truncated native select", () => {
     const html = renderForm();
 
-    expect(html).toContain('aria-label="Select customer..."');
+    // The FormField label names the trigger, so no aria-label overrides it.
+    expect(html).toMatch(/<label[^>]*for="([^"]+)"/);
+    const labelFor = html.match(/<label[^>]*for="([^"]+)"[^>]*>\s*Customer/)?.[1];
+    expect(labelFor).toBeTruthy();
+    expect(html).toContain(`id="${labelFor}"`);
     expect(html).toContain('role="combobox"');
     // A native <select id="customerId"> would be the fixed-page version.
     expect(html).not.toContain('id="customerId"');

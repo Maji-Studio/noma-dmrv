@@ -19,7 +19,6 @@ import {
 } from "@/components/forms/entity-select";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { StockChangeLabel } from "@/components/storage-locations/stock-change-label";
-import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -60,6 +59,7 @@ import { AffectedBinNotices } from "./affected-bin-notices";
 import { formProductComposition, type FormProductComposition } from "./form-product-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
+import { Notice } from "@/components/ui/notice";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -463,6 +463,7 @@ export function BiocharProductForm({
             control={control}
             render={({ field, fieldState }) => (
               <EntitySelect
+                id="sourceBiocharStorageLocationId"
                 entityType="storageLocation"
                 value={field.value || ""}
                 onChange={field.onChange}
@@ -568,6 +569,7 @@ export function BiocharProductForm({
             control={control}
             render={({ field, fieldState }) => (
               <EntitySelect
+                id="formulationId"
                 entityType="formulation"
                 value={field.value || ""}
                 onChange={field.onChange}
@@ -646,6 +648,7 @@ export function BiocharProductForm({
             control={control}
             render={({ field, fieldState }) => (
               <EntitySelect
+                id="storageLocationId"
                 entityType="storageLocation"
                 value={field.value || ""}
                 onChange={field.onChange}
@@ -675,7 +678,7 @@ export function BiocharProductForm({
           <AffectedBinNotices key={bin.storageLocationId} preview={bin} />
         ))}
         {productStockPreview.error && (
-          <StockNotice tone="error" role="alert">{productStockPreview.error.message}</StockNotice>
+          <Notice tone="error">{productStockPreview.error.message}</Notice>
         )}
         {productStockPreview.isFetching && <p role="status" className="sr-only">Refreshing affected bins</p>}
 

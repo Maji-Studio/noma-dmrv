@@ -8,7 +8,6 @@
  * panels mount below via `viewModeChildren` because they fetch their own data.
  */
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -33,6 +32,7 @@ import {
   certificationRemovalsHref,
   productionRunDeepLinkHref,
 } from "@/lib/certification/links";
+import { Notice } from "@/components/ui/notice";
 
 /** Names the figure, so the headline needs no label of its own. */
 const CARBON_ESTIMATE_TITLE = "Carbon estimate, before project emissions";
@@ -201,28 +201,21 @@ function CreditBatchRunsContent({
 }: CreditBatchRunsContentProps) {
   if (runsError) {
     return (
-      <div
-        className="flex flex-col gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10 sm:flex-row sm:items-center sm:justify-between"
-        role="alert"
+      <Notice
+        tone="warning"
+        action={
+          <Button
+            variant="weak"
+            size="small"
+            busy={isRetryingRuns}
+            onClick={onRetryRuns}
+          >
+            Retry
+          </Button>
+        }
       >
-        <span className="inline-flex items-center gap-8 body-caption text-[var(--color-text-secondary)]">
-          <WarningIcon
-            size={14}
-            weight="fill"
-            className="shrink-0 text-[var(--st-wait)]"
-            aria-hidden
-          />
-          Production runs unavailable. Retry to load the linked runs.
-        </span>
-        <Button
-          variant="weak"
-          size="small"
-          busy={isRetryingRuns}
-          onClick={onRetryRuns}
-        >
-          Retry
-        </Button>
-      </div>
+        Production runs unavailable. Retry to load the linked runs.
+      </Notice>
     );
   }
 

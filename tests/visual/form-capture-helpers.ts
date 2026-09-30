@@ -106,7 +106,9 @@ export async function openBinSheet(page: Page, ctx: CaptureContext, binName: str
 
 /** Opens an EntitySelect's quick-add dialog through its "Add new …" option. */
 export async function openQuickAdd(page: Page, scope: Locator, trigger: string): Promise<Locator | string> {
-  const combobox = scope.getByRole("combobox", { name: trigger, exact: true }).first();
+  // Found by its placeholder text: a FormField label now names the trigger, so
+  // the placeholder is no longer its accessible name.
+  const combobox = scope.getByTestId("entity-select-trigger").filter({ hasText: trigger }).first();
   if ((await combobox.count()) === 0) return `no "${trigger}" select on this form`;
   await combobox.click();
   const create = page.getByTestId("entity-select-create").last();

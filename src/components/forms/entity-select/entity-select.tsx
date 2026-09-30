@@ -13,7 +13,14 @@ import {
   useMemo,
   type KeyboardEvent,
 } from "react";
-import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowSquareOutIcon,
+  CaretDownIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+  SpinnerIcon,
+  XIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEntityOptions, useEntityById } from "@/hooks/use-entities";
@@ -26,119 +33,6 @@ import { FormulationQuickAddDialog } from "./formulation-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { ENTITY_TYPE_LABELS } from "./entity-labels";
 import { formatRemainingMass } from "./remaining-mass";
-
-// Icons
-function ChevronDown({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M4 6L8 10L12 6"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M7.333 12.667A5.333 5.333 0 1 0 7.333 2a5.333 5.333 0 0 0 0 10.667ZM14 14l-2.9-2.9"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M8 3.333v9.334M3.333 8h9.334"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M12 4L4 12M4 4l8 8"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("animate-spin", className)}
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r="6"
-        stroke="currentColor"
-        strokeOpacity="0.25"
-        strokeWidth="2"
-      />
-      <path
-        d="M8 2a6 6 0 0 1 6 6"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 export function EntityOptionText({ option }: { option: EntityOption }) {
   return (
@@ -208,6 +102,7 @@ function getFeedstockTypeDefaultUsage(filterBy?: Record<string, string>) {
 }
 
 export function EntitySelect({
+  id,
   entityType,
   value,
   onChange,
@@ -520,6 +415,7 @@ export function EntitySelect({
         <button
           type="button"
           ref={triggerRef}
+          id={id}
           onClick={handleToggle}
           onKeyDown={handleKeyDown}
           disabled={disabled}
@@ -527,12 +423,14 @@ export function EntitySelect({
           aria-haspopup="listbox"
           aria-expanded={isOpen}
           aria-controls={listboxId}
-          aria-label={placeholder || defaultPlaceholder}
+          // A wrapping FormField passes its id so its <label htmlFor> names the
+          // trigger; without one the placeholder is the only name available.
+          aria-label={id ? undefined : placeholder || defaultPlaceholder}
           aria-describedby={triggerDescribedBy}
           aria-invalid={ariaInvalid}
           data-testid="entity-select-trigger"
           className={cn(
-            "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]",
+            "flex h-40 w-full items-center justify-between gap-2 border bg-[var(--color-background-white)] px-12 text-[var(--text-s)] transition-all",
             "focus-visible:outline-none focus-visible:border-[var(--color-interaction)] focus-visible:ring-1 focus-visible:ring-[var(--color-interaction)]",
             error
               ? "border-[var(--color-signal-red)]"
@@ -559,7 +457,9 @@ export function EntitySelect({
                   ? "Loading selection…"
                   : placeholder || defaultPlaceholder)}
           </span>
-          <ChevronDown
+          <CaretDownIcon
+            aria-hidden
+            weight="bold"
             className={cn(
               "size-16 shrink-0 text-[var(--color-text-tertiary)] transition-transform",
               isOpen && "rotate-180"
@@ -575,7 +475,7 @@ export function EntitySelect({
             data-testid="entity-select-clear"
             className="absolute right-[32px] h-24 w-24 hover:bg-[var(--color-background-medium)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
           >
-            <XIcon className="size-16" />
+            <XIcon aria-hidden weight="bold" className="size-16" />
           </Button>
         )}
       </div>
@@ -597,9 +497,9 @@ export function EntitySelect({
         >
           {/* Search input */}
           {showSearch && (
-            <div className="p-8 border-b border-[var(--color-border-primary)]">
+            <div className="p-8">
               <div className="relative">
-                <SearchIcon className="absolute left-12 top-1/2 -translate-y-1/2 size-16 text-[var(--color-text-tertiary)]" />
+                <MagnifyingGlassIcon aria-hidden weight="bold" className="absolute left-12 top-1/2 -translate-y-1/2 size-16 text-[var(--color-text-tertiary)]" />
                 <input
                   ref={inputRef}
                   type="text"
@@ -609,7 +509,7 @@ export function EntitySelect({
                   placeholder={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}...`}
                   aria-label={`Search ${ENTITY_TYPE_LABELS[entityType] || entityType}`}
                   data-testid="entity-select-search"
-                  className="w-full h-[40px] pl-36 pr-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
+                  className="w-full h-[40px] pl-36 pr-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--text-s)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]"
                 />
               </div>
             </div>
@@ -632,7 +532,7 @@ export function EntitySelect({
                 onClick={handleSelectNone}
                 onMouseEnter={() => setHighlightedIndex(0)}
                 className={cn(
-                  "px-12 py-8 cursor-pointer transition-colors border-b border-[var(--color-border-primary)]",
+                  "px-12 py-8 cursor-pointer transition-colors",
                   clampedHighlightedIndex === 0 &&
                     "bg-[var(--color-background-medium)]",
                   !value && "bg-[var(--color-background-interaction-light)]"
@@ -650,7 +550,7 @@ export function EntitySelect({
             )}
             {isLoading ? (
               <li className="flex items-center justify-center gap-2 px-16 py-12 text-[var(--color-text-tertiary)]">
-                <SpinnerIcon className="size-16" />
+                <SpinnerIcon aria-hidden weight="bold" className="size-16 animate-spin" />
                 <span className="text-[var(--text-s)]">Loading...</span>
               </li>
             ) : fetchError ? (
@@ -667,7 +567,7 @@ export function EntitySelect({
                   </p>
                   {/*
                     The fix reads as a row, not an inline link: full-width, its
-                    own hairline, and a 44px hit target, so it is reachable the
+                    own hover background, and a 44px hit target, so it is reachable the
                     same way an option is.
                   */}
                   {emptyHint.href && (
@@ -688,7 +588,7 @@ export function EntitySelect({
                           setSearchQuery("");
                         }
                       }}
-                      className="flex min-h-44 w-full items-center gap-8 border-t border-[var(--color-border-primary)] px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
+                      className="flex min-h-44 w-full items-center gap-8 px-12 py-8 body-small font-medium text-[var(--color-interaction)] transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-interaction)]"
                     >
                       <ArrowSquareOutIcon aria-hidden size={16} weight="bold" />
                       {emptyHint.linkLabel ?? "Open prerequisite"}
@@ -733,12 +633,12 @@ export function EntitySelect({
                   setHighlightedIndex(noneOffset + options.length)
                 }
                 className={cn(
-                  "flex items-center gap-8 px-12 py-8 cursor-pointer border-t border-[var(--color-border-primary)] text-[var(--color-interaction)] hover:bg-[var(--color-background-medium)] transition-colors",
+                  "mt-4 flex items-center gap-8 px-12 py-8 cursor-pointer text-[var(--color-interaction)] hover:bg-[var(--color-background-medium)] transition-colors",
                   clampedHighlightedIndex === noneOffset + options.length &&
                     "bg-[var(--color-background-medium)]"
                 )}
               >
-                <PlusIcon className="size-16" />
+                <PlusIcon aria-hidden weight="bold" className="size-16" />
                 <span className="text-[var(--text-s)]">
                   {createLabel || defaultCreateLabel}
                 </span>

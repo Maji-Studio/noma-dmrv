@@ -5,10 +5,10 @@
  */
 "use client";
 
-import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { combineDateAndTime, formatLocalDate } from "@/lib/date-utils";
 import { backdatedNotice } from "@/lib/output-stock/messages";
+import { Notice } from "@/components/ui/notice";
 
 /** The run's end as an instant, or null while the date or time is incomplete. */
 function runEndInstant(endDate: unknown, endTime: unknown, timeZone: string): string | null {
@@ -35,5 +35,5 @@ export function ProductionRunMixBinNotice({ binId, facilityId, endDate, endTime,
   const bin = binId && facilityId && at ? { storageLocationId: binId, facilityId } : null;
   const balance = useOutputStockBalance(bin, at ?? undefined);
   const notice = balance.data ? backdatedNotice(balance.data) : null;
-  return notice ? <StockNotice>{notice}</StockNotice> : null;
+  return notice ? <Notice>{notice}</Notice> : null;
 }

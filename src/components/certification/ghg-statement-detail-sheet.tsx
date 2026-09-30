@@ -42,6 +42,7 @@ import {
   CERTIFICATION_ACCORDION_LABEL,
   CERTIFICATION_ACCORDION_TRIGGER,
 } from "./certification-accordion-styles";
+import { Notice } from "@/components/ui/notice";
 
 const ICON_SIZE = 14;
 const SHORT_ID = 8;
@@ -215,12 +216,7 @@ function DetailState({
         <EnvBanner isProduction={isProduction} variant="inline" />
 
         {!registryActionsAvailable && (
-          <p
-            className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
-            role="status"
-          >
-            {STALE_DETAIL_WARNING}
-          </p>
+          <Notice tone="warning">{STALE_DETAIL_WARNING}</Notice>
         )}
 
         <section

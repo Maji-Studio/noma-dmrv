@@ -1,8 +1,4 @@
-import {
-  CheckCircleIcon,
-  InfoIcon,
-  WarningIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Accordion } from "@/components/ui/accordion";
 import type { GhgStatementCreateOutcome } from "@/fn/certification/ghg-statements";
 import { formatCount } from "@/lib/copy-utils";
@@ -11,6 +7,7 @@ import {
   CERTIFICATION_ACCORDION_LABEL,
   CERTIFICATION_ACCORDION_TRIGGER,
 } from "./certification-accordion-styles";
+import { Notice } from "@/components/ui/notice";
 
 const RESULT_WARNINGS_ITEM = "result-warnings";
 
@@ -29,54 +26,27 @@ export function ResultPanel({
   // already created in Isometric and this attempt resolved to it. Say that,
   // rather than claiming a creation that did not happen.
   const alreadyExisted = outcome === "existing";
-  const OutcomeIcon = alreadyExisted ? InfoIcon : CheckCircleIcon;
   // Resolving to an existing statement is informational, not a success, so it
-  // takes the status ramp's in-progress step rather than the success one. The
-  // ramp is the semantic layer for feedback accents; `--clr-*` is the raw
-  // palette and must not be reached for from a component.
+  // is an info Notice rather than a success one.
   return (
     <div className="flex flex-col gap-16">
-      <div
-        role="status"
-        className={`flex items-start gap-12 border p-16 ${
+      <Notice
+        tone={alreadyExisted ? "info" : "success"}
+        title={
           alreadyExisted
-            ? "border-[var(--st-run-border)] bg-[var(--st-run-bg)]"
-            : "border-[var(--st-ok-border)] bg-[var(--st-ok-bg)]"
-        }`}
+            ? "Statement synced successfully"
+            : "Statement created successfully"
+        }
       >
-        <OutcomeIcon
-          size={24}
-          weight="fill"
-          aria-hidden
-          className={`shrink-0 ${
-            alreadyExisted
-              ? "text-[var(--st-run)]"
-              : "text-[var(--st-ok)]"
-          }`}
-        />
-        <div className="flex min-w-0 flex-col gap-8">
-          <div className="flex flex-col gap-2">
-            <p className="body-medium font-medium text-[var(--color-text-primary)]">
-              {alreadyExisted
-                ? "Statement synced successfully"
-                : "Statement created successfully"}
-            </p>
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {alreadyExisted
-                ? `The existing statement has ${formatCount(linkedCount, "linked Removal")}.`
-                : `${formatCount(linkedCount, "Removal")} linked from this reporting period.`}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className="label-micro text-[var(--color-text-tertiary)]">
-              Registry ID
-            </span>
-            <span className="body-caption break-all font-mono text-[var(--color-text-primary)]">
-              {externalId}
-            </span>
-          </div>
-        </div>
-      </div>
+        <p>
+          {alreadyExisted
+            ? `The existing statement has ${formatCount(linkedCount, "linked Removal")}.`
+            : `${formatCount(linkedCount, "Removal")} linked from this reporting period.`}
+        </p>
+        <p className="mt-8 body-caption break-all font-mono text-[var(--color-text-primary)]">
+          Registry ID {externalId}
+        </p>
+      </Notice>
       {warnings.length > 0 && (
         <Accordion.Root className="gap-0" defaultValue={[]}>
           <Accordion.Item

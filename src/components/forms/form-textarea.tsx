@@ -17,8 +17,7 @@ export const FormTextarea = forwardRef<HTMLTextAreaElement, FormTextareaProps>(
       <textarea
         ref={ref}
         className={cn(
-          "w-full px-12 py-12 border border-[var(--color-border-secondary)] rounded-none bg-[var(--color-background-white)] text-[var(--color-text-primary)] text-[var(--text-s)] transition-all min-h-[100px] placeholder:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed disabled:opacity-50",
-          "shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]",
+          "block w-full px-12 py-12 border border-[var(--color-border-secondary)] rounded-none bg-[var(--color-background-white)] text-[var(--color-text-primary)] text-[var(--text-s)] transition-all min-h-[100px] placeholder:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed disabled:opacity-50",
           "focus:outline-none focus:border-[var(--color-interaction)] focus:ring-1 focus:ring-[var(--color-interaction)]",
           error && "border-[var(--color-signal-red)]",
           className
