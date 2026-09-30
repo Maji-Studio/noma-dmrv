@@ -266,6 +266,16 @@ export function formatLegDistanceKm(oneWayKm: number | null | undefined): string
   return `${formatDistanceKm(oneWayKm)} one way · ${formatRoundTripKm(oneWayKm)}`;
 }
 
+/**
+ * The compact pair for chips and rails where the full sentence does not fit:
+ * "240 km · 480 km counted". Pair it with `formatLegDistanceKm` as the
+ * accessible name so screen readers still hear "one way" and "round trip".
+ */
+export function formatLegDistanceCompactKm(oneWayKm: number | null | undefined): string {
+  if (oneWayKm == null) return MISSING_VALUE.notRecorded;
+  return `${formatDistanceKm(oneWayKm)} · ${formatDistanceKm(countedRoundTripKm(oneWayKm))} counted`;
+}
+
 /** Just the counted part, "480 km round trip counted", for a one-way figure shown elsewhere. */
 export function formatRoundTripKm(oneWayKm: number): string {
   return `${formatDistanceKm(countedRoundTripKm(oneWayKm))} round trip counted`;

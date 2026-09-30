@@ -5,6 +5,7 @@ import {
   formatCo2e,
   formatDayString,
   formatDistanceKm,
+  formatLegDistanceCompactKm,
   formatLegDistanceKm,
   formatRoundTripKm,
   formatFacilityDateTime,
@@ -54,6 +55,13 @@ describe("formatLegDistanceKm", () => {
 
   it("reads Not recorded when no distance is set", () => {
     expect(formatLegDistanceKm(null)).toBe(MISSING_VALUE.notRecorded);
+  });
+});
+
+describe("formatLegDistanceCompactKm", () => {
+  it("pairs the one-way distance with the counted round trip for chips", () => {
+    expect(formatLegDistanceCompactKm(240)).toBe("240 km · 480 km counted");
+    expect(formatLegDistanceCompactKm(undefined)).toBe(MISSING_VALUE.notRecorded);
   });
 });
 

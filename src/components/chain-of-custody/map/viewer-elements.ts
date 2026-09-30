@@ -5,7 +5,7 @@
  * data — never injected as HTML). Styled by carbon-viewer.css.
  */
 
-import { formatDistanceKm } from "@/lib/format-utils";
+import { formatLegDistanceCompactKm, formatLegDistanceKm } from "@/lib/format-utils";
 import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import type { LineageDetailRow } from "../use-chain-graph";
 import type { ViewerMarkerKind } from "./viewer-constants";
@@ -59,7 +59,8 @@ export function createDistanceChipElement(distanceKm: number | null | undefined)
   const el = document.createElement("div");
   el.className = "cvm-dist";
   el.dataset.testid = "carbon-viewer-distance-chip";
-  el.textContent = formatDistanceKm(distanceKm);
+  el.textContent = formatLegDistanceCompactKm(distanceKm);
+  el.setAttribute("aria-label", formatLegDistanceKm(distanceKm));
   return el;
 }
 
