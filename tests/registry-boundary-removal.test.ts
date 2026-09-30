@@ -66,7 +66,10 @@ vi.mock(
 vi.mock("@/fn/certification/ensure-evidence-ledgers", () => ({
   ensureEvidenceLedgersFromContext: vi.fn(async () => undefined),
 }));
-vi.mock("@/fn/certification/sources", () => ({
+vi.mock("@/fn/certification/source-candidates", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/fn/certification/source-candidates")
+  >()),
   collectCandidateDocumentIdsForRemoval: vi.fn(async () => [
     "doc-boundary-1",
   ]),
@@ -77,6 +80,8 @@ vi.mock("@/fn/certification/sources", () => ({
   resolveSourceBindingCandidates: vi.fn(async () => [
     { ...makeBoundarySourceDocument(), sourceId: "src-boundary-1" },
   ]),
+}));
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
   // submitRemoval mirrors pending candidates before compiling the strict
   // artifact; the boundary fixtures already resolve every candidate, so the
   // mirror is a no-op here.
@@ -97,7 +102,8 @@ import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import { discardLocalRemovalDraft } from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
-import * as sources from "@/fn/certification/sources";
+import * as sources from "@/fn/certification/source-candidates";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { SafeError } from "@/lib/errors";
 import {
@@ -570,7 +576,7 @@ describe("submitRemoval boundary — discard interlock", () => {
     const mirrorRelease = new Promise<void>((resolve) => {
       releaseMirror = resolve;
     });
-    vi.mocked(sources.mirrorCandidateSourcesForSubmission).mockImplementationOnce(
+    vi.mocked(sourcesMirror.mirrorCandidateSourcesForSubmission).mockImplementationOnce(
       async () => {
         signalMirrorEntered?.();
         await mirrorRelease;

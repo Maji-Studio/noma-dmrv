@@ -6,13 +6,12 @@ import {
   type BiocharApplicationIntent,
 } from "./biochar-application-intents";
 import type { RemovalSubmissionContext } from "./certify-context-core";
-import { filterCandidateSourcesForSubmissionLifecycle } from "./removal-source-freeze";
+import { collectSubmissionSourceCandidates } from "./removal-source-freeze";
 import {
-  collectCandidateSourceDocumentsForRemoval,
   resolveSourceBindingCandidates,
   type CandidateSourceDocument,
   type ResolvedSourceBindingCandidate,
-} from "./sources";
+} from "./source-candidates";
 
 type BoundCandidate<T extends { binding: unknown }> = T & {
   binding: NonNullable<T["binding"]>;
@@ -93,20 +92,7 @@ export async function planRemovalEvidence(args: {
     supplied.candidateSourceDocuments ??
     (supplied.sourceIds || supplied.sourceBindingCandidates
       ? []
-      : filterCandidateSourcesForSubmissionLifecycle(
-          await collectCandidateSourceDocumentsForRemoval(orgCtx, {
-            removalId,
-            lineages: ctx.lineages,
-            memberBatches: ctx.memberBatches,
-            memberSamples: ctx.batchesWithSamples.flatMap((batch) =>
-              batch.samples.map((sample) => ({
-                id: sample.id,
-                code: sample.sampleCode,
-              })),
-            ),
-          }),
-          ctx.latestSubmission,
-        ));
+      : await collectSubmissionSourceCandidates(orgCtx, removalId, ctx));
   const sourceBindingCandidates =
     supplied.sourceBindingCandidates ??
     (supplied.sourceIds

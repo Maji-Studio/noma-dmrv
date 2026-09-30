@@ -72,8 +72,11 @@ vi.mock("@/fn/certification/biochar-applications", () => ({
 // Removal submission fails closed unless every candidate document has a
 // validated mirrored Source ID. Tests that exercise missing/partial mirrors
 // override these healthy defaults.
-vi.mock("@/fn/certification/sources", async () => {
+vi.mock("@/fn/certification/source-candidates", async (importOriginal) => {
   return {
+    ...(await importOriginal<
+      typeof import("@/fn/certification/source-candidates")
+    >()),
     collectCandidateDocumentIdsForRemoval: vi.fn(async () => ["doc-test-1"]),
     resolveSourceIdsForRemoval: vi.fn(async () => ["src-test-1"]),
     collectCandidateSourceDocumentsForRemoval: vi.fn(async () => [
@@ -105,9 +108,11 @@ vi.mock("@/fn/certification/sources", async () => {
         sourceId: `src-${candidate.documentId}`,
       })),
     ),
-    mirrorCandidateSourcesForSubmission: vi.fn(),
   };
 });
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
+  mirrorCandidateSourcesForSubmission: vi.fn(),
+}));
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
@@ -166,7 +171,8 @@ import * as productionClaimReservations from "@/data-access/production-claim-res
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
-import * as sources from "@/fn/certification/sources";
+import * as sources from "@/fn/certification/source-candidates";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import * as isometric from "@/lib/isometric";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
 
@@ -925,7 +931,7 @@ beforeEach(() => {
     makeResolvedInventorySource("doc-test-1", "src-test-1"),
   ]);
   vi.mocked(
-    sources.mirrorCandidateSourcesForSubmission,
+    sourcesMirror.mirrorCandidateSourcesForSubmission,
   ).mockResolvedValue(undefined);
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage

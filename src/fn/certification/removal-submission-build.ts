@@ -43,7 +43,7 @@ import {
 import type {
   CandidateSourceDocument,
   ResolvedSourceBindingCandidate,
-} from "./sources";
+} from "./source-candidates";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import {
   sourceIdsForDatapointTarget,

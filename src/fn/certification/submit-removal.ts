@@ -87,10 +87,8 @@ import {
   safeRemovalSubmissionError,
   type RemovalExternalMutation,
 } from "./removal-submission-failure";
-import {
-  mirrorCandidateSourcesForSubmission,
-  resolveSourceBindingCandidates,
-} from "./sources";
+import { resolveSourceBindingCandidates } from "./source-candidates";
+import { mirrorCandidateSourcesForSubmission } from "./sources-mirror-core";
 import { reviewPayloadHash } from "@/lib/certification/removal-review-hash";
 import { describeFeedstockTypeMappingGap } from "@/lib/certification/feedstock-type-mapping";
 import type { SubmissionProgressReporter } from "@/lib/certification/submission-progress";
@@ -420,9 +418,12 @@ async function submitRemovalCore(
   const reviewedBuild = reviewedCompilation.transportPlan;
   assertReviewedCompilationHash(expectedCompilationHash, reviewedBuild);
 
+  // The mirror re-derives the candidate set from the same submission context
+  // rather than trusting a candidate list; the reviewed-hash re-assert below
+  // still catches an evidence set that moved in between.
   await mirrorCandidateSourcesForSubmission(orgCtx, {
     removalId,
-    candidateSourceDocuments: reviewedBuild.candidateSourceDocuments,
+    submissionContext: ctx,
   });
 
   // Compile again from persisted mappings. Only this strict artifact can be

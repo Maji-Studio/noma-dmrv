@@ -58,7 +58,7 @@ import * as ledger from "@/data-access/certification";
 import * as claims from "@/data-access/certification-submissions";
 import * as sensors from "@/data-access/certifier-sensors";
 import * as telemetry from "@/data-access/telemetry-readings";
-import { submitTelemetry } from "@/fn/certification/submit-telemetry";
+import { submitTelemetry } from "@/fn/certification/submit-telemetry-core";
 import { loadRemovalSubmissionContext } from "@/fn/certification/certify-context-core";
 import { fetchSignedUploadWithTimeout } from "@/lib/isometric/utils/signed-upload";
 import { IsometricApiError } from "@/lib/isometric";

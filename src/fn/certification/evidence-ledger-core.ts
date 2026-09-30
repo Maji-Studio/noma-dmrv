@@ -41,7 +41,7 @@ import { SafeError } from "@/lib/errors";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import type { logger } from "@/lib/log";
 import { getStorageProvider } from "@/lib/storage";
-import { mirrorDocumentToSourceForUser } from "./sources";
+import { mirrorDocumentToSourceForUser } from "./sources-mirror-core";
 
 const PDF_MIME = "application/pdf";
 
@@ -303,10 +303,14 @@ export async function ensureLedgerSource(
         // member credit batch, so the candidate-document lineage walk already
         // finds it → its Source rides into source_ids on submit with no extra
         // plumbing.
-        const mirror = await mirrorDocumentToSourceForUser(orgCtx, {
-          removalId: spec.removalId,
-          documentId: doc.id,
-        });
+        // Ledgers are generated only inside the submit pipeline, which owns
+        // the Removal lifecycle transition (including a supersede of a
+        // submitted Removal), so the operator-facing lifecycle guard is off.
+        const mirror = await mirrorDocumentToSourceForUser(
+          orgCtx,
+          { removalId: spec.removalId, documentId: doc.id },
+          { enforceRemovalLifecycle: false },
+        );
 
         // Supersede: retire every prior ledger now that the current one is mirrored.
         await retireSupersededLedgers(

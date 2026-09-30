@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("./sources", () => ({
+vi.mock("./source-candidates", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./source-candidates")>()),
   collectCandidateSourceDocumentsForRemoval: vi.fn(),
   resolveSourceBindingCandidates: vi.fn(),
 }));
@@ -31,7 +32,7 @@ import {
   normalizeSequestrationTemplateForHash,
   removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
-import * as sources from "./sources";
+import * as sources from "./source-candidates";
 
 const TEST_ORG_CONTEXT = {
   userId: "removal-submission-build-user",
