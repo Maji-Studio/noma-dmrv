@@ -8,13 +8,18 @@
 
 import type { ReactNode } from "react";
 import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
-import { OUTPUT_STOCK_MODE_DESCRIPTIONS, outputStockModes } from "@/schemas/storage-locations";
+import { OUTPUT_STOCK_MODE_DESCRIPTIONS, outputStockModes, type OutputBinType } from "@/schemas/storage-locations";
 
 const ART_WIDTH = 112;
 const ART_HEIGHT = 44;
 const BIN_TOP = 10;
 const BIN_BOTTOM = 40;
 const BIN_STROKE = 1.5;
+const BASELINE_STROKE = 1;
+const BASELINE_OPACITY = 0.5;
+/** Multipliers that scatter the three tones through the mix bin. */
+const MIX_SCATTER_COLUMN = 7;
+const MIX_SCATTER_ROW = 5;
 
 /** Split: three bins, each holding one batch's grains. */
 const SPLIT_BIN_WIDTH = 30;
@@ -72,7 +77,7 @@ const MIX_GRAINS = grainGrid(
   MIX_BIN_X,
   MIX_BIN_WIDTH,
   MIX_COLUMNS,
-  (column, row) => SPLIT_TONES[(column * 7 + row * 5 + column * row) % SPLIT_TONES.length],
+  (column, row) => SPLIT_TONES[(column * MIX_SCATTER_COLUMN + row * MIX_SCATTER_ROW + column * row) % SPLIT_TONES.length],
   true,
 );
 
@@ -105,7 +110,7 @@ function StockArt({ mode, children }: { mode: "split" | "mix"; children: ReactNo
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d={`M1 ${BIN_BOTTOM + 1} H${ART_WIDTH - 1}`} strokeWidth={1} opacity={0.5} />
+      <path d={`M1 ${BIN_BOTTOM + 1} H${ART_WIDTH - 1}`} strokeWidth={BASELINE_STROKE} opacity={BASELINE_OPACITY} />
       {children}
     </svg>
   );
@@ -162,7 +167,7 @@ const STOCK_MODE_CARD_ART: Record<OutputStockMode, { title: string; art: ReactNo
 };
 
 /** Cards for the chosen bin type; the caption says what a removal takes from that kind of bin. */
-export function stockModeOptions(type: "biochar_bin" | "product_bin") {
+export function stockModeOptions(type: OutputBinType) {
   return outputStockModes.map((mode) => ({
     value: mode,
     ...STOCK_MODE_CARD_ART[mode],

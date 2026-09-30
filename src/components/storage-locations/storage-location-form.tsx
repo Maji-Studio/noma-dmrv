@@ -32,7 +32,7 @@ import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 
 const STOCK_MODE_HINT =
-  "Split keeps every batch in its own bay, bag or heap, and each removal records which batches it came from. Mix is one blended pile: every removal takes each batch in proportion to what it holds.";
+  "Split keeps every production run or batch in its own bay, bag or heap, and each removal records which ones it came from. Mix is one blended pile: every removal takes from each in proportion to what it holds.";
 const MERGE_TIME_HINT =
   "Removals from this time on take every batch in proportion. Entries already saved keep their shares.";
 
@@ -243,7 +243,7 @@ export function StorageLocationForm({
               disabled={isSubmitting}
               error={!!errors.stockMode}
               stackArt
-              options={stockModeOptions(watchedType === "product_bin" ? "product_bin" : "biochar_bin")}
+              options={stockModeOptions(watchedType)}
               {...register("stockMode", {
                 // Merging starts from now, which the operator can move back.
                 onChange: (event) => {

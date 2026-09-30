@@ -482,10 +482,12 @@ body {
    Settled state by default: bins full of grains, no draw. Hover (a tap on
    touch screens) and keyboard focus play the loop from its start. */
 .stock-art {
-  --stock-batch-a: var(--color-gray-600);
+  --stock-batch-a: var(--color-icon-secondary);
   --stock-batch-b: var(--color-signal-orange);
   --stock-batch-c: var(--st-ok);
   --stock-loop: 2800ms;
+  /* Clears the bin top; keep in step with BIN_TOP and CHIP_START_Y in stock-mode-art.tsx. */
+  --stock-chip-lift: -13px;
   overflow: visible;
 }
 .stock-art .stock-chip {
@@ -494,8 +496,8 @@ body {
 @keyframes stock-chip-lift {
   0%, 58% { opacity: 0; transform: translateY(0); }
   62% { opacity: 1; transform: translateY(0); }
-  84% { opacity: 1; transform: translateY(-13px); }
-  92%, 100% { opacity: 0; transform: translateY(-13px); }
+  84% { opacity: 1; transform: translateY(var(--stock-chip-lift)); }
+  92%, 100% { opacity: 0; transform: translateY(var(--stock-chip-lift)); }
 }
 @keyframes stock-grain-in-a {
   0% { opacity: 0; }
@@ -509,10 +511,21 @@ body {
   0%, 24% { opacity: 0; }
   44%, 100% { opacity: 1; }
 }
-@keyframes stock-grain-out {
-  0%, 60% { opacity: 1; }
-  74%, 90% { opacity: 0; }
-  100% { opacity: 0; }
+/* Top rows arrive with their tone, then leave on the draw (one animation each, so the exit cannot override the arrival). */
+@keyframes stock-grain-top-a {
+  0% { opacity: 0; }
+  20%, 60% { opacity: 1; }
+  74%, 100% { opacity: 0; }
+}
+@keyframes stock-grain-top-b {
+  0%, 12% { opacity: 0; }
+  32%, 60% { opacity: 1; }
+  74%, 100% { opacity: 0; }
+}
+@keyframes stock-grain-top-c {
+  0%, 24% { opacity: 0; }
+  44%, 60% { opacity: 1; }
+  74%, 100% { opacity: 0; }
 }
 @keyframes stock-reset {
   0%, 92% { opacity: 1; }
@@ -533,7 +546,7 @@ body {
   :is(label:hover, label:has(input:focus-visible)) .stock-grain-a { animation-name: stock-grain-in-a; }
   :is(label:hover, label:has(input:focus-visible)) .stock-grain-b { animation-name: stock-grain-in-b; }
   :is(label:hover, label:has(input:focus-visible)) .stock-grain-c { animation-name: stock-grain-in-c; }
-  :is(label:hover, label:has(input:focus-visible)) .stock-grain-a.stock-grain-top { animation-name: stock-grain-in-a, stock-grain-out; }
-  :is(label:hover, label:has(input:focus-visible)) .stock-grain-b.stock-grain-top { animation-name: stock-grain-in-b, stock-grain-out; }
-  :is(label:hover, label:has(input:focus-visible)) .stock-grain-c.stock-grain-top { animation-name: stock-grain-in-c, stock-grain-out; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-a.stock-grain-top { animation-name: stock-grain-top-a; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-b.stock-grain-top { animation-name: stock-grain-top-b; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-c.stock-grain-top { animation-name: stock-grain-top-c; }
 }

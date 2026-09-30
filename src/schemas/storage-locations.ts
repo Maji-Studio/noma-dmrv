@@ -82,23 +82,23 @@ export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
   mix: "Mix: one blended pile",
 };
 
+/** The bin types that choose a stock mode. */
+export type OutputBinType = Extract<StorageLocationType, "biochar_bin" | "product_bin">;
+
 /** Stock mode card captions by bin type: what stays apart or blends, and what a removal takes. */
-export const OUTPUT_STOCK_MODE_DESCRIPTIONS: Record<
-  "biochar_bin" | "product_bin",
-  Record<OutputStockMode, string>
-> = {
+export const OUTPUT_STOCK_MODE_DESCRIPTIONS: Record<OutputBinType, Record<OutputStockMode, string>> = {
   biochar_bin: {
-    split: "Each production run stays in its own bay, bag or heap. You say which ones a removal came from.",
-    mix: "All runs go into one pile. A removal takes a share from each run.",
+    split: "Each production run stays in its own bay, bag or heap. A removal records which runs it came from.",
+    mix: "All runs go into one pile. A removal takes from each run in proportion.",
   },
   product_bin: {
-    split: "Each product batch stays apart. You say which batches a removal came from.",
-    mix: "All batches go into one pile. A removal takes a share from each batch.",
+    split: "Each product batch stays apart. A removal records which batches it came from.",
+    mix: "All batches go into one pile. A removal takes from each batch in proportion.",
   },
 };
 
 /** Only biochar and product bins choose a stock mode. */
-export function isOutputBinType(type: StorageLocationType | undefined | null): boolean {
+export function isOutputBinType(type: StorageLocationType | undefined | null): type is OutputBinType {
   return type === "biochar_bin" || type === "product_bin";
 }
 
