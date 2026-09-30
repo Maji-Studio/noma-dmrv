@@ -34,8 +34,8 @@ interface FormFieldProps {
   hint?: ReactNode;
   /**
    * A short visible line under the control, for a unit, a limit or a
-   * consequence the operator needs while typing ("0 to 100% of wet mass",
-   * "Only an empty bin can switch to split."). Everything else is `hint`.
+   * consequence the operator needs while typing ("Minimum 8 characters",
+   * "Facility time: Africa/Dar es Salaam"). Everything else is `hint`.
    */
   cue?: string;
   /**
