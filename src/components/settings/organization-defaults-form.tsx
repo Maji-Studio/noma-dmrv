@@ -13,10 +13,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { SlidersHorizontalIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm } from "react-hook-form";
 import {
+  ChoiceCardGroup,
   FormActions,
   FormField,
   FormInput,
+  FormSection,
   FormSelect,
+  SegmentedControl,
   ServerError,
 } from "@/components/forms";
 import { EmptyState } from "@/components/ui";
@@ -33,6 +36,7 @@ import {
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import {
+  APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS,
   formatApplicationEvidenceMethod,
   isSelectableApplicationEvidenceMethod,
   selectableApplicationEvidenceMethods,
@@ -57,9 +61,12 @@ const TIMEZONE_OPTIONS = timezones.map((zone) => ({
   label: formatTimezoneLabel(zone),
 }));
 
+// A default evidence method decides which evidence every new application asks
+// for, so it is a card choice with its consequence spelled out.
 const EVIDENCE_METHOD_OPTIONS = selectableApplicationEvidenceMethods.map((method) => ({
   value: method,
-  label: formatApplicationEvidenceMethod(method),
+  title: formatApplicationEvidenceMethod(method),
+  description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS[method],
 }));
 
 const PACKAGING_LABELS: Record<PackagingType, string> = {
@@ -157,7 +164,8 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-preview flex flex-col gap-24"
     >
-      <div className="grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2">
+      <FormSection title="Region and currency" divider={false}>
+        <div className="grid grid-cols-1 gap-x-16 gap-y-16 sm:grid-cols-2">
         <FormField
           id="default-currency"
           label="Currency"
@@ -189,6 +197,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           />
         </FormField>
 
+        <div className="sm:col-span-2">
         <FormField
           id="default-timezone"
           label="Timezone"
@@ -204,14 +213,20 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           />
         </FormField>
 
+        </div>
+        </div>
+      </FormSection>
+
+      <FormSection title="New records">
         <FormField
           id="default-evidence-method"
           label="Application evidence"
           error={errors.defaultEvidenceMethod?.message}
           helperText="Seeds new applications."
         >
-          <FormSelect
+          <ChoiceCardGroup
             id="default-evidence-method"
+            legend="Application evidence"
             options={EVIDENCE_METHOD_OPTIONS}
             error={!!errors.defaultEvidenceMethod}
             {...register("defaultEvidenceMethod")}
@@ -224,14 +239,15 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           error={errors.defaultPackaging?.message}
           helperText="Seeds new orders."
         >
-          <FormSelect
+          <SegmentedControl
             id="default-packaging"
+            legend="Order packaging"
             options={PACKAGING_OPTIONS}
             error={!!errors.defaultPackaging}
             {...register("defaultPackaging")}
           />
         </FormField>
-      </div>
+      </FormSection>
 
       <p className="body-caption text-[var(--color-text-tertiary)]">
         These only seed new records. Nothing already saved changes.

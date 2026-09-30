@@ -13,7 +13,12 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  BuildingsIcon,
+  CheckCircleIcon,
+  FireIcon,
+  PlugsConnectedIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { FacilityForm } from "@/components/facilities/facility-form";
 import { ReactorForm } from "@/components/reactors/reactor-form";
 import { Button, Modal, StepFlow, type StepFlowStep } from "@/components/ui";
@@ -114,14 +119,9 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
       dismissOnClickOutside={false}
     >
       <div className="flex flex-col gap-24">
-        <header className="flex flex-col gap-6">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
-            Getting started
-          </span>
-          <h2 id={WIZARD_TITLE_ID} className="title-heading-3">
-            Set up your facility
-          </h2>
-        </header>
+        <h2 id={WIZARD_TITLE_ID} className="title-heading-3">
+          Set up your facility
+        </h2>
 
         <StepFlow
           steps={STEPS}
@@ -249,17 +249,52 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
   }
 }
 
+const WELCOME_ROWS = [
+  {
+    icon: BuildingsIcon,
+    title: "Your facility",
+    description: "The site where you produce biochar.",
+  },
+  {
+    icon: FireIcon,
+    title: "Its first reactor",
+    description: "The unit that turns feedstock into biochar.",
+  },
+  {
+    icon: PlugsConnectedIcon,
+    title: "Your registry connection",
+    description: "So credit batches can be submitted for verification.",
+  },
+] as const;
+
 function WelcomeStep() {
   return (
     <div className="flex flex-col gap-16">
       <p className="body-medium text-[var(--color-text-primary)]">
         A few steps to get your facility producing verified carbon removals.
       </p>
+      <ul className="flex flex-col gap-12">
+        {WELCOME_ROWS.map(({ icon: Icon, title, description }) => (
+          <li key={title} className="flex items-start gap-12">
+            <Icon
+              size={24}
+              className="mt-2 shrink-0 text-[var(--clr-pink)]"
+              aria-hidden
+            />
+            <div className="flex flex-col">
+              <span className="body-medium font-medium text-[var(--color-text-primary)]">
+                {title}
+              </span>
+              <span className="body-small text-[var(--color-text-secondary)]">
+                {description}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
       <p className="body-small text-[var(--color-text-secondary)]">
-        We&apos;ll set up your facility, its first reactor, and your registry
-        connection. You can add suppliers, feedstock, production runs, and
-        credit batches from the dashboard whenever you&apos;re
-        ready.
+        Suppliers, feedstock, production runs and credit batches can wait until
+        you&apos;re ready.
       </p>
     </div>
   );
