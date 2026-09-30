@@ -41,7 +41,7 @@ export function SetupGuide({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-12">
-          <span className="body-caption text-[var(--color-text-tertiary)]">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
             {doneCount} of {total} done
           </span>
           <Button

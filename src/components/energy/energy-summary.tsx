@@ -188,7 +188,7 @@ export function EnergySummary() {
                 <tr className="last:[border-bottom:none]">
                   <td className="body-medium py-8 px-12">
                     Diesel fuel (genset + startup)
-                    <span className="block body-caption text-[var(--color-text-tertiary)]">
+                    <span className="block label-micro text-[var(--color-text-tertiary)]">
                       Submitted by volume when the active template carries a
                       pyrolysis fuel-usage component; emission factor bound on
                       the Isometric template
