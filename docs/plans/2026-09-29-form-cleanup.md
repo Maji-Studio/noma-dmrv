@@ -211,6 +211,7 @@ From the before/after review of Phase 0 and the Phase 1 checkpoints. Each item g
 - **Process flow** [production]: every bar has the same width, so 1,000 kg in looks the same as 300 kg out. Scale bar length to mass, or find another proportional picture. Drop the inner timeline rail that runs inside the section spine (two timelines side by side).
 - **Two-line labels** [transport]: labels such as "One-way distance to facility (per leg, km)" wrap beside the CERT mark and the ⓘ. Shorten them and move the unit into the `unit` suffix (1a), so no label wraps next to a one-line neighbour.
 - **Trip type** goes away entirely (#852): every leg counts as a round trip, so there is no choice left to design. #852 lands as its own PR before the transport family (Kenji, 2026-09-30).
+- **Durability estimate** [credit batch]: the capped figure is labelled "Durability estimate (capped)" at both levels (Kenji, 2026-09-30; lands with #858).
 - **Derived transport on the product read sheet** shows in Simple since #847. Check it on staging.
 
 ## Risks
