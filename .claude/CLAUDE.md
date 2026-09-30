@@ -58,31 +58,9 @@ Never skip layers · `fn/` always has `"use server"` and validates input with Zo
 
 For every finding: **verify it against the actual code first**, fix only valid ones with minimal changes, skip invalid ones with a one-line written reason (false positives are common, including bogus P0s). Validate with `pnpm lint` + `pnpm typecheck` + tests before committing. Never blanket-apply a findings list.
 
-## Picking the Right Models for Workflows and Subagents
+## Model Selection
 
-Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-6-astra is flat-rate via the Codex desktop subscription, not list price). Intelligence = how hard a problem you can hand the model unsupervised. Taste = UI/UX, code quality, API design, copy.
-
-| model             | cost | intelligence | taste |
-| ----------------- | ---- | ------------ | ----- |
-| gpt-6-astra (low) | 6    | 8            | 7     |
-| sonnet-5          | 5    | 5            | 7     |
-| opus-5            | 4    | 7            | 8     |
-| fable-5.1         | 2    | 9            | 9     |
-
-**Codex default:** use `gpt-6-astra` with reasoning effort `low` for all Codex work below.
-
-**How to apply** — these are defaults, not limits: you have standing permission to escalate if a cheaper model's output doesn't meet the bar. Judge the output, not the price tag; use cheap options to gather information before moving work to expensive ones.
-
-- **Prefer gpt-6-astra over opus-5 most of the time** — it's quite powerful and effectively free; reach for opus-5 mainly when the work must run as a native Claude subagent/Workflow agent or when taste matters.
-- Bulk/mechanical (clear-spec implementation, data analysis, migrations) → **gpt-6-astra**.
-- User-facing (UI, copy, API design) needs **taste ≥ 7**. Utilize frontend-design skill
-- Reviews of plans/implementations → **fable-5.1 or gpt-6-astra**, optionally opus-5 as an extra independent perspective.
-- **Never use Haiku.** Subagents/Workflow agents run on **sonnet or opus — never inherit Fable**. Batch items to keep agent counts low.
-- Don't use Fable for workflows, except its been asked. Use instead opus-5 or gpt-6-astra.
-
-**Mechanics** — the Codex model (**gpt-6-astra low**) is only reachable through the Codex CLI (`codex exec` / `codex review`; `-m gpt-6-astra -c 'model_reasoning_effort="low"'` selects the model + effort; binary at `~/Library/pnpm/bin/codex`; fallback `/Applications/ChatGPT.app/Contents/Resources/codex`). Use the **codex-implementation**, **codex-review**, **codex-computer-use** skills; for uncovered work (investigation, data analysis) run `codex exec -m gpt-6-astra -c 'model_reasoning_effort="low"' -s read-only` directly with a self-contained prompt. Claude models run via the Agent/Workflow `model` parameter.
-
-**gpt-6-astra inside workflows/subagents** — the `model` param only takes Claude models, so wrap: spawn a thin Claude wrapper agent (`model: 'sonnet'`, effort `low`) whose prompt writes a self-contained codex prompt, runs `codex exec` via Bash, and returns the report (use `schema` on the wrapper for structured output). **Always label the wrapper with a `gpt-6:` prefix** (e.g. `{label: 'gpt-6:review-auth'}`) — the UI shows the wrapper's Claude model, the label is the only signal of the real worker. Codex runs can exceed Bash's 10-min timeout: pass an explicit timeout or background+poll. Parallel gpt-6-astra implementation agents must use `isolation: 'worktree'`. Workflow token budgets only count Claude tokens — codex work is invisible to `budget.spent()`.
+Shared across all projects in `~/.claude/model-selection.md` (imported by the global `~/.claude/CLAUDE.md`; source: `shared-agent-skills/policies/model-selection.md`). Change it with the `update-model-policy` skill, not here.
 
 ## Docs Index — read the target BEFORE doing the work (docs are NOT auto-indexed)
 
