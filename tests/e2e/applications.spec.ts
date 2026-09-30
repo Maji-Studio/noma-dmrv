@@ -176,9 +176,11 @@ test.describe("Application + Credit Batch UI CRUD", () => {
       name: /Visual evidence/,
     });
     await expect(visualEvidenceOption).toBeVisible();
-    await expect(visualEvidenceOption).toHaveAttribute("aria-disabled", "true");
+    await expect(visualEvidenceOption).toBeDisabled();
     await expect(
-      visualEvidenceOption.getByText("Available later", { exact: true }),
+      visualEvidenceOption
+        .locator("..")
+        .getByText("Available later", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Supporting evidence", { exact: true }),

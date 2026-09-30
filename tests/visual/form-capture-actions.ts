@@ -448,7 +448,8 @@ const downstream: Surface[] = [
     fill: "empty",
     open: async (page, ctx) => {
       const sheet = await createSheet(page, ctx, "applications", "New application");
-      await sheet.getByRole("radio", { name: /^GIS reference/ }).first().click();
+      // The radio input is visually hidden; its card (the parent label) takes the click.
+      await sheet.getByRole("radio", { name: /^GIS reference/ }).first().locator("..").click();
       return openDialogFromButton(sheet, page, /Add GIS reference/);
     },
   },

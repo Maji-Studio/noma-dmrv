@@ -480,6 +480,42 @@ restore for free.
   (`src/components/certification/confirm-action-dialog.tsx`) — reuse it there
   instead of hand-rolling.
 
+### Choice controls — `src/components/forms`
+
+Three ways to pick one of a few options. Choose by what the choice does.
+
+| Control | Use when | Examples |
+|---|---|---|
+| `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | evidence method, GIS boundary entry, stock mode |
+| `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity |
+| `FormSelect` | Everything else: long or dynamic lists, secondary fields | timezone, currency, category |
+
+A one-option enum is a fixed value, not a control.
+
+Both controls are native radios in a `fieldset` with an `sr-only` legend, so
+the browser gives one tab stop and arrow keys that move and select. Do not add
+`role`, `tabIndex` or key handlers. The selected option carries a check glyph
+plus a heavier border (not colour alone; both survive forced-colors). Wire them
+like `FormSelect` (`{...register("field")}`) or controlled
+(`value` + `onValueChange`). Inside a `FormField`, give the control the same
+`id` and pass `legend` for the accessible name: the visible label stays
+`FormField`'s.
+
+Cards size to their group, not the viewport (CSS container queries): one
+column below about 272px, two columns above it (art beside the text from
+352px, hidden below), three at about 544px for three or more options with the
+art above the text, all rows equal height. Sheets
+are 360 to 640px wide, so give a card group the full row (`md:col-span-2` in a
+two-column grid) or it stacks. Write the consequence as the card caption, not
+as helper text. Art is decorative (`aria-hidden`), monoline, about 44x30, drawn
+in code.
+
+The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
+input is not the touch target: the whole label is, and `SegmentedControl`
+segments are at least 44px tall. The sheet header Simple/Detailed toggle
+(`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
+component.
+
 ### Other primitives — intent only, props at source
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
