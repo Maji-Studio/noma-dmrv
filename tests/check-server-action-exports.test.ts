@@ -50,7 +50,12 @@ export async function issueUrl(ctx: OrgContext, reportId: string): Promise<strin
 };
 
 const FAILING_ACTIONS = `"use server";
-import { requireOrgRole, withAction, type OrgContext } from "./auth";
+import {
+  requireOrgRole,
+  requireOrgRole as assertRole,
+  withAction,
+  type OrgContext,
+} from "./auth";
 import { issueUrl } from "./report-core";
 
 type Ctx = OrgContext;
@@ -87,6 +92,35 @@ async function trustsParameter(ctx: any) {
 }
 void trustsParameter;
 
+export async function generic<T extends OrgContext>(ctx: T) {
+  return ctx.userId;
+}
+
+export async function aliasedGuard(args: { c: unknown }) {
+  assertRole(args.c as OrgContext, "admin");
+}
+
+export async function localFromParameter(input: unknown) {
+  const scope = input as OrgContext;
+  requireOrgRole(scope, "admin");
+}
+
+export async function rawTenantId(organizationId: string) {
+  return organizationId;
+}
+
+export async function rawTenantIdProperty(input: { orgId: string; name: string }) {
+  return input.name;
+}
+
+export async function withoutOrganizationId(ctx: Omit<OrgContext, "organizationId">) {
+  return ctx.isPlatformAdmin;
+}
+
+export async function deeplyNested(input: { a: { b: { ctx: OrgContext } } }) {
+  return input.a;
+}
+
 export { issueUrl } from "./report-core";
 `;
 
@@ -101,12 +135,32 @@ export async function issueUrlAction(input: { reportId: string }) {
   });
 }
 
-// server-action-ok: the organization id is a form input the action re-checks against the session.
-export async function switchOrganization(input: { organizationId: string }) {
-  return withAction(async (ctx) => ctx.organizationId === input.organizationId);
+export async function renameReport(input: unknown) {
+  return withAction(async (ctx) => {
+    const scope = ctx;
+    requireOrgRole(scope, "admin");
+    return input;
+  });
 }
 
 export type { OrgContext } from "./auth";
+`;
+
+// Not a "use server" module: only the inline server functions are actions.
+const INLINE_ACTIONS = `
+import { requireOrgRole, type OrgContext } from "./auth";
+
+export function Page() {
+  async function inlineGuard(ctx: OrgContext) {
+    "use server";
+    return ctx.userId;
+  }
+  const submit = async (form: unknown) => {
+    "use server";
+    requireOrgRole(form as OrgContext, "admin");
+  };
+  return [inlineGuard, submit];
+}
 `;
 
 function writeFixture(dir: string, actions: string): string[] {
@@ -150,12 +204,22 @@ describe("check-server-action-exports", () => {
       expect(byName.get("withTx")).toMatch(/database or transaction handle/);
       expect(byName.get("arrow")).toMatch(/organization context/);
       expect(byName.get("issueUrl")).toMatch(/organization context/);
-      const guardFindings = violations.filter(
-        (v) => v.name === "requireOrgRole",
-      );
-      expect(guardFindings.map((v) => v.reason)).toEqual([
+      expect(byName.get("generic")).toMatch(/organization context/);
+      expect(byName.get("rawTenantId")).toMatch(/raw tenant id/);
+      expect(byName.get("rawTenantIdProperty")).toMatch(/"orgId" accepts a raw tenant id/);
+      expect(byName.get("withoutOrganizationId")).toMatch(/"orgRole"|"isPlatformAdmin"/);
+      expect(byName.get("deeplyNested")).toMatch(/property "a" property "b" property "ctx"/);
+      const guardFindings = violations
+        .filter((v) => v.name === "requireOrgRole")
+        .map((v) => v.reason);
+      // guarded (cast), trustsParameter (private helper), aliasedGuard
+      // (aliased import + property access + cast), localFromParameter (local
+      // initialised from a parameter).
+      expect(guardFindings).toEqual([
         expect.stringMatching(/parameter "ctx"/),
         expect.stringMatching(/parameter "ctx"/),
+        expect.stringMatching(/parameter "args"/),
+        expect.stringMatching(/parameter "input"/),
       ]);
       // The directive-free core is never an action, whatever it accepts.
       expect(violations.every((v) => v.file === "actions.ts")).toBe(true);
@@ -164,7 +228,29 @@ describe("check-server-action-exports", () => {
   );
 
   it(
-    "accepts session-resolving actions, type re-exports and waived exports",
+    "checks guards and parameters inside inline server functions",
+    () => {
+      const inlineDir = mkdtempSync(join(tmpdir(), "server-action-inline-"));
+      try {
+        const files = writeFixture(inlineDir, INLINE_ACTIONS);
+        const violations = checkServerActionExports(
+          inlineDir,
+          files,
+          FIXTURE_OPTIONS,
+        );
+        expect(violations.map((v) => [v.name, v.reason])).toEqual([
+          ["inlineGuard", expect.stringMatching(/raw tenant id|organization context/)],
+          ["requireOrgRole", expect.stringMatching(/parameter "form"/)],
+        ]);
+      } finally {
+        rmSync(inlineDir, { recursive: true, force: true });
+      }
+    },
+    CHECK_TIMEOUT_MS,
+  );
+
+  it(
+    "accepts session-resolving actions and type re-exports",
     () => {
       const files = writeFixture(passingDir, PASSING_ACTIONS);
       expect(
