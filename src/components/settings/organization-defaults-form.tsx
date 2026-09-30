@@ -19,6 +19,9 @@ import {
   FormSelect,
   ServerError,
 } from "@/components/forms";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { FormSection } from "@/components/forms/form-section";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { EmptyState } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -57,9 +60,20 @@ const TIMEZONE_OPTIONS = timezones.map((zone) => ({
   label: formatTimezoneLabel(zone),
 }));
 
+const EVIDENCE_METHOD_CAPTIONS: Record<
+  (typeof selectableApplicationEvidenceMethods)[number],
+  string
+> = {
+  location: "Uses the customer's saved location.",
+  boundary: "Uses a field boundary file or map drawing.",
+};
+
+// A default evidence method decides which evidence every new application asks
+// for, so it is a card choice with its consequence spelled out.
 const EVIDENCE_METHOD_OPTIONS = selectableApplicationEvidenceMethods.map((method) => ({
   value: method,
-  label: formatApplicationEvidenceMethod(method),
+  title: formatApplicationEvidenceMethod(method),
+  description: EVIDENCE_METHOD_CAPTIONS[method],
 }));
 
 const PACKAGING_LABELS: Record<PackagingType, string> = {
@@ -157,7 +171,8 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-preview flex flex-col gap-24"
     >
-      <div className="grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2">
+      <FormSection title="Region and currency" divider={false}>
+        <div className="grid grid-cols-1 gap-x-16 gap-y-20 sm:grid-cols-2">
         <FormField
           id="default-currency"
           label="Currency"
@@ -204,14 +219,19 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           />
         </FormField>
 
+        </div>
+      </FormSection>
+
+      <FormSection title="New records">
         <FormField
           id="default-evidence-method"
           label="Application evidence"
           error={errors.defaultEvidenceMethod?.message}
           helperText="Seeds new applications."
         >
-          <FormSelect
+          <ChoiceCardGroup
             id="default-evidence-method"
+            legend="Application evidence"
             options={EVIDENCE_METHOD_OPTIONS}
             error={!!errors.defaultEvidenceMethod}
             {...register("defaultEvidenceMethod")}
@@ -224,14 +244,15 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           error={errors.defaultPackaging?.message}
           helperText="Seeds new orders."
         >
-          <FormSelect
+          <SegmentedControl
             id="default-packaging"
+            legend="Order packaging"
             options={PACKAGING_OPTIONS}
             error={!!errors.defaultPackaging}
             {...register("defaultPackaging")}
           />
         </FormField>
-      </div>
+      </FormSection>
 
       <p className="body-caption text-[var(--color-text-tertiary)]">
         These only seed new records. Nothing already saved changes.

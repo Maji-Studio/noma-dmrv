@@ -26,6 +26,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { FormActions, FormField, FormInput } from "@/components/forms";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import type { CertifierCredentialsVerification } from "@/fn/certifier-credentials";
@@ -39,7 +40,6 @@ import {
   certifierCredentialsRotationSchema,
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
-import { formatDateTime } from "@/lib/format-utils";
 import { Notice } from "@/components/ui/notice";
 
 interface OrganizationCertifierCredentialsProps {
@@ -75,7 +75,6 @@ export function OrganizationCertifierCredentials({
       organizationId={organizationId}
       configured={configured}
       accessTokenLast4={status?.accessTokenLast4 ?? null}
-      updatedAt={status?.updatedAt ?? null}
     />
   );
 }
@@ -84,24 +83,40 @@ function CredentialsForm({
   organizationId,
   configured,
   accessTokenLast4,
-  updatedAt,
 }: {
   organizationId: string;
   configured: boolean;
   accessTokenLast4: string | null;
-  updatedAt: Date | null;
 }) {
   const toast = useToast();
   const setCredentials = useSetOrgCertifierCredentials(organizationId);
   const [serverError, setServerError] = useState("");
   const [verification, setVerification] =
     useState<CertifierCredentialsVerification | null>(null);
+  // A saved key shows as "Ends 1a2b · Replace"; its input only appears once
+  // the operator asks to replace it. Untouched keys keep the mask, which the
+  // submit handler reads as "keep the stored value".
+  const [replacing, setReplacing] = useState({
+    accessToken: false,
+    clientSecret: false,
+  });
+
+  function startReplace(field: keyof typeof replacing) {
+    setValue(field, "");
+    setReplacing((current) => ({ ...current, [field]: true }));
+  }
+
+  function cancelReplace(field: keyof typeof replacing) {
+    setValue(field, CERTIFIER_CREDENTIAL_MASK);
+    setReplacing((current) => ({ ...current, [field]: false }));
+  }
 
   const {
     control,
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<CertifierCredentialsFormInput>({
     resolver: zodResolver(
@@ -142,6 +157,7 @@ function CredentialsForm({
         accessToken: CERTIFIER_CREDENTIAL_MASK,
         clientSecret: CERTIFIER_CREDENTIAL_MASK,
       });
+      setReplacing({ accessToken: false, clientSecret: false });
       setVerification(result.verification);
       // The toast confirms the write; the panel below carries the connection
       // outcome, which is the part worth reading twice.
@@ -155,14 +171,10 @@ function CredentialsForm({
     }
   }
 
-  const savedCaption = configured
-    ? [
-        accessTokenLast4 ? `Ends ${accessTokenLast4}` : null,
-        updatedAt ? `saved ${formatDateTime(updatedAt)}` : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : undefined;
+  const tokenSaved = configured && !replacing.accessToken;
+  const secretSaved = configured && !replacing.clientSecret;
+  const tokenId = `isometric-access-token-${organizationId}`;
+  const secretId = `isometric-client-secret-${organizationId}`;
 
   return (
     <form
@@ -170,36 +182,60 @@ function CredentialsForm({
       className="content-measure-form flex flex-col gap-16"
     >
       <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
-        <FormField
-          id={`isometric-access-token-${organizationId}`}
-          label="Access token"
-          error={errors.accessToken?.message}
-          required={!configured}
-          cue={savedCaption}
-        >
-          <FormInput
-            id={`isometric-access-token-${organizationId}`}
-            type="password"
-            autoComplete="new-password"
-            disabled={setCredentials.isPending}
-            {...register("accessToken")}
+        {tokenSaved ? (
+          <SavedKey
+            label="Access token"
+            saved={accessTokenLast4 ? `Ends ${accessTokenLast4}` : "Saved"}
+            onReplace={() => startReplace("accessToken")}
           />
-        </FormField>
-        <FormField
-          id={`isometric-client-secret-${organizationId}`}
-          label="Client secret"
-          error={errors.clientSecret?.message}
-          required={!configured}
-          cue={configured ? "Saved" : undefined}
-        >
-          <FormInput
-            id={`isometric-client-secret-${organizationId}`}
-            type="password"
-            autoComplete="new-password"
-            disabled={setCredentials.isPending}
-            {...register("clientSecret")}
+        ) : (
+          <div className="flex flex-col items-start gap-8">
+            <FormField
+              id={tokenId}
+              label="Access token"
+              error={errors.accessToken?.message}
+              required={!configured}
+            >
+              <FormInput
+                id={tokenId}
+                type="password"
+                autoComplete="new-password"
+                disabled={setCredentials.isPending}
+                {...register("accessToken")}
+              />
+            </FormField>
+            {configured && (
+              <CancelReplace onClick={() => cancelReplace("accessToken")} />
+            )}
+          </div>
+        )}
+        {secretSaved ? (
+          <SavedKey
+            label="Client secret"
+            saved="Saved"
+            onReplace={() => startReplace("clientSecret")}
           />
-        </FormField>
+        ) : (
+          <div className="flex flex-col items-start gap-8">
+            <FormField
+              id={secretId}
+              label="Client secret"
+              error={errors.clientSecret?.message}
+              required={!configured}
+            >
+              <FormInput
+                id={secretId}
+                type="password"
+                autoComplete="new-password"
+                disabled={setCredentials.isPending}
+                {...register("clientSecret")}
+              />
+            </FormField>
+            {configured && (
+              <CancelReplace onClick={() => cancelReplace("clientSecret")} />
+            )}
+          </div>
+        )}
       </div>
 
       {verification && <VerificationNotice verification={verification} />}
@@ -213,6 +249,41 @@ function CredentialsForm({
         sticky={false}
       />
     </form>
+  );
+}
+
+/** A stored key: only its last characters are ever shown, never the secret. */
+function SavedKey({
+  label,
+  saved,
+  onReplace,
+}: {
+  label: string;
+  saved: string;
+  onReplace: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <span className="body-small font-medium text-[var(--color-text-primary)]">
+        {label}
+      </span>
+      <div className="flex items-center justify-between gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-surface-light)] px-12 py-8">
+        <span className="body-small text-[var(--color-text-secondary)]">
+          {saved}
+        </span>
+        <Button type="button" variant="weak" size="small" onClick={onReplace}>
+          Replace
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CancelReplace({ onClick }: { onClick: () => void }) {
+  return (
+    <Button type="button" variant="weak" size="small" onClick={onClick}>
+      Keep saved key
+    </Button>
   );
 }
 
