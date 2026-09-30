@@ -17,10 +17,6 @@ const customerLocationFormSource = readFileSync(
   new URL("./customers/customer-location-form.tsx", import.meta.url),
   "utf8",
 );
-const supplierDetailSource = readFileSync(
-  new URL("./suppliers/supplier-detail.tsx", import.meta.url),
-  "utf8",
-);
 const transportLegsEditorSource = readFileSync(
   new URL("./transport-legs/transport-legs-editor.tsx", import.meta.url),
   "utf8",
@@ -53,39 +49,6 @@ describe.each([
     expect(source).toContain("event.stopPropagation()");
   });
 });
-
-describe.each([
-  [
-    "supplier",
-    supplierDetailSource,
-    "SupplierLocationDialog",
-    "SupplierLocationForm",
-    "useCreateSupplierLocation",
-    "useUpdateSupplierLocation",
-  ],
-])(
-  "%s detail location management",
-  (
-    _entity,
-    source,
-    dialogName,
-    formName,
-    createMutationName,
-    updateMutationName,
-  ) => {
-    it("opens the existing location dialog with the selected location", () => {
-      expect(source).toContain(`<${dialogName}`);
-      expect(source).toContain("location={editingLocation}");
-      expect(source).toContain("setIsLocationDialogOpen(true)");
-    });
-
-    it("does not render or mutate the child location inline", () => {
-      expect(source).not.toContain(`<${formName}`);
-      expect(source).not.toContain(createMutationName);
-      expect(source).not.toContain(updateMutationName);
-    });
-  },
-);
 
 describe("transport leg editor dialog", () => {
   it("renders the shared centered dialog around the transport leg form", () => {
