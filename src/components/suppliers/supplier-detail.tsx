@@ -30,13 +30,26 @@ import {
   buildSupplierLocationField,
 } from "./supplier-detail-fields";
 import { Notice } from "@/components/ui/notice";
+import { EmptyState } from "@/components/ui/empty-state";
+import { MapPinIcon } from "@phosphor-icons/react/dist/ssr";
 
 interface SupplierDetailProps {
   supplierId: string;
 }
 
 /** Columns in the supplier locations table, so its loading skeleton matches. */
-const LOCATION_TABLE_COLUMNS = 9;
+const LOCATION_TABLE_COLUMNS = 5;
+
+const LOCATION_HEAD_TEXT =
+  "text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide";
+const LOCATION_HEAD_CLASS = cn("px-16 py-12 text-left", LOCATION_HEAD_TEXT);
+
+/** City, region and country as one line; missing parts are skipped. */
+function formatLocationPlace(location: SupplierLocation): string {
+  return [location.city, location.stateRegion, location.country]
+    .filter(Boolean)
+    .join(", ");
+}
 
 /**
  * One field of the supplier header summary.
@@ -179,47 +192,27 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         {locationsLoading ? (
           <TableSkeleton columns={LOCATION_TABLE_COLUMNS} rows={3} />
         ) : locations.length === 0 ? (
-          <div className="p-48 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] flex flex-col items-center justify-center gap-24 text-center">
-            <div className="flex flex-col gap-16">
-              <h3 className="title-heading-4">No locations yet</h3>
-              <p className="body-medium text-[var(--color-text-secondary)]">
-                Add locations to track where this supplier operates or collects feedstock.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            icon={<MapPinIcon size={40} />}
+            title="No locations yet"
+            description="Add locations to track where this supplier operates or collects feedstock."
+            padding="md"
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-[var(--color-border-primary)]">
-                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Name
-                  </th>
-                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Country
-                  </th>
-                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    State / Region
-                  </th>
-                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    City
-                  </th>
-                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Address / Description
-                  </th>
-                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Source location position
-                  </th>
+                  <th className={LOCATION_HEAD_CLASS}>Name</th>
+                  <th className={LOCATION_HEAD_CLASS}>Place</th>
+                  <th className={LOCATION_HEAD_CLASS}>Source location position</th>
                   <th className="px-16 py-12 text-left">
-                    <span className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                    <span className={cn("flex items-center gap-6", LOCATION_HEAD_TEXT)}>
                       Distance to facility
                       <CertificationFieldTag />
                     </span>
                   </th>
-                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    Default source location
-                  </th>
-                  <th className="px-16 py-12 text-right text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                  <th className={cn("px-16 py-12 text-right", LOCATION_HEAD_TEXT)}>
                     Actions
                   </th>
                 </tr>
@@ -231,19 +224,20 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                     className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-surface-light)]"
                   >
                     <td className="px-16 py-12 body-medium">
-                      {location.name || MISSING_VALUE.notRecorded}
-                    </td>
-                    <td className="px-16 py-12 body-medium">
-                      {location.country}
-                    </td>
-                    <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.stateRegion || MISSING_VALUE.notRecorded}
-                    </td>
-                    <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.city || MISSING_VALUE.notRecorded}
+                      <span className="flex flex-wrap items-center gap-x-8">
+                        {location.name || MISSING_VALUE.notRecorded}
+                        {location.isDefault && (
+                          <span className="body-caption text-[var(--color-text-tertiary)]">
+                            Default source location
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.address || MISSING_VALUE.notRecorded}
+                      {formatLocationPlace(location)}
+                      <span className="block body-caption text-[var(--color-text-tertiary)]">
+                        {location.address || MISSING_VALUE.notRecorded}
+                      </span>
                     </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
@@ -254,9 +248,6 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                       {location.distanceFromFacilityKm != null
                         ? `${location.distanceFromFacilityKm} km`
                         : MISSING_VALUE.notSet}
-                    </td>
-                    <td className="px-16 py-12 body-medium">
-                      {location.isDefault ? "Yes" : "No"}
                     </td>
                     <td className="px-16 py-12 text-right">
                       <div className="flex items-center justify-end gap-16">
