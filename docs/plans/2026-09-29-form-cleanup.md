@@ -23,8 +23,8 @@ The code comment on `DetailedOnly` (`src/components/forms/form-detail-context.ts
 
 ### R2. Decisions (recorded on the audit page)
 
-1. ⓘ holds explanations. A short visible `cue` stays for units, limits and consequences, tagged by hand.
-2. CERT becomes a 14px seal glyph on the label row, explained once in the sheet header. Missing and satisfied keep their colours.
+1. ⓘ holds explanations. A short visible `cue` stays for units, limits and consequences, tagged by hand. Exception (Kenji, 2026-09-30): three helpers stay visible as cues: the org-defaults Timezone scope note, the registry default-visibility scope note, and "Annual average" on soil temperature.
+2. CERT stays the text chip on the label row (Kenji, 2026-09-30, reversing the seal glyph shipped in #851), explained once by a legend on its own line under the sheet title. Missing and satisfied keep their colours. Labels must not wrap next to it: move units into the `unit` suffix.
 3. The red asterisk stays on required fields, since about 62 of 225 fields are required. The 1000-year reflectance fields that miss it get fixed.
 4. Choice cards only where the choice has a consequence: stock mode, sampling, durability tier, GHG report source, evidence method, source visibility. Segmented controls for short equal options: loss/count, storage type, run status, incident severity, packaging, field position mode, feedstock usage. Selects for everything else. A one-option enum becomes a fixed value.
 5. A small monoline illustration set drawn in code, used only in choice cards, empty states and onboarding.
@@ -210,7 +210,7 @@ From the before/after review of Phase 0 and the Phase 1 checkpoints. Each item g
 - **Blend bar** [stock]: drop the green "Total 100%." line. When the shares don't add up, show the gap in the bar itself (an unfilled remainder) and say what is missing. Also fix the create layout, where the lone volume share field sits right-aligned beside an empty column.
 - **Process flow** [production]: every bar has the same width, so 1,000 kg in looks the same as 300 kg out. Scale bar length to mass, or find another proportional picture. Drop the inner timeline rail that runs inside the section spine (two timelines side by side).
 - **Two-line labels** [transport]: labels such as "One-way distance to facility (per leg, km)" wrap beside the CERT mark and the ⓘ. Shorten them and move the unit into the `unit` suffix (1a), so no label wraps next to a one-line neighbour.
-- **Trip type** goes away entirely (#852): every leg counts as a round trip, so there is no choice left to design.
+- **Trip type** goes away entirely (#852): every leg counts as a round trip, so there is no choice left to design. #852 lands as its own PR before the transport family (Kenji, 2026-09-30).
 - **Derived transport on the product read sheet** shows in Simple since #847. Check it on staging.
 
 ## Risks
