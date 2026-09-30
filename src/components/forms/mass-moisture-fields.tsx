@@ -98,7 +98,7 @@ export function MoistureField({
   disabled,
   placeholder = "e.g. 20",
   helperText,
-  cue = MOISTURE_RANGE_HELPER,
+  cue,
   hint = MOISTURE_BASIS_HINT,
   certifyRequired,
   certifyStatus,
@@ -114,7 +114,8 @@ export function MoistureField({
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       error={error}
       warning={guidance?.warning ?? warning}
-      helperText={helperText}
+      // The 0 to 100% range sits behind the ⓘ with the basis (Kenji, cue review 2026-09-30).
+      helperText={[MOISTURE_RANGE_HELPER, helperText].filter(Boolean).join(" ")}
       cue={guidance?.cue ?? cue}
       hint={guidance?.basisText ? <>{guidance.basisText} {hint}</> : hint}
       required={required}

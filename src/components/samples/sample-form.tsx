@@ -12,16 +12,14 @@
  * Spine steps (Evidence & Transport sit OUTSIDE the `<form>` element — they
  * nest their own forms — but FormSpine numbers them on the same rail):
  * 1. Sample information - credit batch, samplingTime, lab details
- * 2. Carbon analysis - totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
- * 3. Elemental analysis - H, N, O, S percentages
- * 4. Proximate analysis - ash, moisture
- * 5. Physical properties - bulkDensity, pH, saltContent
- * 6. Stability ratios - O:C ratio entered, H:C and O:C derived (durability tier
+ * 2. Lab analysis - carbon, ash and elemental percentages in one grid
+ * 3. Physical properties - bulkDensity, pH, saltContent, moisture
+ * 4. Stability ratios - O:C ratio entered, H:C and O:C derived (durability tier
  *    shown, inherited from the batch)
  * (+2 conditional, 1000-year batches) R₀ reflectance · TGA non-reactive carbon
- * 7. Nutrient claims (conditional) - P, K, Mg, Ca, Fe
- * 8. Evidence & documents
- * 9. Transport (lab shipment legs)
+ * 5. Nutrient claims (conditional) - P, K, Mg, Ca, Fe
+ * 6. Evidence & documents
+ * 7. Transport (lab shipment legs)
  */
 "use client";
 
@@ -33,7 +31,7 @@ import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
+import { FlaskIcon, FireIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -274,7 +272,7 @@ export function SampleForm({
         id="oToCOrgRatio"
         label="O:C org ratio"
         error={errors.oToCOrgRatio?.message}
-        cue="Enter the lab ratio, or derive it from O% and C_org%."
+        helperText="Enter the lab ratio, or derive it from O% and C_org%."
         certifyRequired={isSampleCertifyField("oToCOrgRatio")}
         certifyStatus={certStatus("oToCOrgRatio")}
       >
@@ -474,16 +472,17 @@ export function SampleForm({
               </div>
         </FormSection>
 
-        {/* ── Carbon Analysis ── */}
+        {/* ── Lab analysis: carbon, elemental and proximate results in one grid ── */}
         <FormSection
-          title="Carbon analysis"
+          title="Lab analysis"
           icon={<FireIcon size={14} weight="bold" />}
-          fields={["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent"]}
+          fields={["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent", "ashContentPercent", "totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent"]}
         >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="totalCarbonPercent"
-                  label="Total carbon (%)"
+                  label="Total carbon"
+                  unit="%"
                   error={errors.totalCarbonPercent?.message}
                   required
                   certifyRequired={is1000Year && isSampleCertifyField("totalCarbonPercent")}
@@ -504,7 +503,8 @@ export function SampleForm({
 
                 <FormField
                   id="organicCarbonPercent"
-                  label="Organic carbon (%)"
+                  label="Organic carbon"
+                  unit="%"
                   error={organicCarbonError}
                   helperText="Basis for the H:Corg / O:Corg eligibility ratios and durable-carbon accounting (both tiers)."
                   required
@@ -523,123 +523,32 @@ export function SampleForm({
                     })}
                   />
                 </FormField>
-              </div>
 
-              <FormField
-                id="inorganicCarbonPercent"
-                label="Inorganic carbon (%)"
-                error={inorganicCarbonError}
-                certifyRequired={is1000Year && isSampleCertifyField("inorganicCarbonPercent")}
-                certifyStatus={certStatus("inorganicCarbonPercent")}
-              >
-                <FormInput
+                <FormField
                   id="inorganicCarbonPercent"
-                  type="number"
-                  step="any"
-                  placeholder="e.g., 3.5"
-                  disabled={isSubmitting}
-                  error={!!inorganicCarbonError}
-                  {...register("inorganicCarbonPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-        </FormSection>
+                  label="Inorganic carbon"
+                  unit="%"
+                  error={inorganicCarbonError}
+                  certifyRequired={is1000Year && isSampleCertifyField("inorganicCarbonPercent")}
+                  certifyStatus={certStatus("inorganicCarbonPercent")}
+                >
+                  <FormInput
+                    id="inorganicCarbonPercent"
+                    type="number"
+                    step="any"
+                    placeholder="e.g., 3.5"
+                    disabled={isSubmitting}
+                    error={!!inorganicCarbonError}
+                    {...register("inorganicCarbonPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
 
-        {/* ── Elemental Analysis ── */}
-        <FormSection
-          title="Elemental analysis"
-          icon={<AtomIcon size={14} weight="bold" />}
-          fields={["totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent"]}
-        >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
-              <FormField
-                id="totalHydrogenPercent"
-                label="Hydrogen (%)"
-                error={errors.totalHydrogenPercent?.message}
-                certifyRequired={isSampleCertifyField("totalHydrogenPercent")}
-                certifyStatus={certStatus("totalHydrogenPercent")}
-              >
-                <FormInput
-                  id="totalHydrogenPercent"
-                  type="number"
-                  step="any"
-                  placeholder="e.g., 2.5"
-                  disabled={isSubmitting}
-                  error={!!errors.totalHydrogenPercent}
-                  {...register("totalHydrogenPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="totalNitrogenPercent"
-                label="Nitrogen (%)"
-                error={errors.totalNitrogenPercent?.message}
-              >
-                <FormInput
-                  id="totalNitrogenPercent"
-                  type="number"
-                  step="any"
-                  placeholder="e.g., 0.8"
-                  disabled={isSubmitting}
-                  error={!!errors.totalNitrogenPercent}
-                  {...register("totalNitrogenPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="totalOxygenPercent"
-                label="Oxygen (%)"
-                error={errors.totalOxygenPercent?.message}
-                helperText="Used to calculate required O:C org when no lab ratio is entered."
-              >
-                <FormInput
-                  id="totalOxygenPercent"
-                  type="number"
-                  step="any"
-                  placeholder="e.g., 12.0"
-                  disabled={isSubmitting}
-                  error={!!errors.totalOxygenPercent}
-                  {...register("totalOxygenPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="totalSulfurPercent"
-                label="Sulfur (%)"
-                error={errors.totalSulfurPercent?.message}
-              >
-                <FormInput
-                  id="totalSulfurPercent"
-                  type="number"
-                  step="any"
-                  placeholder="e.g., 0.1"
-                  disabled={isSubmitting}
-                  error={!!errors.totalSulfurPercent}
-                  {...register("totalSulfurPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-            </div>
-        </FormSection>
-
-        {/* ── Proximate Analysis ── */}
-        <FormSection
-          title="Proximate analysis"
-          icon={<ScalesIcon size={14} weight="bold" />}
-          fields={["ashContentPercent", "moistureContentPercent"]}
-        >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="ashContentPercent"
-                  label="Ash content (%)"
+                  label="Ash content"
+                  unit="%"
                   error={errors.ashContentPercent?.message}
                 >
                   <FormInput
@@ -650,6 +559,150 @@ export function SampleForm({
                     disabled={isSubmitting}
                     error={!!errors.ashContentPercent}
                     {...register("ashContentPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+
+                <FormField
+                  id="totalHydrogenPercent"
+                  label="Hydrogen"
+                  unit="%"
+                  error={errors.totalHydrogenPercent?.message}
+                  certifyRequired={isSampleCertifyField("totalHydrogenPercent")}
+                  certifyStatus={certStatus("totalHydrogenPercent")}
+                >
+                  <FormInput
+                    id="totalHydrogenPercent"
+                    type="number"
+                    step="any"
+                    placeholder="e.g., 2.5"
+                    disabled={isSubmitting}
+                    error={!!errors.totalHydrogenPercent}
+                    {...register("totalHydrogenPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+
+                <FormField
+                  id="totalNitrogenPercent"
+                  label="Nitrogen"
+                  unit="%"
+                  error={errors.totalNitrogenPercent?.message}
+                >
+                  <FormInput
+                    id="totalNitrogenPercent"
+                    type="number"
+                    step="any"
+                    placeholder="e.g., 0.8"
+                    disabled={isSubmitting}
+                    error={!!errors.totalNitrogenPercent}
+                    {...register("totalNitrogenPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+
+                <FormField
+                  id="totalOxygenPercent"
+                  label="Oxygen"
+                  unit="%"
+                  error={errors.totalOxygenPercent?.message}
+                  helperText="Used to calculate required O:C org when no lab ratio is entered."
+                >
+                  <FormInput
+                    id="totalOxygenPercent"
+                    type="number"
+                    step="any"
+                    placeholder="e.g., 12.0"
+                    disabled={isSubmitting}
+                    error={!!errors.totalOxygenPercent}
+                    {...register("totalOxygenPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+
+                <FormField
+                  id="totalSulfurPercent"
+                  label="Sulfur"
+                  unit="%"
+                  error={errors.totalSulfurPercent?.message}
+                >
+                  <FormInput
+                    id="totalSulfurPercent"
+                    type="number"
+                    step="any"
+                    placeholder="e.g., 0.1"
+                    disabled={isSubmitting}
+                    error={!!errors.totalSulfurPercent}
+                    {...register("totalSulfurPercent", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+              </div>
+        </FormSection>
+
+        {/* ── Physical Properties ── */}
+        <FormSection
+          title="Physical properties"
+          icon={<CubeIcon size={14} weight="bold" />}
+          fields={["bulkDensityKgPerM3", "ph", "saltContentGPerKg", "moistureContentPercent"]}
+        >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
+                <FormField
+                  id="bulkDensityKgPerM3"
+                  label="Bulk density (kg/m³)"
+                  error={errors.bulkDensityKgPerM3?.message}
+                >
+                  <FormInput
+                    id="bulkDensityKgPerM3"
+                    type="number"
+                    step="any"
+                    placeholder="e.g., 350"
+                    disabled={isSubmitting}
+                    error={!!errors.bulkDensityKgPerM3}
+                    {...register("bulkDensityKgPerM3", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+
+                <FormField
+                  id="ph"
+                  label="pH"
+                  error={errors.ph?.message}
+                >
+                  <FormInput
+                    id="ph"
+                    type="number"
+                    step="any"
+                    min="0"
+                    max="14"
+                    placeholder="e.g., 9.5"
+                    disabled={isSubmitting}
+                    error={!!errors.ph}
+                    {...register("ph", {
+                      setValueAs: numericValue,
+                    })}
+                  />
+                </FormField>
+
+                <FormField
+                  id="saltContentGPerKg"
+                  label="Salt content (g/kg)"
+                  error={errors.saltContentGPerKg?.message}
+                >
+                  <FormInput
+                    id="saltContentGPerKg"
+                    type="number"
+                    step="any"
+                    placeholder="e.g., 5.0"
+                    disabled={isSubmitting}
+                    error={!!errors.saltContentGPerKg}
+                    {...register("saltContentGPerKg", {
                       setValueAs: numericValue,
                     })}
                   />
@@ -666,71 +719,6 @@ export function SampleForm({
                   })}
                 />
               </div>
-        </FormSection>
-
-        {/* ── Physical Properties ── */}
-        <FormSection
-          title="Physical properties"
-          icon={<CubeIcon size={14} weight="bold" />}
-          fields={["bulkDensityKgPerM3", "ph", "saltContentGPerKg"]}
-        >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
-              <FormField
-                id="bulkDensityKgPerM3"
-                label="Bulk density (kg/m³)"
-                error={errors.bulkDensityKgPerM3?.message}
-              >
-                <FormInput
-                  id="bulkDensityKgPerM3"
-                  type="number"
-                  step="any"
-                  placeholder="e.g., 350"
-                  disabled={isSubmitting}
-                  error={!!errors.bulkDensityKgPerM3}
-                  {...register("bulkDensityKgPerM3", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="ph"
-                label="pH"
-                error={errors.ph?.message}
-              >
-                <FormInput
-                  id="ph"
-                  type="number"
-                  step="any"
-                  min="0"
-                  max="14"
-                  placeholder="e.g., 9.5"
-                  disabled={isSubmitting}
-                  error={!!errors.ph}
-                  {...register("ph", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="saltContentGPerKg"
-                label="Salt content (g/kg)"
-                error={errors.saltContentGPerKg?.message}
-              >
-                <FormInput
-                  id="saltContentGPerKg"
-                  type="number"
-                  step="any"
-                  placeholder="e.g., 5.0"
-                  disabled={isSubmitting}
-                  error={!!errors.saltContentGPerKg}
-                  {...register("saltContentGPerKg", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-            </div>
         </FormSection>
 
         {/* ── Stability Ratios ── */}
@@ -783,7 +771,8 @@ export function SampleForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="randomReflectanceR0Percent"
-                    label="Mean random reflectance R₀ (%)"
+                    label="Mean random reflectance R₀"
+                    unit="%"
                     required
                     error={errors.randomReflectanceR0Percent?.message}
                     certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
@@ -804,7 +793,8 @@ export function SampleForm({
 
                   <FormField
                     id="sReflectanceFraction"
-                    label="R₀ readings at or above 2% (%)"
+                    label="R₀ readings ≥ 2%"
+                    unit="%"
                     required
                     helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
                     error={errors.sReflectanceFraction?.message}
@@ -882,7 +872,8 @@ export function SampleForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="reactiveCarbonPercent"
-                    label="Reactive carbon (%)"
+                    label="Reactive carbon"
+                    unit="%"
                     error={errors.reactiveCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("reactiveCarbonPercent")}
                     certifyStatus={certStatus("reactiveCarbonPercent")}
@@ -902,8 +893,9 @@ export function SampleForm({
 
                   <FormField
                     id="residualCarbonPercent"
-                    label="Residual (non-reactive) carbon (%)"
-                    cue="Enter this or reactive carbon."
+                    label="Residual carbon"
+                    unit="%"
+                    helperText="Enter this or reactive carbon."
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}

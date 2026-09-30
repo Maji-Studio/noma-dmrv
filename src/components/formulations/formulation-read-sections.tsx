@@ -39,6 +39,7 @@ export function formulationSheetSections(formulation: FormulationWithIngredients
     {
       title: "Blend composition by volume",
       fields: [
+        { label: "Base material", value: "Biochar" },
         {
           label: "Biochar · volume share (%)",
           value: formatRatio(formulation.biocharRatio),

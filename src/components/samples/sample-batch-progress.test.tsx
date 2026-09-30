@@ -107,7 +107,7 @@ describe("SampleBatchProgress", () => {
     ]);
 
     expect(html).toContain(
-      "This batch has 1 usable replicate. 2 recorded Samples don&#x27;t count yet. Enter Oxygen (%) on them to reach the minimum of 3.",
+      "This batch has 1 usable replicate. 2 recorded Samples don&#x27;t count yet. Enter Oxygen on them to reach the minimum of 3.",
     );
   });
 
@@ -115,7 +115,7 @@ describe("SampleBatchProgress", () => {
     const html = render([replicate({ id: "1", hToCorg: null })]);
 
     expect(html).toContain(
-      "This batch has 0 usable replicates. 1 recorded Sample doesn&#x27;t count yet. Enter Hydrogen (%) on it, then add 2 more to reach the minimum of 3.",
+      "This batch has 0 usable replicates. 1 recorded Sample doesn&#x27;t count yet. Enter Hydrogen on it, then add 2 more to reach the minimum of 3.",
     );
   });
 

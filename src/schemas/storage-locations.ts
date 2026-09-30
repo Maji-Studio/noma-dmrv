@@ -292,6 +292,13 @@ export type StorageLocationFilterData = z.infer<
 /**
  * Format storage location type for display
  */
+/** Segment labels for the storage type control, where the field name already says "bin". */
+export const STORAGE_LOCATION_TYPE_SHORT_LABELS: Record<StorageLocationType, string> = {
+  feedstock_bin: "Feedstock",
+  biochar_bin: "Biochar",
+  product_bin: "Product",
+};
+
 export function formatStorageLocationType(type: StorageLocationType): string {
   const labels: Record<StorageLocationType, string> = {
     feedstock_bin: "Feedstock bin",
