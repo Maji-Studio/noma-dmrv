@@ -418,8 +418,8 @@ function JourneyLeg({
  * a caption + add button, the legs as one journey timeline, and a centered
  * add/edit dialog. Pass `readOnly` for the view-mode summary.
  *
- * Every mount is a 390px side sheet, so the legs read as stops on a rail rather
- * than as a table (no rail): consecutive legs share a stop, which is what the operator
+ * Every mount is a 390px side sheet, so the legs read as pinned stops rather
+ * than as a table: consecutive legs share a stop, which is what the operator
  * recorded, and each leg sits as a one-line box between the two stops it joins.
  * Long stop names wrap; the load, evidence icon and actions menu stay pinned
  * right.

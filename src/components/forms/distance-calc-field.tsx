@@ -54,7 +54,8 @@ interface DistanceCalcFieldProps {
   destinationLabel: string;
 }
 
-const DISTANCE_UNIT = "km";
+/** The distance unit, shown as the input suffix and in the accessible name. */
+export const DISTANCE_UNIT = "km";
 
 const ROUTING_UNAVAILABLE_MESSAGE =
   "Routing is not set up. Enter the distance by hand.";

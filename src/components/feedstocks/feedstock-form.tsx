@@ -19,6 +19,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { ControlUnitSuffix, unitEndPadding } from "@/components/forms/form-field";
+import { DISTANCE_UNIT } from "@/components/forms/distance-calc-field";
 import { FormError, FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
@@ -54,7 +55,6 @@ import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
-const DISTANCE_UNIT = "km";
 const DISTANCE_INPUT_STYLE = { paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) } as const;
 
 const isFeedstockCertifyField = (field: string) =>
