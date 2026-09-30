@@ -288,7 +288,7 @@ async function runCodex(prompt, cwd, schemaPath, outputPath, timeoutMs) {
     "-m",
     "gpt-6-astra",
     "-c",
-    'model_reasoning_effort="low"',
+    'model_reasoning_effort="medium"',
     "-s",
     "read-only",
     "--output-schema",
