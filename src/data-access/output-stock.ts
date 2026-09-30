@@ -120,6 +120,7 @@ export function getBiocharOutputStockLayers(ctx: OrgContext, input: { storageLoc
  * mutation guards conserve all of it; draws use dated availability instead.
  */
 export async function getOutputBinAllLayersDryKg(ctx: OrgContext, storageLocationId: string, reader: Reader = db, options: ReadOptions = {}): Promise<number> {
+  requireOrgScope(ctx);
   return Number((await readOutputBinAllLayers(ctx, storageLocationId, reader, options)).allLayersDryKg);
 }
 

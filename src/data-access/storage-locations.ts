@@ -551,9 +551,11 @@ export async function updateStorageLocation(
       ? effectiveFeedstockTypeId ?? null
       : null;
 
-    // These columns select the bin's material lane and facility, so a stocked
-    // bin keeps the setup its recorded stock and history were written against. The guard
-    // compares the two identities itself and returns when neither moved.
+    // These columns select the bin's material lane and facility scope, so a
+    // stocked bin keeps the setup its recorded stock and history were written
+    // against. The guard compares the identities itself and returns when none
+    // moved. The update action no longer carries facilityId; this data-access
+    // input keeps it so any future caller still meets the guard.
     await assertBinIdentityChangeAllowed(
       ctx,
       tx,
@@ -658,8 +660,9 @@ export async function updateStorageLocation(
 // Archive Operations
 // ============================================
 
-const ARCHIVE_RESIDUAL_MATERIAL_MESSAGE =
-  "Cannot archive this storage bin while it still holds material. Record a stock count of zero to clear what is left, then archive it.";
+function archiveResidualMaterialMessage(code: string): string {
+  return `Cannot archive storage bin ${code} while it still holds material. Record a stock count of zero to clear what is left, then archive it.`;
+}
 
 /**
  * Archive one storage bin without disturbing its operational history.
@@ -675,6 +678,7 @@ export async function archiveStorageLocation(
     const [existing] = await tx
       .select({
         id: storageLocations.id,
+        code: storageLocations.code,
         type: storageLocations.type,
         archivedAt: storageLocations.archivedAt,
       })
@@ -694,27 +698,22 @@ export async function archiveStorageLocation(
     }
 
     const lane = laneForStorageType(existing.type);
-    const availableKg = await deriveBinLaneAvailableKg(
-      ctx,
-      tx,
-      storageLocationId,
-      lane,
-    );
-    // Output bins can hold ingredient solids while the dry biochar balance
-    // reads 0.000 kg; a zero count clears both exactly.
-    if (
-      lane !== "feedstock" &&
-      !hasNonZeroStock(availableKg) &&
-      layersHoldMaterial(
-        (await readOutputBinAllLayers(ctx, storageLocationId, tx)).layers,
-      )
-    ) {
-      throw new SafeError(ARCHIVE_RESIDUAL_MATERIAL_MESSAGE);
-    }
+    // Output bins read their layers once: the dry biochar balance, and whether
+    // ingredient solids outlast a 0.000 kg balance (a zero count clears both).
+    const outputState =
+      lane === "feedstock"
+        ? null
+        : await readOutputBinAllLayers(ctx, storageLocationId, tx);
+    const availableKg = outputState
+      ? Number(outputState.allLayersDryKg)
+      : await deriveBinLaneAvailableKg(ctx, tx, storageLocationId, lane);
     if (hasNonZeroStock(availableKg)) {
       throw new SafeError(
-        `Cannot archive this storage bin while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
+        `Cannot archive storage bin ${existing.code} while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
       );
+    }
+    if (outputState && layersHoldMaterial(outputState.layers)) {
+      throw new SafeError(archiveResidualMaterialMessage(existing.code));
     }
 
     const archivedAt = new Date();

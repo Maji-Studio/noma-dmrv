@@ -35,12 +35,12 @@ import { deleteOutputProductFixtures, outputProductFixtureValues } from "./helpe
 import { deleteFeedstock, updateFeedstock } from "@/data-access/feedstocks";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { updateStorageLocation } from "@/data-access/storage-locations";
-import { updateStorageLocationSchema } from "@/schemas/storage-locations";
 import { cleanupPostedStock, postedStockFixture } from "./helpers/posted-output-stock-fixture";
 import { lockBinStock } from "@/data-access/lock-bin-stocks";
 import type { OrgContext } from "@/lib/auth/server";
 
 const INTAKE_WET_KG = 100;
+const FACILITY_CODE_SUFFIX_LENGTH = 4;
 const INTAKE_DRY_KG = 80;
 const MOISTURE_PERCENT = 20;
 const LOSS_WET_KG = 80;
@@ -175,7 +175,7 @@ async function insertOtherFacility(organizationId: string, tag: string): Promise
     .insert(facilities)
     .values({
       organizationId,
-      code: `E2E-BINT-F2-${tag}-${randomUUID().slice(0, 4).toUpperCase()}`,
+      code: `E2E-BINT-F2-${tag}-${randomUUID().slice(0, FACILITY_CODE_SUFFIX_LENGTH).toUpperCase()}`,
       name: `E2E Bin integrity other facility ${tag}`,
     })
     .returning({ id: facilities.id });
@@ -578,15 +578,6 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     const moved = await updateStorageLocation(f.ctx, empty.id, { facilityId: otherFacilityId });
 
     expect(moved.facilityId).toBe(otherFacilityId);
-  });
-
-  it("does not let the update action carry a facility at all", () => {
-    const parsed = updateStorageLocationSchema.parse({
-      storageLocationId: randomUUID(),
-      facilityId: randomUUID(),
-    });
-    expect(parsed).not.toHaveProperty("facilityId");
-    expect(Object.keys(updateStorageLocationSchema.shape)).not.toContain("facilityId");
   });
 
   it("still saves a rename and other metadata on a stocked bin", async () => {

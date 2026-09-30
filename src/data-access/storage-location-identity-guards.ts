@@ -1,8 +1,9 @@
 /**
  * Stocked-bin identity guard (issue #767).
  *
- * A bin's `type`, `feedstockTypeId` and `facilityId` decide which material lane every stock
- * derivation reads for it. Changing either one on a bin that still holds
+ * A bin's `type` and `feedstockTypeId` decide which material lane every stock
+ * derivation reads for it, and its `facilityId` scopes which layers those
+ * derivations count. Changing any of them on a bin that still holds
  * material, or that already carries stock history, silently re-points that
  * history at a lane nobody reads, so the mass disappears from every bin and
  * facility summary without a single movement row to explain it.
