@@ -80,7 +80,7 @@ export function ChainNodeSheet({
         <SlideOverPanel.Header>
           <div className="flex items-center justify-between gap-12">
             <span
-              className="inline-flex min-w-0 items-center gap-6 font-mono text-[10px] font-medium uppercase tracking-[0.09em]"
+              className="inline-flex min-w-0 items-center gap-6 body-caption"
               style={{ color: accentInk }}
             >
               <Icon size={13} weight="bold" className="shrink-0" />

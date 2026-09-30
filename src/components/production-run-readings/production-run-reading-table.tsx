@@ -90,7 +90,7 @@ export function ProductionRunReadingTable({
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       {/* Header */}
       <div className="flex items-center justify-between gap-12">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
           Imported readings{readingCount > 0 ? ` (${readingCount})` : ""}
         </h3>
         {!readOnly && readingCount > 0 && (

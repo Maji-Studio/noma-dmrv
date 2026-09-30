@@ -69,8 +69,8 @@ const STOP_ICON_PX = 13;
 const HERO_ICON_PX = 40;
 /** GPS pairs are shown at ~1 m resolution, the precision operators enter. */
 const COORD_DECIMALS = 5;
-const MICRO_CAPS =
-  "font-mono text-[9.5px] font-medium uppercase tracking-[0.1em]";
+/** Labels are sentence case captions (no eyebrows inside read panels). */
+const CAPTION = "body-caption";
 const HAIRLINE = "border-b border-[var(--clr-dark-purple-10)]";
 const INK_STRONG = "text-[var(--clr-dark-purple)]";
 const INK_MUTED = "text-[var(--clr-dark-purple-60)]";
@@ -149,10 +149,10 @@ function StatusPill({ status }: { status: string | null | undefined }) {
   );
 }
 
-/** Micro-caps section label, on the same full-bleed grid as the rows under it. */
+/** Section title, on the same full-bleed grid as the rows under it. */
 function SectionLabel({ children }: { children: string }) {
   return (
-    <div className={cn(MICRO_CAPS, HAIRLINE, "px-16 py-8 font-normal", INK_FAINT)}>{children}</div>
+    <div className={cn("body-small font-medium", HAIRLINE, "px-16 py-8", INK_MUTED)}>{children}</div>
   );
 }
 
@@ -161,14 +161,14 @@ function SectionLabel({ children }: { children: string }) {
 function InfoRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <div className={cn("flex items-baseline justify-between gap-12 px-16 py-8", HAIRLINE)}>
-      <span className={cn(MICRO_CAPS, "shrink-0 font-normal", INK_MUTED)}>{label}</span>
+      <span className={cn(CAPTION, "shrink-0", INK_MUTED)}>{label}</span>
       <span className={cn(VALUE_CLASS, mono && MONO_VALUE, INK_STRONG)}>{value}</span>
     </div>
   );
 }
 
 /**
- * One end of the courier thread: micro-caps role over the party's name. `ink`
+ * One end of the courier thread: role caption over the party's name. `ink`
  * is set on the record's own end of the leg and null on the counterparty.
  */
 function ThreadStop({
@@ -188,7 +188,7 @@ function ThreadStop({
         <StopIcon size={STOP_ICON_PX} weight={ink ? "fill" : "regular"} style={{ color: ink ?? "var(--clr-dark-purple-40)" }} />
       </span>
       <span className="flex min-w-0 flex-col gap-2">
-        <span className={cn(MICRO_CAPS, "font-normal", INK_FAINT)}>{label}</span>
+        <span className={cn(CAPTION, INK_FAINT)}>{label}</span>
         <span className="truncate text-[12.5px] font-medium" style={{ color: ink ?? "var(--clr-dark-purple)" }}>
           {value}
         </span>
@@ -280,7 +280,7 @@ export function RecordDetailPanel({
     >
       <header className={cn("px-16 pb-12 pt-12", HAIRLINE)}>
         <div className="flex items-center justify-between gap-8">
-          <span className={cn(MICRO_CAPS, "flex min-w-0 items-center gap-6")} style={{ color: accentInk }}>
+          <span className={cn(CAPTION, "flex min-w-0 items-center gap-6")} style={{ color: accentInk }}>
             <Icon size={HEADER_ICON_PX} weight="bold" className="shrink-0" />
             <span className="truncate">{label}</span>
           </span>

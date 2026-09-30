@@ -113,7 +113,7 @@ export function SetupSpine({
                 </div>
 
                 {state === "done" && (
-                  <span className="label-micro shrink-0 text-[var(--st-ok)]">
+                  <span className="body-caption shrink-0 text-[var(--st-ok)]">
                     Done
                   </span>
                 )}

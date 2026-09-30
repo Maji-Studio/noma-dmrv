@@ -218,7 +218,9 @@ caption.
   `body-small font-medium` title in primary ink on a `min-h-24` row, not an
   uppercase tracked micro label. The sheet title and the spine's numbered
   marker already carry the hierarchy. No mono uppercase micro labels inside
-  forms either; `label-micro` belongs to table headers.
+  forms, sheets, dialogs or read views either (accordion triggers, side
+  panels, settings panes); `label-micro` belongs to list-table headers and
+  the dashboard. The `PageHeader` area eyebrow is the one exception.
 - **Lines only where they separate things of a different kind.** Kept: the
   `FormSpine` rail, the hairline between plain `FormSection`s, and the
   `CompositionCard` action row's top rule. Not drawn: rules between a caption
