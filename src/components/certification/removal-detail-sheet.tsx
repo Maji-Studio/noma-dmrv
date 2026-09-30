@@ -71,6 +71,7 @@ export function RemovalStorageSitesField({
       label="Storage sites"
       value={
         <IsometricLink
+          label="View on Isometric"
           href={isometricRegistry.storageSites({
             environment,
             externalProjectId,
