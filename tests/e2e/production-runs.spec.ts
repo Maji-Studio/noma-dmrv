@@ -211,6 +211,15 @@ test.describe("Production Run + Sample UI CRUD", () => {
       await expect(
         page.getByRole("status").filter({ hasText: "Production run updated." }),
       ).toBeVisible();
+      // A save closes the sheet for good, like every other list; reopen the
+      // run to read what was persisted.
+      await waitForSideSheetClose(page);
+      await page
+        .locator("tbody tr")
+        .filter({ hasText: createdCode })
+        .first()
+        .click();
+      await waitForSideSheet(page);
       await expect(
         detail.locator('input[name^="feedstockDraws."]'),
       ).toHaveCount(0);
