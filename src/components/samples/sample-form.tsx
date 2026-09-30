@@ -771,7 +771,8 @@ export function SampleForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="randomReflectanceR0Percent"
-                    label="Mean random reflectance R₀ (%)"
+                    label="Mean random reflectance R₀"
+                    unit="%"
                     required
                     error={errors.randomReflectanceR0Percent?.message}
                     certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
@@ -792,7 +793,8 @@ export function SampleForm({
 
                   <FormField
                     id="sReflectanceFraction"
-                    label="R₀ readings at or above 2% (%)"
+                    label="R₀ readings ≥ 2%"
+                    unit="%"
                     required
                     helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
                     error={errors.sReflectanceFraction?.message}
@@ -870,7 +872,8 @@ export function SampleForm({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="reactiveCarbonPercent"
-                    label="Reactive carbon (%)"
+                    label="Reactive carbon"
+                    unit="%"
                     error={errors.reactiveCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("reactiveCarbonPercent")}
                     certifyStatus={certStatus("reactiveCarbonPercent")}
@@ -890,7 +893,8 @@ export function SampleForm({
 
                   <FormField
                     id="residualCarbonPercent"
-                    label="Residual (non-reactive) carbon (%)"
+                    label="Residual carbon"
+                    unit="%"
                     cue="Enter this or reactive carbon."
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}

@@ -24,6 +24,7 @@ import {
   storageLocationTypes,
   outputStockModes,
   STORAGE_LOCATION_TYPE_SHORT_LABELS,
+  formatStorageLocationType,
   isFeedstockBinType,
   isOutputBinType,
   STORAGE_LOCATION_TYPE_DESCRIPTIONS,
@@ -86,6 +87,8 @@ export function StorageLocationForm({
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const typeChoices = allowedTypes ?? storageLocationTypes;
+  // A caller that allows one type (quick-add) fixes it: no choice to draw.
+  const fixedType = typeChoices.length === 1 ? typeChoices[0] : undefined;
   const storageTypeOptions = typeChoices.map((type) => ({
     value: type,
     label: STORAGE_LOCATION_TYPE_SHORT_LABELS[type],
@@ -103,7 +106,7 @@ export function StorageLocationForm({
     resolver: zodResolver(storageLocationFormSchema),
     defaultValues: {
       name: storageLocation?.name ?? "",
-      type: storageLocation?.type ?? defaultType ?? undefined,
+      type: storageLocation?.type ?? defaultType ?? fixedType,
       facilityId: storageLocation?.facilityId ?? defaultFacilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
@@ -160,22 +163,32 @@ export function StorageLocationForm({
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField
-          id="type"
-          label="Storage type"
-          error={errors.type?.message}
-          helperText={typeDescription}
-          required
-        >
-          <SegmentedControl
+        {fixedType ? (
+          <div className="flex flex-col gap-6">
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">Storage type</span>
+            <span className="flex min-h-40 items-center body-small text-[var(--color-text-primary)]">
+              {formatStorageLocationType(fixedType)}
+            </span>
+            <input type="hidden" {...register("type")} />
+          </div>
+        ) : (
+          <FormField
             id="type"
-            legend="Storage type"
-            disabled={isSubmitting}
-            error={!!errors.type}
-            options={storageTypeOptions}
-            {...register("type")}
-          />
-        </FormField>
+            label="Storage type"
+            error={errors.type?.message}
+            helperText={typeDescription}
+            required
+          >
+            <SegmentedControl
+              id="type"
+              legend="Storage type"
+              disabled={isSubmitting}
+              error={!!errors.type}
+              options={storageTypeOptions}
+              {...register("type")}
+            />
+          </FormField>
+        )}
 
         <FormField id="name" label="Bin name" error={errors.name?.message} required>
           <FormInput
