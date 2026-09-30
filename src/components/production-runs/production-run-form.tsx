@@ -381,7 +381,7 @@ export function ProductionRunForm({
           id="status"
           label="Status"
           error={errors.status?.message}
-          cue="Mark finished runs Complete before certification."
+          helperText="Mark finished runs Complete before certification."
           certifyRequired
           certifyStatus={runStatusCertStatus}
         >
