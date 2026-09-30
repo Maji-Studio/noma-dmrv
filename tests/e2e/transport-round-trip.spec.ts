@@ -188,8 +188,9 @@ test.describe("Transport round trip (#852)", () => {
     await page.keyboard.press("Escape");
 
     // Customer detail → Add location dialog.
-    await page.goto(`/customers/${seededData.customer.id}`);
+    await page.goto(`/customers?customer=${seededData.customer.id}`);
     await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: "Edit customer" }).click();
     await page.getByRole("button", { name: "Add location" }).click();
     // The locations table header now carries the same copy (QA detail-view
     // pass), so target the form INPUT via its accessible name.

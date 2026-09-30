@@ -21,10 +21,6 @@ const supplierDetailSource = readFileSync(
   new URL("./suppliers/supplier-detail.tsx", import.meta.url),
   "utf8",
 );
-const customerDetailSource = readFileSync(
-  new URL("./customers/customer-detail.tsx", import.meta.url),
-  "utf8",
-);
 const transportLegsEditorSource = readFileSync(
   new URL("./transport-legs/transport-legs-editor.tsx", import.meta.url),
   "utf8",
@@ -66,14 +62,6 @@ describe.each([
     "SupplierLocationForm",
     "useCreateSupplierLocation",
     "useUpdateSupplierLocation",
-  ],
-  [
-    "customer",
-    customerDetailSource,
-    "CustomerLocationDialog",
-    "CustomerLocationForm",
-    "useCreateCustomerLocation",
-    "useUpdateCustomerLocation",
   ],
 ])(
   "%s detail location management",

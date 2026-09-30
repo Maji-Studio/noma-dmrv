@@ -1,13 +1,12 @@
 "use client";
 
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
-import { formatCompositionMass } from "@/components/forms/composition-ledger";
 import { SegmentBar, SegmentKey } from "@/components/ui/segment-bar";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockAllocationView } from "@/types/output-stock";
 import type { ReactNode } from "react";
-import { batchSegments, formatWetEstimate } from "./stock-preview-shared";
+import { batchSegments, formatDryKeyMass, formatWetEstimate } from "./stock-preview-shared";
 
 /** The one definition the availability block cannot show as a number. */
 const AVAILABILITY_HINT =
@@ -42,11 +41,6 @@ export function OutputStockAllocations({ allocations }: { allocations: OutputSto
       </dl>
     </div>
   );
-}
-
-/** Key figures under a wet headline: batches are tracked dry, so they say so. */
-function formatDryKeyMass(kg: number | null): string {
-  return `${formatCompositionMass(kg)} dry`;
 }
 
 /**

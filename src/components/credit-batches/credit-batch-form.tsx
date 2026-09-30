@@ -384,6 +384,7 @@ export function CreditBatchForm({
         isError={productionRunOptionsErrored}
         onRetry={() => refetchProductionRunOptions()}
         isRetrying={productionRunOptionsFetching}
+        summary={<CohortInputLedger runs={selectedRuns} />}
       />
 
       {errors.productionRunIds?.message && (
@@ -407,9 +408,6 @@ export function CreditBatchForm({
           Restore the dates or feedstock type to keep the claims.
         </Notice>
       )}
-
-      {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
-      <CohortInputLedger runs={selectedRuns} />
 
       {/* Free-form notes trail the operational inputs and their live preview. */}
       <FormSection title="Additional information">

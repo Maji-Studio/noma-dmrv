@@ -7,9 +7,13 @@ import type { PartyLocationDetail } from "@/components/party-location-detail-fie
 export function customerSheetSections(customer: CustomerWithRelations, locations: PartyLocationDetail[]): DetailPanelSection[] {
   return [
     {
-      title: "Required information",
+      title: "Customer",
       fields: [
         { label: "Customer name", value: customer.name },
+        { label: "Contact email", value: customer.contactEmail },
+        { label: "Contact phone", value: customer.contactPhone },
+        { label: "Crop type", value: customer.cropType },
+        { label: "Address", value: customer.address },
       ],
     },
     {
@@ -21,20 +25,6 @@ export function customerSheetSections(customer: CustomerWithRelations, locations
         descriptionLabel: "Site description",
         includeSoilTemperature: true,
       }),
-    },
-    {
-      title: "Contact information",
-      fields: [
-        { label: "Contact email", value: customer.contactEmail },
-        { label: "Contact phone", value: customer.contactPhone },
-      ],
-    },
-    {
-      title: "Business information",
-      fields: [
-        { label: "Crop type", value: customer.cropType },
-        { label: "Address", value: customer.address },
-      ],
     },
   ];
 }

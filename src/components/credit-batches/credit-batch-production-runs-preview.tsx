@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   ArrowsClockwiseIcon,
   FactoryIcon,
@@ -26,6 +27,8 @@ interface CreditBatchProductionRunsPreviewProps {
   isError: boolean;
   isRetrying: boolean;
   onRetry: () => void;
+  /** Derived totals for the selected cohort, shown above the run rows so the cohort reads as one block. */
+  summary?: ReactNode;
 }
 
 function ProductionRunPreviewRow({
@@ -74,9 +77,6 @@ function ProductionRunPreviewRow({
       <span className="flex shrink-0 items-center gap-10">
         {isPreview && <StatusBadge status={run.status} size="small" />}
         <span className="text-right">
-          <span className="block label-micro text-[var(--color-text-tertiary)]">
-            Biochar output
-          </span>
           <span className="block body-small tabular-nums text-[var(--color-text-secondary)]">
             {formatWetDryMass({
               wetKg: run.biocharOutputKg,
@@ -120,6 +120,7 @@ export function CreditBatchProductionRunsPreview({
   isError,
   isRetrying,
   onRetry,
+  summary,
 }: CreditBatchProductionRunsPreviewProps) {
   const retainedKnownRuns = retainedRuns.flatMap(({ run }) => (run ? [run] : []));
   const unavailableRunIds = retainedRuns.flatMap(({ id, run }) =>
@@ -135,7 +136,7 @@ export function CreditBatchProductionRunsPreview({
   return (
     <section
       data-testid="credit-batch-production-run-cohort"
-      className="space-y-12 border-t border-[var(--color-border-tertiary)] pt-16"
+      className="space-y-12"
     >
       <SectionLabel hint="Completed runs matching this feedstock and production window are attached automatically. Non-complete runs are shown as previews.">
         Production runs
@@ -186,12 +187,15 @@ export function CreditBatchProductionRunsPreview({
             </p>
           )}
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            {completedCount} completed · {previewCount}{" "}
-            {previewCount === 1 ? "preview" : "previews"}
-            {unavailableRunIds.length > 0
-              ? ` · ${unavailableRunIds.length} retained`
-              : ""}
+            {[
+              `${completedCount} completed`,
+              `${previewCount} ${previewCount === 1 ? "preview" : "previews"}`,
+              ...(unavailableRunIds.length > 0
+                ? [`${unavailableRunIds.length} retained`]
+                : []),
+            ].join(" · ")}
           </p>
+          {summary}
           <div className="grid grid-cols-1 gap-8">
             {visibleRuns.map((run) => (
               <ProductionRunPreviewRow

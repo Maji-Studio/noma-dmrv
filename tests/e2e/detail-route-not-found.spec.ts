@@ -16,13 +16,6 @@ const ROUTES = [
     backLabel: "Back to suppliers",
     screenshot: "supplier-not-found.png",
   },
-  {
-    label: "customer",
-    path: "/customers",
-    heading: "Customer not found",
-    backLabel: "Back to customers",
-    screenshot: "customer-not-found.png",
-  },
 ] as const;
 
 for (const route of ROUTES) {

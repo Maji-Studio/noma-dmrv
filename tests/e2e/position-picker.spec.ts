@@ -356,15 +356,13 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       createdCustomerId = savedLocation?.customerId;
 
       // The stored NULL reads back as the shared missing-value token.
-      await page.goto(`/customers/${createdCustomerId}`);
-      const locationRow = page
-        .getByRole("row")
-        .filter({ hasText: locationName });
-      await expect(locationRow).toBeVisible();
-      // Column order: name, country, state / region, city, site description.
-      await expect(locationRow.getByRole("cell").nth(4)).toHaveText(
-        MISSING_VALUE.notRecorded
-      );
+      await page.goto(`/customers?customer=${createdCustomerId}`);
+      const customerView = page.getByRole("dialog");
+      await expect(customerView.getByText(locationName).first()).toBeVisible();
+      await expect(customerView.getByText("Site description")).toBeVisible();
+      await expect(
+        customerView.getByText(MISSING_VALUE.notRecorded).first(),
+      ).toBeVisible();
     } finally {
       try {
         if (createdCustomerId) {
@@ -410,11 +408,12 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(supplierSheet.getByText("E2E Supplier Site")).toBeVisible();
   });
 
-  test("party detail pages open location dialogs", async ({
+  test("party pages open location dialogs", async ({
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/customers/${seededData.customer.id}`);
+    await page.goto(`/customers?customer=${seededData.customer.id}`);
+    await page.getByRole("button", { name: "Edit customer" }).click();
     await page.getByRole("button", { name: "Add location" }).click();
 
     const customerAddDialog = page.getByRole("dialog", {
@@ -424,7 +423,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await customerAddDialog.getByRole("button", { name: "Close" }).click();
     await expect(customerAddDialog).not.toBeVisible();
 
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: /^Edit / }).first().click();
     const customerEditDialog = page.getByRole("dialog", {
       name: "Edit location",
     });

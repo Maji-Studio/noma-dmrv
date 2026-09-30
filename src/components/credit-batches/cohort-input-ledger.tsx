@@ -14,6 +14,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { isMissingValueCopy, MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate } from "@/lib/format-utils";
 import { sumNullable, sumNullableBy } from "@/lib/nullable-sum";
+import { InfoHint } from "@/components/ui/tooltip";
 
 // Per-run categorical palette for the dry-output composition bar. Accent hues
 // (not semantic good/warn/critical) so adjacent segments stay distinguishable;
@@ -127,20 +128,23 @@ export function CohortInputLedger({
       : [];
 
   return (
-    <section
-      className="border-t-2 border-[var(--clr-orange)] bg-[var(--color-background-medium)]"
+    <div
+      className="flex flex-col gap-12"
+      role="group"
       aria-label="Production inputs this batch claims"
     >
-      <div className="flex items-baseline justify-between gap-12 px-18 pt-16 pb-12">
+      <div className="flex items-center gap-6">
         <span className="body-small font-medium text-[var(--color-text-primary)]">
           Production inputs this batch claims
         </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          {runs.length} {runs.length === 1 ? "run" : "runs"}
-        </span>
+        <InfoHint label="More about production inputs">
+          Diesel adds startup, genset and preprocessing fuel. Each input is claimed once in full for this credit batch, even when
+          its output is later split across Removals. Isometric calculates CO₂e
+          at submission. noma submits these quantities, not emission factors.
+        </InfoHint>
       </div>
 
-      <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-24 gap-y-16 px-18 pb-12">
+      <dl className="grid grid-cols-2 gap-x-24 gap-y-16 md:grid-cols-4">
         <Figure
           label="Dry output"
           value={formatTonnesFromKg(totals.dryOutputKg)}
@@ -152,7 +156,7 @@ export function CohortInputLedger({
           unit="t"
         />
         <Figure
-          label="Diesel · startup + genset + preprocess"
+          label="Diesel"
           value={formatQuantity(totals.dieselLiters)}
           unit="L"
         />
@@ -164,7 +168,7 @@ export function CohortInputLedger({
       </dl>
 
       {segments.length > 0 && (
-        <div className="px-18 pb-16 space-y-8">
+        <div className="space-y-8">
           <div className="flex h-12 overflow-hidden bg-[var(--color-background-medium)]">
             {segments.map((segment) => (
               <span
@@ -194,12 +198,6 @@ export function CohortInputLedger({
           </div>
         </div>
       )}
-
-      <p className="px-18 pb-16 pt-4 body-caption text-[var(--color-text-tertiary)] leading-relaxed border-t border-[var(--color-border-tertiary)]">
-        Each input is claimed once in full for this credit batch, even when its
-        output is later split across Removals. Isometric calculates CO₂e at
-        submission. noma submits the quantities above, not emission factors.
-      </p>
-    </section>
+    </div>
   );
 }

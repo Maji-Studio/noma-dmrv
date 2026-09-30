@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import {
+  CameraIcon,
+  MapPinIcon,
   MapTrifoldIcon,
   PlusIcon,
+  PolygonIcon,
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -20,21 +23,26 @@ import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 
 const GIS_BOUNDARY_DOC_TYPE: DocumentType = "gis_boundary";
 
+const METHOD_ART_SIZE = 20;
+
 const METHOD_OPTIONS = [
   {
     value: "location",
     title: "Customer location",
+    art: <MapPinIcon size={METHOD_ART_SIZE} weight="bold" />,
     description:
       "Use the application GPS coordinates from the delivery's customer location.",
   },
   {
     value: "boundary",
     title: "GIS reference",
+    art: <PolygonIcon size={METHOD_ART_SIZE} weight="bold" />,
     description: "The field boundary as a GeoJSON file, drawn on a map.",
   },
   {
     value: "visual",
     title: "Visual evidence",
+    art: <CameraIcon size={METHOD_ART_SIZE} weight="bold" />,
     description: "Geotagged photos of each application stage.",
     disabled: true,
     badge: "Available later",
