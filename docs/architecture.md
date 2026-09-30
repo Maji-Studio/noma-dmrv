@@ -20,6 +20,10 @@ components (UI)
 
 - UI never talks directly to `db`; no layer skipping.
 - `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
+- Trusted-context implementations (anything taking an already resolved
+  `OrgContext`) live in directive-free `fn/**/*-core.ts` modules; a
+  `"use server"` file exports only actions that resolve their own context
+  from the session (`withAction`), enforced by `pnpm check:server-action-exports`.
 - `src/lib/read-models/` holds server-only read cores that take an already
   resolved `OrgContext` and return domain data. They are not Server Actions and
   are not exported from a `"use server"` file; the caller authenticates first.

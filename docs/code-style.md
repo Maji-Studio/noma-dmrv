@@ -84,5 +84,6 @@ copy-pasteable walkthrough is [../TEMPLATE_USAGE.md](../TEMPLATE_USAGE.md) and t
 ## Before you commit
 
 `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm check:org-scoping` ·
+`pnpm check:server-action-exports` ·
 `pnpm check:spacing-scale` (and `pnpm test:e2e`
 when the change has a UI flow).
