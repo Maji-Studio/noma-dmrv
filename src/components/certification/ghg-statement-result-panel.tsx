@@ -75,15 +75,15 @@ export function ResultPanel({
               </Accordion.Trigger>
             </Accordion.Header>
             <Accordion.Panel className="[&>div]:p-0">
-              <p className="body-caption border-b border-[var(--color-border-tertiary)] px-16 py-10 text-[var(--color-text-secondary)]">
+              <p className="body-caption px-16 py-10 text-[var(--color-text-secondary)]">
                 The statement is saved. These linked Removals need attention in
                 noma.
               </p>
-              <ul className="flex max-h-[280px] flex-col overflow-y-auto">
+              <ul className="flex max-h-[280px] flex-col gap-6 overflow-y-auto pb-10">
                 {warnings.map((warning, index) => (
                   <li
                     key={`${index}-${warning}`}
-                    className="body-caption border-b border-[var(--color-border-tertiary)] px-16 py-10 text-[var(--color-text-secondary)] last:border-b-0"
+                    className="body-caption px-16 text-[var(--color-text-secondary)]"
                   >
                     {warning}
                   </li>

@@ -78,7 +78,7 @@ function DurabilityBadge({ durability }: { durability: "200_year" | "1000_year" 
   const is1000Year = durability === "1000_year";
   return (
     <span
-      className={`inline-flex items-center gap-4 px-8 py-2 text-[11px] font-medium uppercase tracking-[0.06em] ${
+      className={`inline-flex items-center gap-4 px-8 py-2 text-[11px] font-medium ${
         is1000Year
           ? "border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] text-[var(--clr-purple)]"
           : "border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] text-[var(--color-text-secondary)]"

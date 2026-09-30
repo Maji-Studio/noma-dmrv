@@ -172,7 +172,7 @@ test.describe("First-run onboarding", () => {
 
       // 6. Collapse to the strip (real dashboard renders), expand back.
       await guide.getByRole("button", { name: "Hide setup guide" }).click();
-      await expect(page.getByText(/Setup · 2\/7/)).toBeVisible();
+      await expect(page.getByText(/Setup, 2 of 7/)).toBeVisible();
       await expect(page.getByTestId("dashboard-kpis")).toBeVisible();
       await page.getByRole("button", { name: "Show guide" }).click();
       await expect(guide).toBeVisible();

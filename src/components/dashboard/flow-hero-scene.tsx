@@ -503,7 +503,7 @@ export function FlowHeroScene({
         return (
           <div
             key={`label-${station.key}`}
-            className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]"
+            className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[10px] text-[var(--clr-dark-purple-60)]"
             style={{
               left: pctX(geo.labelX),
               top: pctY(LABEL_Y),
@@ -596,7 +596,7 @@ export function FlowHeroScene({
       {/* Running-runs chip, stacked above the production badge (overview only). */}
       {interactive && view === "overview" && runningRuns > 0 && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full px-8 py-4 font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.08em] text-white"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full px-8 py-4 text-[9px] font-medium leading-none text-white"
           style={{
             left: pctX(RUNNING_CHIP.x),
             top: pctY(RUNNING_CHIP.y),
@@ -624,7 +624,7 @@ export function FlowHeroScene({
         >
           <div className="flex items-baseline justify-between gap-10">
             <div className="text-[16px] font-bold">{hoveredStation.name}</div>
-            <div className="whitespace-nowrap font-[family-name:var(--font-mono)] text-[9.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">
+            <div className="whitespace-nowrap font-[family-name:var(--font-mono)] text-[9.5px] text-[var(--clr-dark-purple-60)]">
               {hoveredStation.totalLabel}
             </div>
           </div>
@@ -640,12 +640,12 @@ export function FlowHeroScene({
             </div>
           ))}
           {outIndex[hoveredStation.key] != null && (
-            <div className="mt-10 border-t border-[var(--clr-dark-purple-10)] pt-8 font-[family-name:var(--font-mono)] text-[9.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">
+            <div className="mt-10 border-t border-[var(--clr-dark-purple-10)] pt-8 text-[9.5px] text-[var(--clr-dark-purple-60)]">
               Dry out → {formatTonnes(massFlow[outIndex[hoveredStation.key]!]?.tonnes ?? 0)} in
               period
             </div>
           )}
-          <div className="mt-10 font-[family-name:var(--font-mono)] text-[10.5px] uppercase tracking-[0.06em]">
+          <div className="mt-10 text-[10.5px]">
             View all →
           </div>
         </div>

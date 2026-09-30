@@ -9,7 +9,6 @@
  */
 import Link from "next/link";
 import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
-import { Accordion } from "@/components/ui/accordion";
 import { InfoHint } from "@/components/ui/tooltip";
 import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { certificationSettingsHref } from "@/lib/certification/links";
@@ -19,12 +18,7 @@ import {
 } from "@/lib/entity-deep-link";
 import { actionableSubmissionChecks } from "./submission-facts";
 
-const CHECKS_ITEM = "submission-checks";
 const CHECK_ICON_SIZE = 14;
-const ACCORDION_ITEM =
-  "rounded-none border-[var(--color-border-secondary)] bg-[var(--color-background-white)]";
-const ACCORDION_TRIGGER =
-  "bg-[var(--color-background-white)] px-16 py-10 hover:bg-[var(--color-surface-light)]";
 /** Readiness details pack several records into one string. */
 const DETAIL_SEPARATOR = " · ";
 
@@ -129,7 +123,7 @@ function CheckRow({
   const detailLines = check.detail?.split(DETAIL_SEPARATOR) ?? [];
 
   return (
-    <li className="flex items-start gap-8 border-t border-[var(--color-border-tertiary)] px-16 py-8 first:border-t-0">
+    <li className="flex items-start gap-8">
       <span className="mt-2">
         <WarningIcon
           size={CHECK_ICON_SIZE}
@@ -193,35 +187,20 @@ export function SubmissionChecks({
   );
 
   return (
-    <Accordion.Root className="gap-0" defaultValue={[CHECKS_ITEM]}>
-      <Accordion.Item value={CHECKS_ITEM} className={ACCORDION_ITEM}>
-        <Accordion.Header>
-          <Accordion.Trigger
-            className={ACCORDION_TRIGGER}
-            labelClassName="body-small normal-case tracking-normal text-[var(--color-text-primary)]"
-          >
-            <span className="flex w-full items-center justify-between gap-12">
-              <span>What to fix</span>
-              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
-                {passedCount} {passedCount === 1 ? "check" : "checks"} passed
-              </span>
-            </span>
-          </Accordion.Trigger>
-        </Accordion.Header>
-        <Accordion.Panel className="[&>div]:p-0">
-          <div className="border-t border-[var(--color-border-tertiary)]">
-            <ul>
-              {attentionChecks.map((check) => (
-                <CheckRow
-                  key={check.key}
-                  check={check}
-                  facilityId={facilityId}
-                />
-              ))}
-            </ul>
-          </div>
-        </Accordion.Panel>
-      </Accordion.Item>
-    </Accordion.Root>
+    <section className="flex flex-col gap-12" aria-label="What to fix">
+      <div className="flex items-baseline justify-between gap-12">
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
+          What to fix
+        </h3>
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          {passedCount} {passedCount === 1 ? "check" : "checks"} passed
+        </span>
+      </div>
+      <ul className="flex flex-col gap-12">
+        {attentionChecks.map((check) => (
+          <CheckRow key={check.key} check={check} facilityId={facilityId} />
+        ))}
+      </ul>
+    </section>
   );
 }

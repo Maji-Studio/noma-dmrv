@@ -50,9 +50,8 @@ describe("SubmissionChecks", () => {
 
     expect(html).toContain("What to fix");
     expect(html).toContain("8 checks passed");
-    expect(html).toMatch(
-      /<button[^>]*>[\s\S]*What to fix[\s\S]*<\/button>/,
-    );
+    expect(html).toMatch(/<h3[^>]*>\s*What to fix\s*<\/h3>/);
+    expect(html).not.toContain("<button");
     expect(html).toContain("Removal template resolved");
     expect(html).toContain("No default Removal template is selected.");
     expect(html).toContain(

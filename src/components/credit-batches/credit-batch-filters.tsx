@@ -79,7 +79,7 @@ export function CreditBatchFilters({
         </div>
 
         <label className="flex min-w-[150px] flex-1 flex-col gap-4 sm:flex-none">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             From
           </span>
           <input
@@ -92,7 +92,7 @@ export function CreditBatchFilters({
         </label>
 
         <label className="flex min-w-[150px] flex-1 flex-col gap-4 sm:flex-none">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             To
           </span>
           <input
@@ -105,7 +105,7 @@ export function CreditBatchFilters({
         </label>
 
         <label className="flex min-w-[190px] flex-1 flex-col gap-4 sm:flex-none">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             Feedstock
           </span>
           <select
@@ -132,7 +132,7 @@ export function CreditBatchFilters({
         </label>
 
         <label className="flex min-w-[180px] flex-1 flex-col gap-4 sm:flex-none">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">
             Data status
           </span>
           <select
