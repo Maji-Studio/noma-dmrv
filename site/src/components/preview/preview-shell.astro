@@ -1,0 +1,35 @@
+---
+// Throwaway content preview. Retains the existing Astro palette, fonts and visual engine.
+import '../../styles/tokens.css';
+import '../../visuals/visuals.css';
+import './preview.css';
+const { title = 'noma, biochar traceability made clear', current = 'home' } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{title}</title>
+  </head>
+  <body class="pv">
+    <a class="pv-skip" href="#main">Skip to content</a>
+    <header class="pv-nav pv-wrap">
+      <a href="/preview" class="pv-brand" aria-label="noma home">noma <span>by MAJI</span></a>
+      <nav aria-label="Main navigation">
+        <a href="/preview/product" aria-current={current === 'product' ? 'page' : undefined}>Product</a>
+        <a href="/preview#next">What’s next</a>
+        <a href="/preview/open-source" aria-current={current === 'open' ? 'page' : undefined}>Open source</a>
+      </nav>
+      <a class="pv-button pv-small" href="/preview#walkthrough">Book a walkthrough</a>
+    </header>
+    <main id="main"><slot /></main>
+    <footer class="pv-footer pv-wrap">
+      <a class="pv-brand" href="/preview">noma <span>by MAJI</span></a>
+      <p>Built with Dark Earth Carbon in Mafinga, Tanzania.</p>
+      <a href="https://github.com/Maji-Studio/noma-dmrv">GitHub</a>
+    </footer>
+    <div class="pv-prototype">Content preview <span aria-hidden="true">·</span> <a href="/?variant=A">Compare earlier designs</a></div>
+  </body>
+</html>
