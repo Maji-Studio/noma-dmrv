@@ -194,7 +194,7 @@ describe("TransportLegsEditor journey timeline", () => {
     expect(rendered).toContain("1 leg has no recorded distance.");
   });
 
-  it("carries one section certification seal rather than one per leg", () => {
+  it("carries one section CERT chip rather than one per leg", () => {
     const html = renderEditor({ readOnly: true });
 
     expect(html.match(/data-cert-field=/g)?.length).toBe(1);

@@ -466,18 +466,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
-### Should the credit batch durability field say "capped"? (`forms/durability-estimate-label`, opened 2026-09-29)
-
-- **Observed:** `src/components/credit-batches/credit-batch-view.tsx:creditBatchSheetSections`
-  shows the capped durable fraction at both detail levels as "Durability
-  estimate". The raw value, whether the cap applied, and the preview component
-  and formula sit in the section's Detailed-only explanation.
-- In Simple the reader sees the capped figure without the raw one beside it, so
-  "Capped durability estimate" could read as unexplained there, while plain
-  "Durability estimate" hides that a cap may have lowered it.
-- **Resolve via:** Kenji picks the label; change the one field label and the
-  credit batch tests (S).
-
 ### Is the global Simple/Detailed toggle still worth its place? (`forms/detail-toggle-value`, opened 2026-09-29)
 
 - **Observed:** since Simple and Detailed differ only in explanation
@@ -1078,12 +1066,3 @@ operational tradeoff, and this is not a registry requirement we verified.
 
 ## Design review 2026-08-13 follow-ups (opened 2026-08-14)
 
-### The asterisk half of the requiredness legend is undecided (`ui/requiredness-legend`) — DR-015
-
-The certification half shipped with form cleanup Phase 1a: the CERT chip is a
-seal glyph, and `CertificationLegend` explains it once in the sheet or dialog
-header whenever that sheet holds a seal (see `docs/design-system.md`). Still
-open: whether the same legend also explains the red asterisk (blocks
-**saving**), and whether the legend stays on its own line under the sheet
-title or moves beside the subtitle (about 18px of height). **Resolve via:** a
-product-owner call on both, then extend `CertificationLegend`.

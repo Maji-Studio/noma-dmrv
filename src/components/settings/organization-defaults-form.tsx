@@ -193,7 +193,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           id="default-timezone"
           label="Timezone"
           error={errors.defaultTimezone?.message}
-          helperText="Seeds new facilities. Existing facilities keep their own."
+          cue="Seeds new facilities. Existing facilities keep their own."
           hint="A facility's timezone decides which day a Sample or production run is attributed to. Set it before adding records."
         >
           <FormSelect

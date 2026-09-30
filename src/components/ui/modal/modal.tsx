@@ -147,8 +147,6 @@ export function Modal({
           aria-labelledby={ariaLabelledBy}
           aria-label={ariaLabel}
           aria-describedby={ariaDescribedBy}
-          // Scope for the CERT legend a dialog header may carry (globals.css).
-          data-cert-scope=""
           className={cn(
             "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
             "bg-[var(--color-background-white)] border border-[var(--color-border-primary)]",

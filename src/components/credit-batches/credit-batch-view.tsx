@@ -320,7 +320,7 @@ export function creditBatchSheetSections({
           value: formatTonnes(creditBatch.appliedWeightTons),
         },
         ...(durabilityResult?.fDurable != null
-          ? [{ label: "Durability estimate", value: formatDurabilityPercent(durabilityResult.fDurable) }]
+          ? [{ label: "Durability estimate (capped)", value: formatDurabilityPercent(durabilityResult.fDurable) }]
           : []),
       ],
       // How the durability estimate was reached: the raw figure, the cap and

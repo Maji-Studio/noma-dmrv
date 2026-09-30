@@ -226,8 +226,9 @@ caption.
   tints around a derived value.
 - **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose. A
   `FormField` keeps one visible `cue` line only for a unit, a limit or a
-  consequence, and a `unit` suffix inside the control replaces "(kg)" in the
-  label ([forms.md](./forms.md#components)).
+  consequence (plus three named exceptions listed in forms.md), and a `unit`
+  suffix inside the control replaces "(kg)" in the label
+  ([forms.md](./forms.md#components)).
 - **The ⓘ is a toggletip.** `InfoHint` opens on a tap or click, on hover and
   on keyboard focus; a press keeps it open until a second press, Escape or an
   outside press. Its 24px trigger sits beside the label, never inside the
@@ -238,17 +239,13 @@ caption.
   (`getByRole("textbox", { name })`), not `getByLabel`, which also matches the
   ⓘ. Use
   the plain `Tooltip` only for hover extras that are also available another
-  way (the seal's own explanation, a disabled button's reason).
-- **Certification is a seal, explained once.** A field required for
-  certification carries a 14px Phosphor seal on its label row
-  (`CertificationFieldTag`): plain when no record is saved, orange with a
+  way (the CERT chip's own explanation, a disabled button's reason).
+- **Certification is a CERT chip, explained once.** A field required for
+  certification carries a "CERT" chip on its label row
+  (`CertificationFieldTag`): neutral when no record is saved, orange with a
   warning mark when the saved record lacks it, green with a check when it has
-  it. It shows in Simple and Detailed alike. `SlideOverPanel.Header` and
-  `QuickAddDialogShell` carry `CertificationLegend` ("Required for
-  certification"), which a CSS `:has()` rule in `globals.css` shows only when
-  the enclosing `[data-cert-scope]` holds a `[data-cert-field]` seal, so no form
-  opts in. Pages outside a sheet (supplier and customer detail tables) rely on
-  the seal's own tooltip and screen-reader text.
+  it. It shows in Simple and Detailed alike. There is no sheet legend: the
+  chip explains itself through its tooltip and screen-reader text.
 - **Spacing, one rhythm per level:** the form `space-y-20` between sections,
   `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
   derived blocks `gap-12` between their parts, key lines and captions
@@ -372,7 +369,7 @@ Three seams carry it:
   `valuePresent`.
 - **Loading is not absence.** A value whose query has not settled passes
   `pending` instead. The field renders the shared skeleton in the value slot,
-  keeps its certification seal neutral, and counts as neither empty nor provided, so a
+  keeps its CERT chip neutral, and counts as neither empty nor provided, so a
   field waiting on a second query never reads as an operator omission.
   `valuePresent` covers unreadable values that have settled, never in-flight
   ones. A surface with its own markup (the supplier detail header) resolves

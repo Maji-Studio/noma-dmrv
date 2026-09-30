@@ -38,9 +38,6 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   InfoIcon: () => null,
   WarningCircleIcon: () => null,
   CheckCircleIcon: () => null,
-  SealIcon: () => <span />,
-  SealCheckIcon: () => <span />,
-  SealWarningIcon: () => <span />,
 }));
 vi.mock("@/components/navigation", () => ({
   SelectFacilityEmptyState: ({ description }: { description: string }) => (
