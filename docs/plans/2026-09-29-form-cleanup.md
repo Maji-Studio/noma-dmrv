@@ -156,7 +156,7 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
 ### Phase 2. Family passes (5 PRs, at most 2 in parallel, each with its own worktree, database and port)
 
 1. **Transport and feedstock chain:**
-   - Distance gets a suffix, a sentence-case Estimate button and a source chip. The supplier default stays restorable.
+   - Distance gets a suffix and the Calculate button is renamed "Estimate", with no source chip (Kenji, 2026-09-30). The supplier default stays restorable.
    - The From → To pair in the leg dialog.
    - Supplier sections and the 5-column location table.
    - Feedstock type usage as a segmented control, and the import dialog merged into the form.
