@@ -26,8 +26,11 @@ import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import {
   getChainOfCustodyData,
+  type ChainFacility,
+  type ChainFeedstockLineage,
   type ChainOfCustodyData,
 } from "./chain-of-custody";
+import type { ChainRunRollForward } from "./chain-of-custody-roll-forward";
 import { requireOrgScope } from "./utils";
 
 export type ChainGeoNodeKind =
@@ -157,28 +160,13 @@ export async function projectChainOfCustodyGeoData(
 
   const legs = enrichLegs(chain, [...feedstockLegs, ...outboundLegs]);
 
-  const warnings: string[] = [];
   const nodes = buildGeoNodes(chain, {
     facilityGps,
     applicationGps,
     feedstockGpsById,
     legs,
   });
-
-  if (facilityGps.lat == null || facilityGps.lng == null) {
-    warnings.push(
-      "The facility has no GPS coordinates, so records without their own position cannot be plotted."
-    );
-  }
-
-  const unplottableFeedstocks = nodes.filter(
-    (node) => node.kind === "feedstock" && node.positionSource !== "own" && node.positionSource !== "leg_origin"
-  );
-  if (chain.feedstocks.length > 0 && unplottableFeedstocks.length === chain.feedstocks.length) {
-    warnings.push(
-      "Feedstock origins have no coordinates, so inbound transport legs cannot be plotted. Add coordinates to the supplier locations."
-    );
-  }
+  const warnings = geoWarnings(facilityGps, chain.feedstocks.length, nodes);
 
   return {
     facility: {
@@ -191,6 +179,122 @@ export async function projectChainOfCustodyGeoData(
     nodes,
     legs,
     warnings,
+  };
+}
+
+/**
+ * Geo payload for member runs' roll-forwards: feedstock inbound legs plus the
+ * run, product and delivery records, all plotted at their resolved positions.
+ * No outbound leg exists until an application names a destination, so the
+ * batch geo roll-up merges this after the application payloads.
+ */
+export async function projectRunRollForwardGeoData(
+  ctx: OrgContext,
+  facility: ChainFacility,
+  rollForwards: ChainRunRollForward[],
+): Promise<ChainOfCustodyGeoData> {
+  requireOrgScope(ctx);
+  const feedstocks = [
+    ...new Map(
+      rollForwards
+        .flatMap(({ source }) => source.feedstocks)
+        .map((feedstock) => [feedstock.id, feedstock] as const),
+    ).values(),
+  ];
+  const feedstockIds = feedstocks.map((feedstock) => feedstock.id);
+  const [facilityGps, feedstockGpsById, feedstockLegs] = await Promise.all([
+    getFacilityGps(ctx, facility.id),
+    getFeedstockGps(ctx, feedstockIds),
+    getFeedstockLegs(ctx, feedstockIds),
+  ]);
+  const legs = feedstockLegs.map((leg) => enrichInboundLeg(leg, feedstocks));
+  const resolve = geoNodeResolver(facilityGps);
+
+  const nodeById = new Map<string, ChainGeoNode>();
+  const add = (node: ChainGeoNode) => {
+    if (!nodeById.has(node.id)) nodeById.set(node.id, node);
+  };
+  for (const { source } of rollForwards) {
+    if (source.reactor) {
+      add(resolve("reactor", source.reactor.id, source.reactor.code, source.reactor.identifier));
+    }
+  }
+  for (const feedstock of feedstocks) {
+    const inboundLeg = legs.find(
+      (leg) => leg.entityType === "feedstock" && leg.entityId === feedstock.id
+    );
+    add(
+      resolve(
+        "feedstock",
+        feedstock.id,
+        feedstock.code,
+        feedstock.supplierName,
+        feedstockGpsById.get(feedstock.id),
+        inboundLeg ? { lat: inboundLeg.originLat, lng: inboundLeg.originLng } : null
+      )
+    );
+  }
+  for (const { source, products } of rollForwards) {
+    add(resolve("productionRun", source.productionRun.id, source.productionRun.code, null));
+    for (const { product, deliveries: shipped } of products) {
+      add(resolve("biocharProduct", product.id, product.code, null));
+      for (const { delivery } of shipped) {
+        add(resolve("delivery", delivery.id, delivery.code, null));
+      }
+    }
+  }
+
+  const nodes = Array.from(nodeById.values());
+  return {
+    facility: {
+      id: facility.id,
+      code: facility.code,
+      name: facility.name,
+      lat: facilityGps.lat,
+      lng: facilityGps.lng,
+    },
+    nodes,
+    legs,
+    warnings: geoWarnings(facilityGps, feedstocks.length, nodes),
+  };
+}
+
+function geoWarnings(
+  facilityGps: GpsPair,
+  feedstockCount: number,
+  nodes: ChainGeoNode[],
+): string[] {
+  const warnings: string[] = [];
+  if (facilityGps.lat == null || facilityGps.lng == null) {
+    warnings.push(
+      "The facility has no GPS coordinates, so records without their own position cannot be plotted."
+    );
+  }
+
+  const unplottableFeedstocks = nodes.filter(
+    (node) => node.kind === "feedstock" && node.positionSource !== "own" && node.positionSource !== "leg_origin"
+  );
+  if (feedstockCount > 0 && unplottableFeedstocks.length === feedstockCount) {
+    warnings.push(
+      "Feedstock origins have no coordinates, so inbound transport legs cannot be plotted. Add coordinates to the supplier locations."
+    );
+  }
+  return warnings;
+}
+
+function enrichInboundLeg(
+  leg: ChainGeoLeg,
+  feedstocks: ChainFeedstockLineage[],
+): ChainGeoLeg {
+  const feedstock = feedstocks.find((fs) => fs.id === leg.entityId);
+  return {
+    ...leg,
+    materialLabel: feedstock?.feedstockTypeName ?? null,
+    outerHref: feedstock?.href ?? null,
+    outerCode: feedstock?.code ?? null,
+    outerNodeId: feedstock
+      ? `${idPrefix("feedstock")}:${feedstock.id}`
+      : null,
   };
 }
 
@@ -208,16 +312,7 @@ function enrichLegs(
 ): ChainGeoLeg[] {
   return legs.map((leg) => {
     if (leg.kind === "inbound") {
-      const feedstock = chain.feedstocks.find((fs) => fs.id === leg.entityId);
-      return {
-        ...leg,
-        materialLabel: feedstock?.feedstockTypeName ?? null,
-        outerHref: feedstock?.href ?? null,
-        outerCode: feedstock?.code ?? null,
-        outerNodeId: feedstock
-          ? `${idPrefix("feedstock")}:${feedstock.id}`
-          : null,
-      };
+      return enrichInboundLeg(leg, chain.feedstocks);
     }
     return {
       ...leg,
@@ -243,42 +338,7 @@ function buildGeoNodes(
   const { facilityGps, applicationGps, feedstockGpsById, legs } = inputs;
   const nodes: ChainGeoNode[] = [];
   const sources = resolveChainSources(chain);
-
-  const resolve = (
-    kind: ChainGeoNodeKind,
-    entityId: string,
-    code: string,
-    sub: string | null,
-    own?: GpsPair | null,
-    legOrigin?: GpsPair | null
-  ): ChainGeoNode => {
-    let lat: number | null = null;
-    let lng: number | null = null;
-    let positionSource: ChainGeoPositionSource = "none";
-
-    if (own && own.lat != null && own.lng != null) {
-      ({ lat, lng } = own);
-      positionSource = "own";
-    } else if (legOrigin && legOrigin.lat != null && legOrigin.lng != null) {
-      ({ lat, lng } = legOrigin);
-      positionSource = "leg_origin";
-    } else if (facilityGps.lat != null && facilityGps.lng != null) {
-      ({ lat, lng } = facilityGps);
-      positionSource = "facility";
-    }
-
-    return {
-      id: `${idPrefix(kind)}:${entityId}`,
-      kind,
-      entityId,
-      code,
-      lat,
-      lng,
-      positionSource,
-      inheritedFromFacility: positionSource === "facility",
-      sub,
-    };
-  };
+  const resolve = geoNodeResolver(facilityGps);
 
   for (const reactor of new Map(
     sources.flatMap((source) =>
@@ -331,6 +391,48 @@ function buildGeoNodes(
   );
 
   return nodes;
+}
+
+/**
+ * Position resolution shared by every geo projector: own GPS, then the inbound
+ * leg's origin (feedstocks), then the facility marker.
+ */
+function geoNodeResolver(facilityGps: GpsPair) {
+  return (
+    kind: ChainGeoNodeKind,
+    entityId: string,
+    code: string,
+    sub: string | null,
+    own?: GpsPair | null,
+    legOrigin?: GpsPair | null
+  ): ChainGeoNode => {
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let positionSource: ChainGeoPositionSource = "none";
+
+    if (own && own.lat != null && own.lng != null) {
+      ({ lat, lng } = own);
+      positionSource = "own";
+    } else if (legOrigin && legOrigin.lat != null && legOrigin.lng != null) {
+      ({ lat, lng } = legOrigin);
+      positionSource = "leg_origin";
+    } else if (facilityGps.lat != null && facilityGps.lng != null) {
+      ({ lat, lng } = facilityGps);
+      positionSource = "facility";
+    }
+
+    return {
+      id: `${idPrefix(kind)}:${entityId}`,
+      kind,
+      entityId,
+      code,
+      lat,
+      lng,
+      positionSource,
+      inheritedFromFacility: positionSource === "facility",
+      sub,
+    };
+  };
 }
 
 /** DAG node-id prefixes (`use-chain-graph.ts`) — kept in sync for cross-linking. */
