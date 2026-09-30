@@ -1,14 +1,15 @@
 /**
- * Transport Trip Type E2E Tests (issue #316)
+ * Transport round trip E2E Tests (issue #852)
  *
- * The GHG Accounting Module defaults transport to a full round trip; a
- * one-way trip needs an evidenced onward destination. Covers:
- * - Feedstock form: Trip type selector defaults to Return; a One-way override
- *   persists onto the derived transport leg and prefills on reopen.
- * - Biochar delivery form: same selector, persisted on the delivery row.
- * - Relabeled party-record distance copy ("one-way … per leg") on the
- *   supplier and customer-location forms, so operators know the ×2 happens
- *   at emissions time, not at the stored distance.
+ * Every transport leg counts as a round trip: the vehicle returns empty, so
+ * the entered one-way distance counts twice in emissions (Transportation
+ * module v1.1 §5). There is no trip type choice anywhere. Covers:
+ * - Feedstock form: no trip type control; the one-way entry shows the counted
+ *   round trip, and the saved record shows both figures.
+ * - Biochar delivery form: same, with the destination's stored distance.
+ * - Organization defaults: no default trip type setting.
+ * - The one-way (per leg) distance copy on the supplier and customer-location
+ *   forms, so operators know they enter one way.
  */
 import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
@@ -21,9 +22,10 @@ import {
 } from "./fixtures/page-helpers";
 import { fillStockMoisture } from "./helpers/stock-moisture";
 
-// Sorts ahead of the seeded feedstock/delivery rows (deliveryDate desc), so
-// "first row" reopens the record this spec created.
+// Sorts ahead of the seeded feedstock/delivery rows (deliveryDate desc), and
+// its list label finds the record this spec created.
 const FUTURE_DATE = "2027-01-15";
+const FUTURE_DATE_LABEL = "Jan 15, 2027";
 
 async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   await page.goto(`/orders?facility=${seededData.facility.id}`);
@@ -51,8 +53,8 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   await waitForSideSheetClose(page);
 }
 
-test.describe("Transport trip type (#316)", () => {
-  test("feedstock form defaults to Return and persists a One-way override on the derived leg", async ({
+test.describe("Transport round trip (#852)", () => {
+  test("feedstock form has no trip type and shows the counted round trip", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -67,15 +69,10 @@ test.describe("Transport trip type (#316)", () => {
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
-    // Compact distance copy + global option label + Return default.
-    await expect(dialog.getByText("Distance (km)")).toBeVisible();
-    const tripType = dialog.locator('select[name="transportTripType"]');
-    await expect(tripType).toHaveValue("return");
-    await expect(tripType.locator('option[value="one_way"]')).toHaveText("One-way");
+    await expect(dialog.getByText("One-way distance (km)")).toBeVisible();
+    await expect(dialog.getByText(/trip type/i)).toHaveCount(0);
+    await expect(dialog.locator('select[name="transportTripType"]')).toHaveCount(0);
 
-    // Minimal valid feedstock. The distance is required for a persistable
-    // derived leg — trip type rides on that leg, so without a distance there
-    // is nothing to persist it to.
     await page.fill('input[name="deliveryDate"]', FUTURE_DATE);
     await selectEntity(
       page,
@@ -91,7 +88,7 @@ test.describe("Transport trip type (#316)", () => {
     );
     await page.fill('input[name="transportDistanceKm"]', "40");
     await expect(dialog.getByTestId("transport-distance-total")).toHaveText(
-      "Total: 80 km"
+      "80 km round trip counted"
     );
     await page.fill('input[name="totalWetMassKg"]', "100");
     await page.fill('input[name="moisturePercent"]', "25");
@@ -101,25 +98,23 @@ test.describe("Transport trip type (#316)", () => {
       seededData.feedstockStorageLocation.id,
       seededData.feedstockStorageLocation.name
     );
-
-    // Override to One-way, then save.
-    await tripType.selectOption("one_way");
-    await expect(dialog.getByTestId("transport-distance-total")).toHaveCount(0);
     await dialog.locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
 
-    // Reopen: row → view sheet → edit form. The trip type prefills async from
-    // the saved derived leg, so the auto-retrying assertion absorbs the fetch.
+    // Reopen: the view sheet shows the one-way entry with the counted round trip.
     await page.waitForLoadState("networkidle");
-    await page.locator("table tbody tr").first().click();
+    // Target the row by its date: a bare first row can race the re-sort.
+    await page.locator("table tbody tr", { hasText: FUTURE_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit feedstock" }).click();
     await expect(
-      page.locator('[role="dialog"] select[name="transportTripType"]')
-    ).toHaveValue("one_way", { timeout: 15000 });
+      page
+        .locator('[role="dialog"]')
+        .getByText("40 km one way · 80 km round trip counted", { exact: true })
+        .first()
+    ).toBeVisible({ timeout: 15000 });
   });
 
-  test("delivery form defaults to Return and persists a One-way override", async ({
+  test("delivery form has no trip type and shows the counted round trip", async ({
     adminPage: page,
     seededData,
     cleanupTestData,
@@ -135,31 +130,36 @@ test.describe("Transport trip type (#316)", () => {
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
-    // Relabeled distance copy + Return default.
-    await expect(
-      dialog.getByText("One-way distance (per leg, km)")
-    ).toBeVisible();
-    const tripType = dialog.locator('select[name="tripType"]');
-    await expect(tripType).toHaveValue("return");
+    // The unit sits in the control's suffix; the accessible name keeps it.
+    await expect(dialog.getByRole("spinbutton", { name: "One-way distance (km)" })).toBeVisible();
+    await expect(dialog.getByText(/trip type/i)).toHaveCount(0);
+    await expect(dialog.locator('select[name="tripType"]')).toHaveCount(0);
 
     await page.fill('input[name="deliveryDate"]', `${FUTURE_DATE}T12:00`);
     await selectEntityByText(page, "Order", seededData.customer.name);
+    // The seeded customer location is 25 km one way from the facility.
+    await expect(dialog.getByText("50 km round trip counted", { exact: true })).toBeVisible();
     await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
     await fillStockMoisture(page, "delivery", "10");
-    await tripType.selectOption("one_way");
     await page.click('button[type="submit"]:has-text("Create delivery")');
     await waitForSideSheetClose(page);
 
-    // Reopen: row → view sheet → edit form. tripType is a delivery column, so
-    // the edit form's defaultValues carry it directly.
     await page.waitForLoadState("networkidle");
-    await page.locator("table tbody tr").first().click();
+    // Target the row by its date: a bare first row can race the re-sort.
+    await page.locator("table tbody tr", { hasText: FUTURE_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
-    await page.getByRole("button", { name: "Edit delivery" }).click();
     await expect(
-      page.locator('[role="dialog"] select[name="tripType"]')
-    ).toHaveValue("one_way", { timeout: 15000 });
+      page
+        .locator('[role="dialog"]')
+        .getByText("25 km one way · 50 km round trip counted", { exact: true })
+    ).toBeVisible({ timeout: 15000 });
+  });
+
+  test("organization defaults have no trip type setting", async ({ adminPage: page }) => {
+    await page.goto("/settings/defaults");
+    await expect(page.getByText("Application evidence", { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/trip type/i)).toHaveCount(0);
   });
 
   test("supplier and customer-location forms carry the one-way (per leg) distance copy", async ({
