@@ -143,7 +143,6 @@ export interface FeedstockWithRelations {
   storageLocationCode: string | null;
   transportDistanceKm: number | null;
   transportDistanceSource: "map_estimate" | "manual" | "document" | null;
-  transportTripType: "return" | "one_way" | null;
   transportEvidenceDocumentCount: number;
 }
 
@@ -183,7 +182,6 @@ export interface CreateFeedstockInput {
   notes?: string | null;
   transportDistanceKm?: number | null;
   transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
-  transportTripType?: FeedstockTransportOverride["tripType"];
 }
 
 export interface UpdateFeedstockInput {
@@ -202,7 +200,6 @@ export interface UpdateFeedstockInput {
   notes?: string | null;
   transportDistanceKm?: number | null;
   transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
-  transportTripType?: FeedstockTransportOverride["tripType"];
   /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
   expectedUpdatedAt?: Date;
 }
@@ -247,7 +244,6 @@ const feedstockSelectFields = {
   storageLocationCode: storageLocations.code,
   transportDistanceKm: transportLegs.distanceKm,
   transportDistanceSource: transportLegs.distanceSource,
-  transportTripType: transportLegs.tripType,
 } as const;
 
 /**
@@ -529,7 +525,6 @@ export async function createFeedstock(
       await syncFeedstockTransportLeg(ctx, tx, feedstock.id, {
         distanceKm: data.transportDistanceKm,
         distanceSource: data.transportDistanceSource,
-        tripType: data.transportTripType,
       });
 
       // Lock feedstock type on bin (first-use lock)
@@ -574,7 +569,6 @@ export async function updateFeedstock(
   const {
     transportDistanceKm,
     transportDistanceSource,
-    transportTripType,
     expectedUpdatedAt,
     ...feedstockData
   } = data;
@@ -702,7 +696,6 @@ export async function updateFeedstock(
     await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
       distanceKm: transportDistanceKm,
       distanceSource: transportDistanceSource,
-      tripType: transportTripType,
       resetDistanceToRoute:
         routeAnchorChanged &&
         !explicitDistanceSupplied &&

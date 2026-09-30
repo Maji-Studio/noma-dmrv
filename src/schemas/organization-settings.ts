@@ -11,7 +11,6 @@ import { applicationEvidenceMethods } from "./applications";
 import { currencyCodes } from "./credit-batches";
 import { timezones } from "./facilities";
 import { packagingTypes } from "./orders";
-import { tripTypes } from "./trip-type";
 
 const MAX_ORGANIZATION_COUNTRY_LENGTH = 100;
 
@@ -32,7 +31,6 @@ export const organizationSettingsFormSchema = z.object({
     .transform((value) => value || null)
     .nullable(),
   defaultTimezone: z.enum(timezones),
-  defaultTripType: z.enum(tripTypes),
   defaultEvidenceMethod: z.enum(applicationEvidenceMethods),
   defaultPackaging: z.enum(packagingTypes),
 });

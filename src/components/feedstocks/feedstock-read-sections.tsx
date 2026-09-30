@@ -1,11 +1,10 @@
 /** Feedstock delivery side-sheet view mode: the sections config for EntitySideSheet. */
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { formatDate, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { TransportEvidencePanel, TransportLegsSummary } from "@/components/transport-legs";
 import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
@@ -24,7 +23,7 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
       fields: [
         { label: "Vehicle", value: feedstock.vehiclePlateNumber },
         {
-          label: "Distance (km)",
+          label: "Distance",
           ...certificationDetailField("feedstock", "transportDistanceKm"),
           // Status from the raw column, not the formatted string — the
           // "Not recorded" fallback is truthy and would falsely read as satisfied.
@@ -34,10 +33,9 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
           ),
           value:
             feedstock.transportDistanceKm !== null
-              ? formatDistanceKm(feedstock.transportDistanceKm)
+              ? formatLegDistanceKm(feedstock.transportDistanceKm)
               : null,
         },
-        { label: "Trip type", value: TRIP_TYPE_LABELS[feedstock.transportTripType ?? DEFAULT_TRIP_TYPE] },
         {
           label: "Distance source",
           value: feedstock.transportDistanceSource

@@ -3,10 +3,9 @@ import { TransportEvidencePanel } from "@/components/transport-legs";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDistanceKm, formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatFacilityDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
@@ -47,8 +46,7 @@ export function deliverySheetSections(delivery: DeliveryWithRelations, facilitie
     {
       title: "Transport",
       fields: [
-        { label: "One-way distance (per leg, km)", value: formatDistanceKm(delivery.effectiveDistanceKm) },
-        { label: "Trip type", value: TRIP_TYPE_LABELS[delivery.tripType ?? DEFAULT_TRIP_TYPE] },
+        { label: "Distance", value: formatLegDistanceKm(delivery.effectiveDistanceKm) },
         ...(delivery.distanceKmOverride != null
           ? [{ label: "Distance note", value: delivery.distanceNote }]
           : []),

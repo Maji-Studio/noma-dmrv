@@ -23,16 +23,13 @@ function leg(overrides: Partial<TransportLeg>): TransportLeg {
     destinationName: "Facility",
     destinationGpsLatitude: -3.348,
     destinationGpsLongitude: 37.34,
-    distanceKm: 10,
+    // One way; every leg counts its round trip, so t·km use 10 km.
+    distanceKm: 5,
     distanceSource: "map_estimate",
     transportMethodType: "road",
     vehicleType: "Heavy truck",
     modelYear: null,
     loadMassKg: 1000,
-    // These cases assert exact one-way t·km reconciliation, so the builder pins
-    // `one_way` (no ×2). The round-trip doubling (#316) is covered by its own
-    // case below and in the aggregation unit tests.
-    tripType: "one_way",
     calculationMethodType: "distance_based",
     isDerived: false,
     ...overrides,
@@ -51,7 +48,21 @@ const META = {
 };
 
 describe("buildLedgerModel", () => {
-  it("computes per-leg t·km as distanceKm × loadMassKg ÷ 1000, rounded to 2dp", () => {
+  it("computes per-leg t·km as round-trip distance × loadMassKg ÷ 1000, rounded to 2dp", () => {
+    const model = buildLedgerModel({
+      ...META,
+      legsByCategory: {
+        ...emptyCategories(),
+        feedstock: [leg({ distanceKm: 17, loadMassKg: 4500 })],
+      },
+    });
+    // (17 × 2) * 4500 / 1000 = 153
+    expect(model.categories.find((c) => c.key === "feedstock")!.legs[0].tkm).toBe(
+      153,
+    );
+  });
+
+  it("carries the one-way and the counted round-trip distance, reconciling to the subtotal", () => {
     const model = buildLedgerModel({
       ...META,
       legsByCategory: {
@@ -59,26 +70,28 @@ describe("buildLedgerModel", () => {
         feedstock: [leg({ distanceKm: 34, loadMassKg: 4500 })],
       },
     });
-    // 34 * 4500 / 1000 = 153
-    expect(model.categories.find((c) => c.key === "feedstock")!.legs[0].tkm).toBe(
-      153,
-    );
+    const cat = model.categories.find((c) => c.key === "feedstock")!;
+    // Round trip: distance counted as 68 (34 × 2), t·km = 68 × 4.5 = 306.
+    expect(cat.legs[0].oneWayDistanceKm).toBe(34);
+    expect(cat.legs[0].distanceKm).toBe(68);
+    expect(cat.legs[0].tkm).toBe(306);
+    expect(cat.subtotalTkm).toBe(306);
   });
 
-  it("doubles a Return leg's distance and t·km, reconciling to the subtotal (#316)", () => {
+  it("counts a delivery the Mafinga seed used to set one way as a round trip", () => {
+    // Seeded coffee farm delivery: 240 km one way, 800 kg dry biochar. It used
+    // to count 240 km (192 t·km); every leg now counts 480 km.
     const model = buildLedgerModel({
       ...META,
       legsByCategory: {
         ...emptyCategories(),
-        feedstock: [leg({ distanceKm: 34, loadMassKg: 4500, tripType: "return" })],
+        biochar: [leg({ entityType: "biochar", distanceKm: 240, loadMassKg: 800 })],
       },
     });
-    const cat = model.categories.find((c) => c.key === "feedstock")!;
-    // Round trip: distance shown as 68 (34 × 2), t·km = 68 × 4.5 = 306.
-    expect(cat.legs[0].distanceKm).toBe(68);
-    expect(cat.legs[0].roundTrip).toBe(true);
-    expect(cat.legs[0].tkm).toBe(306);
-    expect(cat.subtotalTkm).toBe(306);
+    const bio = model.categories.find((c) => c.key === "biochar")!;
+    expect(bio.legs[0].distanceKm).toBe(480);
+    expect(bio.legs[0].tkm).toBe(384);
+    expect(bio.subtotalTkm).toBe(384);
   });
 
   it("sets subtotal from the canonical raw-sum scalar, not Σ rounded rows", () => {
@@ -86,11 +99,11 @@ describe("buildLedgerModel", () => {
       ...META,
       legsByCategory: {
         feedstock: [
-          leg({ id: "leg-1", distanceKm: 1, loadMassKg: 5 }), // row display 0.01
-          leg({ id: "leg-2", distanceKm: 1, loadMassKg: 5 }), // row display 0.01
+          leg({ id: "leg-1", distanceKm: 0.5, loadMassKg: 5 }), // row display 0.01
+          leg({ id: "leg-2", distanceKm: 0.5, loadMassKg: 5 }), // row display 0.01
         ],
-        biochar: [leg({ distanceKm: 32, loadMassKg: 2000 })],
-        sample: [leg({ distanceKm: 82, loadMassKg: 5 })],
+        biochar: [leg({ distanceKm: 16, loadMassKg: 2000 })],
+        sample: [leg({ distanceKm: 41, loadMassKg: 5 })],
       },
     });
     const feed = model.categories.find((c) => c.key === "feedstock")!;
@@ -114,7 +127,7 @@ describe("buildLedgerModel", () => {
       ...META,
       legsByCategory: {
         ...emptyCategories(),
-        feedstock: [leg({ distanceKm: 100, loadMassKg: null })],
+        feedstock: [leg({ distanceKm: 50, loadMassKg: null })],
       },
     });
     const l = model.categories.find((c) => c.key === "feedstock")!.legs[0];
@@ -128,7 +141,7 @@ describe("buildLedgerModel", () => {
       ...META,
       legsByCategory: {
         ...emptyCategories(),
-        feedstock: [leg({ distanceKm: 100, loadMassKg: 0 })],
+        feedstock: [leg({ distanceKm: 50, loadMassKg: 0 })],
       },
     });
     const l = model.categories.find((c) => c.key === "feedstock")!.legs[0];
@@ -210,9 +223,9 @@ describe("buildLedgerModel", () => {
   // must carry the scaling explicitly to stay an honest reconciliation.
   describe("applied-biochar scaling (delivery bucket, §8.6.2)", () => {
     const scaledLegs: TransportLegsByCategory = {
-      feedstock: [leg({ id: "leg-f", distanceKm: 50, loadMassKg: 1000 })], // 50
-      biochar: [leg({ id: "leg-b", distanceKm: 10, loadMassKg: 1000 })], // 10
-      sample: [leg({ id: "leg-s", distanceKm: 20, loadMassKg: 500 })], // 10
+      feedstock: [leg({ id: "leg-f", distanceKm: 25, loadMassKg: 1000 })], // 50
+      biochar: [leg({ id: "leg-b", distanceKm: 5, loadMassKg: 1000 })], // 10
+      sample: [leg({ id: "leg-s", distanceKm: 10, loadMassKg: 500 })], // 10
     };
 
     it("reconciles the biochar subtotal to leg-sum × fraction; feedstock/sample stay raw sums", () => {
@@ -241,7 +254,7 @@ describe("buildLedgerModel", () => {
         ...META,
         legsByCategory: {
           ...emptyCategories(),
-          biochar: [leg({ distanceKm: 10.005, loadMassKg: 1000 })],
+          biochar: [leg({ distanceKm: 5.0025, loadMassKg: 1000 })],
         },
         appliedBiocharFraction: 0.5,
       });

@@ -29,7 +29,7 @@ import type {
   ChainGeoNode,
   ChainOfCustodyGeoData,
 } from "@/data-access/chain-of-custody-geo";
-import { formatDistanceKm, formatMass } from "@/lib/format-utils";
+import { formatLegDistanceCompactKm, formatLegDistanceKm, formatMass } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -239,9 +239,9 @@ const THREAD_CLASS =
 function DistanceMetric({ legs, ink }: { legs: ChainGeoLeg[]; ink: string }) {
   if (legs.length === 0) return null;
   return (
-    <span className={METRIC_CLASS} style={{ color: ink }}>
+    <span className={METRIC_CLASS} style={{ color: ink }} aria-label={formatLegDistanceKm(totalLegDistanceKm(legs))}>
       <TruckIcon size={TRUCK_ICON_PX} className="shrink-0" aria-hidden="true" />
-      {formatDistanceKm(totalLegDistanceKm(legs))}
+      {formatLegDistanceCompactKm(totalLegDistanceKm(legs))}
     </span>
   );
 }
@@ -422,8 +422,8 @@ function LegSubRow({
           {legOuterName(leg)}
         </span>
         {suffix ? <SubNote text={suffix} tone={INK_FAINT} /> : null}
-        <span className={METRIC_CLASS} style={{ color: accentInk }}>
-          {formatDistanceKm(leg.distanceKm)}
+        <span className={METRIC_CLASS} style={{ color: accentInk }} aria-label={formatLegDistanceKm(leg.distanceKm)}>
+          {formatLegDistanceCompactKm(leg.distanceKm)}
         </span>
       </button>
       {leg.outerHref ? (
@@ -482,7 +482,7 @@ function buildNoPositionEntries(
       nodeId: legAnchorNodeId(geo, leg),
       legId: leg.id,
       code: leg.outerCode ?? legOuterName(leg),
-      detail: `${formatDistanceKm(leg.distanceKm)} leg, endpoint missing`,
+      detail: `${formatLegDistanceKm(leg.distanceKm)} leg, endpoint missing`,
     });
   }
 

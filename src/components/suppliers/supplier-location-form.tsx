@@ -244,7 +244,7 @@ export function SupplierLocationForm({
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
             certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance from this source location to the facility. Return trips are doubled at emissions time (set the trip type on each feedstock delivery)."
+            helperText="One-way road distance from this source location to the facility. Every feedstock delivery counts the round trip, twice this distance, in emissions."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

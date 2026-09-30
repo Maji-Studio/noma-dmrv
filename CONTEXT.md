@@ -511,7 +511,7 @@ surfaces as evidence health, never as an upload error.
 _Avoid_: validation failure (the photo is not rejected).
 
 **Distance override**:
-A per-trip distance recorded on a delivery only when that trip's
+A one-way distance recorded on a delivery only when that delivery's
 routing differs from the destination's stored distance. Absence means
 the stored distance governs — so later corrections to the stored
 distance keep propagating.
@@ -520,8 +520,9 @@ _Avoid_: treating the override as the primary distance value.
 ### Geography & transport
 
 **Transport distance**:
-The road distance (km) of a **transport leg**, fed to Isometric's
-distance-based transport equation. A distance computed from coordinates
+The one-way road distance (km) of a **transport leg**. Every leg counts
+its round trip, twice this distance, in Isometric's distance-based transport
+equation, because the vehicle returns empty. A distance computed from coordinates
 by the map's routing service is an **estimate** — modeled from a road
 graph, not the hauled distance on a bill of lading or weigh ticket. It
 is a *suggested default*, always operator-editable, and in the same

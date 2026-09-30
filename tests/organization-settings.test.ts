@@ -44,7 +44,6 @@ describe.sequential("organization operating defaults", () => {
       defaultCurrency: "KES" as const,
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
-      defaultTripType: "one_way" as const,
       defaultEvidenceMethod: "boundary" as const,
       defaultPackaging: "bagged" as const,
     };

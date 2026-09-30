@@ -11,7 +11,6 @@ const queryState = vi.hoisted(() => ({
       defaultCurrency: "KES",
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
-      defaultTripType: "return" as const,
       defaultEvidenceMethod: "location" as const,
       defaultPackaging: "bagged" as const,
     },

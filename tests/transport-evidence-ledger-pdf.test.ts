@@ -17,13 +17,13 @@ function leg(index: number): TransportLeg {
     destinationName: "Facility",
     destinationGpsLatitude: -3.348,
     destinationGpsLongitude: 37.34,
-    distanceKm: 1,
+    // One way; the ledger counts the 1 km round trip.
+    distanceKm: 0.5,
     distanceSource: "map_estimate",
     transportMethodType: "road",
     vehicleType: "Heavy truck",
     modelYear: null,
     loadMassKg: 5,
-    tripType: "one_way",
     calculationMethodType: "distance_based",
     isDerived: false,
   } as unknown as TransportLeg;
@@ -61,7 +61,7 @@ describe("renderEvidenceLedgerPdf", () => {
           {
             ...leg(100),
             entityType: "biochar",
-            distanceKm: 10.005,
+            distanceKm: 5.0025,
             loadMassKg: 1000,
           },
         ],
@@ -80,6 +80,8 @@ describe("renderEvidenceLedgerPdf", () => {
     const extractedText = pages.join(" ").replace(/\s+/g, " ");
     const compactText = extractedText.replace(/\s+/g, "");
     expect(compactText).toContain("DISPLAYEDROWSUM");
+    // Each row shows the counted round trip with the one-way distance under it.
+    expect(compactText).toContain("1km·rt0.5oneway");
     expect(compactText).toContain("ROUNDINGADJUSTMENT");
     expect(compactText).toContain("SCALINGADJUSTMENT");
 

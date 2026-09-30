@@ -14,7 +14,7 @@ import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIco
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
-import { formatDistanceKm } from "@/lib/format-utils";
+import { formatRoundTripKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
@@ -31,8 +31,6 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -115,10 +113,6 @@ export function FeedstockForm({
       value: FeedstockDistanceSourceChoice;
     } | null>(null);
 
-  // Organization operating defaults seed create mode only; an existing record
-  // always wins. Server-seeded in the `(app)` layout, so this is synchronous.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
     // New records default to today. Legacy records without a delivery date
@@ -133,7 +127,6 @@ export function FeedstockForm({
     transportDistanceKm: undefined as number | undefined,
     transportDistanceSource:
       feedstock?.transportDistanceSource ?? (null as DistanceSourceValue | null),
-    transportTripType: orgDefaults.defaultTripType as TripTypeValue,
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? undefined as number | undefined,
     moisturePercent: feedstock?.moistureContentPercent ?? undefined as number | undefined,
@@ -197,16 +190,12 @@ export function FeedstockForm({
     control,
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
-  const transportTripType = useWatch({
-    control,
-    name: "transportTripType",
-  }) as TripTypeValue | null | undefined;
-  const totalTransportDistanceKm =
-    transportTripType === "return" &&
+  // Every leg counts its round trip; show it beside the one-way entry.
+  const countedTransportDistanceKm =
     typeof transportDistanceKm === "number" &&
     Number.isFinite(transportDistanceKm) &&
     transportDistanceKm >= 0
-      ? transportDistanceKm * roundTripDistanceFactor(transportTripType)
+      ? transportDistanceKm
       : null;
 
   const defaultStorageBinType = "feedstock_bin";
@@ -346,16 +335,6 @@ export function FeedstockForm({
     setValue,
   ]);
 
-  // Prefill the saved leg's trip type in edit mode (async), unless the user
-  // already changed it. New feedstock defaults to Return via defaultValues.
-  const existingLegTripType = existingLegs?.[0]?.tripType ?? null;
-  useEffect(() => {
-    if (!isEditMode || dirtyFields.transportTripType) return;
-    if (existingLegTripType) {
-      setValue("transportTripType", existingLegTripType);
-    }
-  }, [isEditMode, existingLegTripType, dirtyFields.transportTripType, setValue]);
-
   // Sum of allocated wet mass
   const allocatedTotalWetKg = (watchAllocations ?? []).reduce((sum, a) => {
     const val =
@@ -468,7 +447,6 @@ export function FeedstockForm({
             "vehicleId",
             "transportDistanceSource",
             "transportDistanceKm",
-            "transportTripType",
           ]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -540,21 +518,6 @@ export function FeedstockForm({
               />
             </FormField>
 
-            <FormField
-              id="transportTripType"
-              label="Trip type"
-              error={errors.transportTripType?.message}
-              hint="Return counts the entered distance twice; One-way counts it once."
-            >
-              <FormSelect
-                id="transportTripType"
-                options={TRIP_TYPE_OPTIONS}
-                disabled={isSubmitting}
-                error={!!errors.transportTripType}
-                {...register("transportTripType")}
-              />
-            </FormField>
-
             <ActionableFocusTarget
               target="transport-route"
               activeTarget={focusTarget}
@@ -562,7 +525,7 @@ export function FeedstockForm({
             >
               <FormField
                 id="transportDistanceKm"
-                label="Distance (km)"
+                label="One-way distance (km)"
                 error={errors.transportDistanceKm?.message}
                 certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
                 certifyStatus={transportDistanceCertStatus}
@@ -619,13 +582,13 @@ export function FeedstockForm({
                       </button>
                     )}
                   </div>
-                  {totalTransportDistanceKm != null && (
+                  {countedTransportDistanceKm != null && (
                     <p
                       className="body-caption text-[var(--color-text-tertiary)] mt-6"
                       data-testid="transport-distance-total"
                       aria-live="polite"
                     >
-                      Total: {formatDistanceKm(totalTransportDistanceKm)}
+                      {formatRoundTripKm(countedTransportDistanceKm)}
                     </p>
                   )}
                 </div>
@@ -805,8 +768,8 @@ export function FeedstockForm({
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
         // The update path rebuilds the derived transport leg from the
-        // submitted values, so saving before the saved leg has prefilled
-        // trip type/distance would silently reset them to defaults.
+        // submitted values, so saving before the saved leg has prefilled its
+        // distance would silently reset it to the supplier default.
         submitDisabled={isEditMode && existingLegs === undefined}
       />
       </div>

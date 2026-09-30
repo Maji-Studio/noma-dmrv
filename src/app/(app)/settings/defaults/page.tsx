@@ -1,6 +1,6 @@
 /**
  * Settings → Defaults. The organization's operating defaults: the currency,
- * country, timezone, trip type, evidence method and packaging that seed new
+ * country, timezone, evidence method and packaging that seed new
  * records instead of being retyped on each one.
  *
  * Owner/Admin only, and gated here as well as in the action — a member landing

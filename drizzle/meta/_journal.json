@@ -834,6 +834,13 @@
       "when": 1790671434827,
       "tag": "0118_output_moisture_readings",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1790754824154,
+      "tag": "0119_drop_transport_trip_type",
+      "breakpoints": true
     }
   ]
 }

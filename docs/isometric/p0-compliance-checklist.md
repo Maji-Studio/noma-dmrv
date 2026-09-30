@@ -22,7 +22,7 @@
 | `P0-14` | Reversal risk and buffer | Buffer percentage exists | Questionnaire, versioned score/derivation, events, and reassessment schedule | open |
 | `P0-15` | Embodied emissions | Generic documents only | Reproducible full-lifecycle inventory and complete per-factor records | open |
 | `P0-16` | Transport method hierarchy | Method is stored | Evidence-required fallback from energy usage to distance method | open |
-| `P0-17` | Transport trip/evidence completeness | Return trip is representable; evidence references are permissive | Onward-trip proof for one-way plus required record types and scale calibration | open |
+| `P0-17` | Transport trip/evidence completeness | Every leg counts its round trip; evidence references are permissive | Required record types and scale calibration (an onward-trip exception needs its own evidence model first) | open |
 | `P0-18` | Transport factor quality | Factor value is stored | Source, vintage, mode/vehicle match, full-fuel-cycle basis, and recency gate | open |
 
 Current implementation evidence belongs in

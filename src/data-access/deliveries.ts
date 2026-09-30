@@ -88,7 +88,6 @@ export type DeliveryColumnAvailability = {
   distanceKmOverride: boolean;
   distanceSource: boolean;
   distanceNote: boolean;
-  tripType: boolean;
   archivedAt: boolean;
 };
 
@@ -106,7 +105,6 @@ export async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAva
             'distance_km_override',
             'distance_source',
             'distance_note',
-            'trip_type',
             'archived_at'
           )
       `)
@@ -117,7 +115,6 @@ export async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAva
           distanceKmOverride: columns.has("distance_km_override"),
           distanceSource: columns.has("distance_source"),
           distanceNote: columns.has("distance_note"),
-          tripType: columns.has("trip_type"),
           archivedAt: columns.has("archived_at"),
         };
       });
@@ -153,9 +150,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     distanceNote: columns.distanceNote
       ? deliveries.distanceNote
       : sql<string | null>`null`.as("distance_note"),
-    tripType: columns.tripType
-      ? deliveries.tripType
-      : sql<"return" | "one_way">`'return'`.as("trip_type"),
     driverId: deliveries.driverId,
     vehicleId: deliveries.vehicleId,
     archivedAt: columns.archivedAt
@@ -385,7 +379,6 @@ export async function getDeliveryWithRelations(
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
     distanceNote: deliveryRow.distanceNote,
-    tripType: deliveryRow.tripType,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
     archivedAt: deliveryRow.archivedAt,

@@ -62,7 +62,6 @@ export async function seedDistribution(infra: Infrastructure, counts: SeedCounts
     storageLocationId: infra.productBin.id, idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint,
     driverId: infra.driver.id, vehicleId: infra.vehicle.id, status: "delivered",
     deliveredWetMassKg: SHIPMENT.wetMassKg, moistureContentPercent: SHIPMENT.moisturePercent,
-    tripType: "one_way",
   }), facilityId, code: "" }));
   counts.add("deliveries");
 }

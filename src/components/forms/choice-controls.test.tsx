@@ -1,7 +1,7 @@
 /**
  * ChoiceCardGroup and SegmentedControl. The node test environment has no DOM,
- * so arrow-key movement (native radio behaviour) is covered in the trip type
- * e2e spec; here we pin the structure the browser relies on: one shared name,
+ * so arrow-key movement (native radio behaviour) is covered in the output
+ * stock parent form e2e spec; here we pin the structure the browser relies on: one shared name,
  * no custom tab stops or key handlers, the selected mark, disabled options,
  * and the react-hook-form round trip.
  */
@@ -22,9 +22,9 @@ const OPTIONS = [
   { value: "b", title: "Beta", description: "Second.", disabled: true },
   { value: "c", title: "Gamma" },
 ] as const;
-const TRIP_OPTIONS = [
-  { value: "return", title: "Return" },
-  { value: "one_way", title: "One-way" },
+const EVIDENCE_OPTIONS = [
+  { value: "location", title: "Location" },
+  { value: "boundary", title: "Boundary" },
 ] as const;
 const SEGMENTS = [
   { value: "loss", label: "Record loss" },
@@ -92,18 +92,18 @@ describe("radio structure", () => {
 });
 
 describe("react-hook-form", () => {
-  function Harness({ onForm }: { onForm: (api: ReturnType<typeof useForm<{ tripType: string }>>) => void }) {
-    const form = useForm<{ tripType: string }>({ defaultValues: { tripType: "one_way" } });
+  function Harness({ onForm }: { onForm: (api: ReturnType<typeof useForm<{ evidenceMethod: string }>>) => void }) {
+    const form = useForm<{ evidenceMethod: string }>({ defaultValues: { evidenceMethod: "boundary" } });
     onForm(form);
     return (
-      <FormField id="tripType" label="Trip type" error={form.formState.errors.tripType?.message}>
-        <ChoiceCardGroup legend="Trip type" options={TRIP_OPTIONS} id="tripType" error={!!form.formState.errors.tripType} {...form.register("tripType")} />
+      <FormField id="evidenceMethod" label="Evidence method" error={form.formState.errors.evidenceMethod?.message}>
+        <ChoiceCardGroup legend="Evidence method" options={EVIDENCE_OPTIONS} id="evidenceMethod" error={!!form.formState.errors.evidenceMethod} {...form.register("evidenceMethod")} />
       </FormField>
     );
   }
 
   it("applies the registered default through the radio refs and shows the error on the group", async () => {
-    let api!: ReturnType<typeof useForm<{ tripType: string }>>;
+    let api!: ReturnType<typeof useForm<{ evidenceMethod: string }>>;
     const nodes: { name: string; value: string; checked: boolean }[] = [];
     let renderer!: ReturnType<typeof create>;
     await act(async () => {
@@ -116,17 +116,17 @@ describe("react-hook-form", () => {
         },
       });
     });
-    expect(nodes.find((n) => n.value === "one_way")?.checked).toBe(true);
-    expect(nodes.find((n) => n.value === "return")?.checked).toBe(false);
+    expect(nodes.find((n) => n.value === "boundary")?.checked).toBe(true);
+    expect(nodes.find((n) => n.value === "location")?.checked).toBe(false);
 
     // Every radio carries the registered name, so RHF sees one field.
-    expect(new Set(radios(renderer.root).map((i) => i.props.name))).toEqual(new Set(["tripType"]));
-    expect(api.getValues("tripType")).toBe("one_way");
+    expect(new Set(radios(renderer.root).map((i) => i.props.name))).toEqual(new Set(["evidenceMethod"]));
+    expect(api.getValues("evidenceMethod")).toBe("boundary");
 
-    await act(async () => api.setError("tripType", { message: "Choose a trip type." }));
+    await act(async () => api.setError("evidenceMethod", { message: "Choose an evidence method." }));
     const fieldset = renderer.root.findByType("fieldset");
     expect(fieldset.props["aria-invalid"]).toBe(true);
-    expect(fieldset.props["aria-describedby"]).toBe("tripType-error");
-    expect(JSON.stringify(renderer.toJSON())).toContain("Choose a trip type.");
+    expect(fieldset.props["aria-describedby"]).toBe("evidenceMethod-error");
+    expect(JSON.stringify(renderer.toJSON())).toContain("Choose an evidence method.");
   });
 });

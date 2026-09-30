@@ -20,7 +20,7 @@ export async function seedProduction(infra: Infrastructure, counts: SeedCounts) 
       facilityId, deliveryDate: delivery.date, supplierId: infra.suppliers[forestry ? 0 : 1].id,
       feedstockTypeId: forestry ? infra.forestry.id : infra.manure.id,
       vehicleId: infra.vehicle.id, transportDistanceKm: delivery.distanceKm,
-      transportDistanceSource: "manual", transportTripType: "one_way",
+      transportDistanceSource: "manual",
       totalWetMassKg: delivery.massKg, moisturePercent: delivery.moisture,
       allocations: [{ storageLocationId: forestry ? infra.forestryBin.id : infra.manureBin.id, allocatedWetMassKg: delivery.massKg }],
     })));

@@ -34,6 +34,7 @@ import type {
   ChainGeoPositionSource,
 } from "@/data-access/chain-of-custody-geo";
 import { Button } from "@/components/ui/button";
+import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { getStatusState, getStatusStateColor } from "@/lib/status-state";
@@ -102,9 +103,12 @@ const POSITION_SOURCE_LABELS: Record<ChainGeoPositionSource, string> = {
 // Derived copy helpers
 // ---------------------------------------------------------------------------
 
-/** "42 km · route estimate" — the number, then how it was arrived at. */
+/** "42 km one way · route estimate" — the number, then how it was arrived at. */
 function distanceLine(leg: ChainGeoLeg): string {
-  const distance = formatDistanceKm(leg.distanceKm);
+  const distance =
+    leg.distanceKm == null
+      ? formatDistanceKm(leg.distanceKm)
+      : `${formatDistanceKm(leg.distanceKm)} one way`;
   const provenance = leg.distanceSource
     ? DISTANCE_PROVENANCE[leg.distanceSource]
     : leg.isDerived
@@ -315,6 +319,14 @@ export function RecordDetailPanel({
               <InfoRow label="Material" value={leg.materialLabel} />
             ) : null}
             <InfoRow label="Distance" value={distanceLine(leg)} />
+            {/* Every leg counts its round trip in emissions. */}
+            {leg.distanceKm != null ? (
+              <InfoRow
+                label="Round trip counted"
+                value={formatDistanceKm(countedRoundTripKm(leg.distanceKm))}
+                mono
+              />
+            ) : null}
             {massRow ? <InfoRow label={massRow.label} value={massRow.value} mono /> : null}
           </section>
         ) : null}

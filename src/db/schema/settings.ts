@@ -3,9 +3,8 @@
  *
  * These are the facts an operator re-types on every record because the codebase
  * had nowhere to put them: the currency they trade in, the country and timezone
- * they work in, whether their hauls are round trips, how they evidence an
- * application, how they ship. Each was a hardcoded literal repeated in three to
- * five places — `'TZS'` in five files, `'UTC'` in three — which is a
+ * they work in, how they evidence an application, how they ship. Each was a
+ * hardcoded literal repeated in three to five places — `'TZS'` in five files, `'UTC'` in three — which is a
  * multi-tenant app encoding one tenant's habits as physics.
  *
  * Deliberately NOT here: anything protocol-derived. A settings row that could
@@ -27,7 +26,6 @@ import { organizations } from "./auth";
 import {
   applicationEvidenceMethod,
   packagingType,
-  transportTripType,
 } from "./common";
 
 export const organizationSettings = pgTable(
@@ -48,10 +46,6 @@ export const organizationSettings = pgTable(
     defaultCountry: text("default_country"),
     /** IANA zone. Wrong values silently shift sampling-day attribution. */
     defaultTimezone: text("default_timezone").notNull().default("UTC"),
-    /** Conservative protocol default; the per-leg field stays editable. */
-    defaultTripType: transportTripType("default_trip_type")
-      .notNull()
-      .default("return"),
     defaultEvidenceMethod: applicationEvidenceMethod("default_evidence_method")
       .notNull()
       .default("location"),

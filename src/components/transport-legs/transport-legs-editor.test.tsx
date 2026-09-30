@@ -119,11 +119,11 @@ describe("TransportLegsEditor journey timeline", () => {
     }
   });
 
-  it("reads each leg as one line: distance, mode and an evidence icon", () => {
+  it("reads each leg as one line: one-way distance, mode, counted round trip and an evidence icon", () => {
     const html = renderEditor({ readOnly: true });
     const rendered = text(html);
 
-    expect(rendered).toContain("12 km by road");
+    expect(rendered).toContain("12 km one way by road · 24 km round trip counted");
     expect(html).toContain('role="img" aria-label="No evidence"');
     expect(html).not.toContain("Evidence attached");
   });
@@ -155,7 +155,7 @@ describe("TransportLegsEditor journey timeline", () => {
     ];
     const rendered = text(renderEditor({ readOnly: true }));
 
-    expect(rendered).toContain("Total distance 192 km");
+    expect(rendered).toContain("Total distance 192 km one way · 384 km round trip counted");
     // The same cargo moves along both legs, so the load is reported once.
     expect(rendered).toContain("Load carried 2 kg");
     expect(rendered).not.toContain("Load 2 kg");
@@ -190,7 +190,7 @@ describe("TransportLegsEditor journey timeline", () => {
     ];
     const rendered = text(renderEditor({ readOnly: true }));
 
-    expect(rendered).toContain("Total distance 12 km");
+    expect(rendered).toContain("Total distance 12 km one way · 24 km round trip counted");
     expect(rendered).toContain("1 leg has no recorded distance.");
   });
 

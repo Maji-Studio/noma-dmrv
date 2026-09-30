@@ -20,7 +20,7 @@ import type {
 import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { resolveChainSources } from "@/lib/chain-of-custody/sources";
-import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
+import { formatDate, formatDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import {
@@ -175,7 +175,7 @@ function TransportLegEvidence({ leg }: { leg: TrailTransportLeg }) {
       <PathIcon size={14} className="mt-2 shrink-0 text-[var(--color-text-tertiary)]" />
       <div className="min-w-0">
         <p className="body-small text-[var(--color-text-primary)]">
-          Transport leg · {leg.distanceKm.toLocaleString()} km
+          Transport leg · {formatLegDistanceKm(leg.distanceKm)}
           {leg.isDerived ? " · derived" : ""}
         </p>
         <p className="body-caption text-[var(--color-text-tertiary)]">

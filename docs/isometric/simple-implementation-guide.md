@@ -115,13 +115,13 @@ calibration-backed electricity meter stream.
 
 ## Transportation and evidence
 
-Transport legs carry method, trip type, distance/mass, factor, and evidence
-references. Aggregation submits mass-distance by transport category.
+Transport legs carry method, one-way distance, mass, factor, and evidence
+references. Aggregation counts every leg as a round trip (×2 of the one-way
+distance) and submits mass-distance by transport category.
 
 Current gaps include:
 
 - proof that the energy-usage method was unavailable;
-- onward-trip evidence for one-way treatment;
 - mandatory record types rather than “any one document”;
 - gross/tare and scale calibration support;
 - vehicle class/year and factor source/vintage.

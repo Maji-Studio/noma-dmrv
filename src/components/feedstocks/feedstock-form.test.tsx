@@ -116,9 +116,6 @@ vi.mock(
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: "facility-1" }),
 }));
-vi.mock("@/hooks/use-organization-settings", () => ({
-  useOrganizationDefaultValues: () => ({ defaults: { defaultTripType: "return" } }),
-}));
 vi.mock("@/hooks/use-suppliers", () => ({
   useSupplier: () => ({ data: undefined }),
   useSupplierLocationsBySupplier: () => ({ data: [] }),

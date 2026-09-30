@@ -15,7 +15,6 @@ import type { ApplicationEvidenceMethod } from "@/schemas/applications";
 import type { CurrencyCode } from "@/schemas/credit-batches";
 import type { Timezone } from "@/schemas/facilities";
 import type { PackagingType } from "@/schemas/orders";
-import type { TripTypeValue } from "@/schemas/trip-type";
 
 export interface OrganizationDefaults {
   defaultCurrency: CurrencyCode;
@@ -28,7 +27,6 @@ export interface OrganizationDefaults {
    * Consumers that need the narrow type guard against the offered list.
    */
   defaultTimezone: string;
-  defaultTripType: TripTypeValue;
   defaultEvidenceMethod: ApplicationEvidenceMethod;
   defaultPackaging: PackagingType;
 }
@@ -40,7 +38,6 @@ export const DEFAULT_ORGANIZATION_SETTINGS: OrganizationDefaults = {
   defaultCurrency: "TZS",
   defaultCountry: null,
   defaultTimezone: DEFAULT_ORGANIZATION_TIMEZONE,
-  defaultTripType: "return",
   defaultEvidenceMethod: "location",
   defaultPackaging: "loose",
 };

@@ -22,9 +22,8 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { formatRoundTripKm } from "@/lib/format-utils";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
 
@@ -52,8 +51,6 @@ function isSavedTransportLeg(
 
 function legToFormDefaults(
   leg: TransportLeg | TransportLegFormData | null | undefined,
-  /** Organization default, for a leg being created. */
-  defaultTripType: TripTypeValue,
 ) {
   return {
     originGpsLatitude: leg?.originGpsLatitude ?? null,
@@ -69,7 +66,6 @@ function legToFormDefaults(
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
-    tripType: leg?.tripType ?? defaultTripType,
     calculationMethodType: "distance_based" as const,
     billOfLading: leg?.billOfLading ?? "",
     weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
@@ -89,10 +85,7 @@ export function TransportLegForm({
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
-  // Organization operating defaults seed create mode only; a saved leg always
-  // wins. Server-seeded in the `(app)` layout, so this is synchronous.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-  const defaultValues = legToFormDefaults(leg, orgDefaults.defaultTripType);
+  const defaultValues = legToFormDefaults(leg);
 
   const {
     register,
@@ -219,7 +212,13 @@ export function TransportLegForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <DistanceCalcField
             id="distanceKm"
-            label="Distance (km)"
+            label="One-way distance (km)"
+            // Every leg counts its round trip; show what the entry counts.
+            cue={
+              distanceKm != null && Number.isFinite(distanceKm) && distanceKm > 0
+                ? formatRoundTripKm(distanceKm)
+                : undefined
+            }
             required
             certifyRequired={isTransportLegCertifyField("distanceKm")}
             certifyStatus={certStatus("distanceKm")}
@@ -271,20 +270,6 @@ export function TransportLegForm({
             </output>
           </FormField>
           <input type="hidden" {...register("transportMethodType")} />
-          <FormField
-            id="tripType"
-            label="Trip type"
-            error={errors.tripType?.message}
-            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
-          >
-            <FormSelect
-              id="tripType"
-              options={TRIP_TYPE_OPTIONS}
-              disabled={isSubmitting}
-              error={!!errors.tripType}
-              {...register("tripType")}
-            />
-          </FormField>
           <FormField
             id="loadMassKg"
             label="Load mass (kg)"

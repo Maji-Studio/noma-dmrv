@@ -30,6 +30,8 @@ interface DistanceCalcFieldProps {
   id: string;
   label: string;
   helperText?: string;
+  /** Visible line under the control (FormField `cue`), e.g. the counted round trip. */
+  cue?: string;
   error?: string;
   required?: boolean;
   certifyRequired?: boolean;
@@ -102,6 +104,7 @@ export function DistanceCalcField({
   id,
   label,
   helperText,
+  cue,
   error,
   required = false,
   certifyRequired = false,
@@ -178,6 +181,7 @@ export function DistanceCalcField({
       label={label}
       error={error ?? (route.isError ? route.error.message : undefined)}
       helperText={helperText}
+      cue={cue}
       required={required}
       certifyRequired={certifyRequired}
       certifyStatus={certifyStatus}

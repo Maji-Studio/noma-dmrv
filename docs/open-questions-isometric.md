@@ -342,9 +342,10 @@ itself is **built and enforced** — see the invariants section,
     rail/pipeline ≤7 y), round-trip vs. onward-leg evidence, distance-method
     fallback justification (§3.1 "appropriately evidenced"), weigh-scale
     calibration record, vehicle class/model year.
-  - **Current state** (`src/db/schema/logistics.ts`): `tripType` **exists**
-    (`'return'` default, ×2 multiplier — see the invariants section), as do
-    `billOfLading` and `weighScaleTicketRef`. There is **no**
+  - **Current state** (`src/db/schema/logistics.ts`): every leg counts its
+    round trip (×2 of the stored one-way distance, no trip type since issue
+    #852; see the invariants section in `open-questions.md`), and
+    `billOfLading` and `weighScaleTicketRef` exist. There is **no**
     `emissionFactorSource` column anywhere in the schema, and none for factor
     vintage, onward destination, or fallback evidence. Form text mentions §3.2
     but validators do not enforce.
