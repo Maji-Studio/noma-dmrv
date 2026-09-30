@@ -56,12 +56,15 @@ test.describe("Isometric credentials self-service", () => {
         .getByRole("listitem")
         .filter({ hasText: DEC_ORG_NAME });
       await expect(organization).toBeVisible();
-      await expect(
-        organization.getByText("Ends 4321", { exact: false }),
-      ).toBeVisible();
-      await expect(organization.getByLabel("Access token")).not.toHaveValue(
-        "e2e-org-admin-access-4321",
-      );
+      await expect(organization.getByText("Keys saved")).toBeVisible();
+      // The keys live in a modal; a saved key shows only its last characters
+      // and a Replace action, never an input holding the secret.
+      await organization.getByRole("button", { name: "Isometric keys" }).click();
+      const keys = page.getByRole("dialog");
+      await expect(keys.getByText("Ends 4321", { exact: false })).toBeVisible();
+      await expect(keys.getByLabel("Access token")).toHaveCount(0);
+      await expect(keys.getByRole("button", { name: "Replace" })).toHaveCount(2);
+      await page.keyboard.press("Escape");
 
       await db
         .update(certifierCredentials)
@@ -72,11 +75,13 @@ test.describe("Isometric credentials self-service", () => {
         .where(whereOrg);
       await page.reload();
 
+      await page
+        .getByRole("listitem")
+        .filter({ hasText: DEC_ORG_NAME })
+        .getByRole("button", { name: "Isometric keys" })
+        .click();
       await expect(
-        page
-          .getByRole("listitem")
-          .filter({ hasText: DEC_ORG_NAME })
-          .getByText("Ends 9876", { exact: false }),
+        page.getByRole("dialog").getByText("Ends 9876", { exact: false }),
       ).toBeVisible();
     } finally {
       await db.delete(certifierCredentials).where(whereOrg);

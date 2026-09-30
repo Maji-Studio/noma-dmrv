@@ -54,7 +54,8 @@ test.describe("Organization operating defaults", () => {
     await expect(currency).toHaveValue("TZS");
 
     await currency.selectOption("KES");
-    await page.getByRole("combobox", { name: "Order packaging" }).selectOption("bagged");
+    // Order packaging is a segmented control (native radios).
+    await page.getByRole("radio", { name: "Bagged" }).check({ force: true });
     await page.getByRole("button", { name: "Save defaults" }).click();
 
     await expect(page.getByText("Operating defaults saved.")).toBeVisible();
@@ -62,7 +63,7 @@ test.describe("Organization operating defaults", () => {
     // Survives a reload: the value is stored, not just held in the form.
     await page.reload();
     await expect(page.getByRole("combobox", { name: "Currency" })).toHaveValue("KES");
-    await expect(page.getByRole("combobox", { name: "Order packaging" })).toHaveValue("bagged");
+    await expect(page.getByRole("radio", { name: "Bagged" })).toBeChecked();
 
     // And reaches the form it says it seeds. This is the assertion that would
     // catch the default being saved into a table nothing reads.
