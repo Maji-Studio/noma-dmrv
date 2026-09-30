@@ -129,7 +129,7 @@ export { issueUrl } from "./report-core";
 `;
 
 const PASSING_ACTIONS = `"use server";
-import { requireOrgRole, withAction } from "./auth";
+import { requireOrgRole, withAction, type OrgContext } from "./auth";
 import { issueUrl } from "./report-core";
 
 export async function issueUrlAction(input: { reportId: string }) {
@@ -150,11 +150,54 @@ export async function renameReport(input: unknown) {
   return withAction(async (ctx) => {
     const scope = ctx;
     requireOrgRole(scope, "admin");
+    // Re-typing the session context is not a forged context.
+    const typed: OrgContext = ctx as OrgContext;
+    const results: OrgContext[] = [];
+    results.push(typed);
     return input;
   });
 }
 
 export type { OrgContext } from "./auth";
+`;
+
+// Shapes that reintroduce a context without a context-typed parameter.
+const BYPASS_ACTIONS = `"use server";
+import { requireOrgRole, type OrgContext } from "./auth";
+import { issueUrl } from "./report-core";
+
+export async function veryDeep(input: { a: { b: { c: { d: { ctx: OrgContext } } } } }) {
+  return input.a;
+}
+
+export async function indexed(contexts: Record<string, OrgContext>) {
+  return Object.keys(contexts);
+}
+
+export async function castIntoCore(input: unknown) {
+  return issueUrl(input as OrgContext, "report");
+}
+
+export async function castSpread(input: unknown) {
+  const scope = { ...(input as OrgContext) };
+  return scope.userId;
+}
+
+export async function assignedLater(input: unknown) {
+  let scope: OrgContext;
+  scope = input as OrgContext;
+  return scope.userId;
+}
+
+export async function annotatedAny(input: any) {
+  const scope: OrgContext = input;
+  return scope.userId;
+}
+
+export async function localGuardAlias(input: any) {
+  const check = requireOrgRole;
+  check(input, "admin");
+}
 `;
 
 // Not a "use server" module: only the inline server functions are actions.
@@ -241,6 +284,47 @@ describe("check-server-action-exports", () => {
   );
 
   it(
+    "flags deep, indexed, cast, annotated and aliased context bypasses",
+    () => {
+      const bypassDir = mkdtempSync(join(tmpdir(), "server-action-bypass-"));
+      try {
+        const files = writeFixture(bypassDir, BYPASS_ACTIONS);
+        const violations = checkServerActionExports(
+          bypassDir,
+          files,
+          FIXTURE_OPTIONS,
+        );
+        const reasons = (line: number) =>
+          violations.filter((v) => v.line === line).map((v) => v.reason);
+        const lineOf = (needle: string) =>
+          BYPASS_ACTIONS.split("\n").findIndex((l) => l.includes(needle)) + 1;
+
+        const byName = new Map(violations.map((v) => [v.name, v.reason]));
+        expect(byName.get("veryDeep")).toMatch(/property "d" property "ctx"/);
+        expect(byName.get("indexed")).toMatch(/index signature/);
+        expect(reasons(lineOf("issueUrl(input as OrgContext"))).toEqual([
+          expect.stringMatching(/type assertion/),
+        ]);
+        expect(reasons(lineOf("...(input as OrgContext)"))).toEqual([
+          expect.stringMatching(/type assertion/),
+        ]);
+        expect(reasons(lineOf("scope = input as OrgContext"))).toEqual(
+          expect.arrayContaining([expect.stringMatching(/type assertion/)]),
+        );
+        expect(reasons(lineOf("const scope: OrgContext = input"))).toEqual([
+          expect.stringMatching(/annotated local/),
+        ]);
+        expect(reasons(lineOf('check(input, "admin")'))).toEqual([
+          expect.stringMatching(/requireOrgRole\(\) is applied to the parameter "input"/),
+        ]);
+      } finally {
+        rmSync(bypassDir, { recursive: true, force: true });
+      }
+    },
+    CHECK_TIMEOUT_MS,
+  );
+
+  it(
     "checks guards and parameters inside inline server functions",
     () => {
       const inlineDir = mkdtempSync(join(tmpdir(), "server-action-inline-"));
@@ -254,6 +338,7 @@ describe("check-server-action-exports", () => {
         expect(violations.map((v) => [v.name, v.reason])).toEqual([
           ["inlineGuard", expect.stringMatching(/raw tenant id|organization context/)],
           ["requireOrgRole", expect.stringMatching(/parameter "form"/)],
+          ["OrgContext", expect.stringMatching(/type assertion/)],
         ]);
       } finally {
         rmSync(inlineDir, { recursive: true, force: true });

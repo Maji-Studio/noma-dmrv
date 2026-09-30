@@ -18,10 +18,10 @@
  * function) with a parameter that is:
  *
  * - context-shaped: an object type (or union/intersection member, array
- *   element, or generic constraint) with an `organizationId`, `orgRole` or
- *   `isPlatformAdmin` property, directly or up to a few properties deep. This
- *   covers `OrgContext`, its aliases, `Omit<>`/`Pick<>` slices and structural
- *   copies;
+ *   element, index-signature value, or generic constraint) with an
+ *   `organizationId`, `orgRole` or `isPlatformAdmin` property, at any depth.
+ *   This covers `OrgContext`, its aliases, `Omit<>`/`Pick<>` slices and
+ *   structural copies;
  * - a raw tenant id: a parameter or nested property named `organizationId`
  *   or `orgId`. An action learns its organization from the session;
  * - a database or transaction handle (a Drizzle `db`/`tx`, a pg client);
@@ -35,6 +35,14 @@
  * parameter of the callback passed to `withAction(async (ctx) => …)`, which
  * `withAction` resolves from the session. Any other callback parameter
  * (`contexts.map((ctx) => requireOrgRole(ctx, …))`) may carry caller input.
+ *
+ * Inside those same bodies it fails on a type assertion (`as`, `<T>x`,
+ * `satisfies`), annotated local or assignment that gives a context shape to a
+ * value derived from a parameter other than withAction's session context, to
+ * an `any` value, or (for assertions) to a value whose own type lacks that
+ * shape: `core(input as OrgContext)`, `{ ...(input as OrgContext) }`,
+ * `let ctx: OrgContext; ctx = input as OrgContext`. Guard callees are resolved
+ * through import aliases and local aliases (`const check = requireOrgRole`).
  *
  * There is no waiver: fix the export, do not suppress it. `unknown`/`any`
  * inputs stay allowed because they are ordinary action input; casting one to a
@@ -62,8 +70,6 @@ const FORWARDING_UTILITY_TYPES = new Set([
 const DB_HANDLE_MEMBERS = ["select", "insert", "execute"] as const;
 /** Members that together identify a raw pg client or pool. */
 const PG_CLIENT_MEMBERS = ["query", "release"] as const;
-/** How far into a parameter's properties a context shape is searched. */
-const NESTED_PROPERTY_DEPTH = 3;
 /** How many local aliases (`const c = input as Ctx`) a guard argument is followed through. */
 const MAX_ALIAS_HOPS = 5;
 
@@ -134,19 +140,17 @@ class ParameterInspector {
   constructor(private readonly checker: ts.TypeChecker) {}
 
   /** Why this parameter type must never cross the action boundary, if at all. */
-  describe(type: ts.Type, depth = 0, seen = new Set<ts.Type>()): string | null {
+  describe(type: ts.Type, seen = new Set<ts.Type>()): string | null {
     for (const member of withoutNullish(type)) {
-      const reason = this.describeMember(member, depth, seen);
+      const reason = this.describeMember(member, seen);
       if (reason) return reason;
     }
     return null;
   }
 
-  private describeMember(
-    type: ts.Type,
-    depth: number,
-    seen: Set<ts.Type>,
-  ): string | null {
+  // The visited set, not a depth cap, bounds the walk: every type is inspected
+  // at most once, so self-referential types terminate.
+  private describeMember(type: ts.Type, seen: Set<ts.Type>): string | null {
     const { checker } = this;
     if (seen.has(type)) return null;
     seen.add(type);
@@ -154,12 +158,12 @@ class ParameterInspector {
     if (type.flags & ts.TypeFlags.TypeParameter) {
       const constraint = checker.getBaseConstraintOfType(type);
       return constraint && constraint !== type
-        ? this.describe(constraint, depth, seen)
+        ? this.describe(constraint, seen)
         : null;
     }
     if (type.isUnionOrIntersection()) {
       for (const part of type.types) {
-        const reason = this.describeMember(part, depth, seen);
+        const reason = this.describeMember(part, seen);
         if (reason) return reason;
       }
       return null;
@@ -174,7 +178,7 @@ class ParameterInspector {
     }
     if (checker.isArrayType(type) || checker.isTupleType(type)) {
       for (const element of checker.getTypeArguments(type as ts.TypeReference)) {
-        const reason = this.describe(element, depth, seen);
+        const reason = this.describe(element, seen);
         if (reason) return reason;
       }
       return null;
@@ -193,17 +197,20 @@ class ParameterInspector {
     ) {
       return `accepts a database or transaction handle (${checker.typeToString(type)})`;
     }
-    if (depth < NESTED_PROPERTY_DEPTH) {
-      for (const property of checker.getPropertiesOfType(type)) {
-        if (TENANT_ID_NAMES.has(property.name)) {
-          return `property "${property.name}" accepts a raw tenant id`;
-        }
-        const declaration = property.valueDeclaration ?? property.declarations?.[0];
-        if (!declaration) continue;
-        const propertyType = checker.getTypeOfSymbolAtLocation(property, declaration);
-        const reason = this.describe(propertyType, depth + 1, seen);
-        if (reason) return `property "${property.name}" ${reason}`;
+    for (const property of checker.getPropertiesOfType(type)) {
+      if (TENANT_ID_NAMES.has(property.name)) {
+        return `property "${property.name}" accepts a raw tenant id`;
       }
+      const declaration = property.valueDeclaration ?? property.declarations?.[0];
+      if (!declaration) continue;
+      const propertyType = checker.getTypeOfSymbolAtLocation(property, declaration);
+      const reason = this.describe(propertyType, seen);
+      if (reason) return `property "${property.name}" ${reason}`;
+    }
+    // `Record<string, OrgContext>` and other index signatures carry values too.
+    for (const index of checker.getIndexInfosOfType(type)) {
+      const reason = this.describe(index.type, seen);
+      if (reason) return `index signature ${reason}`;
     }
     return null;
   }
@@ -318,11 +325,32 @@ function resolvedCalleeName(
       ? callee.name
       : null;
   if (!nameNode) return null;
-  const symbol = checker.getSymbolAtLocation(nameNode);
+  let symbol = checker.getSymbolAtLocation(nameNode);
   if (!symbol) return nameNode.text;
-  const target =
-    symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
-  return target.name;
+  // Follow import aliases and `const check = requireOrgRole` style locals.
+  for (let hop = 0; hop < MAX_ALIAS_HOPS; hop += 1) {
+    if (symbol.flags & ts.SymbolFlags.Alias) {
+      symbol = checker.getAliasedSymbol(symbol);
+      continue;
+    }
+    const declaration = symbol.valueDeclaration;
+    if (
+      !declaration ||
+      !ts.isVariableDeclaration(declaration) ||
+      !declaration.initializer
+    ) {
+      break;
+    }
+    const initializer = unwrapExpression(declaration.initializer);
+    const next = ts.isPropertyAccessExpression(initializer)
+      ? checker.getSymbolAtLocation(initializer.name)
+      : ts.isIdentifier(initializer)
+        ? checker.getSymbolAtLocation(initializer)
+        : undefined;
+    if (!next) break;
+    symbol = next;
+  }
+  return symbol.name;
 }
 
 /**
@@ -385,12 +413,118 @@ function sourceParameter(
   return null;
 }
 
-function checkGuardCalls(
+/** True when `expression` is (a copy of) the withAction callback's context. */
+function isSessionContext(
   checker: ts.TypeChecker,
+  expression: ts.Expression,
+): boolean {
+  const parameter = sourceParameter(checker, expression);
+  return !!parameter && isSessionContextParameter(checker, parameter);
+}
+
+function isAnyType(type: ts.Type): boolean {
+  return withoutNullish(type).some(
+    (member) => (member.flags & ts.TypeFlags.Any) !== 0,
+  );
+}
+
+/**
+ * Why giving `value` the type `targetType` manufactures an organization
+ * context (or db handle) inside a server boundary, if it does. The value is
+ * suspect when it derives from a parameter other than withAction's session
+ * context, or is `any` (TypeScript checked nothing). A type assertion is also
+ * suspect when it asserts a context shape the value's own type lacks
+ * (`input as OrgContext`); re-typing a value that already has that shape (a
+ * row, the session context) is not a conversion.
+ */
+function contextConversion(
+  checker: ts.TypeChecker,
+  inspector: ParameterInspector,
+  value: ts.Expression,
+  targetType: ts.Type,
+  isAssertion: boolean,
+): string | null {
+  const reason = inspector.describe(targetType);
+  if (!reason) return null;
+  if (isSessionContext(checker, value)) return null;
+  if (sourceParameter(checker, value)) return reason;
+  const valueType = checker.getTypeAtLocation(unwrapExpression(value));
+  if (isAnyType(valueType)) return reason;
+  return isAssertion && !inspector.describe(valueType) ? reason : null;
+}
+
+function isTypeConversion(
+  node: ts.Node,
+): node is ts.AsExpression | ts.TypeAssertion | ts.SatisfiesExpression {
+  return (
+    ts.isAsExpression(node) ||
+    ts.isTypeAssertionExpression(node) ||
+    ts.isSatisfiesExpression(node)
+  );
+}
+
+function checkContextConversions(
+  checker: ts.TypeChecker,
+  inspector: ParameterInspector,
+  node: ts.Node,
+  report: Report,
+): void {
+  if (isTypeConversion(node) && !ts.isConstTypeReference(node.type)) {
+    const reason = contextConversion(
+      checker,
+      inspector,
+      node.expression,
+      checker.getTypeFromTypeNode(node.type),
+      true,
+    );
+    if (reason) {
+      report(node, node.type.getText(), `type assertion ${reason}`);
+    }
+    return;
+  }
+  if (ts.isVariableDeclaration(node) && node.type && node.initializer) {
+    const reason = contextConversion(
+      checker,
+      inspector,
+      node.initializer,
+      checker.getTypeFromTypeNode(node.type),
+      false,
+    );
+    if (reason) {
+      report(node, node.name.getText(), `annotated local ${reason}`);
+    }
+    return;
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+  ) {
+    const reason = contextConversion(
+      checker,
+      inspector,
+      node.right,
+      checker.getTypeAtLocation(node.left),
+      false,
+    );
+    if (reason) {
+      report(node, node.left.getText(), `assignment ${reason}`);
+    }
+  }
+}
+
+/**
+ * Checks a server boundary body (a "use server" module or an inline action):
+ * guards applied to caller input, and casts or annotated locals that turn
+ * caller input into an organization context.
+ */
+function checkServerBody(
+  checker: ts.TypeChecker,
+  inspector: ParameterInspector,
   root: ts.Node,
   report: Report,
 ): void {
   const visit = (node: ts.Node): void => {
+    checkContextConversions(checker, inspector, node, report);
     if (ts.isCallExpression(node)) {
       const name = resolvedCalleeName(checker, node.expression);
       const [first] = node.arguments;
@@ -426,8 +560,8 @@ function checkInlineServerFunctions(
       const name =
         node.name && ts.isIdentifier(node.name) ? node.name.text : "(inline action)";
       if (reason) report(node, name, reason);
-      // A server module's guard pass already covers the whole file.
-      if (!moduleIsServer) checkGuardCalls(checker, node.body, report);
+      // A server module's body pass already covers the whole file.
+      if (!moduleIsServer) checkServerBody(checker, inspector, node.body, report);
     }
     ts.forEachChild(node, visit);
   };
@@ -460,7 +594,7 @@ export function findServerActionViolations(
     checkInlineServerFunctions(checker, inspector, sourceFile, moduleIsServer, report);
     if (!moduleIsServer) continue;
 
-    checkGuardCalls(checker, sourceFile, report);
+    checkServerBody(checker, inspector, sourceFile, report);
     const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
     if (!moduleSymbol) continue;
     for (const exported of checker.getExportsOfModule(moduleSymbol)) {
