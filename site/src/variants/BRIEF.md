@@ -53,3 +53,19 @@ Run it at 400, 1280, 1920 and 2560 and look at the PNGs (Read the image). Full-p
 ## Report back
 
 For each variant: the idea in two sentences; container widths and prose measure you chose; where each diagram's explanation sits relative to the diagram; any section reordering; any shared component you copied and why; the scroll width and console errors at each width; what you think is weakest about it.
+
+## Round 2 (2026-09-30): Apple and Vercel
+
+Kenji liked **6 (Apple style)** and **8 (Vercel style)**. Round 2 refines both and adds two hybrids. Everything above still applies (frozen copy, tokens, what you may edit, no build, no commit). The switcher now lists 0, 6, 8, 11, 12 first.
+
+Measured problems to fix (from the round 1 review):
+- **Diagram labels too small.** The chain trace's labels are 11 units in a 1010-wide viewBox, so they render at 11px only when the chain SVG is at least 1010px wide. Target: chain and dense SVGs at 1010px or wider at 1440 and above. v8 is at about 900px because the "How to read it" panel sits beside it inside a 1360px frame.
+- **The side panel is also the hover readout.** It shows details of the record under the pointer. Beside the diagram is better for that than below a tall one, as long as the diagram keeps its 1010px. If it can't, put the panel below and keep the diagram short enough that the panel shows on a 900px-tall screen while hovering, or say why not.
+- **v6:** page about 14,000px tall at 1920; the three-line 112px hero pushes the trace below the first screen; long centred leads (registry) read poorly, since centred text changes its line starts; at 1760px the diagram-to-panel eye travel is long again; the two figure tiles are uneven.
+- **v8:** bento cells with wide spans leave half their width empty; purple and rose section heads stack many full-width hairlines; the hero is large enough to push the demo down; at 400px the frame rules sit on the viewport edge.
+
+Check with the scripts in the orchestrator's scratchpad (Node, Playwright; they read `http://localhost:3122`):
+`/private/tmp/claude-501/-Users-kenji-Dropbox-Maji-18-Dark-Earth-Carbon-noma-dmrv/d834ef15-fa4e-40a8-9d78-471157defa94/scratchpad/`
+- `sweep.cjs <keys>`: overflow, console errors, prose characters per line, chain width and panel side, page height at 400 to 2560, plus screenshots in `shots/`.
+- `labels.cjs`: label line-box heights on chain and dense (edit its key list to yours). A line box of about 15px means an 11px font.
+- `scrollviz.cjs`: which diagrams scroll sideways at 1280, 1440 and 1920 (edit its key list). None may, at 1280 and above.

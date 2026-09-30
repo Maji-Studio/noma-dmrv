@@ -1,4 +1,4 @@
 /* PROTOTYPE. Caps running prose at about 70 characters a line. `--measure: 62ch` measures GT Flexa's wide zero, so it
    lets about 85 real characters through; 52ch lands near 70. !important because each variant's own width rules are
    more specific and this is a readability floor, not a layout choice. Imported by variants that measured over 75. */
-:root:is([data-layout="1"], [data-layout="3"], [data-layout="4"], [data-layout="8"], [data-layout="9"], [data-layout="10"]) main p { max-width: min(100%, 52ch) !important; }
+:root:is([data-layout="1"], [data-layout="3"], [data-layout="4"], [data-layout="8"], [data-layout="9"], [data-layout="10"], [data-layout="11"], [data-layout="12"]) main p { max-width: min(100%, 52ch) !important; }
