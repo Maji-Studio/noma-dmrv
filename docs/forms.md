@@ -501,6 +501,12 @@ check, never a value:
   moisture: 29.4%" under the input, the basis ("From the reading on …") behind
   the ⓘ, and an advisory warning when the reading differs by more than
   `MOISTURE_READING_WARNING_POINTS` (`@/config/output-stock`). It never blocks.
+- The product, delivery and stock-loss forms share `useOutputDrawDraft`
+  (`src/hooks/use-output-draw-draft.ts`): readings gate, preview, estimate and
+  the one save gate (`gate()`, which also fails on `isFetching` and `error`).
+  Read the submit guard and `submitDisabled` from it, never re-derive them. A
+  failed save is not retried in the form; the mutation hooks invalidate
+  `outputStockKeys.all`, which refreshes the previews.
 - For an output bin, `useOutputMoistureEstimate(bin, facility, occurredAt,
   preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time
   from each batch's latest reading, or the live preview's own (which leaves out

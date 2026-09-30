@@ -24,8 +24,7 @@ import { ProductCompositionPreview } from "@/components/ui/product-composition-p
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
 import { useProductStockPreview } from "@/hooks/use-product-stock-preview";
-import { useOutputStockPreview } from "@/hooks/use-output-stock";
-import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
+import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import { MoistureResetChange } from "@/components/storage-locations/moisture-reset-change";
@@ -304,16 +303,17 @@ export function BiocharProductForm({
     occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null, wetKg: requestedBiocharKg,
   });
   const [attempted, setAttempted] = useState(false);
-  const readingsReady = draw.active ? draw.sources !== null : draw.usesSingleMoisture && watchedMoisture != null;
-  // Create stays pressable while a reached row is empty, so pressing it names the missing reading.
-  const awaitingReadings = draw.active && draw.sources === null && !draw.untickCode && !draw.needsTick;
-  const sourcePreview = useOutputStockPreview(!isEditMode && sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0 && readingsReady ? {
-    storageLocationId: sourceBiocharStorageLocationId,
-    facilityId: selectedFacilityId,
-    occurredAt: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
-    ...(draw.active ? { sources: draw.sources! } : { moisturePercent: Number(watchedMoisture) }),
-  } : null);
-  const sourceMoistureEstimate = useOutputMoistureEstimate(isEditMode || draw.active ? null : sourceBiocharStorageLocationId, selectedFacilityId, watchedPlacedAt ? String(watchedPlacedAt) : null, sourcePreview.data?.moistureEstimate);
+  const { preview: sourcePreview, estimate: sourceMoistureEstimate, readingsReady, gate, basisFingerprint: sourceBasisFingerprint } = useOutputDrawDraft({
+    draw, bypass: isEditMode,
+    singleMoistureReady: watchedMoisture != null,
+    buildInput: (sources) => !isEditMode && sourceBiocharStorageLocationId && watchedPlacedAt && requestedBiocharKg != null && requestedBiocharKg > 0 ? {
+      storageLocationId: sourceBiocharStorageLocationId,
+      facilityId: selectedFacilityId,
+      occurredAt: String(watchedPlacedAt), kind: "production_draw", wetMassKg: requestedBiocharKg,
+      ...(sources ? { sources } : { moisturePercent: Number(watchedMoisture) }),
+    } : null,
+    estimateFor: !isEditMode && sourceBiocharStorageLocationId ? { storageLocationId: sourceBiocharStorageLocationId, facilityId: selectedFacilityId, occurredAt: watchedPlacedAt ? String(watchedPlacedAt) : null } : null,
+  });
   // A split draw's biochar moisture is its overall 1 − solids ÷ wet, from the preview.
   const biocharMoisture = draw.active ? sourcePreview.data?.movementMoisturePercent ?? null : watchedMoisture;
   const ingredientMassesComplete = (watchedIngredientBins ?? []).every(
@@ -329,6 +329,7 @@ export function BiocharProductForm({
     waterAddedKg: Number(watchedWaterAddedKg), ingredientBins: watchedIngredientBins?.map(ingredient => ({ ...ingredient, massKg: typeof ingredient.massKg === "number" ? ingredient.massKg : Number.NaN })),
   } : null);
   const affectedBinsUnavailable = !productStockPreview.data || productStockPreview.isFetching || !!productStockPreview.error || productStockPreview.data.some(bin => !!bin.blockingMessage);
+  const { canSave, submitDisabled } = gate(affectedBinsUnavailable);
   const biocharStockError = sourcePreview.data?.blockingMessage ?? sourcePreview.error?.message;
   const refreshStockPreview = sourcePreview.refetch;
   useEffect(() => {
@@ -355,18 +356,14 @@ export function BiocharProductForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit(async (data) => {
-    if (!isEditMode && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.error || sourcePreview.data.blockingMessage || affectedBinsUnavailable)) return;
-    try {
-      await onSubmit({
-        ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
-        basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint ?? sourcePreview.data?.basisFingerprint ?? data.basisFingerprint,
-        idempotencyKey,
-      });
-    } catch (error) {
-      void sourcePreview.refetch();
-      void productStockPreview.refetch();
-      throw error;
-    }
+    if (!canSave) return;
+    // A failed save needs no refetch here: the host reports the error and the
+    // mutation hooks invalidate `outputStockKeys.all`, which refreshes both previews.
+    await onSubmit({
+      ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
+      basisFingerprint: productStockPreview.data?.[0]?.basisFingerprint ?? sourceBasisFingerprint ?? data.basisFingerprint,
+      idempotencyKey,
+    });
   });
 
   // A stock change label only advertises a fresh, unblocked projection. The
@@ -715,7 +712,7 @@ export function BiocharProductForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={routedServerError.footerError}
-        submitDisabled={hasZeroSourceBiochar || !isEditMode && !awaitingReadings && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.error || !!sourcePreview.data.blockingMessage || affectedBinsUnavailable)}
+        submitDisabled={hasZeroSourceBiochar || submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

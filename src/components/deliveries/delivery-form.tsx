@@ -23,8 +23,8 @@ import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-chan
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrdersForSelect } from "@/hooks/use-orders";
-import { useMatchingOutputBins, useOutputStockPreview } from "@/hooks/use-output-stock";
-import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
+import { useMatchingOutputBins } from "@/hooks/use-output-stock";
+import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { SubBinDrawField } from "@/components/storage-locations/sub-bin-draw-field";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
@@ -245,15 +245,17 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     occurredAt: watchDate ? String(watchDate) : null, wetKg: wetMass,
   });
   const [attempted, setAttempted] = useState(false);
-  const readingsReady = draw.active ? draw.sources !== null : draw.usesSingleMoisture && Number.isFinite(moisture) && moisture >= 0 && moisture < 100;
-  // Create stays pressable while a reached row is empty, so pressing it names the missing reading.
-  const awaitingReadings = draw.active && draw.sources === null && !draw.untickCode && !draw.needsTick;
-  const stockPreview = useOutputStockPreview(!isEditMode && watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass) && readingsReady ? {
-    storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery",
-    occurredAt: String(watchDate), wetMassKg: wetMass,
-    ...(draw.active ? { sources: draw.sources! } : { moisturePercent: moisture }),
-  } : null);
-  const moistureEstimate = useOutputMoistureEstimate(isEditMode || draw.active ? null : watchBinId, formFacilityId, watchDate ? String(watchDate) : null, stockPreview.data?.moistureEstimate);
+  const { preview: stockPreview, estimate: moistureEstimate, gate, basisFingerprint } = useOutputDrawDraft({
+    draw, bypass: isEditMode,
+    singleMoistureReady: Number.isFinite(moisture) && moisture >= 0 && moisture < 100,
+    buildInput: (sources) => !isEditMode && watchBinId && watchDate && wetMass > 0 && Number.isFinite(wetMass) ? {
+      storageLocationId: watchBinId, facilityId: formFacilityId ?? "", kind: "delivery",
+      occurredAt: String(watchDate), wetMassKg: wetMass,
+      ...(sources ? { sources } : { moisturePercent: moisture }),
+    } : null,
+    estimateFor: !isEditMode && watchBinId ? { storageLocationId: watchBinId, facilityId: formFacilityId, occurredAt: watchDate ? String(watchDate) : null } : null,
+  });
+  const { canSave, submitDisabled } = gate();
   useClearOnDependencyChange(watchOrderId, () => setValue("storageLocationId", ""));
   const deliveredWetMassError = errors.deliveredWetMassKg?.message ?? stockPreview.data?.blockingMessage ?? undefined;
 
@@ -265,14 +267,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
   const submitDelivery = handleSubmit(async (data) => {
-    if (!isEditMode && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.error || stockPreview.data.blockingMessage)) return;
+    if (!canSave) return;
     const normalized = data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
-    try {
-      await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint: stockPreview.data?.basisFingerprint } as DeliveryFormData);
-    } catch (error) {
-      void stockPreview.refetch();
-      throw error;
-    }
+    // A failed save needs no refetch here: the host reports the error and the
+    // mutation hooks invalidate `outputStockKeys.all`, which refreshes this preview.
+    await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint } as DeliveryFormData);
   });
 
   // All three branches describe the same quantity — the one-way facility ›
@@ -489,7 +488,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitDisabled={!isEditMode && !awaitingReadings && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.error || !!stockPreview.data.blockingMessage)}
+        submitDisabled={submitDisabled}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

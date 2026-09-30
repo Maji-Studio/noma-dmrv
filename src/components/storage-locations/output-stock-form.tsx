@@ -4,9 +4,9 @@ import { FormActions, FormField, FormSection, FormSpine, FormTextarea, ResolvedE
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { MoistureField, WetMassField } from "@/components/forms/mass-moisture-fields";
 import { outputStockEventLabel } from "@/lib/output-stock/labels";
-import { useOutputStockPreview, usePostOutputStock } from "@/hooks/use-output-stock";
+import { usePostOutputStock } from "@/hooks/use-output-stock";
 import { useFacilityClock } from "@/hooks/use-facility-context";
-import { useOutputMoistureEstimate } from "@/hooks/use-output-moisture-estimate";
+import { useOutputDrawDraft } from "@/hooks/use-output-draw-draft";
 import { useSubBinDraw } from "@/hooks/use-sub-bin-draw";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { toNumberOrNull } from "@/schemas/helpers";
@@ -66,21 +66,21 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   // Until every reached sub-bin is read there is nothing to preview. A split
   // correction waits for its rows: without them the server would quietly
   // replay the saved readings at the new weight.
-  const readingsReady = draw.active ? draw.sources !== null : draw.usesSingleMoisture && !splitOriginal;
-  const input = candidate.success && readingsReady ? candidate.data : null;
-  // Save stays pressable while a reached row is empty, so pressing it names the missing reading.
-  const awaitingReadings = draw.active && draw.sources === null && !draw.untickCode && !draw.needsTick;
-  const preview = useOutputStockPreview(input);
   // A correction's estimate must leave out the entry it replaces, which only its own preview does.
-  const estimate = useOutputMoistureEstimate(original || draw.active ? null : storageLocationId, facilityId, values.occurredAt, preview.data?.moistureEstimate);
+  const { preview, input, estimate, gate, basisFingerprint } = useOutputDrawDraft({
+    draw, singleMoistureReady: !splitOriginal,
+    buildInput: () => candidate.success ? candidate.data : null,
+    estimateFor: original ? null : { storageLocationId, facilityId, occurredAt: values.occurredAt },
+  });
+  const { canSave, submitDisabled } = gate();
   // Names the entry in the preview's caption. A replaced loss or delivery is
   // still wet mass removed from the bin; a replaced count is still a count.
   const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";
   const submit = handleSubmit(async (data) => {
-    if (!input || !preview.data || preview.isFetching || !!preview.error || preview.data.blockingMessage) return;
+    if (!input || !canSave || !basisFingerprint) return;
     setServerError(undefined);
     try {
-      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), basisFingerprint: preview.data.basisFingerprint, idempotencyKey });
+      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), basisFingerprint, idempotencyKey });
       setIdempotencyKey(crypto.randomUUID());
       onRecorded();
     } catch (error) {
@@ -125,6 +125,6 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
         </FormField>
       </FormSection>
     </FormSpine>
-    <FormActions control={control} onCancel={onCancel} isSubmitting={mutation.isPending} errorMessage={serverError} submitDisabled={awaitingReadings ? false : !input || !preview.data || preview.isFetching || !!preview.error || !!preview.data.blockingMessage} submitLabel={original ? "Save correction" : kind === "count" ? "Reconcile stock" : "Record loss"} />
+    <FormActions control={control} onCancel={onCancel} isSubmitting={mutation.isPending} errorMessage={serverError} submitDisabled={submitDisabled} submitLabel={original ? "Save correction" : kind === "count" ? "Reconcile stock" : "Record loss"} />
   </form>;
 }
