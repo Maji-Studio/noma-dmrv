@@ -231,7 +231,7 @@ async function captureSurface(session: CaptureSession, browser: Browser, surface
   } catch (error) {
     // Strip ANSI colour codes Playwright adds to assertion messages.
     const message = (error instanceof Error ? error.message : String(error)).replace(/\u001b\[\d+m/g, "").split("\n").slice(0, ERROR_MESSAGE_LINES).join(" ");
-    await target.screenshot({ path: path.join(outDir, `${surface.id}__failed.png`) }).catch(() => undefined);
+    await target.screenshot({ path: path.join(outDir, `${surface.id}__failed.png`), mask }).catch(() => undefined);
     return { ...record, status: "failed", reason: message };
   } finally {
     await anonymous?.close();

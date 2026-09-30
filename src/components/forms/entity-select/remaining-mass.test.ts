@@ -14,6 +14,12 @@ describe("formatRemainingMass", () => {
     );
   });
 
+  it("names the dry figure of a feedstock bin as dry feedstock", () => {
+    expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_400, dryLabel: "dry feedstock" })).toBe(
+      "Remaining now: 3,000 kg wet, 2,400 kg dry feedstock",
+    );
+  });
+
   it("can show only wet mass when dry mass is not useful for the task", () => {
     expect(formatRemainingMass({ wetKg: 3_000, dryKg: 2_900 }, false)).toBe(
       "Remaining now: 3,000 kg wet",

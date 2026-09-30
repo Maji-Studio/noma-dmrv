@@ -71,6 +71,17 @@ describe("split bin draws in PostgreSQL", () => {
     expect(movement.inputSnapshot).toMatchObject({ sources: [{ layerId: f.p1.id, moisturePercent: 40 }], moisturePercent: 40 });
   });
 
+  it("corrects a draw past a later ordered draw from another sub-bin, not past an oldest-first one", async () => {
+    const f = await splitBin();
+    const original = await postMeasurement(f, { kind: "loss", wetMassKg: 100, sources: [{ layerId: f.p2.id, moisturePercent: 50 }] });
+    await postMeasurement(f, { kind: "loss", wetMassKg: 100, sources: [{ layerId: f.p1.id, moisturePercent: 50 }] });
+    const correction = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss" as const, wetMassKg: 200, correctsMovementId: original.movementId };
+    expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toBeNull();
+    // Oldest first takes P1, but it would have split differently with P2 restored.
+    await postMeasurement(f, { kind: "loss", wetMassKg: 100 });
+    expect((await previewOutputStock(f.ctx, correction)).blockingMessage).toMatch(/Correction blocked by a later stock loss/);
+  });
+
   it("feeds applications from a split delivery and then locks its correction", async () => {
     const f = await splitBin();
     const sources = [{ layerId: f.p2.id, moisturePercent: 20 }, { layerId: f.p1.id, moisturePercent: 25 }];

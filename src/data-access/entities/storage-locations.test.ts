@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LaneStockDerivation } from "../lane-stock-derivation";
-import { toFeedstockBinEntityOption } from "./storage-locations";
+import { toFeedstockBinEntityOption, toOutputBinEntityOption } from "./storage-locations";
 
 type StorageLocationOptionRow = Parameters<
   typeof toFeedstockBinEntityOption
@@ -17,6 +17,7 @@ function storageRow(
     heldFeedstockTypeName: null,
     heldFeedstockTypeUsage: null,
     feedstockTypeName: null,
+    formulationName: null,
     totalStoredWetKg: 0,
     pendingStoredWetKg: 0,
     totalConsumedKg: 0,
@@ -55,7 +56,26 @@ describe("toFeedstockBinEntityOption", () => {
       }),
     );
 
-    expect(option.remainingMass).toEqual({ wetKg: 3_000, dryKg: 1_950 });
+    expect(option.remainingMass).toEqual({ wetKg: 3_000, dryKg: 1_950, dryLabel: "dry feedstock" });
     expect(option.subtitle).toContain("3,000 kg stored");
+  });
+});
+
+describe("toOutputBinEntityOption", () => {
+  const stock = { estimatedWetMassKg: 277, dryMassKg: 249.6 };
+
+  it("leads a product bin subtitle with its formulation", () => {
+    const option = toOutputBinEntityOption(storageRow({ type: "product_bin", formulationName: "BCF-01 Organic" }), stock);
+    expect(option.subtitle).toMatch(/^BCF-01 Organic · /);
+  });
+
+  it("names a product bin with no formulation 'Pure biochar'", () => {
+    const option = toOutputBinEntityOption(storageRow({ type: "product_bin" }), stock);
+    expect(option.subtitle).toMatch(/^Pure biochar · /);
+  });
+
+  it("keeps a biochar bin subtitle to its stock", () => {
+    const option = toOutputBinEntityOption(storageRow({ type: "biochar_bin" }), stock);
+    expect(option.subtitle).not.toContain(" · ");
   });
 });
