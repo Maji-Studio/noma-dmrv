@@ -69,7 +69,7 @@ test.describe("Transport round trip (#852)", () => {
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
-    await expect(dialog.getByText("One-way distance (km)")).toBeVisible();
+    await expect(dialog.getByRole("spinbutton", { name: "Distance (km)" })).toBeVisible();
     await expect(dialog.getByText(/trip type/i)).toHaveCount(0);
     await expect(dialog.locator('select[name="transportTripType"]')).toHaveCount(0);
 
@@ -181,9 +181,7 @@ test.describe("Transport round trip (#852)", () => {
       name: "Add location",
     });
     await expect(
-      supplierLocationDialog.getByText(
-        "One-way distance to facility (per leg, km)",
-      )
+      supplierLocationDialog.getByRole("spinbutton", { name: "Distance to facility (km)" })
     ).toBeVisible();
     await page.keyboard.press("Escape");
 
@@ -196,7 +194,7 @@ test.describe("Transport round trip (#852)", () => {
     // pass), so target the form INPUT via its accessible name.
     await expect(
       page.getByRole("spinbutton", {
-        name: "One-way distance from facility (per leg, km)",
+        name: "Distance from facility",
       })
     ).toBeVisible({ timeout: 10000 });
   });

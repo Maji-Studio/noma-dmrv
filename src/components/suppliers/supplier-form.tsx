@@ -185,26 +185,17 @@ export function SupplierForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Required Fields Section */}
-      <FormSection title="Required information" divider={false}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="name"
-            label="Supplier name"
-            required
-            error={errors.name?.message}
-          >
-            <FormInput
-              id="name"
-              type="text"
-              placeholder="e.g., Agricultural Residues Co-op"
-              disabled={isSubmitting}
-              error={!!errors.name}
-              {...register("name")}
-            />
-          </FormField>
-        </div>
-      </FormSection>
+      {/* Supplier name leads the sheet at full width, no section for one field. */}
+      <FormField id="name" label="Supplier name" required error={errors.name?.message}>
+        <FormInput
+          id="name"
+          type="text"
+          placeholder="e.g., Agricultural Residues Co-op"
+          disabled={isSubmitting}
+          error={!!errors.name}
+          {...register("name")}
+        />
+      </FormField>
 
       {/* Locations Section */}
       {managesLiveLocations && supplierId ? (
@@ -235,24 +226,6 @@ export function SupplierForm({
               {...register("contactName")}
             />
           </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="contactEmail"
-            label="Contact email"
-            error={errors.contactEmail?.message}
-          >
-            <FormInput
-              id="contactEmail"
-              type="email"
-              placeholder="e.g., procurement.partner@example.com"
-              disabled={isSubmitting}
-              error={!!errors.contactEmail}
-              {...register("contactEmail")}
-            />
-          </FormField>
-
           <FormField
             id="contactPhone"
             label="Contact phone"
@@ -268,6 +241,22 @@ export function SupplierForm({
               {...register("contactPhone")}
             />
           </FormField>
+          <div className="md:col-span-2">
+          <FormField
+            id="contactEmail"
+            label="Contact email"
+            error={errors.contactEmail?.message}
+          >
+            <FormInput
+              id="contactEmail"
+              type="email"
+              placeholder="e.g., procurement.partner@example.com"
+              disabled={isSubmitting}
+              error={!!errors.contactEmail}
+              {...register("contactEmail")}
+            />
+          </FormField>
+          </div>
         </div>
       </FormSection>
 

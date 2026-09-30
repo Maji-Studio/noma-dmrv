@@ -9,11 +9,6 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 
-export interface SupplierDetailData {
-  supplier: Supplier;
-  locations: SupplierLocation[];
-}
-
 /**
  * The one ordering for a supplier's locations: the default first, then oldest
  * first. Every surface that lists them shares this, so a cache seeded on the
@@ -48,7 +43,7 @@ export async function findSupplierRow(
   return supplier;
 }
 
-/** The one supplier-locations read, shared by the hydrated page and its refetch. */
+/** The one supplier-locations read. */
 export async function findSupplierLocations(
   ctx: OrgContext,
   supplierId: string,
@@ -65,26 +60,4 @@ export async function findSupplierLocations(
       ),
     )
     .orderBy(...SUPPLIER_LOCATION_ORDER);
-}
-
-/**
- * Resolve the complete payload used by the full supplier detail route.
- *
- * The supplier and its locations are independently organization-scoped and
- * loaded in parallel, through the same reads the client hooks refetch. A
- * missing supplier returns `null` so the route can keep its not-found contract
- * without doing a smaller existence query first.
- */
-export async function findSupplierDetail(
-  ctx: OrgContext,
-  supplierId: string,
-): Promise<SupplierDetailData | null> {
-  requireOrgScope(ctx);
-
-  const [supplier, locations] = await Promise.all([
-    findSupplierRow(ctx, supplierId),
-    findSupplierLocations(ctx, supplierId),
-  ]);
-
-  return supplier ? { supplier, locations } : null;
 }
