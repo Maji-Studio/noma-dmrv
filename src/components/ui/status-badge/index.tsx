@@ -59,6 +59,7 @@ const statusLabels = {
   ready: "Ready",
   sold: "Sold",
   pending: "Pending",
+  missing_data: "Missing data",
   verified: "Verified",
   issued: "Issued",
   rejected: "Rejected",

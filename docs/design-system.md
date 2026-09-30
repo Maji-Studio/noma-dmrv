@@ -176,7 +176,7 @@ the `FormField` id (`FormEntitySelect` does) so the field label names it.
 Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
-- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase; on its way out, only the certification read files still use it; do not use it in new UI)
+- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons)
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`

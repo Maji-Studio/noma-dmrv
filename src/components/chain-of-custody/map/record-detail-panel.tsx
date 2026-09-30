@@ -14,9 +14,10 @@
  *
  * Nothing animates: the rail's own rows appear instantly, so a column sliding
  * out from under them reads as a separate object arriving rather than as more of
- * the rail. Type balance follows the ChainNodeSheet: labels whisper in mono
- * micro caps, content speaks in the inherited sans. Mono is left only where the
- * value is code-like — the record code, coordinates, a measurement.
+ * the rail. Type balance follows the ChainNodeSheet: labels are sentence case
+ * captions, content speaks in the inherited sans. Mono is left only where the
+ * value is code-like (the record code, coordinates, a measurement) and on the
+ * action buttons, which keep the button casing.
  */
 
 import { ChainStatusBadge } from "../chain-status-badge";

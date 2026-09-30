@@ -3,27 +3,20 @@ import {
   statusLabels,
   type StatusValue,
 } from "@/components/ui/status-badge";
+import { humanizeEnum } from "@/lib/copy-utils";
 
 /**
  * Status badge for a traceability node (canvas node, sheet and map panel).
  *
  * Node statuses come from several entities. Values the shared StatusBadge
- * vocabulary knows render as their own list badges do; a feedstock's
- * `missing_data` matches the feedstock list ("Pending" colour, "Missing data"
- * label). Anything else falls back to a neutral badge with a readable label.
+ * vocabulary knows render as their own list badges do, colour included.
+ * Anything else falls back to a neutral badge with a readable label.
  */
 export function toBadgeProps(status: string): { status: StatusValue; label?: string } {
-  if (status === "missing_data") {
-    return { status: "pending", label: "Missing data" };
-  }
   if (Object.hasOwn(statusLabels, status)) {
     return { status: status as StatusValue };
   }
-  const readable = status.replaceAll("_", " ");
-  return {
-    status: "draft",
-    label: readable.charAt(0).toUpperCase() + readable.slice(1),
-  };
+  return { status: "draft", label: humanizeEnum(status) };
 }
 
 export function ChainStatusBadge({

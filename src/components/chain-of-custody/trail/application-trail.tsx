@@ -24,6 +24,7 @@ import { resolveChainSources } from "@/lib/chain-of-custody/sources";
 import { formatDate, formatDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { humanizeEnum } from "@/lib/copy-utils";
 import {
   FileIcon,
   FlaskIcon,
@@ -34,11 +35,6 @@ import {
   LINEAGE_NODE_STYLES,
   type LineageNodeKind,
 } from "../chain-constants";
-
-function sentenceCase(value: string): string {
-  const text = value.replaceAll("_", " ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
 
 interface TrailStepDescriptor {
   nodeId: string;
@@ -232,7 +228,7 @@ function StepEvidence({ evidence }: { evidence: TrailNodeEvidence | undefined })
               {doc.fileName}
             </p>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              {sentenceCase(doc.documentType)}
+              {humanizeEnum(doc.documentType)}
             </p>
           </div>
         </li>
