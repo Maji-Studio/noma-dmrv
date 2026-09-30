@@ -121,7 +121,7 @@ describe("BinReconcileSheet", () => {
       expect(markup).toContain("After this loss");
       expect(markup).toContain(expectedStock);
       if (showsMoisture) {
-        expect(markup).toContain("wet estimate, 16.7% moisture");
+        expect(markup).toContain("Wet stock, 16.7% moisture");
       } else {
         expect(markup).not.toContain("moisture");
       }

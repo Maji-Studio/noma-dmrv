@@ -481,7 +481,8 @@ export function SampleForm({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="totalCarbonPercent"
-                  label="Total carbon (%)"
+                  label="Total carbon"
+                  unit="%"
                   error={errors.totalCarbonPercent?.message}
                   required
                   certifyRequired={is1000Year && isSampleCertifyField("totalCarbonPercent")}
@@ -502,7 +503,8 @@ export function SampleForm({
 
                 <FormField
                   id="organicCarbonPercent"
-                  label="Organic carbon (%)"
+                  label="Organic carbon"
+                  unit="%"
                   error={organicCarbonError}
                   helperText="Basis for the H:Corg / O:Corg eligibility ratios and durable-carbon accounting (both tiers)."
                   required
@@ -524,7 +526,8 @@ export function SampleForm({
 
                 <FormField
                   id="inorganicCarbonPercent"
-                  label="Inorganic carbon (%)"
+                  label="Inorganic carbon"
+                  unit="%"
                   error={inorganicCarbonError}
                   certifyRequired={is1000Year && isSampleCertifyField("inorganicCarbonPercent")}
                   certifyStatus={certStatus("inorganicCarbonPercent")}
@@ -544,7 +547,8 @@ export function SampleForm({
 
                 <FormField
                   id="ashContentPercent"
-                  label="Ash content (%)"
+                  label="Ash content"
+                  unit="%"
                   error={errors.ashContentPercent?.message}
                 >
                   <FormInput
@@ -562,7 +566,8 @@ export function SampleForm({
 
                 <FormField
                   id="totalHydrogenPercent"
-                  label="Hydrogen (%)"
+                  label="Hydrogen"
+                  unit="%"
                   error={errors.totalHydrogenPercent?.message}
                   certifyRequired={isSampleCertifyField("totalHydrogenPercent")}
                   certifyStatus={certStatus("totalHydrogenPercent")}
@@ -582,7 +587,8 @@ export function SampleForm({
 
                 <FormField
                   id="totalNitrogenPercent"
-                  label="Nitrogen (%)"
+                  label="Nitrogen"
+                  unit="%"
                   error={errors.totalNitrogenPercent?.message}
                 >
                   <FormInput
@@ -600,7 +606,8 @@ export function SampleForm({
 
                 <FormField
                   id="totalOxygenPercent"
-                  label="Oxygen (%)"
+                  label="Oxygen"
+                  unit="%"
                   error={errors.totalOxygenPercent?.message}
                   helperText="Used to calculate required O:C org when no lab ratio is entered."
                 >
@@ -619,7 +626,8 @@ export function SampleForm({
 
                 <FormField
                   id="totalSulfurPercent"
-                  label="Sulfur (%)"
+                  label="Sulfur"
+                  unit="%"
                   error={errors.totalSulfurPercent?.message}
                 >
                   <FormInput

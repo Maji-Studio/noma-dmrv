@@ -4,6 +4,8 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
+import type { ReactNode } from "react";
+import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -20,7 +22,8 @@ import { FormActions } from "@/components/forms/form-actions";
 import {
   storageLocationFormSchema,
   storageLocationTypes,
-  formatStorageLocationType,
+  outputStockModes,
+  STORAGE_LOCATION_TYPE_SHORT_LABELS,
   isFeedstockBinType,
   isOutputBinType,
   STORAGE_LOCATION_TYPE_DESCRIPTIONS,
@@ -30,10 +33,11 @@ import {
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 
-const STOCK_MODE_OPTIONS = [
-  { value: "split", title: "Split", description: "Each batch stays its own sub-bin.", art: <SplitPilesArt /> },
-  { value: "mix", title: "Mix", description: "One blended pile, drawn in proportion.", art: <MixPileArt /> },
-] as const;
+const STOCK_MODE_CARDS: Record<OutputStockMode, { title: string; description: string; art: ReactNode }> = {
+  split: { title: "Split", description: "Each batch stays its own sub-bin.", art: <SplitPilesArt /> },
+  mix: { title: "Mix", description: "One blended pile, drawn in proportion.", art: <MixPileArt /> },
+};
+const STOCK_MODE_OPTIONS = outputStockModes.map((mode) => ({ value: mode, ...STOCK_MODE_CARDS[mode] }));
 
 const STOCK_MODE_HINT =
   "Split keeps every batch in its own bay, bag or heap, and each removal records which batches it came from. Mix is one blended pile: every removal takes each batch in proportion to what it holds.";
@@ -84,8 +88,7 @@ export function StorageLocationForm({
   const typeChoices = allowedTypes ?? storageLocationTypes;
   const storageTypeOptions = typeChoices.map((type) => ({
     value: type,
-    // The field is already "Storage type", so "bin" only crowds the segments.
-    label: formatStorageLocationType(type).replace(/ bin$/, ""),
+    label: STORAGE_LOCATION_TYPE_SHORT_LABELS[type],
   }));
 
   const {
@@ -248,9 +251,9 @@ export function StorageLocationForm({
           </FormField>
           </div>
           {merging && (
-            <FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} cue={clock.hint} required>
+            <div className="md:col-span-2"><FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} cue={clock.hint} required>
               <EventTimeInput control={control} name="mergedAt" id="mergedAt" timeZone={clock.timeZone} disabled={isSubmitting} />
-            </FormField>
+            </FormField></div>
           )}
         </div>
       )}

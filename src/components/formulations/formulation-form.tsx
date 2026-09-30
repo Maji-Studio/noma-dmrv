@@ -50,6 +50,9 @@ const EMPTY_INGREDIENT = {
   sharePercent: null,
 };
 
+/** Width of the remove button; the biochar row reserves the same slot so every share lines up. */
+const REMOVE_SLOT_CLASSES = "size-40 shrink-0";
+
 /** One row per material: name on the left, share (and remove) on the right, at every level. */
 const MATERIAL_ROW_CLASSES = "grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20";
 
@@ -300,7 +303,7 @@ export function FormulationForm({
           </Button>
         }
       >
-        {/* One flat row per material: a sub-title naming it, then its fields.
+        {/* One flat row per material: its name field, then its share.
             Every share sits in the right-hand column so the shares read down
             as one column that adds up to 100%. */}
         <div className="space-y-20">
@@ -348,7 +351,7 @@ export function FormulationForm({
                 </FormField>
               </div>
               {/* Holds the width of the remove button below, so every share lines up. */}
-              <span aria-hidden="true" className="hidden size-40 shrink-0 md:block" />
+              <span aria-hidden="true" className={`hidden md:block ${REMOVE_SLOT_CLASSES}`} />
             </div>
           </div>
 
@@ -411,7 +414,7 @@ export function FormulationForm({
                   onClick={() => remove(index)}
                   disabled={isSubmitting}
                   aria-label={`Remove ingredient ${index + 1}`}
-                  className="shrink-0"
+                  className={REMOVE_SLOT_CLASSES}
                 >
                   <TrashIcon size={16} weight="bold" />
                 </Button>

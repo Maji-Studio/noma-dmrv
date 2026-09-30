@@ -13,7 +13,7 @@ function ChangeBlock({ label, figure, caption, muted }: {
   muted?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 bg-[var(--color-background-light)] px-12 py-10">
+    <div className="flex min-w-0 flex-col gap-2 py-4">
       <span className="body-caption text-[var(--color-text-secondary)]">{label}</span>
       <span className={`body-large font-medium tabular-nums ${muted ? "text-[var(--color-text-tertiary)]" : ""}`}>{figure}</span>
       <span className="body-caption text-[var(--color-text-secondary)]">{caption}</span>
@@ -23,20 +23,20 @@ function ChangeBlock({ label, figure, caption, muted }: {
 
 /**
  * What a feedstock loss does to the bin, as two blocks with an arrow: the wet
- * stock now (with its estimated moisture), then the wet stock once the mass
+ * stock now (with its moisture), then the wet stock once the mass
  * typed above is taken out. The after block waits for a usable mass.
  */
 export function FeedstockLossChange({ beforeKg, moisturePercent, lossKg, blocked }: {
   beforeKg: number | null;
   moisturePercent: number | null;
   lossKg: number | null;
-  /** True while the entered mass is more than the bin holds. */
+  /** True while the entered mass is more than the bin holds. `lossKg` is null until the entry passes the loss field schema. */
   blocked: boolean;
 }) {
   const afterKg = beforeKg !== null && lossKg !== null && !blocked ? beforeKg - lossKg : null;
   const beforeFigure = formatMassKg(beforeKg);
   const afterFigure = afterKg === null ? "Enter a mass" : formatMassKg(afterKg);
-  const beforeCaption = `wet estimate, ${formatMoisturePercent(moisturePercent)} moisture`;
+  const beforeCaption = moisturePercent === null ? "Wet stock" : `Wet stock, ${formatMoisturePercent(moisturePercent)} moisture`;
   return (
     <div
       role="group"
@@ -45,7 +45,7 @@ export function FeedstockLossChange({ beforeKg, moisturePercent, lossKg, blocked
     >
       <ChangeBlock label="In the bin now" figure={beforeFigure} caption={beforeCaption} />
       <ArrowRightIcon size={ICON_PX} aria-hidden="true" className="self-center text-[var(--color-icon-secondary)]" />
-      <ChangeBlock label="After this loss" figure={afterFigure} caption="wet estimate" muted={afterKg === null} />
+      <ChangeBlock label="After this loss" figure={afterFigure} caption="Wet stock" muted={afterKg === null} />
     </div>
   );
 }

@@ -45,7 +45,7 @@ export const LossReasonChips = forwardRef<HTMLTextAreaElement, ReasonProps>(
               aria-pressed={active === preset}
               onClick={() => onPick(reasonWithPreset(value, preset))}
               className={cn(
-                "body-small inline-flex min-h-32 items-center gap-6 border px-12 transition-colors duration-300",
+                "body-small inline-flex min-h-44 items-center gap-6 border px-12 transition-colors duration-300",
                 "border-[var(--color-border-secondary)] bg-[var(--color-background-white)] text-[var(--color-text-secondary)]",
                 "hover:border-[var(--color-border-primary)]",
                 "aria-pressed:border-[var(--color-interaction)] aria-pressed:bg-[var(--color-background-interaction-light)] aria-pressed:text-[var(--color-text-primary)]",

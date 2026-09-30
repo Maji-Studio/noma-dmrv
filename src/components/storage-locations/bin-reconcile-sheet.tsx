@@ -101,6 +101,8 @@ function LossForm({
   const lossInput = useWatch({ control, name: "lossMassKg" });
   const reasonInput = useWatch({ control, name: "reason" });
   const lossMassKg = previewNumber(lossInput);
+  // Only an entry the field schema accepts (positive, in range) previews an after figure.
+  const lossPreviewKg = recordLossFormSchema.shape.lossMassKg.safeParse(lossInput).success ? lossMassKg : null;
   const liveStockError =
     lossMassKg !== null && availableKg !== null &&
     isStockOverdraw(lossMassKg, availableKg)
@@ -181,7 +183,7 @@ function LossForm({
         <FeedstockLossChange
           beforeKg={availableKg}
           moisturePercent={storageLocation.feedstockInventory.estimatedMoisturePercent}
-          lossKg={lossMassKg}
+          lossKg={lossPreviewKg}
           blocked={!!liveStockError}
         />
       )}
