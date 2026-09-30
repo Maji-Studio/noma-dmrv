@@ -4,7 +4,7 @@ import { expect, test } from "./fixtures";
 const DUPLICATE_REQUEST_SETTLE_MS = 1_000;
 
 /**
- * Open a party's detail page from its list.
+ * Open a supplier's detail page from its list.
  *
  * The list paginates at 10 rows in an organization every spec shares, so the
  * seeded row is only reliably reachable after searching for its code. The
@@ -13,8 +13,8 @@ const DUPLICATE_REQUEST_SETTLE_MS = 1_000;
  */
 async function openDetailFromList(
   page: Page,
-  path: "/suppliers" | "/customers",
-  searchLabel: "Search suppliers" | "Search customers",
+  path: "/suppliers",
+  searchLabel: "Search suppliers",
   code: string,
 ) {
   await page.goto(path);
@@ -94,63 +94,6 @@ test("supplier detail is hydrated on client navigation and hard reload", async (
 
   await adminPage.screenshot({
     path: testInfo.outputPath("supplier-hard-reload.png"),
-    fullPage: true,
-  });
-  observed.stop();
-});
-
-test("customer detail is hydrated on client navigation and hard reload", async ({
-  adminPage,
-  seededData,
-}, testInfo) => {
-  const observed = collectDetailActionRequests(
-    adminPage,
-    seededData.customer.id,
-  );
-
-  await openDetailFromList(
-    adminPage,
-    "/customers",
-    "Search customers",
-    seededData.customer.code,
-  );
-
-  await expect(adminPage).toHaveURL(
-    new RegExp(`/customers/${seededData.customer.id}(?:[?#]|$)`),
-  );
-  await expect(
-    adminPage.getByRole("heading", {
-      name: seededData.customer.name,
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    adminPage.getByRole("heading", { name: /^Locations \(\d+\)$/ }),
-  ).toBeVisible();
-  await adminPage.waitForTimeout(DUPLICATE_REQUEST_SETTLE_MS);
-  expect(observed.requests).toHaveLength(0);
-
-  await adminPage.screenshot({
-    path: testInfo.outputPath("customer-client-navigation.png"),
-    fullPage: true,
-  });
-
-  observed.reset();
-  await adminPage.reload();
-  await expect(
-    adminPage.getByRole("heading", {
-      name: seededData.customer.name,
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    adminPage.getByRole("heading", { name: /^Locations \(\d+\)$/ }),
-  ).toBeVisible();
-  await adminPage.waitForTimeout(DUPLICATE_REQUEST_SETTLE_MS);
-  expect(observed.requests).toHaveLength(0);
-
-  await adminPage.screenshot({
-    path: testInfo.outputPath("customer-hard-reload.png"),
     fullPage: true,
   });
   observed.stop();

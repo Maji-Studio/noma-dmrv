@@ -398,20 +398,15 @@ const productionSite: Surface[] = [
   },
 ];
 
+/** The customer sheet (deep-linked by `?customer=`) switched to its edit form, where locations are managed. */
+async function customerEditSheet(page: Page, ctx: CaptureContext): Promise<Locator> {
+  await gotoRoute(page, ctx, `customers?customer=${ctx.customer!.id}`);
+  const sheet = page.getByRole("dialog").first();
+  await sheet.getByRole("button", { name: "Edit customer", exact: true }).click();
+  return sheet;
+}
+
 const downstream: Surface[] = [
-  {
-    id: "customer.detail-page",
-    family: "downstream",
-    title: "Customer detail page",
-    kind: "page",
-    mode: "read",
-    fill: "none",
-    skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
-    open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return page.locator("main");
-    },
-  },
   {
     id: "customer.location-add",
     family: "downstream",
@@ -422,8 +417,8 @@ const downstream: Surface[] = [
     errors: true,
     skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Add location");
+      const sheet = await customerEditSheet(page, ctx);
+      return openDialogFromButton(sheet, page, "Add location");
     },
   },
   {
@@ -435,8 +430,8 @@ const downstream: Surface[] = [
     fill: "filled",
     skip: (ctx) => (ctx.customer ? undefined : "no seeded customer"),
     open: async (page, ctx) => {
-      await gotoRoute(page, ctx, `customers/${ctx.customer!.id}`);
-      return openDialogFromButton(page.locator("main"), page, "Edit");
+      const sheet = await customerEditSheet(page, ctx);
+      return openDialogFromButton(sheet, page, /^Edit /);
     },
   },
   {

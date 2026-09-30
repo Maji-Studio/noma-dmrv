@@ -6,14 +6,12 @@ const {
   mockRequireOrgContext,
   mockGetCreditBatchById,
   mockFindSupplierDetail,
-  mockFindCustomerWithRelations,
 } = vi.hoisted(() => ({
   NOT_FOUND_ERROR: "NEXT_NOT_FOUND",
   mockRedirect: vi.fn(),
   mockRequireOrgContext: vi.fn(),
   mockGetCreditBatchById: vi.fn(),
   mockFindSupplierDetail: vi.fn(),
-  mockFindCustomerWithRelations: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -32,14 +30,9 @@ vi.mock("@/data-access/supplier-detail", () => ({
   findSupplierDetail: mockFindSupplierDetail,
 }));
 vi.mock("@/components/suppliers", () => ({ SupplierDetail: () => null }));
-vi.mock("@/data-access/customer-detail", () => ({
-  findCustomerWithRelations: mockFindCustomerWithRelations,
-}));
-vi.mock("@/components/customers", () => ({ CustomerDetail: () => null }));
 
 import CreditBatchRedirectPage from "@/app/(app)/credit-batches/[id]/page";
 import SupplierDetailPage from "@/app/(app)/suppliers/[supplierId]/page";
-import CustomerDetailPage from "@/app/(app)/customers/[customerId]/page";
 
 const VALID_MISSING_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_VALID_ID = "22222222-2222-4222-8222-222222222222";
@@ -79,12 +72,6 @@ describe("detail route server preflights", () => {
       },
       locations: [{ id: "supplier-location-1", country: "Switzerland" }],
     });
-    mockFindCustomerWithRelations.mockResolvedValue({
-      id: VALID_MISSING_ID,
-      code: "CUS-001",
-      name: "Customer One",
-      locations: [{ id: "customer-location-1", country: "Switzerland" }],
-    });
   });
 
   it("redirects the retired credit-batch detail route into the list side sheet", async () => {
@@ -120,17 +107,6 @@ describe("detail route server preflights", () => {
     expect(mockFindSupplierDetail).not.toHaveBeenCalled();
   });
 
-  it("returns not found for a malformed customer ID before querying", async () => {
-    await expect(
-      CustomerDetailPage({
-        params: Promise.resolve({ customerId: "__missing__" }),
-      }),
-    ).rejects.toThrow(NOT_FOUND_ERROR);
-
-    expect(mockRequireOrgContext).not.toHaveBeenCalled();
-    expect(mockFindCustomerWithRelations).not.toHaveBeenCalled();
-  });
-
   it("returns not found for an absent supplier UUID", async () => {
     mockFindSupplierDetail.mockResolvedValue(null);
 
@@ -141,21 +117,6 @@ describe("detail route server preflights", () => {
     ).rejects.toThrow(NOT_FOUND_ERROR);
 
     expect(mockFindSupplierDetail).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: "test-org" }),
-      VALID_MISSING_ID,
-    );
-  });
-
-  it("returns not found for an absent customer UUID", async () => {
-    mockFindCustomerWithRelations.mockResolvedValue(null);
-
-    await expect(
-      CustomerDetailPage({
-        params: Promise.resolve({ customerId: VALID_MISSING_ID }),
-      }),
-    ).rejects.toThrow(NOT_FOUND_ERROR);
-
-    expect(mockFindCustomerWithRelations).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "test-org" }),
       VALID_MISSING_ID,
     );
@@ -189,28 +150,6 @@ describe("detail route server preflights", () => {
     expect(supplierState?.dataUpdatedAt).toBeGreaterThan(0);
     expect(locationsState?.dataUpdatedAt).toBe(supplierState?.dataUpdatedAt);
     expect(mockFindSupplierDetail).toHaveBeenCalledTimes(1);
-  });
-
-  it("hydrates complete customer relations under the detail key", async () => {
-    const page = await CustomerDetailPage({
-      params: Promise.resolve({ customerId: VALID_MISSING_ID }),
-    });
-
-    const customerState = dehydratedData(page, [
-      "customers",
-      "detail",
-      VALID_MISSING_ID,
-      "relations",
-    ]);
-
-    expect(customerState?.data).toEqual(
-      expect.objectContaining({
-        id: VALID_MISSING_ID,
-        locations: [expect.objectContaining({ id: "customer-location-1" })],
-      }),
-    );
-    expect(customerState?.dataUpdatedAt).toBeGreaterThan(0);
-    expect(mockFindCustomerWithRelations).toHaveBeenCalledTimes(1);
   });
 
   it("keeps hydration cache entries isolated by detail ID", async () => {
