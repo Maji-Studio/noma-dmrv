@@ -35,7 +35,7 @@ import {
 import { useRouteGeometries } from "@/hooks/use-geo";
 import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import type { ChainNodeSheetNode } from "../chain-node-sheet";
-import { buildLineageNodes, buildRollForwardGraph } from "../use-chain-graph";
+import { buildLineageNodes, buildRollForwardNodes } from "../use-chain-graph";
 import type { PopupContentByNodeId } from "./carbon-transit-map";
 import { CustodyStagesRail, RAIL_WIDTH_PX } from "./custody-stages-rail";
 import { RECORD_PANEL_WIDTH_PX, RecordDetailPanel } from "./record-detail-panel";
@@ -144,7 +144,7 @@ function buildPopupContent(
   const content: PopupContentByNodeId = {};
   const nodes = [
     ...(lineages ?? []).flatMap((chainData) => buildLineageNodes(chainData)),
-    ...rollForwards.flatMap((rollForward) => buildRollForwardGraph(rollForward).nodes),
+    ...buildRollForwardNodes(rollForwards),
   ];
   for (const node of nodes) {
     if (content[node.id]) continue;

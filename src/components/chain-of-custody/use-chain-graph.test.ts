@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Edge } from "@xyflow/react";
+import { formatWetDryMass } from "@/lib/mass-moisture";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import type {
   ChainRollForwardProduct,
@@ -8,6 +9,7 @@ import type {
 import {
   assignEdgeRouteOffsets,
   buildLineageNodes,
+  buildRollForwardNodes,
   reachableNodeIds,
   useBatchChainGraph,
   useChainGraph,
@@ -472,6 +474,21 @@ describe("roll-forwards", () => {
     expect(
       edges.find((graphEdge) => graphEdge.id === "production-run:run-1->biochar-product:product-2")?.data?.pctLabel,
     ).toBe("25%");
+  });
+
+  it("leaves a drawn total unknown when one run's mass is unknown", () => {
+    const first = rollForward("run-1");
+    const second = rollForward("run-2");
+    first.products = [rollForwardProduct("product-1")];
+    second.products = [{ ...rollForwardProduct("product-1"), drawnDryMassKg: null }];
+
+    const product = buildRollForwardNodes([first, second]).find(
+      (node) => node.id === "biochar-product:product-1",
+    );
+
+    expect(product?.details).toEqual([
+      { label: "Drawn from runs", value: formatWetDryMass({ wetKg: 1_200, dryKg: null }) },
+    ]);
   });
 
   it("sums two member runs' shares of one shipment", () => {

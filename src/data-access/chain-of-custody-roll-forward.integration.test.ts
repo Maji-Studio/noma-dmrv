@@ -20,7 +20,7 @@ const available = await probe.connect().then(() => true, () => false);
 await probe.end();
 if (!available && process.env.CI) throw new Error("Roll-forward tests require PostgreSQL in CI");
 const ctx: OrgContext = { organizationId: "roll-forward-org", userId: "roll-forward-user", orgRole: "owner", isPlatformAdmin: false };
-const ids = Object.fromEntries(["formulation", "facility", "bin", "run", "outsideRun", "shipped", "stocked", "foreign", "delivery", "order", "batch"].map(key => [key, randomUUID()]));
+const ids = Object.fromEntries(["formulation", "facility", "bin", "run", "outsideRun", "shipped", "stocked", "foreign", "legacy", "delivery", "order", "batch"].map(key => [key, randomUUID()]));
 const org = { organizationId: ctx.organizationId };
 let client: Client;
 let executor: typeof db;
@@ -55,6 +55,8 @@ describe.skipIf(!available)("run roll-forward PostgreSQL queries", () => {
     await executor.insert(schema.productionRuns).values(["run", "outsideRun"].map(key => ({ ...org, id: ids[key], facilityId: ids.facility, code: key, reactorId: randomUUID(), status: "complete" as const, biocharDryMassKg: 1000 })));
     await executor.insert(schema.formulations).values({ ...org, id: ids.formulation, code: "FORM", name: "Fixture pure", biocharRatio: 1 });
     await executor.insert(schema.biocharProducts).values(["shipped", "stocked", "foreign"].map(label => ({ ...org, id: ids[label], facilityId: ids.facility, code: label, formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 600 })));
+    // A legacy lot: no source bin, no allocation row, linked to the run directly.
+    await executor.insert(schema.biocharProducts).values({ ...org, id: ids.legacy, facilityId: ids.facility, code: "legacy", formulationId: ids.formulation, placedAt: new Date("2026-01-01T12:00:00.000Z"), productionDate: new Date("2026-01-01"), massKg: 200, moistureContentPercent: 10, linkedProductionRunId: ids.run });
     await executor.insert(schema.biocharProductSourceAllocations).values([
       { ...org, biocharProductId: ids.shipped, productionRunId: ids.run, sourceStorageLocationId: ids.bin, allocatedWetMassKg: 600, allocatedDryMassKg: 570 },
       { ...org, biocharProductId: ids.stocked, productionRunId: ids.run, sourceStorageLocationId: ids.bin, allocatedWetMassKg: 300, allocatedDryMassKg: 285 },
@@ -93,10 +95,11 @@ describe.skipIf(!available)("run roll-forward PostgreSQL queries", () => {
     const [rollForward] = data.rollForwards;
     expect(rollForward.source.productionRun.id).toBe(ids.run);
     expect(rollForward.products.map(p => [p.product.id, p.drawnWetMassKg, p.drawnDryMassKg])).toEqual([
+      [ids.legacy, 200, 180],
       [ids.shipped, 600, 570],
       [ids.stocked, 300, 285],
     ]);
-    const [shipped, stocked] = rollForward.products;
+    const [, shipped, stocked] = rollForward.products;
     // Only the member run's share, never the outside run's biochar.
     expect(shipped.deliveries.map(d => [d.delivery.id, d.wetMassKg, d.dryMassKg])).toEqual([[ids.delivery, 300, 285]]);
     expect(shipped.deliveries[0].delivery.deliveredWetMassKg).toBe(400);

@@ -15,7 +15,8 @@ import {
   formulations,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { splitWetMass } from "@/lib/mass-moisture";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type {
   BatchRunForwardDeliveryFact,
   BatchRunForwardProductFact,
@@ -71,7 +72,51 @@ export async function loadRunForwardFactsWithExecutor(
       ),
     );
 
-  const productIds = [...new Set(productRows.map((row) => row.id))];
+  // Legacy products carry no source allocation: they link to their run
+  // directly, the same branch credit-batch-lineage-filter.ts accepts.
+  const legacyRows = await executor
+    .select({
+      productionRunId: biocharProducts.linkedProductionRunId,
+      id: biocharProducts.id,
+      code: biocharProducts.code,
+      status: biocharProducts.status,
+      productionDate: biocharProducts.productionDate,
+      massKg: biocharProducts.massKg,
+      moistureContentPercent: biocharProducts.moistureContentPercent,
+      formulationName: formulations.name,
+    })
+    .from(biocharProducts)
+    .leftJoin(
+      formulations,
+      and(
+        eq(biocharProducts.formulationId, formulations.id),
+        eq(formulations.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(biocharProducts.organizationId, ctx.organizationId),
+        isNull(biocharProducts.sourceBiocharStorageLocationId),
+        inArray(biocharProducts.linkedProductionRunId, runIds),
+      ),
+    );
+  const allocated = new Set(productRows.map((row) => `${row.productionRunId}:${row.id}`));
+  const drawnRows: Array<
+    Omit<(typeof productRows)[number], "drawnWetMassKg" | "drawnDryMassKg"> & {
+      drawnWetMassKg: number | null;
+      drawnDryMassKg: number | null;
+    }
+  > = [
+    ...productRows,
+    ...legacyRows.flatMap(({ productionRunId, ...row }) => {
+      if (!productionRunId || allocated.has(`${productionRunId}:${row.id}`)) return [];
+      // The whole legacy lot came from its one linked run.
+      const split = splitWetMass(row.massKg, row.moistureContentPercent);
+      return [{ ...row, productionRunId, drawnWetMassKg: row.massKg, drawnDryMassKg: split?.dryKg ?? null }];
+    }),
+  ];
+
+  const productIds = [...new Set(drawnRows.map((row) => row.id))];
   const layers = deliveryProductAllocations(ctx, executor);
   const deliveryRows = productIds.length
     ? await executor
@@ -116,7 +161,7 @@ export async function loadRunForwardFactsWithExecutor(
   }
 
   const byRun: Record<string, BatchRunForwardProductFact[]> = {};
-  for (const row of productRows) {
+  for (const row of drawnRows) {
     (byRun[row.productionRunId] ??= []).push({
       id: row.id,
       code: row.code,

@@ -699,6 +699,34 @@ export function buildRollForwardGraph(rollForward: ChainRunRollForward): {
   return { nodes, edges };
 }
 
+/**
+ * Every roll-forward card, deduped, with each product's "Drawn from runs"
+ * total across member runs. Shared by the DAG merge and the map popups. A
+ * mass unknown for any run leaves that basis unknown rather than understated.
+ */
+export function buildRollForwardNodes(rollForwards: ChainRunRollForward[]): LineageGraphNode[] {
+  const drawnByProductNode = new Map<string, { wetKg: number | null; dryKg: number | null }>();
+  for (const rollForward of rollForwards) {
+    for (const { product, drawnWetMassKg, drawnDryMassKg } of rollForward.products) {
+      const nodeId = `biochar-product:${product.id}`;
+      const total = drawnByProductNode.get(nodeId) ?? { wetKg: 0, dryKg: 0 };
+      total.wetKg = total.wetKg == null || drawnWetMassKg == null ? null : total.wetKg + drawnWetMassKg;
+      total.dryKg = total.dryKg == null || drawnDryMassKg == null ? null : total.dryKg + drawnDryMassKg;
+      drawnByProductNode.set(nodeId, total);
+    }
+  }
+  const nodeById = new Map<string, LineageGraphNode>();
+  for (const rollForward of rollForwards) {
+    for (const node of buildRollForwardGraph(rollForward).nodes) {
+      if (nodeById.has(node.id)) continue;
+      const drawn = drawnByProductNode.get(node.id);
+      if (drawn) node.details = [{ label: "Drawn from runs", value: formatWetDryMass(drawn) }];
+      nodeById.set(node.id, node);
+    }
+  }
+  return Array.from(nodeById.values());
+}
+
 export interface ChainGraphOptions {
   /**
    * Split/map cross-linking: card clicks highlight the map marker instead of
@@ -865,28 +893,14 @@ function buildMergedChainGraph(
     }
   }
 
-  const drawnByProductNode = new Map<string, { wetKg: number; dryKg: number }>();
-  for (const rollForward of rollForwards) {
-    for (const { product, drawnWetMassKg, drawnDryMassKg } of rollForward.products) {
-      const nodeId = `biochar-product:${product.id}`;
-      const total = drawnByProductNode.get(nodeId) ?? { wetKg: 0, dryKg: 0 };
-      total.wetKg += drawnWetMassKg;
-      total.dryKg += drawnDryMassKg;
-      drawnByProductNode.set(nodeId, total);
-    }
+  for (const node of buildRollForwardNodes(rollForwards)) {
+    if (!nodeById.has(node.id)) nodeById.set(node.id, node);
   }
   // Roll-forward shipments are per-run shares, so two member runs feeding one
   // product sum on its delivery edge. They never sum into a rollback edge.
   const rollForwardEdgeById = new Map<string, Edge>();
   for (const rollForward of rollForwards) {
-    const graph = buildRollForwardGraph(rollForward);
-    for (const node of graph.nodes) {
-      if (nodeById.has(node.id)) continue;
-      const drawn = drawnByProductNode.get(node.id);
-      if (drawn) node.details = [{ label: "Drawn from runs", value: formatWetDryMass(drawn) }];
-      nodeById.set(node.id, node);
-    }
-    for (const rollForwardEdge of graph.edges) {
+    for (const rollForwardEdge of buildRollForwardGraph(rollForward).edges) {
       if (edgeById.has(rollForwardEdge.id)) continue;
       const existing = rollForwardEdgeById.get(rollForwardEdge.id);
       if (!existing) {

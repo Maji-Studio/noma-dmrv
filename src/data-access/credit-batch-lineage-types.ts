@@ -95,8 +95,9 @@ export interface BatchRunForwardProductFact {
   massKg: number | null;
   moistureContentPercent: number | null;
   formulationName: string | null;
-  drawnWetMassKg: number;
-  drawnDryMassKg: number;
+  /** Null for a legacy lot whose recorded mass or moisture is missing. */
+  drawnWetMassKg: number | null;
+  drawnDryMassKg: number | null;
   deliveries: BatchRunForwardDeliveryFact[];
 }
 
