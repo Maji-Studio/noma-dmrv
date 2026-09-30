@@ -93,9 +93,9 @@ describe("BinReconcileSheet", () => {
   it.each([
     {
       type: "feedstock_bin",
-      expectedStockLabel: "Current wet stock",
+      expectedStockLabel: "In the bin now",
       expectedStock: "150 kg",
-      expectedLossLabel: "Wet mass lost (kg)",
+      expectedLossLabel: "Wet mass lost",
       showsMoisture: true,
     },
   ] as const)(
@@ -118,11 +118,12 @@ describe("BinReconcileSheet", () => {
       expect(markup).toContain("Reconcile FB-001");
       expect(markup).toContain("North hopper");
       expect(markup).toContain(expectedStockLabel);
+      expect(markup).toContain("After this loss");
       expect(markup).toContain(expectedStock);
       if (showsMoisture) {
-        expect(markup).toContain("Current estimated moisture");
+        expect(markup).toContain("wet estimate, 16.7% moisture");
       } else {
-        expect(markup).not.toContain("Current estimated moisture");
+        expect(markup).not.toContain("moisture");
       }
       expect(markup).toContain(expectedLossLabel);
       expect(markup).toContain('id="loss-amount"');
