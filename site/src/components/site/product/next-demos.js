@@ -1,6 +1,5 @@
-// "What's next" tabs and their demos. Tabs follow the ARIA tabs pattern with automatic activation.
-// Each demo plays when its tab opens: CSS owns the timed parts (data-anim="armed" then "play"),
-// JS adds what CSS cannot do (values flying between cards, messages typing in). Reduced motion, no
+// "What's next" demos (NextShowcase). Each demo plays when its accordion item opens: CSS owns the timed
+// parts (data-anim="armed" then "play"), JS adds what CSS cannot do (values flying between cards, messages typing in). Reduced motion, no
 // IntersectionObserver or no JS: every demo shows its end state and nothing is ever hidden at rest.
 import { motionToken, onFirstView, reducedMotion } from "../motion.js";
 
@@ -81,48 +80,24 @@ export function playDemo(demo) {
   }));
 }
 
-export function mountNextTabs(root) {
-  const list = root.querySelector('[role="tablist"]');
-  const tabs = [...list.querySelectorAll('[role="tab"]')];
-  const panels = tabs.map((t) => document.getElementById(t.getAttribute("aria-controls")));
-  const demoOf = (i) => panels[i].querySelector("[data-demo]");
-  let current = 0, seen = false;
+// Wires the demos to the showcase: the open item's demo plays on first view and whenever an item opens;
+// the demo it replaces jumps to its end state.
+export function mountNextDemos(root) {
+  const demos = [...root.querySelectorAll("[data-demo]")];
+  demos.forEach((d) => timers.set(d, []));
+  const demoIn = (visual) => visual && visual.querySelector("[data-demo]");
+  let current = null;
 
-  panels.forEach((p, i) => {
-    p.setAttribute("role", "tabpanel");
-    p.setAttribute("tabindex", "0");
-    p.setAttribute("aria-labelledby", tabs[i].id);
-    timers.set(demoOf(i), []);
-  });
-  list.hidden = false;
-  root.classList.add("is-tabbed");
-
-  function select(i, { focus = false } = {}) {
-    if (i !== current) finish(demoOf(current));
-    current = i;
-    tabs.forEach((t, k) => {
-      const on = k === i;
-      t.setAttribute("aria-selected", String(on));
-      t.tabIndex = on ? 0 : -1;
-      panels[k].hidden = !on;
-    });
-    if (focus) tabs[i].focus();
-    if (seen) playDemo(demoOf(i));
+  function play(demo) {
+    if (current && current !== demo) finish(current);
+    current = demo;
+    playDemo(demo);
   }
 
-  tabs.forEach((t, i) => t.addEventListener("click", () => select(i)));
-  list.addEventListener("keydown", (e) => {
-    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-    let next = null;
-    if (step) next = (current + step + tabs.length) % tabs.length;
-    else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = tabs.length - 1;
-    if (next === null) return;
-    e.preventDefault();
-    select(next, { focus: true });
-  });
-
-  select(0);
+  root.addEventListener("accordion:open", (e) => { if (e.detail.visual) play(demoIn(e.detail.visual)); });
   if (reducedMotion() || !("IntersectionObserver" in window)) return;
-  onFirstView(root, () => { seen = true; playDemo(demoOf(current)); }, { threshold: 0.2 });
+  onFirstView(root, () => {
+    const visual = root.querySelector(".acc-visual[data-shown]") || root.querySelector(".acc-visual");
+    if (!current) play(demoIn(visual));
+  }, { threshold: 0.2 });
 }

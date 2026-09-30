@@ -79,13 +79,16 @@
   --header-h: 84px;
   --btn-h: 56px;
   --index-h: 52px;
-  --still-max: 440px;                       /* Home tour stills (square) stop growing here */
+  --hatch-line: var(--clr-purple-10);      /* accordion showcase frame: faint diagonal hatch */
+  --hatch-gap: 8px;
+  --hatch: repeating-linear-gradient(-45deg, var(--hatch-line) 0 var(--hairline), transparent var(--hairline) var(--hatch-gap));
   --photo-min: 360px;
 
   /* type scale: GT Flexa Light 300 display, tight tracking */
   --fs-display: clamp(46px, 6.6vw, 108px);
   --fs-h2: clamp(34px, 4.4vw, 68px);
   --fs-h3: clamp(24px, 2.2vw, 32px);
+  --fs-h4: clamp(20px, 1.55vw, 26px);       /* accordion item titles */
   --fs-stage: clamp(40px, 4.45vw, 72px);    /* 64px at 1440: a stage is one keynote slide */
   --fs-lead: clamp(18px, 1.45vw, 22px);
   --fs-body: 18px;

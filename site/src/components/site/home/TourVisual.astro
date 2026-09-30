@@ -1,0 +1,109 @@
+---
+/**
+ * TourVisual: a large, static drawing of one Product visual for the Home tour's showcase frame, in the
+ * site's tokens. Square (600 by 600) so it fills the AccordionShowcase frame. Shapes are SVG; labels are
+ * HTML placed by percentage, so they keep a readable size at every width. Decorative: the showcase gives the
+ * visual its text alternative (visualRole "img").
+ * Props: kind: "bins" | "evidence" | "map"
+ *   bins      three sub-bins with dated layers, a draw arcing into the truck
+ *   evidence  production run PR-001 and its check rows: three documents attached, the lab result missing
+ *   map       the map around Mafinga: sawmills into the plant, routes out to fields, one route lit
+ */
+import "./tour-visual.css";
+const { kind } = Astro.props;
+
+const V = 600; // viewBox size
+const pct = (n) => `${(n / V) * 100}%`;
+
+// bins: square pitch and size, the floor, the top of the walls, bin width (same grammar as the bins visual)
+const PQ = 28, SQ = 23, BED = 470, TOP = 110, BW = 118;
+const BINS = [
+  { x: 40, layers: [["l1", 4], ["l2", 3]] },
+  { x: 170, layers: [["l1", 3], ["l2", 4], ["l3", 5]] },
+  { x: 300, layers: [["l2", 2], ["l3", 7]] },
+];
+const squaresIn = (x, layers) => layers.flatMap(([layer, rows]) => Array.from({ length: rows * 4 }, () => layer))
+  .map((layer, k) => ({ x: x + 4 + (k % 4) * PQ, y: BED - (Math.floor(k / 4) + 1) * PQ + 2.5, layer }));
+const binSquares = BINS.flatMap((b) => squaresIn(b.x, b.layers));
+const TRUCK = 440;
+const truckSquares = squaresIn(TRUCK, [["l1", 2]]).map((q) => ({ ...q, y: q.y - 30 }));
+const BIN_LABELS = [...BINS.map((b, i) => [b.x + BW / 2, `Sub-bin ${i + 1}`]), [TRUCK + 76, "Truck"]];
+const PLACED = [["l1", "4 Aug"], ["l2", "11 Aug"], ["l3", "18 Aug"]];
+
+const CHECKS = [
+  { label: "Weighbridge ticket", ok: true },
+  { label: "Moisture reading", ok: true },
+  { label: "Transport document", ok: true },
+  { label: "Lab result", ok: false },
+];
+
+// map: the Home still's layout at 2.5 times the scale
+const S = 2.5;
+const sc = (pts) => pts.map(([x, y]) => [x * S, y * S]);
+const PLANT = [148 * S, 104 * S];
+const SAWMILLS = sc([[118, 70], [176, 64], [196, 126]]);
+const FIELDS = sc([[34, 176], [58, 198], [24, 142], [92, 214], [206, 204], [226, 176]]);
+const arc = ([ax, ay], [bx, by]) => `M${ax},${ay} Q${(ax + bx) / 2 - (by - ay) * 0.2},${(ay + by) / 2 + (bx - ax) * 0.2} ${bx},${by}`;
+const LEGEND = [["sup", "Supplier"], ["plant", "Plant"], ["app", "Application site"]];
+---
+<div class:list={["tv", `tv--${kind}`]} aria-hidden="true">
+  {kind === "bins" && <>
+    <svg viewBox={`0 0 ${V} ${V}`} focusable="false">
+      <path class="tv-ground" d={`M16,${BED} H${V - 16}`} />
+      {BINS.map(({ x }) => <path class="tv-wall" d={`M${x},${TOP} V${BED} H${x + BW} V${TOP}`} />)}
+      {[...binSquares, ...truckSquares].map((q) => <rect class:list={["tv-sq", q.layer]} x={q.x} y={q.y} width={SQ} height={SQ} />)}
+      <path class="tv-wall" d={`M${TRUCK},${BED - 70} V${BED - 30} H${TRUCK + 118} V${BED - 70}`} />
+      <path class="tv-wall" d={`M${TRUCK + 118},${BED - 30} V${BED - 78} H${TRUCK + 140} L${TRUCK + 154},${BED - 58} V${BED - 30} Z M${TRUCK - 4},${BED - 22} H${TRUCK + 154}`} />
+      <circle class="tv-wheel" cx={TRUCK + 26} cy={BED - 11} r="11" />
+      <circle class="tv-wheel" cx={TRUCK + 132} cy={BED - 11} r="11" />
+      <path class="tv-draw" d={`M${BINS[0].x + 58},${BED - 7 * PQ - 12} C140,-20 430,0 ${TRUCK + 58},${BED - 104}`} />
+      <path class="tv-draw-end" d={`M${TRUCK + 50},${BED - 116} L${TRUCK + 58},${BED - 102} L${TRUCK + 66},${BED - 116}`} />
+    </svg>
+    {BIN_LABELS.map(([x, label]) => <span class="tv-lab tv-lab--under" style={`left:${pct(x)};top:${pct(BED + 14)}`}>{label}</span>)}
+    <div class="tv-key tv-key--row" style={`left:50%;top:${pct(BED + 64)}`}>
+      <span class="tv-key-title">Placed</span>
+      {PLACED.map(([layer, date]) => <span class="tv-key-row"><i class:list={["tv-swatch", layer]}></i>{date}</span>)}
+    </div>
+  </>}
+  {kind === "evidence" && (
+    <div class="tv-ev">
+      <div class="tv-sheet"><span></span></div>
+      <div class="tv-card">
+        <span class="tv-cap">Production run</span>
+        <strong class="tv-code">PR-001</strong>
+        <ul class="tv-checks">
+          {CHECKS.map((c) => (
+            <li class:list={[!c.ok && "is-open"]}>
+              <span class="tv-cell">{c.ok
+                ? <svg viewBox="0 0 20 20" focusable="false"><path d="M5 10.5l3.5 3.5 6.5-7.5" /></svg>
+                : "?"}</span>
+              <span>{c.label}</span>
+              <span class="tv-state">{c.ok ? "Attached" : "Missing"}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )}
+  {kind === "map" && <>
+    <svg viewBox={`0 0 ${V} ${V}`} focusable="false">
+      <rect class="tv-land" x="0.5" y="0.5" width={V - 1} height={V - 1} />
+      <g class="tv-contours" transform={`scale(${S})`}>
+        <path d="M40,120 C40,70 110,40 160,54 C214,68 236,110 220,150 C204,190 130,206 84,190 C50,178 40,150 40,120 Z" />
+        <path d="M74,122 C74,92 116,76 150,84 C186,92 200,116 190,140 C180,162 136,170 108,162 C86,156 74,142 74,122 Z" />
+        <path d="M112,122 C112,108 130,100 146,104 C162,108 168,118 164,130 C160,142 140,146 128,142 C118,138 112,132 112,122 Z" />
+      </g>
+      <path class="tv-road" d={`M0,${V - 10} L${60 * S},${176 * S} L${PLANT[0]},${PLANT[1]} L${V},${20}`} />
+      {SAWMILLS.map((s) => <path class="tv-arc tv-arc--in" d={arc(s, PLANT)} />)}
+      {FIELDS.map((f, i) => <path class:list={["tv-arc", i === 0 && "tv-arc--lit"]} d={arc(PLANT, f)} />)}
+      {SAWMILLS.map(([x, y]) => <rect class="tv-mark tv-mark--sup" x={x - 12} y={y - 12} width="24" height="24" />)}
+      {FIELDS.map(([x, y], i) => <rect class:list={["tv-mark", "tv-mark--app", i === 0 && "tv-mark--lit"]} x={x - 10} y={y - 10} width="20" height="20" />)}
+      <rect class="tv-mark tv-mark--plant" x={PLANT[0] - 20} y={PLANT[1] - 20} width="40" height="40" />
+    </svg>
+    <span class="tv-lab tv-lab--town" style={`left:${pct(PLANT[0] + 32)};top:${pct(PLANT[1] - 34)}`}>Mafinga</span>
+    <span class="tv-lab tv-lab--strong" style={`left:${pct(PLANT[0] + 32)};top:${pct(PLANT[1] - 6)}`}>Plant</span>
+    <div class="tv-key" style={`left:${pct(24)};top:${pct(24)}`}>
+      {LEGEND.map(([k, label]) => <span class="tv-key-row"><i class:list={["tv-swatch", `tv-swatch--${k}`]}></i>{label}</span>)}
+    </div>
+  </>}
+</div>

@@ -2,6 +2,8 @@
 /**
  * NextDemo: one upcoming concept demo, square and editorial. Content from the preview's
  * upcoming-preview.astro, restyled. Each demo carries data-demo={kind}; next-demos.js plays it.
+ * NextShowcase labels it ("Concept preview with illustrative data") and sets it in the showcase frame;
+ * demos without their own cards sit on a paper plate (.nd-plate) so they read on the hatch.
  * Props:
  *   kind: "documents" | "reactor" | "telegram" | "connections" | "checks"
  * Hooks for the animation: [data-fly-from]/[data-fly-to] (documents), [data-type] (telegram),
@@ -10,7 +12,7 @@
 const { kind } = Astro.props;
 const TOOLS = ["Reactor data", "Your software", "AI tools"];
 ---
-<div class:list={["nd", `nd--${kind}`]} data-demo={kind} role="group" aria-label="Concept preview with illustrative data">
+<div class:list={["nd", `nd--${kind}`]} data-demo={kind}>
   {kind === "documents" && (
     <div class="nd-docs">
       <div class="nd-card nd-ticket">
@@ -35,7 +37,7 @@ const TOOLS = ["Reactor data", "Your software", "AI tools"];
     </div>
   )}
   {kind === "reactor" && (
-    <div class="nd-reading">
+    <div class="nd-reading nd-plate">
       <div class="nd-row"><span>Reactor temperature</span><span class="nd-cap">Example reading</span></div>
       <strong class="nd-big">612 <small>°C</small></strong>
       <svg viewBox="0 0 480 110" aria-hidden="true" focusable="false">
@@ -47,7 +49,7 @@ const TOOLS = ["Reactor data", "Your software", "AI tools"];
     </div>
   )}
   {kind === "telegram" && (
-    <div class="nd-chat">
+    <div class="nd-chat nd-plate">
       <span class="nd-cap">noma in Telegram</span>
       <p class="nd-msg nd-msg--out" data-type>Delivery received. 2,400 kg of wood residues from Sawmill A.</p>
       <div class="nd-msg nd-msg--in">
@@ -74,7 +76,7 @@ const TOOLS = ["Reactor data", "Your software", "AI tools"];
     </div>
   )}
   {kind === "checks" && (
-    <div class="nd-checks">
+    <div class="nd-checks nd-plate">
       <span class="nd-cap">Production run PR-043</span>
       <strong class="nd-title">A reading worth checking.</strong>
       <dl class="nd-values">

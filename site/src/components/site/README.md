@@ -20,9 +20,12 @@ Light editorial pages with one dark keynote stage per page. Brief: owner's 2026-
  | [ interactive trace, square, hairline ]     |
  +---------------------------------------------+
  ███ STAGE: huge line, then a dot-and-dash timeline ███
- +----------------------+----------------------+
- | tour cell (glyph)    | tour cell            |   2 x 2 cells, hairline gaps
- +----------------------+----------------------+
+ +--------------+------------------------------+
+ | heading      |   + - - - - - - - - - - +    |   AccordionShowcase: accordion left,
+ | > open item  |   | hatched frame,      |    |   one visual right that swaps with
+ |   closed     |   | the open item's     |    |   the open item
+ |   closed     |   + visual  - - - - - - +    |
+ +--------------+------------------------------+
  | photo                | Built with producers |
  +---------------------------------------------+
  | rose band: Upcoming teaser                  |
@@ -38,6 +41,6 @@ Light editorial pages with one dark keynote stage per page. Brief: owner's 2026-
 ## Components
 
 Each `.astro` file documents its props at the top. Shell: `SiteShell`, `SiteNav`, `SiteFooter`.
-Layout: `GridFrame`, `SectionIndex`. Actions: `Button`, `TextLink`, `Chip`. Stage: `stage/Stage`,
+Layout: `GridFrame`, `SectionIndex`, `AccordionShowcase` (Home tour, Product "What's next"). Actions: `Button`, `TextLink`, `Chip`. Stage: `stage/Stage`,
 `stage/StageCheckRow`, `stage/StageConnector`, `stage/StageDot`, `stage/StageMark`. Motion: `motion.js`.
 Config (nav, login flag, section anchors): `src/config.js`.

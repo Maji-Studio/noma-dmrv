@@ -1,0 +1,50 @@
+---
+/**
+ * TourShowcase: the short tour as an accordion beside one large visual (AccordionShowcase). Items are bins,
+ * evidence and map; each links to its Product section, and its visual is a large static drawing
+ * (TourVisual). The trace is not repeated here: the hero and the stage above already show it. No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import TextLink from "../TextLink.astro";
+import AccordionShowcase from "../AccordionShowcase.astro";
+import TourVisual from "./TourVisual.astro";
+
+const BLOCKS = [
+  {
+    id: "bins", title: "Know what’s in the bin.",
+    text: "Keep track of material as it is stored, mixed and drawn, with wet and dry quantities at every step.",
+    link: "See bins and stock", href: "/product#bins",
+    visualLabel: "Drawing of three sub-bins holding layers placed on different dates, and a draw from sub-bin 1 into a truck.",
+  },
+  {
+    id: "evidence", title: "Keep the evidence with the record.",
+    text: "Attach weighbridge tickets, transport documents, photos and lab results where they belong. See what is missing as you prepare a submission.",
+    note: "The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.",
+    link: "See evidence and reporting", href: "/product#evidence",
+    visualLabel: "Drawing of production run PR-001 with its evidence: weighbridge ticket, moisture reading and transport document attached, lab result missing.",
+  },
+  {
+    id: "map", title: "See where it went.",
+    text: "Connect suppliers, production and application sites. Select a field to trace its sources, or a supplier to see the destinations.",
+    link: "Open the map", href: "/product#map",
+    visualLabel: "Drawing of a map around Mafinga: sawmills supply the plant, routes lead out to application sites, and one route is highlighted.",
+  },
+];
+---
+<GridFrame class="tour" pad="none" flush aria-labelledby="tour-title">
+  <AccordionShowcase id="tour" items={BLOCKS} visualRole="img">
+    <Fragment slot="head">
+      <h2 id="tour-title" class="t-h2">What else the records show.</h2>
+      <p class="t-lead">The trace is one view of your records. The same records also tell you what is in each bin, which evidence backs each step, and where each load went.</p>
+      <TextLink href="/why#spreadsheets">Compare it with a spreadsheet</TextLink>
+    </Fragment>
+    {BLOCKS.map((b) => (
+      <Fragment slot={`panel-${b.id}`}>
+        <p class="t-body t-muted">{b.text}</p>
+        {b.note && <p class="t-caption">{b.note}</p>}
+        <TextLink href={b.href}>{b.link}</TextLink>
+      </Fragment>
+    ))}
+    {BLOCKS.map((b) => <Fragment slot={`visual-${b.id}`}><TourVisual kind={b.id} /></Fragment>)}
+  </AccordionShowcase>
+</GridFrame>

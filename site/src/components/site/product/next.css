@@ -1,24 +1,15 @@
-/* "What's next" tabs (NextTabs.astro) and the five concept demos (NextDemo.astro). Square, hairlines.
-   Demo motion states (data-anim, set by next-demos.js): armed = start, play/typing = running,
-   none or done = end state. Every rule that hides something is scoped to armed/play/typing. */
-.nx { --nd-card-line: var(--rule-strong); --nd-demo-min: 440px; --nd-max: 520px; --nd-bar: 2px; --nd-dot: 6px; --nd-hub-ring: 3px; --nd-lift: 6px; --nd-title: 20px; } /* demo titles sit below the panel h3 */
-.nx-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: var(--hairline) solid var(--rule); }
-.nx-tab { position: relative; min-height: var(--btn-h); padding: var(--space-3) var(--space-5); border: 0; border-right: var(--hairline) solid var(--rule); background: none; color: var(--ink-2); font-size: var(--fs-ui); text-align: left; cursor: pointer; transition: color var(--dur-fast), background-color var(--dur-fast); }
-.nx-tab:last-child { border-right: 0; }
-.nx-tab:first-child { padding-left: var(--frame-pad); } /* first label on the content edge */
-.nx-tab:hover { color: var(--ink); background: var(--band-purple); }
-.nx-tab[aria-selected="true"] { color: var(--ink); background: var(--paper); box-shadow: inset 0 var(--nd-bar) 0 var(--accent); }
-.nx-tab:focus-visible { outline-offset: -3px; }
-
-.nx-panel { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--hairline); background: var(--rule); border-top: var(--hairline) solid var(--rule); }
-.nx-panel:focus-visible { outline-offset: -3px; }
-.nx-copy { display: grid; gap: var(--space-4); align-content: start; padding: var(--space-8) var(--frame-pad); background: var(--page); }
-.nx-copy .t-h3 { margin-top: var(--space-3); }
-.nx-stage { display: grid; place-items: center; min-height: var(--nd-demo-min); padding: var(--space-8) var(--frame-pad); background: linear-gradient(var(--band-purple), var(--band-purple)), var(--page); min-width: 0; }
+/* "What's next" (NextShowcase.astro) and the five concept demos (NextDemo.astro). Square, hairlines.
+   The accordion and frame come from accordion-showcase.css. Demo motion states (data-anim, set by
+   next-demos.js): armed = start, play/typing = running, none or done = end state. Every rule that hides
+   something is scoped to armed/play/typing. */
 .nx-note { padding: var(--space-4) var(--frame-pad) var(--space-6); border-top: var(--hairline) solid var(--rule); }
 
 /* Demo primitives */
-.nd { position: relative; width: 100%; max-width: var(--nd-max); font-size: var(--fs-small); line-height: 1.5; }
+.nd {
+  --nd-card-line: var(--rule-strong); --nd-max: 600px; --nd-bar: 2px; --nd-dot: 6px; --nd-hub-ring: 3px; --nd-lift: 6px; --nd-title: 20px; /* demo titles sit below the item titles */
+  position: relative; width: 100%; max-width: var(--nd-max); margin-inline: auto; font-size: var(--fs-small); line-height: 1.5;
+}
+.nd-plate { padding: var(--space-6); background: var(--paper); border: var(--hairline) solid var(--nd-card-line); }
 .nd-card { display: grid; gap: var(--space-3); padding: var(--space-5); background: var(--paper); border: var(--hairline) solid var(--nd-card-line); }
 .nd-cap { font-size: var(--fs-caption); color: var(--ink-2); }
 .nd-code { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-ui); }
@@ -109,17 +100,9 @@
 .nd[data-anim="armed"] .nd-last { opacity: 0; }
 .nd[data-anim="play"] .nd-last { transition: opacity var(--dur-base) var(--ease-out) var(--nd-last, 1200ms); }
 
-/* Stacked without JS: panels in a column. Tabbed: only the selected panel shows (hidden attribute). */
 @media (max-width: 760px) {
-  .nx-list { grid-template-columns: minmax(0, 1fr); }
-  .nx-tab { border-right: 0; border-bottom: var(--hairline) solid var(--rule); padding-inline: var(--frame-pad); }
-  .nx-tab:last-child { border-bottom: 0; }
-  .nx-tab[aria-selected="true"] { box-shadow: inset var(--nd-bar) 0 0 var(--accent); }
-  .nx-panel { grid-template-columns: minmax(0, 1fr); }
-  .nx-copy { padding-block: var(--space-7); }
-  .nx-stage { min-height: 0; padding: var(--space-7) var(--frame-pad); }
   .nd-docs { gap: var(--space-3); }
-  .nd-card { padding: var(--space-4); }
+  .nd-card, .nd-plate { padding: var(--space-4); }
   .nd-record { margin-top: var(--space-6); }
   .nd-tools .nd-card { padding: var(--space-2); }
 }

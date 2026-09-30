@@ -1,0 +1,63 @@
+/* Home tour visuals (TourVisual.astro): large static drawings in the Product visuals' colours, sat on the
+   showcase's hatch. Strokes do not scale with the drawing; HTML labels keep token sizes at every width. */
+.tv { --tv-stroke: 1.5px; --tv-stroke-lit: 2.5px; --tv-swatch: 12px; position: relative; aspect-ratio: 1; font-family: var(--f-sans); }
+.tv > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.tv path, .tv rect, .tv circle { vector-effect: non-scaling-stroke; }
+
+/* Labels and keys */
+.tv-lab { position: absolute; font-size: var(--fs-small); line-height: 1.2; white-space: nowrap; color: var(--ink); }
+.tv-lab--under { transform: translateX(-50%); }
+.tv-lab--town { color: var(--ink-2); }
+.tv-lab--strong { font-weight: 700; }
+.tv-key { position: absolute; display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); background: var(--paper); border: var(--hairline) solid var(--rule); font-size: var(--fs-caption); line-height: 1.3; color: var(--ink-2); }
+.tv-key-title { color: var(--ink); }
+.tv-key--row { display: flex; gap: var(--space-4); transform: translateX(-50%); white-space: nowrap; }
+.tv-key-row { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
+.tv-swatch { flex: none; width: var(--tv-swatch); height: var(--tv-swatch); border: var(--hairline) solid transparent; }
+.tv-swatch.l1 { background: var(--l1); } .tv-swatch.l2 { background: var(--l2); } .tv-swatch.l3 { background: var(--l3); }
+.tv-swatch--sup { background: var(--infra-bg); border-color: var(--infra); }
+.tv-swatch--plant { background: var(--prod-bg); border-color: var(--prod); }
+.tv-swatch--app { background: var(--dist-bg); border-color: var(--dist); }
+
+/* bins */
+.tv-ground { fill: none; stroke: var(--rule-strong); stroke-width: var(--hairline); }
+.tv-wall { fill: var(--paper); stroke: var(--ink); stroke-width: var(--tv-stroke); stroke-linejoin: round; stroke-linecap: round; }
+.tv-wheel { fill: var(--paper); stroke: var(--ink); stroke-width: var(--tv-stroke); }
+.tv-sq.l1 { fill: var(--l1); } .tv-sq.l2 { fill: var(--l2); } .tv-sq.l3 { fill: var(--l3); }
+.tv-draw { fill: none; stroke: var(--accent); stroke-width: var(--tv-stroke); stroke-dasharray: 2 6; stroke-linecap: round; }
+.tv-draw-end { fill: none; stroke: var(--accent); stroke-width: var(--tv-stroke); stroke-linecap: round; stroke-linejoin: round; }
+
+/* evidence: a record card over the document it came with */
+.tv-ev { position: relative; display: grid; place-items: center; }
+.tv-sheet { position: absolute; top: 0; right: 0; width: 46%; aspect-ratio: 3 / 4; padding: var(--space-5); background: var(--paper); border: var(--hairline) solid var(--rule); }
+.tv-sheet span { display: block; height: 40%; background: repeating-linear-gradient(transparent 0 10px, var(--rule) 10px 11px); }
+.tv-card { position: relative; display: grid; gap: var(--space-2); width: min(100%, 26rem); margin: 18% 12% 0 0; padding: var(--space-6); background: var(--paper); border: var(--hairline) solid var(--rule-strong); }
+.tv-cap { font-size: var(--fs-caption); color: var(--ink-2); }
+.tv-code { font-size: var(--fs-h3); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1.1; }
+.tv-checks { display: grid; list-style: none; margin: var(--space-4) 0 0; padding: 0; border-top: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.tv-checks li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding-block: var(--space-3); border-bottom: var(--hairline) solid var(--rule); }
+.tv-cell { display: grid; place-items: center; width: var(--space-5); height: var(--space-5); background: var(--ok-bg); border: var(--hairline) solid var(--ok); color: var(--ok); }
+.tv-cell svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tv-state { font-size: var(--fs-caption); color: var(--ok); }
+.tv-checks .is-open { color: var(--warn); }
+.tv-checks .is-open .tv-cell { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); font-size: var(--fs-caption); font-weight: 700; }
+.tv-checks .is-open .tv-state { color: var(--warn); }
+
+/* map */
+.tv-land { fill: var(--map-land); stroke: var(--rule); stroke-width: var(--hairline); }
+.tv-contours path { fill: none; stroke: var(--map-line); stroke-width: var(--hairline); }
+.tv-road { fill: none; stroke: var(--hair-2); stroke-width: var(--tv-stroke); stroke-dasharray: 2 5; }
+.tv-arc { fill: none; stroke: var(--dist); stroke-opacity: 0.28; stroke-width: var(--tv-stroke); }
+.tv-arc--in { stroke: var(--infra); }
+.tv-arc--lit { stroke-opacity: 1; stroke-width: var(--tv-stroke-lit); }
+.tv-mark { stroke-width: var(--tv-stroke); }
+.tv-mark--sup { fill: var(--infra-bg); stroke: var(--infra); }
+.tv-mark--app { fill: var(--dist-bg); stroke: var(--dist); }
+.tv-mark--lit { stroke-width: var(--tv-stroke-lit); }
+.tv-mark--plant { fill: var(--prod-bg); stroke: var(--prod); stroke-width: var(--tv-stroke-lit); }
+
+@media (max-width: 520px) {
+  .tv-lab { font-size: var(--fs-caption); }
+  .tv-card { padding: var(--space-4); margin: 12% 6% 0 0; }
+  .tv-sheet { padding: var(--space-3); }
+}
