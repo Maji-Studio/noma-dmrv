@@ -28,6 +28,12 @@ application becomes the **drill-down** scope, preserving today's views
 unchanged; a dual header selector (batch *or* application) keeps
 unbatched applications reachable.
 
+**Amendment (2026-09-30).** The roll-up also merges one **roll-forward**
+per member run (CONTEXT.md), so a batch with no application yet still
+shows feedstock → run → product → delivery. The anchor stays the credit
+batch; the forward resolver below now exists, but only fills in records
+the rollbacks lack.
+
 ## Considered options
 
 - **Production-run anchor** — the operator's unit of work, traced

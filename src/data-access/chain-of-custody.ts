@@ -31,7 +31,7 @@ import type {
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
 
-const CHAIN_HREFS = {
+export const CHAIN_HREFS = {
   application: "/applications",
   delivery: "/deliveries",
   order: "/orders",
@@ -178,6 +178,7 @@ export function projectChainOfCustodyFromBatchFacts(
   const warnings = run.feedstocks.length === 0
     ? ["The linked production run does not have any recorded feedstock allocations."]
     : [];
+  const source = sourceLineageFromRunFact(run, application.sourceAllocation);
   return {
     facility: application.facility,
     application: {
@@ -201,6 +202,20 @@ export function projectChainOfCustodyFromBatchFacts(
       ...application.biocharProduct,
       href: CHAIN_HREFS.biocharProduct,
     },
+    productionRun: source.productionRun,
+    reactor: source.reactor,
+    feedstocks: source.feedstocks,
+    sources: [source],
+    warnings,
+  };
+}
+
+/** A member run's upstream block (run, reactor, feedstocks) as a chain source. */
+export function sourceLineageFromRunFact(
+  run: BatchLineageRunFact,
+  allocation: { allocatedWetMassKg: number | null; allocatedDryMassKg: number | null } | null,
+): ChainSourceLineage {
+  return {
     productionRun: {
       id: run.id, code: run.code, status: run.status, date: run.date,
       biocharStorageName: run.biocharStorageName,
@@ -216,28 +231,8 @@ export function projectChainOfCustodyFromBatchFacts(
       ...feedstock,
       href: CHAIN_HREFS.feedstock,
     })),
-    sources: [{
-      productionRun: {
-        id: run.id, code: run.code, status: run.status, date: run.date,
-        biocharStorageName: run.biocharStorageName,
-        biocharOutputKg: run.biocharOutputKg,
-        biocharDryMassKg: run.biocharDryMassKg,
-        feedstockMassDryKg: run.feedstockMassDryKg,
-        href: CHAIN_HREFS.productionRun,
-      },
-      reactor: run.reactor
-        ? { ...run.reactor, href: CHAIN_HREFS.reactor }
-        : null,
-      feedstocks: run.feedstocks.map((feedstock) => ({
-        ...feedstock,
-        href: CHAIN_HREFS.feedstock,
-      })),
-      allocatedWetMassKg:
-        application.sourceAllocation?.allocatedWetMassKg ?? null,
-      allocatedDryMassKg:
-        application.sourceAllocation?.allocatedDryMassKg ?? null,
-    }],
-    warnings,
+    allocatedWetMassKg: allocation?.allocatedWetMassKg ?? null,
+    allocatedDryMassKg: allocation?.allocatedDryMassKg ?? null,
   };
 }
 
