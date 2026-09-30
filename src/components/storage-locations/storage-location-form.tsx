@@ -4,8 +4,6 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { EventTimeInput } from "@/components/forms/event-time-input";
 
-import type { ReactNode } from "react";
-import type { OutputStockMode } from "@/lib/output-stock/stock-mode";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -17,12 +15,11 @@ import {
 } from "@/components/forms";
 import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 import { SegmentedControl } from "@/components/forms/segmented-control";
-import { MixPileArt, SplitPilesArt } from "./stock-mode-art";
+import { stockModeOptions } from "./stock-mode-art";
 import { FormActions } from "@/components/forms/form-actions";
 import {
   storageLocationFormSchema,
   storageLocationTypes,
-  outputStockModes,
   STORAGE_LOCATION_TYPE_SHORT_LABELS,
   formatStorageLocationType,
   isFeedstockBinType,
@@ -33,12 +30,6 @@ import {
 } from "@/schemas/storage-locations";
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
-
-const STOCK_MODE_CARDS: Record<OutputStockMode, { title: string; description: string; art: ReactNode }> = {
-  split: { title: "Split", description: "Each batch stays its own sub-bin.", art: <SplitPilesArt /> },
-  mix: { title: "Mix", description: "One blended pile, drawn in proportion.", art: <MixPileArt /> },
-};
-const STOCK_MODE_OPTIONS = outputStockModes.map((mode) => ({ value: mode, ...STOCK_MODE_CARDS[mode] }));
 
 const STOCK_MODE_HINT =
   "Split keeps every batch in its own bay, bag or heap, and each removal records which batches it came from. Mix is one blended pile: every removal takes each batch in proportion to what it holds.";
@@ -251,7 +242,8 @@ export function StorageLocationForm({
               legend="Stock mode"
               disabled={isSubmitting}
               error={!!errors.stockMode}
-              options={STOCK_MODE_OPTIONS}
+              stackArt
+              options={stockModeOptions(watchedType === "product_bin" ? "product_bin" : "biochar_bin")}
               {...register("stockMode", {
                 // Merging starts from now, which the operator can move back.
                 onChange: (event) => {

@@ -82,6 +82,21 @@ export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
   mix: "Mix: one blended pile",
 };
 
+/** Stock mode card captions by bin type: what stays apart or blends, and what a removal takes. */
+export const OUTPUT_STOCK_MODE_DESCRIPTIONS: Record<
+  "biochar_bin" | "product_bin",
+  Record<OutputStockMode, string>
+> = {
+  biochar_bin: {
+    split: "Each production run stays in its own bay, bag or heap. You say which ones a removal came from.",
+    mix: "All runs go into one pile. A removal takes a share from each run.",
+  },
+  product_bin: {
+    split: "Each product batch stays apart. You say which batches a removal came from.",
+    mix: "All batches go into one pile. A removal takes a share from each batch.",
+  },
+};
+
 /** Only biochar and product bins choose a stock mode. */
 export function isOutputBinType(type: StorageLocationType | undefined | null): boolean {
   return type === "biochar_bin" || type === "product_bin";

@@ -477,3 +477,97 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Stock mode art (src/components/storage-locations/stock-mode-art.tsx).
+   Settled state by default: bins full, no draw. Hover, keyboard focus and
+   selection play the loop; selection plays it once so touch users see it. */
+.stock-art {
+  --stock-batch-a: var(--color-gray-600);
+  --stock-batch-b: var(--color-signal-orange);
+  --stock-batch-c: var(--st-ok);
+  --stock-loop: 2800ms;
+  overflow: visible;
+}
+.stock-art .stock-chip {
+  opacity: 0;
+}
+.stock-art .stock-fill {
+  transform-box: fill-box;
+  transform-origin: bottom;
+}
+@keyframes stock-fill-a {
+  0% { transform: scaleY(0); }
+  20%, 90% { transform: scaleY(1); }
+  100% { transform: scaleY(0); }
+}
+@keyframes stock-fill-b {
+  0%, 8% { transform: scaleY(0); }
+  28%, 60% { transform: scaleY(1); }
+  74%, 90% { transform: scaleY(0.5); }
+  100% { transform: scaleY(0); }
+}
+@keyframes stock-fill-c {
+  0%, 16% { transform: scaleY(0); }
+  36%, 90% { transform: scaleY(1); }
+  100% { transform: scaleY(0); }
+}
+@keyframes stock-chip-lift {
+  0%, 58% { opacity: 0; transform: translateY(0); }
+  62% { opacity: 1; transform: translateY(0); }
+  84% { opacity: 1; transform: translateY(-13px); }
+  92%, 100% { opacity: 0; transform: translateY(-13px); }
+}
+@keyframes stock-grain-in-a {
+  0% { opacity: 0; }
+  20%, 100% { opacity: 1; }
+}
+@keyframes stock-grain-in-b {
+  0%, 12% { opacity: 0; }
+  32%, 100% { opacity: 1; }
+}
+@keyframes stock-grain-in-c {
+  0%, 24% { opacity: 0; }
+  44%, 100% { opacity: 1; }
+}
+@keyframes stock-grain-out {
+  0%, 60% { opacity: 1; }
+  74%, 90% { opacity: 0; }
+  100% { opacity: 0; }
+}
+@keyframes stock-reset {
+  0%, 92% { opacity: 1; }
+  98%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :where(label:has(input:checked)) .stock-art,
+  label:hover .stock-art,
+  label:has(input:focus-visible) .stock-art {
+    --stock-count: 1;
+  }
+  label:hover .stock-art,
+  label:has(input:focus-visible) .stock-art {
+    --stock-count: infinite;
+  }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-art {
+    animation: stock-reset var(--stock-loop) ease-in-out var(--stock-count) backwards;
+  }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-fill,
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-grain,
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-chip {
+    animation-duration: var(--stock-loop);
+    animation-iteration-count: var(--stock-count);
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: backwards;
+  }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-fill-a { animation-name: stock-fill-a; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-fill-b { animation-name: stock-fill-b; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-fill-c { animation-name: stock-fill-c; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-art-split .stock-chip { animation-name: stock-chip-lift; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-art-mix .stock-chip { animation-name: stock-chip-lift; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-grain-a { animation-name: stock-grain-in-a; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-grain-b { animation-name: stock-grain-in-b; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-grain-c { animation-name: stock-grain-in-c; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-grain-a.stock-grain-top { animation-name: stock-grain-in-a, stock-grain-out; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-grain-b.stock-grain-top { animation-name: stock-grain-in-b, stock-grain-out; }
+  :is(label:has(input:checked), label:hover, label:has(input:focus-visible)) .stock-grain-c.stock-grain-top { animation-name: stock-grain-in-c, stock-grain-out; }
+}
