@@ -13,7 +13,9 @@ import {
   FormTextarea,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
-import { FormSelect } from "@/components/forms/form-select";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { SegmentedControl } from "@/components/forms/segmented-control";
+import { MixPileArt, SplitPilesArt } from "./stock-mode-art";
 import { FormActions } from "@/components/forms/form-actions";
 import {
   storageLocationFormSchema,
@@ -21,8 +23,6 @@ import {
   formatStorageLocationType,
   isFeedstockBinType,
   isOutputBinType,
-  OUTPUT_STOCK_MODE_LABELS,
-  outputStockModes,
   STORAGE_LOCATION_TYPE_DESCRIPTIONS,
   type StorageLocationFormData,
   type StorageLocationType,
@@ -30,7 +30,10 @@ import {
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 
-const STOCK_MODE_OPTIONS = outputStockModes.map((mode) => ({ value: mode, label: OUTPUT_STOCK_MODE_LABELS[mode] }));
+const STOCK_MODE_OPTIONS = [
+  { value: "split", title: "Split", description: "Each batch stays its own sub-bin.", art: <SplitPilesArt /> },
+  { value: "mix", title: "Mix", description: "One blended pile, drawn in proportion.", art: <MixPileArt /> },
+] as const;
 
 const STOCK_MODE_HINT =
   "Split keeps every batch in its own bay, bag or heap, and each removal records which batches it came from. Mix is one blended pile: every removal takes each batch in proportion to what it holds.";
@@ -81,7 +84,8 @@ export function StorageLocationForm({
   const typeChoices = allowedTypes ?? storageLocationTypes;
   const storageTypeOptions = typeChoices.map((type) => ({
     value: type,
-    label: formatStorageLocationType(type),
+    // The field is already "Storage type", so "bin" only crowds the segments.
+    label: formatStorageLocationType(type).replace(/ bin$/, ""),
   }));
 
   const {
@@ -160,9 +164,9 @@ export function StorageLocationForm({
           helperText={typeDescription}
           required
         >
-          <FormSelect
+          <SegmentedControl
             id="type"
-            placeholder="Select storage type..."
+            legend="Storage type"
             disabled={isSubmitting}
             error={!!errors.type}
             options={storageTypeOptions}
@@ -217,6 +221,7 @@ export function StorageLocationForm({
 
       {showStockMode && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <div className="md:col-span-2">
           <FormField
             id="stockMode"
             label="Stock mode"
@@ -225,8 +230,9 @@ export function StorageLocationForm({
             cue={unmixing ? "Only an empty bin can switch to split." : merging ? "Switching back to split needs an empty bin." : undefined}
             required
           >
-            <FormSelect
+            <ChoiceCardGroup
               id="stockMode"
+              legend="Stock mode"
               disabled={isSubmitting}
               error={!!errors.stockMode}
               options={STOCK_MODE_OPTIONS}
@@ -240,6 +246,7 @@ export function StorageLocationForm({
               })}
             />
           </FormField>
+          </div>
           {merging && (
             <FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} cue={clock.hint} required>
               <EventTimeInput control={control} name="mergedAt" id="mergedAt" timeZone={clock.timeZone} disabled={isSubmitting} />
@@ -250,7 +257,8 @@ export function StorageLocationForm({
 
       {showFeedstockType && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormEntitySelect
+          <div className="md:col-span-2">
+<FormEntitySelect
             control={control}
             name="feedstockTypeId"
             label="Feedstock type"
@@ -263,12 +271,14 @@ export function StorageLocationForm({
             createLabel="Add new feedstock type"
             filterBy={feedstockTypeFilter}
           />
+          </div>
         </div>
       )}
 
       {showFormulation && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormEntitySelect
+          <div className="md:col-span-2">
+<FormEntitySelect
             control={control}
             name="formulationId"
             label="Formulation"
@@ -279,6 +289,7 @@ export function StorageLocationForm({
             allowCreate
             createLabel="Add new formulation"
           />
+          </div>
         </div>
       )}
 

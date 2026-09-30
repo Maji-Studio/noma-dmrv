@@ -50,6 +50,9 @@ const EMPTY_INGREDIENT = {
   sharePercent: null,
 };
 
+/** One row per material: name on the left, share (and remove) on the right, at every level. */
+const MATERIAL_ROW_CLASSES = "grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20";
+
 /** Display tolerance (in percent) for the "fully allocated" state. */
 const PERCENT_DISPLAY_TOLERANCE = 0.1;
 
@@ -247,12 +250,9 @@ export function FormulationForm({
     })),
     unallocatedPercent,
   });
-  // Under 100% the key line already names the unallocated share, so the total
-  // alone is enough; over 100% it is an error and says how to fix it.
-  const totalLine = `Total ${formatSharePercent(totalPercent)}%.`;
-  const balanceMessage = isOverAllocated
-    ? `${totalLine} Reduce a share to reach 100%.`
-    : totalLine;
+  // Under 100% the bar leaves the missing share unfilled and the key line names
+  // it, so only the over-allocated case needs a sentence: it says how to fix it.
+  const overMessage = `Total ${formatSharePercent(totalPercent)}%. Reduce a share to reach 100%.`;
 
   const handleBalance = () => {
     setAutoBalance(true);
@@ -267,23 +267,21 @@ export function FormulationForm({
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Required Fields Section */}
       <FormSection title="Required information" divider={false}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
+        <FormField
+          id="name"
+          label="Formulation name"
+          error={errors.name?.message}
+          required
+        >
+          <FormInput
             id="name"
-            label="Formulation name"
-            error={errors.name?.message}
-            required
-          >
-            <FormInput
-              id="name"
-              type="text"
-              placeholder="e.g., Soil Amendment Blend"
-              disabled={isSubmitting}
-              error={!!errors.name}
-              {...register("name")}
-            />
-          </FormField>
-        </div>
+            type="text"
+            placeholder="e.g., Soil Amendment Blend"
+            disabled={isSubmitting}
+            error={!!errors.name}
+            {...register("name")}
+          />
+        </FormField>
       </FormSection>
 
       {/* Blend Composition — volume shares partition one whole */}
@@ -306,21 +304,23 @@ export function FormulationForm({
             Every share sits in the right-hand column so the shares read down
             as one column that adds up to 100%. */}
         <div className="space-y-20">
-          <div className="space-y-12">
-            <div className="flex min-h-24 items-center gap-8">
-              <span className="body-small font-medium text-[var(--color-text-primary)]">
+          <div className={MATERIAL_ROW_CLASSES}>
+            <div className="flex flex-col gap-4 md:col-span-2">
+              <div className="flex min-h-24 items-start gap-6">
+                <span className="body-small font-medium text-[var(--color-text-secondary)]">
+                  Base material
+                </span>
+                <InfoHint label="About biochar">
+                  Pyrolyzed carbon from your production runs.
+                </InfoHint>
+              </div>
+              <div className="flex min-h-40 items-center body-small text-[var(--color-text-primary)]">
                 Biochar
-              </span>
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                Base material
-              </span>
-              <InfoHint label="About biochar">
-                Pyrolyzed carbon from your production runs.
-              </InfoHint>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-              <div className="md:col-start-3">
+            <div className="flex items-end gap-8">
+              <div className="min-w-0 flex-1">
                 <FormField
                   id="biocharPercent"
                   label="Volume share"
@@ -347,6 +347,8 @@ export function FormulationForm({
                   />
                 </FormField>
               </div>
+              {/* Holds the width of the remove button below, so every share lines up. */}
+              <span aria-hidden="true" className="hidden size-40 shrink-0 md:block" />
             </div>
           </div>
 
@@ -357,65 +359,62 @@ export function FormulationForm({
           )}
 
           {fields.map((field, index) => (
-            <div key={field.id} className="space-y-12">
-              <div className="flex min-h-24 items-center justify-between gap-8">
-                <span className="body-small font-medium text-[var(--color-text-primary)]">
-                  Ingredient {index + 1}
-                </span>
+            <div key={field.id} className={MATERIAL_ROW_CLASSES}>
+              <div className="md:col-span-2">
+                <FormEntitySelect
+                  control={formControl}
+                  name={`ingredients.${index}.feedstockTypeId`}
+                  label="Blend material"
+                  entityType="feedstockType"
+                  placeholder="Select a blend material..."
+                  disabled={isSubmitting}
+                  required
+                  autoSelectSingle={false}
+                  allowCreate
+                  createLabel="Add blend material"
+                  filterBy={{ usage: FORMULATION_LINE_FEEDSTOCK_USAGE }}
+                  excludeIds={(ingredients ?? [])
+                    .map((ingredient, ingredientIndex) =>
+                      ingredientIndex === index
+                        ? undefined
+                        : ingredient?.feedstockTypeId,
+                    )
+                    .filter((id): id is string => !!id)}
+                  alwaysShowSearch
+                />
+              </div>
+
+              <div className="flex items-end gap-8">
+                <div className="min-w-0 flex-1">
+                  <FormField
+                    id={`ingredients.${index}.sharePercent`}
+                    label="Volume share"
+                    unit="%"
+                    error={errors.ingredients?.[index]?.sharePercent?.message}
+                  >
+                    <FormInput
+                      id={`ingredients.${index}.sharePercent`}
+                      type="number"
+                      step={SHARE_PERCENT_STEP}
+                      min="0"
+                      max="100"
+                      placeholder="e.g., 30"
+                      disabled={isSubmitting}
+                      error={!!errors.ingredients?.[index]?.sharePercent}
+                      {...register(`ingredients.${index}.sharePercent`)}
+                    />
+                  </FormField>
+                </div>
                 <Button
                   variant="destructive"
                   size="small"
                   onClick={() => remove(index)}
                   disabled={isSubmitting}
                   aria-label={`Remove ingredient ${index + 1}`}
+                  className="shrink-0"
                 >
                   <TrashIcon size={16} weight="bold" />
                 </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-                <div className="md:col-span-2">
-                  <FormEntitySelect
-                    control={formControl}
-                    name={`ingredients.${index}.feedstockTypeId`}
-                    label="Blend material"
-                    entityType="feedstockType"
-                    placeholder="Select a blend material..."
-                    disabled={isSubmitting}
-                    required
-                    autoSelectSingle={false}
-                    allowCreate
-                    createLabel="Add blend material"
-                    filterBy={{ usage: FORMULATION_LINE_FEEDSTOCK_USAGE }}
-                    excludeIds={(ingredients ?? [])
-                      .map((ingredient, ingredientIndex) =>
-                        ingredientIndex === index
-                          ? undefined
-                          : ingredient?.feedstockTypeId,
-                      )
-                      .filter((id): id is string => !!id)}
-                    alwaysShowSearch
-                  />
-                </div>
-
-                <FormField
-                  id={`ingredients.${index}.sharePercent`}
-                  label="Volume share"
-                  unit="%"
-                  error={errors.ingredients?.[index]?.sharePercent?.message}
-                >
-                  <FormInput
-                    id={`ingredients.${index}.sharePercent`}
-                    type="number"
-                    step={SHARE_PERCENT_STEP}
-                    min="0"
-                    max="100"
-                    placeholder="e.g., 30"
-                    disabled={isSubmitting}
-                    error={!!errors.ingredients?.[index]?.sharePercent}
-                    {...register(`ingredients.${index}.sharePercent`)}
-                  />
-                </FormField>
               </div>
             </div>
           ))}
@@ -463,18 +462,11 @@ export function FormulationForm({
                 format={formatShareSegment}
                 className="tabular-nums"
               />
-              <p
-                className={`body-caption tabular-nums ${
-                  isOverAllocated
-                    ? "text-[var(--st-bad)]"
-                    : isBalanced
-                      ? "text-[var(--st-ok)]"
-                      : "text-[var(--color-text-secondary)]"
-                }`}
-                aria-live="polite"
-              >
-                {balanceMessage}
-              </p>
+              {isOverAllocated && (
+                <p className="body-caption tabular-nums text-[var(--st-bad)]" role="status">
+                  {overMessage}
+                </p>
+              )}
             </div>
           </CompositionCard>
         )}

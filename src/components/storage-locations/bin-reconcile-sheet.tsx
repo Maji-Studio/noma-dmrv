@@ -17,8 +17,6 @@ import {
   RecordLossFieldError,
   useRecordLoss,
 } from "@/hooks/use-bin-movements";
-import { formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
 import {
   binStockOverdrawInlineMessage,
   isStockOverdraw,
@@ -34,6 +32,8 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { binCurrentMassKg } from "./bin-display";
 import { OutputStockForm } from "./output-stock-form";
+import { FeedstockLossChange } from "./feedstock-loss-change";
+import { LossReasonChips } from "./loss-reason-chips";
 
 /** Shown when a resubmit reuses a request key that already saved a loss. */
 const LOSS_CONFLICT_MESSAGE =
@@ -62,44 +62,6 @@ interface BinReconcileSheetProps {
 function previewNumber(value: unknown): number | null {
   const parsed = toNumberOrNull(value);
   return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null;
-}
-
-function CurrentStockContext({
-  storageLocation,
-}: {
-  storageLocation: StorageLocationWithFacility;
-}) {
-  const isFeedstock =
-    laneForStorageType(storageLocation.type) === "feedstock";
-  const currentMoisturePercent = isFeedstock
-    ? storageLocation.feedstockInventory.estimatedMoisturePercent
-    : null;
-
-  return (
-    <dl
-      aria-label="Current stock context"
-      className="border border-[var(--color-border-tertiary)]"
-    >
-      <div className="flex items-center justify-between gap-8 px-12 py-10">
-        <dt className="body-caption text-[var(--color-text-tertiary)]">
-          {isFeedstock ? "Current wet stock" : "Current derived stock"}
-        </dt>
-        <dd className="body-small font-medium text-[var(--color-text-primary)]">
-          {formatMassKg(binCurrentMassKg(storageLocation))}
-        </dd>
-      </div>
-      {isFeedstock && (
-        <div className="flex items-center justify-between gap-8 border-t border-[var(--color-border-tertiary)] px-12 py-10">
-          <dt className="body-caption text-[var(--color-text-tertiary)]">
-            Current estimated moisture
-          </dt>
-          <dd className="body-small font-medium text-[var(--color-text-primary)]">
-            {formatMoisturePercent(currentMoisturePercent)}
-          </dd>
-        </div>
-      )}
-    </dl>
-  );
 }
 
 function LossForm({
@@ -131,12 +93,14 @@ function LossForm({
     handleSubmit,
     control,
     trigger,
+    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
     defaultValues: { reason: "" },
   });
   const lossInput = useWatch({ control, name: "lossMassKg" });
+  const reasonInput = useWatch({ control, name: "reason" });
   const lossMassKg = previewNumber(lossInput);
   const liveStockError =
     lossMassKg !== null && availableKg !== null &&
@@ -196,7 +160,8 @@ function LossForm({
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="loss-amount"
-        label={lane === "feedstock" ? "Wet mass lost (kg)" : "Amount lost (kg)"}
+        label={lane === "feedstock" ? "Wet mass lost" : "Amount lost"}
+        unit="kg"
         error={lossMassError}
         required
         helperText="The mass removed from the bin through spoilage, spillage, or write-off."
@@ -213,6 +178,15 @@ function LossForm({
         />
       </FormField>
 
+      {lane === "feedstock" && (
+        <FeedstockLossChange
+          beforeKg={availableKg}
+          moisturePercent={storageLocation.feedstockInventory.estimatedMoisturePercent}
+          lossKg={lossMassKg}
+          blocked={!!liveStockError}
+        />
+      )}
+
       <FormField
         id="loss-reason"
         label="Reason"
@@ -220,9 +194,11 @@ function LossForm({
         required
         helperText="What happened, such as a spoiled batch, transfer spill, or failed production run."
       >
-        <FormTextarea
+        <LossReasonChips
           id="loss-reason"
           rows={3}
+          value={reasonInput ?? ""}
+          onPick={(next) => setValue("reason", next, { shouldDirty: true, shouldValidate: true })}
           placeholder="Document the loss so a verifier knows what happened"
           disabled={recordLoss.isPending}
           error={!!errors.reason}
@@ -278,7 +254,6 @@ export function BinReconcileSheet({
           {storageLocation && (
             <div className="flex flex-1 flex-col gap-20">
               {storageLocation.type === "feedstock_bin" ? <>
-              <CurrentStockContext storageLocation={storageLocation} />
               {/* Keyed so switching bins resets the form's state. */}
               <LossForm
                 key={`loss-${storageLocation.id}`}
