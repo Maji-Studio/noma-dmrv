@@ -124,7 +124,7 @@ export function ProductionRunReadingTable({
                 scrolls past the capped height. bg matches the side-sheet paper
                 so rows don't bleed through behind it. */}
             <thead className="sticky top-0 z-10 bg-[var(--color-background-white)]">
-              <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
+              <tr className="border-b border-[var(--color-border-primary)] text-left body-small text-[var(--color-text-secondary)]">
                 <th className="py-8 pr-12 font-medium">
                   Time ({timeZone.replace(/_/g, " ")})
                 </th>

@@ -174,8 +174,8 @@ export function EnergySummary() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-[var(--panel-head-bg)] [border-bottom:var(--panel-head-border)]">
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-left">Source</th>
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Preview value</th>
+                  <th className="body-small font-medium text-[var(--color-text-secondary)] py-10 px-12 text-left">Source</th>
+                  <th className="body-small font-medium text-[var(--color-text-secondary)] py-10 px-12 text-right">Preview value</th>
                 </tr>
               </thead>
               <tbody>
