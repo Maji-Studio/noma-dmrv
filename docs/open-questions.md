@@ -465,18 +465,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
-### Should the credit batch durability field say "capped"? (`forms/durability-estimate-label`, opened 2026-09-29)
-
-- **Observed:** `src/components/credit-batches/credit-batch-view.tsx:creditBatchSheetSections`
-  shows the capped durable fraction at both detail levels as "Durability
-  estimate". The raw value, whether the cap applied, and the preview component
-  and formula sit in the section's Detailed-only explanation.
-- In Simple the reader sees the capped figure without the raw one beside it, so
-  "Capped durability estimate" could read as unexplained there, while plain
-  "Durability estimate" hides that a cap may have lowered it.
-- **Resolve via:** Kenji picks the label; change the one field label and the
-  credit batch tests (S).
-
 ### Is the global Simple/Detailed toggle still worth its place? (`forms/detail-toggle-value`, opened 2026-09-29)
 
 - **Observed:** since Simple and Detailed differ only in explanation
