@@ -76,11 +76,8 @@ export async function readInput(request: Request): Promise<unknown> {
   if (declaredBodyBytes(request) > MAX_READ_BODY_BYTES) {
     throw new SafeError(OVERSIZED_BODY_ERROR);
   }
-  const encoded = await request.text();
+  const encoded = await readBoundedText(request);
   if (encoded === "") return undefined;
-  if (byteLength(encoded) > MAX_READ_BODY_BYTES) {
-    throw new SafeError(OVERSIZED_BODY_ERROR);
-  }
   try {
     return JSON.parse(encoded);
   } catch {
@@ -97,8 +94,40 @@ function declaredBodyBytes(request: Request): number {
   return Number.isNaN(declared) ? 0 : declared;
 }
 
-function byteLength(value: string): number {
-  return new TextEncoder().encode(value).length;
+/**
+ * Read the body chunk by chunk and stop once it passes the cap, so a client
+ * that declares no length (or lies) cannot make the server buffer it all. A
+ * stream fault is a malformed body, not a server error. Decoding is
+ * non-fatal, like `request.text()`: invalid UTF-8 becomes U+FFFD and then
+ * fails JSON parsing or passes through as before.
+ */
+async function readBoundedText(request: Request): Promise<string> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_READ_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new SafeError(OVERSIZED_BODY_ERROR);
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error instanceof SafeError) throw error;
+    throw new SafeError(MALFORMED_BODY_ERROR);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 
 /**

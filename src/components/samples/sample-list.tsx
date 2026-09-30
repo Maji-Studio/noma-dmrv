@@ -429,17 +429,17 @@ export function SampleList({
   };
 
   const handleUpdate = async (data: SampleFormData) => {
-    if (sideSheet?.mode !== "edit") return;
+    // A deep-linked edit sheet (?sample=...&mode=edit) has no local sheet
+    // state, so the target comes from the displayed sheet, not `sideSheet`.
+    if (displaySideSheet?.mode !== "edit") return;
     setFormError(null);
     if (createWithEvidence.guardUpdate(deferredLegs.length > 0)) return;
     try {
       await updateSample.mutateAsync({
-        sampleId: sideSheet.entity.id,
+        sampleId: displaySideSheet.entity.id,
         ...data,
       });
-      createWithEvidence.reset();
-      setDeferredLegs([]);
-      setSideSheet(null);
+      closeSideSheet();
       toast.success("Sample updated.");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Sample was not saved. Try again.");

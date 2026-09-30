@@ -355,7 +355,7 @@ export function BiocharProductForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit(async (data) => {
-    if (!isEditMode && (!sourcePreview.data || sourcePreview.isFetching || sourcePreview.data.blockingMessage || affectedBinsUnavailable)) return;
+    if (!isEditMode && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.error || sourcePreview.data.blockingMessage || affectedBinsUnavailable)) return;
     try {
       await onSubmit({
         ...prepareBiocharProductSubmission(data as BiocharProductFormData, hasFrozenSourceAllocation, isEditMode ? product?.massKg ?? undefined : undefined),
@@ -715,7 +715,7 @@ export function BiocharProductForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={routedServerError.footerError}
-        submitDisabled={hasZeroSourceBiochar || !isEditMode && !awaitingReadings && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.data.blockingMessage || affectedBinsUnavailable)}
+        submitDisabled={hasZeroSourceBiochar || !isEditMode && !awaitingReadings && (!sourcePreview.data || sourcePreview.isFetching || !!sourcePreview.error || !!sourcePreview.data.blockingMessage || affectedBinsUnavailable)}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

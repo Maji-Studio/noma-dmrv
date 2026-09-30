@@ -265,7 +265,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update delivery" : "Create delivery";
 
   const submitDelivery = handleSubmit(async (data) => {
-    if (!isEditMode && (!stockPreview.data || stockPreview.isFetching || stockPreview.data.blockingMessage)) return;
+    if (!isEditMode && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.error || stockPreview.data.blockingMessage)) return;
     const normalized = data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
     try {
       await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint: stockPreview.data?.basisFingerprint } as DeliveryFormData);
@@ -489,7 +489,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitDisabled={!isEditMode && !awaitingReadings && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.data.blockingMessage)}
+        submitDisabled={!isEditMode && !awaitingReadings && (!stockPreview.data || stockPreview.isFetching || !!stockPreview.error || !!stockPreview.data.blockingMessage)}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

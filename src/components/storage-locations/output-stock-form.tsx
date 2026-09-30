@@ -77,7 +77,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   // still wet mass removed from the bin; a replaced count is still a count.
   const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";
   const submit = handleSubmit(async (data) => {
-    if (!input || !preview.data || preview.isFetching || preview.data.blockingMessage) return;
+    if (!input || !preview.data || preview.isFetching || !!preview.error || preview.data.blockingMessage) return;
     setServerError(undefined);
     try {
       await mutation.mutateAsync({ ...input, reason: data.reason.trim(), basisFingerprint: preview.data.basisFingerprint, idempotencyKey });
@@ -125,6 +125,6 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
         </FormField>
       </FormSection>
     </FormSpine>
-    <FormActions control={control} onCancel={onCancel} isSubmitting={mutation.isPending} errorMessage={serverError} submitDisabled={awaitingReadings ? false : !input || !preview.data || preview.isFetching || !!preview.data.blockingMessage} submitLabel={original ? "Save correction" : kind === "count" ? "Reconcile stock" : "Record loss"} />
+    <FormActions control={control} onCancel={onCancel} isSubmitting={mutation.isPending} errorMessage={serverError} submitDisabled={awaitingReadings ? false : !input || !preview.data || preview.isFetching || !!preview.error || !!preview.data.blockingMessage} submitLabel={original ? "Save correction" : kind === "count" ? "Reconcile stock" : "Record loss"} />
   </form>;
 }

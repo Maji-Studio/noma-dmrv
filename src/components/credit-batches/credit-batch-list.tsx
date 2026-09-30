@@ -290,7 +290,7 @@ export function CreditBatchList({
         ...mutableData,
       });
       if (result.success) {
-        setSideSheet(null);
+        closeSideSheet();
         // The batch is saved. A warning says only that part of its detail did
         // not load, so the operator is told what to do, not that it failed.
         if (result.warning) toast.warning(`${result.warning} Refresh the page.`);
