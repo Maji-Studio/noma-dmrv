@@ -42,6 +42,8 @@ function request(body: string, headers?: HeadersInit): Request {
   });
 }
 
+const MALFORMED_BODY_ERROR =
+  "The request could not be read. Refresh the page and try again.";
 const OVERSIZED_BODY_ERROR =
   "The request was too large to read. Narrow the filters and try again.";
 
@@ -253,6 +255,45 @@ describe("read input decoding", () => {
     await expect(readInput(request(oversized))).rejects.toThrow(
       OVERSIZED_BODY_ERROR,
     );
+  });
+
+  it("stops reading a headerless stream once it passes the cap", async () => {
+    let pulls = 0;
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls <= 400) controller.enqueue(new Uint8Array(8 * 1024));
+        else controller.error(new Error("TAIL_READ_SENTINEL"));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const streamed = new Request("https://app.example/api/reads/test", {
+      method: "POST",
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    await expect(readInput(streamed)).rejects.toThrow(OVERSIZED_BODY_ERROR);
+    expect(cancelled).toBe(true);
+    expect(pulls).toBeLessThanOrEqual(3);
+  });
+
+  it("answers a failing body stream as a malformed body", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error("socket reset"));
+      },
+    });
+    const broken = new Request("https://app.example/api/reads/test", {
+      method: "POST",
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    await expect(readInput(broken)).rejects.toThrow(MALFORMED_BODY_ERROR);
   });
 
   it("refuses an oversized body before buffering it", async () => {
