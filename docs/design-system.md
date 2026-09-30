@@ -502,8 +502,9 @@ like `FormSelect` (`{...register("field")}`) or controlled
 `FormField`'s.
 
 Cards size to their group, not the viewport (CSS container queries): one
-column below about 352px with the art beside the text, two columns above it,
-three at about 544px for three or more options, all rows equal height. Sheets
+column below about 272px, two columns above it (art beside the text from
+352px, hidden below), three at about 544px for three or more options with the
+art above the text, all rows equal height. Sheets
 are 360 to 640px wide, so give a card group the full row (`md:col-span-2` in a
 two-column grid) or it stacks. Write the consequence as the card caption, not
 as helper text. Art is decorative (`aria-hidden`), monoline, about 44x30, drawn

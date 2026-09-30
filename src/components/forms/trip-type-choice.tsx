@@ -65,13 +65,13 @@ const TRIP_TYPE_CARDS: readonly (ChoiceCardOption & { value: TripTypeValue })[] 
   {
     value: "return",
     title: "Return",
-    description: "The truck comes back empty. The distance counts twice.",
+    description: "Distance counts twice.",
     art: <ReturnArt />,
   },
   {
     value: "one_way",
     title: "One-way",
-    description: "There is evidence of an onward trip. The distance counts once.",
+    description: "Distance counts once.",
     art: <OneWayArt />,
   },
 ];

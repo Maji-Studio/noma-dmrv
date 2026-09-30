@@ -83,7 +83,7 @@ describe("radio structure", () => {
     const three = renderToStaticMarkup(<ChoiceCardGroup legend="t" options={OPTIONS} />);
     expect(two).toContain("@container");
     expect(two).toContain("grid-cols-1");
-    expect(two).toContain("@min-[22rem]:grid-cols-2");
+    expect(two).toContain("@min-[17rem]:grid-cols-2");
     expect(three).toContain("@min-[34rem]:grid-cols-3");
   });
 });

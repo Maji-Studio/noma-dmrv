@@ -54,14 +54,17 @@ export interface ChoiceCardGroupProps {
 /** Width of the group at which each column count starts. Cards keep about 176px. */
 const COLUMN_CLASSES = {
   1: "",
-  2: "@min-[22rem]:grid-cols-2",
+  2: "@min-[17rem]:grid-cols-2",
   3: "@min-[34rem]:grid-cols-3",
 } as const;
 
-/** Row layout (art beside the text) below the column breakpoint, stacked above it. */
+/**
+ * Art sits beside the text (shortest card). Only three-up columns are too
+ * narrow for that, so those stack the art above the text.
+ */
 const STACK_CLASSES = {
   1: "",
-  2: "@min-[22rem]:flex-col @min-[22rem]:items-start",
+  2: "",
   3: "@min-[34rem]:flex-col @min-[34rem]:items-start",
 } as const;
 
@@ -145,7 +148,7 @@ export const ChoiceCardGroup = forwardRef<HTMLInputElement, ChoiceCardGroupProps
                     {option.art && (
                       <span
                         aria-hidden
-                        className="flex shrink-0 items-center text-[var(--color-text-secondary)]"
+                        className="hidden shrink-0 items-center text-[var(--color-text-secondary)] @min-[22rem]:flex"
                       >
                         {option.art}
                       </span>
