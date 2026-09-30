@@ -48,12 +48,12 @@ function calculateTabStops(markup: string) {
 describe("DistanceCalcField accessibility", () => {
   it("describes the input by its short helper", () => {
     const input = inputTag(render({ helperText: "Road distance." }));
-    expect(input).toContain('aria-describedby="distanceKm-helper"');
+    expect(input).toMatch(/aria-describedby="distanceKm-helper( [^"]*)?"/);
   });
 
   it("describes the input by the error and marks it invalid", () => {
     const input = inputTag(render({ helperText: "Road distance.", error: "Enter a distance." }));
-    expect(input).toContain('aria-describedby="distanceKm-error"');
+    expect(input).toMatch(/aria-describedby="distanceKm-error( [^"]*)?"/);
     expect(input).toContain('aria-invalid="true"');
   });
 });
