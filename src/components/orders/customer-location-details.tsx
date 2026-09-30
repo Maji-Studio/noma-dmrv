@@ -12,7 +12,6 @@
 
 import dynamic from "next/dynamic";
 import { useRouteGeometries } from "@/hooks/use-geo";
-import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDistanceKm } from "@/lib/format-utils";
 import {
   DISTANCE_SOURCE_LABELS,
@@ -27,7 +26,6 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
 const MINI_MAP_HEIGHT_CLASS = "h-[260px]";
 const ORDER_LOCATION_ROUTE_PREVIEW_ID = "order-location-route-preview";
 /** Matches the customer location form and detail surfaces. */
-const SITE_DESCRIPTION_LABEL = "Site description";
 
 const ROUTE_PREVIEW_LABELS = {
   loading: "Destination · loading road route, straight line shown",
@@ -133,23 +131,13 @@ export function CustomerLocationDetails({
 
       <div className="space-y-12">
         <div className="space-y-2">
-          {location.address ? (
+          {/* The site description is optional: when there is none, the
+              locality line below already says where the location is, so an
+              empty "Not recorded" pair would only add noise (Kenji, 2026-09-30). */}
+          {location.address && (
             <p className="body-small text-[var(--color-text-primary)]">
               {location.address}
             </p>
-          ) : (
-            // The site description is optional, so this is the ordinary
-            // rendering. Name the field above the token: on its own, a floating
-            // "Not recorded" under the panel header does not say which value is
-            // missing.
-            <div>
-              <p className="body-caption text-[var(--color-text-secondary)]">
-                {SITE_DESCRIPTION_LABEL}
-              </p>
-              <p className="body-small text-[var(--color-text-tertiary)]">
-                {MISSING_VALUE.notRecorded}
-              </p>
-            </div>
           )}
           {localityLine && (
             <p className="body-caption text-[var(--color-text-secondary)]">
