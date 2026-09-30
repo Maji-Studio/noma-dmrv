@@ -189,7 +189,7 @@ function CredentialsForm({
             onReplace={() => startReplace("accessToken")}
           />
         ) : (
-          <div className="flex flex-col items-start gap-8">
+          <div className="flex flex-col gap-8">
             <FormField
               id={tokenId}
               label="Access token"
@@ -216,7 +216,7 @@ function CredentialsForm({
             onReplace={() => startReplace("clientSecret")}
           />
         ) : (
-          <div className="flex flex-col items-start gap-8">
+          <div className="flex flex-col gap-8">
             <FormField
               id={secretId}
               label="Client secret"
@@ -281,7 +281,7 @@ function SavedKey({
 
 function CancelReplace({ onClick }: { onClick: () => void }) {
   return (
-    <Button type="button" variant="weak" size="small" onClick={onClick}>
+    <Button type="button" variant="weak" size="small" onClick={onClick} className="self-start">
       Keep saved key
     </Button>
   );
