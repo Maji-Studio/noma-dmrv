@@ -2,11 +2,13 @@
  * The run as a journey: where the material came from, what it passed through,
  * where it ended up.
  *
- * Three stops, source bins to reactor to destination bin, and the two
- * segments between them carry the masses. The first segment is the feedstock
- * going in, drawn as its moisture split so the dry matter the yield is measured
- * on is visible rather than implied. The second is the biochar coming out, the
- * same way. The yield is the block's one headline figure, above the stops.
+ * Three stops, source bin to reactor to destination bin, each marked by the
+ * icon its form section uses. A mass sits under the bin it belongs to: the
+ * feedstock going in under the source bin, the biochar coming out under the
+ * destination bin, each drawn as its moisture split so the dry matter the
+ * yield is measured on is visible rather than implied. The reactor is the step
+ * between them and carries no figure. The yield is the block's one headline
+ * figure, above the stops.
  *
  * The two bars share one mass scale: the heavier wet mass fills the row and
  * the other is drawn in proportion, so 1,000 kg in and 300 kg out look like it.
@@ -24,6 +26,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { FactoryIcon, PackageIcon, PlantIcon } from "@phosphor-icons/react/dist/ssr";
+import type { Icon } from "@phosphor-icons/react";
 import { CompositionCard } from "@/components/forms/composition-card";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
 import { flowBarWidthPercent, flowScaleKg } from "./production-run-flow-scale";
@@ -33,6 +37,8 @@ import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { StockRows, type StockRow } from "@/components/storage-locations/stock-figures";
 
 const YIELD_DIGITS = 1;
+/** Stop markers match the 16px icons on the form's section titles. */
+const FLOW_STOP_ICON_PX = 16;
 
 
 const PROCESS_FLOW_HINT =
@@ -100,7 +106,7 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
     >
       {/* The block's own section already carries the name. */}
       <ol className="space-y-16">
-        <FlowStop name={sourceBinName} placeholder="Select source bin">
+        <FlowStop icon={PlantIcon} name={sourceBinName} placeholder="Select source bin">
           <FlowSegment
             label="Feedstock in"
             massKg={feedstockKg}
@@ -110,7 +116,8 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
             scaleKg={scaleKg}
           />
         </FlowStop>
-        <FlowStop name={reactorName} placeholder="Select reactor">
+        <FlowStop icon={FactoryIcon} name={reactorName} placeholder="Select reactor" />
+        <FlowStop icon={PackageIcon} name={destinationBinName} placeholder="Select destination bin">
           <FlowSegment
             label="Biochar out"
             massKg={biocharKg}
@@ -120,23 +127,27 @@ export function ProcessFlowPreview(props: ProcessFlowProps) {
             scaleKg={scaleKg}
           />
         </FlowStop>
-        <FlowStop name={destinationBinName} placeholder="Select destination bin" />
       </ol>
     </CompositionCard>
   );
 }
 
 /**
- * A stop: its name, then the segment leaving it. The final stop has no segment.
+ * A stop: its icon and name, then the material that belongs to it (the reactor
+ * has none). The figure is indented to the name, so the icons read as one
+ * column of markers without a rail.
  *
  * An unselected stop still shows, with the placeholder naming which field to
  * fill, so the shape of a run is visible before its bins are picked.
  */
-function FlowStop({ name, placeholder, children }: { name: string | null; placeholder: string; children?: ReactNode }) {
+function FlowStop({ icon: StopIcon, name, placeholder, children }: { icon: Icon; name: string | null; placeholder: string; children?: ReactNode }) {
   return (
     <li className="min-w-0 space-y-8">
-      <p className={`body-small font-medium ${name ? "" : "text-[var(--color-text-tertiary)]"}`}>{name ?? placeholder}</p>
-      {children}
+      <p className={`flex items-center gap-8 body-small font-medium ${name ? "" : "text-[var(--color-text-tertiary)]"}`}>
+        <StopIcon aria-hidden size={FLOW_STOP_ICON_PX} className="shrink-0 text-[var(--color-text-tertiary)]" />
+        {name ?? placeholder}
+      </p>
+      {children && <div className="pl-24">{children}</div>}
     </li>
   );
 }

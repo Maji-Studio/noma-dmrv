@@ -34,7 +34,7 @@ function text(node: ReactElement): string {
 }
 
 describe("ProcessFlowPreview", () => {
-  it("reads as a journey: three stops, the feedstock in, the biochar out and the dry yield", () => {
+  it("reads as a journey: feedstock in under the source bin, the reactor, biochar out under the destination bin", () => {
     const rendered = text(<ProcessFlowPreview {...run} />);
 
     expect(rendered).toContain("Feedstock July");
@@ -47,10 +47,12 @@ describe("ProcessFlowPreview", () => {
     expect(rendered).toContain("50 kg wet");
     expect(rendered).toContain("Dry biochar 45 kg");
     expect(rendered).toContain("Dry yield 50%");
-    // Each stop comes before the segment leaving it.
+    // Source bin, reactor, destination bin in order; each mass sits under the
+    // bin it belongs to, and the reactor carries none.
     expect(rendered.indexOf("Feedstock July")).toBeLessThan(rendered.indexOf("Feedstock in"));
-    expect(rendered.indexOf("Reactor 1")).toBeLessThan(rendered.indexOf("Biochar out"));
-    expect(rendered.indexOf("Biochar out")).toBeLessThan(rendered.indexOf("Biochar July"));
+    expect(rendered.indexOf("Feedstock in")).toBeLessThan(rendered.indexOf("Reactor 1"));
+    expect(rendered.indexOf("Reactor 1")).toBeLessThan(rendered.indexOf("Biochar July"));
+    expect(rendered.indexOf("Biochar July")).toBeLessThan(rendered.indexOf("Biochar out"));
   });
 
   it("draws both bars to one mass scale, with no rail beside the stops", () => {
