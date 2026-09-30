@@ -435,11 +435,12 @@ export function ApplicationForm({
             label="Delivery"
             error={errors.deliveryId?.message}
             required
-            helperText={
+            cue={
               selectedDelivery
                 ? formatApplicationDeliveryHelperText(selectedDelivery)
-                : "Choose a delivery by order, formulation, and kg."
+                : undefined
             }
+            helperText="Choose a delivery by order, formulation, and kg."
           >
             <FormSelect
               id="deliveryId"
@@ -455,13 +456,14 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharAppliedTons"
-            label="Biochar product applied (kg)"
+            label="Biochar product applied"
+            unit="kg"
             error={biocharAppliedError}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             certifyStatus={certStatus("biocharAppliedTons")}
             hint="As-received mass at delivery, water included."
-            helperText={
+            cue={
               availableKg !== null
                 ? `${formatStockLimitKg(availableKg)} available from this delivery`
                 : undefined

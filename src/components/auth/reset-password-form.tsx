@@ -102,7 +102,7 @@ function ResetPasswordFormContent() {
           <FormField
             id="newPassword"
             label="New password"
-            helperText="Minimum 8 characters"
+            cue="Minimum 8 characters"
             error={errors.newPassword?.message}
           >
             <FormInput

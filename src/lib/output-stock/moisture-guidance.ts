@@ -29,7 +29,7 @@ export function outputMoistureFieldEstimate(estimate: OutputMoistureEstimate | n
 }
 
 /**
- * What a moisture field says around a reading: the estimate as one line under
+ * What a moisture field says around a reading: the estimate as its `cue` under
  * the input, its basis for the ⓘ, and an advisory when the reading is further
  * from the estimate than `MOISTURE_READING_WARNING_POINTS`. The estimate is
  * never a value: the operator measures and types every reading.
@@ -39,7 +39,7 @@ export function moistureReadingGuidance(estimate: MoistureFieldEstimate | null, 
   // Compared at the precision shown, so "5.0 points" never warns against a limit of 5.
   const gap = estimated !== null && typeof reading === 'number' && Number.isFinite(reading) ? Number(Math.abs(reading - estimated).toFixed(POINT_DIGITS)) : null;
   return {
-    helperText: estimated === null ? undefined : `Estimated moisture: ${formatMoisturePercent(estimated)}`,
+    cue: estimated === null ? undefined : `Estimated moisture: ${formatMoisturePercent(estimated)}`,
     basisText: estimated === null ? undefined : estimate?.basisText ?? undefined,
     // Says which way the reading is off, in points shown like the figures ("12", not "12.0").
     warning: gap !== null && gap > MOISTURE_READING_WARNING_POINTS

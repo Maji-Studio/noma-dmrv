@@ -106,12 +106,12 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
         ]} />
       </FormSection>}
       <FormSection title={original ? "Proposed replacement" : kind === "count" ? "Reconcile stock" : "Record loss"} fields={["occurredAt", "wetMassKg", "moisturePercent"]}>
-        <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message} helperText={clock.hint}>
+        <FormField id="occurredAt" label="Date and time" required error={errors.occurredAt?.message} cue={clock.hint}>
           <EventTimeInput control={control} name="occurredAt" id="occurredAt" timeZone={clock.timeZone} disabled={mutation.isPending} />
         </FormField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
           <WetMassField id="stock-wet" label={kind === "count" ? "Counted wet mass (kg)" : "Wet mass removed (kg)"} required disabled={mutation.isPending} error={errors.wetMassKg?.message} registration={register("wetMassKg", { setValueAs: toNumberOrNull })} />
-          {draw.usesSingleMoisture && !splitOriginal && <MoistureField id="stock-moisture" required={!(kind === "count" && wetMassKg === 0)} disabled={mutation.isPending} error={errors.moisturePercent?.message} helperText="Enter less than 100%. A zero count does not need moisture." estimate={estimate} reading={values.moisturePercent} registration={register("moisturePercent", { setValueAs: toNumberOrNull })} />}
+          {draw.usesSingleMoisture && !splitOriginal && <MoistureField id="stock-moisture" required={!(kind === "count" && wetMassKg === 0)} disabled={mutation.isPending} error={errors.moisturePercent?.message} cue="Enter less than 100%. A zero count does not need moisture." estimate={estimate} reading={values.moisturePercent} registration={register("moisturePercent", { setValueAs: toNumberOrNull })} />}
         </div>
         {draw.active && <SubBinDrawField draw={draw} timeZone={clock.timeZone} idPrefix="stock" disabled={mutation.isPending} showErrors={attempted} />}
         {draw.query.error && <Notice tone="error">{draw.query.error.message}</Notice>}

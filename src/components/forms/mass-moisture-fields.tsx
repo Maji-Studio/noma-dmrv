@@ -57,9 +57,11 @@ interface MassMoistureInputProps {
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
-  /** Overrides the short always-visible cue rendered under the input. */
+  /** Explanation added behind the ⓘ, after `hint`. */
   helperText?: string;
   hint?: ReactNode;
+  /** Overrides the short visible line under the input (a limit or unit). */
+  cue?: string;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
   /**
@@ -72,7 +74,7 @@ interface MassMoistureInputProps {
 
 /**
  * A stock reading: the estimate it is checked against, and the value as typed.
- * With an estimate the field shows it as one line under the input, dates it
+ * With an estimate the field shows it as its cue under the input, dates it
  * behind the ⓘ, and warns (never blocks) when the reading is far from it. The
  * estimate is never filled in: every reading is measured.
  */
@@ -95,7 +97,8 @@ export function MoistureField({
   required,
   disabled,
   placeholder = "e.g. 20",
-  helperText = MOISTURE_RANGE_HELPER,
+  helperText,
+  cue = MOISTURE_RANGE_HELPER,
   hint = MOISTURE_BASIS_HINT,
   certifyRequired,
   certifyStatus,
@@ -111,7 +114,8 @@ export function MoistureField({
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       error={error}
       warning={guidance?.warning ?? warning}
-      helperText={guidance?.helperText ?? helperText}
+      helperText={helperText}
+      cue={guidance?.cue ?? cue}
       hint={guidance?.basisText ? <>{guidance.basisText} {hint}</> : hint}
       required={required}
       certifyRequired={certifyRequired}
@@ -143,6 +147,7 @@ export function WetMassField({
   disabled,
   placeholder = "e.g. 1000",
   helperText,
+  cue,
   hint = "As-received weight, water included.",
   certifyRequired,
   certifyStatus,
@@ -156,6 +161,7 @@ export function WetMassField({
       error={error}
       warning={warning}
       helperText={helperText}
+      cue={cue}
       hint={hint}
       required={required}
       certifyRequired={certifyRequired}

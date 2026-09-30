@@ -311,7 +311,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         fields={["deliveryDate", "orderId", "storageLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required helperText={deliveryClock.hint}>
+          <FormField id="deliveryDate" label="Delivery date and time" error={errors.deliveryDate?.message} required cue={deliveryClock.hint}>
             <EventTimeInput control={control} name="deliveryDate" id="deliveryDate" timeZone={deliveryClock.timeZone} disabled={isSubmitting || isEditMode} />
           </FormField>
 

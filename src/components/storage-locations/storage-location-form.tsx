@@ -222,7 +222,7 @@ export function StorageLocationForm({
             label="Stock mode"
             hint={STOCK_MODE_HINT}
             error={errors.stockMode?.message}
-            helperText={unmixing ? "Only an empty bin can switch to split." : merging ? "Switching back to split needs an empty bin." : undefined}
+            cue={unmixing ? "Only an empty bin can switch to split." : merging ? "Switching back to split needs an empty bin." : undefined}
             required
           >
             <FormSelect
@@ -241,7 +241,7 @@ export function StorageLocationForm({
             />
           </FormField>
           {merging && (
-            <FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} helperText={clock.hint} required>
+            <FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} cue={clock.hint} required>
               <EventTimeInput control={control} name="mergedAt" id="mergedAt" timeZone={clock.timeZone} disabled={isSubmitting} />
             </FormField>
           )}
