@@ -1,7 +1,7 @@
 /* /why stage: three columns, the centre lit (CompareStage.astro, CompareSchematic.astro).
    End state is the rest state: outer columns dim, centre lit. [data-reveal="armed"] puts every column at a
    neutral start; "play" settles the outer columns dim (at --settle) and lights the centre (each part at --at). */
-.wc { --wc-fig: 272px; /* schematic width, the same in every column */
+.wc { --wc-fig: clamp(220px, 21vw, 340px); /* schematic width, the same in every column; grows with the 1600 frame */
   --wc-sep: repeating-linear-gradient(180deg, var(--stage-line-dim) 0 var(--stage-dot), transparent var(--stage-dot) calc(var(--stage-dot) * 2.5));
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
 .wc-col { display: grid; grid-template-rows: auto 1fr auto; gap: var(--space-7); padding: var(--space-6) var(--space-7) var(--space-6); min-width: 0; }

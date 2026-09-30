@@ -1,10 +1,11 @@
 /* "What's next" tabs (NextTabs.astro) and the five concept demos (NextDemo.astro). Square, hairlines.
    Demo motion states (data-anim, set by next-demos.js): armed = start, play/typing = running,
    none or done = end state. Every rule that hides something is scoped to armed/play/typing. */
-.nx { --nd-card-line: var(--rule-strong); --nd-demo-min: 440px; --nd-max: 520px; --nd-bar: 2px; --nd-dot: 6px; --nd-hub-ring: 3px; --nd-lift: 6px; }
+.nx { --nd-card-line: var(--rule-strong); --nd-demo-min: 440px; --nd-max: 520px; --nd-bar: 2px; --nd-dot: 6px; --nd-hub-ring: 3px; --nd-lift: 6px; --nd-title: 20px; } /* demo titles sit below the panel h3 */
 .nx-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: var(--hairline) solid var(--rule); }
 .nx-tab { position: relative; min-height: var(--btn-h); padding: var(--space-3) var(--space-5); border: 0; border-right: var(--hairline) solid var(--rule); background: none; color: var(--ink-2); font-size: var(--fs-ui); text-align: left; cursor: pointer; transition: color var(--dur-fast), background-color var(--dur-fast); }
 .nx-tab:last-child { border-right: 0; }
+.nx-tab:first-child { padding-left: var(--frame-pad); } /* first label on the content edge */
 .nx-tab:hover { color: var(--ink); background: var(--band-purple); }
 .nx-tab[aria-selected="true"] { color: var(--ink); background: var(--paper); box-shadow: inset 0 var(--nd-bar) 0 var(--accent); }
 .nx-tab:focus-visible { outline-offset: -3px; }
@@ -21,7 +22,7 @@
 .nd-card { display: grid; gap: var(--space-3); padding: var(--space-5); background: var(--paper); border: var(--hairline) solid var(--nd-card-line); }
 .nd-cap { font-size: var(--fs-caption); color: var(--ink-2); }
 .nd-code { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-ui); }
-.nd-title { font-size: var(--fs-h3); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1.15; }
+.nd-title { font-size: var(--nd-title); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1.2; }
 .nd dl { display: grid; margin: 0; }
 .nd dl > div { display: flex; justify-content: space-between; gap: var(--space-3); padding-block: var(--space-2); border-bottom: var(--hairline) solid var(--rule); }
 .nd dt { color: var(--ink-2); }

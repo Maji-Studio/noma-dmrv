@@ -10,16 +10,23 @@
 }
 .stg--frame .stg-in::before { left: calc(var(--cross-size) / -2 - var(--hairline) / 2); }
 .stg--frame .stg-in::after { right: calc(var(--cross-size) / -2 - var(--hairline) / 2); }
-.stg-copy { display: grid; gap: var(--space-5); }
+/* Head: title left, lead right (like the light section heads), so a stage reads as one keynote slide. */
+.stg-copy { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--space-5) var(--gap); align-items: end; }
+.stg-head, .stg-body { display: grid; gap: var(--space-4); align-content: end; }
 .stg-kicker { font-size: var(--fs-ui); color: var(--stage-ink-3); }
-.stg-title { font-size: var(--fs-stage); font-weight: 300; line-height: var(--lh-display); letter-spacing: var(--track-display); color: var(--stage-ink); max-width: 12ch; }
-.stg-lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--stage-ink-2); max-width: 40ch; }
-.stg-figure { margin: var(--space-9) 0 0; min-width: 0; }
-.stg-after { margin-top: var(--space-8); display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6); align-items: center; }
+.stg-title { font-size: var(--fs-stage); font-weight: 300; line-height: var(--lh-display); letter-spacing: var(--track-display); color: var(--stage-ink); max-width: 15ch; }
+.stg-lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--stage-ink-2); max-width: var(--measure); }
+.stg-action { display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6); align-items: center; margin-top: calc(var(--space-2) * -1); }
+.stg-figure { margin: var(--space-7) 0 0; min-width: 0; }
+.stg-after { margin-top: var(--space-6); display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-6); align-items: center; }
 .stg--split .stg-in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--gap); align-items: center; }
+.stg--split .stg-copy { grid-template-columns: minmax(0, 1fr); align-items: start; }
 .stg--split .stg-figure { margin: 0; }
 .stg--split .stg-after { grid-column: 1 / -1; margin-top: 0; }
-@media (max-width: 860px) { .stg--split .stg-in { grid-template-columns: minmax(0, 1fr); } .stg-figure { margin-top: var(--space-8); } }
+@media (max-width: 860px) {
+  .stg-copy, .stg--split .stg-in { grid-template-columns: minmax(0, 1fr); }
+  .stg-figure, .stg--split .stg-figure { margin-top: var(--space-7); }
+}
 
 /* Stagger: every primitive gets --at from its index and delay. */
 .stg-row, .stg-conn, .stg-dot, .stg-fade { --at: calc(var(--i, 0) * var(--stagger) + var(--delay, 0ms)); }

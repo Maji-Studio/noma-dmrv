@@ -9,11 +9,14 @@
  *   kicker?: string        short sentence-case line above the title (no uppercase outside diagrams)
  *   lead?: string          one or two sentences under the title
  *   alt: string            text alternative for the diagram; the diagram itself is aria-hidden
- *   layout?: "stack" | "split"   title above the diagram (default) or title left, diagram right
+ *   layout?: "stack" | "split"   head above the diagram (default: title left, lead right, like the light
+ *                          section heads) or copy left, diagram right. Both stack under 860px.
  *   reveal?: boolean       default true: the diagram plays its draw-in when it scrolls into view
  *   revealMs?: number      total choreography length in ms, default 3000
  *   frame?: boolean        default true: carries the page's hairline frame through the band, dimmed
- * Slots: default = the diagram; "after" = content under the diagram (a link, a note).
+ * Slots: default = the diagram; "action" = a link under the lead; "after" = content under the diagram.
+ * The stage is sized as one keynote slide: head and diagram fit about one 1440x900 or 1280x800 screen.
+ * Motion plays when the figure (data-reveal-trigger), not the band's top edge, scrolls into view.
  * Choreography: primitives take `index` (stagger slot) and `delay`; see stage.css for the states.
  */
 import "./stage.css";
@@ -23,11 +26,18 @@ const uid = id || `stage-${Math.random().toString(36).slice(2, 8)}`;
 <section id={id} class:list={["stg", `stg--${layout}`, frame && "stg--frame"]} aria-labelledby={`${uid}-title`} data-reveal={reveal ? "" : undefined} data-reveal-ms={revealMs}>
   <div class="stg-in">
     <div class="stg-copy">
-      {kicker && <p class="stg-kicker">{kicker}</p>}
-      <H class="stg-title" id={`${uid}-title`}>{title}</H>
-      {lead && <p class="stg-lead">{lead}</p>}
+      <div class="stg-head">
+        {kicker && <p class="stg-kicker">{kicker}</p>}
+        <H class="stg-title" id={`${uid}-title`}>{title}</H>
+      </div>
+      {(lead || Astro.slots.has("action")) && (
+        <div class="stg-body">
+          {lead && <p class="stg-lead">{lead}</p>}
+          {Astro.slots.has("action") && <div class="stg-action"><slot name="action" /></div>}
+        </div>
+      )}
     </div>
-    <figure class="stg-figure" aria-describedby={`${uid}-alt`}>
+    <figure class="stg-figure" aria-describedby={`${uid}-alt`} data-reveal-trigger>
       <div class="stg-diagram" aria-hidden="true"><slot /></div>
       <figcaption class="sr-only" id={`${uid}-alt`}>{alt}</figcaption>
     </figure>

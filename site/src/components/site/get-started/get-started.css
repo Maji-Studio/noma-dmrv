@@ -26,6 +26,9 @@
 .wf-field label { font-size: var(--fs-small); color: var(--ink); }
 .wf :is(input, select, textarea) { width: 100%; min-height: var(--btn-h); padding: var(--space-3) var(--space-4); border: var(--hairline) solid var(--rule-strong); border-radius: var(--r-square); background: var(--paper); color: var(--ink); font-size: var(--fs-body); font-weight: 300; line-height: 1.4; transition: border-color var(--dur-fast); }
 .wf textarea { resize: vertical; display: block; }
+/* "Choose a size" is a prompt, not a value: muted until a size is picked. */
+.wf select:has(option[value=""]:checked) { color: var(--ink-2); }
+.wf option { color: var(--ink); }
 .wf :is(input, select, textarea):hover { border-color: var(--link); }
 .site .wf :is(input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
 .wf input[aria-invalid="true"] { border-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }

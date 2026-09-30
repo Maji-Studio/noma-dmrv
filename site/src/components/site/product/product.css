@@ -1,6 +1,6 @@
 /* Product page (/product): intro, section heads, trace cells, and the editorial restyle of the shared
    bins and map visuals. Page-scoped: every selector starts with a .pd- class. Values come from tokens.css. */
-.pd { --pd-side: clamp(260px, 24vw, 320px); }
+.pd { --pd-side: clamp(260px, 24vw, 320px); --pd-bins-stacked: 400px; /* stacked bins and truck stop growing here */ }
 
 /* Intro: same rhythm as Home's hero copy. */
 .pd-intro { display: grid; gap: var(--space-6); padding: var(--section) var(--frame-pad) var(--space-8); }
@@ -30,6 +30,7 @@
 .pd-bins .nv-bins { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-areas: "ctrl ctrl" "art read" "legend read"; gap: var(--space-5) var(--gap); align-items: start; }
 .pd-bins .nv-bin-ctrl { grid-area: ctrl; gap: var(--space-5) var(--space-6); padding-bottom: var(--space-5); border-bottom: var(--hairline) solid var(--rule); }
 .pd-bins .nv-scroll { grid-area: art; }
+.pd-bins .nv-bins[data-layout="stacked"] .nv-scroll svg { max-width: var(--pd-bins-stacked); }
 .pd-bins .nv-bin-legend { grid-area: legend; gap: var(--space-2) var(--space-5); font-size: var(--fs-caption); }
 .pd-bins .nv-bin-read { grid-area: read; gap: var(--space-3); }
 .pd-bins .nv-bin-ctrl label { font-size: var(--fs-small); gap: var(--space-2); }
@@ -56,6 +57,8 @@
 .pd-map .nv-side { padding: var(--space-6) var(--space-5); gap: var(--space-4); background: linear-gradient(var(--band-purple), var(--band-purple)), var(--paper); border-left: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
 .pd-map .nv-code { font-family: var(--f-sans); font-weight: 300; font-size: var(--fs-h3); letter-spacing: var(--track-h3); line-height: 1.1; }
 .pd-map .nv-counts span { border-color: var(--rule); }
+/* Swipe hint, like the trace's: only where the map is wider than its box. */
+.pd-hint { display: none; }
 
 @media (max-width: 860px) {
   .pd-map .nv-viz { grid-template-columns: minmax(0, 1fr); }
@@ -63,6 +66,7 @@
   .pd-bins .nv-bins { grid-template-columns: minmax(0, 1fr); grid-template-areas: "ctrl" "art" "legend" "read"; }
 }
 @media (max-width: 760px) {
+  .pd-hint { display: block; padding: var(--space-4) var(--frame-pad); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--ink-2); }
   .pd-intro-row, .pd-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
   .pd-intro-row .actions { justify-content: flex-start; }
   .pd-bins { padding-block: var(--space-6); }

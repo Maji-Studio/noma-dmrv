@@ -75,6 +75,8 @@
 /* Text link */
 .tl { display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--tap); width: fit-content; font-size: var(--fs-ui); color: var(--link); text-decoration: underline; text-decoration-thickness: var(--hairline); text-decoration-color: var(--link-rule); text-underline-offset: 6px; transition: text-decoration-color var(--dur-fast); }
 .tl:hover { text-decoration-color: currentColor; }
+/* External links: the ↗ sits outside the underline (an inline block takes no text decoration). */
+.tl-ext { display: inline-block; margin-left: var(--space-2); }
 .tl--stage { color: var(--stage-ink); text-decoration-color: var(--stage-line); }
 .tl--stage:focus-visible { outline-color: var(--stage-lit); }
 

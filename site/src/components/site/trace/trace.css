@@ -1,5 +1,5 @@
 /* Interactive trace, editorial: square, hairlines, paper surface. */
-.tx { background: var(--paper); border-block: var(--hairline) solid var(--rule); }
+.tx { --tx-code-sm: 16px; --tx-sub-sm: 15px; background: var(--paper); border-block: var(--hairline) solid var(--rule); }
 .tx-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--frame-pad); border-bottom: var(--hairline) solid var(--rule); }
 .tx-title { font-size: var(--fs-ui); }
 .tx-title span { margin-left: var(--space-3); color: var(--ink-2); font-size: var(--fs-small); }
@@ -15,7 +15,10 @@
 .tx-graph .nv-node text.nv-st { font-size: var(--fs-micro); font-weight: 300; }
 .tx-graph .nv-edge { vector-effect: none; stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 0; } /* pathLength dashes need scaling strokes */
 .tx-graph.nv-hl .nv-edge.on { stroke: var(--accent); stroke-width: 2; }
-.tx-graph.nv-hl .nv-node:not(.on) { opacity: 0.24; }
+/* Off-path records: the square fades, the labels stay readable (--ink-3 is 3:1 or better on paper). */
+.tx-graph.nv-hl .nv-node:not(.on) { opacity: 1; }
+.tx-graph.nv-hl .nv-node:not(.on) :is(.nv-body, .nv-glyph) { opacity: 0.24; }
+.tx-graph.nv-hl .nv-node:not(.on) text { fill: var(--ink-3); }
 .tx-graph.nv-hl .nv-node.self .nv-body { stroke: var(--accent); }
 /* first view: edges draw in column by column */
 .tx-graph.tx-armed .nv-edge { stroke-dashoffset: 1; }
@@ -36,6 +39,12 @@
 .tx-record strong { font-weight: 700; }
 .tx-code { font-size: var(--fs-h3); letter-spacing: var(--track-h3); line-height: 1.1; }
 .tx-noscript { padding: var(--space-5) var(--frame-pad); }
+/* Narrow screens draw the 1080-unit graph at its 740px minimum, so labels are set in larger units
+   (about 11px code, 10px sublabel on screen) and moved down to clear each other. */
+@media (max-width: 520px) {
+  .tx-graph .nv-node text { font-size: var(--tx-code-sm); transform: translateY(var(--space-1)); }
+  .tx-graph .nv-node text.nv-st { font-size: var(--tx-sub-sm); transform: translateY(var(--space-3)); }
+}
 @media (max-width: 800px) {
   .tx-columns { display: none; }
   .tx-hint { display: block; padding: var(--space-4) var(--frame-pad) 0; font-size: var(--fs-caption); color: var(--ink-2); }

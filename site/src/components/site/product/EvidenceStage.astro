@@ -1,11 +1,13 @@
 ---
 /**
- * EvidenceStage (#evidence): the Product page's one keynote stage. A production run's reactor on the left
- * with its evidence as check rows; a registry submission on the right with the fields it needs. One
- * evidence row is lit and wired across to its matching submission row; the rest stay dim.
- * Choreography (one playhead): the dim link between the two schematics draws, the left rows tick top to
- * bottom, the dotted wire draws from the weighbridge ticket, then the feedstock mass row lights.
- * Stacks vertically under 960px (left rows, a vertical wire, then the submission rows). No props.
+ * EvidenceStage (#evidence): the Product page's one keynote stage. A feedstock delivery on the left (a truck
+ * on the weighbridge) with its evidence as check rows; a registry submission on the right with the fields
+ * that evidence fills. Each record row sits level with the registry field it fills: the moisture reading
+ * fills moisture content (dim link), the missing lab result leaves the lab result field open (the one "?"),
+ * and the weighbridge ticket fills feedstock mass. That pair and its wire are the one lit element.
+ * Choreography (one playhead): the weighbridge terminal settles, the rows tick top to bottom on both sides,
+ * the dim link draws, then the lit wire draws from the weighbridge ticket and the feedstock mass fills.
+ * Stacks vertically under 960px (record, a vertical wire, then the submission). No props.
  */
 import Stage from "../stage/Stage.astro";
 import StageCheckRow from "../stage/StageCheckRow.astro";
@@ -14,19 +16,16 @@ import TextLink from "../TextLink.astro";
 import "./evidence-stage.css";
 
 // Delays in ms from the moment the stage plays. The lit pair is last on both sides, as in the keynote.
-const T = { rows: [350, 650, 950], wire: 1250, wireDur: 850, lit: 2100 };
-const RECORD = [
-  { label: "Moisture reading", mark: "check", meta: "12%" },
-  { label: "Lab result", mark: "unknown", meta: "Missing", dim: true },
-  { label: "Weighbridge ticket", mark: "check", meta: "2,400 kg", lit: true },
+const T = { leds: [150, 300, 450], rows: [350, 650, 950], side: 150, link: 1100, wire: 1300, wireDur: 850, lit: 2150 };
+// One entry per level: the record row and the registry field it fills.
+const PAIRS = [
+  { record: { label: "Moisture reading", mark: "check", meta: "12%" }, registry: { label: "Moisture content", mark: "check", meta: "12%" }, link: "dim" },
+  { record: { label: "Lab result", mark: "unknown", meta: "Missing", dim: true }, registry: { label: "Lab result", mark: "unknown" } },
+  { record: { label: "Weighbridge ticket", mark: "check", meta: "2,400 kg" }, registry: { label: "Feedstock mass", mark: "check", meta: "2,400 kg" }, link: "lit" },
 ];
-const REGISTRY = [
-  { label: "Moisture content", mark: "unknown" },
-  { label: "Carbon content", mark: "unknown" },
-  { label: "Feedstock mass", mark: "check", meta: "2,400 kg", lit: true },
-];
+const FIELDS = [{ y: 44, filled: true }, { y: 76, filled: false }, { y: 108, filled: true }];
 const ms = (n) => `${n}ms`;
-const ALT = "Diagram with illustrative records. On the left, production run PR-043 and its evidence: a moisture reading of 12%, recorded; a lab result, missing; and a weighbridge ticket for 2,400 kg, recorded and highlighted. A dotted line connects the weighbridge ticket to the registry submission on the right, where the feedstock mass field is filled with 2,400 kg. The submission's moisture content and carbon content fields are still open; carbon content waits on the missing lab result.";
+const ALT = "Diagram with illustrative records. On the left, feedstock delivery FD-2026-014, a truck on the weighbridge, and its evidence: a moisture reading of 12%, recorded; a lab result, missing; and a weighbridge ticket for 2,400 kg, recorded and highlighted. On the right, the registry submission, each field level with the evidence that fills it: moisture content, 12%; lab result, still open because the lab result is missing; and feedstock mass, 2,400 kg, joined to the weighbridge ticket by a highlighted line.";
 ---
 <Stage
   id="evidence"
@@ -36,47 +35,55 @@ const ALT = "Diagram with illustrative records. On the left, production run PR-0
   alt={ALT}
   revealMs={T.lit + 900}
 >
+  <TextLink slot="action" href="/get-started" tone="stage">Book a walkthrough</TextLink>
   <div class="ev" style={`--ev-lit:${ms(T.lit)}`}>
-    <svg class="ev-art ev-art--record" viewBox="0 0 460 220" preserveAspectRatio="xMidYMid meet">
-      <path d="M44 4H132L114 30H62Z" />
-      <rect x="376" y="4" width="28" height="26" />
-      <rect x="1" y="30" width="458" height="189" />
-      {[41, 100, 159].map((y, i) => (
-        <g>
-          <rect x="12" y={y} width="436" height="50" />
-          <path class="ev-art-dim" d={`M30 ${y + 25}q10-10 20 0t20 0t20 0t20 0t20 0`} />
-          {[398, 414, 430].map((x, k) => <circle class:list={["ev-led", k === i && "ev-led--on"]} style={`--ev-at:${ms(200 + i * 150)}`} cx={x} cy={y + 25} r="4.5" />)}
-        </g>
-      ))}
+    <svg class="ev-art ev-art--record" viewBox="0 0 460 148" preserveAspectRatio="xMidYMid meet">
+      <path class="ev-art-dim" d="M0 142H460" />
+      <rect x="16" y="126" width="318" height="10" />
+      <path class="ev-art-dim" d="M40 136V142M175 136V142M310 136V142" />
+      <path class="ev-art-dim" d="M36 38C66 16 104 10 134 20S204 18 228 38" />
+      <rect x="32" y="38" width="200" height="60" />
+      <path d="M28 98H322" />
+      <path d="M244 98V50H290L320 80V98" />
+      <path class="ev-art-dim" d="M252 58H286L306 80H252Z" />
+      {[70, 102, 272].map((cx) => <circle cx={cx} cy="112" r="14" />)}
+      <path class="ev-art-dim ev-art-dot" d="M334 131H398" />
+      <path d="M398 142V76" />
+      <rect x="366" y="20" width="72" height="56" />
+      <path class="ev-art-dim" d="M380 60H424" />
+      {[384, 400, 416].map((cx, i) => <circle class="ev-led ev-led--on" style={`--ev-at:${ms(T.leds[i])}`} cx={cx} cy="40" r="4.5" />)}
     </svg>
-    <div class="ev-bridge"><StageConnector variant="dotted" length="100%" class="ev-bridge-line" /></div>
-    <svg class="ev-art ev-art--registry" viewBox="0 0 460 220" preserveAspectRatio="xMidYMid meet">
-      <rect x="1" y="30" width="458" height="189" />
-      <path d="M1 62H459" />
-      {[22, 38, 54].map((x) => <circle class="ev-led" cx={x} cy="46" r="4.5" />)}
-      {[84, 124, 164].map((y, i) => (
+    <div class="ev-bridge"><StageConnector variant="dotted" state="dim" length="100%" class="ev-bridge-line" /></div>
+    <svg class="ev-art ev-art--registry" viewBox="0 0 460 148" preserveAspectRatio="xMidYMid meet">
+      <rect x="1" y="1" width="458" height="146" />
+      <path d="M1 28H459" />
+      {[22, 38, 54].map((x) => <circle class="ev-led" cx={x} cy="14.5" r="4.5" />)}
+      {FIELDS.map((f) => (
         <g>
-          <path class="ev-art-dim" d={`M24 ${y + 12}H96`} />
-          <rect class:list={["ev-field", i === 2 && "ev-field--on"]} x="120" y={y} width="316" height="24" />
+          <path class="ev-art-dim" d={`M24 ${f.y + 11}H96`} />
+          <rect class:list={["ev-field", !f.filled && "ev-field--open"]} x="120" y={f.y} width="316" height="22" />
         </g>
       ))}
     </svg>
 
-    <p class="ev-cap ev-cap--record"><span>Production run</span><span>PR-043</span></p>
+    <p class="ev-cap ev-cap--record"><span>Feedstock delivery</span><span>FD-2026-014</span></p>
     <p class="ev-cap ev-cap--registry"><span>Registry submission</span><span>In development</span></p>
 
     <ul class="ev-rows ev-rows--record">
-      {RECORD.map((r, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} state={r.lit ? "lit" : r.dim ? "dim" : "default"} delay={ms(T.rows[i])} />)}
+      {PAIRS.map(({ record: r }, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} state={r.dim ? "dim" : PAIRS[i].link === "lit" ? "lit" : "default"} delay={ms(T.rows[i])} />)}
     </ul>
-    <StageConnector variant="dotted" state="lit" cap="ring" length="100%" delay={ms(T.wire)} duration={ms(T.wireDur)} class="ev-wire ev-wire--h" />
+    <div class="ev-links">
+      {PAIRS.map((p) => p.link === "dim"
+        ? <StageConnector variant="dotted" state="dim" length="100%" delay={ms(T.link)} />
+        : p.link === "lit"
+          ? <StageConnector variant="dotted" state="lit" cap="ring" length="100%" delay={ms(T.wire)} duration={ms(T.wireDur)} class="ev-wire ev-wire--h" />
+          : <span></span>)}
+    </div>
     <StageConnector variant="dotted" direction="v" state="lit" cap="ring" delay={ms(T.wire)} duration={ms(T.wireDur)} class="ev-wire ev-wire--v" />
     <ul class="ev-rows ev-rows--registry">
-      {REGISTRY.map((r, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} dashed state={r.lit ? "lit" : "dim"} delay={ms(r.lit ? T.lit : T.rows[i] + 150)} />)}
+      {PAIRS.map(({ registry: r, link }, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} dashed state={link === "lit" ? "lit" : "dim"} delay={ms(link === "lit" ? T.lit : T.rows[i] + T.side)} />)}
     </ul>
-    <p class="ev-note">Illustrative records</p>
+    <p class="ev-note ev-note--record">Illustrative records</p>
+    <p class="ev-note ev-note--registry">The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.</p>
   </div>
-  <Fragment slot="after">
-    <p class="ev-claim">The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.</p>
-    <TextLink href="/get-started" tone="stage">Book a walkthrough</TextLink>
-  </Fragment>
 </Stage>

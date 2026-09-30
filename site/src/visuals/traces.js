@@ -51,7 +51,7 @@ const TOWNS = [["Iringa", -7.77, 35.69], ["Mafinga", -8.3, 35.28], ["Makambako",
 // Map marker sizes (viewBox units) and the gap between a town dot and its label.
 const MARK = { plant: 26, sup: 15, app: 11 };
 const TOWN_GAP = 7;
-const MAP_IDLE = `<div class="nv-stage">How to read it</div><p>The same records, placed where they happened. Everything inside the plant collapses into one square.</p><p>Hover a <b>field</b> to see which sawmills its biochar came from. Hover a <b>sawmill</b> to see every field it ended up in.</p>`;
+const MAP_IDLE = `<div class="nv-stage">How to read it</div><p>The same records, placed where they happened. Everything inside the plant collapses into one square.</p><p>Tap or hover a <b>field</b> to see which sawmills its biochar came from. Tap or hover a <b>sawmill</b> to see every field it ended up in.</p>`;
 export function mountMap(root) {
   root.dataset.legend = root.dataset.legend || "false";
   const { svg, sideEl } = frame(root, { viewBox: "0 0 1000 680", minWidth: 680, label: "Chain of custody on a map of the Southern Highlands, Tanzania" });
@@ -69,12 +69,12 @@ export function mountMap(root) {
   const road = (pts) => el("path", { class: "nv-road", d: pts.map((p, i) => (i ? "L" : "M") + P(p[0], p[1]).join(",")).join("") }, svg);
   road([[-7.77, 35.69], [-8.3, 35.28], [-8.85, 34.83], [-8.91, 33.46]]); road([[-8.85, 34.83], [-9.33, 34.77]]);
   // A town under the plant marker (Mafinga) gets its label above-right of the marker, clear of it, of "Plant" and of the sawmills to its left.
+  // Town labels are drawn last (see the end of the node loop), above the markers, with a land-coloured halo.
   const [px, py] = P(PLANT.lat, PLANT.lng), clear = MARK.plant / 2 + TOWN_GAP / 2;
-  TOWNS.forEach(([n, la, ln]) => {
+  const townLabels = TOWNS.map(([n, la, ln]) => {
     const [x, y] = P(la, ln), under = Math.abs(x - px) < clear && Math.abs(y - py) < clear;
     el("circle", { cx: x, cy: y, r: 2.5, class: "nv-town-dot" }, svg);
-    const at = under ? { x: px + clear, y: py - clear } : { x: x + TOWN_GAP, y: y - TOWN_GAP };
-    el("text", { ...at, class: "nv-town" }, svg).textContent = n;
+    return [n, under ? { x: px + clear, y: py - clear } : { x: x + TOWN_GAP, y: y - TOWN_GAP }];
   });
   const note = el("text", { x: 16, y: 664, class: "nv-town", "font-size": "11" }, svg); note.textContent = "Illustrative: Southern Highlands, Tanzania. Real towns, made-up suppliers and fields.";
   const plant = { id: "plant", st: "plant", code: "Mafinga plant", meta: ["All production, bins and blending happen here", "18 runs, 8 biochar bins"], lat: PLANT.lat, lng: PLANT.lng };
@@ -97,6 +97,8 @@ export function mountMap(root) {
     if (n.st === "plant") { const t = el("text", { x: s + 6, y: s / 2 + 4 }, g); t.textContent = "Plant"; }
     nEls.set(n.id, g);
   });
+  const tG = el("g", { class: "nv-town-labels" }, svg);
+  townLabels.forEach(([n, at]) => { el("text", { ...at, class: "nv-town nv-town-lab" }, tG).textContent = n; });
   const lineage = (id) => {
     if (id === "plant") return { sups: new Set(sups.map((s) => s.id)), apps: new Set(apps.map((a) => a.id)) };
     const n = dense.byId.get(id);

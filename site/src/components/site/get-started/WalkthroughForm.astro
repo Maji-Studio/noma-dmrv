@@ -36,7 +36,7 @@ const TEXT_FIELDS = [
     ))}
     <div class="wf-field">
       <label for={id("size")}>{w.fields.size}</label>
-      <span class="wf-select"><select id={id("size")} name="size">{w.sizes.map((s) => <option>{s}</option>)}</select></span>
+      <span class="wf-select"><select id={id("size")} name="size"><option value="" disabled selected>Choose a size</option>{w.sizes.map((s) => <option>{s}</option>)}</select></span>
     </div>
     <div class="wf-field wf-field--wide">
       <label for={id("msg")}>{w.fields.message}</label>

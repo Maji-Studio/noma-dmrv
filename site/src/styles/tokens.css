@@ -67,7 +67,7 @@
   --link-rule: var(--clr-purple-30);
   --r-square: 0;
 
-  --wrap: 1240px;                           /* content max width; visuals may bleed wider */
+  --wrap: 1600px;                           /* content max width (Kenji 2026-09-30); text keeps --measure */
   --gutter: clamp(12px, 4vw, 72px);        /* page edge to frame line */
   --frame-pad: clamp(16px, 4.5vw, 72px);    /* frame line to content */
   --section: clamp(72px, 8vw, 136px);
@@ -79,14 +79,14 @@
   --header-h: 84px;
   --btn-h: 56px;
   --index-h: 52px;
-  --glyph-w: 160px;
+  --still-max: 440px;                       /* Home tour stills (square) stop growing here */
   --photo-min: 360px;
 
   /* type scale: GT Flexa Light 300 display, tight tracking */
   --fs-display: clamp(46px, 6.6vw, 108px);
   --fs-h2: clamp(34px, 4.4vw, 68px);
   --fs-h3: clamp(24px, 2.2vw, 32px);
-  --fs-stage: clamp(40px, 5.6vw, 92px);
+  --fs-stage: clamp(40px, 4.45vw, 72px);    /* 64px at 1440: a stage is one keynote slide */
   --fs-lead: clamp(18px, 1.45vw, 22px);
   --fs-body: 18px;
   --fs-ui: 15px;
@@ -120,9 +120,9 @@
   --stage-stroke: 1.5px;
   --stage-dash: 6px;
   --stage-dot: 2px;
-  --stage-pad: clamp(88px, 11vw, 176px);
-  --stage-row-h: 56px;
-  --stage-icon-w: 56px;
+  --stage-pad: clamp(56px, min(6.7vw, 10.7vh), 96px); /* 96px at 1440x900, shorter screens pad less */
+  --stage-row-h: 44px;
+  --stage-icon-w: 44px;
   --stage-mark: 20px;
   --stage-dot-size: 14px;
   --stage-dot-sm: 10px;
