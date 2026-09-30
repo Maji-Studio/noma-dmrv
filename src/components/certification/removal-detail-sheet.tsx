@@ -27,7 +27,7 @@ import {
   deriveRemovalWorkflowStatus,
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
-import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
+import { pluralize } from "@/lib/copy-utils";
 import { formatDateRange } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
 import { EnvBanner } from "./env-banner";
@@ -222,14 +222,21 @@ export function RemovalDetailSheet({
 
             <DetailSection title="Removal">
               <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-                <DetailField label="Reporting window" value={window} />
+                <DetailField
+                  label="Reporting window"
+                  value={window}
+                  valuePresent={Boolean(hasReportingWindow)}
+                />
                 <DetailField
                   label={`Credit batches (${summary.memberBatchCodes.length})`}
                   value={
-                    <span className="font-mono">
-                      {summary.memberBatchCodes.join(", ") || MISSING_VALUE.none}
-                    </span>
+                    summary.memberBatchCodes.length > 0 ? (
+                      <span className="font-mono">
+                        {summary.memberBatchCodes.join(", ")}
+                      </span>
+                    ) : null
                   }
+                  emptySituation="none"
                 />
 
                 {summary.externalId && (

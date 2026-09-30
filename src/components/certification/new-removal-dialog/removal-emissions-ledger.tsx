@@ -11,11 +11,15 @@ import {
   productionRunDeepLinkHref,
   traceabilityApplicationHref,
 } from "@/lib/certification/links";
-import { DerivedHeadline } from "@/components/forms/derived-headline";
+import { SectionLabel } from "@/components/forms/section-label";
+import { DetailField } from "@/components/ui/detail-panel";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatTonnes } from "@/lib/format-utils";
 
 const LINK_ICON_SIZE = 12;
+
+const LEDGER_NOTE =
+  "Estimated before project emissions and registry verification. Isometric calculates the final net value.";
 
 function inputValue(input: RemovalLedgerPreview["inputs"][number]): string {
   return input.magnitude == null
@@ -80,14 +84,15 @@ export function RemovalEmissionsLedger({
       className="flex flex-col gap-24"
       aria-label="Carbon ledger"
     >
-      <DerivedHeadline
-        label="Carbon ledger"
+      <SectionLabel hint={LEDGER_NOTE}>Carbon ledger</SectionLabel>
+      <DetailField
+        label="Estimated CO₂e stored"
         value={
           estimate == null
             ? null
             : `≈ ${formatTonnes(estimate, { unit: "t CO₂e" })}`
         }
-        sub="Estimated CO₂e stored before project emissions and registry verification. Isometric calculates the final net value."
+        emptySituation="notYetComputed"
       />
 
       {showAllocation && (

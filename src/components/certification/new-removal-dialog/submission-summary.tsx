@@ -209,6 +209,7 @@ export function SubmissionSummary({
               destinationLabel
             )
           }
+          valuePresent={Boolean(facts.projectLabel)}
         />
         <DetailField
           label="Facility"
@@ -231,6 +232,7 @@ export function SubmissionSummary({
         <DetailField
           label="Reporting window"
           value={facts.reportingWindowLabel ?? "Not compiled yet"}
+          valuePresent={facts.reportingWindowLabel != null}
         />
         <DetailField
           label={facts.batchCount === 1 ? "Credit batch" : "Credit batches"}

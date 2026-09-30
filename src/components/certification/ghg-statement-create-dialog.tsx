@@ -268,7 +268,10 @@ function DialogBody({
           />
         ) : (
           <>
-          {endOn && !periodError && statementsLoaded && (
+          {/* Step 0 waits for the statements list; past it the period is
+              validated, so a failed background refetch must not hide the
+              period on the confirm step. */}
+          {endOn && !periodError && (stepIndex > 0 || statementsLoaded) && (
             <PeriodStrip start={derivedStart} end={endOn} />
           )}
           <StepFlow
