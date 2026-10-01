@@ -23,6 +23,7 @@ import { useFieldArray, useForm, useWatch, Controller, type Resolver } from "rea
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
 import { SegmentedControl } from "@/components/forms/segmented-control";
@@ -678,6 +679,7 @@ export function ProductionRunForm({
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
                 onCreateNew={() => biocharBinDialog.open()}
+                trailingActions={<StorageBinActions storageLocationId={field.value} />}
               />
             )}
           />

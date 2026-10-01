@@ -6,8 +6,9 @@
 "use client";
 
 import { TrashIcon } from "@phosphor-icons/react/dist/ssr";
-import type { Control, UseFormRegisterReturn, FieldError } from "react-hook-form";
+import { useWatch, type Control, type UseFormRegisterReturn, type FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
+import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import { Button } from "@/components/ui/button";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
@@ -44,9 +45,15 @@ export function BinAllocationRow({
   feedstockTypeId,
   onCreateNew,
 }: BinAllocationRowProps) {
+  const storageLocationId: string | undefined = useWatch({
+    control,
+    name: `allocations.${index}.storageLocationId`,
+  });
+
   return (
     <div className="flex items-start gap-12">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-12 flex-1">
+      {/* The bin column is wider: it carries the View and Edit buttons. */}
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-x-16 gap-y-12 flex-1">
         <FormEntitySelect
           control={control}
           name={`allocations.${index}.storageLocationId`}
@@ -62,7 +69,9 @@ export function BinAllocationRow({
             ...(feedstockTypeId ? { feedstockTypeId } : {}),
           }}
           dependsOn={[feedstockTypeId, facilityId]}
+          allowCreate={Boolean(onCreateNew)}
           onCreateNew={onCreateNew}
+          trailingActions={<StorageBinActions storageLocationId={storageLocationId} />}
         />
 
         <FormField

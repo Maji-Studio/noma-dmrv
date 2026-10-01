@@ -13,6 +13,7 @@ import {
   recordLossFn,
   recordStockTakeFn,
 } from "@/fn/bin-movements";
+import { stockAvailabilityKeys } from "@/hooks/use-stock-availability";
 import { storageLocationKeys } from "@/hooks/use-storage-locations";
 import type {
   RecordLossData,
@@ -113,6 +114,9 @@ function useInvalidateAfterMovement() {
       queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
     });
     void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
+    void queryClient.invalidateQueries({
+      queryKey: stockAvailabilityKeys.all,
+    });
     invalidateStockEntityQueries(queryClient, "binMovement");
   };
 }

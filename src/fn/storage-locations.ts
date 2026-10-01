@@ -17,15 +17,18 @@ import {
   createStorageLocation,
   deleteStorageLocation,
   getStorageLocations as getStorageLocationsData,
+  getStorageLocationWithFacility,
   restoreStorageLocation,
   updateStorageLocation,
   type PaginatedStorageLocations,
+  type StorageLocationWithFacility,
 } from "@/data-access/storage-locations";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   archiveStorageLocationSchema,
   createStorageLocationSchema,
   deleteStorageLocationSchema,
+  getStorageLocationSchema,
   restoreStorageLocationSchema,
   updateStorageLocationSchema,
   storageLocationFilterSchema,
@@ -107,6 +110,22 @@ export async function getStorageLocationsFn(
       ),
     };
   }
+}
+
+/**
+ * Get one storage bin with the same facility and inventory fields as a list
+ * row, so a picker can open the storage page's own detail sheet for it.
+ */
+export async function getStorageLocationFn(
+  data: z.infer<typeof getStorageLocationSchema>,
+): Promise<ActionResult<StorageLocationWithFacility>> {
+  return withAction(
+    async (ctx) => {
+      const validated = getStorageLocationSchema.parse(data);
+      return getStorageLocationWithFacility(ctx, validated.storageLocationId);
+    },
+    { fallbackMessage: "Failed to load storage bin" },
+  );
 }
 
 // ============================================

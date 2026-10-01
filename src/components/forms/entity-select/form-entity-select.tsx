@@ -66,6 +66,8 @@ interface FormEntitySelectProps<
   dependsOn?: string | null | (string | null | undefined)[];
   /** Empty-list hint naming the upstream prerequisite (see EntitySelectProps). */
   emptyHint?: EntitySelectProps["emptyHint"];
+  /** Buttons beside the trigger (see EntitySelectProps). */
+  trailingActions?: EntitySelectProps["trailingActions"];
 }
 
 export function FormEntitySelect<
@@ -92,6 +94,7 @@ export function FormEntitySelect<
   showRemainingDryMass = true,
   dependsOn,
   emptyHint,
+  trailingActions,
 }: FormEntitySelectProps<TFieldValues, TName>) {
   const id = useId();
   const { field, fieldState } = useController({ control, name });
@@ -127,6 +130,7 @@ export function FormEntitySelect<
         hideSearch={hideSearch}
         showRemainingDryMass={showRemainingDryMass}
         emptyHint={emptyHint}
+        trailingActions={trailingActions}
       />
     </FormField>
   );
