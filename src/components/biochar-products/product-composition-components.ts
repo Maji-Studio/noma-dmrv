@@ -7,13 +7,15 @@
  * has, and a part that cannot be derived stays null so it reads "Not
  * available" rather than being filed as solids or water.
  */
-import type { ProductCompositionPart } from "@/components/ui/product-composition-preview";
+import type { ProductCompositionPart, ProductFlowSource } from "@/components/ui/product-composition-preview";
 import type { IngredientBin } from "@/lib/biochar-composition";
 import { MASS_MOISTURE_LABELS, splitWetMass } from "@/lib/mass-moisture";
 
 export type CompositionComponent = ProductCompositionPart;
 
 export const DRY_BIOCHAR_LABEL = "Dry biochar";
+/** The biochar input in the product's mass flow. */
+export const BIOCHAR_SOURCE_LABEL = "Biochar";
 export const BIOCHAR_WATER_LABEL = "Water in biochar";
 /** All water in the product before any was added: the biochar's and every ingredient's. */
 export const POOLED_WATER_LABEL = "Water";
@@ -101,5 +103,22 @@ export function productCompositionComponents(
     ...ingredients.filter((component) => component.kind === "ingredient"),
     { label: POOLED_WATER_LABEL, massKg: pooledWater, kind: "water" },
     ...source.filter((component) => component.kind === "addedWater"),
+  ];
+}
+
+/**
+ * The product's inputs for its mass flow, each with its own parts: the
+ * biochar as dry biochar and its water, each ingredient as its solids and its
+ * water, then the water added afterwards. Unlike the composition, water is not
+ * pooled here, because the flow shows where each part came from.
+ */
+export function productFlowSources(
+  source: readonly CompositionComponent[],
+  ingredients: ReadonlyArray<{ label: string; parts: readonly CompositionComponent[] }>,
+): ProductFlowSource[] {
+  return [
+    { label: BIOCHAR_SOURCE_LABEL, parts: source.filter((component) => component.kind !== "addedWater") },
+    ...ingredients,
+    { label: MASS_MOISTURE_LABELS.waterAdded, parts: source.filter((component) => component.kind === "addedWater") },
   ];
 }
