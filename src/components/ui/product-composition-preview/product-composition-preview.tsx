@@ -90,7 +90,8 @@ interface ProductCompositionPreviewProps {
   /**
    * The same parts grouped by the input they came from. When every part
    * resolves, the picture is a mass flow from the inputs into the product in
-   * place of the bar; the key underneath stays.
+   * place of the bar and its key, since the flow names each part beside the
+   * product.
    */
   sources?: readonly ProductFlowSource[];
   /** Blend masses as received, one segment and one ledger row each. */
