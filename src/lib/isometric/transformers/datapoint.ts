@@ -1,10 +1,13 @@
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
-import type {
-  AggregatedProductionData,
-  EmissionInputBucket,
-} from "../utils/aggregation";
+import type { AggregatedProductionData } from "../utils/aggregation";
 import { payloadHash } from "../utils/payload-hash";
+import {
+  projectInputMapping,
+  projectPeriodInputTuples,
+  type InputMappingEntry,
+  type InputMappingTable,
+} from "../semantic-binding-catalog";
 import {
   RegistryMappingError,
   SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
@@ -12,57 +15,11 @@ import {
 } from "./sequestration-binding";
 import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "./measurement-sample";
 
-type DatapointType = components["schemas"]["DatapointType"];
-type QuantityKindType = components["schemas"]["QuantityKindType"];
 type ComponentBlueprintInput = components["schemas"]["ComponentBlueprintInput"];
 type GhgEntryTemplateComponentInput =
   components["schemas"]["GhgEntryTemplateComponentInput"];
 
-export interface InputMappingEntry {
-  source: keyof AggregatedProductionData;
-  unit: string;
-  datapointType: DatapointType;
-  expectedQuantityKind: QuantityKindType;
-  // §8.6.2 attribution basis (issue #349, ADR 0020): PRODUCTION front-loads
-  // in full on the batch's claiming GHG entry; DELIVERY/STORED are
-  // applied-mass-scoped. Enforcement lives in aggregation.ts (SOURCE_BUCKETS)
-  // + submit-removal.ts (claim gate); the two classifications are welded by
-  // tests/isometric-emission-buckets.test.ts.
-  bucket: EmissionInputBucket;
-  transform?: (value: number) => number;
-  // Stable, declarative identity for `transform`. Function source text is not
-  // stable across independently compiled Next.js bundles (a minifier may, for
-  // example, rename the parameter), so MAPPING_REVISION hashes this value
-  // instead of Function#toString. Bump it whenever transform semantics change.
-  transformRevision?: string;
-  // Per-template-component source override. Set ONLY where one
-  // (group, blueprint, input) triple is declared by MORE THAN ONE component
-  // (e.g. the pyrolysis diesel split: "Generator diesel usage" vs "Startup
-  // diesel usage"). Certify's template model exposes no stable per-component
-  // key, so the component display name (normalized: trimmed + lowercased) is
-  // the only discriminator. When present it REPLACES `source`, and
-  // buildCreateDatapointRequest fails closed on an unrecognized name — a rename
-  // or added component surfaces loudly instead of silently double-counting or
-  // mis-bucketing. The data-driven replacement (facility-configurable
-  // component→source map + assignment wizard) is tracked in
-  // docs/open-questions.md.
-  sourceByComponent?: Readonly<Record<string, keyof AggregatedProductionData>>;
-}
-
-// Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
-// source field. The 3-level structure is required because blueprints repeat
-// across groups in real templates (e.g., the `transport` blueprint appears
-// in both `biomass-feedstock-transport` and `biochar-transport` groups, with
-// different semantic meaning). Group keys are stable kebab-case slugs from
-// the template's RemovalTemplateComponentGroup.key field.
-//
-// Validated against the live blueprint at submit time (see
-// buildCreateDatapointRequest) so a key that drifts from the catalog
-// surfaces immediately rather than silently producing a malformed datapoint.
-export type InputMappingTable = Record<
-  string,
-  Record<string, Record<string, InputMappingEntry>>
->;
+export type { InputMappingEntry, InputMappingTable };
 
 function ownValue<T>(
   record: Readonly<Record<string, T>>,
@@ -93,217 +50,17 @@ function lookupThreeLevelValue<T>(
   return thirdLevel ? ownValue(thirdLevel, thirdKey) : undefined;
 }
 
-// Resolves each pyrolysis `fuel_usage_by_volume` component to its diesel source
-// by normalized (trimmed + lowercased) display name. The Dark Earth removal
-// template declares TWO such components — "Generator diesel usage"
-// (generator + preprocessing, the "summarized" figure) and "Startup diesel
-// usage" (reactor-startup / plant diesel) — and Certify exposes no stable
-// per-component key, so the display name is the only discriminator. Keys MUST
-// match the template component display names (case/whitespace-insensitive). A
-// facility-configurable mapping + assignment wizard is the planned replacement
-// (docs/open-questions.md).
-const PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT: Readonly<
-  Record<string, keyof AggregatedProductionData>
-> = {
-  "generator diesel usage": "totalGensetDieselLitres",
-  "startup diesel usage": "totalStartupDieselLitres",
-};
-
-// Resolves the miscellaneous `mass_based_ci_emissions` component to its mass
-// source by normalized display name. Only "Safety margin" is a REMOVAL-scope,
-// per-removal quantity. The active sandbox template currently has an observed
-// fixed `carbon_intensity` Datapoint of 20 kgCO2e/metric_ton
-// (`dtp_1KS4PMV99SBXX88K`, verified read-only 2026-07-29); that value is
-// registry-owned configuration, not a protocol requirement. noma submits only
-// the exact biochar dry mass this removal claims. Any OTHER miscellaneous
-// mass-based CI component is annually-sourced LCA overhead and stays
-// PROJECT-scope per ADR 0005/0018 - the PERIOD_INPUT_TUPLES guard still fires
-// for it (see lookupPeriodInputTuple).
-const MISCELLANEOUS_MASS_SOURCE_BY_COMPONENT: Readonly<
-  Record<string, keyof AggregatedProductionData>
-> = {
-  "safety margin": "totalBiocharDryMassKg",
-};
-
-export const INPUT_MAPPING: InputMappingTable = {
-  // CO₂ stored from biochar application
-  "co2-stored": {
-    carbon_rich_substance_sequestration: {
-      // Demo template declares carbon_content as dimensionless (a 0–1 fraction).
-      // samples.organicCarbonPercent is 0–100, so transform converts before emit.
-      carbon_content: {
-        source: "weightedOrganicCarbonPercent",
-        unit: "dimensionless",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "dimensionless",
-        bucket: "stored",
-        transform: (v) => v / 100,
-        transformRevision: "percent-to-fraction-v1",
-      },
-      product_mass: {
-        source: "totalBiocharDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
-        bucket: "stored",
-      },
-    },
-  },
-
-  // Biomass → processing transport (feedstock leg category). The template
-  // binds this to `mass_distance_based_ci_emissions`: a single `mass_distance`
-  // (tonne·km) SCALAR = Σⱼ(distⱼ × massⱼ) across the run's feedstock legs
-  // (multiple deliveries / storage bins, mass-weighted), with the emission
-  // factor held as a fixed input on the blueprint. There is no LIST-shaped
-  // transport blueprint in the Certify catalog, so per-leg datapoints are not
-  // possible — the mass-weighted sum is exact for same-factor legs.
-  "biomass-feedstock-transport": {
-    mass_distance_based_ci_emissions: {
-      mass_distance: {
-        source: "feedstockTransportMassDistanceTonneKm",
-        unit: "tonne * km",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass_distance",
-        bucket: "production",
-      },
-    },
-    specific_volume_based_emissions: {
-      feedstock_mass: {
-        source: "totalFeedstockDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
-        bucket: "production",
-      },
-    },
-  },
-
-  // Biochar → storage transport (biochar product leg category). Same
-  // mass_distance (tonne·km) model as feedstock transport above.
-  "biochar-transport": {
-    mass_distance_based_ci_emissions: {
-      mass_distance: {
-        source: "biocharTransportMassDistanceTonneKm",
-        unit: "tonne * km",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass_distance",
-        bucket: "delivery",
-      },
-    },
-    specific_volume_based_emissions: {
-      feedstock_mass: {
-        source: "totalBiocharDryMassKg",
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
-        bucket: "delivery",
-      },
-    },
-  },
-
-  // Sample shipping to lab — mass_distance (tonne·km), like the feedstock and
-  // biochar transport categories. (The legacy `distance_based_ci_emissions`
-  // binding was dropped: the re-authored template uses
-  // `mass_distance_based_ci_emissions` for every transport category.)
-  "sampling-required-for-mrv": {
-    // Sampling consumables (`mass_based_ci_emissions`) and lab electricity
-    // (`grid_electricity_use`) used to live here as zero stubs. Both moved
-    // to PROJECT scope as Project Components per ADR 0005. If a template
-    // declares either as a REMOVAL-scope component the scope-conflict
-    // SafeError fires from PERIOD_INPUT_TUPLES below.
-    // Real (Phase 3.7) — sample shipment to the lab as mass-distance
-    // (tonne·km), derived from the sample transport legs by
-    // `enrichWithTransportLegs`. 0 when no sample legs.
-    mass_distance_based_ci_emissions: {
-      mass_distance: {
-        source: "sampleTransportMassDistanceTonneKm",
-        unit: "tonne * km",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass_distance",
-        bucket: "production",
-      },
-    },
-  },
-
-  // Pyrolysis energy (ADR 0015, amended by #319 and again by the generator/
-  // startup diesel split — docs/isometric/changes.md). Energy enters as grid
-  // electricity (`grid_electricity_use`, kWh) plus diesel volume
-  // (`fuel_usage_by_volume`, litres). The Dark Earth template declares TWO
-  // diesel components — "Generator diesel usage" (generator + preprocessing)
-  // and "Startup diesel usage" (reactor-startup / plant) — so the single
-  // `volume_of_fuel` triple resolves per component via
-  // PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT. Both share one volumetric well-to-
-  // wheel EF pre-bound on the template (energy-use-accounting v1.3 Eq 7), so
-  // the split is presentation-only; noma never converts litres to kWh nor
-  // submits the EF. The former `energy_based_ci_emissions` genset entry modeled
-  // fuel as electricity CI and is gone (protocol-noncompliant; issue #319).
-  pyrolysis: {
-    grid_electricity_use: {
-      electricity_use: {
-        source: "totalElectricityKwh",
-        unit: "kWh",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
-        bucket: "production",
-      },
-    },
-    fuel_usage_by_volume: {
-      volume_of_fuel: {
-        // TWO components share this triple (generator vs. startup diesel);
-        // sourceByComponent resolves each by display name. Because
-        // sourceByComponent is set, resolveDatapointSource FAILS CLOSED on an
-        // unrecognized component name — it never falls back to `source` at
-        // runtime (a collapsed/renamed template surfaces loudly, see
-        // resolveDatapointSource). `source` is retained only to satisfy the
-        // non-optional type and to keep the combined litres in MAPPING_REVISION.
-        // Same volumetric EF on both, so the split is presentation-only
-        // (docs/isometric/changes.md, amends #319).
-        source: "totalDieselLitres",
-        sourceByComponent: PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT,
-        unit: "l",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "volume",
-        bucket: "production",
-      },
-    },
-  },
-
-  miscellaneous: {
-    mass_based_ci_emissions: {
-      mass: {
-        // sourceByComponent is the ONLY resolver here - it doubles as the
-        // named carve-out key that releases this tuple from the PROJECT-scope
-        // guard. An unrecognized miscellaneous component never reaches this
-        // entry (the guard fires first) and would fail closed in
-        // resolveDatapointSource even if it did.
-        source: "totalBiocharDryMassKg",
-        sourceByComponent: MISCELLANEOUS_MASS_SOURCE_BY_COMPONENT,
-        unit: "kg",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "mass",
-        bucket: "stored",
-      },
-    },
-  },
-
-  // Four blueprint families that live only as PROJECT-scope inputs
-  // (`staff-travel/distance_based_ci_emissions`,
-  // `direct-emissions/ghg_direct_emissions` × 2 inputs,
-  // `biochar-storage/fuel_usage_by_volume`) and two more under
-  // `sampling-required-for-mrv` moved to PROJECT scope as Project
-  // Components per ADR 0005. The miscellaneous family remains PROJECT-scope
-  // except for the explicitly named Safety margin component above. All tuples
-  // remain in PERIOD_INPUT_TUPLES below; a Removal Template that declares one
-  // without a named carve-out trips the scope-conflict SafeError in
-  // buildCreateDatapointRequest.
-
-  // (The former `biomass-feedstock-sourcing` / `biomass-feedstock-processing`
-  // `fuel_usage_by_volume` entries carried startup/plant diesel separately.
-  // Issue #319 folded that diesel into the combined `pyrolysis /
-  // fuel_usage_by_volume` datapoint above — keeping them would double-count.
-  // The previous `miscellaneous` zero-stub remains guarded for every component
-  // except the named Safety margin carve-out.)
-};
+// Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
+// source field. A projection of the semantic binding catalog
+// (src/lib/isometric/semantic-binding-catalog.ts), which owns every entry and
+// its rationale; edit the catalog, never this table. The 3-level structure is
+// required because blueprints repeat across groups with different meaning
+// (`mass_distance` is feedstock, biochar or sample transport by group).
+//
+// Validated against the live blueprint at submit time (see
+// buildCreateDatapointRequest) so a key that drifts from the catalog
+// surfaces immediately rather than silently producing a malformed datapoint.
+export const INPUT_MAPPING: InputMappingTable = projectInputMapping();
 
 export function lookupInputMapping(
   groupKey: string,
@@ -352,43 +109,9 @@ export function resolveDatapointSource(
 // never bypass the guard and the resulting `SafeError` names the canonical
 // scope rather than just "missing mapping".
 //
-// Keys mirror the deleted INPUT_MAPPING entries exactly. The category
-// strings are self-contained literals — this table is the guard's only
-// source of truth (ADR 0018).
-const PERIOD_INPUT_TUPLES: Record<
-  string,
-  Record<string, Record<string, { category: string }>>
-> = {
-  "staff-travel": {
-    distance_based_ci_emissions: {
-      distance: { category: "staff_travel" },
-    },
-  },
-  "direct-emissions": {
-    ghg_direct_emissions: {
-      concentration: { category: "pyrolyzer_direct" },
-      mass_flow: { category: "pyrolyzer_direct" },
-    },
-  },
-  "biochar-storage": {
-    fuel_usage_by_volume: {
-      volume_of_fuel: { category: "biochar_storage_fuel" },
-    },
-  },
-  miscellaneous: {
-    mass_based_ci_emissions: {
-      mass: { category: "miscellaneous" },
-    },
-  },
-  "sampling-required-for-mrv": {
-    mass_based_ci_emissions: {
-      mass: { category: "sampling_consumables" },
-    },
-    grid_electricity_use: {
-      electricity_use: { category: "lab_electricity" },
-    },
-  },
-};
+// A projection of the catalog's project-scope roles (ADR 0018): edit the
+// catalog, never this table.
+const PERIOD_INPUT_TUPLES = projectPeriodInputTuples();
 
 export function lookupPeriodInputTuple(
   groupKey: string,

@@ -208,8 +208,9 @@ provider missing-resource 400 for the addressed batch or measurement is absence.
 ## Template and input contract
 
 The live template is read at compilation time. Every monitored ordinary input
-must resolve through `INPUT_MAPPING` in
-`src/lib/isometric/transformers/datapoint.ts`, and every durability component
+must resolve through the semantic binding catalog
+(`src/lib/isometric/semantic-binding-catalog.ts`, projected as `INPUT_MAPPING`
+in `src/lib/isometric/transformers/datapoint.ts`), and every durability component
 must have an explicit supported binding. Unit, quantity-kind, component-name,
 tier, and scope conflicts fail before a registry write.
 
