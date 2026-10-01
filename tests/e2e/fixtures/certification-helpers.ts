@@ -16,6 +16,21 @@ import {
   CERTIFICATION_PROTOCOL_SLUG,
   CERTIFICATION_PROTOCOL_VERSION,
 } from "./certification-mapping-helpers";
+import {
+  READY_BIOCHAR_OUTPUT_KG, READY_BIOCHAR_DRY_MASS_KG,
+  READY_FEEDSTOCK_WET_MASS_KG, READY_FEEDSTOCK_DRY_MASS_KG,
+  READY_FEEDSTOCK_MOISTURE_PCT, READY_BIOCHAR_MOISTURE_PCT,
+  READY_DIESEL_OPERATION_L, READY_PREPROCESSING_FUEL_L, READY_DIESEL_GENSET_L,
+  READY_ELECTRICITY_KWH, SAMPLE_TOTAL_CARBON_PCT, SAMPLE_ORGANIC_CARBON_PCT,
+  SAMPLE_INORGANIC_CARBON_PCT, SAMPLE_H_TO_CORG_RATIO, SAMPLE_O_TO_CORG_RATIO,
+  SAMPLE_S_REFLECTANCE_FRACTION, SAMPLE_RANDOM_REFLECTANCE_R0_PCT,
+  SAMPLE_REACTIVE_CARBON_PCT, SAMPLE_RESIDUAL_CARBON_PCT,
+  READY_SAMPLE_REPLICATE_COUNT, READY_REFERENCE_SOIL_TEMPERATURE_C,
+  READY_REFERENCE_SOIL_TEMPERATURE_SOURCE, TRANSPORT_LEG_DISTANCE_KM,
+  TRANSPORT_LEG_LOAD_MASS_KG, TRANSPORT_LEG_EMISSION_FACTOR,
+  READY_TRANSPORT_EVIDENCE_URL, READY_PRODUCTION_READINGS_URL,
+  READY_APPLICATION_EVIDENCE_URL, READY_APPLICATION_EVIDENCE_ROLES,
+} from "./certification-ready-batch-constants";
 export * from "./certification-mapping-helpers";
 export * from "./certification-incomplete-batch";
 
@@ -432,46 +447,16 @@ export async function teardownWizardRemovalForBatch(
 // owns the grouping. Pair with a `seedCertifierMapping` that carries
 // `emissionConfig` (a live submit reads it) + a real default removal template.
 
-const READY_BIOCHAR_OUTPUT_KG = 150;
-const READY_BIOCHAR_DRY_MASS_KG = 147; // ≤ output (DB check constraint)
-const READY_FEEDSTOCK_WET_MASS_KG = 420;
-const READY_FEEDSTOCK_DRY_MASS_KG = 400;
-const READY_FEEDSTOCK_MOISTURE_PCT = 4.76;
-const READY_BIOCHAR_MOISTURE_PCT = 2;
-const READY_DIESEL_OPERATION_L = 0;
-const READY_PREPROCESSING_FUEL_L = 0;
-const READY_DIESEL_GENSET_L = 0;
-const READY_ELECTRICITY_KWH = 0;
-const SAMPLE_TOTAL_CARBON_PCT = 80;
-const SAMPLE_ORGANIC_CARBON_PCT = 78;
-const SAMPLE_INORGANIC_CARBON_PCT = 2;
-const SAMPLE_H_TO_CORG_RATIO = 0.4;
-const SAMPLE_O_TO_CORG_RATIO = 0.1;
-// 1000-year lab evidence (certify-field-registry sample descriptors +
-// computeBlueprint1000YearDurability completeness): measured inorganic carbon,
-// sReflectanceFraction, and randomReflectanceR0Percent must be entered, plus
-// reactive OR residual carbon.
-const SAMPLE_S_REFLECTANCE_FRACTION = 0.9;
-const SAMPLE_RANDOM_REFLECTANCE_R0_PCT = 2.85;
-const SAMPLE_REACTIVE_CARBON_PCT = 32.6;
-const SAMPLE_RESIDUAL_CARBON_PCT = 67.4;
-const READY_SAMPLE_REPLICATE_COUNT = 3;
-const READY_REFERENCE_SOIL_TEMPERATURE_C = 25;
-const READY_REFERENCE_SOIL_TEMPERATURE_SOURCE =
-  "E2E readiness fixture reference";
-const TRANSPORT_LEG_DISTANCE_KM = 50;
-const TRANSPORT_LEG_LOAD_MASS_KG = 100;
-const TRANSPORT_LEG_EMISSION_FACTOR = 0.1;
-const READY_TRANSPORT_EVIDENCE_URL =
-  "https://example.invalid/e2e-transport-evidence.pdf";
-const READY_PRODUCTION_READINGS_URL =
-  "https://example.invalid/e2e-production-readings.csv";
-const READY_APPLICATION_EVIDENCE_URL = "https://example.com/e2e-geotagged-application.jpg";
-const READY_APPLICATION_EVIDENCE_ROLES = [
-  "stockpile",
-  "spreading",
-  "incorporation",
-] as const;
+
+export interface ReadyBatchOptions {
+  /**
+   * Omit the lab samples and the batch → production-run link. The batch still
+   * has an unassigned application slice (so the wizard lists it) but is
+   * deterministically NOT ready: gaps "Lab chemistry results" and "Linked
+   * production data". Defaults to the full ready chain.
+   */
+  incomplete?: boolean;
+}
 
 export interface SeededReadyBatch {
   creditBatchId: string;
@@ -490,7 +475,9 @@ export interface SeededReadyBatch {
 export async function seedUngroupedReadyBatchWithChain(
   refs: ChainSeedRefs,
   testRunId: string,
+  options: ReadyBatchOptions = {},
 ): Promise<SeededReadyBatch> {
+  const withLabAndRun = !options.incomplete;
   const { db, pool } = createDbConnection();
   const id = {
     productionRun: crypto.randomUUID(),
@@ -517,6 +504,10 @@ export async function seedUngroupedReadyBatchWithChain(
   const creditBatchCode = `E2E-RDY-${testRunId}`;
   const applicationCode = `E2E-APP-RDY-${testRunId}`;
   const today = new Date().toISOString().slice(0, 10);
+  let linkedFeedstockType: {
+    id: string;
+    priorIsometricId: string | null;
+  } | null = null;
   let createdFacilityMappingId: string | null = null;
   let priorFacilityEmissionConfig: {
     mappingId: string;
@@ -756,6 +747,23 @@ export async function seedUngroupedReadyBatchWithChain(
           `Fixture seed failed: feedstock ${refs.feedstockId} missing or has no feedstockTypeId`,
         );
       }
+      // Since PR #700 readiness requires the batch's feedstock type to be
+      // linked to an Isometric feedstock type. The column is unique per org and
+      // every E2E worker shares DEC_ORG_ID, so use a per-run placeholder. It is
+      // never sent anywhere on the committed (no-submit) path; a real
+      // E2E_LIVE_SUBMIT=1 run would need a sandbox catalogue id here instead.
+      const [priorType] = await tx
+        .select({ id: schema.feedstockTypes.isometricFeedstockTypeId })
+        .from(schema.feedstockTypes)
+        .where(eq(schema.feedstockTypes.id, feedstockRow.feedstockTypeId));
+      linkedFeedstockType = {
+        id: feedstockRow.feedstockTypeId,
+        priorIsometricId: priorType?.id ?? null,
+      };
+      await tx
+        .update(schema.feedstockTypes)
+        .set({ isometricFeedstockTypeId: `e2e-fst-${testRunId}` })
+        .where(eq(schema.feedstockTypes.id, feedstockRow.feedstockTypeId));
       await tx.insert(schema.productionProcesses).values({
         organizationId: DEC_ORG_ID,
         id: id.productionProcess,
@@ -776,11 +784,13 @@ export async function seedUngroupedReadyBatchWithChain(
         // Tier is inherited from the facility (ADR 0021), not a batch column.
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
       });
-      await tx.insert(schema.creditBatchProductionRuns).values({
-        organizationId: DEC_ORG_ID,
-        creditBatchId: id.creditBatch,
-        productionRunId: id.productionRun,
-      });
+      if (withLabAndRun) {
+        await tx.insert(schema.creditBatchProductionRuns).values({
+          organizationId: DEC_ORG_ID,
+          creditBatchId: id.creditBatch,
+          productionRunId: id.productionRun,
+        });
+      }
       await tx.insert(schema.creditBatchApplications).values({
         organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
@@ -790,25 +800,27 @@ export async function seedUngroupedReadyBatchWithChain(
       });
       // A sampled credit batch needs at least three complete H/Corg + O/Corg
       // replicates pooled on the batch itself. The run link is provenance only.
-      await tx.insert(schema.samples).values(
-        id.samples.map((sampleId, index) => ({
-          organizationId: DEC_ORG_ID,
-          id: sampleId,
-          creditBatchId: id.creditBatch,
-          productionRunId: id.productionRun,
-          sampleCode: `E2E-SMP-${testRunId}-${index + 1}`,
-          samplingTime: new Date(),
-          totalCarbonPercent: SAMPLE_TOTAL_CARBON_PCT,
-          organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
-          inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PCT,
-          hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
-          oToCOrgRatio: SAMPLE_O_TO_CORG_RATIO,
-          sReflectanceFraction: SAMPLE_S_REFLECTANCE_FRACTION,
-          randomReflectanceR0Percent: SAMPLE_RANDOM_REFLECTANCE_R0_PCT,
-          reactiveCarbonPercent: SAMPLE_REACTIVE_CARBON_PCT,
-          residualCarbonPercent: SAMPLE_RESIDUAL_CARBON_PCT,
-        })),
-      );
+      if (withLabAndRun) {
+        await tx.insert(schema.samples).values(
+          id.samples.map((sampleId, index) => ({
+            organizationId: DEC_ORG_ID,
+            id: sampleId,
+            creditBatchId: id.creditBatch,
+            productionRunId: id.productionRun,
+            sampleCode: `E2E-SMP-${testRunId}-${index + 1}`,
+            samplingTime: new Date(),
+            totalCarbonPercent: SAMPLE_TOTAL_CARBON_PCT,
+            organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
+            inorganicCarbonPercent: SAMPLE_INORGANIC_CARBON_PCT,
+            hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
+            oToCOrgRatio: SAMPLE_O_TO_CORG_RATIO,
+            sReflectanceFraction: SAMPLE_S_REFLECTANCE_FRACTION,
+            randomReflectanceR0Percent: SAMPLE_RANDOM_REFLECTANCE_R0_PCT,
+            reactiveCarbonPercent: SAMPLE_REACTIVE_CARBON_PCT,
+            residualCarbonPercent: SAMPLE_RESIDUAL_CARBON_PCT,
+          })),
+        );
+      }
       await tx.insert(schema.transportLegs).values([
         {
           ...leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
@@ -818,7 +830,9 @@ export async function seedUngroupedReadyBatchWithChain(
           ...leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
           distanceSource: "document" as const,
         },
-        leg(id.sampleTransportLeg, "sample", id.samples[0]),
+        ...(withLabAndRun
+          ? [leg(id.sampleTransportLeg, "sample", id.samples[0])]
+          : []),
       ]);
       await tx.insert(schema.documents).values([
         {
@@ -931,6 +945,12 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .delete(schema.productionRuns)
             .where(eq(schema.productionRuns.id, id.productionRun));
+          if (linkedFeedstockType) {
+            await tx
+              .update(schema.feedstockTypes)
+              .set({ isometricFeedstockTypeId: linkedFeedstockType.priorIsometricId })
+              .where(eq(schema.feedstockTypes.id, linkedFeedstockType.id));
+          }
           if (createdFacilityMappingId) {
             await tx
               .delete(schema.certifierProjects)
