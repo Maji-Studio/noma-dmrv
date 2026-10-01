@@ -96,6 +96,7 @@ export function useLoadStorageLocation() {
   return (storageLocationId: string) =>
     queryClient.fetchQuery({
       queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
+      staleTime: 0,
       queryFn: async () => {
         const result = await getStorageLocationFn({ storageLocationId });
         if (!result.success) {
