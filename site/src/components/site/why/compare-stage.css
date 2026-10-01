@@ -1,4 +1,4 @@
-/* /why stage: three columns, the centre lit (CompareStage.astro, CompareSchematic.astro).
+/* /why principle 1: three columns, the centre lit (CompareStage.astro, CompareSchematic.astro).
    End state is the rest state: outer columns dim, centre lit. [data-reveal="armed"] puts every column at a
    neutral start; "play" settles the outer columns dim (at --settle) and lights the centre (each part at --at). */
 .wc { --wc-fig: clamp(220px, 21vw, 340px); /* schematic width, the same in every column; grows with the 1600 frame */
@@ -65,3 +65,24 @@
 
 /* Principle 1's numeral, matching the other principles (Principle.astro). Decorative, so empty alt text. */
 #sources .stg-head::before { content: "1" / ""; display: block; margin-bottom: var(--space-3); font-size: clamp(64px, 7vw, 120px); font-weight: 100; line-height: 0.8; letter-spacing: -0.04em; color: var(--stage-lit); }
+
+/* Principle 1 sits on the page ground like principles 2 to 5: light stage tokens, section padding and an h2
+   head inside the grid frame. The comparison keeps its dim-and-lit choreography; the lit accent is purple. */
+#sources {
+  --stage: var(--paper);
+  --stage-raise: var(--sea);
+  --stage-band: var(--clr-purple-5);
+  --stage-grid: var(--rule);
+  --stage-line: var(--clr-purple-40);
+  --stage-line-dim: var(--clr-purple-20);
+  --stage-ink: var(--ink);
+  --stage-ink-2: var(--ink-2);
+  --stage-ink-3: var(--ink-3);
+  --stage-lit: var(--accent);
+  --stage-lit-fill: var(--clr-rose-20);
+  --stage-lit-glow: var(--clr-rose-40);
+  padding-block: 0; background: transparent;
+}
+#sources.stg--frame .stg-in { margin-block: 0; padding-block: var(--section); border-top: var(--hairline) solid var(--rule); }
+#sources.stg--frame .stg-in::before, #sources.stg--frame .stg-in::after { background: linear-gradient(var(--cross), var(--cross)) center / var(--hairline) 100% no-repeat, linear-gradient(var(--cross), var(--cross)) center / 100% var(--hairline) no-repeat; }
+#sources .stg-title { font-size: var(--fs-h2); line-height: var(--lh-heading); letter-spacing: var(--track-h2); max-width: 14ch; }
