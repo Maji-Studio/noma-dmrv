@@ -1,5 +1,45 @@
 # Isometric Docs Change Log
 
+## 2026-10-01: Field registry tuples and transport categories come from the catalog
+
+- `CERTIFY_FIELD_REGISTRY` (`src/lib/certification/certify-field-registry.ts`)
+  now names only the aggregated facts each field feeds.
+  `resolveCertifyFieldInputTuples` resolves the removal-template inputs through
+  the catalog (`projectInputTuplesBySource`), so fields whose fact feeds a bound
+  input now list it even where the old literals left it out (moisture, the
+  Safety margin, the transport-derived distances and masses).
+- `deriveRequiredTransportCategories`
+  (`src/fn/certification/certify-transport-coverage.ts`) reads the catalog's
+  `projectTransportCategories`; the hand-kept `TRANSPORT_SOURCE_TO_CATEGORY`
+  and its sync comment are gone. `TRANSPORT_SOURCE_FACTS` names the fact each
+  transport category submits, and readiness routes transport legs through
+  `transportRepairDestination` (`src/fn/certification/certify-readiness-gaps.ts`)
+  instead of its own category-to-fix-target map.
+- No binding or submitted value changed (#637, part of #291).
+  `tests/binding-catalog-projections.test.ts` pins the pre-#637 sources,
+  tuples, categories and fix targets, and shows one catalog edit moving the
+  registry tuples and the transport categories together.
+  `tests/binding-tuple-literal-guard.test.ts` fails when a source file quotes
+  a catalog `(blueprint_key, input_key)` pair; its allowlist names the mirrors
+  #638 and #639 still own.
+
+## 2026-10-01: Removal input bindings live in one semantic catalog
+
+- `src/lib/isometric/semantic-binding-catalog.ts` now owns every ordinary
+  removal-template binding, keyed by `(blueprint_key, input_key)` with an
+  explicit role per allowed group: the source fact, datapoint contract
+  (unit, quantity kind, type, transform), attribution bucket, strategy
+  (aggregated Datapoint or PROJECT-scope forbidden) and the per-component
+  carve-outs. `SOURCE_FACTS` carries each fact's readiness provenance and
+  repair destination once; the Removal template diagnostic reads its source
+  labels from there.
+- `INPUT_MAPPING` and `PERIOD_INPUT_TUPLES` in
+  `src/lib/isometric/transformers/datapoint.ts` are projections of the
+  catalog. No binding changed: `tests/semantic-binding-catalog.test.ts` pins
+  both tables and `MAPPING_REVISION` to their pre-catalog values (#636, part
+  of #291). Sequestration bindings, `CERTIFY_FIELD_REGISTRY` and
+  `TRANSPORT_SOURCE_TO_CATEGORY` move in the next slices.
+
 ## 2026-09-16: Source audit events are staged outside the mirror transaction
 
 - `mirrorDocumentToSourceForUser` (`src/fn/certification/sources.ts`) runs its
