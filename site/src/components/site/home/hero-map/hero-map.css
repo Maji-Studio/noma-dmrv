@@ -17,7 +17,8 @@
 .hm-mk { position: relative; width: 0; height: 0; cursor: pointer; transition: opacity var(--dur-base) var(--ease-out); --acc: var(--infra); }
 .hm-mk--supplier { --acc: var(--prod); }
 .hm-mk--field { --acc: var(--dist); }
-.hm-mk:focus-visible { outline: none; }
+.hm-mk:focus-visible { outline: none; opacity: 1; }
+.hm-mk:focus-visible .hm-ring { border-width: 2px; border-color: var(--ink); }
 .hm-shape { position: absolute; left: calc(var(--hm-mark) / -2); top: calc(var(--hm-mark) / -2); width: var(--hm-mark); height: var(--hm-mark); background: var(--acc); }
 .hm-mk--field .hm-shape { transform: rotate(45deg); }
 .hm-mk--facility .hm-shape { left: calc(var(--hm-mark-facility) / -2); top: calc(var(--hm-mark-facility) / -2); width: var(--hm-mark-facility); height: var(--hm-mark-facility); }
