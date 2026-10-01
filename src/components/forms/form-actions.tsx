@@ -21,6 +21,9 @@ import {
 } from "@/components/ui/entity-side-sheet/side-sheet-context";
 import { ServerError } from "./server-error";
 
+/** Room kept between a focused control and the sticky CTA row's top edge. */
+const FOCUS_CLEARANCE_PX = 8;
+
 interface FormActionsProps<
   TFieldValues extends FieldValues = FieldValues,
   TContext = unknown,
@@ -106,6 +109,7 @@ export function FormActions<
         <SheetDirtyBridge control={control} reportDirty={sheetActions.reportDirty} />
       )}
     <div
+      ref={sticky ? reserveStickyFooterSpace : undefined}
       className={cn(
         "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
         sticky
@@ -137,6 +141,36 @@ export function FormActions<
     </div>
     </>
   );
+}
+
+/**
+ * Keeps keyboard focus clear of the sticky CTA row (WCAG 2.2 SC 2.4.11). The
+ * browser's focus scrolling ignores sticky elements but honours
+ * `scroll-padding`, so the row's height is reserved as `scroll-padding-bottom`
+ * on its scroll container. The row grows when an action error shows, so its
+ * size is observed rather than assumed. Ref callback; returns the cleanup.
+ */
+export function reserveStickyFooterSpace(footer: HTMLElement | null) {
+  if (!footer || typeof ResizeObserver === "undefined") return;
+  const scrollport = findScrollContainer(footer);
+  if (!scrollport) return;
+  const previous = scrollport.style.scrollPaddingBottom;
+  const observer = new ResizeObserver(() => {
+    scrollport.style.scrollPaddingBottom = `${footer.offsetHeight + FOCUS_CLEARANCE_PX}px`;
+  });
+  observer.observe(footer);
+  return () => {
+    observer.disconnect();
+    scrollport.style.scrollPaddingBottom = previous;
+  };
+}
+
+function findScrollContainer(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === "auto" || overflowY === "scroll") return node;
+  }
+  return null;
 }
 
 /**
