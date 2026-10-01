@@ -21,6 +21,7 @@ import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { resolveDeliveryDistanceSourceChoice } from "./delivery-distance-source";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { useFacility } from "@/hooks/use-facilities";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
@@ -211,12 +212,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     }
   };
 
-  const handleDistanceSourceChange = (source: DistanceSourceValue) => {
-    if (
-      source === "map_estimate" &&
-      storedDistanceSource === "map_estimate" &&
-      storedDistanceKm != null
-    ) {
+  const handleDistanceSourceChange = (raw: string) => {
+    const choice = resolveDeliveryDistanceSourceChoice(raw, {
+      storedDistanceKm,
+      storedDistanceSource,
+      hasOverride: distanceKmOverride != null,
+    });
+    if (choice.kind === "inherit-stored" && storedDistanceKm != null) {
       setDistanceDraft(formatDistance(storedDistanceKm));
       setSyncedDistanceKm(storedDistanceKm);
       setValue("distanceKmOverride", null, SET_VALUE_OPTS);
@@ -224,15 +226,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       setValue("distanceNote", "", SET_VALUE_OPTS);
       return;
     }
-
-    if (source === "manual" && distanceKmOverride == null) {
-      // A matching manual customer-location value remains inherited; only an
-      // edited distance becomes a delivery-specific manual override.
-      setValue("distanceSource", null, SET_VALUE_OPTS);
-      return;
-    }
-    setValue("distanceSource", source, SET_VALUE_OPTS);
+    setValue("distanceSource", choice.kind === "set" ? choice.source : null, SET_VALUE_OPTS);
   };
+
 
   // Switching orders invalidates a trip-specific override and its note.
   useClearOnDependencyChange(watchOrderId, () => {
@@ -448,12 +444,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               disabled={isSubmitting || effectiveDistanceKm == null}
               error={!!errors.distanceSource}
               {...register("distanceSource")}
+              // The select shows the effective source, which may be inherited
+              // from the customer location while the form value stays null.
+              // These overrides keep RHF's handlers from copying the displayed
+              // value into the form; blur still validates through trigger().
               value={effectiveDraftDistanceSource ?? ""}
-              onChange={(event) =>
-                handleDistanceSourceChange(
-                  event.target.value as DistanceSourceValue,
-                )
-              }
+              onChange={(event) => handleDistanceSourceChange(event.target.value)}
+              onBlur={() => void trigger("distanceSource")}
             />
           </FormField>
 
