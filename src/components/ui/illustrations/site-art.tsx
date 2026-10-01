@@ -2,27 +2,29 @@
 
 import { Dots, IllustrationFrame, Motion, type IllustrationProps } from "./illustration-frame";
 
-/** Storage bin: a plain box bin, its lid on, the grains inside showing through. */
-const BIN_BODY = "M12 16 V35 H44 V16";
-const BIN_LID = "M10 11 H46 V16 H10 Z";
-const BIN_HANDLE = "M24 11 V8.5 H32 V11";
-const BIN_GRAINS_LOW = [[17, 30.5], [24.3, 30.5], [31.7, 30.5], [39, 30.5]] as const;
-const BIN_GRAINS_HIGH = [[20.6, 25], [28, 25], [35.4, 25]] as const;
-/** The upper grains settle a beat after the lid lifts. */
-const BIN_GRAIN_DELAY = 300;
+/** Storage bin: the stock-mode bin, an open box with its grains in rows, the lid lifted off. */
+const BIN_BODY = "M12 15 V35 H44 V15";
+const BIN_LID = "M10 9 H46 V12 H10 Z";
+const BIN_HANDLE = "M25 9 V7 H31 V9";
+const BIN_GRAIN_RADIUS = 1.1;
+const BIN_GRAIN_XS = [16, 20, 24, 28, 32, 36, 40] as const;
+const BIN_GRAIN_YS = [20, 24, 28, 32] as const;
+/** The top row pops back in on large drawings, as if just poured. */
+const BIN_GRAINS_TOP = BIN_GRAIN_XS.map((x) => [x, BIN_GRAIN_YS[0]] as const);
+const BIN_GRAINS_BELOW = BIN_GRAIN_YS.slice(1).flatMap((y) => BIN_GRAIN_XS.map((x) => [x, y] as const));
 
 export function StorageBinArt(props: IllustrationProps) {
   return (
     <IllustrationFrame ground="solid" {...props}>
-      <path d={BIN_BODY} />
       <Motion kind="lift">
         <path d={BIN_LID} />
         <path d={BIN_HANDLE} />
       </Motion>
-      <Dots points={BIN_GRAINS_LOW} />
-      <Motion kind="drop" delay={BIN_GRAIN_DELAY} largeOnly>
-        <Dots points={BIN_GRAINS_HIGH} />
+      <path d={BIN_BODY} />
+      <Motion kind="pop" largeOnly>
+        <Dots points={BIN_GRAINS_TOP} radius={BIN_GRAIN_RADIUS} />
       </Motion>
+      <Dots points={BIN_GRAINS_BELOW} radius={BIN_GRAIN_RADIUS} />
     </IllustrationFrame>
   );
 }

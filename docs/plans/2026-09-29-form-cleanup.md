@@ -206,6 +206,7 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
   - **Choice cards:** drawings in every choice card, including the application evidence and default evidence cards. They replace the 20px Phosphor icons. Stock mode art stays as it is.
   - **Empty states:** the drawing at 96px (`ILLUSTRATION_SIZE.empty`) in the `EmptyState` icon slot. Filtered, error and nested `padding="sm"` empties keep Phosphor.
   - **Motion:** a hover loop on every drawing, CSS only, behind `prefers-reduced-motion`. Card-size drawings move one key part; empty states and onboarding move every part.
+  - **Second redraw (Kenji, 2026-10-01, from a variants page):** the storage bin becomes the stock-mode bin (an open box, grains in rows, lid lifted off). The feedstock becomes a heap of mixed biomass with a sprig. The biochar product becomes a tied sack with a leaf on it. The supplier becomes a warehouse with sacks on a pallet. The pines and the log stack were too specific to wood.
 - The full rescan with all three instruments.
 - Update `docs/design-system.md` with sections on choice controls, Simple and Detailed, and illustrations. Then archive this plan.
 

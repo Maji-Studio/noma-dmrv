@@ -27,58 +27,52 @@ export function CustomerArt(props: IllustrationProps) {
   );
 }
 
-/** Supplier: where feedstock comes from, two tiered pines. */
-const PINE_TALL = "M21 5 L27 14 H24 L29.5 22 H26 L31 30 H11 L16 22 H12.5 L18 14 H15 Z";
-const PINE_TALL_TRUNK = "M21 30 V35";
-const PINE_SHORT = "M41 13 L45.5 19.5 H43.5 L47.5 25 H45 L49 30 H33 L37 25 H34.5 L38.5 19.5 H36.5 Z";
-const PINE_SHORT_TRUNK = "M41 30 V35";
-/** The short pine sways out of step with the tall one. */
-const PINE_STAGGER = 350;
+/** Supplier: a warehouse with a roller door, filled sacks on a pallet outside. */
+const WAREHOUSE = "M5 35 V17 L20 9 L35 17 V35";
+const WAREHOUSE_DOOR = "M12 35 V23 H28 V35";
+const WAREHOUSE_DOOR_SLATS = "M12 26.5 H28 M12 30 H28";
+const SUPPLY_PALLET = "M38 35 V32.5 H52 V35";
+const SUPPLY_SACK_SIZE = { width: 6.5, height: 5.5, rx: 2.5 } as const;
+const SUPPLY_SACKS_BELOW = [[38.5, 27], [45, 27]] as const;
+const SUPPLY_SACK_TOP = [41.75, 21.5] as const;
 
 export function SupplierArt(props: IllustrationProps) {
   return (
     <IllustrationFrame ground="solid" {...props}>
-      <Motion kind="sway">
-        <path d={PINE_TALL} />
-        <path d={PINE_TALL_TRUNK} />
+      <path d={WAREHOUSE} />
+      <path d={WAREHOUSE_DOOR} />
+      <Motion kind="draw" largeOnly>
+        <path d={WAREHOUSE_DOOR_SLATS} pathLength={1} />
       </Motion>
-      <Motion kind="sway" delay={PINE_STAGGER} largeOnly>
-        <path d={PINE_SHORT} />
-        <path d={PINE_SHORT_TRUNK} />
+      <path d={SUPPLY_PALLET} />
+      {SUPPLY_SACKS_BELOW.map(([x, y]) => (
+        <rect key={x} x={x} y={y} {...SUPPLY_SACK_SIZE} />
+      ))}
+      <Motion kind="drop">
+        <rect x={SUPPLY_SACK_TOP[0]} y={SUPPLY_SACK_TOP[1]} {...SUPPLY_SACK_SIZE} />
       </Motion>
     </IllustrationFrame>
   );
 }
 
-/** Feedstock: a stack of logs seen end on, three, two, one. */
-const LOG_RADIUS = 5;
-const LOG_CORE_RADIUS = 1.1;
-const LOGS_BOTTOM = [[18, 30], [28, 30], [38, 30]] as const;
-const LOGS_MIDDLE = [[23, 21.34], [33, 21.34]] as const;
-const LOG_TOP = [28, 12.68] as const;
-/** The middle row lands, then the top log. */
-const LOG_TOP_DELAY = 250;
-
-function Logs({ centres }: { centres: readonly (readonly [number, number])[] }) {
-  return (
-    <>
-      {centres.map(([cx, cy]) => (
-        <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={LOG_RADIUS} />
-      ))}
-      <Dots points={centres} radius={LOG_CORE_RADIUS} />
-    </>
-  );
-}
+/** Feedstock: a heap of mixed biomass, chips and twigs, a sprig growing from the top. */
+const HEAP = "M7 35 C12 22 20 17 28 17 C36 17 44 22 49 35";
+const HEAP_CHIPS = "M15 30 L19 28 M24 25.5 L28 27 M33 29.5 L37 27.5 M20 33 L23.5 32 M29 21.5 L32.5 21 M38 32.5 L41 31";
+const HEAP_GRAINS = [[18, 23.5], [26, 31], [40, 25]] as const;
+const SPRIG_STEM = "M30 17 C30.5 13 31.5 10.5 33.5 8";
+const SPRIG_LEAVES = "M32 11 C34 8 37.5 7.5 39.5 8.5 C38 11.5 34.5 12.5 32 11 Z M30.5 14 C28.5 11.5 25.5 11 23.5 12 C25 14.5 28 15.5 30.5 14 Z";
 
 export function FeedstockArt(props: IllustrationProps) {
   return (
     <IllustrationFrame ground="solid" {...props}>
-      <Logs centres={LOGS_BOTTOM} />
-      <Motion kind="drop" largeOnly>
-        <Logs centres={LOGS_MIDDLE} />
+      <path d={HEAP} />
+      <path d={HEAP_CHIPS} />
+      <Motion kind="pop" largeOnly>
+        <Dots points={HEAP_GRAINS} />
       </Motion>
-      <Motion kind="drop" delay={LOG_TOP_DELAY}>
-        <Logs centres={[LOG_TOP]} />
+      <Motion kind="sway">
+        <path d={SPRIG_STEM} />
+        <path d={SPRIG_LEAVES} />
       </Motion>
     </IllustrationFrame>
   );
@@ -107,25 +101,22 @@ export function OrderArt(props: IllustrationProps) {
   );
 }
 
-/** Biochar product: a bulk bag on its lifting loops, filled with biochar. */
-const BAG_BODY = "M13 14 V33 Q13 35 15 35 H41 Q43 35 43 33 V14 Z";
-const BAG_LOOPS = "M16 14 V9.5 Q16 7.5 18 7.5 Q20 7.5 20 9.5 V14 M36 14 V9.5 Q36 7.5 38 7.5 Q40 7.5 40 9.5 V14";
-const BAG_LEVEL = "M13 20 H43";
-const BAG_GRAINS = [[19, 25], [31, 25], [25, 28.5], [37, 28.5], [22, 32], [34, 32]] as const;
-const BAG_GRAIN_STAGGER = 90;
+/** Biochar product: a sack, its neck tied, a leaf printed on the front. */
+const SACK_TOP = "M22 12.5 L19 6 Q22.5 7.8 25 5.5 Q28 8.2 31 5.5 Q33.5 7.8 37 6 L34 12.5";
+const SACK_TIE = "M21 13 Q28 15.5 35 13";
+const SACK_BODY = "M21.5 13.5 C13 17 11 27 13 35 H43 C45 27 43 17 34.5 13.5";
+const SACK_LEAF = "M24 29 C25 24 29 21.5 33 21.5 C33 26 29.5 29 24 29 Z M24 29 L29 24.5";
 
 export function BiocharProductArt(props: IllustrationProps) {
   return (
     <IllustrationFrame ground="solid" {...props}>
       <Motion kind="lift">
-        <path d={BAG_BODY} />
-        <path d={BAG_LOOPS} />
-        <path d={BAG_LEVEL} />
-        {BAG_GRAINS.map((grain, index) => (
-          <Motion key={grain.join("-")} kind="drop" delay={index * BAG_GRAIN_STAGGER} largeOnly>
-            <Dots points={[grain]} />
-          </Motion>
-        ))}
+        <path d={SACK_TOP} />
+        <path d={SACK_TIE} />
+        <path d={SACK_BODY} />
+        <Motion kind="pop" largeOnly>
+          <path d={SACK_LEAF} />
+        </Motion>
       </Motion>
     </IllustrationFrame>
   );
