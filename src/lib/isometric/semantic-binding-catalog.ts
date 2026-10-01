@@ -30,9 +30,9 @@ type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
 
 /**
- * Where an operator repairs a missing or wrong source fact: the readiness
- * fix-target vocabulary, routed as readiness already routes these facts
- * (transport legs: src/fn/certification/certify-readiness-gaps.ts).
+ * Where an operator repairs a missing or wrong source fact, in the readiness
+ * fix-target vocabulary. Readiness routes transport legs through
+ * `transportRepairDestination`.
  */
 export type RepairDestination = Extract<
   BatchHealthFixTarget,

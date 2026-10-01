@@ -4,9 +4,9 @@
  * hand-kept mirror of the catalog. Resolve the binding through the catalog's
  * projections instead.
  *
- * Tests are exempt: they pin tuples on purpose. The allowlist names the
- * mirrors a later #291 slice still owns; it may only shrink, so an entry that
- * no longer matches fails too.
+ * Tests are exempt: they pin tuples on purpose. KNOWN_MIRRORS names each pair
+ * a later #291 slice still owns, per file. It must match exactly, so a new
+ * pair fails and a removed one must be dropped from the list.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -18,13 +18,20 @@ const SOURCE_DIR = join(ROOT, "src");
 const CATALOG_MODULE = "src/lib/isometric/semantic-binding-catalog.ts";
 const GENERATED_DIR = "src/lib/isometric/generated/";
 
-const KNOWN_MIRRORS: Record<string, string> = {
-  // Evidence targets for Isometric Sources; the catalog takes them with the
-  // role assignments in #638.
-  "src/lib/certification/removal-source-bindings.ts": "#638 evidence targets",
-  "src/fn/certification/removal-snapshot-readers.ts": "#638 evidence targets (snapshot schema)",
-  // Template walk for the diesel warning; the compiled plan replaces it.
-  "src/fn/certification/submission-warnings.ts": "#639 compiled binding plan",
+const KNOWN_MIRRORS: Record<string, string[]> = {
+  // Evidence targets for Isometric Sources; #638 moves them onto the catalog
+  // roles.
+  "src/lib/certification/removal-source-bindings.ts": [
+    "carbon_rich_substance_sequestration/product_mass",
+    "mass_distance_based_ci_emissions/mass_distance",
+    "mass_based_ci_emissions/mass",
+  ],
+  "src/fn/certification/removal-snapshot-readers.ts": [
+    "mass_distance_based_ci_emissions/mass_distance",
+    "mass_based_ci_emissions/mass",
+  ],
+  // Template walk for the diesel warning; #639's compiled plan replaces it.
+  "src/fn/certification/submission-warnings.ts": ["fuel_usage_by_volume/volume_of_fuel"],
 };
 
 function sourceFiles(dir: string): string[] {
@@ -59,17 +66,8 @@ function literalMirrors(): Record<string, string[]> {
 }
 
 describe("binding tuple literals", () => {
-  const mirrors = literalMirrors();
-
-  it("are declared only in the catalog module", () => {
-    const unexpected = Object.fromEntries(
-      Object.entries(mirrors).filter(([file]) => !(file in KNOWN_MIRRORS)),
-    );
-    expect(unexpected).toEqual({});
-  });
-
-  it("keeps the known-mirror allowlist current", () => {
-    expect(Object.keys(KNOWN_MIRRORS).filter((file) => !(file in mirrors))).toEqual([]);
+  it("are declared only in the catalog module, apart from the known mirrors", () => {
+    expect(literalMirrors()).toEqual(KNOWN_MIRRORS);
   });
 
   it("catches a literal mirror and ignores prose", () => {
@@ -78,5 +76,11 @@ describe("binding tuple literals", () => {
       mirroredPairs('tuple("pyrolysis", "grid_electricity_use", "electricity_use")'),
     ).toEqual(["grid_electricity_use/electricity_use"]);
     expect(mirroredPairs("// `grid_electricity_use` / `electricity_use`")).toEqual([]);
+  });
+
+  it("fails on a new pair in a known-mirror file", () => {
+    const file = "src/fn/certification/submission-warnings.ts";
+    const text = `${readFileSync(join(ROOT, file), "utf8")}\nconst x = ["grid_electricity_use", "electricity_use"];`;
+    expect(mirroredPairs(text)).not.toEqual(KNOWN_MIRRORS[file]);
   });
 });
