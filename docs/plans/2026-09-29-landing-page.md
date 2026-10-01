@@ -102,7 +102,7 @@ The prototype already contains reusable pieces: the five visuals ported to `site
 
 ## Visual language
 
-Use the MAJI website language from the earlier draft on `codex/public-website` (`src/components/marketing-pages/marketing-pages.module.css`, `website.module.css`), not the app's CRUD look:
+Use the MAJI website language from the earlier draft on branch `codex/public-website` (its `marketing-pages.module.css` and `website.module.css`), not the app's CRUD look:
 
 - Display and section headings in GT Flexa Light (300), tight tracking (about -0.045em to -0.06em), line height about 1.01 to 1.06. No bold headlines.
 - Editorial grids (1.2fr / 0.8fr and 1fr / 1fr), gutters `clamp(24px, 5vw, 88px)`, section spacing `clamp(64px, 7vw, 112px)`, body copy 18 to 20 px.
@@ -135,4 +135,4 @@ Slice 3 can run in parallel with 2.
 
 ## Prior work
 
-Branch `codex/public-website` (Codex worktree, last commit 2026-09-28, no PR) built a different website: several marketing routes inside the Next.js app, 3D landscape illustrations and `docs/website.md`. This plan replaces that approach (separate static site, one page). Don't merge or port its structure, but do take its visual language (see Visual language). Things worth reusing after checking: `public/landing/maji-logo.svg`, `public/landing/mafinga-field-trial.jpg` (confirm the photo rights with DEC), and the positioning research note `docs/archive/research/2026-09-23-dmrv-website-positioning.md` on that branch, which is the source of the Cula finding above. Whether to delete the branch is the owner's call.
+Branch `codex/public-website` (Codex worktree, last commit 2026-09-28, no PR) built a different website: several marketing routes inside the Next.js app, 3D landscape illustrations and a `website.md` doc. This plan replaces that approach (separate static site, one page). Don't merge or port its structure, but do take its visual language (see Visual language). Things worth reusing after checking, all on that branch only: the MAJI logo (`maji-logo.svg`), the Mafinga field trial photo (`mafinga-field-trial.jpg`; confirm the photo rights with DEC), and its archived positioning research note (`2026-09-23-dmrv-website-positioning.md`), which is the source of the Cula finding above. Whether to delete the branch is the owner's call.
