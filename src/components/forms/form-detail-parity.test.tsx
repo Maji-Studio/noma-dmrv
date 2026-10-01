@@ -38,8 +38,6 @@ vi.mock("@/hooks/use-entities", () => ({
     dataUpdatedAt: 1, isPending: false, isError: false, error: null,
   }),
 }));
-vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "Stock history"}</button> }));
-vi.mock("@/components/storage-locations/bin-movement-history-modal", () => ({ BinMovementHistoryModal: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button> }));
 // The bin picker's quick-add dialogs need a query client; none is under test.
 vi.mock("./entity-select/driver-quick-add-dialog", () => ({ DriverQuickAddDialog: () => null }));
 vi.mock("./entity-select/operator-quick-add-dialog", () => ({ OperatorQuickAddDialog: () => null }));
