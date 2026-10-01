@@ -61,6 +61,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 import { BiocharProductForm } from "./biochar-product-form";
 import { productSheetSections } from "./product-read-details";
+import { ILLUSTRATION_SIZE, BiocharProductArt } from "@/components/ui/illustrations";
 
 const WET_PRODUCT_LABEL = "Wet product";
 const DRY_BIOCHAR_LABEL = "Dry biochar";
@@ -511,7 +512,7 @@ export function BiocharProductList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<CubeIcon size={48} />}
+            icon={creditBatchFilter || hasActiveFilters ? <CubeIcon size={48} /> : <BiocharProductArt size={ILLUSTRATION_SIZE.empty} />}
             title={
               creditBatchFilter
                 ? "No biochar products in this credit batch"

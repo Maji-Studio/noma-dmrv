@@ -198,6 +198,14 @@ R1 inventory, from the code on 2026-09-29 (`grep` for `detailedOnly|DetailedOnly
 ### Phase 4. Illustrations and final rescan (1 PR plus a scan)
 
 - About 10 monoline SVGs in `components/ui/illustrations/`: routes, split and mix piles, bin states, reactor types, a sample vial, an envelope.
+- Kenji's decisions, 2026-10-01 (decisions page plus chat). These replace the list above.
+  - **The set is 19 drawings**, not about 10. There are no routes, bin states or reactor types: trip type is gone (#852), and the app has no bin-state or reactor-type choice to illustrate. The delivery truck takes the routes drawing's place.
+  - **Kept as drawn:** computed estimate, envelope, facility, field boundary, file upload, paste text, photo evidence, sample vial.
+  - **Redrawn:** the location pin loses its side contour lines. The delivery truck is simpler, with fewer load dots and wheels clear of the body. The reactor is an open Kon-Tiki cone kiln with flames at the rim, not an arched oven. The storage bin is a plain lidded box with grains, not a silo.
+  - **Drawn in this PR too:** customers, suppliers, orders, feedstock, biochar products, credit batches and members, each on its list's "No X yet" state.
+  - **Choice cards:** drawings in every choice card, including the application evidence and default evidence cards. They replace the 20px Phosphor icons. Stock mode art stays as it is.
+  - **Empty states:** the drawing at 96px (`ILLUSTRATION_SIZE.empty`) in the `EmptyState` icon slot. Filtered, error and nested `padding="sm"` empties keep Phosphor.
+  - **Motion:** a hover loop on every drawing, CSS only, behind `prefers-reduced-motion`. Card-size drawings move one key part; empty states and onboarding move every part.
 - The full rescan with all three instruments.
 - Update `docs/design-system.md` with sections on choice controls, Simple and Detailed, and illustrations. Then archive this plan.
 

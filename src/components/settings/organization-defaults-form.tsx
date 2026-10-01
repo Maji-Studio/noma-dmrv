@@ -50,6 +50,7 @@ import {
   type OrganizationSettingsValues,
 } from "@/schemas/organization-settings";
 import { useState } from "react";
+import { EVIDENCE_METHOD_ART } from "@/components/applications/evidence-method-art";
 
 const CURRENCY_OPTIONS = currencyCodes.map((code) => ({
   value: code,
@@ -67,6 +68,7 @@ const EVIDENCE_METHOD_OPTIONS = selectableApplicationEvidenceMethods.map((method
   value: method,
   title: formatApplicationEvidenceMethod(method),
   description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS[method],
+  art: EVIDENCE_METHOD_ART[method],
 }));
 
 const PACKAGING_LABELS: Record<PackagingType, string> = {

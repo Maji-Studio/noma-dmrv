@@ -531,8 +531,9 @@ column below about 272px, two columns above it (art beside the text from
 art above the text, all rows equal height. Sheets
 are 360 to 640px wide, so give a card group the full row (`md:col-span-2` in a
 two-column grid) or it stacks. Write the consequence as the card caption, not
-as helper text. Art is decorative (`aria-hidden`), monoline, about 44x30, drawn
-in code.
+as helper text. Art is a drawing from the illustration set at card size
+(see [Illustrations](#illustrations--srccomponentsuiillustrations)). Either
+every card in a group has one or none does.
 Wide art (stock mode, 112x44) uses `stackArt` to sit above the text at every
 width. It is the one exception to monoline: filled grains in three fixed batch
 tones (`--stock-batch-*` in `globals.css`). It can play a loop on card hover and focus through CSS in
@@ -545,6 +546,56 @@ segments are at least 44px tall. The sheet header Simple/Detailed toggle
 (`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
 component.
 
+### Illustrations — `src/components/ui/illustrations`
+
+A small set of monoline drawings, one per thing an operator picks or has none
+of yet: evidence methods, GIS entry, sampling, and the core records (storage
+bin, reactor, facility, delivery, customer, supplier, feedstock, order, biochar
+product, credit batch, sample, members, invitations). They are decoration
+(`aria-hidden`); the text next to them carries the meaning.
+
+**Where they go.** Three places, nowhere else.
+
+- Choice cards (`ChoiceCardGroup` `art`), at the default card size (56px wide).
+  If one card in a group has a drawing, all of them do.
+- Top-level "No X yet" empty states, at `ILLUSTRATION_SIZE.empty` (96px) in the
+  `EmptyState` `icon` slot. The filtered branch of the same empty state keeps
+  its Phosphor icon, so the `icon` prop switches with the title. Error states,
+  filtered states and nested `padding="sm"` empties never get a drawing.
+- Onboarding: the welcome step and the setup-in-progress state.
+
+Everything else (buttons, table rows, KPI cards, nav) stays on Phosphor.
+
+**Style.** Every drawing sits on a 56x40 view box inside `IllustrationFrame`:
+flat front view, `currentColor`, round caps and joins, no fills except the
+small solid dots (`Dots`) for grains, corners and hubs. The frame holds the
+on-screen stroke at 1.5px up to 80px wide and 2px above that, so a drawing never
+turns heavy when scaled. An optional half-opacity ground line (solid, or dotted
+for a road) sits at y 37. Keep lines from crossing where you can: the flames
+stand on the kiln rim's back edge, the wheels hang below the chassis. Every coordinate is a named constant.
+The stock mode art (`stock-mode-art.tsx`) is the one older exception, wider and
+with tinted grains.
+
+**Motion.** Hovering the host plays a short loop: the choice card's label, or
+any element with the `illo-host` class. `EmptyState` and the onboarding welcome
+step are hosts. Keyboard focus inside the host plays it too, and a disabled card
+stays still. Wrap the moving part in `<Motion kind="…">`. The kinds are `bob`,
+`rise`, `flicker`, `sway`, `pop`, `drop`, `lift`, `draw` (give the path
+`pathLength={1}`) and `stamp`. The dotted ground scrolls on its own. `delay`
+staggers sibling parts. A card-size drawing plays only its key part, the one
+part per drawing without `largeOnly`. Large drawings play every part. The
+keyframes live in `globals.css` under "Illustrations", behind
+`prefers-reduced-motion: no-preference`, and they are CSS only: no state, no
+`useEffect`. Each keyframe starts and ends on the settled drawing, so leaving
+the host snaps back to the static picture.
+
+**Adding one.** Draw it in the file for its group (`site-art.tsx`,
+`field-art.tsx`, `record-art.tsx`, `entity-art.tsx`), export it from `index.ts`
+and bump the count in `illustrations.test.tsx`. The test checks that each
+drawing is decorative, keeps its stroke weight at both sizes and has a part
+that moves at card size. Check it at 56px and 96px beside its neighbours
+before wiring it: at card size a detail under about 3px turns into a blot.
+
 ### AuthResult — `src/components/auth`
 
 The one outcome screen for auth pages (check your email, email verified, verification failed, invitation not usable, password reset done). `tone` is `pending`, `info`, `success` or `error` and picks the 32px glyph and tint; one title, one message (the only announced part: `alert` for errors, `status` otherwise). `actions` are full-width buttons or `AuthPrimaryLink`; `footer` is quiet navigation (`AuthLink`) and always last. `framed={false}` drops the page card and renders the title as an h2, for use inside a card that already has an h1.
@@ -553,7 +604,9 @@ The one outcome screen for auth pages (check your email, email verified, verific
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
   filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
-  caller-owned. Two copy rules, both load-bearing:
+  caller-owned. A top-level "No X yet" state carries a drawing at
+  `ILLUSTRATION_SIZE.empty` (see Illustrations); every other branch keeps a
+  Phosphor icon. Two copy rules, both load-bearing:
   - **The zero-state CTA is `Create your first <entity>`, never a copy of the
     `PageHeader` button.** Both buttons render at once on an empty list, and two
     controls with the same accessible name break `getByRole("button", { name })`

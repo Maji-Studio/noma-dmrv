@@ -67,6 +67,7 @@ import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { sumNullableBy } from "@/lib/nullable-sum";
 import { Notice } from "@/components/ui/notice";
+import { ILLUSTRATION_SIZE, CreditBatchArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Helpers
@@ -613,7 +614,7 @@ export function CreditBatchList({
       ) : paginatedItems.length === 0 ? (
         <EmptyState
           padding="lg"
-          icon={<CertificateIcon size={48} />}
+          icon={hasActiveFilters ? <CertificateIcon size={48} /> : <CreditBatchArt size={ILLUSTRATION_SIZE.empty} />}
           title={
             hasActiveFilters
               ? "No credit batches found"

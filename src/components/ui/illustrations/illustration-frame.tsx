@@ -4,9 +4,17 @@
  * stands above an empty-state heading. The stroke stays a constant on-screen
  * weight per size (1.5px at card size, 2px at empty-state size), so the scaled
  * drawing does not turn heavy. Decorative: always aria-hidden.
+ *
+ * Motion: parts wrapped in `Motion` play a short loop while the host is hovered
+ * or keyboard focused (a choice card's label, or any `.illo-host` such as an
+ * empty state). The keyframes live in globals.css under "Illustrations"; the
+ * class names here must match it. Card-size drawings play only their key part,
+ * large drawings play every part. Without motion the drawing shows its settled
+ * state: every keyframe starts and ends there.
  */
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 /** Every drawing is laid out on this grid, in view-box units. */
 export const VIEW_WIDTH = 56;
@@ -46,11 +54,12 @@ export function IllustrationFrame({
   ground = "none",
   children,
 }: FrameProps) {
-  const strokePx = size >= EMPTY_STROKE_FROM ? STROKE_EMPTY : STROKE_CARD;
+  const large = size >= EMPTY_STROKE_FROM;
+  const strokePx = large ? STROKE_EMPTY : STROKE_CARD;
   const unitsPerPx = VIEW_WIDTH / size;
   return (
     <svg
-      className={className}
+      className={cn("illo", large && "illo-lg", className)}
       width={size}
       height={(size * VIEW_HEIGHT) / VIEW_WIDTH}
       viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
@@ -64,6 +73,7 @@ export function IllustrationFrame({
     >
       {ground !== "none" && (
         <path
+          className={ground === "dotted" ? "illo-m illo-road" : undefined}
           d={`M${GROUND_INSET} ${GROUND_Y} H${VIEW_WIDTH - GROUND_INSET}`}
           strokeWidth={GROUND_STROKE * unitsPerPx}
           strokeDasharray={ground === "dotted" ? GROUND_DASH : undefined}
@@ -80,4 +90,31 @@ export function Dots({ points, radius = DOT_RADIUS }: { points: readonly (readon
   return points.map(([cx, cy]) => (
     <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={radius} fill="currentColor" stroke="none" />
   ));
+}
+
+/**
+ * The loops a part can play (keyframes `illo-<kind>` in globals.css):
+ * bob (rises and settles), rise (smoke drifting up), flicker (a flame),
+ * sway (rocks on its base), pop (shrinks away and springs back), drop (falls
+ * into place), lift (lifts and sets down), draw (the stroke redraws; give each
+ * path `pathLength={1}`), stamp (presses down like a seal).
+ */
+export type MotionKind = "bob" | "rise" | "flicker" | "sway" | "pop" | "drop" | "lift" | "draw" | "stamp";
+
+interface MotionProps {
+  kind: MotionKind;
+  /** Offset into the loop, in ms, to stagger sibling parts. */
+  delay?: number;
+  /** Play only on large drawings (empty states, onboarding); card-size drawings keep this part still. */
+  largeOnly?: boolean;
+  children: ReactNode;
+}
+
+export function Motion({ kind, delay, largeOnly = false, children }: MotionProps) {
+  const style = delay ? ({ "--illo-delay": `${delay}ms` } as CSSProperties) : undefined;
+  return (
+    <g className={cn("illo-m", `illo-${kind}`, largeOnly && "illo-lg-only")} style={style}>
+      {children}
+    </g>
+  );
 }

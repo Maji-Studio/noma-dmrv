@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import { Notice } from "@/components/ui/notice";
 import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { FileUploadArt, PasteTextArt } from "@/components/ui/illustrations";
 
 const DIALOG_TITLE_ID = "gis-reference-dialog-title";
 const FILE_INPUT_ID = "gis-reference-file";
@@ -30,11 +31,13 @@ const MODE_OPTIONS = [
     value: "upload",
     title: "Upload a file",
     description: "A .geojson file exported from your GIS tool.",
+    art: <FileUploadArt />,
   },
   {
     value: "manual",
     title: "Insert manually",
     description: "Paste the GeoJSON text straight in.",
+    art: <PasteTextArt />,
   },
 ] as const;
 

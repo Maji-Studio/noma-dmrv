@@ -1,21 +1,22 @@
-/** Where biochar is applied: a location pin on terrain, a field boundary, a photo of the field. */
+/** Where biochar is applied: a location pin, a field boundary, a photo of the field. */
 
-import { Dots, IllustrationFrame, VERTEX_RADIUS, type IllustrationProps } from "./illustration-frame";
+import { Dots, IllustrationFrame, Motion, VERTEX_RADIUS, type IllustrationProps } from "./illustration-frame";
 
-/** Location pin: a teardrop pin standing on a ripple, contour lines either side. */
+/** Location pin: a teardrop pin standing on a ripple. */
 const PIN_BODY = "M28 30 C21 22 18 19 18 14 A10 10 0 0 1 38 14 C38 19 35 22 28 30 Z";
 const PIN_HOLE = { cx: 28, cy: 14, r: 3.5 } as const;
 const PIN_RIPPLE = { cx: 28, cy: 31.5, rx: 9, ry: 2.5 } as const;
-const PIN_CONTOURS = "M3 36 Q13 33 20 35 M36 35 Q46 32 53 35";
-const PIN_CONTOUR_OPACITY = 0.5;
 
 export function LocationPinArt(props: IllustrationProps) {
   return (
     <IllustrationFrame {...props}>
-      <path d={PIN_CONTOURS} opacity={PIN_CONTOUR_OPACITY} />
-      <ellipse {...PIN_RIPPLE} />
-      <path d={PIN_BODY} />
-      <circle {...PIN_HOLE} />
+      <Motion kind="pop" largeOnly>
+        <ellipse {...PIN_RIPPLE} />
+      </Motion>
+      <Motion kind="bob">
+        <path d={PIN_BODY} />
+        <circle {...PIN_HOLE} />
+      </Motion>
     </IllustrationFrame>
   );
 }
@@ -25,13 +26,21 @@ const BOUNDARY_CORNERS = [[8, 26], [14, 9], [36, 6], [49, 18], [42, 33], [18, 34
 const BOUNDARY_OUTLINE = `M${BOUNDARY_CORNERS.map(([x, y]) => `${x} ${y}`).join(" L")} Z`;
 const BOUNDARY_FURROWS = "M17 16 L41 14 M14 23 L44 22 M19 29 L40 29";
 const BOUNDARY_FURROW_OPACITY = 0.5;
+/** Corner dots pop one after another, walking the boundary. */
+const BOUNDARY_CORNER_STAGGER = 120;
 
 export function FieldBoundaryArt(props: IllustrationProps) {
   return (
     <IllustrationFrame {...props}>
       <path d={BOUNDARY_FURROWS} opacity={BOUNDARY_FURROW_OPACITY} />
-      <path d={BOUNDARY_OUTLINE} />
-      <Dots points={BOUNDARY_CORNERS} radius={VERTEX_RADIUS} />
+      <Motion kind="draw" largeOnly>
+        <path d={BOUNDARY_OUTLINE} pathLength={1} />
+      </Motion>
+      {BOUNDARY_CORNERS.map((corner, index) => (
+        <Motion key={corner.join("-")} kind="pop" delay={index * BOUNDARY_CORNER_STAGGER}>
+          <Dots points={[corner]} radius={VERTEX_RADIUS} />
+        </Motion>
+      ))}
     </IllustrationFrame>
   );
 }
@@ -50,8 +59,12 @@ export function PhotoEvidenceArt(props: IllustrationProps) {
       <path d={CAMERA_BODY} />
       <circle {...CAMERA_LENS} />
       <path d={CAMERA_HILLS} />
-      <Dots points={CAMERA_SUN} radius={CAMERA_SUN_RADIUS} />
-      <Dots points={CAMERA_FLASH} />
+      <Motion kind="bob" largeOnly>
+        <Dots points={CAMERA_SUN} radius={CAMERA_SUN_RADIUS} />
+      </Motion>
+      <Motion kind="pop">
+        <Dots points={CAMERA_FLASH} />
+      </Motion>
     </IllustrationFrame>
   );
 }
