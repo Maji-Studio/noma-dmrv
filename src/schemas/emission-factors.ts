@@ -42,7 +42,8 @@ export const saveFacilityEmissionFactorsSchema =
      * row. Omitted skips the check. Null is what stops a second first save
      * from silently overwriting the first.
      */
-    expectedUpdatedAt: expectedUpdatedAtSchema.or(z.null()),
+    // Null first: the date branch coerces null to the epoch.
+    expectedUpdatedAt: z.union([z.null(), expectedUpdatedAtSchema]),
   });
 
 /** What the form holds: numbers arrive as strings from the inputs. */
