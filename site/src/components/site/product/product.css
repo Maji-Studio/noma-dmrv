@@ -1,6 +1,6 @@
 /* Product page (/product): intro, section heads, trace cells, and the editorial restyle of the shared
-   bins and map visuals. Page-scoped: every selector starts with a .pd- class. Values come from tokens.css. */
-.pd { --pd-side: clamp(260px, 24vw, 320px); --pd-bins-stacked: 400px; /* stacked bins and truck stop growing here */ }
+   map visual. Page-scoped: every selector starts with a .pd- class. Values come from tokens.css. */
+.pd { --pd-side: clamp(260px, 24vw, 320px); }
 
 /* Intro: same rhythm as Home's hero copy. */
 .pd-intro { display: grid; gap: var(--space-6); padding: var(--section) var(--frame-pad) var(--space-8); }
@@ -22,35 +22,6 @@
 
 /* Visual panels: paper surface between hairlines, edge to edge inside the frame. */
 .pd-panel { background: var(--paper); border-top: var(--hairline) solid var(--rule); }
-.pd-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3) var(--space-6); padding: var(--space-4) var(--frame-pad) var(--space-5); border-top: var(--hairline) solid var(--rule); }
-.pd-foot p { max-width: var(--measure); font-size: var(--fs-small); color: var(--ink-2); }
-
-/* Bins visual, restyled: controls across the top, bin left, before/after readout right. */
-.pd-bins { padding: var(--space-7) var(--frame-pad); }
-.pd-bins .nv-bins { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-areas: "ctrl ctrl" "art read" "legend read"; gap: var(--space-5) var(--gap); align-items: start; }
-.pd-bins .nv-bin-ctrl { grid-area: ctrl; gap: var(--space-5) var(--space-6); padding-bottom: var(--space-5); border-bottom: var(--hairline) solid var(--rule); }
-.pd-bins .nv-scroll { grid-area: art; }
-.pd-bins .nv-bins[data-layout="stacked"] .nv-scroll svg { max-width: var(--pd-bins-stacked); }
-.pd-bins .nv-bin-legend { grid-area: legend; gap: var(--space-2) var(--space-5); font-size: var(--fs-caption); }
-.pd-bins .nv-bin-read { grid-area: read; gap: var(--space-3); }
-.pd-bins .nv-bin-ctrl label { font-size: var(--fs-small); gap: var(--space-2); }
-.pd-bins .nv-bin-ctrl input[type="range"] { accent-color: var(--accent); }
-.pd-bins .nv-seg { border: var(--hairline) solid var(--rule-strong); padding: 0; gap: 0; background: var(--paper); }
-.pd-bins .nv-seg button { min-height: var(--tap); padding: 0 var(--space-4); font-size: var(--fs-small); }
-.pd-bins .nv-seg button + button { border-left: var(--hairline) solid var(--rule-strong); }
-.pd-bins .nv-seg button[aria-pressed="true"] { background: var(--cta); color: var(--cta-ink); font-weight: 300; }
-.pd-bins .nv-btn { min-height: var(--tap); padding: 0 var(--space-4); border: var(--hairline) solid var(--cta); background: var(--cta); color: var(--cta-ink); font-size: var(--fs-small); font-weight: 300; }
-.pd-bins .nv-btn:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
-.pd-bins .nv-ba-box, .pd-bins .nv-ba-mini { border: var(--hairline) solid var(--rule); }
-.pd-bins .nv-ba-box { background: var(--page); padding: var(--space-3) var(--space-4); }
-.pd-bins .nv-ba-box b { font-weight: 300; font-size: var(--fs-h3); letter-spacing: var(--track-h3); line-height: 1.15; }
-.pd-bins .nv-ba-box small, .pd-bins .nv-ba-mini .nv-hint { color: var(--ink-2); }
-.pd-bins .nv-ba-mini b { font-weight: 300; }
-.pd-bins .nv-ba { align-items: stretch; }
-.pd-bins .nv-ba-arrow { align-self: center; }
-.pd-bins .nv-ba-layers { display: grid; gap: 0; border-top: var(--hairline) solid var(--rule); }
-.pd-bins .nv-ba-layers .nv-ba-mini { border: 0; border-bottom: var(--hairline) solid var(--rule); padding: var(--space-2) 0; background: none; }
-.pd-bins .nv-ba-mini > span:first-child { flex: 1; color: var(--ink-2); }
 
 /* Map visual, restyled: hairlines, a band-tinted side panel and a large record code. */
 .pd-map .nv-viz { grid-template-columns: minmax(0, 1fr) var(--pd-side); border: 0; background: var(--paper); }
@@ -63,11 +34,9 @@
 @media (max-width: 860px) {
   .pd-map .nv-viz { grid-template-columns: minmax(0, 1fr); }
   .pd-map .nv-side { border-left: 0; border-top: var(--hairline) solid var(--rule); }
-  .pd-bins .nv-bins { grid-template-columns: minmax(0, 1fr); grid-template-areas: "ctrl" "art" "legend" "read"; }
 }
 @media (max-width: 760px) {
   .pd-hint { display: block; padding: var(--space-4) var(--frame-pad); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--ink-2); }
   .pd-intro-row, .pd-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
   .pd-intro-row .actions { justify-content: flex-start; }
-  .pd-bins { padding-block: var(--space-6); }
 }

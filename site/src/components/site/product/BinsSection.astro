@@ -1,22 +1,136 @@
 ---
 /**
- * BinsSection (#bins): the shared bins visual (data-visual="bins"), restyled square. The draw plays once
- * when the visual scrolls into view; the play button, bin type and sliders keep working. No props.
+ * BinsSection (#bins): one bin, told in three steps the visitor clicks through (step tabs, Back, Next) on a
+ * dark stage: one big figure per step beside one picture made of 10 kg squares. The same squares carry the
+ * story: biochar with its water mixed in (dashed) drops into bin A in layers, the oldest draw slides onto
+ * the truck with its water while the rest settle, then the weighbridge weighs both and the water lights up.
+ * The markup is the last step with every step's text listed, so without JS everything is readable;
+ * bins-steps.js arms the stepper. No props.
+ *
+ * Illustrative numbers: every layer at one moisture (M), so the water in the bin and on the truck add up.
+ * SVG geometry: user units. A square is 16 with a 20 pitch. Bin A is 10 squares wide, the truck bed 8.
+ * BY is the floor shared by bin and truck bed.
  */
 import GridFrame from "../GridFrame.astro";
+import { BIN_LAYERS } from "../../../visuals/data.js";
+import "./bins-steps.css";
+
+const [l1, l2, l3] = BIN_LAYERS;
+const KG_PER_SQ = 10;
+const M = 15; // % moisture, the same in every layer and at departure
+const DRAW = 400; // kg dry biochar drawn
+const waterOf = (dry) => (dry * M) / (100 - M);
+const TOTAL = l1.dry + l2.dry + l3.dry; // 810
+const WATER_IN = Math.round(waterOf(TOTAL)); // 143
+const FROM_L1 = Math.min(DRAW, l1.dry); // 270
+const FROM_L2 = DRAW - FROM_L1; // 130
+const WATER = Math.round(waterOf(DRAW)); // 71
+const WET = DRAW + WATER; // 471
+const kg = (n) => `${n}\u00a0kg`; // no-break space: a figure never splits from its unit
+
+const SQ = 16, P = 20, INSET = (P - SQ) / 2;
+const BX = 28, BY = 240, BIN_COLS = 10;
+const TX = 300, TRUCK_COLS = 8;
+const DROP = 220; // how far above the bin the squares start before the fill
+const at = (x0, cols, n) => ({ x: x0 + (n % cols) * P + INSET, y: BY - (Math.floor(n / cols) + 1) * P + INSET });
+
+// Bottom-up, oldest layer first. Each layer is its biochar squares with its water squares spread evenly
+// through them; index i is the square's place in the full bin.
+const layerSquares = (l, k) => {
+  const dry = Math.round(l.dry / KG_PER_SQ);
+  const wet = Math.round(waterOf(l.dry) / KG_PER_SQ);
+  const len = dry + wet;
+  const waterAt = new Set(Array.from({ length: wet }, (_, w) => Math.floor(((w + 0.5) * len) / wet)));
+  return Array.from({ length: len }, (_, n) => (waterAt.has(n) ? "w" : `l${k + 1}`));
+};
+const seq = [l1, l2, l3].flatMap(layerSquares);
+// The draw takes squares from the bottom until it holds DRAW of biochar; the water among them goes too.
+let drawnN = 0;
+for (let dry = 0; dry < DRAW / KG_PER_SQ; drawnN++) if (seq[drawnN] !== "w") dry++;
+const squares = seq.map((kind, i) => {
+  const full = at(BX, BIN_COLS, i);
+  const after = i < drawnN ? at(TX, TRUCK_COLS, i) : at(BX, BIN_COLS, i - drawnN);
+  return { kind, drawn: i < drawnN, style: `--i:${i};--x1:${full.x};--y1:${full.y};--x0:${full.x};--y0:${full.y - DROP};--x2:${after.x};--y2:${after.y}` };
+});
+const TOP = BY - (Math.ceil(seq.length / BIN_COLS) + 1) * P; // bin walls rise one row above the full bin
+
+const STEPS = [
+  {
+    key: "fill", name: "Fill", num: kg(TOTAL), label: "dry biochar in bin A",
+    text: `Each production run lands as its own layer, with its date and dry weight. The biochar comes in wet: at ${M}% moisture, the bin also holds ${kg(WATER_IN)} of water.`,
+    rows: [
+      ...[l1, l2, l3].map((l, k) => ({ sw: `l${k + 1}`, name: l.date, v: kg(l.dry) })),
+      { sw: "w", name: "Water", v: kg(WATER_IN) },
+    ],
+  },
+  {
+    key: "draw", name: "Draw", num: kg(DRAW), label: "dry biochar drawn",
+    text: `Bin A draws the oldest layer first (FIFO): all of ${l1.date}, then part of ${l2.date}. The water in it goes along: ${kg(WATER)}.`,
+    rows: [{ sw: "l1", name: l1.date, v: kg(FROM_L1) }, { sw: "l2", name: l2.date, v: kg(FROM_L2) }, { sw: "w", name: "Water", v: kg(WATER) }],
+    aside: "Each bin has its own draw method: oldest first (FIFO), newest first (LIFO), or a share of every layer (mix). Need a different rule? We can set it up for your site.",
+  },
+  {
+    key: "weigh", name: "Weigh", num: kg(WET), label: "on the weighbridge", lit: true,
+    text: `The weighbridge weighs biochar and water together. noma subtracts the ${M}% moisture and takes ${kg(DRAW)} of dry biochar off the bin’s stock.`,
+    rows: [{ sw: "dry", name: "Dry biochar", v: kg(DRAW) }, { sw: "w", name: "Water", v: kg(WATER) }],
+  },
+];
+const LAST = STEPS.length;
 ---
 <GridFrame id="bins" pad="none" flush aria-labelledby="bins-title">
-  <div class="pd-head">
-    <h2 id="bins-title" class="t-h2">Know what’s in the bin.</h2>
-    <div class="stack-tight">
-      <p class="t-lead">Keep track of material as it is stored, mixed and drawn. Explore how wet and dry quantities change in this example.</p>
+  <div class="bs">
+    <div class="pd-head">
+      <h2 id="bins-title" class="t-h2">Know what’s in the bin.</h2>
+      <p class="t-lead">noma records each production run that goes into a bin and each draw that leaves it. Step through one bin, from filling to the truck.</p>
     </div>
-  </div>
-  <div class="pd-panel">
-    <div class="pd-bins"><div data-visual="bins" data-pd-bins></div></div>
-    <div class="pd-foot">
-      <p>A split bin draws the oldest layer first. A mix bin draws from every layer in proportion. The water leaves with the biochar, so the truck carries more than the dry figure.</p>
-      <p class="t-caption">One square is 10 kg of dry biochar. Illustrative records.</p>
+
+    <div class="bs-stage" data-bs data-step={LAST}>
+      <ol class="bs-tabs" aria-label="Steps" hidden>
+        {STEPS.map((s, k) => (
+          <li><button type="button" data-bs-go={k + 1} aria-current={k + 1 === LAST ? "step" : undefined}><span class="bs-n">{k + 1}</span>{s.name}</button></li>
+        ))}
+      </ol>
+
+      <div class="bs-body">
+        <div class="bs-panels" aria-live="polite">
+          {STEPS.map((s, k) => (
+            <section class="bs-panel" data-bs-panel={k + 1} aria-label={`Step ${k + 1}, ${s.name}`}>
+              <p class:list={["bs-num", s.lit && "is-lit"]}>{s.num}</p>
+              <p class:list={["bs-label", s.lit && "is-lit"]}>{s.label}</p>
+              <p class="bs-text">{s.text}</p>
+              <ul class="bs-rows">
+                {s.rows.map((r) => <li><span class={`bs-sw bs-sw--${r.sw}`} aria-hidden="true"></span><span>{r.name}</span><span class="bs-v">{r.v}</span></li>)}
+              </ul>
+              {s.aside && <p class="bs-aside">{s.aside}</p>}
+            </section>
+          ))}
+        </div>
+
+        <svg class="bs-art" viewBox="0 0 560 300" aria-hidden="true">
+          <text class="bs-cap" x={BX + (BIN_COLS * P) / 2} y={BY + 30} text-anchor="middle">Bin A</text>
+          <g class="bs-truck">
+            <path class="bs-line" d={`M${TX - 14} ${BY}H534V${BY - 30}L508 ${BY - 56}H478V${BY}`} />
+            <circle class="bs-wheel" cx={TX + 16} cy={BY + 12} r="10" />
+            <circle class="bs-wheel" cx={TX + 144} cy={BY + 12} r="10" />
+            <circle class="bs-wheel" cx="514" cy={BY + 12} r="10" />
+          </g>
+          <g class="bs-scale">
+            <path class="bs-line" d={`M${TX - 24} ${BY + 23}H544`} />
+            <text class="bs-read" x="544" y={BY + 50} text-anchor="end">{kg(WET)}</text>
+          </g>
+          {squares.map((s) => <rect class:list={["bs-sq", `bs-sq--${s.kind}`, s.drawn && "is-drawn"]} width={SQ} height={SQ} style={s.style} />)}
+          <path class="bs-line" d={`M${BX - 2} ${TOP}V${BY}H${BX + BIN_COLS * P + 2}V${TOP}`} />
+        </svg>
+      </div>
+
+      <div class="bs-foot">
+        <p class="bs-note">One square is {kg(KG_PER_SQ)} of biochar or water. Illustrative records.</p>
+        <div class="bs-nav" hidden>
+          <button type="button" class="bs-back" data-bs-back>Back</button>
+          <button type="button" class="btn btn--stage" data-bs-next>Next</button>
+        </div>
+      </div>
     </div>
   </div>
 </GridFrame>
+<script>import "./bins-steps.js";</script>
