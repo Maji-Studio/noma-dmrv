@@ -1,4 +1,4 @@
-/* Product page (/product): intro, section heads, trace cells, and the editorial restyle of the shared
+/* Product page (/product): intro, section heads, and the editorial restyle of the shared
    map visual. Page-scoped: every selector starts with a .pd- class. Values come from tokens.css. */
 .pd { --pd-side: clamp(260px, 24vw, 320px); }
 
@@ -26,14 +26,6 @@
 /* Section head: headline left, lead right, like Home's tour head. */
 .pd-head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: end; padding: var(--section) var(--frame-pad) var(--space-8); }
 .pd-head h2 { max-width: 14ch; }
-
-/* Trace: two cells under the explorer, one per direction. */
-.pd-trace-cells { border-top: var(--hairline) solid var(--rule); }
-.pd-trace-cells > * { display: grid; gap: var(--space-4); align-content: start; }
-.pd-dir { display: flex; align-items: center; gap: var(--space-3); color: var(--accent); font-size: var(--fs-ui); }
-.pd-dir svg { width: var(--space-8); height: var(--space-4); fill: none; stroke: currentColor; stroke-width: 1.25; }
-.pd-trace-btn { justify-self: start; min-height: var(--tap); padding: 0; border: 0; background: none; color: var(--link); font-size: var(--fs-ui); text-decoration: underline; text-decoration-thickness: var(--hairline); text-decoration-color: var(--link-rule); text-underline-offset: 6px; cursor: pointer; }
-.pd-trace-btn:hover { text-decoration-color: currentColor; }
 
 @media (max-width: 760px) {
   .pd-intro-row, .pd-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }

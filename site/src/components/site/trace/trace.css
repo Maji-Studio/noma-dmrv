@@ -1,5 +1,11 @@
-/* Interactive trace, editorial: square, hairlines, paper surface. */
-.tx { --tx-code-sm: 16px; --tx-sub-sm: 15px; --tx-card-w: 560px; --tx-art-h: 176px; position: relative; background: var(--paper); border-block: var(--hairline) solid var(--rule); }
+/* Interactive trace, editorial: square, hairlines, on a dark stage sheet like the product page's other exhibits.
+   The page tokens are remapped to stage tokens for the bar and the graph; the record card keeps the paper look. */
+.tx { --tx-code-sm: 16px; --tx-sub-sm: 15px; --tx-card-w: 560px; --tx-art-h: 176px; position: relative; background: var(--stage); color: var(--stage-ink); border-block: var(--hairline) solid var(--rule); }
+.tx > :not(.tx-card) {
+  --ink: var(--stage-ink); --ink-2: var(--stage-ink-2); --ink-3: var(--stage-ink-3);
+  --rule: var(--stage-grid); --rule-strong: var(--stage-line); --hair-2: var(--stage-line-dim);
+  --accent: var(--stage-lit); --cta: var(--stage-ink); --cta-ink: var(--stage);
+}
 .tx-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--frame-pad); border-bottom: var(--hairline) solid var(--rule); }
 .tx-title { font-size: var(--fs-ui); }
 .tx-title span { margin-left: var(--space-3); color: var(--ink-2); font-size: var(--fs-small); }

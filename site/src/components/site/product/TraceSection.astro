@@ -1,14 +1,9 @@
 ---
 /**
- * TraceSection (#trace): following material both ways. Reuses TraceExplorer; the two cells under it
- * pin a record in the explorer (upstream from a field, downstream from a production run). No props.
+ * TraceSection (#trace): following material both ways. A section head over TraceExplorer. No props.
  */
 import GridFrame from "../GridFrame.astro";
 import TraceExplorer from "../trace/TraceExplorer.astro";
-const DIRECTIONS = [
-  { key: "up", label: "Upstream", title: "Back to the source.", text: "Start from a field and walk back through the delivery, the product and the mix bin to the production runs and sawmills behind it.", record: "field-coffee", action: "Trace the coffee field back" },
-  { key: "down", label: "Downstream", title: "Forward to the field.", text: "Start from a production run and see which product, deliveries and fields its biochar reached, after it was mixed with another run.", record: "run-a", action: "Follow PR-001 forward" },
-];
 ---
 <GridFrame id="trace" pad="none" flush aria-labelledby="trace-title">
   <div class="pd-head">
@@ -16,32 +11,4 @@ const DIRECTIONS = [
     <p class="t-lead">Trace an application back to its sources, or see where a production run’s biochar ended up. Follow the connections through storage, mixing and delivery.</p>
   </div>
   <TraceExplorer id="trace-explorer" />
-  <div class="gf-cells pd-trace-cells" style="--cols:2">
-    {DIRECTIONS.map((d) => (
-      <article aria-labelledby={`trace-${d.key}`}>
-        <p class="pd-dir">
-          <svg viewBox="0 0 64 16" aria-hidden="true" focusable="false">
-            {d.key === "up" ? <path d="M62 8H4M10 2L4 8l6 6" /> : <path d="M2 8h58M54 2l6 6-6 6" />}
-          </svg>
-          {d.label}
-        </p>
-        <h3 id={`trace-${d.key}`} class="t-h3">{d.title}</h3>
-        <p class="t-body t-muted">{d.text}</p>
-        <button type="button" class="pd-trace-btn" data-pin-record={d.record} hidden>{d.action}</button>
-      </article>
-    ))}
-  </div>
 </GridFrame>
-<script>
-  // The buttons pin through the explorer's trace:pin event, so the explorer stays the one source of state.
-  const explorer = document.getElementById("trace-explorer");
-  document.querySelectorAll("[data-pin-record]").forEach((button) => {
-    if (!explorer) return;
-    button.hidden = false;
-    button.addEventListener("click", () => {
-      explorer.dispatchEvent(new CustomEvent("trace:pin", { detail: button.dataset.pinRecord }));
-      const top = explorer.getBoundingClientRect().top;
-      if (top < 0) explorer.scrollIntoView({ block: "start" });
-    });
-  });
-</script>

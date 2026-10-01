@@ -2,7 +2,6 @@
    The accordion and frame come from accordion-showcase.css. Demo motion states (data-anim, set by
    next-demos.js): armed = start, play/typing = running, none or done = end state. Every rule that hides
    something is scoped to armed/play/typing. */
-.nx-note { padding: var(--space-4) var(--frame-pad) var(--space-6); border-top: var(--hairline) solid var(--rule); }
 
 /* Demo primitives */
 .nd {

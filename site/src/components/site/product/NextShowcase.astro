@@ -34,7 +34,6 @@ const UPCOMING = [
     ))}
     {UPCOMING.map((u) => <Fragment slot={`visual-${u.id}`}><NextDemo kind={u.id} /></Fragment>)}
   </AccordionShowcase>
-  <p class="nx-note t-caption">These features are planned. The previews illustrate how they could work.</p>
 </GridFrame>
 <script>
   import { mountNextDemos } from "./next-demos.js";
