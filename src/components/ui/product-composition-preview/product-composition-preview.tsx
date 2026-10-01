@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/segment-bar";
 import { MassFlowSankey, type MassFlowDiagram, type MassFlowNode, type MassFlowSegment } from "@/components/ui/mass-flow-sankey";
 import { formatMoisturePercent, MASS_MOISTURE_LABELS, PERCENT_SCALE } from "@/lib/mass-moisture";
+import { formatPercent } from "@/lib/format-utils";
 
 /**
  * What the parts mean. A definition, not arithmetic, so it rides on the caption
@@ -271,7 +272,7 @@ function productFlowDiagram(
         kg,
         kind: FLOW_KINDS[part.kind],
         fill: fills.get(key),
-        label: { name: part.label, figure: `${format(kg)} (${shares[index]}%)` },
+        label: { name: part.label, figure: `${format(kg)} (${formatPercent(shares[index], { digits: 0 })})` },
       };
     });
   const productIds = new Set(product.map((segment) => segment.id));
