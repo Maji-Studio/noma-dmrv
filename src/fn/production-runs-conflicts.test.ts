@@ -50,7 +50,6 @@ vi.mock("@/data-access/production-runs", async () => {
     createProductionRun: vi.fn(),
     deleteProductionRun: mocks.deleteProductionRun,
     getProductionRunById: vi.fn(),
-    getFacilityEnergyTotals: vi.fn(),
     getProductionRunReadings: vi.fn(),
     updateProductionRun: mocks.updateProductionRun,
     ProductionRunOverlapError,

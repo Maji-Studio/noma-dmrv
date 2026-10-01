@@ -89,13 +89,6 @@ export interface ProductionRunStats {
   draftCount: number;
 }
 
-export interface FacilityEnergyTotals {
-  runCount: number;
-  electricityKwh: number | null;
-  gensetLitres: number | null;
-  startupLitres: number | null;
-}
-
 export interface ProductionRunReadingRecord {
   id: string;
   productionRunId: string;

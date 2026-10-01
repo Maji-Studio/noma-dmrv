@@ -35,6 +35,7 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
+import { APPLICATION_DEEP_LINK_PARAM } from "@/lib/application-links";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -233,7 +234,31 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   } | null>(null);
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
 
-  const applicationLock = useApplicationCertificationLock(sideSheet?.entity?.id);
+  // `?application=<id>` opens that application's view sheet, mirroring
+  // `?delivery=` on the delivery list. The row is read through the exact-id
+  // filter so the sheet gets the same list item shape a row click passes.
+  const [focusedApplicationId, setFocusedApplicationId] = useQueryState(
+    APPLICATION_DEEP_LINK_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const focusedQueryEnabled = !!contextFacilityId && !!focusedApplicationId;
+  const focusedApplication = useApplications(
+    contextFacilityId && focusedApplicationId
+      ? { facilityId: contextFacilityId, ids: [focusedApplicationId] }
+      : undefined,
+    { enabled: focusedQueryEnabled },
+  );
+  const focusedApplicationItem =
+    focusedApplication.data?.items.find((item) => item.id === focusedApplicationId) ?? null;
+  const focusedApplicationMissing =
+    focusedQueryEnabled &&
+    !focusedApplication.isLoading &&
+    (focusedApplication.error != null || focusedApplicationItem == null);
+  const displaySideSheet =
+    sideSheet ??
+    (focusedApplicationItem ? { entity: focusedApplicationItem, mode: "view" as const } : null);
+
+  const applicationLock = useApplicationCertificationLock(displaySideSheet?.entity?.id);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -281,6 +306,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!focusedApplicationMissing) return;
+    void setFocusedApplicationId(null);
+    toast.error("Linked application could not be opened");
+  }, [focusedApplicationMissing, setFocusedApplicationId, toast]);
   const createWithEvidence = useCreateWithEvidence({
     entityType: "application",
     entityNoun: "Application",
@@ -327,8 +358,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: ApplicationFormData) => {
-    if (!sideSheet?.entity) return;
-    const applicationId = sideSheet.entity.id;
+    if (!displaySideSheet?.entity) return;
+    const applicationId = displaySideSheet.entity.id;
     setUpdateError(null);
     // Still guards on failed or in-flight attachments, as every other list
     // does. It does not block held files, which the flush below sends: an
@@ -340,7 +371,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         applicationId,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        expectedUpdatedAt: displaySideSheet.entity.updatedAt,
         ...data,
       });
       if (result.success) {
@@ -373,6 +404,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           });
         }
         createWithEvidence.reset();
+        void setFocusedApplicationId(null);
         setSideSheet(null);
         toast.success("Application updated.");
       } else {
@@ -411,14 +443,19 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const openCreate = () => {
+    void setFocusedApplicationId(null);
     setCreateError(null);
     setUpdateError(null);
     createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
-  const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
+  const openView = (application: ApplicationListItem) => {
+    void setFocusedApplicationId(application.id);
+    setSideSheet({ entity: application, mode: "view" });
+  };
   const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: application, mode: "edit" }); };
   const closeSideSheet = () => {
+    void setFocusedApplicationId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
@@ -426,7 +463,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const confirmCreateClose = () =>
-    createWithEvidence.confirmClose(sideSheet?.mode === "create");
+    createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
@@ -483,16 +520,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const fieldsEditable = !sideSheet?.entity || applicationLock.data === false;
-  const sideSheetMode = sideSheet?.mode === "edit" && !fieldsEditable ? "view" : sideSheet?.mode ?? "create";
+  const sideSheetOpen = !!displaySideSheet;
+  const fieldsEditable = !displaySideSheet?.entity || applicationLock.data === false;
+  const sideSheetMode = displaySideSheet?.mode === "edit" && !fieldsEditable ? "view" : displaySideSheet?.mode ?? "create";
   // The stored entity is a snapshot from when the sheet opened; prefer the
   // refreshed row from the list query so evidence-driven readiness changes
   // show while the sheet stays open. Fall back to the snapshot for rows the
   // list has not caught up with yet (e.g. just-created applications).
-  const sideSheetEntity = sideSheet?.entity
-    ? (items.find((item) => item.id === sideSheet.entity?.id) ??
-      sideSheet.entity)
+  const sideSheetEntity = displaySideSheet?.entity
+    ? (items.find((item) => item.id === displaySideSheet.entity?.id) ??
+      displaySideSheet.entity)
     : null;
 
   const sideSheetTitle =
@@ -687,7 +724,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) =>
+          setSideSheet(displaySideSheet ? { ...displaySideSheet, mode } : null)
+        }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         canEdit={fieldsEditable}

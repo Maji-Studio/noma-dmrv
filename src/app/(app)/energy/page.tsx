@@ -1,14 +1,10 @@
 /**
- * Energy Summary Page
- * Facility electricity + diesel rollup with the per-stage Isometric
- * submission preview. Protected by requireAuth guard in the (app) layout.
+ * Energy page: where the facility's energy went over a period, and which
+ * records used it (ADR 0031). Protected by the requireAuth guard in the (app)
+ * layout.
  */
-import { EnergySummary } from "@/components/energy/energy-summary";
+import { EnergyPage } from "@/components/energy";
 
-export default function EnergyPage() {
-  return (
-    <div className="container-max page-shell">
-      <EnergySummary />
-    </div>
-  );
+export default function EnergyRoute() {
+  return <EnergyPage />;
 }
