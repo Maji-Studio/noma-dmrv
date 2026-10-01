@@ -16,6 +16,9 @@
 .tx-switch button[aria-pressed="true"] { background: var(--cta); color: var(--cta-ink); }
 .tx-columns { display: grid; grid-template-columns: repeat(7, 1fr); padding: var(--space-5) var(--space-4) 0; text-align: center; font-size: var(--fs-caption); color: var(--ink-2); }
 .tx-hint { display: none; }
+.tx-picker { display: none; padding: var(--space-4) var(--frame-pad) 0; font-size: var(--fs-small); }
+.tx-picker select { width: 100%; min-height: var(--tap); margin-top: var(--space-2); padding: var(--space-2); border: var(--hairline) solid var(--stage-ink-2); border-radius: var(--r-square); background: var(--stage); color: var(--stage-ink); font-size: var(--fs-body); }
+.site .tx-picker select:focus-visible { outline-color: var(--stage-lit); }
 .tx-scroll { overflow-x: auto; padding: 0 var(--space-4); }
 .tx-graph { display: block; width: 100%; min-width: 740px; }
 .tx-graph .nv-node text { font-family: var(--f-sans); font-size: var(--fs-caption); font-weight: 700; }
@@ -50,6 +53,7 @@
   .tx-graph .nv-node text.nv-st { font-size: var(--tx-sub-sm); transform: translateY(var(--space-3)); }
 }
 @media (max-width: 800px) {
+  .tx-picker { display: block; }
   .tx-columns, .tx-title .tx-pointer-hint { display: none; }
   .tx-hint { display: block; padding: var(--space-4) var(--frame-pad) 0; font-size: var(--fs-caption); color: var(--ink-2); }
   .tx-card { position: static; width: auto; margin: var(--space-4) var(--frame-pad) var(--space-5); --rc-art-stroke: 1.6; }

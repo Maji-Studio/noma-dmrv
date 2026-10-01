@@ -22,7 +22,8 @@ const { id, class: className } = Astro.props;
     </div>
   </div>
   <div class="tx-columns" aria-hidden="true">{COLUMNS.map((c) => <span>{c}</span>)}</div>
-  <p class="tx-hint">Swipe across the trace and tap a record.</p>
+  <p class="tx-hint">Choose a record, or swipe across the trace and tap one.</p>
+  <label class="tx-picker" hidden>Record to explore<select data-trace-record></select></label>
   <div class="tx-scroll"><svg class="tx-graph" viewBox="0 0 1080 300" role="group" aria-label="Select a biochar record to trace its origins and destinations"></svg></div>
   <div class="tx-card" aria-live="polite" data-record-card hidden></div>
   <noscript><p class="tx-noscript">Enable JavaScript to explore this example. noma links feedstock, production, storage, deliveries and applications in both directions.</p></noscript>

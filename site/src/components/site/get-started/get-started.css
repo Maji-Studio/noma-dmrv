@@ -42,6 +42,7 @@
 .wf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); }
 .wf-actions .t-caption { max-width: 30ch; }
 .wf-status { font-size: var(--fs-ui); color: var(--ink); }
+.wf-status:empty { position: absolute; }
 .wf-status:not(:empty) { padding: var(--space-4) var(--space-5); border: var(--hairline) solid var(--rule-strong); background: var(--band-purple); }
 
 @media (max-width: 860px) {

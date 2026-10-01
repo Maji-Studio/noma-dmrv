@@ -76,7 +76,7 @@ export function initTraceStage(root) {
   rows.forEach((row) => {
     const id = row.dataset.step;
     const button = row.querySelector("button");
-    row.addEventListener("pointerenter", () => pick(id));
+    row.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") pick(id); });
     button.addEventListener("focus", () => pick(id));
     button.addEventListener("click", () => pick(id));
   });

@@ -28,6 +28,7 @@ function cardFor(n) {
 export function mountTrace(root) {
   const svg = root.querySelector("svg");
   const card = root.querySelector("[data-record-card]");
+  const picker = root.querySelector("[data-trace-record]");
   const floating = matchMedia(FLOATING);
   let scale = "simple", graph = null, pinned = DEFAULT_RECORD, shown = null, hovered = null, focused = null;
 
@@ -75,7 +76,12 @@ export function mountTrace(root) {
     syncCard();
     if (animate) lightPath(id);
   }
-  const pin = (id) => { pinned = id || null; show(pinned, true); };
+  const syncTabStop = () => {
+    graph.nodeEls.forEach((node, id) => node.setAttribute("tabindex", id === (pinned || DEFAULT_RECORD) ? "0" : "-1"));
+  };
+  const pin = (id) => { pinned = id || null; picker.value = pinned || ""; syncTabStop(); show(pinned, true); };
+  picker.closest("label").hidden = false;
+  picker.addEventListener("change", () => { hovered = null; focused = null; pin(picker.value); });
 
   function render() {
     graph = GRAPHS[scale]();
@@ -83,6 +89,14 @@ export function mountTrace(root) {
     drawGraph(svg, graph, { size: scale === "simple" ? LAYOUT.smallSize : LAYOUT.largeSize, glyphs: true, labels: scale === "simple", focusable: true });
     graph.edgeEls.forEach((p) => { p.setAttribute("pathLength", "1"); p.style.setProperty("--c", graph.byId.get(p._a).col); });
     if (pinned && !graph.byId.has(pinned)) pinned = DEFAULT_RECORD;
+    picker.replaceChildren(...[{ id: "", code: "Choose a record" }, ...graph.nodes].map((n) => {
+      const option = document.createElement("option");
+      option.value = n.id;
+      option.textContent = n.id ? `${STAGES[n.st].label}: ${n.code}` : n.code;
+      return option;
+    }));
+    picker.value = pinned || "";
+    syncTabStop();
     shown = undefined;
   }
 
@@ -103,7 +117,13 @@ export function mountTrace(root) {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pin(id); }
     if (e.key === "Escape") { focused = null; pin(null); }
     const adjacency = e.key === "ArrowLeft" ? graph.inn : e.key === "ArrowRight" ? graph.out : null;
-    const next = adjacency?.get(id)?.[0];
+    let next = adjacency?.get(id)?.[0];
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const current = graph.byId.get(id);
+      const column = graph.nodes.filter((n) => n.col === current.col).sort((a, b) => a.y - b.y);
+      const index = column.findIndex((n) => n.id === id);
+      next = column[index + (e.key === "ArrowUp" ? -1 : 1)]?.id;
+    }
     if (next) { e.preventDefault(); graph.nodeEls.get(next).focus(); pin(next); }
   });
   addEventListener("resize", () => { if (shown) placeCard(graph.byId.get(shown)); });
