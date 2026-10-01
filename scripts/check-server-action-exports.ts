@@ -44,9 +44,12 @@
  * `let ctx: OrgContext; ctx = input as OrgContext`. It also fails on a call
  * argument that implicitly converts an `any` (the value, or a property or
  * array element of it) into a context-shaped parameter:
- * `core(JSON.parse(raw))`, `core({ scope: input })` with `input: any`. Guard
- * callees are resolved through import aliases and local aliases
- * (`const check = requireOrgRole`).
+ * `core(JSON.parse(raw))`, `core({ scope: input })` with `input: any`, into
+ * any tuple element or index-signature value of such a parameter, and through
+ * spreads, `.call`/`.apply`/`.bind` and generic forwarding, which are checked
+ * against the declared parameters of the function actually invoked
+ * (scripts/server-action-call-targets.ts). Guard callees are resolved through
+ * import aliases and local aliases (`const check = requireOrgRole`).
  *
  * There is no waiver: fix the export, do not suppress it. `unknown`/`any`
  * inputs stay allowed because they are ordinary action input; turning one into
@@ -55,14 +58,20 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import ts from "typescript";
+import {
+  declaredParameterFindings,
+  invokedFunction,
+} from "./server-action-call-targets";
+import {
+  carriesAnyContext,
+  ParameterInspector,
+  TENANT_ID_NAMES,
+  unwrapExpression,
+} from "./server-action-types";
 
 const SCANNED_EXTENSIONS = new Set([".ts", ".tsx"]);
 const TEST_FILE = /\.test\.tsx?$/;
 const USE_SERVER = "use server";
-/** Any one of these properties makes an object type an organization context. */
-const CONTEXT_PROPERTIES = ["organizationId", "orgRole", "isPlatformAdmin"];
-/** Parameter or property names that carry a raw tenant id. */
-const TENANT_ID_NAMES = new Set(["organizationId", "orgId"]);
 const GUARD_NAMES = new Set(["requireOrgRole", "requireOrgScope"]);
 /** Wrappers that call their callback with a session-resolved OrgContext. */
 const SESSION_CONTEXT_WRAPPERS = new Set(["withAction"]);
@@ -70,10 +79,6 @@ const FORWARDING_UTILITY_TYPES = new Set([
   "Parameters",
   "ConstructorParameters",
 ]);
-/** Members that together identify a Drizzle database or transaction. */
-const DB_HANDLE_MEMBERS = ["select", "insert", "execute"] as const;
-/** Members that together identify a raw pg client or pool. */
-const PG_CLIENT_MEMBERS = ["query", "release"] as const;
 /** How many local aliases (`const c = input as Ctx`) a guard argument is followed through. */
 const MAX_ALIAS_HOPS = 5;
 
@@ -122,102 +127,6 @@ function lineOf(node: ts.Node): number {
   return (
     sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1
   );
-}
-
-function withoutNullish(type: ts.Type): ts.Type[] {
-  const members = type.isUnion() ? type.types : [type];
-  return members.filter(
-    (member) =>
-      !(member.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)),
-  );
-}
-
-function typeHasMembers(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-  members: readonly string[],
-): boolean {
-  return members.every((member) => checker.getPropertyOfType(type, member));
-}
-
-class ParameterInspector {
-  constructor(private readonly checker: ts.TypeChecker) {}
-
-  /** Why this parameter type must never cross the action boundary, if at all. */
-  describe(type: ts.Type, seen = new Set<ts.Type>()): string | null {
-    for (const member of withoutNullish(type)) {
-      const reason = this.describeMember(member, seen);
-      if (reason) return reason;
-    }
-    return null;
-  }
-
-  // The visited set, not a depth cap, bounds the walk: every type is inspected
-  // at most once, so self-referential types terminate.
-  private describeMember(type: ts.Type, seen: Set<ts.Type>): string | null {
-    const { checker } = this;
-    if (seen.has(type)) return null;
-    seen.add(type);
-    if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return null;
-    if (type.flags & ts.TypeFlags.TypeParameter) {
-      const constraint = checker.getBaseConstraintOfType(type);
-      return constraint && constraint !== type
-        ? this.describe(constraint, seen)
-        : null;
-    }
-    if (type.isUnionOrIntersection()) {
-      for (const part of type.types) {
-        const reason = this.describeMember(part, seen);
-        if (reason) return reason;
-      }
-      return null;
-    }
-    // Functions cannot be serialized from the browser, so a callback
-    // parameter (withAction's `fn`) is not a forged-input channel.
-    if (
-      type.getCallSignatures().length > 0 &&
-      type.getProperties().length === 0
-    ) {
-      return null;
-    }
-    if (checker.isArrayType(type) || checker.isTupleType(type)) {
-      for (const element of checker.getTypeArguments(type as ts.TypeReference)) {
-        const reason = this.describe(element, seen);
-        if (reason) return reason;
-      }
-      return null;
-    }
-    if (!(type.flags & ts.TypeFlags.Object)) return null;
-
-    const contextProperty = CONTEXT_PROPERTIES.find((name) =>
-      checker.getPropertyOfType(type, name),
-    );
-    if (contextProperty) {
-      return `accepts a caller-supplied organization context (${checker.typeToString(type)} has "${contextProperty}")`;
-    }
-    if (
-      typeHasMembers(checker, type, DB_HANDLE_MEMBERS) ||
-      typeHasMembers(checker, type, PG_CLIENT_MEMBERS)
-    ) {
-      return `accepts a database or transaction handle (${checker.typeToString(type)})`;
-    }
-    for (const property of checker.getPropertiesOfType(type)) {
-      if (TENANT_ID_NAMES.has(property.name)) {
-        return `property "${property.name}" accepts a raw tenant id`;
-      }
-      const declaration = property.valueDeclaration ?? property.declarations?.[0];
-      if (!declaration) continue;
-      const propertyType = checker.getTypeOfSymbolAtLocation(property, declaration);
-      const reason = this.describe(propertyType, seen);
-      if (reason) return `property "${property.name}" ${reason}`;
-    }
-    // `Record<string, OrgContext>` and other index signatures carry values too.
-    for (const index of checker.getIndexInfosOfType(type)) {
-      const reason = this.describe(index.type, seen);
-      if (reason) return `index signature ${reason}`;
-    }
-    return null;
-  }
 }
 
 function forwardingRestType(declaration: ts.ParameterDeclaration): string | null {
@@ -289,21 +198,6 @@ function exportSite(
       statement.moduleSpecifier,
   );
   return star ?? sourceFile.statements[0] ?? sourceFile;
-}
-
-/** Strips `as`, `!`, `satisfies`, type assertions and parentheses. */
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isAsExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isTypeAssertionExpression(current) ||
-    ts.isParenthesizedExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }
 
 /** Strips casts and property/element access down to the root expression. */
@@ -426,65 +320,6 @@ function isSessionContext(
   return !!parameter && isSessionContextParameter(checker, parameter);
 }
 
-function isAnyType(type: ts.Type): boolean {
-  return withoutNullish(type).some(
-    (member) => (member.flags & ts.TypeFlags.Any) !== 0,
-  );
-}
-
-/**
- * True when `valueType` puts an `any` where `targetType` expects a context
- * shape: the value itself (`JSON.parse(raw)`) or a property or array element
- * of it (`{ scope: input }`). TypeScript checks nothing across that `any`.
- */
-function carriesAnyContext(
-  checker: ts.TypeChecker,
-  inspector: ParameterInspector,
-  valueType: ts.Type,
-  targetType: ts.Type,
-  seen = new Set<ts.Type>(),
-): boolean {
-  if (!inspector.describe(targetType)) return false;
-  if (isAnyType(valueType)) return true;
-  if (seen.has(valueType)) return false;
-  seen.add(valueType);
-  for (const value of withoutNullish(valueType)) {
-    for (const target of withoutNullish(targetType)) {
-      if (
-        (checker.isArrayType(value) || checker.isTupleType(value)) &&
-        (checker.isArrayType(target) || checker.isTupleType(target))
-      ) {
-        const [valueElement] = checker.getTypeArguments(value as ts.TypeReference);
-        const [targetElement] = checker.getTypeArguments(target as ts.TypeReference);
-        if (
-          valueElement &&
-          targetElement &&
-          carriesAnyContext(checker, inspector, valueElement, targetElement, seen)
-        ) {
-          return true;
-        }
-        continue;
-      }
-      for (const property of checker.getPropertiesOfType(target)) {
-        const valueProperty = checker.getPropertyOfType(value, property.name);
-        if (
-          valueProperty &&
-          carriesAnyContext(
-            checker,
-            inspector,
-            checker.getTypeOfSymbol(valueProperty),
-            checker.getTypeOfSymbol(property),
-            seen,
-          )
-        ) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
 /**
  * Why giving `value` the type `targetType` manufactures an organization
  * context (or db handle) inside a server boundary, if it does. The value is
@@ -574,7 +409,9 @@ function checkContextConversions(
  * `core({ scope: input })` with `input: any` hands the core a context no
  * cast, annotation or guard ever touched. Parameter-derived values that are
  * not `any` need a cast to fit a context slot, which the assertion rule
- * catches, so only `any` is checked here.
+ * catches, so only `any` is checked here. Each argument is checked against
+ * its contextual type and against the declared parameter of the function
+ * actually invoked (through spreads, `.call`/`.apply`/`.bind` and generics).
  */
 function checkCallArguments(
   checker: ts.TypeChecker,
@@ -583,6 +420,7 @@ function checkCallArguments(
   skip: ts.Expression | undefined,
   report: Report,
 ): void {
+  const findings = new Map<ts.Expression, string>();
   for (const argument of call.arguments ?? []) {
     if (argument === skip || ts.isSpreadElement(argument)) continue;
     const targetType = checker.getContextualType(argument);
@@ -598,10 +436,30 @@ function checkCallArguments(
     ) {
       continue;
     }
+    findings.set(argument, inspector.describe(targetType) ?? "");
+  }
+  const invoked = invokedFunction(checker, call);
+  if (invoked) {
+    for (const [argument, reason] of declaredParameterFindings(
+      checker,
+      inspector,
+      call,
+      invoked,
+      (argument) =>
+        argument === skip ||
+        isSessionContext(
+          checker,
+          ts.isSpreadElement(argument) ? argument.expression : argument,
+        ),
+    )) {
+      if (!findings.has(argument)) findings.set(argument, reason);
+    }
+  }
+  for (const [argument, reason] of findings) {
     report(
       argument,
       argument.getText(),
-      `call argument passes an \`any\` value into ${inspector.describe(targetType)}`,
+      `call argument passes an \`any\` value into ${reason}`,
     );
   }
 }
