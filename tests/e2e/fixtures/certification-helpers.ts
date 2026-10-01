@@ -29,7 +29,7 @@ import {
   READY_REFERENCE_SOIL_TEMPERATURE_SOURCE, TRANSPORT_LEG_DISTANCE_KM,
   TRANSPORT_LEG_LOAD_MASS_KG, TRANSPORT_LEG_EMISSION_FACTOR,
   READY_TRANSPORT_EVIDENCE_URL, READY_PRODUCTION_READINGS_URL,
-  READY_APPLICATION_EVIDENCE_URL, READY_APPLICATION_EVIDENCE_ROLES,
+  READY_APPLICATION_EVIDENCE_URL, READY_APPLICATION_EVIDENCE_ROLES, E2E_ISOMETRIC_FEEDSTOCK_TYPE_ID_PREFIX,
 } from "./certification-ready-batch-constants";
 export * from "./certification-mapping-helpers";
 export * from "./certification-incomplete-batch";
@@ -762,7 +762,7 @@ export async function seedUngroupedReadyBatchWithChain(
       };
       await tx
         .update(schema.feedstockTypes)
-        .set({ isometricFeedstockTypeId: `e2e-fst-${testRunId}` })
+        .set({ isometricFeedstockTypeId: `${E2E_ISOMETRIC_FEEDSTOCK_TYPE_ID_PREFIX}${testRunId}` })
         .where(eq(schema.feedstockTypes.id, feedstockRow.feedstockTypeId));
       await tx.insert(schema.productionProcesses).values({
         organizationId: DEC_ORG_ID,

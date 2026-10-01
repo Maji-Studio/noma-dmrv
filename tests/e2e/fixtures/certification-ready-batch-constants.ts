@@ -40,3 +40,4 @@ export const READY_APPLICATION_EVIDENCE_ROLES = [
   "spreading",
   "incorporation",
 ] as const;
+export const E2E_ISOMETRIC_FEEDSTOCK_TYPE_ID_PREFIX = "e2e-fst-";
