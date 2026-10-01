@@ -106,7 +106,6 @@ export function mountTrace(root) {
     const next = adjacency?.get(id)?.[0];
     if (next) { e.preventDefault(); graph.nodeEls.get(next).focus(); pin(next); }
   });
-  root.addEventListener("trace:pin", (e) => pin(e.detail));
   addEventListener("resize", () => { if (shown) placeCard(graph.byId.get(shown)); });
   floating.addEventListener("change", () => { shown = undefined; syncCard(); });
   root.querySelectorAll("[data-scale]").forEach((button) => button.addEventListener("click", () => {
