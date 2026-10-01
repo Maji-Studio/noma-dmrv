@@ -1,0 +1,44 @@
+---
+/**
+ * EvidenceProof: proof for principle 2. Left, one record (feedstock delivery FD-001) with its evidence
+ * attached; right, the removal it feeds, checking what is attached across all its records and naming
+ * the one thing still missing. Same illustrative records as Home's AskAnswer "missing". The registry note
+ * sits under it, the only place on /why that says it. Static. No props.
+ */
+import StageMark from "../stage/StageMark.astro";
+const FILES = [
+  { kind: "doc", name: "Weighbridge ticket", meta: "1,000 kg wet" },
+  { kind: "reading", name: "Moisture reading", meta: "15%" },
+  { kind: "photo", name: "Photos of the load", meta: "2" },
+];
+const CHECKS = [["Traced to feedstock", true], ["Moisture at every draw", true], ["Transport, counted both ways", true], ["Field boundary and photos", true], ["Lab result for PR-002", false]];
+const ICONS = {
+  doc: `<path d="M1 1h7l3 3v9H1z M8 1v3h3" />`,
+  reading: `<rect x="1" y="1" width="12" height="12" /><path d="M4 9l2-3 2 2 2-4" />`,
+  photo: `<path d="M1 3h3l1-2h4l1 2h3v9H1z" /><circle cx="7" cy="7.5" r="2.2" />`,
+};
+const ALT = "Illustration: feedstock delivery FD-001 with its weighbridge ticket for 1,000 kg wet, a moisture reading of 15% and two photos of the load attached. It feeds removal RM-004, which checks its records: traced to feedstock, moisture at every draw, transport counted both ways, field boundary and photos are all there; the lab result for PR-002 is missing.";
+---
+<div class="evp-wrap">
+  <figure class="evp" role="img" aria-label={ALT}>
+    <div class="evp-card" aria-hidden="true">
+      <p class="evp-head"><span>Feedstock delivery</span><span class="evp-code">FD-001</span></p>
+      <ul class="evp-files">
+        {FILES.map((f) => (
+          <li><svg viewBox="0 0 14 14" focusable="false" set:html={ICONS[f.kind]} /><span>{f.name}</span><span class="evp-meta">{f.meta}</span></li>
+        ))}
+      </ul>
+    </div>
+    <svg class="evp-link" viewBox="0 0 48 12" aria-hidden="true" focusable="false"><path d="M0 6H44M39 1l5 5-5 5" /></svg>
+    <div class="evp-card" aria-hidden="true">
+      <p class="evp-head"><span>Removal</span><span class="evp-code">RM-004</span></p>
+      <ul class="evp-checks">
+        {CHECKS.map(([label, ok]) => (
+          <li class:list={[!ok && "is-missing"]}><StageMark kind={ok ? "check" : "cross"} /><span>{label}</span>{!ok && <span class="evp-missing">Missing</span>}</li>
+        ))}
+      </ul>
+      <p class="evp-foot">1 to add before you prepare the submission</p>
+    </div>
+  </figure>
+  <p class="t-caption evp-note">Illustrative records. The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.</p>
+</div>

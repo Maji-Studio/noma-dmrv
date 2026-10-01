@@ -1,0 +1,12 @@
+/* Home page sections. Shared pieces live in site.css; the hero in hero-map/hero-map.css; the stage in trace-stage.css. */
+
+.proof-cells > .proof-figure { margin: 0; padding: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.proof-figure img { display: block; width: 100%; height: 100%; min-height: var(--photo-min); object-fit: cover; }
+.proof-figure figcaption { padding: var(--space-3) var(--frame-pad); }
+.proof-cells > .proof-copy { align-content: center; padding-block: var(--section); }
+
+.next-open .gf-cells > .next-cell { background: linear-gradient(var(--band-rose), var(--band-rose)), var(--page); }
+
+@media (max-width: 760px) {
+  .proof-cells > .proof-copy { padding-block: var(--space-8); }
+}

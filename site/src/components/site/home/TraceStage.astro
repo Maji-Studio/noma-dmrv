@@ -1,0 +1,88 @@
+---
+/**
+ * TraceStage: Home's keynote stage. One application's biochar as six records on a horizontal rail: a dot
+ * per step, a line icon, label, code and quantity under each. The stage plays left to right (the rail
+ * draws, the dots appear), then the record view below walks the steps as a slow timeline, one per
+ * --ts-dwell (3 s): the rail segment from the active dot fills toward the next one over the dwell, and
+ * the active step is the one lit accent. Hovering, focusing or tapping a step jumps the timeline there and
+ * pauses until the viewer presses Play (trace-stage.js). The view shows the step's station as a contour drawing
+ * (RecordCard, shared with the product trace and the hero map) and what its record holds. Cards share one grid cell, so
+ * switching never shifts layout. Under 900px the rail turns into a vertical list. No props.
+ */
+import Stage from "../stage/Stage.astro";
+import StageConnector from "../stage/StageConnector.astro";
+import StageDot from "../stage/StageDot.astro";
+import TextLink from "../TextLink.astro";
+import RecordCard from "../RecordCard.astro";
+import { STATION_LINES } from "../contours/index.js";
+import { ICON_VIEWBOX, TRACE_ICONS } from "./trace-icons.js";
+import "./trace-stage.css";
+
+const STEPS = [
+  { id: "feedstock-delivery", label: "Feedstock delivery", code: "FD-001", qty: "1,000 kg wet",
+    holds: ["Weighbridge ticket, 1,000 kg wet", "Moisture reading", "Supplier and feedstock type"] },
+  { id: "production-run", label: "Production run", code: "PR-001", qty: "270 kg dry",
+    holds: ["Feedstock drawn from FD-001", "Reactor temperatures over the run", "Biochar out, 270 kg dry"] },
+  { id: "mix-bin", label: "Mix bin", code: "Two runs", qty: "540 kg dry",
+    holds: ["PR-001 and PR-002, 270 kg dry each", "Each draw split pro rata", "Moisture when it leaves"] },
+  { id: "biochar-product", label: "Biochar product", code: "BP-001", qty: "540 kg dry",
+    holds: ["Drawn from the mix bin", "Bag count and wet mass", "Formulation, if blended"] },
+  { id: "delivery", label: "Delivery", code: "DL-001", qty: "270 kg dry",
+    holds: ["Truck weights, loaded and empty", "Route distance, counted both ways", "Delivery note"] },
+  { id: "application", label: "Application", code: "Coffee field", qty: "270 kg dry",
+    holds: ["Field boundary", "Spread date and 270 kg dry", "Photos from the field"] },
+];
+const REST = "application"; // open at rest (no JS, reduced motion)
+// The playhead crosses one leg of the rail per step, in percent of --dur-stage.
+const LEG = 100 / (STEPS.length - 1);
+const when = (p) => `calc(var(--dur-stage) * ${p} / 100)`;
+const ALT = "Timeline of illustrative records for one application: feedstock delivery FD-001, 1,000 kg wet; production run PR-001, 270 kg of dry biochar; mix bin holding 540 kg dry from two runs; biochar product BP-001, 540 kg dry; delivery DL-001, 270 kg dry; application on the coffee field, 270 kg dry. Each step opens a line drawing of its station and what its record holds.";
+---
+<Stage
+  id="trace-stage"
+  kicker="The trace"
+  title="Every step leaves a record."
+  lead="One field’s biochar, from the weighbridge to the soil. Each step is its own record, with the quantity and the evidence behind it."
+  alt={ALT}
+  revealMs={3400}
+  interactive
+>
+  <TextLink slot="action" href="/product#trace" tone="stage">Explore the trace</TextLink>
+  <div class="ts" data-trace-stage>
+    <div class="ts-stage">
+      <ol class="ts-rows">
+        {STEPS.map((s, i) => (
+          <li class="ts-row" data-step={s.id}>
+            {i < STEPS.length - 1 && (
+              <span class="ts-seg" aria-hidden="true">
+                <StageConnector variant="solid" length="100%" delay={when(i * LEG)} duration={when(LEG)} />
+              </span>
+            )}
+            <span class="ts-mark" aria-hidden="true"><StageDot state="on" delay={when(i * LEG)} /></span>
+            <button type="button" class="ts-text stg-fade" style={`--delay:${when(i * LEG)}`} aria-controls={`ts-view-${s.id}`} aria-current={s.id === REST ? "step" : undefined}>
+              <svg class="ts-icon" viewBox={ICON_VIEWBOX} aria-hidden="true" set:html={TRACE_ICONS[s.id]} />
+              <span class="ts-label">{s.label}</span>
+              <span class="ts-meta ts-code">{s.code}</span>
+              <span class="ts-meta ts-qty">{s.qty}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      <div class="ts-view" aria-live="polite">
+        {STEPS.map((s) => (
+          <RecordCard class={s.id === REST ? "ts-card is-active" : "ts-card"} id={`ts-view-${s.id}`} data-step={s.id} inert={s.id !== REST}
+            tone="stage" station={s.id} scope="ts" label={s.label} code={s.code} line={STATION_LINES[s.id]} holds={s.holds} />
+        ))}
+      </div>
+    </div>
+    <div class="ts-controls">
+      <p class="ts-note">Illustrative records.</p>
+      <button class="ts-pause" type="button" hidden>Pause timeline</button>
+    </div>
+  </div>
+</Stage>
+
+<script>
+  import { initTraceStage } from "./trace-stage.js";
+  document.querySelectorAll("[data-trace-stage]").forEach(initTraceStage);
+</script>

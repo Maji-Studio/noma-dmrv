@@ -1,0 +1,21 @@
+---
+/**
+ * ContourArt: one station's line drawing, inlined from contours/<station>.svg (rendered offline from the
+ * biochar-landscape models by scripts/export-contours.mjs). Shared by the home hero and RecordCard so
+ * they all draw the same way; the browser twin is loadContour() + contourNode() in index.js. The owner
+ * sets the size and the colour (strokes are currentColor) and toggles two classes on an ancestor:
+ * .is-active runs the station's loops, .is-plotting plots the contour in (contour-art.css). Decorative:
+ * the owner's text carries the meaning.
+ * Props: station (contour file id), scope (prefix for the SVG's ids, unique per page use), class.
+ */
+import { scopeSvg } from "./index.js";
+import "./contour-art.css";
+
+interface Props { station: string; scope: string; class?: string }
+const { station, scope, class: className } = Astro.props;
+
+const CONTOURS = import.meta.glob("./*.svg", { query: "?raw", import: "default", eager: true });
+const raw = CONTOURS[`./${station}.svg`];
+if (!raw) throw new Error(`ContourArt: no contour for "${station}"`);
+---
+<div class:list={["contour-art", className]} aria-hidden="true" set:html={scopeSvg(raw, scope)} />

@@ -1,0 +1,60 @@
+/* Interactive trace, editorial: square, hairlines, on a dark stage sheet like the product page's other exhibits.
+   The page tokens are remapped to stage tokens for the bar and the graph; the record card keeps the paper look. */
+.tx { --tx-code-sm: 16px; --tx-sub-sm: 15px; --tx-card-w: 560px; --tx-art-h: 176px; position: relative; background: var(--stage); color: var(--stage-ink); border-block: var(--hairline) solid var(--rule); }
+.tx > :not(.tx-card) {
+  --ink: var(--stage-ink); --ink-2: var(--stage-ink-2); --ink-3: var(--stage-ink-3);
+  --rule: var(--stage-grid); --rule-strong: var(--stage-line); --hair-2: var(--stage-line-dim);
+  --accent: var(--stage-lit); --cta: var(--stage-ink); --cta-ink: var(--stage);
+}
+.tx-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--frame-pad); border-bottom: var(--hairline) solid var(--rule); }
+.tx-title { font-size: var(--fs-ui); }
+.tx-title span { margin-left: var(--space-3); color: var(--ink-2); font-size: var(--fs-small); }
+.tx-title .tx-pointer-hint { margin-left: 0; }
+.tx-switch { display: flex; border: var(--hairline) solid var(--rule-strong); }
+.tx-switch button { min-height: var(--tap); padding: 0 var(--space-4); border: 0; background: none; font-size: var(--fs-small); cursor: pointer; color: var(--ink-2); }
+.tx-switch button + button { border-left: var(--hairline) solid var(--rule-strong); }
+.tx-switch button[aria-pressed="true"] { background: var(--cta); color: var(--cta-ink); }
+.tx-columns { display: grid; grid-template-columns: repeat(7, 1fr); padding: var(--space-5) var(--space-4) 0; text-align: center; font-size: var(--fs-caption); color: var(--ink-2); }
+.tx-hint { display: none; }
+.tx-picker { display: none; padding: var(--space-4) var(--frame-pad) 0; font-size: var(--fs-small); }
+.tx-picker select { width: 100%; min-height: var(--tap); margin-top: var(--space-2); padding: var(--space-2); border: var(--hairline) solid var(--stage-ink-2); border-radius: var(--r-square); background: var(--stage); color: var(--stage-ink); font-size: var(--fs-body); }
+.site .tx-picker select:focus-visible { outline-color: var(--stage-lit); }
+.tx-scroll { overflow-x: auto; padding: 0 var(--space-4); }
+.tx-graph { display: block; width: 100%; min-width: 740px; }
+.tx-graph .nv-node text { font-family: var(--f-sans); font-size: var(--fs-caption); font-weight: 700; }
+.tx-graph .nv-node text.nv-st { font-size: var(--fs-micro); font-weight: 300; }
+.tx-graph .nv-edge { vector-effect: none; stroke-width: 1.5; stroke-dasharray: 1; stroke-dashoffset: 0; } /* pathLength dashes need scaling strokes */
+.tx-graph.nv-hl .nv-edge.on { stroke: var(--accent); stroke-width: 2; }
+/* Off-path records: the square fades, the labels stay readable (--ink-3 is 3:1 or better on paper). */
+.tx-graph.nv-hl .nv-node:not(.on) { opacity: 1; }
+.tx-graph.nv-hl .nv-node:not(.on) :is(.nv-body, .nv-glyph) { opacity: 0.24; }
+.tx-graph.nv-hl .nv-node:not(.on) text { fill: var(--ink-3); }
+.tx-graph.nv-hl .nv-node.self .nv-body { stroke: var(--accent); }
+/* first view: edges draw in column by column */
+.tx-graph.tx-armed .nv-edge { stroke-dashoffset: 1; }
+.tx-graph.tx-play .nv-edge { stroke-dashoffset: 0; transition: stroke-dashoffset var(--dur-draw) var(--ease-draw) calc(var(--c) * var(--stagger)); }
+/* pinned record: its path lights outward from it */
+.tx-graph .nv-edge.on.tx-lit { animation: tx-light var(--dur-base) var(--ease-out) calc(var(--d) * var(--dur-fast)) both; }
+.tx-graph .nv-edge.on.tx-lit.tx-up { animation-name: tx-light-up; }
+@keyframes tx-light { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes tx-light-up { from { stroke-dashoffset: -1; } to { stroke-dashoffset: 0; } }
+/* Record card: the shared record card (../record-card.css) beside the hovered square, placed by
+   trace-explorer.js; wide enough that the drawing sits beside the text. */
+.tx-card { position: absolute; left: var(--x, 0); top: var(--y, 0); z-index: 1; width: var(--tx-card-w); pointer-events: none; --rc-art-h: var(--tx-art-h); --rc-art-fr: 4fr; --rc-row-pad: var(--space-5); --rc-art-stroke: 2; }
+.tx-card[hidden] { display: none; }
+.tx-card.is-in { animation: tx-card-in var(--dur-base) var(--ease-out) both; }
+@keyframes tx-card-in { from { opacity: 0; translate: 0 var(--space-1); } }
+@media (prefers-reduced-motion: reduce) { .tx-card.is-in { animation: none; } }
+.tx-noscript { padding: var(--space-5) var(--frame-pad); }
+/* Narrow screens draw the 1080-unit graph at its 740px minimum, so labels are set in larger units
+   (about 11px code, 10px sublabel on screen) and moved down to clear each other. */
+@media (max-width: 520px) {
+  .tx-graph .nv-node text { font-size: var(--tx-code-sm); transform: translateY(var(--space-1)); }
+  .tx-graph .nv-node text.nv-st { font-size: var(--tx-sub-sm); transform: translateY(var(--space-3)); }
+}
+@media (max-width: 800px) {
+  .tx-picker { display: block; }
+  .tx-columns, .tx-title .tx-pointer-hint { display: none; }
+  .tx-hint { display: block; padding: var(--space-4) var(--frame-pad) 0; font-size: var(--fs-caption); color: var(--ink-2); }
+  .tx-card { position: static; width: auto; margin: var(--space-4) var(--frame-pad) var(--space-5); --rc-art-stroke: 1.6; }
+}
