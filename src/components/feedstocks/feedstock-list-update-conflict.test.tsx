@@ -26,7 +26,6 @@ const feedstock = {
   vehiclePlateNumber: null,
   transportDistanceKm: null,
   transportDistanceSource: null,
-  transportTripType: null,
   feedstockTypeId: "type-1",
   feedstockTypeName: "Coffee husks",
   feedstockTypeCategory: "agricultural",

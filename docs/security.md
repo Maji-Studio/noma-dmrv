@@ -130,7 +130,9 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   performance switch, not a security-gate exception; base-branch, local, live,
   and deployed builds leave it unset or false.
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
-  (`src/lib/cli/ensure-admin.ts`), never by the running app.
+  (`src/lib/cli/ensure-admin.ts`) and, locally, by the opt-in form capture
+  fixture (`tests/visual/form-capture-fixture.ts`), which reads it from
+  `.env.local` to sign in; never by the running app.
 - `ALLOW_DEV_BOOTSTRAP` carries the literal `"1"` and has two separate
   meanings, both CLI-only. In `src/lib/cli/ensure-admin-core.ts` it permits the
   destructive development bootstrap against a non-local database. In

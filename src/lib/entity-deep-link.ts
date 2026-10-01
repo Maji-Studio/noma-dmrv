@@ -1,8 +1,9 @@
 export const ENTITY_DEEP_LINK_MODE_PARAM = "mode";
 export const ENTITY_DEEP_LINK_FOCUS_PARAM = "focus";
 export const ENTITY_DEEP_LINK_EDIT_MODE = "edit";
-export const FEEDSTOCK_TYPE_EDIT_LABEL = "Edit Feedstock Type";
+export const FEEDSTOCK_TYPE_EDIT_LABEL = "Edit feedstock type";
 export const FEEDSTOCK_TYPE_QUERY_PARAM = "feedstockType";
+export const SUPPLIER_QUERY_PARAM = "supplier";
 
 const FEEDSTOCK_TYPES_PATH = "/feedstock-types";
 

@@ -96,7 +96,7 @@ export function OperatorForm({
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
         submitLabel={submitLabel}
-        defaultSubmitLabel={isEditMode ? "Update Operator" : "Create Operator"}
+        defaultSubmitLabel={isEditMode ? "Update operator" : "Create operator"}
       />
     </form>
   );

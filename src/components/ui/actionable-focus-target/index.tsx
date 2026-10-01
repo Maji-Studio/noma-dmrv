@@ -45,7 +45,7 @@ export function ActionableFocusTarget({
       data-focus-target={target}
     >
       {active && (
-        <p className="label-micro mb-10 text-[var(--st-wait)]" role="status">
+        <p className="body-small font-medium mb-10 text-[var(--st-wait)]" role="status">
           {actionLabel}
         </p>
       )}

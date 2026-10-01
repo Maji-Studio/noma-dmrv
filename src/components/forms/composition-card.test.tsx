@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
 import { CompositionCard } from "./composition-card";
 import { DerivedHeadline } from "./derived-headline";
-import { FormDetailControl, FormDetailProvider, type SimplePresence } from "./form-detail-context";
+import { FormDetailControl, FormDetailProvider } from "./form-detail-context";
 
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 function History() {
@@ -43,11 +43,10 @@ function visible(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visible).join(" ");
 }
 
-function Block({ simple }: { simple?: SimplePresence }) {
+function Block() {
   return (
     <CompositionCard
       title="Bin stock"
-      simple={simple}
       headline={<DerivedHeadline label="Wet stock in bin, estimate" before="≈ 1,420" value="1,110 kg" sub="310 kg wet removed at 22.7% moisture" />}
       detail={<p>Dry biochar pair</p>}
       calculation={<p>Batch ledger</p>}
@@ -58,17 +57,13 @@ function Block({ simple }: { simple?: SimplePresence }) {
   );
 }
 
-describe("Simple presence", () => {
-  it.each([
-    { simple: "picture" as const, present: ["Bin stock", "1,110 kg", "Split bar", "Stock history"], absent: ["Dry biochar pair", "Show calculation"] },
-    { simple: "headline" as const, present: ["Bin stock", "≈ 1,420", "to", "1,110 kg", "310 kg wet removed"], absent: ["Split bar", "Dry biochar pair", "Stock history", "Show calculation"] },
-    { simple: "hidden" as const, present: [], absent: ["Bin stock", "1,110 kg", "Split bar", "Stock history"] },
-  ])("$simple keeps only its parts in Simple, and Detailed shows the whole block", async ({ simple, present, absent }) => {
+describe("detail levels", () => {
+  it("shows caption, headline, picture and actions at both levels; Detailed adds only explanation", async () => {
     let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<FormDetailProvider scope="block"><FormDetailControl /><Block simple={simple} /></FormDetailProvider>); });
-    const shown = visible(renderer.root);
-    for (const text of present) expect(shown).toContain(text);
-    for (const text of absent) expect(shown).not.toContain(text);
+    await act(async () => { renderer = create(<FormDetailProvider scope="block"><FormDetailControl /><Block /></FormDetailProvider>); });
+    const simple = visible(renderer.root);
+    for (const text of ["Bin stock", "≈ 1,420", "1,110 kg", "310 kg wet removed", "Split bar", "Stock history"]) expect(simple).toContain(text);
+    for (const text of ["Dry biochar pair", "Show calculation"]) expect(simple).not.toContain(text);
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
     const detailed = visible(renderer.root);
     for (const text of ["Bin stock", "1,110 kg", "Split bar", "Dry biochar pair", "Show calculation", "Stock history"]) expect(detailed).toContain(text);
@@ -78,7 +73,7 @@ describe("Simple presence", () => {
 
   it("shows the whole block outside a detail provider", async () => {
     let renderer!: ReactTestRenderer;
-    await act(async () => { renderer = create(<Block simple="hidden" />); });
+    await act(async () => { renderer = create(<Block />); });
     expect(visible(renderer.root)).toContain("Dry biochar pair");
     expect(visible(renderer.root)).toContain("Show calculation");
     await act(async () => renderer.unmount());

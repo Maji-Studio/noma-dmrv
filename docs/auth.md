@@ -76,6 +76,8 @@ export async function getProductionProcessSummariesByFacilityFn(facilityId: stri
 }
 ```
 
+Never export a function that takes `ctx: OrgContext` from a `"use server"` file: Next.js makes every export a public action, and a caller-supplied context defeats every guard below it (`requireOrgScope` only checks for non-empty strings; `requireOrgRole` trusts `ctx.isPlatformAdmin`). Trusted-context code lives in directive-free modules; `pnpm check:server-action-exports` enforces it (see [code-style.md](./code-style.md)).
+
 `requireOrgRole(ctx, …)` is for admin-gated org/certification operations only — CRUD actions do not assert `"member"`, since any resolvable `OrgContext` is already at least a member or a Platform Admin.
 
 ## Tenancy in data-access

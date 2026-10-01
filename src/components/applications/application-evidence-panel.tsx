@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import {
+  CameraIcon,
+  MapPinIcon,
   MapTrifoldIcon,
   PlusIcon,
+  PolygonIcon,
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -12,30 +15,35 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import type {
   ApplicationEvidenceMethod,
 } from "@/schemas/applications";
+import { APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS } from "@/schemas/applications";
 import type { DocumentType } from "@/schemas/documents";
 import type { GisBoundary } from "@/schemas/gis-boundary";
 import { GisReferenceDialog } from "./gis-reference-dialog";
 import { GisReferenceSummary } from "./gis-reference-summary";
-import { RadioCardGroup } from "./radio-card-group";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 
 const GIS_BOUNDARY_DOC_TYPE: DocumentType = "gis_boundary";
 
+const METHOD_ART_SIZE = 20;
+
 const METHOD_OPTIONS = [
   {
-    key: "location",
+    value: "location",
     title: "Customer location",
-    description:
-      "Use the application GPS coordinates from the delivery's customer location.",
+    art: <MapPinIcon size={METHOD_ART_SIZE} weight="bold" />,
+    description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.location,
   },
   {
-    key: "boundary",
+    value: "boundary",
     title: "GIS reference",
-    description: "The field boundary as a GeoJSON file, drawn on a map.",
+    art: <PolygonIcon size={METHOD_ART_SIZE} weight="bold" />,
+    description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.boundary,
   },
   {
-    key: "visual",
+    value: "visual",
     title: "Visual evidence",
-    description: "Geotagged photos of each application stage.",
+    art: <CameraIcon size={METHOD_ART_SIZE} weight="bold" />,
+    description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.visual,
     disabled: true,
     badge: "Available later",
   },
@@ -176,13 +184,13 @@ export function ApplicationEvidencePanel({
   return (
     <div className="flex flex-col gap-16">
       {!readOnly && (
-        <RadioCardGroup
-          label="Evidence method"
+        <ChoiceCardGroup
+          legend="Evidence method"
           value={mode}
           options={METHOD_OPTIONS}
           disabled={disabled}
-          onChange={(key) =>
-            onModeChange?.(key as ApplicationEvidenceMethod)
+          onValueChange={(next) =>
+            onModeChange?.(next as ApplicationEvidenceMethod)
           }
         />
       )}

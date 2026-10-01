@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { IsometricClient } from "./client";
+import {
+  createIsometricClientFromTransport,
+  type IsometricClient,
+} from "./client";
 import {
   buildCreateStorageLocationRequest,
   buildStorageLocationReference,
@@ -9,16 +12,21 @@ import {
   type IsometricStorageLocation,
 } from "./storage-locations";
 
+// List reads walk the real paginate over the stubbed `get`.
 function client(overrides: Partial<IsometricClient> = {}): IsometricClient {
+  const get = overrides.get ?? vi.fn();
+  const paged = createIsometricClientFromTransport((_method, path, options) =>
+    get(path, options),
+  );
   return {
     request: vi.fn(),
-    get: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
-    paginate: vi.fn(),
-    paginateAll: vi.fn(),
+    paginate: paged.paginate,
+    paginateAll: paged.paginateAll,
     ...overrides,
+    get,
   } as IsometricClient;
 }
 
@@ -158,7 +166,7 @@ describe("Storage Location contract", () => {
         "nm-slc-stable",
         { maxPages: 1 },
       ),
-    ).rejects.toThrow(/safety limit/);
+    ).rejects.toThrow(/more than 50 records/);
   });
 
   it("rejects a page size above the API maximum", async () => {

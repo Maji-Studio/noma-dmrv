@@ -27,7 +27,7 @@ export default async function AppLayout({
   // which is captured once at mount. Fetching them from the client left a
   // window — a hard load onto `/deliveries?create=true` mounts the form in the
   // same tick the fetch starts — in which a record would be created with the
-  // system fallback instead of the organization's currency or trip type.
+  // system fallback instead of the organization's currency or packaging.
   const organizationDefaults = orgContext
     ? {
         defaults: await getOrganizationDefaults(orgContext),

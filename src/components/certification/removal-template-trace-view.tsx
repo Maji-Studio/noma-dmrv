@@ -92,8 +92,9 @@ export function RemovalTemplateTraceView({
     removalId,
     Boolean(removalId),
   );
-  const tracedModel = compilation.data
-    ? attachRemovalCompilationToDiagnostic(model, compilation.data)
+  const compiledReview = compilation.data?.review;
+  const tracedModel = compiledReview
+    ? attachRemovalCompilationToDiagnostic(model, { review: compiledReview })
     : model;
   const removalEntries = removals.data?.removals ?? [];
 
@@ -167,15 +168,16 @@ export function RemovalTemplateTraceView({
         <>
           <section className="grid gap-12 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16 md:grid-cols-2">
             <div>
-              <p className="label-micro text-[var(--color-text-tertiary)]">
+              <p className="body-small font-medium text-[var(--color-text-secondary)]">
                 Mapping revision
               </p>
               <p className="body-caption break-all font-mono">
-                {compilation.data.review.template.mappingRevision}
+                {compilation.data.review?.template.mappingRevision ??
+                  MISSING_VALUE.notYetComputed}
               </p>
             </div>
             <div>
-              <p className="label-micro text-[var(--color-text-tertiary)]">
+              <p className="body-small font-medium text-[var(--color-text-secondary)]">
                 Compilation hash
               </p>
               <p className="body-caption break-all font-mono">
@@ -186,7 +188,7 @@ export function RemovalTemplateTraceView({
 
           <CompilationBlockers blockers={compilation.data.blockers} />
           <section className="flex flex-col gap-6">
-            <h4 className="label-micro text-[var(--color-text-tertiary)]">
+            <h4 className="body-small font-medium text-[var(--color-text-primary)]">
               Compilation warnings
             </h4>
             <CompilationWarnings warnings={compilation.data.warnings} showEmpty />
@@ -196,7 +198,7 @@ export function RemovalTemplateTraceView({
             <h4 className="body-large">Resolved template inputs</h4>
             <div className="overflow-x-auto border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
               <table className="w-full min-w-[780px] text-left">
-                <thead className="label-micro bg-[var(--sea)] text-[var(--color-text-tertiary)]">
+                <thead className="body-small font-medium bg-[var(--sea)] text-[var(--color-text-secondary)]">
                   <tr>
                     <th className="px-12 py-10">Template destination</th>
                     <th className="px-12 py-10">noma dMRV source</th>

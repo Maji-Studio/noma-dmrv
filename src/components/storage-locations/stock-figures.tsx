@@ -18,7 +18,6 @@ import {
   ArrowRightIcon,
   CaretDownIcon,
   CaretUpIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -43,18 +42,23 @@ export interface StockRow {
 }
 
 /** Aligned label/value pairs. Never render these figures as a sentence. */
-export function StockRows({ label, rows }: { label: string; rows: StockRow[] }) {
+export function StockRows({ label, rows, inline = false }: {
+  label: string;
+  rows: StockRow[];
+  /** Values follow their labels in a narrow label column, for lists read down the page (history). */
+  inline?: boolean;
+}) {
   return (
     <dl aria-label={label} className="space-y-6">
       {rows.map((row) => (
         <div
           key={row.label}
-          className="flex items-baseline justify-between gap-12"
+          className={inline ? "grid grid-cols-[6rem_minmax(0,1fr)] items-baseline gap-12" : "flex items-baseline justify-between gap-12"}
         >
           <dt className="body-caption text-[var(--color-text-secondary)]">
             {row.label}
           </dt>
-          <dd className="body-small tabular-nums text-right">{row.value}</dd>
+          <dd className={`body-small tabular-nums ${inline ? "" : "text-right"}`}>{row.value}</dd>
         </div>
       ))}
     </dl>
@@ -172,36 +176,6 @@ export function StockChip({
 }
 
 /**
- * One line, one icon. Blocking refusals are errors; everything else is a status
- * the operator can read and keep working.
- */
-export function StockNotice({
-  children,
-  tone = "warning",
-  role = "status",
-}: {
-  children: ReactNode;
-  tone?: "warning" | "error";
-  role?: "status" | "alert";
-}) {
-  return (
-    <p
-      role={role}
-      className={`flex items-start gap-8 body-caption ${
-        tone === "error" ? "text-[var(--st-bad)]" : "text-[var(--st-wait)]"
-      }`}
-    >
-      <WarningCircleIcon
-        size={16}
-        aria-hidden="true"
-        className="mt-2 shrink-0"
-      />
-      <span>{children}</span>
-    </p>
-  );
-}
-
-/**
  * "Show calculation" for surfaces that are not a `CompositionCard` — a history
  * entry or a bare form section. Same label, caret and quiet weight as the card,
  * so the control means one thing everywhere.
@@ -223,7 +197,7 @@ export function CalculationDisclosure({
         data-presentation-control
         type="button"
         variant="noOutline"
-        className="min-h-44 gap-6 px-8 normal-case"
+        className="-ml-8 min-h-44 gap-6 px-8 normal-case"
         aria-expanded={open}
         aria-controls={id}
         aria-label={`${open ? "Hide" : "Show"} calculation for ${subject}`}

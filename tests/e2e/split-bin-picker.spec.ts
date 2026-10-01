@@ -14,7 +14,7 @@ test.describe("Split bin picker", () => {
     const [older, newer] = f.products;
     await page.goto(`/deliveries?facility=${f.facility.id}`);
     await waitForFacilityHydration(page, f.facility.name);
-    await page.getByRole("button", { name: "New Delivery", exact: true }).click();
+    await page.getByRole("button", { name: "New delivery", exact: true }).click();
     await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
     await selectEntity(page, "Order", f.order.id, f.order.code);
     await page.locator("#storageLocationId").selectOption(f.bin.id);
@@ -52,7 +52,7 @@ test.describe("Split bin picker", () => {
     await expect(reading(older.code)).toBeVisible();
     await reading(older.code).focus();
     await page.keyboard.type("25");
-    const create = page.getByRole("button", { name: "Create Delivery", exact: true });
+    const create = page.getByRole("button", { name: "Create delivery", exact: true });
     // The preview refetches for the new readings; Create waits for it.
     await expect(create).toBeEnabled();
     await create.focus();

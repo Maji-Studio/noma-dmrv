@@ -1,4 +1,5 @@
-import { getOutputBinStockView } from './output-stock';
+import { getOutputBinStocks, type OutputBinStock } from './output-stock';
+import type { StorageLocationLaneSummary } from "./storage-location-lane-summary";
 /**
  * Storage Location Enrichment
  *
@@ -93,10 +94,7 @@ export interface PaginatedStorageLocations {
   page: number;
   pageSize: number;
   totalPages: number;
-  laneSummary: Record<
-    StorageLocation["type"],
-    { binCount: number; onHandKg: number }
-  >;
+  laneSummary: StorageLocationLaneSummary;
 }
 
 export type BaseStorageLocationRow = {
@@ -152,6 +150,7 @@ export async function enrichStorageLocationRows(
     productApplicationRows,
     lastActivityRows,
     laneStockRows,
+    outputStocks,
   ] = storageLocationIds.length > 0
     ? await db.transaction(async (tx) => Promise.all([
         tx
@@ -461,6 +460,13 @@ export async function enrichStorageLocationRows(
         `),
         // Enrichment also needs the source-allocation aggregate from the biochar lane.
         deriveLaneStock(ctx, tx, { storageLocationIds }),
+        // Output-bin stock reads the same snapshot as every other figure
+        // here, in one batch for the whole page.
+        getOutputBinStocks(
+          ctx,
+          rows.filter((row) => row.type !== "feedstock_bin").map((row) => row.id),
+          tx,
+        ),
       ]), {
         isolationLevel: "repeatable read",
         accessMode: "read only",
@@ -483,6 +489,7 @@ export async function enrichStorageLocationRows(
           }>,
         },
         [],
+        new Map<string, OutputBinStock>(),
       ];
 
   const lastActivityMap = new Map(
@@ -536,7 +543,6 @@ export async function enrichStorageLocationRows(
     laneStockRows.map((row) => [row.storageLocationId, row]),
   );
 
-  const outputViews = new Map(await Promise.all(rows.filter(row => row.type !== 'feedstock_bin').map(async row => [row.id, await getOutputBinStockView(ctx, row.id)] as const)));
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
@@ -563,7 +569,7 @@ export async function enrichStorageLocationRows(
 
     const productInventoryRow = productInventoryMap.get(row.id);
     const productApplicationRow = productApplicationMap.get(row.id);
-    const outputView = outputViews.get(row.id);
+    const outputStock = outputStocks.get(row.id);
 
     return {
       ...row,
@@ -582,8 +588,8 @@ export async function enrichStorageLocationRows(
       biocharInventory: {
         productionRunCount: Number(biocharOutputRow?.productionRunCount ?? 0),
         // Unclamped, movement-inclusive (see currentWetMassKg above).
-        currentMassKg: outputView?.estimatedWetMassKg ?? null,
-        dryMassKg: outputView?.dryMassKg ?? null,
+        currentMassKg: outputStock?.estimatedWetMassKg ?? null,
+        dryMassKg: outputStock?.availableDryKg ?? null,
         allocatedToProductsKg: allocatedKg,
         downstreamFormulations: [
           ...(downstreamFormulationsByLocation.get(row.id) ?? []),
@@ -591,9 +597,9 @@ export async function enrichStorageLocationRows(
       },
       productInventory: {
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
-        currentMassKg: outputView?.estimatedWetMassKg ?? null,
-        dryMassKg: outputView?.dryMassKg ?? null,
-        biocharEquivalentKg: outputView?.dryMassKg ?? null,
+        currentMassKg: outputStock?.estimatedWetMassKg ?? null,
+        dryMassKg: outputStock?.availableDryKg ?? null,
+        biocharEquivalentKg: outputStock?.availableDryKg ?? null,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
         ),

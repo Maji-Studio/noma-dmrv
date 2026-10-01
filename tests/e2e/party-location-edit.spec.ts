@@ -49,7 +49,7 @@ async function editLocationName(
   const dialog = page.getByTestId(dialogTestId);
   await expect(dialog).toBeVisible();
   await dialog.locator('input[name="name"]').fill(updatedName);
-  await dialog.getByRole("button", { name: "Save Changes" }).click();
+  await dialog.getByRole("button", { name: "Save changes" }).click();
 
   await expect(dialog).toBeHidden();
   await expect(page.getByText(updatedName, { exact: true })).toBeVisible();

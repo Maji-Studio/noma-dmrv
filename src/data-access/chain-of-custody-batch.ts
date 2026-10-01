@@ -3,7 +3,8 @@
  *
  * Re-anchors the chain-of-custody page on the credit batch (ADR 0011): the
  * batch roll-up is its member applications' rollbacks merged, runs deduped —
- * resolved from the shared set-based lineage facts.
+ * resolved from the shared set-based lineage facts — plus one roll-forward per
+ * member run, so runs whose biochar is not applied yet still trace forward.
  * The Sankey aggregates come from the same payload via the pure
  * `buildBatchSankey` builder; the geo roll-up merges the per-application
  * Phase 2 geo payloads so the Carbon Transit map renders unchanged.
@@ -24,12 +25,22 @@ import {
 } from "./chain-of-custody";
 import {
   projectChainOfCustodyGeoData,
+  projectRunRollForwardGeoData,
   type ChainGeoLeg,
   type ChainGeoNode,
   type ChainOfCustodyGeoData,
 } from "./chain-of-custody-geo";
+import {
+  projectRunRollForwards,
+  type ChainRunRollForward,
+} from "./chain-of-custody-roll-forward";
 import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
+import {
+  EMPTY_CREDIT_BATCH_WARNING,
+  NO_APPLICATION_YET_WARNING,
+  NO_LINEAGE_FOR_SELECTED_RUN,
+} from "@/lib/chain-of-custody/copy";
 
 export interface CreditBatchChainBatch {
   id: string;
@@ -49,6 +60,8 @@ export interface CreditBatchChainData {
   facility: ChainFacility;
   /** One resolved rollback per member application (DAG merge happens client-side). */
   lineages: CreditBatchChainLineage[];
+  /** One roll-forward per member run (merged with the rollbacks client-side). */
+  rollForwards: ChainRunRollForward[];
   sankey: CreditBatchSankeyData;
   warnings: string[];
 }
@@ -57,6 +70,7 @@ interface ResolvedBatchScope {
   batch: CreditBatchChainBatch & { facilityId: string };
   applicationIds: string[];
   lineages: CreditBatchChainLineage[];
+  rollForwards: ChainRunRollForward[];
 }
 
 // The roll-up's lineage walk — shared by the chain and geo payloads. The
@@ -88,9 +102,11 @@ async function resolveBatchScope(
     throw new SafeError("Credit batch not found");
   }
 
-  const accounting = (await loadCreditBatchRollups(ctx, [creditBatchId]))[
-    creditBatchId
-  ];
+  const accounting = (
+    await loadCreditBatchRollups(ctx, [creditBatchId], {
+      includeRunForwards: true,
+    })
+  )[creditBatchId];
   if (!accounting) {
     throw new SafeError("Credit batch accounting could not be loaded");
   }
@@ -104,7 +120,8 @@ async function resolveBatchScope(
     ),
   }));
   const applicationIds = facts.applicationIds;
-  return { batch, applicationIds, lineages };
+  const rollForwards = projectRunRollForwards(facts);
+  return { batch, applicationIds, lineages, rollForwards };
 }
 
 // Lineage warnings merged batch-wide, prefixed by the application they belong
@@ -125,11 +142,16 @@ export async function getCreditBatchChainData(
 ): Promise<CreditBatchChainData> {
   requireOrgScope(ctx);
 
-  const { batch, lineages } = await resolveBatchScope(ctx, creditBatchId);
+  const { batch, lineages, rollForwards } = await resolveBatchScope(
+    ctx,
+    creditBatchId,
+  );
 
   const warnings = mergeLineageWarnings(lineages);
-  if (lineages.length === 0) {
-    warnings.push("This credit batch has no member applications yet.");
+  if (rollForwards.length === 0) {
+    warnings.push(EMPTY_CREDIT_BATCH_WARNING);
+  } else if (lineages.length === 0) {
+    warnings.push(NO_APPLICATION_YET_WARNING);
   }
 
   const sankey = buildBatchSankey(lineages.map(({ chain }) => chain));
@@ -145,6 +167,7 @@ export async function getCreditBatchChainData(
     facility:
       lineages[0]?.chain.facility ?? (await getFacilityIdentity(ctx, batch.facilityId)),
     lineages,
+    rollForwards,
     sankey,
     warnings,
   };
@@ -155,21 +178,47 @@ export async function getCreditBatchChainData(
  * `ChainOfCustodyGeoData` — nodes and legs deduped by id (shared runs / lots /
  * feedstocks collapse), warnings deduped — so the Carbon Transit map consumes
  * the batch exactly like a single application.
+ *
+ * Member runs' roll-forwards merge in after the rollbacks, so runs whose
+ * biochar is not applied yet still plot their feedstock legs and records.
+ *
+ * `productionRunId` narrows the roll-up to lineages flowing through that run,
+ * the same subset the page's Run filter shows in the DAG and Sankey.
  */
 export async function getCreditBatchChainGeoData(
   ctx: OrgContext,
   creditBatchId: string,
+  options: { productionRunId?: string | null } = {},
 ): Promise<ChainOfCustodyGeoData> {
   requireOrgScope(ctx);
 
-  const { batch, lineages } = await resolveBatchScope(
-    ctx,
-    creditBatchId,
-  );
+  const {
+    batch,
+    lineages: batchLineages,
+    rollForwards: batchRollForwards,
+  } = await resolveBatchScope(ctx, creditBatchId);
+  const lineages = options.productionRunId
+    ? batchLineages.filter(
+        ({ chain }) => chain.productionRun?.id === options.productionRunId,
+      )
+    : batchLineages;
+  const rollForwards = options.productionRunId
+    ? batchRollForwards.filter(
+        ({ source }) => source.productionRun.id === options.productionRunId,
+      )
+    : batchRollForwards;
 
   const payloads = await Promise.all(
     lineages.map(({ chain }) => projectChainOfCustodyGeoData(ctx, chain)),
   );
+  if (rollForwards.length > 0) {
+    const facility =
+      lineages[0]?.chain.facility ??
+      (await getFacilityIdentity(ctx, batch.facilityId));
+    payloads.push(
+      await projectRunRollForwardGeoData(ctx, facility, rollForwards),
+    );
+  }
 
   if (payloads.length === 0) {
     const facility = await getFacilityGeoIdentity(ctx, batch.facilityId);
@@ -177,7 +226,11 @@ export async function getCreditBatchChainGeoData(
       facility,
       nodes: [],
       legs: [],
-      warnings: ["This credit batch has no member applications yet."],
+      warnings: [
+        options.productionRunId && batchRollForwards.length > 0
+          ? NO_LINEAGE_FOR_SELECTED_RUN
+          : EMPTY_CREDIT_BATCH_WARNING,
+      ],
     };
   }
 

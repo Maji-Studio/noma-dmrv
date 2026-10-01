@@ -34,7 +34,7 @@ function text(node: ReactElement): string {
 }
 
 describe("ProcessFlowPreview", () => {
-  it("reads as a journey: three stops, the feedstock in, the biochar out and the dry yield", () => {
+  it("reads as a journey: feedstock in under the source bin, the reactor, biochar out under the destination bin", () => {
     const rendered = text(<ProcessFlowPreview {...run} />);
 
     expect(rendered).toContain("Feedstock July");
@@ -47,10 +47,32 @@ describe("ProcessFlowPreview", () => {
     expect(rendered).toContain("50 kg wet");
     expect(rendered).toContain("Dry biochar 45 kg");
     expect(rendered).toContain("Dry yield 50%");
-    // Each stop comes before the segment leaving it.
+    // Source bin, reactor, destination bin in order; each mass sits under the
+    // bin it belongs to, and the reactor carries none.
     expect(rendered.indexOf("Feedstock July")).toBeLessThan(rendered.indexOf("Feedstock in"));
-    expect(rendered.indexOf("Reactor 1")).toBeLessThan(rendered.indexOf("Biochar out"));
-    expect(rendered.indexOf("Biochar out")).toBeLessThan(rendered.indexOf("Biochar July"));
+    expect(rendered.indexOf("Feedstock in")).toBeLessThan(rendered.indexOf("Reactor 1"));
+    expect(rendered.indexOf("Reactor 1")).toBeLessThan(rendered.indexOf("Biochar July"));
+    expect(rendered.indexOf("Biochar July")).toBeLessThan(rendered.indexOf("Biochar out"));
+  });
+
+  it("draws both bars to one mass scale, with no rail beside the stops", () => {
+    const html = renderToStaticMarkup(<ProcessFlowPreview {...run} feedstockKg={1000} feedstockDryKg={900} biocharKg={300} biocharDryKg={270} />);
+    const widths = [...html.matchAll(/role="img"[^>]*style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
+
+    expect(widths).toHaveLength(2);
+    expect(widths[0]).toBe(100);
+    expect(widths[1]).toBeCloseTo(30, 5);
+    // The old rail: a dot per stop and a line between them.
+    expect(html).not.toContain("rounded-full");
+  });
+
+  it("draws an unresolved bar to the same scale", () => {
+    const html = renderToStaticMarkup(
+      <ProcessFlowPreview {...run} feedstockKg={1000} feedstockMoisturePercent={10} feedstockDryKg={900} biocharKg={300} biocharMoisturePercent={null} biocharDryKg={null} />,
+    );
+    const hatched = [...html.matchAll(/border-dashed[^>]*style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
+
+    expect(hatched).toEqual([30]);
   });
 
   it("keeps the yield arithmetic behind the block's own disclosure", () => {
@@ -62,7 +84,7 @@ describe("ProcessFlowPreview", () => {
     expect(html).toContain("Dry yield = biochar out / feedstock in. 45 kg / 90 kg = 50%.");
   });
 
-  it("keeps the yield headline only in Simple and adds the rail and calculation in Detailed", async () => {
+  it("shows the yield headline and the rail at both levels and adds the calculation in Detailed", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<FormDetailProvider scope="production-run"><FormDetailControl /><ProcessFlowPreview {...run} /></FormDetailProvider>);
@@ -70,8 +92,8 @@ describe("ProcessFlowPreview", () => {
     const simple = visible(renderer.root);
     expect(simple).toContain("Dry yield");
     expect(simple).toContain("50%");
-    expect(simple).not.toContain("Feedstock July");
-    expect(simple).not.toContain("Feedstock in");
+    expect(simple).toContain("Feedstock July");
+    expect(simple).toContain("Feedstock in");
     expect(simple).not.toContain("Show calculation");
 
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());

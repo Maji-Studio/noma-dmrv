@@ -7,6 +7,7 @@ import {
   CompilationBlockers,
   CompilationWarnings,
 } from "./compilation-notices";
+import { Notice } from "@/components/ui/notice";
 
 interface CompiledSubmissionReviewProps {
   compilation: RemovalCompilationView | null;
@@ -23,8 +24,8 @@ function ReviewSection({
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-8 border-t border-[var(--color-border-tertiary)] pt-12">
-      <h5 className="label-micro text-[var(--color-text-tertiary)]">
+    <section className="flex flex-col gap-8">
+      <h5 className="body-small font-medium text-[var(--color-text-primary)]">
         {title}
       </h5>
       {children}
@@ -52,7 +53,9 @@ function registryTargetLabel(target: string): string {
 }
 
 function bindingSourceLabel(
-  binding: RemovalCompilationView["review"]["bindings"][number]["binding"],
+  binding: NonNullable<
+    RemovalCompilationView["review"]
+  >["bindings"][number]["binding"],
 ): string {
   if (binding === "fixed") return "Template value";
   if (binding === "measurement-sample") return "Durability measurement";
@@ -108,18 +111,17 @@ export function CompiledSubmissionReview({
 
   if (error || !compilation) {
     return (
-      <div
-        className="flex items-center justify-between gap-12 border border-[var(--st-bad-border)] px-16 py-12"
-        role="alert"
+      <Notice
+        tone="error"
+        action={
+          <Button variant="weak" onClick={onRetry}>
+            Retry review
+          </Button>
+        }
       >
-        <p className="body-small text-[var(--color-text-primary)]">
-          Submission details could not be prepared. Retry the review before
-          submitting.
-        </p>
-        <Button variant="weak" onClick={onRetry}>
-          Retry review
-        </Button>
-      </div>
+        Submission details could not be prepared. Retry the review before
+        submitting.
+      </Notice>
     );
   }
 
@@ -129,9 +131,11 @@ export function CompiledSubmissionReview({
       <div className="flex flex-wrap items-start justify-between gap-12">
         <div className="flex flex-col gap-2">
           <h4 className="title-heading-3">Registry submission details</h4>
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Template {review.template.displayName}
-          </p>
+          {review && (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Template {review.template.displayName}
+            </p>
+          )}
         </div>
         <Button variant="weak" onClick={onRetry}>
           Refresh review
@@ -140,6 +144,32 @@ export function CompiledSubmissionReview({
 
       <CompilationBlockers blockers={blockers} />
 
+      {/* Preparation stopped before anything compiled (no project link,
+          credentials or usable template): the blockers are all there is. */}
+      {review ? (
+        <CompiledReviewSections
+          review={review}
+          snapshot={snapshot}
+          warnings={warnings}
+        />
+      ) : (
+        <CompilationWarnings warnings={warnings} />
+      )}
+    </div>
+  );
+}
+
+function CompiledReviewSections({
+  review,
+  snapshot,
+  warnings,
+}: {
+  review: NonNullable<RemovalCompilationView["review"]>;
+  snapshot: RemovalCompilationView["snapshot"];
+  warnings: string[];
+}) {
+  return (
+    <>
       <ReviewSection title="Registry plan">
         <p className="body-small text-[var(--color-text-secondary)]">
           {review.reportingWindow.startedOn || MISSING_VALUE.notRecorded} to{" "}
@@ -211,7 +241,7 @@ export function CompiledSubmissionReview({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left body-caption">
-              <thead className="text-[var(--color-text-tertiary)]">
+              <thead className="body-small font-medium text-[var(--color-text-secondary)]">
                 <tr>
                   <th className="pr-12 pb-6">Registry field</th>
                   <th className="pr-12 pb-6">Source</th>
@@ -285,6 +315,6 @@ export function CompiledSubmissionReview({
       <ReviewSection title="Submission notes">
         <CompilationWarnings warnings={warnings} showEmpty />
       </ReviewSection>
-    </div>
+    </>
   );
 }

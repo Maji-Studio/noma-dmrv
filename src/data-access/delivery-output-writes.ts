@@ -36,7 +36,7 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
     const [delivery] = await tx.insert(deliveries).values({ organizationId: ctx.organizationId, code: data.code, orderId: data.orderId, facilityId: data.facilityId,
       storageLocationId: data.storageLocationId, deliveryDate: data.deliveryDate, status: 'delivered', deliveredWetMassKg: data.deliveredWetMassKg,
       moistureContentPercent: data.moistureContentPercent, driverId: data.driverId, vehicleId: data.vehicleId,
-      distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote, tripType: data.tripType ?? 'return' }).returning();
+      distanceKmOverride: data.distanceKmOverride, distanceSource: data.distanceSource, distanceNote: data.distanceNote }).returning();
     const posted = await post({ deliveryId: delivery.id });
     // A split-bin load stores its overall moisture, 1 − solids ÷ wet, from the per-sub-bin readings.
     const [saved] = await tx.update(deliveries).set({ massDryKg: posted.preview.removedDryKg, moistureContentPercent: posted.moisturePercent }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
@@ -60,7 +60,7 @@ export async function updateDelivery(ctx: OrgContext, deliveryId: string, raw: O
     }
     if (data.deliveryDate && data.deliveryDate.getTime() !== existing.deliveryDate.getTime()) throw new SafeError('Use Correct entry in bin history to change the delivery time.');
     const [saved] = await tx.update(deliveries).set({ code: data.code, driverId: data.driverId, vehicleId: data.vehicleId, distanceKmOverride: data.distanceKmOverride,
-      distanceSource: data.distanceSource, distanceNote: data.distanceNote, tripType: data.tripType ?? undefined, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
+      distanceSource: data.distanceSource, distanceNote: data.distanceNote, updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId))).returning();
     const rows = await getOutputStockAllocationProjection(ctx, { deliveryId }, tx);
     await syncBiocharProductTransportLegs(ctx, tx, [...new Set(rows.flatMap(r => r.allocation.biocharProductId ? [r.allocation.biocharProductId] : []))]);
     return saved;

@@ -25,8 +25,8 @@
  * `calculation={false}` drops that table where the host surface already owns a
  * disclosure for the arithmetic.
  *
- * Its Simple boundary is the picture: Simple keeps the bar and key line,
- * because those are what the two inputs mean, and Detailed adds the table.
+ * Both detail levels show the bar and key line, because those are what the
+ * two inputs mean; the table is explanation, so only Detailed adds it.
  * Without a form detail scope (unmanaged sheets) the level resolves to
  * Detailed and the table always shows.
  *
@@ -41,7 +41,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useSimplePresence } from "@/components/forms/form-detail-context";
+import { DETAIL_EXPLANATION_ATTR, useFormDetailLevel } from "@/components/forms/form-detail-context";
 import { CompositionLedger } from "@/components/forms/composition-ledger";
 import {
   describeMassSplit,
@@ -100,6 +100,12 @@ interface MoistureSplitProps {
    * arithmetic rather than beside the bar.
    */
   note?: string;
+  /**
+   * `detail` only. Width of the bar as a share of its row (default 100), so
+   * several splits stacked in one picture can be drawn to a common mass scale.
+   * The key line below keeps the full row.
+   */
+  barWidthPercent?: number;
   className?: string;
 }
 
@@ -253,10 +259,12 @@ function SplitBar({
   split,
   height,
   addedWaterState,
+  widthPercent = PERCENT_SCALE,
 }: {
   split: MassSplit;
   height: string;
   addedWaterState: AddedWaterState | null;
+  widthPercent?: number;
 }) {
   const widths = segmentWidths(split, addedWaterState);
 
@@ -272,7 +280,8 @@ function SplitBar({
             )
           : describeMassSplit(split)
       }
-      className={`flex w-full overflow-hidden border border-[var(--color-border-secondary)] ${height}`}
+      className={`flex overflow-hidden border border-[var(--color-border-secondary)] ${height}`}
+      style={{ width: `${widthPercent}%` }}
     >
       <div
         aria-hidden="true"
@@ -385,11 +394,12 @@ function formatSplitArithmetic({
   return `${base} Added water raises the wet mass and leaves dry mass unchanged: ${formatSplitMass(split.wetKg)} + ${formatSplitMass(addedWaterState.addedWaterKg)} = ${formatSplitMass(addedWaterState.finalSplit.wetKg)}.`;
 }
 
-function UnresolvedBar({ height }: { height: string }) {
+function UnresolvedBar({ height, widthPercent = PERCENT_SCALE }: { height: string; widthPercent?: number }) {
   return (
     <div
       aria-hidden="true"
-      className={`moisture-water-hatch w-full border border-dashed border-[var(--color-border-secondary)] ${height}`}
+      className={`moisture-water-hatch border border-dashed border-[var(--color-border-secondary)] ${height}`}
+      style={{ width: `${widthPercent}%` }}
     />
   );
 }
@@ -406,9 +416,10 @@ export function MoistureSplit({
   dryLabel,
   finalMoistureLabel,
   note,
+  barWidthPercent,
   className = "",
 }: MoistureSplitProps) {
-  const parts = useSimplePresence("picture");
+  const detailed = useFormDetailLevel() === "detailed";
   const display = resolveDisplaySplit(wetMassKg, moisturePercent, dryMassKg);
   const unresolvedDryLabel =
     dryLabel ?? (materialLabel ? `${materialLabel} dry mass` : "Dry mass");
@@ -432,6 +443,7 @@ export function MoistureSplit({
       <div className={`flex flex-col gap-6 ${className}`}>
         <UnresolvedBar
           height={variant === "compact" ? COMPACT_BAR_HEIGHT : BAR_HEIGHT}
+          widthPercent={variant === "compact" ? undefined : barWidthPercent}
         />
         <p
           className="body-caption text-[var(--color-text-tertiary)]"
@@ -491,9 +503,9 @@ export function MoistureSplit({
     );
   }
 
-  // The bar and its key are what the two inputs mean, so they stay in Simple.
-  // The table is the arithmetic behind them, which is what Detailed adds.
-  const showCalculation = calculation && parts.detailed;
+  // The bar and its key are what the two inputs mean, so both levels show
+  // them. The table is the arithmetic behind them: explanation, Detailed only.
+  const showCalculation = calculation && detailed;
 
   return (
     <div className={`flex flex-col gap-12 ${className}`}>
@@ -502,6 +514,7 @@ export function MoistureSplit({
           split={split}
           height={BAR_HEIGHT}
           addedWaterState={addedWaterState}
+          widthPercent={barWidthPercent}
         />
         <SplitKey
           split={split}
@@ -513,7 +526,7 @@ export function MoistureSplit({
       </div>
 
       {showCalculation && (
-        <div className="flex flex-col gap-8">
+        <div {...{ [DETAIL_EXPLANATION_ATTR]: true }} className="flex flex-col gap-8">
           <CompositionLedger
             label={`${materialLabel ?? "Material"} composition`}
             totalLabel={wetLabel ?? "Wet total"}

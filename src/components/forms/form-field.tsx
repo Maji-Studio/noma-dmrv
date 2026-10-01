@@ -3,15 +3,42 @@
  * Wrapper component that provides label, children (input/textarea), and error display
  */
 
-import { cloneElement, isValidElement, type ReactNode } from "react";
+import { cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import { FormError } from "./form-error";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
   CertificationFieldTag,
   type CertFieldStatus,
 } from "@/components/ui/certification-field-tag";
+import { cn } from "@/lib/utils";
 
-const INLINE_HELPER_MAX_CHARS = 64;
+/**
+ * Room the control keeps at its end for a `unit` suffix: the unit's own width
+ * in `ch` plus the input's end padding and a gap, both on the spacing scale.
+ */
+const UNIT_END_SPACE = "var(--spacing-24)";
+
+/** End padding that keeps typed text clear of a `unit` suffix. */
+export function unitEndPadding(unit: string): string {
+  return `calc(${unit.length}ch + ${UNIT_END_SPACE})`;
+}
+
+/**
+ * The unit shown inside the end of a control. Place it as a sibling after a
+ * `peer` control inside a `relative` wrapper. aria-hidden: the label carries
+ * the unit for screen readers.
+ */
+export function ControlUnitSuffix({ unit }: { unit: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-control-unit=""
+      className="pointer-events-none absolute inset-y-0 right-12 flex items-center text-[length:var(--text-s)] text-[var(--color-text-tertiary)] peer-disabled:opacity-50"
+    >
+      {unit}
+    </span>
+  );
+}
 
 interface FormFieldProps {
   id: string;
@@ -19,17 +46,34 @@ interface FormFieldProps {
   error?: string;
   /** Non-blocking field advisory. Hidden whenever a blocking error is present. */
   warning?: string;
-  helperText?: string;
   /**
-   * Explanatory text shown via an info ⓘ icon next to the label instead of
-   * inline. Prefer this over `helperText` for longer prose so the form stays
-   * compact; keep `helperText` for short, always-visible cues.
+   * Explanation of the field. Always rendered behind the info ⓘ beside the
+   * label (after `hint`), never as a visible line. A short line the operator
+   * needs while typing belongs in `cue` instead.
    */
+  helperText?: string;
+  /** Explanatory content for the info ⓘ beside the label. */
   hint?: ReactNode;
+  /**
+   * A short visible line under the control, for a unit, a limit or a
+   * consequence the operator needs while typing ("Minimum 8 characters",
+   * "Facility time: Africa/Dar es Salaam"). Everything else is `hint`.
+   */
+  cue?: string;
+  /**
+   * Unit suffix shown inside the end of the control ("kg", "%", "km"), so the
+   * label needs no "(kg)". The accessible name keeps the unit.
+   */
+  unit?: string;
+  /**
+   * Unit that the control draws itself (beside another element, so FormField
+   * cannot wrap it). Only adds the sr-only " (unit)" to the label.
+   */
+  labelUnit?: string;
   required?: boolean;
   certifyRequired?: boolean;
   /**
-   * Saved-state of the certification field — colours the CERT chip (orange when
+   * Saved-state of the certification field. It colours the CERT chip (orange when
    * the saved record is missing this field, green when present). Defaults to
    * neutral. Only meaningful when `certifyRequired` is set.
    */
@@ -39,42 +83,50 @@ interface FormFieldProps {
   children: ReactNode;
 }
 
-function shouldCollapseHelperText(helperText: string | undefined): helperText is string {
-  return (helperText?.trim().length ?? 0) > INLINE_HELPER_MAX_CHARS;
+function hasText(value: string | undefined): value is string {
+  return (value?.trim().length ?? 0) > 0;
 }
 
-function composeHintContent(hint: ReactNode, collapsedHelperText: string | undefined) {
-  if (!collapsedHelperText) return hint;
-  if (hint == null) return collapsedHelperText;
+function composeHintContent(hint: ReactNode, helperText: string | undefined) {
+  if (!hasText(helperText)) return hint;
+  if (hint == null) return helperText;
 
   return (
     <span className="flex flex-col gap-6">
       <span>{hint}</span>
-      <span>{collapsedHelperText}</span>
+      <span>{helperText}</span>
     </span>
   );
 }
 
+interface ControlDecoration {
+  describedBy: string | undefined;
+  invalid: boolean;
+  unit: string | undefined;
+}
+
 /**
- * Wire the error/helper text to the control via `aria-describedby` so screen
- * readers announce them when the field is focused. FormField owns the `id`
- * and renders both the control and its messages, so it is the only place that
- * can establish the association without every call site repeating it.
+ * Wire the messages to the control via `aria-describedby` so screen readers
+ * announce them when the field is focused. FormField owns the `id` and renders
+ * both the control and its messages, so it is the only place that can
+ * establish the association without every call site repeating it.
  *
  * The control is expected to be a single element whose own `id` matches the
  * FormField `id` (the established pattern — see FormInput/FormSelect usage).
- * When that holds, clone it to merge in `aria-describedby`; otherwise render
- * children untouched so atypical layouts don't break.
+ * When that holds, clone it to merge in `aria-describedby` (and, with a unit,
+ * the end space the suffix needs); otherwise render children untouched so
+ * atypical layouts don't break.
  */
 function describeChild(
   children: ReactNode,
-  describedBy: string | undefined,
-  invalid: boolean
+  { describedBy, invalid, unit }: ControlDecoration
 ): ReactNode {
-  if ((!describedBy && !invalid) || !isValidElement(children)) return children;
+  if ((!describedBy && !invalid && !unit) || !isValidElement(children)) return children;
   const childProps = children.props as {
     "aria-describedby"?: string;
     "aria-invalid"?: boolean | "true" | "false";
+    className?: string;
+    style?: CSSProperties;
   };
   const merged = [childProps["aria-describedby"], describedBy]
     .filter(Boolean)
@@ -82,6 +134,16 @@ function describeChild(
   return cloneElement(children, {
     ...(merged ? { "aria-describedby": merged } : {}),
     "aria-invalid": invalid ? true : childProps["aria-invalid"],
+    ...(unit
+      ? {
+          // `peer` lets the suffix dim with a disabled control.
+          className: cn(childProps.className, "peer"),
+          style: {
+            ...childProps.style,
+            paddingInlineEnd: unitEndPadding(unit),
+          },
+        }
+      : {}),
   } as Partial<typeof childProps>);
 }
 
@@ -92,6 +154,9 @@ export function FormField({
   warning,
   helperText,
   hint,
+  cue,
+  unit,
+  labelUnit,
   required,
   certifyRequired,
   certifyStatus,
@@ -100,28 +165,36 @@ export function FormField({
 }: FormFieldProps) {
   const errorId = `${id}-error`;
   const warningId = `${id}-warning`;
-  const helperId = `${id}-helper`;
-  const collapsedHelperText = shouldCollapseHelperText(helperText)
-    ? helperText
-    : undefined;
-  const inlineHelperText = collapsedHelperText ? undefined : helperText;
-  const hintContent = composeHintContent(hint, collapsedHelperText);
+  const cueId = `${id}-cue`;
+  const explanationId = `${id}-helper`;
+  const certId = `${id}-cert`;
+  const hintContent = composeHintContent(hint, helperText);
+  const hasExplanation = hintContent != null;
   const showWarning = Boolean(warning) && !error;
-  const showInlineHelper = Boolean(inlineHelperText) && !error && !showWarning;
-  const showScreenReaderHelper = Boolean(collapsedHelperText) && !error && !showWarning;
+  // One caption line under the control at a time: an error or warning
+  // replaces the cue while it shows.
+  const showCue = hasText(cue) && !error && !showWarning;
 
-  // Point the control at whichever message is actually rendered below it.
-  const describedBy = error
-    ? errorId
-    : showWarning
-      ? warningId
-      : showInlineHelper || showScreenReaderHelper
-        ? helperId
-        : undefined;
+  // Point the control at whichever message is rendered below it, then the
+  // explanation behind the ⓘ, then the CERT chip.
+  const describedBy =
+    [
+      error ? errorId : showWarning ? warningId : showCue ? cueId : undefined,
+      !error && !showWarning && hasExplanation ? explanationId : undefined,
+      certifyRequired ? certId : undefined,
+    ]
+      .filter(Boolean)
+      .join(" ") || undefined;
+
+  const control = describeChild(children, {
+    describedBy,
+    invalid: Boolean(error),
+    unit,
+  });
 
   // Keep the info icon a sibling of the label, not a child — a button
   // inside a <label> would forward its clicks to the field control.
-  // Top-align so a wrapped multi-line label keeps the CERT tag / ⓘ icon
+  // Top-align so a wrapped multi-line label keeps the CERT chip / ⓘ icon
   // beside its first line instead of floating them in the vertical
   // middle of the wrapped text.
   const labelRow = (spacing: string) => (
@@ -131,6 +204,7 @@ export function FormField({
         className="body-small font-medium text-[var(--color-text-secondary)]"
       >
         {label}
+        {(unit ?? labelUnit) && <span className="sr-only"> ({unit ?? labelUnit})</span>}
         {required && (
           <>
             <span className="text-[var(--color-signal-red)] ml-2" aria-hidden="true">*</span>
@@ -138,9 +212,14 @@ export function FormField({
           </>
         )}
       </label>
-      {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
-      {hintContent != null && (
-        <InfoHint side="top" label={`More about ${label}`}>
+      {certifyRequired && (
+        // The 24px row centres the CERT chip on the ⓘ's line.
+        <span className="inline-flex min-h-24 items-center">
+          <CertificationFieldTag status={certifyStatus} descriptionId={certId} />
+        </span>
+      )}
+      {hasExplanation && (
+        <InfoHint side="top" label={`More about ${label}`} descriptionId={explanationId}>
           {hintContent}
         </InfoHint>
       )}
@@ -160,16 +239,26 @@ export function FormField({
           </div>
         </div>
       ) : labelRow("mb-6")}
-      {describeChild(children, describedBy, Boolean(error))}
-      {showInlineHelper && (
-        <p
-          id={helperId}
-          className="body-caption text-[var(--color-text-tertiary)] mt-6"
-        >
-          {inlineHelperText}
-        </p>
+      {unit ? (
+        <div className="relative">
+          {control}
+          <ControlUnitSuffix unit={unit} />
+        </div>
+      ) : (
+        control
       )}
-      {showScreenReaderHelper && <p id={helperId} className="sr-only">{collapsedHelperText}</p>}
+      {hasExplanation && (
+        <span id={explanationId} className="sr-only">
+          {hintContent}
+        </span>
+      )}
+      {showCue && (
+        <div className="mt-6">
+          <p id={cueId} className="body-caption text-[var(--color-text-tertiary)]">
+            {cue}
+          </p>
+        </div>
+      )}
       {showWarning && (
         <p
           id={warningId}

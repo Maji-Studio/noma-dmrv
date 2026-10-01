@@ -188,7 +188,6 @@ async function applyFeedstockPatch(
     feedstockId,
     transportDistanceKm,
     transportDistanceSource,
-    transportTripType,
     ...updateData
   } = updateFeedstockSchema.parse({
     feedstockId: fixture.feedstockId,
@@ -202,7 +201,6 @@ async function applyFeedstockPatch(
       transportDistanceKm,
       transportDistanceSource,
     ),
-    transportTripType,
   });
 }
 

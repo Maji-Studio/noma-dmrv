@@ -67,6 +67,10 @@ vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   LeafIcon: () => <span />,
   PlusIcon: () => <span />,
   SealCheckIcon: () => <span data-icon="isometric" />,
+  InfoIcon: () => null,
+  WarningIcon: () => null,
+  WarningCircleIcon: () => null,
+  CheckCircleIcon: () => null,
 }));
 vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button>{children}</button>,
@@ -142,7 +146,7 @@ describe("FeedstockTypeList", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
     expect(html).toContain("Import from Isometric");
-    expect(html).toContain("New Feedstock Type");
+    expect(html).toContain("New feedstock type");
   });
 
   it("withholds the Isometric import trigger without a registry connection", () => {
@@ -151,7 +155,7 @@ describe("FeedstockTypeList", () => {
       const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
       expect(html).not.toContain("Import from Isometric");
-      expect(html).toContain("New Feedstock Type");
+      expect(html).toContain("New feedstock type");
     } finally {
       certifier.mapping = { id: "mapping-1" };
     }
@@ -161,7 +165,7 @@ describe("FeedstockTypeList", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage={false} />);
 
     expect(html).not.toContain("Import from Isometric");
-    expect(html).not.toContain("New Feedstock Type");
+    expect(html).not.toContain("New feedstock type");
   });
 
   it("offers archive as the actionable delete-conflict resolution", () => {

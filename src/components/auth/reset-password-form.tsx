@@ -17,6 +17,7 @@ import {
   ResolvedErrorRevalidator,
   ServerError,
 } from "@/components/forms";
+import { AuthLink, AuthResult } from "./auth-result";
 
 function ResetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -70,27 +71,14 @@ function ResetPasswordFormContent() {
   // Show error if no token in URL
   if (!token) {
     return (
-      <div className="space-y-24">
-        <div
-          className="p-24 bg-[var(--color-signal-red)]/10 border border-[var(--color-signal-red)] rounded-none text-[var(--color-signal-red)]"
-          role="alert"
-        >
-          <h3 className="body-bold mb-16">Invalid reset link</h3>
-          <p className="body-small">
-            This password reset link is invalid or has expired. Request a new
-            password reset.
-          </p>
-        </div>
-
-        <div className="text-center">
-          <Link
-            href="/forgot-password"
-            className="body-medium text-[var(--clr-dark-purple)] hover:underline"
-          >
-            Request new reset link
-          </Link>
-        </div>
-      </div>
+      <AuthResult
+        framed={false}
+        tone="error"
+        title="Invalid reset link"
+        footer={<AuthLink href="/forgot-password">Request new reset link</AuthLink>}
+      >
+        This password reset link is invalid or has expired. Request a new password reset.
+      </AuthResult>
     );
   }
 
@@ -98,26 +86,15 @@ function ResetPasswordFormContent() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
-        <div className="space-y-24">
-          <div
-            className="p-24 bg-[var(--color-status-success-bg)] border border-[var(--color-status-success-border)] rounded-none text-[var(--color-status-success)]"
-            role="status"
-            aria-live="polite"
-          >
-            <h3 className="body-bold mb-16">
-              Password reset successful
-            </h3>
-            <p className="body-small">
-              Your password has been reset. Redirecting to login...
-            </p>
-          </div>
-        </div>
+        <AuthResult framed={false} tone="success" title="Password reset">
+          Your password has been reset. Redirecting to login…
+        </AuthResult>
       ) : (
         <>
           <FormField
             id="newPassword"
             label="New password"
-            helperText="Minimum 8 characters"
+            cue="Minimum 8 characters"
             error={errors.newPassword?.message}
           >
             <FormInput
@@ -155,7 +132,7 @@ function ResetPasswordFormContent() {
             width="full"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Resetting..." : "Reset Password"}
+            {isSubmitting ? "Resetting..." : "Reset password"}
           </Button>
 
           <div className="text-center">

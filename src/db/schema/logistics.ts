@@ -22,7 +22,6 @@ import {
   packagingType,
   transportEntityType,
   transportMethod,
-  transportTripType,
 } from './common';
 import { facilities, storageLocations } from './facilities';
 import { massKg, percent } from './numeric-families';
@@ -136,10 +135,6 @@ export const deliveries = pgTable(
     // has trip-specific evidence for the inherited customer-location distance.
     distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
-    // Round-trip vs one-way accounting for the distribution transport leg
-    // (issue #316, §4.2). `return` (default) doubles the one-way distance at
-    // aggregation; `one_way` requires an evidenced onward destination.
-    tripType: transportTripType('trip_type').notNull().default('return'),
 
     // --- Product Batch ---
     biocharProductId: uuid('biochar_product_id').references(
@@ -227,6 +222,8 @@ export const transportLegs = pgTable(
     destinationGpsLatitude: doublePrecision('destination_gps_latitude'),
     destinationGpsLongitude: doublePrecision('destination_gps_longitude'),
     destinationName: text('destination_name'),
+    // One-way road distance. Every leg counts its round trip (×2) at the
+    // mass-distance aggregation seam (`@/lib/calculations/round-trip`).
     distanceKm: real('distance_km').notNull(),
     // Provenance of distanceKm. On a derived leg this is inherited from the
     // level that won the distance-priority resolution (NOT a blanket
@@ -242,11 +239,6 @@ export const transportLegs = pgTable(
     // --- Load Details (Isometric: Distance-Based Method, Eq. 3 — W_j, the cargo mass) ---
     loadMassKg: massKg('load_mass_kg'),
 
-    // Round-trip vs one-way accounting (issue #316, §4.2 ruling). The stored
-    // distanceKm stays ONE-WAY per leg; `return` (default, conservative) applies
-    // the ×2 multiplier in `aggregateTransportMassDistance`, `one_way` (evidenced
-    // onward destination) does not. Orthogonal to distanceSource / isDerived.
-    tripType: transportTripType('trip_type').notNull().default('return'),
 
     // --- Method (distance-based only — see ADR/changes; the emission factor
     // lives in the Isometric component blueprint, NOT here: we submit distance +

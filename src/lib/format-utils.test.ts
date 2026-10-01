@@ -5,6 +5,9 @@ import {
   formatCo2e,
   formatDayString,
   formatDistanceKm,
+  formatLegDistanceCompactKm,
+  formatLegDistanceKm,
+  formatRoundTripKm,
   formatFacilityDateTime,
   formatFacilityDateTimeWithOffset,
   formatFileSize,
@@ -41,6 +44,24 @@ describe("missing-value routing", () => {
     expect(formatMass(0)).toBe("0 kg");
     expect(formatDistanceKm(0)).toBe("0 km");
     expect(formatPercent(0)).toBe("0%");
+  });
+});
+
+describe("formatLegDistanceKm", () => {
+  it("shows the one-way distance with the round trip it counts", () => {
+    expect(formatLegDistanceKm(240)).toBe("240 km one way · 480 km round trip counted");
+    expect(formatRoundTripKm(18)).toBe("36 km round trip counted");
+  });
+
+  it("reads Not recorded when no distance is set", () => {
+    expect(formatLegDistanceKm(null)).toBe(MISSING_VALUE.notRecorded);
+  });
+});
+
+describe("formatLegDistanceCompactKm", () => {
+  it("pairs the one-way distance with the counted round trip for chips", () => {
+    expect(formatLegDistanceCompactKm(240)).toBe("240 km · 480 km counted");
+    expect(formatLegDistanceCompactKm(undefined)).toBe(MISSING_VALUE.notRecorded);
   });
 });
 

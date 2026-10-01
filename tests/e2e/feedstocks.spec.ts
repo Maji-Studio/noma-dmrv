@@ -42,7 +42,7 @@ test.describe("Feedstock UI CRUD", () => {
       await expect(
         page.locator("aside").getByText(seededData.facility.name, { exact: false }),
       ).toBeVisible({ timeout: 15000 });
-      await page.getByRole("button", { name: "New Feedstock" }).click();
+      await page.getByRole("button", { name: "New feedstock" }).click();
       await waitForSideSheet(page);
 
       const dialog = page.getByRole("dialog");
@@ -80,7 +80,7 @@ test.describe("Feedstock UI CRUD", () => {
     await page.waitForLoadState("networkidle");
 
     // Open the create side sheet
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
 
     // Fill delivery date (required)
@@ -120,7 +120,7 @@ test.describe("Feedstock UI CRUD", () => {
     );
 
     // Submit the form
-    await page.locator('[role="dialog"]').locator('button:has-text("Create Feedstock")').click();
+    await page.locator('[role="dialog"]').locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
 
     // Verify feedstock appears in list
@@ -159,12 +159,12 @@ test.describe("Feedstock UI CRUD", () => {
           page.locator("aside").getByText(seededData.facility.name, { exact: false }),
         ).toBeVisible();
         await waitForSideSheet(page);
-        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        await page.getByRole("button", { name: "Edit feedstock" }).click();
         const dialog = page.getByRole("dialog");
         await dialog.locator('input[name="totalWetMassKg"]').fill(String(wetMass));
         await expect(dialog.locator('input[name="allocations.0.allocatedWetMassKg"]'))
           .toHaveValue(String(wetMass));
-        await dialog.getByRole("button", { name: "Save Changes", exact: true }).click();
+        await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
         await waitForSideSheetClose(page);
 
         const [saved] = await db.select().from(schema.feedstocks).where(eq(schema.feedstocks.id, id));
@@ -174,7 +174,7 @@ test.describe("Feedstock UI CRUD", () => {
         // Reload from persistence so query-cache state cannot hide a lost edit.
         await page.goto(`/feedstocks?facility=${seededData.facility.id}&feedstock=${id}`);
         await waitForSideSheet(page);
-        await page.getByRole("button", { name: "Edit Feedstock" }).click();
+        await page.getByRole("button", { name: "Edit feedstock" }).click();
         await expect(page.locator('input[name="totalWetMassKg"]')).toHaveValue(String(wetMass));
         await expect(page.locator('input[name="allocations.0.allocatedWetMassKg"]')).toHaveValue(String(wetMass));
       }
@@ -195,7 +195,7 @@ test.describe("Feedstock UI CRUD", () => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
@@ -227,7 +227,7 @@ test.describe("Feedstock UI CRUD", () => {
     await expect(
       page.locator("aside").getByText(seededData.facility.name, { exact: false }),
     ).toBeVisible({ timeout: 15000 });
-    await page.getByRole("button", { name: "New Feedstock" }).click();
+    await page.getByRole("button", { name: "New feedstock" }).click();
     await waitForSideSheet(page);
 
     await selectEntity(
@@ -239,7 +239,7 @@ test.describe("Feedstock UI CRUD", () => {
 
     const dialog = page.getByRole("dialog");
     await dialog.locator('input[name="totalWetMassKg"]').fill("1000");
-    await dialog.getByRole("button", { name: "Add Bin" }).click();
+    await dialog.getByRole("button", { name: "Add bin" }).click();
 
     const firstAllocation = dialog.locator(
       'input[name="allocations.0.allocatedWetMassKg"]',
@@ -279,41 +279,71 @@ test.describe("Feedstock UI CRUD", () => {
     ).toHaveCount(0);
   });
 
-  test("explains the CERT badge on hover instead of leaving it bare (Phase 1, §6)", async ({
+  test("explains the CERT chip once in the sheet header and on hover", async ({
     adminPage: page,
     seededData,
   }) => {
     await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
-    await page.click('button:has-text("New Feedstock")');
+    await page.click('button:has-text("New feedstock")');
     await waitForSideSheet(page);
 
     const dialog = page.locator('[role="dialog"]');
-    // The explanation ships as an always-on sr-only string for assistive tech
-    // (one per CERT chip). Hovering a chip mounts a visible tooltip carrying the
-    // SAME text — so the previously-unexplained "CERT" chip is legible to
-    // sighted users too. The tooltip portals to <body> (outside the dialog), so
-    // the robust signal is a page-scoped count that grows by exactly one.
-    const explanationOnPage = page.getByText("Required for certification", {
-      exact: true,
-    });
-    // waitForSideSheet resolves on dialog attach, not form paint — retry until
-    // the first sr-only explanation exists (the chips mount in one commit)
-    // before snapshotting the non-retrying count.
-    await expect(explanationOnPage.first()).toBeAttached();
+    const seals = dialog.locator("[data-cert-field]");
+    await expect(seals.first()).toBeVisible();
+
+    // Each chip carries the same explanation as an sr-only string; hovering a
+    // chip mounts a tooltip with it. The tooltip portals to <body>, so count
+    // page-wide matches.
+    const explanationOnPage = page.getByText("Required for certification", { exact: true });
     const beforeHover = await explanationOnPage.count();
-    expect(beforeHover).toBeGreaterThan(0);
-
-    // The CERT chip is the sr-only text's parent span (the tooltip trigger);
-    // hover a chip that lives inside the dialog so it isn't under the overlay.
-    const chipInDialog = dialog
-      .getByText("Required for certification", { exact: true })
-      .first()
-      .locator("xpath=..");
-    await chipInDialog.hover();
-
+    await seals.first().hover();
     await expect(explanationOnPage).toHaveCount(beforeHover + 1);
+  });
+
+  test("the ⓘ opens on a click, closes on a second click and on Escape, and never focuses the field", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.click('button:has-text("New feedstock")');
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    const trigger = dialog.locator("[data-toggletip-trigger]").first();
+    await expect(trigger).toBeVisible();
+    // The explanation is the trigger's description: a FormField ⓘ points at
+    // the field's screen-reader copy, any other ⓘ carries aria-description.
+    const descriptionId = await trigger.getAttribute("aria-describedby");
+    const explanation = (
+      descriptionId
+        ? await page.locator(`[id="${descriptionId}"]`).textContent()
+        : await trigger.getAttribute("aria-description")
+    )?.trim() ?? "";
+    expect(explanation.length).toBeGreaterThan(0);
+
+    // The popup has no tooltip role; count matches of its text page-wide.
+    const copies = page.getByText(explanation, { exact: true });
+    const closedCount = await copies.count();
+
+    await trigger.click();
+    await expect(copies).toHaveCount(closedCount + 1);
+    // The trigger sits outside the <label>, so the press stays on the trigger.
+    await expect(trigger).toBeFocused();
+
+    // Moving the pointer away keeps a pressed tip open; a second press closes it.
+    await page.mouse.move(0, 0);
+    await expect(copies).toHaveCount(closedCount + 1);
+    await trigger.click();
+    await expect(copies).toHaveCount(closedCount);
+
+    await trigger.click();
+    await expect(copies).toHaveCount(closedCount + 1);
+    await page.keyboard.press("Escape");
+    await expect(copies).toHaveCount(closedCount);
   });
 
   test("view mode shows transport evidence read-only; edit mode has upload controls", async ({
@@ -353,7 +383,7 @@ test.describe("Feedstock UI CRUD", () => {
 
     // Switch to edit mode: the same sheet swaps to the edit form, whose
     // trailing evidence section mounts one classified multi-file uploader.
-    await page.getByRole("button", { name: "Edit Feedstock" }).click();
+    await page.getByRole("button", { name: "Edit feedstock" }).click();
     await expect(dialog.locator('input[type="file"]')).toHaveCount(1, {
       timeout: 15000,
     });

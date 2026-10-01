@@ -2,7 +2,6 @@
 
 import { CompositionCard, CompositionLedger, DerivedHeadline } from "@/components/forms";
 import type { MassSegment } from "@/components/forms/composition-ledger";
-import { useSimplePresence } from "@/components/forms/form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
@@ -11,8 +10,9 @@ import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/
 import type { ReactNode } from "react";
 import { MoistureResetChange } from "./moisture-reset-change";
 import { IngredientStockInfo, StockLoadCard } from "./output-stock-load-card";
-import { StockBalanceChange, StockNotice, StockRows, type StockRow } from "./stock-figures";
-import { binLabel, capitalize, dryingNotice, formatWetEstimate, SPLIT_MATERIAL_LABEL, splitWetMassKg, STOCK_SIMPLE_PRESENCE, stockCardHint } from "./stock-preview-shared";
+import { StockBalanceChange, StockRows, type StockRow } from "./stock-figures";
+import { binLabel, capitalize, dryingNotice, formatWetEstimate, SPLIT_MATERIAL_LABEL, splitWetMassKg, stockCardHint } from "./stock-preview-shared";
+import { Notice } from "@/components/ui/notice";
 
 export { OutputStockAllocations, OutputStockAvailability } from "./output-stock-availability";
 
@@ -37,9 +37,10 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
  * against one bin (a correction, a loss, a count, a delivery load), `load` for
  * a surface that shows several bins at once (the product form).
  *
- * The stock family is hidden in Simple: the entry fields already say what the
- * operator is doing. Refusals, blockers and discrepancies are not optional, so
- * they stay visible at both levels.
+ * The preview is decision info, so both levels show the headline (the bin's
+ * stock before and after), the picture, notices, refusals and blockers. Only
+ * explanation waits for Detailed: the dry pair under a wet headline and the
+ * figures and batch draw behind Show calculation.
  *
  * `entry` is what the operator typed on a movement surface: its kind names the
  * movement in the headline's caption ("310 kg wet removed at 22.7% moisture"),
@@ -51,15 +52,10 @@ const ENTRY_VERB: Record<Exclude<StockEntryKind, "count">, string> = {
  * and the preview drops its own alert.
  */
 export function OutputStockPreview({ variant = "load", preview, entry, moreInfo, renderBlocker, hideBlockingMessage = false }: { variant?: "movement" | "load"; preview: Preview; entry?: StockEntry; moreInfo?: ReactNode; renderBlocker?: (blocker: NonNullable<Preview["blockers"]>[number]) => ReactNode; hideBlockingMessage?: boolean }) {
-  const parts = useSimplePresence(STOCK_SIMPLE_PRESENCE);
   const blockingMessage = hideBlockingMessage ? null : preview.blockingMessage;
   const backdated = backdatedNotice(preview);
-  const needsAttention = Boolean(blockingMessage) || Boolean(preview.blockers?.length) || preview.discrepancySolidsKg > 0 || Boolean(backdated);
-
-  // The live region stays mounted while the level hides it, so a blocker that
-  // appears later is still announced.
   return (
-    <section hidden={!parts.block && !needsAttention} className="flex flex-col gap-16" aria-label="Stock preview" aria-live="polite">
+    <section className="flex flex-col gap-16" aria-label="Stock preview" aria-live="polite">
       {variant === "movement" ? (
         <StockMovementCard preview={preview} entry={entry} moreInfo={moreInfo} />
       ) : (
@@ -68,9 +64,9 @@ export function OutputStockPreview({ variant = "load", preview, entry, moreInfo,
           actions={moreInfo ?? (preview.lane === "ingredient" ? <IngredientStockInfo preview={preview} /> : null)}
         />
       )}
-      {preview.discrepancySolidsKg > 0 && <StockNotice>Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</StockNotice>}
-      {backdated && <StockNotice>{backdated}</StockNotice>}
-      {blockingMessage && <StockNotice tone="error" role="alert">{blockingMessage}</StockNotice>}
+      {preview.discrepancySolidsKg > 0 && <Notice>Count exceeds tracked solids by {formatMassKg(preview.discrepancySolidsKg)}. This discrepancy adds no stock.</Notice>}
+      {backdated && <Notice>{backdated}</Notice>}
+      {blockingMessage && <Notice tone="error">{blockingMessage}</Notice>}
       {preview.blockers?.map(blocker => renderBlocker?.(blocker) ?? (blocker.entity === "binMovement" ? <span key={blocker.id}>{blocker.code}</span> : <a key={`${blocker.entity}:${blocker.id}`} className="body-small underline" href={blocker.entity === "binMovement" ? `/storage-locations?storageLocation=${preview.storageLocationId}&movement=${blocker.id}` : blocker.entity === "application" ? `/applications?ids=${blocker.id}` : blocker.entity === "ghgStatement" ? `/certification/ghg-statements?statement=${blocker.id}` : `/certification/removals?removal=${blocker.id}`}>{blocker.code}</a>))}
     </section>
   );
@@ -112,7 +108,6 @@ function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; ent
     <CompositionCard
       title={preview.binName}
       hint={stockCardHint(preview)}
-      simple={STOCK_SIMPLE_PRESENCE}
       actions={moreInfo}
       headline={wet
         ? refused
@@ -128,7 +123,7 @@ function StockMovementCard({ preview, entry, moreInfo }: { preview: Preview; ent
       {/* The block's own disclosure holds the arithmetic, so the split
           contributes the bar and its key line and no second ledger. */}
       {enteredWetKg !== null && <MoistureSplit calculation={false} wetMassKg={enteredWetKg} moisturePercent={preview.movementMoisturePercent} materialLabel={SPLIT_MATERIAL_LABEL} />}
-      {notice && <StockNotice>{notice}</StockNotice>}
+      {notice && <Notice>{notice}</Notice>}
       {!refused && preview.moistureReset && <MoistureResetChange reset={preview.moistureReset} />}
     </CompositionCard>
   );

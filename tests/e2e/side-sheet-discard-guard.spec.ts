@@ -34,8 +34,9 @@ test.describe("Side-sheet discard guard", () => {
     await row.click();
     await waitForSideSheet(page);
 
-    await page.getByRole("button", { name: "Edit Feedstock" }).click();
-    const notesField = page.getByLabel("Notes");
+    await page.getByRole("button", { name: "Edit feedstock" }).click();
+    // By role: the field's ⓘ button is named "More about Notes".
+    const notesField = page.getByRole("textbox", { name: "Notes" });
     await expect(notesField).toBeVisible();
     await notesField.fill("E2E discard-guard probe");
 
@@ -49,7 +50,7 @@ test.describe("Side-sheet discard guard", () => {
     // Keep editing preserves the typed value.
     await dialog.getByRole("button", { name: "Keep editing" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByLabel("Notes")).toHaveValue(
+    await expect(page.getByRole("textbox", { name: "Notes" })).toHaveValue(
       "E2E discard-guard probe",
     );
 
@@ -60,7 +61,7 @@ test.describe("Side-sheet discard guard", () => {
     await dialog.getByRole("button", { name: "Discard changes" }).click();
     await expect(dialog).toBeHidden();
     await expect(
-      page.getByRole("button", { name: "Edit Feedstock" }),
+      page.getByRole("button", { name: "Edit feedstock" }),
     ).toBeVisible();
   });
 
@@ -82,7 +83,7 @@ test.describe("Side-sheet discard guard", () => {
       await row.click();
       await waitForSideSheet(page);
 
-      await page.getByRole("button", { name: "Edit Feedstock" }).click();
+      await page.getByRole("button", { name: "Edit feedstock" }).click();
 
       // Change only the supplier via the entity select — commits through RHF
       // setValue, which the native-event dirty heuristic cannot see.

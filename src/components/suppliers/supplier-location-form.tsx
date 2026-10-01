@@ -6,6 +6,7 @@
 "use client";
 
 import { useForm } from "react-hook-form";
+import { ONE_WAY_EACH_DELIVERY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DistanceCalcField,
@@ -92,7 +93,7 @@ export function SupplierLocationForm({
   });
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
-  const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
+  const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
   // Preprocessed Zod fields have `unknown` input types — narrow the watches.
   const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
@@ -240,11 +241,12 @@ export function SupplierLocationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <DistanceCalcField
             id={distanceId}
-            label="One-way distance to facility (per leg, km)"
+            label="Distance to facility"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
             certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance from this source location to the facility. Return trips are doubled at emissions time (set the trip type on each feedstock delivery)."
+            helperText="One-way road distance from this source location to the facility. Every feedstock delivery counts the round trip, twice this distance, in emissions."
+            cue={oneWayDistanceCue(distanceFromFacilityKm, ONE_WAY_EACH_DELIVERY_CUE)}
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

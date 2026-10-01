@@ -7,7 +7,11 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import Link from "next/link";
+import {
+  AuthLink,
+  AuthPrimaryLink,
+  AuthResult,
+} from "@/components/auth/auth-result";
 
 function VerifyEmailCallbackContent() {
   const [status, setStatus] = useState<"verifying" | "success" | "error">(
@@ -65,101 +69,38 @@ function VerifyEmailCallbackContent() {
 
   if (status === "verifying") {
     return (
-      <div className="w-full max-w-md mx-auto">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-24">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--clr-dark-purple)]" />
-          </div>
-          <h1 className="title-heading-2 mb-16">Verifying your email</h1>
-          <p className="body-medium text-[var(--color-text-secondary)]">
-            This may take a moment.
-          </p>
-        </div>
-      </div>
+      <AuthResult tone="pending" title="Verifying your email">
+        This may take a moment.
+      </AuthResult>
     );
   }
 
   if (status === "success") {
     return (
-      <div className="w-full max-w-md mx-auto">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-24 bg-[var(--color-status-success-bg)] rounded-full flex items-center justify-center">
-            <svg
-              className="w-8 h-8 text-[var(--color-status-success)]"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-
-          <h1 className="title-heading-2 mb-16">Email verified</h1>
-          <p className="body-medium text-[var(--color-text-secondary)] mb-24">
-            Your email is verified. You are being redirected to sign in.
-          </p>
-
-          <Link
-            href="/login"
-            className="inline-block px-32 py-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity body-medium"
-          >
-            Sign in
-          </Link>
-        </div>
-      </div>
+      <AuthResult
+        tone="success"
+        title="Email verified"
+        actions={<AuthPrimaryLink href="/login">Sign in</AuthPrimaryLink>}
+      >
+        Your email is verified. You are being redirected to sign in.
+      </AuthResult>
     );
   }
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-24 bg-[var(--color-signal-red)]/10 rounded-full flex items-center justify-center">
-          <svg
-            className="w-8 h-8 text-[var(--color-signal-red)]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </div>
-
-        <h1 className="title-heading-2 mb-16">Verification failed</h1>
-        <p className="body-medium text-[var(--color-text-secondary)] mb-24">
-          {error ||
-            "Your email could not be verified. Request a new verification email."}
-        </p>
-
-        <div className="space-y-16">
-          <Link
-            href="/verify-email"
-            className="inline-block px-32 py-16 bg-[var(--clr-dark-purple)] text-white rounded-none hover:opacity-90 transition-opacity body-medium"
-          >
-            Resend verification email
-          </Link>
-          <div>
-            <Link
-              href="/login"
-              className="body-small text-[var(--color-text-tertiary)] hover:text-[var(--clr-dark-purple)]"
-            >
-              Back to login
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+    <AuthResult
+      tone="error"
+      title="Verification failed"
+      actions={
+        <AuthPrimaryLink href="/verify-email">
+          Resend verification email
+        </AuthPrimaryLink>
+      }
+      footer={<AuthLink href="/login">Back to login</AuthLink>}
+    >
+      {error ||
+        "Your email could not be verified. Request a new verification email."}
+    </AuthResult>
   );
 }
 
@@ -167,9 +108,7 @@ export default function VerifyEmailCallbackPage() {
   return (
     <Suspense
       fallback={
-        <div className="w-full max-w-md mx-auto text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[var(--clr-dark-purple)] mx-auto" />
-        </div>
+        <AuthResult tone="pending" title="Verifying your email" />
       }
     >
       <VerifyEmailCallbackContent />

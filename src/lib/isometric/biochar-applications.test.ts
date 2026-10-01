@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { IsometricClient } from "./client";
+import {
+  createIsometricClientFromTransport,
+  type IsometricClient,
+} from "./client";
 import {
   BIOCHAR_APPLICATION_DEPARTURE_MASS_KG,
   BIOCHAR_APPLICATION_RATE_UNIT,
@@ -192,6 +195,13 @@ describe("Biochar Application request", () => {
   });
 });
 
+// List reads walk the real paginate over the stubbed `get`.
+function pagedClient(get: IsometricClient["get"]) {
+  return createIsometricClientFromTransport((_method, path, options) =>
+    get(path, options),
+  );
+}
+
 describe("Biochar Application reconciliation", () => {
   it("paginates to the exact supplier reference", async () => {
     const get = vi
@@ -209,20 +219,20 @@ describe("Biochar Application reconciliation", () => {
 
     await expect(
       findBiocharApplicationBySupplierReference(
-        { get } as unknown as IsometricClient,
+        pagedClient(get),
         BASE.supplierReferenceId,
       ),
     ).resolves.toMatchObject({ id: "bse-test" });
   });
 
   it("rejects duplicate exact references", async () => {
-    const client = {
-      get: vi.fn().mockResolvedValue({
+    const client = pagedClient(
+      vi.fn().mockResolvedValue({
         nodes: [remote({ id: "bse-1" }), remote({ id: "bse-2" })],
         page_info: { has_next_page: false, end_cursor: null },
         total_count: 2,
       }),
-    } as unknown as IsometricClient;
+    );
     await expect(
       findBiocharApplicationBySupplierReference(client, BASE.supplierReferenceId),
     ).rejects.toThrow(/Multiple Isometric Biochar Applications/i);

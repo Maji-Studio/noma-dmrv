@@ -42,12 +42,17 @@ import {
   OrganizationRosterList,
   OrganizationRosterRow,
 } from "./organization-roster-list";
+import { Notice } from "@/components/ui/notice";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
   { value: "admin", label: "Admin" },
   { value: "member", label: "Member" },
 ] as const;
+
+const ROLE_LABELS: Record<string, string> = Object.fromEntries(
+  ROLE_OPTIONS.map((option) => [option.value, option.label]),
+);
 
 type InviteForm = z.infer<typeof inviteMemberSchema>;
 
@@ -164,7 +169,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
           <h2 className="title-heading-3">Invite a member</h2>
           <form
             onSubmit={handleSubmit(onInvite)}
-            className="content-measure-form flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
+            className="content-measure-form flex flex-col gap-16"
           >
             <div className="grid grid-cols-1 gap-16 md:grid-cols-[1fr_180px]">
               <FormField
@@ -195,11 +200,8 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
               </FormField>
             </div>
             {lastInviteLink && (
-              <div className="flex flex-col gap-8 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] p-12">
-                <span className="body-caption font-medium text-[var(--color-text-primary)]">
-                  Share this link with the invitee
-                </span>
-                <div className="flex items-center gap-8">
+              <Notice tone="success" title="Share this link with the invitee">
+                <div className="mt-8 flex items-center gap-8">
                   <input
                     readOnly
                     value={lastInviteLink}
@@ -220,7 +222,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                     {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-              </div>
+              </Notice>
             )}
             <FormActions
               control={control}
@@ -268,8 +270,8 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                         aria-label={`Role for ${member.email}`}
                       />
                     ) : (
-                      <span className="body-caption uppercase tracking-wide text-[var(--color-text-secondary)]">
-                        {member.role}
+                      <span className="body-caption text-[var(--color-text-secondary)]">
+                        {ROLE_LABELS[member.role] ?? member.role}
                       </span>
                     )}
                     {canManage && (
@@ -316,8 +318,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                 <OrganizationRosterRow
                   key={invite.id}
                   primary={invite.email}
-                  secondary={invite.role}
-                  secondaryClassName="uppercase tracking-wide"
+                  secondary={ROLE_LABELS[invite.role] ?? invite.role}
                   actions={
                     <Button
                       type="button"

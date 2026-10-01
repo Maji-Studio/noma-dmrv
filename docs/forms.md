@@ -197,7 +197,8 @@ and shown on the facility clock, like production runs
   not shifted: the field value stays empty, the typed time stays visible, and
   the input says why under itself (`eventTimeRefusal`).
 - `useFacilityClock(facilityId)` (`src/hooks/use-facility-context.ts`) gives
-  `{ timeZone, hint }`; pass `hint` as the `FormField` `helperText`.
+  `{ timeZone, hint }`; pass `hint` as the `FormField` `cue` (which clock the
+  time is on is a unit the operator needs while typing).
 - `stockEventInstantSchema()` (`@/schemas/helpers`) validates the wire value.
 - Read surfaces format it on the same clock; see
   [design-system.md](./design-system.md#date-and-time-display).
@@ -206,9 +207,14 @@ and shown on the facility clock, like production runs
 
 All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — read it for the full surface; TypeScript carries the prop signatures. Only the non-obvious contracts are documented here.
 
-- **`FormField`** — `hint` (ⓘ icon) is for explanatory prose; `helperText` is for **short**, always-visible cues and auto-collapses into the hint treatment past `INLINE_HELPER_MAX_CHARS`. Long text in `helperText` is a mistake. Keep existing short cues ("Typically 1 to 2% for biochar"); do not blank them to tidy a form. The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or hint.
+- **`FormField`** — three kinds of help, one rule: **the ⓘ holds explanations; a `cue` stays visible only for a unit, a limit or a consequence** the operator needs while typing.
+  - `hint` and `helperText` both render behind the ⓘ beside the label (hint first), whatever their length. They also reach screen readers as the control's description. Definitions, examples, "why we ask", plain scope notes ("Seeds new orders.") and typical ranges ("0 to 100% of wet mass", "Only an empty bin can switch to split.") go here.
+  - `cue` is one visible `body-caption` line under the control: "Minimum 8 characters", "-90 to 90", "Facility time: Africa/Dar es Salaam", "1,200 kg available from this delivery", "Seeds new facilities. Existing facilities keep their own." (organization defaults timezone), "Applies to new Sources across the organization." (registry default visibility), "Annual average for this application site" (soil temperature). It is tagged by hand at the call site; never move an explanation into it to make it visible. Exception: exactly the last three examples above (the timezone and default-visibility scope notes and the soil temperature definition) stay visible as cues by product decision; no other explanation may be a cue. An error or warning replaces it while shown.
+  - `unit` renders a suffix inside the end of the control ("kg", "%", "km"), so the label drops its "(kg)". The label keeps the unit for screen readers. Use it only for a single input; the read-view value already carries the unit, so the read label drops it too.
+  - The label row is `min-h-24` (the ⓘ hit area), so a one-line label reads at the same height with or without a CERT chip or ⓘ. The ⓘ is a sibling of the `<label>`, never inside it.
 - **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. For server validation targeting a field, use RHF `setError('root.serverError', …)`.
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
+- **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`), loss / count the segmented one (`bin-reconcile-sheet.tsx`).
 - **`MassMoistureFields`** — the canonical wet-mass + moisture pair for an unmixed material, with the live `MoistureSplit` bar spanning both. It owns the labels, wet-basis hint, range helper, and derived readout. A blended biochar product is the exception: pair standalone `WetMassField` and `MoistureField` controls with `ProductCompositionPreview`, because finished-product moisture does not split tracked dry biochar from ingredients and water. The standalone fields also cover lab samples with no paired mass and bin stock-takes whose counted mass is recorded separately. Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify canonical labels, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
 - **`DistanceCalcField`** — derived transport-leg distance.
 - **`PositionPicker`** (+ `PositionValue`, `PickerAccent`) — lat/lng entry.
@@ -294,11 +300,11 @@ The read-mode `sections` passed to `EntitySideSheet` must mirror the form's sect
 
 ### CERT chip status
 
-`FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
+A field with `certifyRequired` carries the CERT chip on its label row (`CertificationFieldTag`), in Simple and Detailed alike. It explains itself on hover and to screen readers ("Required for certification"); there is no sheet legend. `FormField` accepts `certifyStatus`; the section's `certifyRequired` controls whether the chip shows. The chip reflects the record's **saved** state, frozen — it does not flip while the user types:
 
-- create mode → `neutral` (no claim)
-- edit mode, saved value present → `satisfied` (green)
-- edit mode, saved value missing → `missing` (orange)
+- create mode → `neutral` (neutral chip, no claim)
+- edit mode, saved value present → `satisfied` (green chip with a check)
+- edit mode, saved value missing → `missing` (orange chip with a warning mark)
 
 Derive it with `makeCertFieldStatus(savedValues)`, passing the form's `defaultValues` in edit mode (or `undefined` while creating):
 
@@ -391,59 +397,58 @@ fields. Presentation state is separate from RHF and payloads. The shared sheet
 excludes `data-presentation-control` events from its unsaved-change heuristic.
 A real input change must still trigger the discard guard.
 
-Simple shows inputs, or the saved field values in read mode, plus what each
-derived block declares as its Simple presence (below). Validation errors,
-shortage blockers, required controls, evidence and save actions stay visible at
-both levels. Detailed adds the rest of every block, optional read fields and
-optional read sections.
+**The contract: Simple and Detailed show the same information and differ
+only in explanation.** Neither level hides something you fill in or something
+you read.
+
+- **Forms:** every input, section and action (history links, uploads, add
+  buttons) renders at both levels, and so does everything that informs a
+  decision: available stock, stock after the movement, matching bins, before →
+  after previews, blockers and warnings.
+- **Read views:** both levels show the same fields and sections.
+  `DetailPanelField` and `DetailPanelSection` have no level flag.
+- **Detailed adds only explanation:** calculation rows, basis captions,
+  formula or component provenance, raw versus capped values. A read section
+  puts it in its `explanation` slot; a derived block in `detail` or
+  `calculation`; anything else in `DetailedOnly`. All three carry
+  `data-detail-explanation`.
+- **No "Add X" reveals** for fillable fields. A field may still appear when an
+  earlier answer makes it relevant (a cancellation reason, an over-allocation
+  justification). Keep long sheets calm by grouping, pairing and unit
+  suffixes, never by hiding.
+- **Dry figures are data.** A read view shows dry biochar or dry solids as a
+  `secondary` line under the wet figure (`DetailField`, `DerivedHeadline`,
+  both through `SecondaryFigure`), CERT chip included. A stock balance such as
+  available dry stock does the same. In a movement preview the dry before and
+  after pair stays part of the calculation.
+
+The `src/components/forms/form-detail-parity*.test.tsx` suites guard this.
+Only `form-detail-context`, `CompositionCard` and `MoistureSplit` may read the
+level, and `DetailedOnly` has a short list of callers. Every level-aware block,
+every read sheet and one create form per family render at both levels and must
+show identical labels, titles, inputs, actions and text outside explanation
+blocks. Read sheets build their sections in a named builder
+(`*-read-sections.tsx`, returning `DetailPanelSection[]`), never inline in the
+list; a new builder fails the coverage check until it has a case.
 
 ### Derived blocks
 
 A derived block is a `CompositionCard` (`@/components/forms`) that sits flat
 under the inputs that drive it, with no tint and no frame: a sentence case
 caption with its one-sentence definition behind an ⓘ `hint`, an optional
-`headline`, the picture as `children`, `detail` rows that Detailed shows in
-place, and one action row holding Show calculation and the block's own
-`actions` (a stock history, a fix such as "Balance to 100%"). `calculation` is
-arithmetic the block does not already show; omit it and no control renders. Do
+`headline`, the picture as `children`, and one action row holding the block's
+own `actions` (a stock history, a fix such as "Balance to 100%"). All of that
+shows at both levels. Detailed adds the `detail` rows (explanation such as a
+ledger, never decision info) and Show calculation, which opens `calculation`:
+arithmetic the block does not already show. Omit it and no control renders. Do
 not draw proportions from an incomplete or zero basis.
 
-`simple` declares the block's Simple boundary once:
-
-| `simple` | Simple keeps |
-|---|---|
-| `picture` (default) | caption, headline, picture and the block's `actions` |
-| `headline` | caption and headline |
-| `hidden` | nothing |
-
-In a form, Simple draws a picture only once one of its inputs has a value (the
-moisture split under wet mass and moisture, the product composition under the
-biochar and ingredient masses); Detailed keeps the unresolved state visible.
-
-`detail` rows, Show calculation and the calculation are Detailed only. Parts
-outside the boundary stay mounted behind `hidden`, so an open history dialog or
-a half-written correction survives a level switch. Blocks that are not a
-`CompositionCard` read the same rule through `useSimplePresence(simple)`
-(`MoistureSplit`, `MatchingOutputBins`, `OutputStockPreview`). Never branch a
-derived block on `useFormDetailLevel()` by hand.
-
-The boundaries in use, pinned row by row in
-`src/components/forms/form-detail-boundaries.test.tsx` (add a row with a new
-block):
-
-| Block | Simple |
-|---|---|
-| Moisture split | picture, once an input has a value: bar and key; ledger and arithmetic are Detailed |
-| Product composition | picture, once an input has a value |
-| Blend by volume (formulation) | hidden, except the picture while the total is over 100% |
-| Process flow (production run) | headline: the dry yield; the rail is Detailed |
-| Applied batches (application) | picture |
-| Derived ratios (sample) | headline |
-| Carbon estimate (credit batch, closing Production runs) | headline |
-| Delivery stock (delivery read) | picture and its stock history |
-| Original entry figures (stock correction) | hidden (`DetailedOnly`) |
-| Matching stock (order form and read) | hidden |
-| Stock movement preview | hidden, unless it has a blocker, refusal or count discrepancy, which show alone |
+Before any input, a form's moisture split and product composition are
+explanation of what will appear, so only Detailed draws their unresolved
+state (`<DetailedOnly unless={started}>`, which keeps one wrapper so the block
+never remounts when the first value arrives). The product composition also draws once a source bin is chosen,
+because its stock history is an action. Explanation parts stay mounted behind
+`hidden`, so an open disclosure survives a level switch.
 
 `DerivedHeadline` is the block's one figure, at most one per block: a caption
 label, the figure with its unit and approximation in the value ("≈ 1,110 kg",
@@ -454,13 +459,7 @@ one phrase.
 
 Disclosure state is separate from form state and must never submit or dirty the
 form. Keep stateful history/correction controls mounted while hiding their
-presentation, so switching modes does not reset an active correction. Use
-`DetailedOnly` only for optional stateless context. Read fields may use
-`detailedOnly` for optional technical metadata; never apply it to required values,
-validation messages or evidence. Optional read sections can also use `detailedOnly`;
-filter them before numbering so Simple has no empty headings or gaps in the rail.
-Saved allocations remain saved facts; today's stock on a saved record (the
-order's Matching stock) gets its own Detailed-only section.
+presentation, so switching levels does not reset an active correction.
 
 ### Stock blocks lead with wet mass
 
@@ -474,15 +473,19 @@ stock family presents wet first. Only presentation changes.
   loaded at 16% moisture"). Before is each batch at its latest reading; after
   applies this entry's readings. The picture is the entered wet mass split into
   solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is a
-  Detailed row; the entered figures and the FIFO batch draw sit behind Show
-  calculation. Without a moisture there is no estimate, and the dry pair takes
+  Detailed `detail` row (the calculation); the entered figures and the FIFO
+  batch draw sit behind Show calculation. Without a moisture there is no estimate, and the dry pair takes
   the headline. Ingredient bins track wet stock directly, so their headline is
   not labelled an estimate.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
   estimate" at each batch's latest moisture reading, since an order has no
-  departure moisture yet; the batch bar and key as the picture; available dry stock as a
-  Detailed row.
+  departure moisture yet, with available dry stock as a secondary line under it at
+  both levels; the batch bar and key as the picture. On the order form and
+  read sheet the bins collapse into one tappable "Available stock" row
+  (wet estimate first, dry secondary) that opens a "Matching stock" modal with
+  these cards. The row's wet figure sums only the bins that have an estimate and
+  says "in N of M bins" when some do not; it never switches to dry.
 - A wet estimate is computed at a moisture, not weighed: its label always says
   "estimate", and it reads in whole kilograms.
 
@@ -498,6 +501,12 @@ check, never a value:
   moisture: 29.4%" under the input, the basis ("From the reading on …") behind
   the ⓘ, and an advisory warning when the reading differs by more than
   `MOISTURE_READING_WARNING_POINTS` (`@/config/output-stock`). It never blocks.
+- The product, delivery and stock forms (loss, count, correction) share `useOutputDrawDraft`
+  (`src/hooks/use-output-draw-draft.ts`): readings gate, preview, estimate and
+  the one save gate (`gate()`, which also fails on `isFetching` and `error`).
+  Read the submit guard and `submitDisabled` from it, never re-derive them. A
+  failed save is not retried in the form; the mutation hooks invalidate
+  `outputStockKeys.all`, which refreshes the previews.
 - For an output bin, `useOutputMoistureEstimate(bin, facility, occurredAt,
   preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time
   from each batch's latest reading, or the live preview's own (which leaves out

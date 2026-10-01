@@ -31,7 +31,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import {
   ClipboardTextIcon,
-  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
 import { Button, EmptyState, Modal } from "@/components/ui";
@@ -60,12 +59,14 @@ import {
 import { EnvBanner } from "./env-banner";
 import { ProductionConfirmation } from "./production-confirmation";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
+import { PeriodStrip } from "./ghg-statement-period-strip";
 import { ResultPanel } from "./ghg-statement-result-panel";
 import {
   CERTIFICATION_ACCORDION_ITEM,
   CERTIFICATION_ACCORDION_LABEL,
   CERTIFICATION_ACCORDION_TRIGGER,
 } from "./certification-accordion-styles";
+import { Notice } from "@/components/ui/notice";
 
 interface GhgStatementCreateDialogProps {
   facilityId: string;
@@ -266,6 +267,13 @@ function DialogBody({
             warnings={result.warnings}
           />
         ) : (
+          <>
+          {/* Step 0 waits for the statements list; past it the period is
+              validated, so a failed background refetch must not hide the
+              period on the confirm step. */}
+          {endOn && !periodError && (stepIndex > 0 || statementsLoaded) && (
+            <PeriodStrip start={derivedStart} end={endOn} />
+          )}
           <StepFlow
             orientation="vertical"
             steps={STEPS}
@@ -283,8 +291,6 @@ function DialogBody({
                   onChange: () => clearErrors("reportingPeriodEndOn"),
                 })}
                 error={periodError}
-                endOn={endOn}
-                derivedStart={derivedStart}
                 statementsQuery={statementsQuery}
                 registryStatementsQuery={registryStatementsQuery}
                 registryStatementsExpanded={registryStatementsExpanded}
@@ -303,8 +309,6 @@ function DialogBody({
             )}
             {stepIndex === 2 && (
               <StepConfirm
-                endOn={endOn}
-                derivedStart={derivedStart}
                 isProduction={isProduction}
                 registerProps={register("confirmProduction")}
                 confirmError={errors.confirmProduction?.message}
@@ -316,6 +320,7 @@ function DialogBody({
               </div>
             )}
           </StepFlow>
+          </>
         )}
       </div>
 
@@ -377,42 +382,9 @@ function DialogBody({
   );
 }
 
-// The start is read-only: Isometric sets it for the first statement, then
-// derives each later start from the previous statement's end.
-export function PeriodWindow({
-  derivedStart,
-  endOn,
-}: {
-  derivedStart: string | null;
-  endOn: string;
-}) {
-  return (
-    <dl className="grid grid-cols-1 gap-12 sm:grid-cols-2">
-      <div className="flex flex-col gap-2">
-        <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Start
-        </dt>
-        <dd className="body-small font-mono text-[var(--color-text-primary)]">
-          {derivedStart ? formatDate(derivedStart) : "Set by Isometric"}
-        </dd>
-      </div>
-      <div className="flex flex-col gap-2">
-        <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          End
-        </dt>
-        <dd className="body-small font-mono text-[var(--color-text-primary)]">
-          {formatDate(endOn)}
-        </dd>
-      </div>
-    </dl>
-  );
-}
-
 function StepPeriod({
   registerProps,
   error,
-  endOn,
-  derivedStart,
   statementsQuery,
   registryStatementsQuery,
   registryStatementsExpanded,
@@ -420,8 +392,6 @@ function StepPeriod({
 }: {
   registerProps: UseFormRegisterReturn;
   error?: string;
-  endOn: string;
-  derivedStart: string | null;
   statementsQuery: ReturnType<typeof useGhgStatementsForFacility>;
   registryStatementsQuery: ReturnType<
     typeof useRegistryGhgStatementsForFacility
@@ -450,14 +420,6 @@ function StepPeriod({
         />
       </FormField>
       <ExistingPeriodsStatus query={statementsQuery} />
-      {endOn && !error && statementsQuery.isSuccess && (
-        <div className="flex flex-col gap-8 border-l-2 border-[var(--color-border-secondary)] pl-12">
-          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            Reporting period
-          </span>
-          <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
-        </div>
-      )}
       <RegistryStatementsPanel
         query={registryStatementsQuery}
         expanded={registryStatementsExpanded}
@@ -688,11 +650,9 @@ function StepPreview({
 
   return (
     <div className="flex flex-col gap-16">
-      <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
-
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-2">
-          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          <span className="body-small font-medium text-[var(--color-text-primary)]">
             Expected in this statement ({inPeriod.length})
           </span>
           <span className="body-caption text-[var(--color-text-tertiary)]">
@@ -700,18 +660,10 @@ function StepPreview({
           </span>
         </div>
         {inPeriod.length === 0 ? (
-          <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-orange)] bg-[var(--st-wait-bg)] pl-12 pr-12 py-8">
-            <WarningIcon
-              size={16}
-              weight="fill"
-              aria-hidden
-              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
-            />
-            <p className="body-small text-[var(--color-text-primary)]">
-              No submitted Removals fall in this period. Submit one or choose
-              an end date that includes one.
-            </p>
-          </div>
+          <Notice tone="warning">
+            No submitted Removals fall in this period. Submit one or choose an
+            end date that includes one.
+          </Notice>
         ) : (
           <RemovalBatchesAccordion
             facilityId={facilityId}
@@ -763,14 +715,10 @@ function StepPreview({
 }
 
 function StepConfirm({
-  endOn,
-  derivedStart,
   isProduction,
   registerProps,
   confirmError,
 }: {
-  endOn: string;
-  derivedStart: string | null;
   isProduction: boolean;
   registerProps: UseFormRegisterReturn;
   confirmError?: string;
@@ -780,7 +728,6 @@ function StepConfirm({
       <p className="body-small text-[var(--color-text-secondary)]">
         Isometric will create this period and link matching Removals.
       </p>
-      <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
       {isProduction ? (
         <ProductionConfirmation
           actionLabel="create this GHG Statement in the production Isometric registry"

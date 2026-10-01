@@ -21,7 +21,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, FileIcon, MapTrifoldIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus, useFormDetailLevel } from "@/components/forms";
+import { FormField, FormInput, FormSelect, FormSection, FormSpine, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { ResolvedErrorRevalidator } from "@/components/forms";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import {
@@ -154,7 +154,6 @@ export function ApplicationForm({
   deferredAttachments,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
-  const detailLevel = useFormDetailLevel();
   const { defaults: organizationDefaults } = useOrganizationDefaultValues();
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
   // removals derive durability from petrographic reflectance + TGA.
@@ -203,7 +202,7 @@ export function ApplicationForm({
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
-  const defaultSubmitLabel = isEditMode ? "Update Application" : "Create Application";
+  const defaultSubmitLabel = isEditMode ? "Update application" : "Create application";
   const selectedDeliveryId = useWatch({ control, name: "deliveryId" });
   const watchedAppliedKg = useWatch({ control, name: "biocharAppliedTons" });
   const evidenceMethod = useWatch({ control, name: "evidenceMethod" }) as ApplicationEvidenceMethod;
@@ -436,11 +435,12 @@ export function ApplicationForm({
             label="Delivery"
             error={errors.deliveryId?.message}
             required
-            helperText={
+            cue={
               selectedDelivery
-                ? detailLevel === "detailed" ? formatApplicationDeliveryHelperText(selectedDelivery) : undefined
-                : "Choose a delivery by order, formulation, and kg."
+                ? formatApplicationDeliveryHelperText(selectedDelivery)
+                : undefined
             }
+            helperText="Choose a delivery by order, formulation, and kg."
           >
             <FormSelect
               id="deliveryId"
@@ -456,14 +456,15 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharAppliedTons"
-            label="Biochar product applied (kg)"
+            label="Biochar product applied"
+            unit="kg"
             error={biocharAppliedError}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             certifyStatus={certStatus("biocharAppliedTons")}
             hint="As-received mass at delivery, water included."
-            helperText={
-              detailLevel === "detailed" && availableKg !== null
+            cue={
+              availableKg !== null
                 ? `${formatStockLimitKg(availableKg)} available from this delivery`
                 : undefined
             }
@@ -647,7 +648,7 @@ export function ApplicationForm({
             id="soilTemperatureC"
             label="Soil temperature (°C)"
             error={errors.soilTemperatureC?.message}
-            helperText="Annual average for this application site"
+            cue="Annual average for this application site"
             certifyRequired={isApplicationCertifyField("soilTemperatureC")}
             certifyStatus={certStatus("soilTemperatureC")}
           >

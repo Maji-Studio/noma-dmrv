@@ -15,8 +15,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, Modal } from "@/components/ui";
+import { Notice } from "@/components/ui/notice";
 import { useFacilityArchiveImpact } from "@/hooks/use-facilities";
 
 interface ArchiveFacilityDialogProps {
@@ -99,7 +99,8 @@ export function ArchiveFacilityDialog({
       width="sm"
     >
       <div className="flex flex-col gap-24">
-        <div className="flex flex-col gap-12">
+        {/* pr-40 keeps the title clear of the Modal's built-in close button. */}
+        <div className="flex flex-col gap-12 pr-40">
           <h2 id={titleId} className="title-heading-3">
             Archive facility {facility?.code}
           </h2>
@@ -121,12 +122,21 @@ export function ArchiveFacilityDialog({
               Checking attached data…
             </p>
           ) : impactParts.length > 0 ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-8">
               <p className="body-small text-[var(--color-text-secondary)]">
                 Also archives {dependentRecordTotal} dependent{" "}
-                {dependentRecordTotal === 1 ? "record" : "records"}:{" "}
-                {impactParts.join(", ")}.
+                {dependentRecordTotal === 1 ? "record" : "records"}:
               </p>
+              <ul className="flex flex-wrap gap-8" aria-label="Records archived with this facility">
+                {impactParts.map((part) => (
+                  <li
+                    key={part}
+                    className="border border-[var(--color-border-secondary)] bg-[var(--color-surface-light)] px-8 py-2 body-small text-[var(--color-text-primary)] tabular-nums"
+                  >
+                    {part}
+                  </li>
+                ))}
+              </ul>
               {emptyParts.length > 0 && (
                 <p className="body-small text-[var(--color-text-tertiary)]">
                   Checked, none found: {emptyParts.join(", ")}.
@@ -152,18 +162,11 @@ export function ArchiveFacilityDialog({
           )}
 
           {impact?.hasRegistrySubmissions && (
-            <div className="flex items-start gap-8 border border-[var(--clr-orange-20)] bg-[var(--clr-orange-10)] p-12">
-              <WarningIcon
-                size={18}
-                weight="bold"
-                className="mt-2 shrink-0 text-[var(--clr-orange)]"
-              />
-              <p className="body-small text-[var(--color-text-primary)]">
-                This facility has Removals or GHG Statements submitted to the
-                certifier registry. Archiving hides them here but does not
-                change anything on the registry.
-              </p>
-            </div>
+            <Notice tone="warning">
+              This facility has Removals or GHG Statements submitted to the
+              certifier registry. Archiving hides them here but does not
+              change anything on the registry.
+            </Notice>
           )}
 
           {requiresTypedCode && (

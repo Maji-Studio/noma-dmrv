@@ -49,6 +49,16 @@ describe("storage-bin validation copy", () => {
   });
 });
 
+describe("updateStorageLocationSchema", () => {
+  it("drops a facility, because a bin never changes facility through the update action", () => {
+    const parsed = updateStorageLocationSchema.parse({
+      storageLocationId: RELATED_ID,
+      facilityId: FACILITY_ID,
+    });
+    expect(parsed).not.toHaveProperty("facilityId");
+  });
+});
+
 describe("stock mode", () => {
   const base = { name: "Pile", facilityId: FACILITY_ID };
   it("lets only biochar and product bins hold one mixed pile", () => {

@@ -53,6 +53,12 @@ jobs:
       - name: Org-scoping check
         run: pnpm check:org-scoping
 
+      # Every export of a "use server" module is a public action the browser
+      # can call with any arguments; this fails any export that accepts an
+      # OrgContext, a db/tx handle or a Parameters<> passthrough.
+      - name: Server-action export check
+        run: pnpm check:server-action-exports
+
       # Tailwind's spacing scale is an allow-list here (`--spacing-*: initial`),
       # so an off-scale utility compiles to nothing and fails silently at
       # runtime rather than at build time. Nothing else catches it.

@@ -19,6 +19,8 @@ export interface EntityOption {
     wetKg: number | null;
     /** Omit for wet-only materials; null renders an explicit unknown dry mass. */
     dryKg?: number | null;
+    /** What the dry figure measures; biochar unless the option holds feedstock. */
+    dryLabel?: "dry feedstock";
     /** Qualifies figures whose delivered mass excludes the order being edited. */
     labelVariant?: "excluding-this-order";
   };
@@ -43,6 +45,8 @@ export type EntityType =
   | "creditBatch";
 
 export interface EntitySelectProps {
+  /** Id of the trigger; a wrapping FormField passes its own so the label names the control. */
+  id?: string;
   /** The type of entity to select */
   entityType: EntityType;
   /** Current selected value (entity ID) */

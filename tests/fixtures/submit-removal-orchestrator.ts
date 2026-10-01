@@ -5,18 +5,16 @@ import type {
   CertifierProjectRow,
 } from "@/data-access/certification";
 import type { InsertDraftSubmissionInput } from "@/data-access/certification-submissions";
-import type {
-  IsometricComponentBlueprint,
-  IsometricGhgEntryTemplate,
-} from "@/lib/isometric";
+import type { IsometricComponentBlueprint } from "@/lib/isometric";
 import type {
   ProductionRun,
   Sample,
 } from "@/db/schema";
 import { evaluateDurabilitySubmissionGates } from "@/lib/certification/durability-submission-gates";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
 import {
+  getMetadataValue,
   SUBMISSION_ATTEMPT_OUTCOMES,
+  SUBMISSION_EXTERNAL_MUTATIONS,
   SUBMISSION_METADATA_KEYS,
 } from "@/lib/certification/submission-metadata";
 
@@ -28,6 +26,14 @@ const INTERRUPTION_METADATA_KEYS = new Set<string>([
 const RETRY_CLEARED_METADATA_KEYS = new Set<string>([
   SUBMISSION_METADATA_KEYS.lastError,
   SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+]);
+const REJECTION_CLEARED_METADATA_KEYS = new Set<string>([
+  SUBMISSION_METADATA_KEYS.lastAttemptOutcome,
+  SUBMISSION_METADATA_KEYS.externalMutation,
+]);
+const BLOCKING_EXTERNAL_MUTATIONS = new Set<unknown>([
+  SUBMISSION_EXTERNAL_MUTATIONS.possible,
+  SUBMISSION_EXTERNAL_MUTATIONS.confirmed,
 ]);
 
 // ---------------------------------------------------------------------------
@@ -62,8 +68,11 @@ vi.mock("@/fn/certification/biochar-applications", () => ({
 // Removal submission fails closed unless every candidate document has a
 // validated mirrored Source ID. Tests that exercise missing/partial mirrors
 // override these healthy defaults.
-vi.mock("@/fn/certification/sources", async () => {
+vi.mock("@/fn/certification/source-candidates", async (importOriginal) => {
   return {
+    ...(await importOriginal<
+      typeof import("@/fn/certification/source-candidates")
+    >()),
     collectCandidateDocumentIdsForRemoval: vi.fn(async () => ["doc-test-1"]),
     resolveSourceIdsForRemoval: vi.fn(async () => ["src-test-1"]),
     collectCandidateSourceDocumentsForRemoval: vi.fn(async () => [
@@ -95,9 +104,11 @@ vi.mock("@/fn/certification/sources", async () => {
         sourceId: `src-${candidate.documentId}`,
       })),
     ),
-    mirrorCandidateSourcesForSubmission: vi.fn(),
   };
 });
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
+  mirrorCandidateSourcesForSubmission: vi.fn(),
+}));
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
@@ -156,13 +167,22 @@ import * as productionClaimReservations from "@/data-access/production-claim-res
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
-import * as sources from "@/fn/certification/sources";
+import * as sources from "@/fn/certification/source-candidates";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import * as isometric from "@/lib/isometric";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
+import { makeTemplate, TEMPLATE_ID } from "./submit-removal-templates";
 
 export {
   isometricClientFake,
 };
+export {
+  make1000YearSequestrationTemplate,
+  makeSequestrationTemplate,
+  makeTemplate,
+  RTC_PRODUCT_MASS_ID,
+  TEMPLATE_ID,
+} from "./submit-removal-templates";
 
 // ---------------------------------------------------------------------------
 // Constants used by the fakes + assertions.
@@ -175,8 +195,6 @@ export const CREDIT_BATCH_ID = "cb-test-1";
 export const APPLICATION_ID = "app-test-1";
 export const PRODUCTION_RUN_ID = "pr-test-1";
 export const EXTERNAL_PROJECT_ID = "prj_test_1";
-export const TEMPLATE_ID = "rvt_test_1";
-export const RTC_PRODUCT_MASS_ID = "rtc-product-mass";
 
 export const EXTERNAL_FACILITY_ID = "fcl_test_1";
 export const EXTERNAL_FEEDSTOCK_TYPE_ID = "ftt_test_1";
@@ -260,121 +278,9 @@ export function newLedgerRow(
 }
 
 // ---------------------------------------------------------------------------
-// Domain fixtures — a one-component template and a single production run.
-// Choosing `product_mass` keeps the test independent of transport legs and
-// the per-stage energy split (which need their own fixtures).
+// Domain fixtures — templates live in ./submit-removal-templates; a single
+// production run and mapping follow.
 // ---------------------------------------------------------------------------
-
-export function makeTemplate(): IsometricGhgEntryTemplate {
-  return {
-    id: TEMPLATE_ID,
-    name: "Test removal template",
-    display_name: "Test removal template",
-    // submitRemoval refuses non-REMOVAL templates (credit_type guard).
-    credit_type: "REMOVAL",
-    groups: [
-      {
-        id: "grp-1",
-        key: "co2-stored",
-        name: "CO2 stored",
-        components: [
-          {
-            id: RTC_PRODUCT_MASS_ID,
-            blueprint_key: "carbon_rich_substance_sequestration",
-            display_name: "Sequestered biochar",
-            inputs: [
-              {
-                type: "monitored",
-                input_key: "product_mass",
-                datapoint_id: null,
-                display_name: "Product mass",
-                quantity_kind: "mass",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  } as unknown as IsometricGhgEntryTemplate;
-}
-
-// A template that routes durability through the unverified 200-year
-// measurement-samples path. submitRemoval keeps it fail-closed until the
-// remaining H/C unit and binding contract is confirmed.
-export function makeSequestrationTemplate(): IsometricGhgEntryTemplate {
-  return {
-    id: TEMPLATE_ID,
-    name: "Durability template",
-    display_name: "Durability template",
-    credit_type: "REMOVAL",
-    groups: [
-      {
-        id: "grp-seq",
-        key: "co2-stored",
-        name: "Durable storage",
-        components: [
-          {
-            id: "rtc-seq",
-            blueprint_key: "biochar_sequestration_200_year_c_org",
-            display_name: "200-year sequestration",
-            inputs: [
-              {
-                type: "monitored",
-                input_key: "h_c_molar_ratios",
-                datapoint_id: null,
-                display_name: "H/C molar ratios",
-                quantity_kind: "dimensionless_ratio",
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  } as unknown as IsometricGhgEntryTemplate;
-}
-
-export function make1000YearSequestrationTemplate(): IsometricGhgEntryTemplate {
-  const base = makeSequestrationTemplate();
-  return {
-    ...base,
-    name: "1000-year durability template",
-    display_name: "1000-year durability template",
-    groups: base.groups.map((group) => ({
-      ...group,
-      components: group.components.map((component) => ({
-        ...component,
-        blueprint_key: CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-        display_name: "1000-year sequestration",
-        inputs: [
-          {
-            type: "monitored",
-            input_key: "total_carbon_contents",
-            quantity_kind: "mass_fraction_dry_basis",
-            datapoint_id: null,
-          },
-          {
-            type: "monitored",
-            input_key: "inorganic_carbon_contents",
-            quantity_kind: "mass_fraction_dry_basis",
-            datapoint_id: null,
-          },
-          {
-            type: "monitored",
-            input_key: "product_mass",
-            quantity_kind: "mass",
-            datapoint_id: null,
-          },
-          {
-            type: "monitored",
-            input_key: "s_fraction",
-            quantity_kind: "dimensionless_ratio",
-            datapoint_id: null,
-          },
-        ],
-      })),
-    })),
-  } as unknown as IsometricGhgEntryTemplate;
-}
 
 function makeBlueprints(): IsometricComponentBlueprint[] {
   return [
@@ -832,11 +738,17 @@ beforeEach(() => {
         !args.expectedLockedAt ||
         row?.lockedAt?.getTime() === args.expectedLockedAt.getTime();
       if (row?.status === "draft" && ownsLock) {
+        // Mirrors rejectDraftSubmission: a definitive rejection leaves no
+        // registry write in doubt, so the attempt markers are cleared.
         row.status = "rejected";
         row.lockedAt = null;
         row.metadata = {
-          ...(row.metadata ?? {}),
-          lastError: args.errorMessage,
+          ...Object.fromEntries(
+            Object.entries(row.metadata ?? {}).filter(
+              ([key]) => !REJECTION_CLEARED_METADATA_KEYS.has(key),
+            ),
+          ),
+          [SUBMISSION_METADATA_KEYS.lastError]: args.errorMessage,
         };
       }
     },
@@ -847,6 +759,12 @@ beforeEach(() => {
   vi.mocked(
     productionClaimReservations.rejectSubmissionAndReleaseProductionClaims,
   ).mockImplementation(async (ctx, args) => {
+    // Mirrors the real reject+release: a possible or confirmed external
+    // mutation leaves the row alone; otherwise only the exact draft attempt is
+    // rejected (the fake rejection checks draft status and lock ownership).
+    const row = storedRows.find((candidate) => candidate.id === args.submissionId);
+    const mutation = getMetadataValue(row?.metadata, SUBMISSION_METADATA_KEYS.externalMutation);
+    if (BLOCKING_EXTERNAL_MUTATIONS.has(mutation)) return;
     await ledger.markSubmissionRejected(ctx, args.submissionId, {
       errorMessage: args.errorMessage,
       expectedLockedAt: args.expectedLockedAt,
@@ -903,7 +821,7 @@ beforeEach(() => {
     makeResolvedInventorySource("doc-test-1", "src-test-1"),
   ]);
   vi.mocked(
-    sources.mirrorCandidateSourcesForSubmission,
+    sourcesMirror.mirrorCandidateSourcesForSubmission,
   ).mockResolvedValue(undefined);
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage

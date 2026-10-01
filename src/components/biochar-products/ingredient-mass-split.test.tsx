@@ -35,9 +35,9 @@ describe("IngredientMassSplit", () => {
     expect(text(html)).toContain("Water 40 kg");
   });
 
-  it("offers the bin history in Detailed only", () => {
+  it("offers the bin history at both levels", () => {
     const simple = renderToStaticMarkup(<FormDetailProvider scope="s"><Harness /></FormDetailProvider>);
-    expect(simple).not.toContain("Stock history");
+    expect(simple).toContain('aria-label="Stock history, Compost bin"');
     const detailed = renderToStaticMarkup(<Harness />);
     expect(detailed).toContain('aria-label="Stock history, Compost bin"');
   });

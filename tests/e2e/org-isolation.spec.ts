@@ -151,30 +151,26 @@ test("organization domain data is isolated across lists, record URLs, and picker
   ).toBeVisible();
   await expect(orgB.page.getByText(orgABatch.code, { exact: true })).toHaveCount(0);
 
-  const supplierResponse = await orgB.page.goto(
-    `/suppliers/${seededData.supplier.id}`,
-  );
-  expect(supplierResponse?.status()).toBe(404);
-  await expect(
-    orgB.page.getByRole("heading", { name: "Supplier not found", exact: true }),
-  ).toBeVisible();
+  // The supplier detail page is gone: the list's `?supplier=` deep link must
+  // not open another organization's supplier either.
+  await orgB.page.goto(`/suppliers?supplier=${seededData.supplier.id}`);
+  await expect(orgB.page.getByText("Linked supplier could not be opened")).toBeVisible();
+  await expect(orgB.page.getByRole("dialog")).toHaveCount(0);
   await expect(
     orgB.page.getByText(seededData.supplier.name, { exact: true }),
   ).toHaveCount(0);
 
-  const customerResponse = await orgB.page.goto(
-    `/customers/${seededData.customer.id}`,
-  );
-  expect(customerResponse?.status()).toBe(404);
-  await expect(
-    orgB.page.getByRole("heading", { name: "Customer not found", exact: true }),
-  ).toBeVisible();
+  // The customer detail page is gone: the list's `?customer=` deep link must
+  // not open another organization's customer either.
+  await orgB.page.goto(`/customers?customer=${seededData.customer.id}`);
+  await expect(orgB.page.getByText("Linked customer could not be opened")).toBeVisible();
+  await expect(orgB.page.getByRole("dialog")).toHaveCount(0);
   await expect(
     orgB.page.getByText(seededData.customer.name, { exact: true }),
   ).toHaveCount(0);
 
   await orgB.page.goto(`/feedstocks?facility=${orgB.facility.id}`);
-  await orgB.page.getByRole("button", { name: "New Feedstock" }).click();
+  await orgB.page.getByRole("button", { name: "New feedstock" }).click();
   const dialog = orgB.page.getByRole("dialog");
   const supplierTrigger = dialog
     .locator("label")

@@ -25,7 +25,7 @@ import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, PlusIcon } from "@p
 import { FormField, FormInput, FormTextarea, MassMoistureFields, MoistureField, FormActions, FormError, FormSection, FormSpine, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { ProductionReadingsField } from "./production-readings-field";
-import { FormSelect } from "@/components/forms/form-select";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import {
   EntitySelect,
   StorageLocationQuickAddDialog,
@@ -300,7 +300,7 @@ export function ProductionRunForm({
     resetField,
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
+  const defaultSubmitLabel = isEditMode ? "Update production run" : "Create production run";
 
   const handleFormSubmit = handleSubmit(async (data) => {
     // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
@@ -377,43 +377,23 @@ export function ProductionRunForm({
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
-            <Controller
-              name="reactorId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  entityType="reactor"
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder="Select a reactor..."
-                  disabled={isSubmitting || !watchedFacilityId}
-                  error={!!errors.reactorId}
-                  filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
-                  autoSelectSingle
-                />
-              )}
-            />
-          </FormField>
-
-          <FormField
+        <FormField
+          id="status"
+          label="Status"
+          error={errors.status?.message}
+          helperText="Mark finished runs Complete before certification."
+          certifyRequired
+          certifyStatus={runStatusCertStatus}
+        >
+          <SegmentedControl
             id="status"
-            label="Status"
-            error={errors.status?.message}
-            helperText="Mark finished runs Complete before certification."
-            certifyRequired
-            certifyStatus={runStatusCertStatus}
-          >
-            <FormSelect
-              id="status"
-              disabled={isSubmitting}
-              error={!!errors.status}
-              options={statusOptions}
-              {...register("status")}
-            />
-          </FormField>
-        </div>
+            legend="Run status"
+            options={statusOptions}
+            disabled={isSubmitting}
+            error={!!errors.status}
+            {...register("status")}
+          />
+        </FormField>
 
         {watchedStatus === "cancelled" && (
           <FormField
@@ -434,11 +414,51 @@ export function ProductionRunForm({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <FormField id="reactorId" label="Reactor" error={errors.reactorId?.message} required>
+            <Controller
+              name="reactorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  id="reactorId"
+                  entityType="reactor"
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="Select a reactor..."
+                  disabled={isSubmitting || !watchedFacilityId}
+                  error={!!errors.reactorId}
+                  filterBy={watchedFacilityId ? { facilityId: watchedFacilityId } : undefined}
+                  autoSelectSingle
+                />
+              )}
+            />
+          </FormField>
+
+          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
+            <Controller
+              name="operatorId"
+              control={control}
+              render={({ field }) => (
+                <EntitySelect
+                  id="operatorId"
+                  entityType="operator"
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                  placeholder="Select operator..."
+                  disabled={isSubmitting}
+                  error={!!errors.operatorId}
+                />
+              )}
+            />
+          </FormField>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="startDate"
             label="Start date"
             error={errors.startDate?.message}
-            helperText={timezoneHelperText}
+            cue={timezoneHelperText}
             required
           >
             <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
@@ -494,24 +514,6 @@ export function ProductionRunForm({
           </FormField>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
-            <Controller
-              name="operatorId"
-              control={control}
-              render={({ field }) => (
-                <EntitySelect
-                  entityType="operator"
-                  value={field.value || undefined}
-                  onChange={field.onChange}
-                  placeholder="Select operator..."
-                  disabled={isSubmitting}
-                  error={!!errors.operatorId}
-                />
-              )}
-            />
-          </FormField>
-        </div>
       </FormSection>
 
       {/* ── Feedstock & processing ── */}
@@ -667,6 +669,7 @@ export function ProductionRunForm({
             control={control}
             render={({ field }) => (
               <EntitySelect
+                id="biocharStorageLocationId"
                 entityType="storageLocation"
                 value={field.value || undefined}
                 onChange={field.onChange}

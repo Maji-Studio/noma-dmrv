@@ -108,28 +108,28 @@ export function EnergySummary() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
         <StatCard
-          title="Production Runs"
+          title="Production runs"
           value={runCount}
           icon={<FireIcon size={24} weight="bold" />}
           description="Rolled up in this summary"
           isLoading={isLoading}
         />
         <StatCard
-          title="Grid Electricity"
+          title="Grid electricity"
           value={formatEnergyQuantity(electricityKwh, "kWh")}
           icon={<LightningIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
-          title="Genset Diesel"
+          title="Genset diesel"
           value={formatEnergyQuantity(gensetLitres, "L")}
           icon={<GasPumpIcon size={24} weight="bold" />}
           description="All production runs"
           isLoading={isLoading}
         />
         <StatCard
-          title="Startup / Plant Diesel"
+          title="Startup / plant diesel"
           value={formatEnergyQuantity(startupLitres, "L")}
           icon={<GasPumpIcon size={24} weight="bold" />}
           description="All production runs"
@@ -174,8 +174,8 @@ export function EnergySummary() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-[var(--panel-head-bg)] [border-bottom:var(--panel-head-border)]">
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-left">Source</th>
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Preview value</th>
+                  <th className="body-small font-medium text-[var(--color-text-secondary)] py-10 px-12 text-left">Source</th>
+                  <th className="body-small font-medium text-[var(--color-text-secondary)] py-10 px-12 text-right">Preview value</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,7 +188,7 @@ export function EnergySummary() {
                 <tr className="last:[border-bottom:none]">
                   <td className="body-medium py-8 px-12">
                     Diesel fuel (genset + startup)
-                    <span className="block label-micro text-[var(--color-text-tertiary)]">
+                    <span className="block body-caption text-[var(--color-text-tertiary)]">
                       Submitted by volume when the active template carries a
                       pyrolysis fuel-usage component; emission factor bound on
                       the Isometric template

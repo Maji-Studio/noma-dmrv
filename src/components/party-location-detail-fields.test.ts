@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { isMissingValueCopy } from "@/lib/copy-utils";
 import { buildPartyLocationDetailFields } from "./party-location-detail-fields";
 
-/** Mirrors the customer-list call site verbatim (customer-list.tsx). */
+/** Mirrors the customer read-sheet call site verbatim (customer-read-sections.tsx). */
 const options = {
-  distanceLabel: "One-way distance from facility (per leg, km)",
+  distanceLabel: "Distance from facility (one way)",
   defaultLabel: "Default destination",
   positionLabel: "Application site position",
   descriptionLabel: "Site description",
@@ -24,7 +24,7 @@ describe("buildPartyLocationDetailFields", () => {
       "Application site position latitude",
       "Application site position longitude",
       "Default soil temperature (°C)",
-      "One-way distance from facility (per leg, km)",
+      "Distance from facility (one way)",
       "Default destination",
     ]);
     expect(

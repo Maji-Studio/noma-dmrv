@@ -1,6 +1,6 @@
 # Mix bins draw every batch pro-rata
 
-**Status: Accepted** (2026-09-28; not implemented). [Plan](../plans/2026-09-28-split-and-mix-bins.md). Builds on [ADR 0029](./0029-output-bin-stock-is-dry-biochar-drawn-fifo.md).
+**Status: Accepted** (2026-09-28; implemented in [#839](https://github.com/Maji-Studio/noma-dmrv/pull/839)). [Plan](../plans/2026-09-28-split-and-mix-bins.md). Builds on [ADR 0029](./0029-output-bin-stock-is-dry-biochar-drawn-fifo.md).
 
 Some yards keep biochar or product as one well-mixed pile rather than separate bays. FIFO attribution is wrong for such a pile: a loader takes material from every batch at once. An output bin can therefore be set to **Mix**, and a mix bin conserves the same dry biochar per layer as ADR 0029 but draws it differently.
 
@@ -12,6 +12,7 @@ Some yards keep biochar or product as one well-mixed pile rather than separate b
 - Every removal carries a measured moisture reading (required, never prefilled). The estimate is shown as a hint and triggers an advisory warning beyond a configured gap.
 - Event order within a day matters, so output stock events carry date and time. An entry timed before an already-posted removal leaves that removal's saved shares unchanged; the operator is warned which removals were calculated without it.
 - The UI shows the pile as one box; batch shares stay in the ledger and in Detailed views.
+  Superseded in part: batch shares are data and show at both detail levels; see [forms.md, "Simple and Detailed presentation"](../forms.md#simple-and-detailed-presentation).
 
 ## Consequences
 

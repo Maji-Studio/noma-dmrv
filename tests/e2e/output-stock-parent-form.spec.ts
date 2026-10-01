@@ -18,6 +18,15 @@ test("saving a history correction keeps the containing delivery form unsaved", a
   await page.getByPlaceholder("Search by code or name…").fill(fixture.bin.code);
   await page.getByText(fixture.bin.name, { exact: true }).first().click();
   await page.getByRole("button", { name: "Record loss", exact: true }).click();
+  // The movement mode is a segmented control: native radios, arrow keys switch it.
+  const lossMode = page.getByRole("radio", { name: "Record loss", exact: true });
+  const countMode = page.getByRole("radio", { name: "Reconcile stock", exact: true });
+  await expect(lossMode).toBeChecked();
+  await lossMode.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(countMode).toBeChecked();
+  await lossMode.locator("..").click();
+  await expect(lossMode).toBeChecked();
   await page.locator("#occurredAt").fill(FIFO_BROWSER_TIME);
   await page.locator("#stock-wet").fill("120");
   await fillStockMoisture(page, "stock", "30");
@@ -29,16 +38,16 @@ test("saving a history correction keeps the containing delivery form unsaved", a
 
   await page.goto(`/deliveries?facility=${fixture.facility.id}`);
   await waitForFacilityHydration(page, fixture.facility.name);
-  await page.getByRole("button", { name: "New Delivery", exact: true }).click();
+  await page.getByRole("button", { name: "New delivery", exact: true }).click();
   await page.locator("#deliveryDate").fill(FIFO_BROWSER_TIME);
   await selectEntity(page, "Order", fixture.order.id, fixture.order.code);
   await page.locator("#storageLocationId").selectOption(fixture.bin.id);
   await page.locator("#deliveredWetMassKg").fill("10");
   await fillStockMoisture(page, "delivery", "30");
-  const create = page.getByRole("button", { name: "Create Delivery", exact: true });
+  const create = page.getByRole("button", { name: "Create delivery", exact: true });
   await expect(create).toBeEnabled();
-  // The preview (and its history trigger) is a Detailed-only surface now.
-  await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
+  // The preview and its history trigger show at both levels.
+  await expect(page.getByRole("radio", { name: "Simple", exact: true })).toBeChecked();
   await page.getByRole("region", { name: "Stock preview", exact: true })
     .getByRole("button", { name: "Stock history", exact: true }).click();
   const history = page.getByRole("dialog", { name: "Stock history", exact: true });

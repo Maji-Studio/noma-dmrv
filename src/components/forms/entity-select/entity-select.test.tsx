@@ -152,7 +152,7 @@ describe("EntitySelect selected-value display", () => {
     expect(html).toContain('aria-invalid="true"');
   });
 
-  it("keeps the selected input and helper but omits derived stock captions in Simple", () => {
+  it("keeps the selected input, helper and remaining stock caption in Simple", () => {
     entityState.selected = {
       id: "bin-1", code: "BIN-01", name: "North product bin",
       remainingMass: { wetKg: 3000, dryKg: 2900 },
@@ -164,15 +164,12 @@ describe("EntitySelect selected-value display", () => {
       </FormDetailProvider>,
     );
     expect(html).toContain("North product bin");
-    // The aria-label names the field, so the selected label (which can carry
-    // a stock change) is announced as a description.
+    // Remaining stock informs the pick, so Simple shows it too and the
+    // control is described by the helper, the stock caption and the label.
     const describedBy = html.match(/aria-describedby="([^"]*)"/)?.[1].split(" ") ?? [];
     expect(describedBy[0]).toBe("field-helper");
-    expect(describedBy).toHaveLength(2);
-    expect(html).toContain(`id="${describedBy[1]}"`);
-    expect(html).toMatch(new RegExp(`id="${describedBy[1]}"[^>]*>North product bin<`));
-    expect(html).not.toContain("Remaining now");
-    expect(html).not.toContain("remaining-mass");
+    expect(describedBy).toHaveLength(3);
+    expect(html).toContain("Remaining now: 3,000 kg wet, 2,900 kg dry biochar");
   });
 
   it("qualifies a selected stock figure that excludes the edited order", () => {
@@ -382,5 +379,51 @@ describe("EntitySelect open option display", () => {
     expect(html).toContain("North Kiln");
     expect(html).toContain("Pyrolysis reactor");
     expect(html).not.toContain("RE-001");
+  });
+});
+
+describe("EntitySelect label association", () => {
+  const renderLabelled = (id?: string) =>
+    renderToStaticMarkup(
+      <div>
+        <label htmlFor="reactor-field">Reactor</label>
+        <EntitySelect
+          id={id}
+          entityType="reactor"
+          onChange={() => undefined}
+          placeholder="Select reactor"
+        />
+      </div>,
+    );
+
+  it("gives the combobox trigger the field id so the label names it", () => {
+    const html = renderLabelled("reactor-field");
+    const trigger = html.match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
+
+    expect(html).toContain('for="reactor-field"');
+    expect(trigger).toContain('id="reactor-field"');
+    // aria-label outranks a native label in the name computation, so it must
+    // not be set when a label points at the trigger.
+    expect(trigger).not.toContain("aria-label");
+  });
+
+  it("falls back to the placeholder as the name when no id is supplied", () => {
+    const trigger =
+      renderLabelled().match(/<button[^>]*role="combobox"[^>]*>/)?.[0] ?? "";
+
+    expect(trigger).toContain('aria-label="Select reactor"');
+    expect(trigger).not.toContain(" id=");
+  });
+});
+
+describe("EntitySelect popover", () => {
+  it("keeps the remaining-mass line rendered outside the popover", () => {
+    entityState.selected = {
+      id: "reactor-1",
+      code: "BIN-01",
+      name: "North product bin",
+      remainingMass: { wetKg: 3_000, dryKg: 2_900 },
+    };
+    expect(render("reactor-1")).toContain("3,000");
   });
 });

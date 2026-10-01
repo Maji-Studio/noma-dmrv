@@ -23,6 +23,7 @@
 "use client";
 
 import { RowActionsMenu } from "@/components/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { useOutputStockBalance } from "@/hooks/use-output-stock";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -139,9 +140,7 @@ export function StorageBinTile({
         <p className="flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">
           <span className="min-w-0 truncate">{bin.name}</span>
           {isArchived && (
-            <span className="label-micro shrink-0 border border-[var(--color-border-primary)] px-6">
-              Archived
-            </span>
+            <StatusBadge status="archived" size="small" className="shrink-0" />
           )}
         </p>
 

@@ -1,10 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { InfoHint } from "@/components/ui/tooltip";
+import { CalculatorIcon, TestTubeIcon } from "@phosphor-icons/react/dist/ssr";
+import { FormField } from "@/components/forms/form-field";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 import type { MethodBEligibility } from "@/lib/certification/method-b-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { formatCount } from "@/lib/copy-utils";
+import { Notice } from "@/components/ui/notice";
+
+const SAMPLING_ART_SIZE = 20;
 
 interface CreditBatchSamplingControlProps {
   visible: boolean;
@@ -33,17 +38,13 @@ export function CreditBatchSamplingControl({
 
   if (isEditMode) {
     return (
-      <div
-        className="flex flex-col gap-4 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
+      <Notice
+        tone="info"
+        title={`Sampling: ${value === "unsampled" ? "Unsampled" : "Sampled"}`}
         data-testid="sampling-read-only"
       >
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          Sampling: {value === "unsampled" ? "Unsampled" : "Sampled"}
-        </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          Fixed when the credit batch was created and cannot be changed.
-        </span>
-      </div>
+        Fixed when the credit batch was created and cannot be changed.
+      </Notice>
     );
   }
 
@@ -64,48 +65,33 @@ export function CreditBatchSamplingControl({
             : "The Method-B baseline is met. An Admin must record the Method-B prerequisites."
 
   return (
-    <fieldset className="flex flex-col gap-10" data-testid="sampling-control">
-      <legend className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
-        Sampling
-        <InfoHint label="About sampling eligibility">{hint}</InfoHint>
-      </legend>
-      <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
-        <label className="flex min-h-44 cursor-pointer items-center gap-10 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-8 body-small">
-          <input
-            type="radio"
-            name="sampling-choice"
-            value="sampled"
-            checked={value === "sampled"}
-            onChange={() => onChange("sampled")}
-            disabled={disabled}
-          />
-          <span className="flex flex-col gap-2">
-            <span className="font-medium">Sampled</span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Method A · sampled batch
-            </span>
-          </span>
-        </label>
-        <label
-          className="flex min-h-44 items-center gap-10 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-8 body-small has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-40"
-        >
-          <input
-            type="radio"
-            name="sampling-choice"
-            value="unsampled"
-            checked={value === "unsampled"}
-            onChange={() => onChange("unsampled")}
-            disabled={unsampledDisabled}
-          />
-          <span className="flex flex-col gap-2">
-            <span className="font-medium">Unsampled</span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Method B · computed eligibility
-            </span>
-          </span>
-        </label>
-      </div>
+    <div data-testid="sampling-control" className="flex flex-col gap-8">
+      <FormField id="sampling-choice" label="Sampling" helperText={hint}>
+        <ChoiceCardGroup
+          id="sampling-choice"
+          legend="Sampling"
+          name="sampling-choice"
+          value={value}
+          options={[
+            {
+              value: "sampled",
+              title: "Sampled",
+              description: "Method A, lab sampled",
+              art: <TestTubeIcon size={SAMPLING_ART_SIZE} weight="bold" />,
+              disabled,
+            },
+            {
+              value: "unsampled",
+              title: "Unsampled",
+              description: "Method B, computed",
+              art: <CalculatorIcon size={SAMPLING_ART_SIZE} weight="bold" />,
+              disabled: unsampledDisabled,
+            },
+          ]}
+          onValueChange={(next) => onChange(next as CreditBatchSampling)}
+        />
+      </FormField>
       {countMet && !eligibility?.prerequisitesRecorded && canManage && prerequisitesSetup}
-    </fieldset>
+    </div>
   );
 }

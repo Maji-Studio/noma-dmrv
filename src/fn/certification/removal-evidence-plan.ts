@@ -12,7 +12,7 @@ import {
   resolveSourceBindingCandidates,
   type CandidateSourceDocument,
   type ResolvedSourceBindingCandidate,
-} from "./sources";
+} from "./source-candidates";
 
 type BoundCandidate<T extends { binding: unknown }> = T & {
   binding: NonNullable<T["binding"]>;

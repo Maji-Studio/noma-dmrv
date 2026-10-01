@@ -21,7 +21,8 @@ import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as biocharApplications from "@/fn/certification/biochar-applications";
 import * as biocharApplicationsDA from "@/data-access/certifier-biochar-applications";
-import * as sources from "@/fn/certification/sources";
+import * as sources from "@/fn/certification/source-candidates";
+import * as sourcesMirror from "@/fn/certification/sources-mirror-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { compileRemovalSubmission } from "@/fn/certification/removal-submission-build";
 import * as isometric from "@/lib/isometric";
@@ -231,16 +232,18 @@ describe("submitRemoval — Source binding gate", () => {
       orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
       ctx,
-      defaultTemplate: ctx.defaultTemplate!,
-      blueprintsByKey: new Map(
-        ctx.blueprintsForTemplate.map((blueprint) => [
-          blueprint.key,
-          blueprint,
-        ]),
-      ),
-      externalProjectId: ctx.mapping!.externalProjectId,
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: ctx.defaultTemplate!,
+        blueprintsByKey: new Map(
+          ctx.blueprintsForTemplate.map((blueprint) => [
+            blueprint.key,
+            blueprint,
+          ]),
+        ),
+        externalProjectId: ctx.mapping!.externalProjectId,
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
     });
 
     expect(compiled.blockers).toEqual([]);
@@ -431,7 +434,7 @@ describe("submitRemoval — Source binding gate", () => {
           : [],
     );
     vi.mocked(
-      sources.mirrorCandidateSourcesForSubmission,
+      sourcesMirror.mirrorCandidateSourcesForSubmission,
     ).mockImplementation(async () => {
       prepared = true;
     });
@@ -440,16 +443,18 @@ describe("submitRemoval — Source binding gate", () => {
       orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
       ctx,
-      defaultTemplate: ctx.defaultTemplate!,
-      blueprintsByKey: new Map(
-        ctx.blueprintsForTemplate.map((blueprint) => [
-          blueprint.key,
-          blueprint,
-        ]),
-      ),
-      externalProjectId: ctx.mapping!.externalProjectId,
-      allowPeriodInputStub: false,
-      hasDurabilityComponents: false,
+      prepared: {
+        defaultTemplate: ctx.defaultTemplate!,
+        blueprintsByKey: new Map(
+          ctx.blueprintsForTemplate.map((blueprint) => [
+            blueprint.key,
+            blueprint,
+          ]),
+        ),
+        externalProjectId: ctx.mapping!.externalProjectId,
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      },
       allowPendingSources: true,
     });
     expect(reviewed.snapshot).not.toBeNull();
@@ -473,7 +478,7 @@ describe("submitRemoval — Source binding gate", () => {
     ).resolves.toMatchObject({ externalId: "rem_1" });
 
     expect(
-      sources.mirrorCandidateSourcesForSubmission,
+      sourcesMirror.mirrorCandidateSourcesForSubmission,
     ).toHaveBeenCalledWith(
       expect.any(Object),
       {

@@ -28,9 +28,13 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
   const observedLayers = originalKind === 'count' ? ((original.inputSnapshot?.preview as { beforeAllocations?: { layerId: string }[] } | undefined)?.beforeAllocations ?? []).map(l => l.layerId) : [];
   const affected = new Set([...allocations.map(a => a.biocharProductId ?? a.productionRunId), ...replacementLayerIds, ...observedLayers]);
   const affectedLayers = layers.filter(l => affected.has(l.id));
+  // A later oldest-first or pro-rata draw would have split differently had the
+  // affected layers held other stock; an operator-ordered draw took only the
+  // sub-bins it names, so it depends on the correction only if it touched one.
   const later = all.find(r => r.movement.postingSequence > original.postingSequence &&
     (affected.has(r.allocation.biocharProductId ?? r.allocation.productionRunId) ||
-      affectedLayers.some(l => l.placedAt <= r.movement.occurredAt!.toISOString())));
+      (r.allocation.basisSnapshot.policy !== 'operator_order' &&
+        affectedLayers.some(l => l.placedAt <= r.movement.occurredAt!.toISOString()))));
 
   // The bin is the record the operator opens to clear the way; the later
   // movement rides along as a blocker under the label its history row shows.

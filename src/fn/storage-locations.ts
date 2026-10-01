@@ -188,7 +188,6 @@ export async function updateStorageLocationFn(
         code: validated.code,
         name: validated.name,
         type: validated.type,
-        facilityId: validated.facilityId,
         capacityKg: validated.capacityKg,
         feedstockTypeId: validated.feedstockTypeId,
         formulationId: validated.formulationId,
