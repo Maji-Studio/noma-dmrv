@@ -12,6 +12,7 @@ export * from "./list-pagination";
 export * from "./modal";
 export * from "./notice";
 export * from "./mass-pair";
+export * from "./noma-logo";
 export * from "./moisture-split";
 export * from "./page-header";
 export * from "./product-composition-preview";
