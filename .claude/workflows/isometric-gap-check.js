@@ -44,7 +44,7 @@ Our (non-authoritative) interpretation docs — read these to judge whether a re
 
 const OUR_CODE = `
 Our implementation — read these to judge whether a requirement is BUILT / GATED:
-- src/lib/isometric/transformers/datapoint.ts  (INPUT_MAPPING, ~lines 35-199: (group_key, blueprint_key, input_key) → source field/unit/type. This is what we actually SUBMIT.)
+- src/lib/isometric/semantic-binding-catalog.ts  (SEMANTIC_BINDING_CATALOG, keyed blueprint_key → input_key → role per group_key: source field/unit/type/bucket. INPUT_MAPPING in transformers/datapoint.ts is a projection of it. This is what we actually SUBMIT.)
 - src/lib/isometric/transformers/ghg-entry.ts, measurement-sample.ts, data-upload.ts
 - src/lib/isometric/utils/aggregation.ts        (production-run → AggregatedProductionData)
 - src/lib/isometric/utils/durability-aggregation.ts
@@ -70,7 +70,7 @@ Verify by TARGETED lookup, NOT by reading whole files (that was the cost driver)
 1. Open each claim's priorFileRefs first — the coverage pass already cited file:line. Confirm or rebut exactly what it says.
 2. Then grep ONLY for the specific places a real requirement could hide under a different name:
    - schema column under another name → grep src/db/schema/ for the concept
-   - what we actually submit → grep src/lib/isometric/transformers/datapoint.ts (INPUT_MAPPING) for the group/blueprint/input key
+   - what we actually submit → grep src/lib/isometric/semantic-binding-catalog.ts (SEMANTIC_BINDING_CATALOG) for the blueprint/input key, then its role for the group key
    - a submission gate → grep src/lib/certification/readiness.ts + drizzle/*.sql (condition migrations)
    - an intentional decision/exclusion → grep docs/adr/ and docs/open-questions.md
    - a doc row using different wording → grep docs/isometric/{requirements-shortlist,schema-mapping,p0-compliance-checklist,condition-registry}.md
@@ -264,7 +264,7 @@ ${liveNote}
 
 Method per atom:
 1. Is it DOCUMENTED in our docs? Grep the docs above for the concept; note the row/file:line or its absence.
-2. Is it BUILT? Check schema columns + INPUT_MAPPING tuple (datapoint.ts) + aggregation. Note file:line or absence.
+2. Is it BUILT? Check schema columns + SEMANTIC_BINDING_CATALOG binding/role (semantic-binding-catalog.ts) + aggregation. Note file:line or absence.
 3. Is it GATED? Check readiness.ts / condition migrations / Zod. Note file:line or absence.
 4. Does our doc/code CONTRADICT the authority text? → INTERPRETATION_DRIFT.
 5. If sub-material: is the exclusion documented? If not → SUB_MATERIAL_EXCLUSION_UNDOCUMENTED.
