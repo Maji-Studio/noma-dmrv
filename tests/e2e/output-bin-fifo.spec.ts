@@ -117,10 +117,10 @@ test.describe("Output-bin conserved FIFO", () => {
 
     await page.locator("#deliveredWetMassKg").fill("2000");
     await fillStockMoisture(page, "delivery", "30");
-    // Simple shows the preview headline, picture and history action;
-    // Detailed adds the dry pair and the calculation.
+    // Simple shows the preview headline and picture; Detailed adds the dry
+    // pair and the calculation. Stock history lives on the storage bin.
     await expect(preview.getByText("2,000 kg wet loaded at 30% moisture", { exact: true })).toBeVisible();
-    await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toBeVisible();
+    await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toHaveCount(0);
     await expect(preview.getByRole("group", { name: "Dry biochar in bin: 1,500 kg before, 350 kg after" })).toBeHidden();
     await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
     // 2,000 kg wet at 30% moisture is 1,400 kg of dry solids, of which 1,150 kg
@@ -138,17 +138,7 @@ test.describe("Output-bin conserved FIFO", () => {
     await expect(draw.getByRole("row").filter({ hasText: "Dry biochar in this movement" })).toContainText("1,150 kg");
     await draw.scrollIntoViewIfNeeded();
     await evidence(page, info, "spanning-delivery-preview");
-    const more = preview.getByRole("button", { name: "Stock history", exact: true });
-    await more.focus();
-    await page.keyboard.press("Enter");
-    const history = page.getByRole("dialog", { name: "Stock history", exact: true });
-    await expect(history).toBeVisible();
-    await expect.poll(() => history.evaluate(element => element.contains(document.activeElement))).toBe(true);
-    await expect(history.getByRole("button", { name: "About stock history", exact: true })).toBeVisible();
-    // Escape while the info hint's tooltip is open closes the tooltip first, so leave focus on the initial control.
-    await page.keyboard.press("Escape");
-    await expect(history).toHaveCount(0);
-    await expect(more).toBeFocused();
+    await expect(preview.getByRole("button", { name: "Stock history", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Create delivery", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     const saved = await readOutputStockBrowserFixture(f);

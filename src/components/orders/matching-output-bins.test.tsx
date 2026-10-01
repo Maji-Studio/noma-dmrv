@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MatchingOutputBin } from "@/types/output-stock";
 type BalanceBin = { storageLocationId: string; facilityId: string } | null;
 const state = vi.hoisted(() => ({ bins: [] as MatchingOutputBin[], loading: false, error: false, inputs: [] as BalanceBin[] }));
-vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ storageLocationId, facilityId }: { storageLocationId: string; facilityId: string }) => <button data-history-bin={storageLocationId} data-facility={facilityId}>More info</button> }));
 vi.mock("@/hooks/use-output-stock", () => ({
   useMatchingOutputBins: () => ({ data: state.bins, isLoading: false, error: null }),
   useOutputStockBalance: (input: BalanceBin) => {
@@ -74,7 +73,7 @@ describe("MatchingOutputBins", () => {
     const html = renderToStaticMarkup(<MatchingOutputBins facilityId="facility" formulationId="pure" />);
     expect(html).toContain("You can save this order now");
   });
-  it("shows current layers and history without a withdrawal", () => {
+  it("shows current layers without a withdrawal or a history action", () => {
     state.bins = [{ id: "bin", code: "B1", name: "Bin", dryMassKg: 100, estimatedWetMassKg: null }];
     const html = renderList();
     expect(state.inputs).toEqual([{ storageLocationId: "bin", facilityId: "facility" }]);
@@ -82,8 +81,7 @@ describe("MatchingOutputBins", () => {
     expect(html).toContain('aria-label="Batches in Bin: BP-001 100 kg"');
     expect(html).toContain("BP-001 100 kg dry");
     expect(html).toContain("background:var(--acc-prod)");
-    expect(html).toContain('data-history-bin="bin" data-facility="facility"');
-    expect(html).toContain("More info");
+    expect(html).not.toContain("Stock history");
     // Without a resolved wet estimate the headline falls back to dry stock.
     expect(html).toContain("Available dry stock");
     expect(html).toContain("100 kg dry biochar");
@@ -104,7 +102,6 @@ describe("MatchingOutputBins", () => {
     const html = renderList();
     expect(html).toContain('role="status"');
     expect(html).toContain("100 kg dry biochar");
-    expect(html).toContain("More info");
     expect(html).not.toContain("150 kg");
   });
 });
