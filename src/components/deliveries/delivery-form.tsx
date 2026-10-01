@@ -7,7 +7,6 @@
 
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { formatRoundTripKm } from "@/lib/format-utils";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useState } from "react";
 
@@ -279,15 +278,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint } as DeliveryFormData);
   });
 
-  // All three branches describe the same quantity — the one-way facility ›
-  // destination distance the field's own label names — so none of them
-  // re-qualifies it. Why the field is empty stays visible (a cue); with a
-  // distance the cue shows the round trip every leg counts.
+  // Why the field is empty stays visible (a cue). With a distance there is no
+  // cue: the route below shows the round trip it counts.
   const distanceCue = !watchOrderId
     ? "Select an order to load the destination's stored distance."
-    : effectiveDistanceKm != null && effectiveDistanceKm > 0
-      ? formatRoundTripKm(effectiveDistanceKm)
-      : undefined;
+    : undefined;
   const distanceHelperText = !watchOrderId
     ? undefined
     : storedDistanceKm == null

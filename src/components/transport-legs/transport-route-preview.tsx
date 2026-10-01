@@ -3,8 +3,12 @@
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import { positiveOrNull } from "@/lib/calculations/transport-leg";
-import { TransportLegsEditor } from "./transport-legs-editor";
 import type { JourneyLegInput } from "./transport-journey-model";
+import {
+  deriveTransportLegCertStatuses,
+  summarizeTransportLegCertStatuses,
+} from "./transport-leg-cert-status";
+import { TransportRoute } from "./transport-route";
 
 /** An end as the caller holds it: either coordinate may be missing. */
 interface RoutePointInput {
@@ -28,7 +32,7 @@ interface TransportRoutePreviewProps {
   saved?: boolean;
   /** Evidence state; left out, the leg draws no evidence icon. */
   evidenceAttached?: boolean;
-  /** Shown while there is neither a distance nor a load to draw. */
+  /** Shown while there is no distance, load or pair of coordinates to draw. */
   emptyMessage: string;
   /** Override the route's accessible name. */
   title?: string;
@@ -44,7 +48,9 @@ interface TransportRoutePreviewProps {
 /**
  * The one road leg a record moves goods along, drawn from values the caller
  * already holds instead of the saved transport-leg rows. A delivery or a
- * feedstock form being edited shows the same route the saved leg will.
+ * feedstock form being edited shows the same route the saved leg will. With
+ * both ends located, the route draws (and offers its map) even before a
+ * distance is recorded, so the missing distance reads on the leg.
  */
 export function TransportRoutePreview({
   entityType,
@@ -64,7 +70,10 @@ export function TransportRoutePreview({
 }: TransportRoutePreviewProps) {
   const distance = positiveOrNull(distanceKm);
   const load = plannedRoute ? null : positiveOrNull(loadMassKg);
-  const legs: JourneyLegInput[] = distance == null && load == null
+  const located =
+    originPoint?.lat != null && originPoint.lng != null &&
+    destinationPoint?.lat != null && destinationPoint.lng != null;
+  const legs: JourneyLegInput[] = distance == null && load == null && !located
     ? []
     : [{
         originName,
@@ -79,17 +88,19 @@ export function TransportRoutePreview({
         loadMassKg: load,
       }];
 
+  const cert = certTag && !plannedRoute
+    ? summarizeTransportLegCertStatuses(deriveTransportLegCertStatuses(legs, saved, entityType))
+    : undefined;
+
   return (
-    <TransportLegsEditor
+    <TransportRoute
       entityType={entityType}
-      entityId=""
-      previewLegs={legs}
-      previewSaved={saved}
-      previewEvidenceAttached={evidenceAttached}
-      emptyMessage={emptyMessage}
+      legs={legs}
       title={title}
+      cert={cert}
       hideLoad={plannedRoute}
-      certTag={certTag && !plannedRoute}
+      emptyMessage={emptyMessage}
+      evidence={() => evidenceAttached}
     />
   );
 }

@@ -3,13 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
 vi.mock("@/hooks/use-geo", () => ({ useRouteGeometries: () => ({ isPending: false, data: undefined }) }));
-vi.mock("@/hooks/use-transport-legs", () => ({
-  useCreateTransportLeg: () => ({ isPending: false }),
-  useDeleteTransportLeg: () => ({ isPending: false }),
-  useUpdateTransportLeg: () => ({ isPending: false }),
-  useTransportLegsForEntity: () => ({ data: [], error: null, isLoading: false }),
-}));
-vi.mock("@/components/ui/toast", () => ({ useToast: () => ({ success: vi.fn() }) }));
 
 import { CustomerLocationDetails, type CustomerLocationDetailsLocation } from "./customer-location-details";
 

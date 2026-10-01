@@ -55,10 +55,10 @@ function stopName(name: string | null): string {
 function Stop({ name }: { name: string | null }) {
   return (
     <div className={GRID}>
-      <span className="flex justify-center pt-6" aria-hidden>
+      <span className="flex justify-center pt-8" aria-hidden>
         <span className="size-8 rounded-full bg-[var(--color-text-primary)]" />
       </span>
-      <p className="col-span-2 body-small font-medium text-[var(--color-text-primary)]">
+      <p className="col-span-2 body-medium text-[var(--color-text-primary)]">
         {stopName(name)}
       </p>
     </div>
@@ -97,10 +97,9 @@ function LegRow({
   const MethodIcon =
     TRANSPORT_METHOD_ICONS[leg.method as TransportMethodValue] ?? FALLBACK_METHOD_ICON;
   const method = transportMethodLabel(leg.method);
-  const source = leg.sourceLabel ?? "Distance source not recorded";
-  const load = showLoad
-    ? ` · ${leg.loadKg == null ? `load ${MISSING_VALUE.notRecorded.toLowerCase()}` : `${formatMass(leg.loadKg)} load`}`
-    : "";
+  // Label and value pairs, so a missing value is the shared token itself.
+  const source = `Distance source: ${leg.sourceLabel ?? MISSING_VALUE.notRecorded}`;
+  const load = showLoad ? ` · Load: ${formatMass(leg.loadKg)}` : "";
 
   return (
     <div className={GRID}>
@@ -112,10 +111,10 @@ function LegRow({
         <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />
       </span>
       <div className="min-w-0 space-y-2 py-12">
-        <p className="body-small text-[var(--color-text-secondary)]">
+        <p className="body-medium text-[var(--color-text-secondary)]">
           <span className="sr-only">{`Leg to ${stopName(leg.destinationName)}. `}</span>
           {leg.oneWayKm == null ? (
-            `${method} · distance not recorded`
+            `${method} · One way: ${formatDistanceKm(leg.oneWayKm)}`
           ) : (
             <>
               {method} · <span className="tabular-nums">{formatDistanceKm(leg.oneWayKm)}</span> one way
@@ -130,10 +129,10 @@ function LegRow({
       <div className="flex items-start gap-4 py-12">
         <div className="text-right">
           {leg.countedKm == null ? (
-            <p className="body-small text-[var(--color-text-tertiary)]">{MISSING_VALUE.notRecorded}</p>
+            <p className="body-medium text-[var(--color-text-tertiary)]">{MISSING_VALUE.notRecorded}</p>
           ) : (
             <>
-              <p className="body-small font-medium tabular-nums text-[var(--color-text-primary)]">
+              <p className="body-medium tabular-nums text-[var(--color-text-primary)]">
                 {formatDistanceKm(leg.countedKm)}
               </p>
               <p className="body-caption text-[var(--color-text-tertiary)]">round trip</p>
@@ -182,13 +181,13 @@ export function TransportJourney({
           <span />
           <dl className="col-span-2 grid grid-cols-[1fr_auto] gap-x-12 gap-y-4 body-small">
             <dt className="text-[var(--color-text-tertiary)]">Distance counted, all legs</dt>
-            <dd className="text-right font-medium tabular-nums text-[var(--color-text-primary)]">
+            <dd className="text-right body-medium tabular-nums text-[var(--color-text-primary)]">
               {formatDistanceKm(journey.totalCountedKm)}
             </dd>
             {journey.sharedLoadKg != null && (
               <>
                 <dt className="text-[var(--color-text-tertiary)]">Load carried</dt>
-                <dd className="text-right tabular-nums text-[var(--color-text-secondary)]">
+                <dd className="text-right body-medium tabular-nums text-[var(--color-text-primary)]">
                   {formatMass(journey.sharedLoadKg)}
                 </dd>
               </>

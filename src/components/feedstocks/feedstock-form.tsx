@@ -14,7 +14,7 @@ import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIco
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
-import { ONE_WAY_CUE, formatRoundTripKm } from "@/lib/format-utils";
+import { ONE_WAY_CUE } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
@@ -197,8 +197,8 @@ export function FeedstockForm({
     control,
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
-  // Every leg counts its round trip; show it beside the one-way entry.
-  const countedTransportDistanceKm =
+  // The one-way entry as a number; the route preview adds the round trip.
+  const oneWayTransportDistanceKm =
     typeof transportDistanceKm === "number" &&
     Number.isFinite(transportDistanceKm) &&
     transportDistanceKm >= 0
@@ -601,14 +601,9 @@ export function FeedstockForm({
                       </button>
                     )}
                   </div>
-                  <p
-                    className="body-caption text-[var(--color-text-tertiary)] mt-6"
-                    data-testid="transport-distance-total"
-                    aria-live="polite"
-                  >
-                    {countedTransportDistanceKm != null
-                      ? formatRoundTripKm(countedTransportDistanceKm)
-                      : ONE_WAY_CUE}
+                  {/* The route below shows the round trip this distance counts. */}
+                  <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
+                    {ONE_WAY_CUE}
                   </p>
                 </div>
               </FormField>
@@ -621,7 +616,7 @@ export function FeedstockForm({
             originPoint={supplierRoutePoint}
             destinationPoint={{ lat: watchedFacility?.gpsLatitude ?? null, lng: watchedFacility?.gpsLongitude ?? null }}
             destinationName={watchedFacility?.name}
-            distanceKm={countedTransportDistanceKm}
+            distanceKm={oneWayTransportDistanceKm}
             distanceSource={draftTransportDistanceSource}
             loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
             saved={isEditMode}

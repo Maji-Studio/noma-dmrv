@@ -17,7 +17,8 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import type { JourneyLeg } from "./transport-journey-model";
-import type { RoutePoint } from "./route-line";
+import { resolveRouteLine, type RouteLineState, type RoutePoint } from "./route-line";
+import { MAP_ACCENT_TOKEN, type MapAccent } from "@/components/map";
 
 // Inlined at build time: public, domain-locked key (browser-safe).
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
@@ -93,6 +94,30 @@ function legCards(
   };
 }
 
+// Marker colour by what the end is, as on the Carbon Viewer map.
+const KIND_ACCENTS: Record<EndpointCard["kind"], MapAccent> = {
+  supplier: "orange",
+  facility: "purple",
+  field: "pink",
+};
+
+// What the line between the markers is, so the dash pattern is never the only cue.
+const LINE_STATE_LABELS: Record<RouteLineState, string> = {
+  loading: "Straight line while the road route loads",
+  road: "Road route",
+  fallback: "Straight line, no road route available",
+};
+
+function Swatch({ accent }: { accent: MapAccent }) {
+  return (
+    <span
+      className="size-[9px] shrink-0"
+      style={{ background: `var(${MAP_ACCENT_TOKEN[accent]})` }}
+      aria-hidden
+    />
+  );
+}
+
 function RouteMap({
   origin,
   destination,
@@ -108,18 +133,36 @@ function RouteMap({
   // make the reverse request a different route.
   const query = useRouteGeometries({ legs: [{ id: ROUTE_ID, origin, destination }] });
   const geometry = query.isPending ? undefined : (query.data?.[ROUTE_ID] ?? null);
+  const lineState = resolveRouteLine(origin, destination, geometry).state;
   const markedAtOrigin = LEG_ENDS[entityType].marked === "origin";
+  const first = markedAtOrigin ? "origin" : "destination";
+  const second = markedAtOrigin ? "destination" : "origin";
+  const points = { origin, destination };
   return (
-    <div className={`${MAP_HEIGHT_CLASS} border border-[var(--clr-dark-purple-30)]`}>
-      <RouteMiniMap
-        facility={markedAtOrigin ? origin : destination}
-        destination={markedAtOrigin ? destination : origin}
-        routeGeometry={geometry}
-        endpointCards={{
-          facility: markedAtOrigin ? cards.origin : cards.destination,
-          destination: markedAtOrigin ? cards.destination : cards.origin,
-        }}
-      />
+    <div className="space-y-6">
+      <div className={`${MAP_HEIGHT_CLASS} border border-[var(--clr-dark-purple-30)]`}>
+        <RouteMiniMap
+          facility={points[first]}
+          destination={points[second]}
+          routeGeometry={geometry}
+          endpointCards={{ facility: cards[first], destination: cards[second] }}
+          accents={{
+            facility: KIND_ACCENTS[cards[first].kind],
+            destination: KIND_ACCENTS[cards[second].kind],
+          }}
+        />
+      </div>
+      <p className="flex flex-wrap items-center gap-x-12 gap-y-4 body-caption text-[var(--color-text-tertiary)]">
+        <span className="flex items-center gap-6">
+          <Swatch accent={KIND_ACCENTS[cards.origin.kind]} />
+          {cards.origin.code}
+        </span>
+        <span className="flex items-center gap-6">
+          <Swatch accent={KIND_ACCENTS[cards.destination.kind]} />
+          {cards.destination.code}
+        </span>
+        <span>{LINE_STATE_LABELS[lineState]}</span>
+      </p>
     </div>
   );
 }
@@ -160,7 +203,7 @@ export function TransportRouteMapButton({
           />
         )}
         <p className="mt-8 body-caption text-[var(--color-text-tertiary)]">
-          Hover or click a marker for its details.
+          Select a marker for its details.
         </p>
       </QuickAddDialogShell>
     </>

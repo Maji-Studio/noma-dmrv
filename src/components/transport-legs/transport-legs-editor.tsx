@@ -3,13 +3,11 @@
 import { useState } from "react";
 import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
-import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { useToast } from "@/components/ui/toast";
 import { ServerError } from "@/components/forms";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { Skeleton } from "@/components/ui/loading-skeleton";
 import {
   useCreateTransportLeg,
   useDeleteTransportLeg,
@@ -23,9 +21,7 @@ import type {
 import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
-import { TransportJourney } from "./transport-journey";
-import { buildJourney, type JourneyLegInput } from "./transport-journey-model";
-import { TransportRouteMapButton } from "./transport-route-map";
+import { TransportRoute } from "./transport-route";
 import {
   deriveTransportLegCertStatuses,
   summarizeTransportLegCertStatuses,
@@ -51,23 +47,6 @@ interface TransportLegsEditorProps {
    * overwrite them.
    */
   disabled?: boolean;
-  /**
-   * Draw these legs instead of fetching saved ones: a read-only route the
-   * caller builds from its own values (a delivery, or a form being edited).
-   * Implies `readOnly`.
-   */
-  previewLegs?: readonly JourneyLegInput[];
-  /** The preview reflects saved values, so its CERT chip may resolve. */
-  previewSaved?: boolean;
-  /** Evidence state for the preview legs; left out, the evidence icon is hidden. */
-  previewEvidenceAttached?: boolean;
-  /** A route before any goods move (an order) has no load to show. */
-  hideLoad?: boolean;
-  /**
-   * Show the route's CERT chip on its label. Forms leave it off: their
-   * distance and mass inputs carry their own chips.
-   */
-  certTag?: boolean;
 }
 
 type EditableTransportLeg = TransportLeg | TransportLegFormData;
@@ -78,29 +57,19 @@ type TransportLegDialogState = {
 };
 
 function isSavedTransportLeg(
-  leg: EditableTransportLeg | JourneyLegInput,
+  leg: EditableTransportLeg,
 ): leg is TransportLeg {
   return "id" in leg;
 }
-
-// Feedstock and biochar legs are auto-derived (supplier distance / delivery
-// aggregation) and only ever rendered read-only; sample → lab stays manual.
-// The visible label is "Route"; this names the route for screen readers.
-const DEFAULT_CATEGORY_LABELS: Record<TransportEntityTypeValue, string> = {
-  feedstock: "Feedstock to processing",
-  biochar: "Biochar distribution",
-  sample: "Sample to lab",
-};
 
 const MENU_ICON_PX = 16;
 const ADD_ICON_PX = 16;
 
 /**
- * Transport legs for an entity side sheet: a "Route" label with its CERT
- * chip, the legs on the route rail (`TransportJourney`), a map for a single
- * leg and, when editable, add/edit/delete through a centered dialog. Pass
- * `readOnly` for the view-mode summary, `previewLegs` to draw a caller's
- * values instead of saved rows.
+ * Saved or deferred transport legs for an entity side sheet, drawn by
+ * `TransportRoute` and, when editable, added, edited and deleted through a
+ * centered dialog. Pass `readOnly` for the view-mode summary. A caller that
+ * holds its own route values uses `TransportRoutePreview` instead.
  */
 export function TransportLegsEditor({
   entityType,
@@ -112,20 +81,13 @@ export function TransportLegsEditor({
   deferredLegs = [],
   onDeferredChange,
   disabled = false,
-  previewLegs,
-  previewSaved = false,
-  previewEvidenceAttached,
-  hideLoad = false,
-  certTag = true,
 }: TransportLegsEditorProps) {
   // `readOnly` and `deferred` are intentionally separate modes. Callers should
   // not combine them: deferred legs only exist while a create form is editable.
-  const preview = previewLegs !== undefined;
-  const fetchesSaved = !deferred && !preview;
   const { data: legs, isLoading, error } = useTransportLegsForEntity(
     entityType,
     entityId,
-    { enabled: fetchesSaved },
+    { enabled: !deferred },
   );
   const createMutation = useCreateTransportLeg();
   const updateMutation = useUpdateTransportLeg(entityType, entityId);
@@ -212,28 +174,15 @@ export function TransportLegsEditor({
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
-  const isReadOnly = readOnly || preview;
-  const showAddButton = !isReadOnly;
-  const displayedLegs: readonly (EditableTransportLeg | JourneyLegInput)[] = preview
-    ? previewLegs
-    : deferred
-      ? deferredLegs
-      : (legs ?? []);
-  const hasLegs = displayedLegs.length > 0;
-  const categoryLabel = title ?? DEFAULT_CATEGORY_LABELS[entityType];
-  const journey = buildJourney(displayedLegs, { hideLoad });
-  const mapLeg = journey.legs.length === 1 ? journey.legs[0] : null;
+  const displayedLegs: readonly EditableTransportLeg[] = deferred
+    ? deferredLegs
+    : (legs ?? []);
   const controlsDisabled = dialog.open || disabled;
   const certSummary = summarizeTransportLegCertStatuses(
-    deriveTransportLegCertStatuses(
-      preview ? previewLegs : deferred ? deferredLegs : legs,
-      preview ? previewSaved : !deferred,
-      entityType,
-    ),
+    deriveTransportLegCertStatuses(deferred ? deferredLegs : legs, !deferred, entityType),
   );
 
-  const evidenceFor = (index: number): boolean | undefined => {
-    if (preview) return previewEvidenceAttached;
+  const evidenceFor = (index: number): boolean => {
     const leg = displayedLegs[index];
     return (
       !deferred &&
@@ -246,9 +195,7 @@ export function TransportLegsEditor({
   };
 
   const actionsFor = (index: number) => {
-    // Only editable mounts reach here, where every displayed leg is a saved
-    // row or a deferred form value.
-    const leg = displayedLegs[index] as EditableTransportLeg;
+    const leg = displayedLegs[index];
     return (
       <RowActionsMenu
         className="shrink-0"
@@ -276,22 +223,30 @@ export function TransportLegsEditor({
   };
 
   return (
-    <div className="space-y-8">
-      {/* Reads as a field label in the step, not a heading: the step title
-          already sits on the page's heading ladder. */}
-      <div className="flex flex-wrap items-center justify-between gap-8">
-        <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
-          Route
-          {certTag && (
-            <CertificationFieldTag
-              status={certSummary.status}
-              description={certSummary.description}
-            />
-          )}
-        </span>
-        <span className="flex items-center gap-8">
-          {mapLeg && <TransportRouteMapButton leg={mapLeg} entityType={entityType} />}
-          {showAddButton && (
+    <div>
+      <TransportRoute
+        entityType={entityType}
+        legs={displayedLegs}
+        title={title}
+        cert={certSummary}
+        emptyMessage={
+          emptyMessage ??
+          (readOnly
+            ? "No transport legs recorded yet."
+            : 'No transport legs recorded yet. Click "Add transport leg" to record one.')
+        }
+        loading={!deferred && isLoading}
+        error={
+          !deferred && error
+            ? error instanceof Error
+              ? error.message
+              : "The transport legs could not be loaded. Refresh the page and try again."
+            : null
+        }
+        evidence={evidenceFor}
+        actions={readOnly ? undefined : actionsFor}
+        headerAction={
+          readOnly ? undefined : (
             <Button
               type="button"
               variant="default"
@@ -302,41 +257,11 @@ export function TransportLegsEditor({
               <PlusIcon size={ADD_ICON_PX} weight="bold" />
               Add transport leg
             </Button>
-          )}
-        </span>
-      </div>
+          )
+        }
+      />
 
-      {fetchesSaved && error && (
-        <ServerError
-          message={
-            error instanceof Error ? error.message : "The transport legs could not be loaded. Refresh the page and try again."
-          }
-        />
-      )}
-
-      {fetchesSaved && isLoading ? (
-        <div className="space-y-12" aria-label="Loading transport legs">
-          <Skeleton className="h-16 w-2/3" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-16 w-1/2" />
-        </div>
-      ) : !hasLegs ? (
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          {emptyMessage ??
-            (isReadOnly
-              ? "No transport legs recorded yet."
-              : 'No transport legs recorded yet. Click "Add transport leg" to record one.')}
-        </p>
-      ) : (
-        <TransportJourney
-          journey={journey}
-          label={`${categoryLabel} journey`}
-          evidence={evidenceFor}
-          actions={isReadOnly ? undefined : actionsFor}
-        />
-      )}
-
-      {!isReadOnly && (
+      {!readOnly && (
         <QuickAddDialogShell
           isOpen={dialog.open}
           onClose={closeDialog}
@@ -362,7 +287,7 @@ export function TransportLegsEditor({
       )}
 
       {/* Delete Confirmation */}
-      {!isReadOnly && (
+      {!readOnly && (
         <>
           {deleteError && <ServerError message={deleteError} />}
           <DeleteConfirmDialog

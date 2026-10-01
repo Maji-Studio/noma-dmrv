@@ -39,12 +39,13 @@ describe("TransportRoutePreview", () => {
     const html = renderToStaticMarkup(<TransportRoutePreview {...ROUTE} />);
     const rendered = text(html);
 
-    expect(mocks.fetchEnabled).toEqual([false]);
+    // Drawn from the caller's values: no saved-leg query, no mutation hooks.
+    expect(mocks.fetchEnabled).toEqual([]);
     expect(rendered).toContain("Mafinga Facility");
     expect(rendered).toContain("Demo coffee field");
     expect(rendered).toContain("Road · 240 km one way");
     expect(rendered).toContain("480 km round trip");
-    expect(rendered).toContain("400 kg load");
+    expect(rendered).toContain("Load: 400 kg");
     expect(rendered).not.toContain("Add transport leg");
     expect(html).not.toContain("Actions for leg");
   });
@@ -66,7 +67,22 @@ describe("TransportRoutePreview", () => {
     expect(renderToStaticMarkup(<TransportRoutePreview {...ROUTE} saved certTag />)).toContain("data-cert-field=");
   });
 
-  it("shows the empty message until there is a distance or a load", () => {
+  it("draws a located route without a distance so its map stays reachable", () => {
+    const rendered = text(renderToStaticMarkup(
+      <TransportRoutePreview
+        {...ROUTE}
+        distanceKm={null}
+        plannedRoute
+        originPoint={{ lat: -8.3, lng: 35.28 }}
+        destinationPoint={{ lat: -8.91, lng: 33.46 }}
+      />,
+    ));
+
+    expect(rendered).toContain("Road · One way: Not recorded");
+    expect(rendered).not.toContain("Nothing to draw yet.");
+  });
+
+  it("shows the empty message until there is a distance, a load or both ends located", () => {
     const rendered = text(renderToStaticMarkup(
       <TransportRoutePreview {...ROUTE} distanceKm={null} loadMassKg={0} />,
     ));

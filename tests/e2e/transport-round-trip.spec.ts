@@ -87,9 +87,10 @@ test.describe("Transport round trip (#852)", () => {
       seededData.feedstockType.name
     );
     await page.fill('input[name="transportDistanceKm"]', "40");
-    await expect(dialog.getByTestId("transport-distance-total")).toHaveText(
-      "80 km round trip counted"
-    );
+    // The route under the entry counts the round trip.
+    await expect(
+      dialog.getByRole("list", { name: "Feedstock to processing route" })
+    ).toContainText(/80 km\s*round trip/);
     await page.fill('input[name="totalWetMassKg"]', "100");
     await page.fill('input[name="moisturePercent"]', "25");
     await selectEntity(
@@ -108,7 +109,7 @@ test.describe("Transport round trip (#852)", () => {
     await waitForSideSheet(page);
     const feedstockRoute = page
       .locator('[role="dialog"]')
-      .getByRole("list", { name: "Feedstock to processing journey" });
+      .getByRole("list", { name: "Feedstock to processing route" });
     await expect(feedstockRoute).toContainText("40 km one way", { timeout: 15000 });
     await expect(feedstockRoute).toContainText(/80 km\s*round trip/);
   });
@@ -137,7 +138,9 @@ test.describe("Transport round trip (#852)", () => {
     await page.fill('input[name="deliveryDate"]', `${FUTURE_DATE}T12:00`);
     await selectEntityByText(page, "Order", seededData.customer.name);
     // The seeded customer location is 25 km one way from the facility.
-    await expect(dialog.getByText("50 km round trip counted", { exact: true })).toBeVisible();
+    await expect(
+      dialog.getByRole("list", { name: "Biochar distribution route" })
+    ).toContainText(/50 km\s*round trip/);
     await page.selectOption('select[name="storageLocationId"]', seededData.productStorageLocation.id);
     await page.fill('input[name="deliveredWetMassKg"]', "45");
     await fillStockMoisture(page, "delivery", "10");
@@ -150,7 +153,7 @@ test.describe("Transport round trip (#852)", () => {
     await waitForSideSheet(page);
     const deliveryRoute = page
       .locator('[role="dialog"]')
-      .getByRole("list", { name: "Biochar distribution journey" });
+      .getByRole("list", { name: "Biochar distribution route" });
     await expect(deliveryRoute).toContainText("25 km one way", { timeout: 15000 });
     await expect(deliveryRoute).toContainText(/50 km\s*round trip/);
   });

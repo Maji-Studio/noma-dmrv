@@ -66,7 +66,7 @@ describe("TransportLegsEditor route rail", () => {
 
     expect(html).not.toContain("<h3");
     expect(text(html).startsWith("Route")).toBe(true);
-    expect(html).toContain('aria-label="Sample to lab journey"');
+    expect(html).toContain('aria-label="Sample to lab route"');
   });
 
   it("shares a stop between chained legs and keeps them in route order", () => {
@@ -130,7 +130,7 @@ describe("TransportLegsEditor route rail", () => {
     const rendered = text(renderEditor({ readOnly: true }));
 
     expect(rendered.match(/24 km/g)).toHaveLength(1);
-    expect(rendered).toContain("Manual entry · 2 kg load");
+    expect(rendered).toContain("Distance source: Manual entry · Load: 2 kg");
     expect(rendered).not.toContain("Distance counted");
     expect(rendered).not.toContain("Load carried");
   });
@@ -162,7 +162,7 @@ describe("TransportLegsEditor route rail", () => {
 
     expect(rendered).toContain("Distance counted, all legs 384 km");
     expect(rendered).toContain("Load carried 2 kg");
-    expect(rendered).not.toContain("2 kg load");
+    expect(rendered).not.toContain("Load: 2 kg");
   });
 
   it("names each leg's load when the legs carry different loads", () => {
@@ -178,8 +178,8 @@ describe("TransportLegsEditor route rail", () => {
     const rendered = text(renderEditor({ readOnly: true }));
 
     expect(rendered).not.toContain("Load carried");
-    expect(rendered).toContain("2 kg load");
-    expect(rendered).toContain("5 kg load");
+    expect(rendered).toContain("Load: 2 kg");
+    expect(rendered).toContain("Load: 5 kg");
   });
 
   it("says how many legs the total could not include", () => {
@@ -203,10 +203,6 @@ describe("TransportLegsEditor route rail", () => {
     const html = renderEditor({ readOnly: true });
 
     expect(html.match(/data-cert-field=/g)?.length).toBe(1);
-  });
-
-  it("drops the CERT chip when the inputs around it carry their own", () => {
-    expect(renderEditor({ readOnly: true, certTag: false })).not.toContain("data-cert-field=");
   });
 
   it("keeps the add button and a per-leg actions menu in edit mode", () => {
@@ -248,9 +244,15 @@ describe("TransportLegsEditor route rail", () => {
       ),
     );
 
-    expect(rendered).toContain("Road · distance not recorded");
-    expect(rendered).toContain("Distance source not recorded");
+    expect(rendered).toContain("Road · One way: Not recorded");
+    expect(rendered).toContain("Distance source: Not recorded");
     expect(rendered).not.toContain("null km");
+  });
+
+  it("says a single leg's load is not recorded instead of dropping it", () => {
+    mocks.legs = [savedLeg({ loadMassKg: null })];
+
+    expect(text(renderEditor({ readOnly: true }))).toContain("Load: Not recorded");
   });
 
   it("names an unrecorded stop rather than leaving the node blank", () => {

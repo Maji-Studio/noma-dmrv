@@ -50,6 +50,16 @@ describe("buildJourney", () => {
     ).toBe(true);
   });
 
+  it("keeps a missing load visible on its leg, alone or among others", () => {
+    expect(buildJourney([leg({ loadMassKg: null })]).loadOnLegs).toBe(true);
+    const allMissing = buildJourney([
+      leg({ loadMassKg: null }),
+      leg({ originName: "Plant", loadMassKg: null }),
+    ]);
+    expect(allMissing.loadOnLegs).toBe(true);
+    expect(allMissing.sharedLoadKg).toBeNull();
+  });
+
   it("drops the load entirely for a route before goods move", () => {
     const journey = buildJourney([leg()], { hideLoad: true });
 

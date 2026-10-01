@@ -124,17 +124,17 @@ export function buildJourney(
     .map((leg) => leg.countedKm)
     .filter((km): km is number => km != null);
   const loads = legs.map((leg) => leg.loadKg).filter((kg): kg is number => kg != null);
-  // A leg without a load is not the same cargo as one with it.
+  // A leg without a load is not the same cargo as one with it, so a missing
+  // load reads on its own leg instead of disappearing from the route.
   const loadsVary =
-    loads.some((kg) => kg !== loads[0]) || (loads.length > 0 && loads.length < legs.length);
-  const showLoad = !options.hideLoad && loads.length > 0;
-  const loadOnLegs = showLoad && (legs.length === 1 || loadsVary);
+    loads.some((kg) => kg !== loads[0]) || loads.length < legs.length;
+  const loadOnLegs = !options.hideLoad && (legs.length === 1 || loadsVary);
 
   return {
     legs,
     totalCountedKm: counted.length > 0 ? counted.reduce((sum, km) => sum + km, 0) : null,
     missingDistances: legs.length - counted.length,
     loadOnLegs,
-    sharedLoadKg: showLoad && !loadOnLegs ? loads[0] : null,
+    sharedLoadKg: !options.hideLoad && !loadOnLegs ? (loads[0] ?? null) : null,
   };
 }
