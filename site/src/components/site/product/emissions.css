@@ -1,4 +1,4 @@
-/* EmissionsSection (#emissions): a stage panel (stage tokens, repainted light in product.css) with the net figure beside one waterfall chart,
+/* EmissionsSection (#emissions): a dark stage panel (stage tokens) with the net figure beside one waterfall chart,
    a caption row under it and a footnote. Everything dim; the net column is the one lit element. Scoped .em-. Numbers inside the SVG rules (font sizes, stroke widths, dash arrays) are SVG user units.
    Without JS (no .is-live) every caption is listed and the chart shows its end state. */
 

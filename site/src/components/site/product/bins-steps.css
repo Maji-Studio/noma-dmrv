@@ -1,4 +1,4 @@
-/* BinsSection (#bins), "Step through": a stage panel (stage tokens, repainted light in product.css) with step tabs, one panel of text per step
+/* BinsSection (#bins), "Step through": a dark stage panel (stage tokens) with step tabs, one panel of text per step
    beside one picture of 10 kg squares, and Back / Next. Scoped under .bs. Numbers inside the SVG rules
    (font sizes, stroke widths, delay per square) are SVG user units or part of the drawing's choreography.
    Without JS (no .is-live) every panel is listed and the picture shows the last step. */
