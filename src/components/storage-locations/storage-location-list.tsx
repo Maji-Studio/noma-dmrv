@@ -12,14 +12,9 @@ import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, PageHeader } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import {
-  EntitySideSheet,
-  type SideSheetMode,
-} from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import type { StorageLocation } from "@/db/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -28,14 +23,11 @@ import {
 } from "@/hooks/use-list-pagination";
 import {
   useArchiveStorageLocation,
-  useCreateStorageLocation,
   useDeleteStorageLocation,
   useRestoreStorageLocation,
   useStorageLocations,
-  useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
-import { toSaveErrorMessage } from "@/lib/stale-version";
-import { type StorageLocationFilterData, type StorageLocationFormData } from "@/schemas/storage-locations";
+import type { StorageLocationFilterData } from "@/schemas/storage-locations";
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import {
@@ -45,13 +37,7 @@ import {
 } from "./bin-display";
 import { BinReconcileSheet } from "./bin-reconcile-sheet";
 import { StorageBinBoard } from "./storage-bin-board";
-import { StorageLocationForm } from "./storage-location-form";
-import { storageLocationSheetSections } from "./storage-location-read-sections";
-
-type SideSheetState =
-  | { mode: "create"; entity: null }
-  | { mode: "view"; entity: StorageLocationWithFacility }
-  | { mode: "edit"; entity: StorageLocationWithFacility };
+import { StorageBinSheet, type StorageBinSheetState } from "./storage-bin-sheet";
 
 export function StorageLocationList() {
   const { facilityId } = useFacilityContext();
@@ -67,12 +53,11 @@ export function StorageLocationList() {
     LIST_SEARCH_DEBOUNCE_MS,
   );
 
-  const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
+  const [sideSheet, setSideSheet] = useState<StorageBinSheetState | null>(null);
   const [reconcileKind, setReconcileKind] = useState<"loss" | "count">("count");
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
   const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const sort = parseBinSortValue(sortValue);
@@ -94,8 +79,6 @@ export function StorageLocationList() {
     error: fetchError,
   } = useStorageLocations(filters, { enabled: !!facilityId });
 
-  const createStorageLocation = useCreateStorageLocation();
-  const updateStorageLocation = useUpdateStorageLocation();
   const archiveStorageLocation = useArchiveStorageLocation();
   const restoreStorageLocation = useRestoreStorageLocation();
   const deleteStorageLocation = useDeleteStorageLocation();
@@ -111,37 +94,6 @@ export function StorageLocationList() {
     isLoading,
     setCurrentPage,
   });
-
-  const handleCreate = async (data: StorageLocationFormData) => {
-    setFormError(null);
-    try {
-      await createStorageLocation.mutateAsync(data);
-      setSideSheet(null);
-      toast.success("Storage bin created.");
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Storage bin was not created. Check the form.");
-    }
-  };
-
-  const handleUpdate = async (data: StorageLocationFormData) => {
-    if (sideSheet?.mode !== "edit") return;
-    setFormError(null);
-    try {
-      await updateStorageLocation.mutateAsync({
-        storageLocationId: sideSheet.entity.id,
-        // The version the side sheet opened on, never a refetched one, so a
-        // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: sideSheet.entity.updatedAt,
-        ...data,
-      });
-      setSideSheet(null);
-      toast.success("Storage bin updated.");
-    } catch (error) {
-      // The side sheet stays open on every failure, so the operator's draft
-      // survives an expected-version refusal untouched.
-      setFormError(toSaveErrorMessage(error, "Storage bin was not saved. Try again."));
-    }
-  };
 
   const handleDelete = (id: string) => setDeletingStorageLocationId(id);
 
@@ -187,20 +139,13 @@ export function StorageLocationList() {
     }
   };
 
-  const openCreate = () => {
-    setFormError(null);
-    setSideSheet({ mode: "create", entity: null });
-  };
+  const openCreate = () => setSideSheet({ mode: "create", entity: null });
 
-  const openView = (storageLocation: StorageLocationWithFacility) => {
-    setFormError(null);
+  const openView = (storageLocation: StorageLocationWithFacility) =>
     setSideSheet({ mode: "view", entity: storageLocation });
-  };
 
-  const openEdit = (storageLocation: StorageLocationWithFacility) => {
-    setFormError(null);
+  const openEdit = (storageLocation: StorageLocationWithFacility) =>
     setSideSheet({ mode: "edit", entity: storageLocation });
-  };
 
   // Reconcile lives in its own side sheet — close the detail sheet first so the
   // two panels never stack.
@@ -208,17 +153,6 @@ export function StorageLocationList() {
     setReconcileKind(kind);
     setSideSheet(null);
     setReconcilingBin(storageLocation);
-  };
-
-  const closeSideSheet = () => {
-    setSideSheet(null);
-    setFormError(null);
-  };
-
-  const handleModeChange = (mode: SideSheetMode) => {
-    if (!sideSheet || !sideSheet.entity) return;
-    setFormError(null);
-    setSideSheet({ mode: mode === "edit" ? "edit" : "view", entity: sideSheet.entity });
   };
 
   const clearFilters = () => {
@@ -234,8 +168,6 @@ export function StorageLocationList() {
   };
 
   const hasActiveFilters = Boolean(searchQuery) || typeFilter !== "all";
-  const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
-  const isSubmitting = createStorageLocation.isPending || updateStorageLocation.isPending;
 
   if (!facilityId) {
     return (
@@ -329,41 +261,11 @@ export function StorageLocationList() {
         errorMessage={deleteError ?? undefined}
       />
 
-      <EntitySideSheet
-        open={!!sideSheet}
-        onOpenChange={(open) => {
-          if (!open) closeSideSheet();
-        }}
-        mode={sideSheet?.mode ?? "create"}
-        onModeChange={handleModeChange}
-        // No detail toggle: a bin sheet has no explanation to switch on, since
-        // a mix bin's batch shares are data and show at every level.
-        // Bins lead with their name, not their code — the one entity where the
-        // house convention (code as the sheet title) puts an opaque lookup key
-        // where the operator's own word for the thing belongs. The code stays,
-        // small, on the line beneath.
-        title={sideSheet?.mode === "create" ? "Create storage bin" : sideSheet?.entity?.name ?? ""}
-        subtitle={
-          sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.code
-        }
-        editLabel="Edit storage bin"
-        canEdit={sideSheet?.entity?.archivedAt == null}
-        sections={
-          sideSheet?.mode === "view" && sideSheet.entity
-            ? storageLocationSheetSections(sideSheet.entity, openReconcile)
-            : undefined
-        }
-      >
-        <StorageLocationForm
-          key={editingEntity?.id ?? "create"}
-          storageLocation={editingEntity as StorageLocation | undefined}
-          onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={isSubmitting}
-          errorMessage={formError ?? undefined}
-          submitLabel={sideSheet?.mode === "edit" ? "Save changes" : "Create storage bin"}
-        />
-      </EntitySideSheet>
+      <StorageBinSheet
+        state={sideSheet}
+        onStateChange={setSideSheet}
+        onReconcile={openReconcile}
+      />
 
       <BinReconcileSheet
         key={`${reconcilingBin?.id}-${reconcileKind}`}

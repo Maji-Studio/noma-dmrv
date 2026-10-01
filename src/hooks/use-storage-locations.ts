@@ -23,6 +23,7 @@ import type {
 } from "@/data-access/storage-locations";
 import {
   getStorageLocationsFn,
+  getStorageLocationFn,
   createStorageLocationFn,
   archiveStorageLocationFn,
   restoreStorageLocationFn,
@@ -30,6 +31,7 @@ import {
   deleteStorageLocationFn,
 } from "@/fn/storage-locations";
 import { facilityKeys } from "@/hooks/use-facilities";
+import { invalidateEntityTypeQueries } from "@/hooks/entity-query-keys";
 import { throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
@@ -84,6 +86,26 @@ export function useStorageLocations(
   });
 }
 
+/**
+ * Returns a loader for one storage bin with its facility and inventory fields,
+ * the shape the bin sheet reads. It always refetches, so a sheet opened from a
+ * form shows the bin's current stock, not a cached figure.
+ */
+export function useLoadStorageLocation() {
+  const queryClient = useQueryClient();
+  return (storageLocationId: string) =>
+    queryClient.fetchQuery({
+      queryKey: storageLocationKeys.detailWithFacility(storageLocationId),
+      queryFn: async () => {
+        const result = await getStorageLocationFn({ storageLocationId });
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+        return result.data;
+      },
+    });
+}
+
 // ============================================
 // Mutation Hooks
 // ============================================
@@ -126,6 +148,8 @@ export function useCreateStorageLocation(
 
       // Pre-populate the detail cache with the new storage location
       queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+      // Bin pickers in entry forms list the new bin straight away.
+      invalidateEntityTypeQueries(queryClient, "storageLocation");
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -247,6 +271,8 @@ export function useUpdateStorageLocation(
         // A stock-mode change reshapes the bin's sub-bins, balance and history.
         queryClient.invalidateQueries({ queryKey: outputStockKeys.all }),
       ]);
+      // A rename or type change shows in every bin picker's label and options.
+      invalidateEntityTypeQueries(queryClient, "storageLocation");
 
       await callbacks?.onSuccess?.(data, variables);
     },

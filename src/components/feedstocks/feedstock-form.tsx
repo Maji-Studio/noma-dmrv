@@ -700,10 +700,15 @@ export function FeedstockForm({
                   binTypeFilter={FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER}
                   facilityId={watchedFacilityId || undefined}
                   feedstockTypeId={watchedFeedstockTypeId || undefined}
-                  onCreateNew={() => {
-                    setStorageLocationRowIndex(index);
-                    storageLocationDialog.open();
-                  }}
+                  // The quick-add dialog needs a facility to create the bin in.
+                  onCreateNew={
+                    watchedFacilityId
+                      ? () => {
+                          setStorageLocationRowIndex(index);
+                          storageLocationDialog.open();
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>

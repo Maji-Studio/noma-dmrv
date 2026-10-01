@@ -109,6 +109,12 @@ export interface EntitySelectProps {
     label: string;
     subtitle?: string;
   };
+  /**
+   * Buttons rendered to the right of the trigger (e.g. View / Edit for the
+   * selected entity). They sit outside the dropdown's box, so the option list
+   * keeps the trigger's width.
+   */
+  trailingActions?: React.ReactNode;
 }
 
 export interface UseEntityOptionsParams {
