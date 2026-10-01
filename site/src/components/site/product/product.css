@@ -20,23 +20,7 @@
 .pd-trace-btn { justify-self: start; min-height: var(--tap); padding: 0; border: 0; background: none; color: var(--link); font-size: var(--fs-ui); text-decoration: underline; text-decoration-thickness: var(--hairline); text-decoration-color: var(--link-rule); text-underline-offset: 6px; cursor: pointer; }
 .pd-trace-btn:hover { text-decoration-color: currentColor; }
 
-/* Visual panels: paper surface between hairlines, edge to edge inside the frame. */
-.pd-panel { background: var(--paper); border-top: var(--hairline) solid var(--rule); }
-
-/* Map visual, restyled: hairlines, a band-tinted side panel and a large record code. */
-.pd-map .nv-viz { grid-template-columns: minmax(0, 1fr) var(--pd-side); border: 0; background: var(--paper); }
-.pd-map .nv-side { padding: var(--space-6) var(--space-5); gap: var(--space-4); background: linear-gradient(var(--band-purple), var(--band-purple)), var(--paper); border-left: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
-.pd-map .nv-code { font-family: var(--f-sans); font-weight: 300; font-size: var(--fs-h3); letter-spacing: var(--track-h3); line-height: 1.1; }
-.pd-map .nv-counts span { border-color: var(--rule); }
-/* Swipe hint, like the trace's: only where the map is wider than its box. */
-.pd-hint { display: none; }
-
-@media (max-width: 860px) {
-  .pd-map .nv-viz { grid-template-columns: minmax(0, 1fr); }
-  .pd-map .nv-side { border-left: 0; border-top: var(--hairline) solid var(--rule); }
-}
 @media (max-width: 760px) {
-  .pd-hint { display: block; padding: var(--space-4) var(--frame-pad); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--ink-2); }
   .pd-intro-row, .pd-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
   .pd-intro-row .actions { justify-content: flex-start; }
 }

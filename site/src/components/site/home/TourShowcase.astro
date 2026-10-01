@@ -26,7 +26,6 @@ const BLOCKS = [
   {
     id: "map", title: "See where it went.",
     text: "Connect suppliers, production and application sites. Select a field to trace its sources, or a supplier to see the destinations.",
-    link: "Open the map", href: "/product#map",
     visualLabel: "Drawing of a map around Mafinga: sawmills supply the plant, routes lead out to application sites, and one route is highlighted.",
   },
 ];
@@ -42,7 +41,7 @@ const BLOCKS = [
       <Fragment slot={`panel-${b.id}`}>
         <p class="t-body t-muted">{b.text}</p>
         {b.note && <p class="t-caption">{b.note}</p>}
-        <TextLink href={b.href}>{b.link}</TextLink>
+        {b.href && <TextLink href={b.href}>{b.link}</TextLink>}
       </Fragment>
     ))}
     {BLOCKS.map((b) => <Fragment slot={`visual-${b.id}`}><TourVisual kind={b.id} /></Fragment>)}

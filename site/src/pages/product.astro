@@ -1,5 +1,5 @@
 ---
-// Product: Trace · Bins and stock · Map · Evidence and reporting · What's next.
+// Product: Trace · Bins and stock · Evidence and reporting · What's next.
 // Section ids come from PRODUCT_SECTIONS in src/config.js (Home links to them).
 import SiteShell from "../components/site/SiteShell.astro";
 import SectionIndex from "../components/site/SectionIndex.astro";
@@ -7,11 +7,9 @@ import GetStartedBand from "../components/site/GetStartedBand.astro";
 import ProductIntro from "../components/site/product/ProductIntro.astro";
 import TraceSection from "../components/site/product/TraceSection.astro";
 import BinsSection from "../components/site/product/BinsSection.astro";
-import MapSection from "../components/site/product/MapSection.astro";
 import EvidenceStage from "../components/site/product/EvidenceStage.astro";
 import NextShowcase from "../components/site/product/NextShowcase.astro";
 import { PRODUCT_SECTIONS } from "../config.js";
-import "../visuals/visuals.css";
 import "../components/site/product/product.css";
 ---
 <SiteShell
@@ -24,13 +22,8 @@ import "../components/site/product/product.css";
     <SectionIndex items={PRODUCT_SECTIONS} />
     <TraceSection />
     <BinsSection />
-    <MapSection />
     <EvidenceStage />
     <NextShowcase />
     <GetStartedBand />
   </div>
 </SiteShell>
-<script>
-  import { mountProductVisuals } from "../components/site/product/visuals.js";
-  mountProductVisuals();
-</script>
