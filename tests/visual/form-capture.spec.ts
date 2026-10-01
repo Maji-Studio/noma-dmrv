@@ -1,5 +1,5 @@
 /**
- * Form capture harness (docs/plans/2026-09-29-form-cleanup.md, "Browser
+ * Form capture harness (docs/archive/plans/2026-09-29-form-cleanup.md, "Browser
  * rescan", Instrument A). Opt-in: runs only with FORM_CAPTURE=1 against a
  * running, seeded dev server (pnpm db:seed). One test loops the surface
  * manifest so the capture signs in once.
