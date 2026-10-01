@@ -13,6 +13,7 @@ import { WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 import { formatStorageLocationType } from "@/schemas/storage-locations";
 import { StockChangeLabel } from "@/components/storage-locations/stock-change-label";
+import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import type { AffectedStockPreview } from "@/types/output-stock";
 import { useState } from "react";
 import {
@@ -212,6 +213,7 @@ export function IngredientBinField({
                         ? feedstockBinDialog.open
                         : undefined
                     }
+                    trailingActions={<StorageBinActions storageLocationId={field.value} />}
                   />
                 </FormField>
                 <AffectedBinNotices preview={stock} />
