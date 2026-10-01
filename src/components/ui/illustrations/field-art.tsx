@@ -26,7 +26,7 @@ const BOUNDARY_CORNERS = [[8, 26], [14, 9], [36, 6], [49, 18], [42, 33], [18, 34
 const BOUNDARY_OUTLINE = `M${BOUNDARY_CORNERS.map(([x, y]) => `${x} ${y}`).join(" L")} Z`;
 const BOUNDARY_FURROWS = "M17 16 L41 14 M14 23 L44 22 M19 29 L40 29";
 const BOUNDARY_FURROW_OPACITY = 0.5;
-/** Corner dots pop one after another, walking the boundary. */
+/** Corner dots pop one after another, walking the boundary. At card size only the first corner pops. */
 const BOUNDARY_CORNER_STAGGER = 120;
 
 export function FieldBoundaryArt(props: IllustrationProps) {
@@ -37,7 +37,7 @@ export function FieldBoundaryArt(props: IllustrationProps) {
         <path d={BOUNDARY_OUTLINE} pathLength={1} />
       </Motion>
       {BOUNDARY_CORNERS.map((corner, index) => (
-        <Motion key={corner.join("-")} kind="pop" delay={index * BOUNDARY_CORNER_STAGGER}>
+        <Motion key={corner.join("-")} kind="pop" delay={index * BOUNDARY_CORNER_STAGGER} largeOnly={index > 0}>
           <Dots points={[corner]} radius={VERTEX_RADIUS} />
         </Motion>
       ))}

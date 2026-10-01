@@ -558,8 +558,10 @@ product, credit batch, sample, members, invitations). They are decoration
 
 - Choice cards (`ChoiceCardGroup` `art`), at the default card size (56px wide).
   If one card in a group has a drawing, all of them do.
-- Top-level "No X yet" empty states, at `ILLUSTRATION_SIZE.empty` (96px) in the
-  `EmptyState` `icon` slot. The filtered branch of the same empty state keeps
+- The top-level "No X yet" empty state of each record the set draws, at
+  `ILLUSTRATION_SIZE.empty` (96px) in the `EmptyState` `icon` slot. Lists the
+  set doesn't draw yet (removals, formulations, feedstock types and others)
+  keep Phosphor until a drawing exists. The filtered branch of the same empty state keeps
   its Phosphor icon, so the `icon` prop switches with the title. Error states,
   filtered states and nested `padding="sm"` empties never get a drawing.
 - Onboarding: the welcome step and the setup-in-progress state.
@@ -604,9 +606,9 @@ The one outcome screen for auth pages (check your email, email verified, verific
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
   filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
-  caller-owned. A top-level "No X yet" state carries a drawing at
-  `ILLUSTRATION_SIZE.empty` (see Illustrations); every other branch keeps a
-  Phosphor icon. Two copy rules, both load-bearing:
+  caller-owned. The "No X yet" state of a record the illustration set draws
+  carries its drawing at `ILLUSTRATION_SIZE.empty` (see Illustrations); every
+  other branch keeps a Phosphor icon. Two copy rules, both load-bearing:
   - **The zero-state CTA is `Create your first <entity>`, never a copy of the
     `PageHeader` button.** Both buttons render at once on an empty list, and two
     controls with the same accessible name break `getByRole("button", { name })`

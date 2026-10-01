@@ -20,7 +20,7 @@ export function SampleVialArt(props: IllustrationProps) {
       <path d={VIAL_LID} />
       <path d={VIAL_LEVEL} />
       {VIAL_GRAINS.map((grain, index) => (
-        <Motion key={grain.join("-")} kind="drop" delay={index * VIAL_GRAIN_STAGGER} largeOnly={index > 1}>
+        <Motion key={grain.join("-")} kind="drop" delay={index * VIAL_GRAIN_STAGGER} largeOnly={index > 0}>
           <Dots points={[grain]} />
         </Motion>
       ))}

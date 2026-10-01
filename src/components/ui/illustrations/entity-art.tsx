@@ -100,7 +100,7 @@ export function OrderArt(props: IllustrationProps) {
           <path d={item} pathLength={1} />
         </Motion>
       ))}
-      <Motion kind="draw" delay={RECEIPT_ITEMS.length * RECEIPT_LINE_STAGGER}>
+      <Motion kind="draw" delay={RECEIPT_ITEMS.length * RECEIPT_LINE_STAGGER} largeOnly>
         <path d={RECEIPT_TOTAL} pathLength={1} />
       </Motion>
     </IllustrationFrame>
