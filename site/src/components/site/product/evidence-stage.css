@@ -1,23 +1,32 @@
-/* Evidence stage (EvidenceStage.astro): two schematics, check rows under each, one lit wire between.
-   Desktop: a three-column grid (record, links, registry); both row lists share one row height and gap, so
-   every record row sits level with the registry field it fills. Under 960px it stacks: record, wire, registry. */
+/* Evidence stage (EvidenceStage.astro): two schematics, check rows under each, a link with an adapter node
+   between each record row and the certifier field it maps to. Desktop: a three-column grid (record, links,
+   certifier); both row lists share one row height and gap, so every record row sits level with its field.
+   Under 960px it stacks: record, one vertical link, certifier. */
 .ev {
   --ev-link: clamp(64px, 11vw, 176px);
+  --ev-adapter: 10px;
   display: grid; grid-template-columns: minmax(0, 1fr) var(--ev-link) minmax(0, 1fr);
   grid-template-rows: auto auto auto auto; row-gap: var(--space-3);
 }
-.ev-art { display: block; width: 100%; height: auto; overflow: visible; fill: none; stroke: var(--stage-line); stroke-width: var(--stage-stroke); stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.ev-art { display: block; width: 100%; height: auto; overflow: visible; fill: none; stroke: var(--stage-line); stroke-width: var(--stage-stroke); stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
 .ev-art * { vector-effect: non-scaling-stroke; }
 .ev-art--record { grid-column: 1; grid-row: 1; }
 .ev-art--registry { grid-column: 3; grid-row: 1; }
 .ev-art-dim { stroke: var(--stage-line-dim); }
 .ev-art-dot { stroke-dasharray: 2 4; }
+.ev-art-label { fill: var(--stage-ink-2); stroke: none; font-family: var(--f-mono); font-weight: 500; font-size: 10px; letter-spacing: var(--track-mono); }
 .ev-led { fill: var(--stage-line-dim); stroke: none; }
 .ev-led--on { fill: var(--stage-ink); }
-.ev-field { stroke: var(--stage-line-dim); }
+.ev-field { stroke: var(--stage-line-dim); fill: var(--stage); }
 .ev-field--open { stroke-dasharray: 4 4; }
+.ev-fill path { stroke: var(--stage-ink-2); }
+/* The seal: open (dashed ring, "?") until every field is filled, then closed and lit (the approval). */
+.ev-seal-dash { stroke-dasharray: 3 4; }
+.ev-seal-q { fill: var(--stage-ink-3); font-size: 13px; }
+.ev-seal-from { opacity: 0; }
+.ev-seal-to { stroke: var(--stage-lit); filter: drop-shadow(0 0 6px var(--stage-lit-glow)); }
 
-/* The dim link between the schematics: from the weighbridge terminal (y 48 of 148) to the form window. */
+/* The dim link between the schematics: from the weighbridge terminal (y 48 of 148) to the review window. */
 .ev-bridge { grid-column: 2; grid-row: 1; position: relative; }
 .ev .ev-bridge-line { position: absolute; left: 0; right: 0; top: 32%; }
 
@@ -25,24 +34,51 @@
 .ev-cap span + span { color: var(--stage-ink-3); }
 .ev-cap--record { grid-column: 1; grid-row: 2; }
 .ev-cap--registry { grid-column: 3; grid-row: 2; }
+.ev-cap--map { grid-column: 2; grid-row: 2; justify-content: center; border-bottom-style: dashed; color: var(--stage-ink-3); white-space: nowrap; }
 
 .ev-rows, .ev-links { display: grid; grid-auto-rows: var(--stage-row-h); gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
 .ev-rows--record { grid-column: 1; grid-row: 3; }
 .ev-rows--registry { grid-column: 3; grid-row: 3; }
-.ev-links { grid-column: 2; grid-row: 3; align-items: center; }
-.ev-rows .stg-row--dim .stg-row-meta { color: var(--stage-ink-3); }
+.ev-links { grid-column: 2; grid-row: 3; }
+.ev-link, .ev-link-v { position: relative; display: grid; align-items: center; }
+.ev-link-v { display: none; }
+/* The adapter node: where our record becomes the certifier's field. */
+.ev-adapter { position: absolute; left: 50%; top: 50%; width: var(--ev-adapter); height: var(--ev-adapter); transform: translate(-50%, -50%) rotate(45deg); border: var(--stage-stroke) solid var(--stage-ink-2); background: var(--stage); }
 .ev-rows .stg-row--lit .stg-row-meta { color: var(--stage-lit); }
-.ev .ev-wire--h { z-index: 1; }
-.ev .ev-wire--v { display: none; }
+/* The lab result row: two marks and two metas stacked, "missing" until it arrives. */
+.ev-arrive .stg-row-icon, .ev-arrive .stg-row-meta { display: grid; }
+.ev-arrive .stg-row-icon > *, .ev-arrive .stg-row-meta > * { grid-area: 1 / 1; }
+.ev-arrive .stg-row-meta { justify-items: end; }
+.ev .ev-arrive .ev-from { opacity: 0; }
 .ev-note { grid-row: 4; margin-top: var(--space-2); font-size: var(--fs-caption); line-height: 1.5; color: var(--stage-ink-3); }
 .ev-note--record { grid-column: 1; }
 .ev-note--registry { grid-column: 3; max-width: var(--measure); }
 
-/* Motion (the Stage's data-reveal states from motion.js). */
-[data-reveal="armed"] .ev-led--on { fill: var(--stage-line-dim); }
-[data-reveal="armed"] .ev-rows--registry .stg-row--lit .stg-row-meta { opacity: 0; }
-[data-reveal="play"] .ev-rows--registry .stg-row--lit .stg-row-meta { transition: opacity var(--dur-base) var(--ease-out) var(--ev-lit); }
-[data-reveal="play"] .ev-led--on { transition: fill var(--dur-base) var(--ease-out) var(--ev-at); }
+/* Motion (the Stage's data-reveal states from motion.js). Start: the lab result is missing, the certifier
+   fields are empty and dim, the seal is open. Each step runs at its own delay; rest = the approved end state. */
+[data-reveal="armed"] .ev .ev-led--on { fill: var(--stage-line-dim); }
+[data-reveal="armed"] .ev :is(.ev-fill, .ev-seal-to) { opacity: 0; }
+[data-reveal="armed"] .ev .ev-seal-from { opacity: 1; }
+[data-reveal="armed"] .ev .ev-arrive { color: var(--stage-ink-3); border-color: var(--stage-line-dim); }
+[data-reveal="armed"] .ev .ev-arrive .stg-row-icon { border-color: var(--stage-line-dim); }
+[data-reveal="armed"] .ev .ev-arrive .ev-from { opacity: 1; transform: none; }
+[data-reveal="armed"] .ev .ev-arrive .ev-to { opacity: 0; }
+[data-reveal="armed"] .ev .ev-rows--registry .stg-row { color: var(--stage-ink-3); border-color: var(--stage-line-dim); background: transparent; }
+[data-reveal="armed"] .ev .ev-rows--registry .stg-row-icon { border-color: var(--stage-line-dim); }
+[data-reveal="armed"] .ev .ev-rows--registry .stg-row-meta { opacity: 0; }
+
+[data-reveal="play"] .ev .ev-led--on { transition: fill var(--dur-base) var(--ease-out) var(--ev-at); }
+[data-reveal="play"] .ev .ev-fill { transition: opacity var(--dur-base) var(--ease-out) var(--ev-at); }
+[data-reveal="play"] .ev :is(.ev-seal-from, .ev-seal-to) { transition: opacity var(--dur-base) var(--ease-out) var(--ev-ok); }
+[data-reveal="play"] .ev :is(.ev-arrive, .ev-arrive .stg-row-icon) { transition: color var(--dur-base) var(--ease-out) var(--at), border-color var(--dur-base) var(--ease-out) var(--at); }
+[data-reveal="play"] .ev .ev-arrive :is(.ev-from, .ev-to) { transition: opacity var(--dur-base) var(--ease-out) var(--at), transform var(--dur-base) var(--ease-out) var(--at); }
+/* Certifier rows: the value lands when the link arrives (--at); the row lights on approval, one after another. */
+.ev-rows--registry .stg-row { --ev-row-ok: var(--ev-ok); }
+.ev-rows--registry .stg-row:nth-child(2) { --ev-row-ok: calc(var(--ev-ok) + var(--ev-ok-step)); }
+.ev-rows--registry .stg-row:nth-child(3) { --ev-row-ok: calc(var(--ev-ok) + var(--ev-ok-step) * 2); }
+[data-reveal="play"] .ev .ev-rows--registry .stg-row { transition: color var(--dur-base) var(--ease-out) var(--at), border-color var(--dur-base) var(--ease-out) var(--ev-row-ok), background-color var(--dur-base) var(--ease-out) var(--ev-row-ok); }
+[data-reveal="play"] .ev .ev-rows--registry .stg-row-icon { transition: border-color var(--dur-base) var(--ease-out) var(--ev-row-ok); }
+[data-reveal="play"] .ev .ev-rows--registry .stg-row-meta { transition: opacity var(--dur-base) var(--ease-out) var(--at), color var(--dur-base) var(--ease-out) var(--ev-row-ok); }
 
 @media (max-width: 960px) {
   .ev { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 0; }
@@ -50,11 +86,12 @@
   .ev-art--record { order: 1; max-width: 420px; }
   .ev-cap--record { order: 2; margin-block: var(--space-4); }
   .ev-rows--record { order: 3; }
-  .ev .ev-wire--v { order: 4; display: block; height: var(--space-9); margin-left: calc(var(--stage-icon-w) / 2 - var(--stage-stroke) / 2); }
-  .ev-rows--registry { order: 5; display: flex; flex-direction: column-reverse; }
+  .ev .ev-link-v { order: 4; display: grid; justify-items: start; height: var(--space-9); padding-left: calc(var(--stage-icon-w) / 2 - var(--stage-stroke) / 2); }
+  .ev-link-v .ev-adapter { left: calc(var(--stage-icon-w) / 2); }
+  .ev-rows--registry { order: 5; }
   .ev-cap--registry { order: 6; margin-block: var(--space-4); }
   .ev-art--registry { order: 7; max-width: 420px; }
   .ev-note--registry { order: 8; margin-top: var(--space-4); }
   .ev-note--record { order: 9; }
-  .ev .ev-bridge, .ev .ev-links { display: none; }
+  .ev .ev-bridge, .ev .ev-links, .ev .ev-cap--map { display: none; }
 }

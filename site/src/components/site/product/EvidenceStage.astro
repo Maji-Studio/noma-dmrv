@@ -1,31 +1,35 @@
 ---
 /**
  * EvidenceStage (#evidence): the Product page's one keynote stage. A feedstock delivery on the left (a truck
- * on the weighbridge) with its evidence as check rows; a registry submission on the right with the fields
- * that evidence fills. Each record row sits level with the registry field it fills: the moisture reading
- * fills moisture content (dim link), the missing lab result leaves the lab result field open (the one "?"),
- * and the weighbridge ticket fills feedstock mass. That pair and its wire are the one lit element.
- * Choreography (one playhead): the weighbridge terminal settles, the rows tick top to bottom on both sides,
- * the dim link draws, then the lit wire draws from the weighbridge ticket and the feedstock mass fills.
- * Stacks vertically under 960px (record, a vertical wire, then the submission). No props.
+ * on the weighbridge) with its evidence as check rows; the certifier on the right (a review window with a
+ * certification seal) with the fields that evidence fills. Each record row sits level with the certifier field
+ * it maps to, through an adapter node: our names in, the certifier's names out (moisture reading to moisture
+ * content, lab result to carbon content, weighbridge ticket to feedstock mass).
+ * Choreography (one playhead): the weighbridge terminal settles and the record rows tick, with the lab result
+ * missing. Moisture, then weighbridge, map across and fill their certifier fields. The lab result arrives and
+ * maps last. Then the submission is approved: the seal closes and the certifier rows light (the one lit group).
+ * At rest (no JS, reduced motion) the stage shows the approved end state.
+ * Stacks vertically under 960px (record, a vertical wire with one adapter, then the certifier). No props.
  */
 import Stage from "../stage/Stage.astro";
 import StageCheckRow from "../stage/StageCheckRow.astro";
 import StageConnector from "../stage/StageConnector.astro";
+import StageMark from "../stage/StageMark.astro";
 import TextLink from "../TextLink.astro";
 import "./evidence-stage.css";
 
-// Delays in ms from the moment the stage plays. The lit pair is last on both sides, as in the keynote.
-const T = { leds: [150, 300, 450], rows: [350, 650, 950], side: 150, link: 1100, wire: 1300, wireDur: 850, lit: 2150 };
-// One entry per level: the record row and the registry field it fills.
+// Delays in ms from the moment the stage plays. Each link draws for T.wireDur, then its certifier field fills.
+const T = { leds: [150, 300, 450], rows: [300, 450, 600], bridge: 700, wireDur: 500, arrive: 2600, ok: 4100, okStep: 120 };
+// One entry per level: the record row, the certifier field it maps to, and when the link draws.
 const PAIRS = [
-  { record: { label: "Moisture reading", mark: "check", meta: "12%" }, registry: { label: "Moisture content", mark: "check", meta: "12%" }, link: "dim" },
-  { record: { label: "Lab result", mark: "unknown", meta: "Missing", dim: true }, registry: { label: "Lab result", mark: "unknown" } },
-  { record: { label: "Weighbridge ticket", mark: "check", meta: "2,400 kg" }, registry: { label: "Feedstock mass", mark: "check", meta: "2,400 kg" }, link: "lit" },
+  { record: { label: "Moisture reading", meta: "12%" }, registry: { label: "Moisture content", meta: "12%" }, draw: 1000 },
+  { record: { label: "Lab result", meta: "Attached", from: "Missing" }, registry: { label: "Carbon content", meta: "48%" }, draw: 3000 },
+  { record: { label: "Weighbridge ticket", meta: "2,400 kg" }, registry: { label: "Feedstock mass", meta: "2,400 kg" }, draw: 1600 },
 ];
-const FIELDS = [{ y: 44, filled: true }, { y: 76, filled: false }, { y: 108, filled: true }];
+const fill = (p) => p.draw + T.wireDur;
+const FIELD_Y = [44, 76, 108];
 const ms = (n) => `${n}ms`;
-const ALT = "Diagram with illustrative records. On the left, feedstock delivery FD-2026-014, a truck on the weighbridge, and its evidence: a moisture reading of 12%, recorded; a lab result, missing; and a weighbridge ticket for 2,400 kg, recorded and highlighted. On the right, the registry submission, each field level with the evidence that fills it: moisture content, 12%; lab result, still open because the lab result is missing; and feedstock mass, 2,400 kg, joined to the weighbridge ticket by a highlighted line.";
+const ALT = "Animated diagram with illustrative records. On the left, feedstock delivery FD-2026-014, a truck on the weighbridge, and its evidence: a moisture reading of 12%, a lab result that starts out missing and then arrives, and a weighbridge ticket for 2,400 kg. On the right, the certifier's review window with a certification seal. Each record maps across to the certifier's own field: moisture reading to moisture content, 12%; lab result to carbon content, 48%; weighbridge ticket to feedstock mass, 2,400 kg. Once all three are filled, the seal closes and the submission is approved.";
 ---
 <Stage
   id="evidence"
@@ -33,10 +37,10 @@ const ALT = "Diagram with illustrative records. On the left, feedstock delivery 
   title="Keep the evidence with the record."
   lead="Attach weighbridge tickets, transport documents, photos and lab results where they belong. See what is missing as you prepare a submission."
   alt={ALT}
-  revealMs={T.lit + 900}
+  revealMs={T.ok + 900}
 >
   <TextLink slot="action" href="/get-started" tone="stage">Book a walkthrough</TextLink>
-  <div class="ev" style={`--ev-lit:${ms(T.lit)}`}>
+  <div class="ev" style={`--ev-ok:${ms(T.ok)};--ev-ok-step:${ms(T.okStep)}`}>
     <svg class="ev-art ev-art--record" viewBox="0 0 460 148" preserveAspectRatio="xMidYMid meet">
       <path class="ev-art-dim" d="M0 142H460" />
       <rect x="16" y="126" width="318" height="10" />
@@ -53,35 +57,66 @@ const ALT = "Diagram with illustrative records. On the left, feedstock delivery 
       <path class="ev-art-dim" d="M380 60H424" />
       {[384, 400, 416].map((cx, i) => <circle class="ev-led ev-led--on" style={`--ev-at:${ms(T.leds[i])}`} cx={cx} cy="40" r="4.5" />)}
     </svg>
-    <div class="ev-bridge"><StageConnector variant="dotted" state="dim" length="100%" class="ev-bridge-line" /></div>
+    <div class="ev-bridge"><StageConnector variant="dotted" state="dim" length="100%" delay={ms(T.bridge)} class="ev-bridge-line" /></div>
     <svg class="ev-art ev-art--registry" viewBox="0 0 460 148" preserveAspectRatio="xMidYMid meet">
       <rect x="1" y="1" width="458" height="146" />
       <path d="M1 28H459" />
       {[22, 38, 54].map((x) => <circle class="ev-led" cx={x} cy="14.5" r="4.5" />)}
-      {FIELDS.map((f) => (
+      <text class="ev-art-label" x="76" y="18.5">CERTIFIER REVIEW</text>
+      {PAIRS.map((p, i) => (
         <g>
-          <path class="ev-art-dim" d={`M24 ${f.y + 11}H96`} />
-          <rect class:list={["ev-field", !f.filled && "ev-field--open"]} x="120" y={f.y} width="316" height="22" />
+          <path class="ev-art-dim" d={`M24 ${FIELD_Y[i] + 11}H84`} />
+          <rect class="ev-field ev-field--open" x="100" y={FIELD_Y[i]} width="224" height="22" />
+          <g class="ev-fill" style={`--ev-at:${ms(fill(p))}`}>
+            <rect class="ev-field" x="100" y={FIELD_Y[i]} width="224" height="22" />
+            <path d={`M112 ${FIELD_Y[i] + 11}H${172 + i * 18}`} />
+          </g>
         </g>
       ))}
+      <g class="ev-seal">
+        <path class="ev-seal-to" d="M374 104L366 138L376 132L383 141L388 108M410 104L418 138L408 132L401 141L396 108" />
+        <g class="ev-seal-from">
+          <circle class="ev-seal-dash" cx="392" cy="80" r="30" />
+          <circle cx="392" cy="80" r="22" />
+          <text class="ev-art-label ev-seal-q" x="392" y="84" text-anchor="middle">?</text>
+        </g>
+        <g class="ev-seal-to">
+          <circle cx="392" cy="80" r="30" />
+          <circle cx="392" cy="80" r="22" />
+          <path d="M382 80L389 87L403 73" />
+        </g>
+      </g>
     </svg>
 
     <p class="ev-cap ev-cap--record"><span>Feedstock delivery</span><span>FD-2026-014</span></p>
-    <p class="ev-cap ev-cap--registry"><span>Registry submission</span><span>In development</span></p>
+    <p class="ev-cap ev-cap--map" aria-hidden="true">Maps to</p>
+    <p class="ev-cap ev-cap--registry"><span>For the certifier</span><span>In development</span></p>
 
     <ul class="ev-rows ev-rows--record">
-      {PAIRS.map(({ record: r }, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} state={r.dim ? "dim" : PAIRS[i].link === "lit" ? "lit" : "default"} delay={ms(T.rows[i])} />)}
+      {PAIRS.map(({ record: r }, i) => r.from
+        ? (
+          <li class="stg-row stg-row--default ev-arrive" style={`--i:0;--delay:${ms(T.arrive)}`}>
+            <span class="stg-row-icon"><StageMark kind="unknown" class="ev-from" /><StageMark kind="check" /></span>
+            <span class="stg-row-label">{r.label}</span>
+            <span class="stg-row-meta"><span class="ev-from">{r.from}</span><span class="ev-to">{r.meta}</span></span>
+          </li>
+        )
+        : <StageCheckRow as="li" label={r.label} meta={r.meta} delay={ms(T.rows[i])} />)}
     </ul>
     <div class="ev-links">
-      {PAIRS.map((p) => p.link === "dim"
-        ? <StageConnector variant="dotted" state="dim" length="100%" delay={ms(T.link)} />
-        : p.link === "lit"
-          ? <StageConnector variant="dotted" state="lit" cap="ring" length="100%" delay={ms(T.wire)} duration={ms(T.wireDur)} class="ev-wire ev-wire--h" />
-          : <span></span>)}
+      {PAIRS.map((p) => (
+        <div class="ev-link">
+          <StageConnector variant="dotted" cap="ring" length="100%" delay={ms(p.draw)} duration={ms(T.wireDur)} />
+          <span class="ev-adapter stg-fade" style={`--i:0;--delay:${ms(p.draw + T.wireDur / 2)}`}></span>
+        </div>
+      ))}
     </div>
-    <StageConnector variant="dotted" direction="v" state="lit" cap="ring" delay={ms(T.wire)} duration={ms(T.wireDur)} class="ev-wire ev-wire--v" />
+    <div class="ev-link-v">
+      <StageConnector variant="dotted" direction="v" cap="ring" length="100%" delay={ms(PAIRS[0].draw)} duration={ms(T.wireDur)} />
+      <span class="ev-adapter stg-fade" style={`--i:0;--delay:${ms(PAIRS[0].draw + T.wireDur / 2)}`}></span>
+    </div>
     <ul class="ev-rows ev-rows--registry">
-      {PAIRS.map(({ registry: r, link }, i) => <StageCheckRow as="li" label={r.label} mark={r.mark} meta={r.meta} dashed state={link === "lit" ? "lit" : "dim"} delay={ms(link === "lit" ? T.lit : T.rows[i] + T.side)} />)}
+      {PAIRS.map((p) => <StageCheckRow as="li" label={p.registry.label} meta={p.registry.meta} dashed state="lit" delay={ms(fill(p))} />)}
     </ul>
     <p class="ev-note ev-note--record">Illustrative records</p>
     <p class="ev-note ev-note--registry">The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.</p>
