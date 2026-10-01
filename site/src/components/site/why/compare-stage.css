@@ -62,3 +62,6 @@
   .wc-col + .wc-col { background: repeating-linear-gradient(90deg, var(--stage-line-dim) 0 var(--stage-dot), transparent var(--stage-dot) calc(var(--stage-dot) * 2.5)) left top / 100% var(--stage-stroke) no-repeat; }
   .wc-svg { max-width: 240px; }
 }
+
+/* Principle 1's numeral, matching the other principles (Principle.astro). Decorative, so empty alt text. */
+#sources .stg-head::before { content: "1" / ""; display: block; margin-bottom: var(--space-3); font-size: clamp(64px, 7vw, 120px); font-weight: 100; line-height: 0.8; letter-spacing: -0.04em; color: var(--stage-lit); }

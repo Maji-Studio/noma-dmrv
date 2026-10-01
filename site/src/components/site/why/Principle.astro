@@ -1,0 +1,29 @@
+---
+/**
+ * Principle: one /why principle. A large thin numeral, the principle as the heading, one or two sentences,
+ * then its proof: the default slot (a visual). Text left and proof right; with
+ * wide, the proof runs the full width of the frame under the text.
+ * Props:
+ *   id: string            section id (from WHY_PRINCIPLES in src/config.js)
+ *   n: number             position in the list, 1 to 5
+ *   title: string
+ *   text: string
+ *   wide?: boolean
+ * Slots: default = the proof; "action" = links or buttons under the text.
+ */
+import GridFrame from "../GridFrame.astro";
+import "./principles.css";
+interface Props { id: string; n: number; title: string; text: string; wide?: boolean }
+const { id, n, title, text, wide = false } = Astro.props;
+---
+<GridFrame id={id} class:list={["pr", wide && "pr--wide"]} pad="none" flush aria-labelledby={`${id}-title`}>
+  <div class="pr-in">
+    <div class="pr-copy">
+      <p class="pr-n" aria-hidden="true">{n}</p>
+      <h2 id={`${id}-title`} class="t-h2 pr-title"><span class="sr-only">Principle {n}: </span>{title}</h2>
+      <p class="t-lead">{text}</p>
+      {Astro.slots.has("action") && <div class="actions pr-action"><slot name="action" /></div>}
+    </div>
+    <div class="pr-proof"><slot /></div>
+  </div>
+</GridFrame>

@@ -1,20 +1,29 @@
 ---
 /**
- * Mafinga: built with Dark Earth Carbon in Mafinga, Tanzania. The field-trial photo runs the full width
- * of the frame under the copy, with the caption under it. No props.
+ * Mafinga: proof for principle 5 (wide). The field-trial photo across the frame, then the four places a
+ * working plant keeps records, each as its station's contour drawing (ContourArt, the same drawings as
+ * Home's trace). No props.
  */
-import GridFrame from "../GridFrame.astro";
+import ContourArt from "../contours/ContourArt.astro";
+const PLACES = [
+  { station: "feedstock-delivery", name: "Weighbridge", line: "Feedstock in, weighed wet, moisture read." },
+  { station: "production-run", name: "Reactor", line: "Each run, feedstock in and biochar out." },
+  { station: "mix-bin", name: "Bins", line: "Every draw, oldest layer first." },
+  { station: "application", name: "Fields", line: "Where the biochar goes into the soil." },
+];
 ---
-<GridFrame id="mafinga" class="maf" pad="none" flush aria-labelledby="maf-title">
-  <div class="why-head maf-copy">
-    <h2 id="maf-title" class="t-h2">Built with Dark Earth Carbon in Mafinga, Tanzania.</h2>
-    <div class="stack">
-      <p class="t-lead">We’re developing noma with Dark Earth Carbon in Mafinga, Tanzania, around the work of recording production and tracing biochar to its application.</p>
-      <p class="t-body t-muted">The starting point is the work on the ground: deliveries at the weighbridge, runs at the reactor, draws from each bin and the fields where the biochar goes into the soil.</p>
-    </div>
-  </div>
+<div class="maf">
   <figure class="maf-figure">
     <img src="/preview/mafinga-field-trial.jpg" alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" />
     <figcaption class="t-caption">Field trial plots, Mafinga, Tanzania</figcaption>
   </figure>
-</GridFrame>
+  <ul class="maf-places">
+    {PLACES.map((p) => (
+      <li class="maf-place">
+        <ContourArt station={p.station} scope={`maf-${p.station}`} class="maf-art" />
+        <h3 class="maf-name">{p.name}</h3>
+        <p class="t-body t-muted">{p.line}</p>
+      </li>
+    ))}
+  </ul>
+</div>

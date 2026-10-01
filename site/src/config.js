@@ -21,9 +21,12 @@ export const PRODUCT_SECTIONS = [
   { id: "evidence", label: "Evidence and reporting" },
   { id: "next", label: "What’s next" },
 ];
-export const WHY_SECTIONS = [
-  { id: "who", label: "Who it’s for" },
-  { id: "spreadsheets", label: "noma vs spreadsheets" },
-  { id: "open-source", label: "Open source and ownership" },
-  { id: "mafinga", label: "Built in Mafinga" },
+// /why is five principles (the hero lists them as the page index); principle 1 compares with spreadsheets.
+// Home links to #who (the hero's audiences), #open-source and #mafinga.
+export const WHY_PRINCIPLES = [
+  { id: "sources", label: "Every figure has a source" },
+  { id: "evidence", label: "Evidence stays with the record" },
+  { id: "open-source", label: "The math is public" },
+  { id: "ownership", label: "Your data stays yours" },
+  { id: "mafinga", label: "Built where biochar is made" },
 ];

@@ -1,0 +1,100 @@
+/* /why principles: the Principle frame and each principle's proof. */
+
+/* Principle: thin numeral and copy left, proof right; --wide stacks the proof under the copy. */
+.pr-in { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--gap); align-items: start; padding: var(--section) var(--frame-pad); }
+.pr-copy { display: grid; gap: var(--space-5); justify-items: start; position: sticky; top: calc(var(--header-h) + var(--space-6)); }
+.pr-n { margin: 0 0 calc(var(--space-2) * -1); font-size: clamp(64px, 7vw, 120px); font-weight: 100; line-height: 0.8; letter-spacing: -0.04em; color: var(--accent); }
+.pr-title { max-width: 14ch; }
+.pr-action { margin-top: var(--space-3); }
+.pr-proof { min-width: 0; }
+.pr--wide .pr-in { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); row-gap: var(--space-8); padding-bottom: 0; }
+.pr--wide .pr-copy { position: static; grid-column: 1 / -1; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--gap); align-items: end; }
+.pr--wide .pr-n { grid-row: 1 / span 2; align-self: start; }
+.pr--wide .pr-proof { grid-column: 1 / -1; margin-inline: calc(var(--frame-pad) * -1); }
+
+/* Shared proof surface: white card on the page, hairline, one hard purple offset. */
+.evp-card, .mx, .own-side { background: var(--paper); border: var(--hairline) solid var(--rule-strong); }
+.mx { box-shadow: var(--space-3) var(--space-3) 0 var(--clr-purple-10); }
+.evp-code, .mx-file { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); letter-spacing: var(--track-mono); color: var(--ink-2); }
+
+/* 2. EvidenceProof: a record and the removal it feeds, joined by an arrow. */
+.evp { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); gap: var(--space-4); align-items: start; margin: 0; }
+.evp-card { box-shadow: var(--space-2) var(--space-2) 0 var(--clr-purple-10); }
+.evp-card p { margin: 0; }
+.evp-head { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-5); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.evp-files, .evp-checks { list-style: none; margin: 0; padding: var(--space-3) var(--space-5); display: grid; }
+.evp-files li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; padding-block: var(--space-3); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.evp-files li:last-child { border-bottom: 0; }
+.evp-files svg { width: 16px; height: 16px; fill: none; stroke: var(--accent); stroke-width: 1.2; }
+.evp-meta { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); color: var(--ink-2); }
+.evp-link { align-self: center; width: 48px; height: 12px; fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.evp-checks { gap: var(--space-2); font-size: var(--fs-small); }
+.evp-checks li { display: flex; align-items: center; gap: var(--space-3); }
+.evp-checks .stg-mark { width: 16px; height: 16px; flex: none; color: var(--ok); }
+.evp-checks .stg-mark-cut { stroke: var(--paper); }
+.evp-checks .is-missing, .evp-checks .is-missing .stg-mark { color: var(--warn); }
+.evp-missing { margin-left: auto; padding: 0 var(--space-2); font-size: var(--fs-caption); border: var(--hairline) solid currentColor; }
+.evp-note { margin: var(--space-6) 0 0; max-width: var(--measure); }
+.evp-foot { padding: var(--space-3) var(--space-5); border-top: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--warn); }
+
+/* 3. MathExcerpt: the quoted function. */
+.mx { margin: 0; min-width: 0; }
+.mx-head, .mx-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3) var(--space-5); padding: var(--space-3) var(--space-5); margin: 0; }
+.mx-head { border-bottom: var(--hairline) solid var(--rule); }
+.mx-file { overflow-wrap: anywhere; }
+.mx-lic { padding: 0 var(--space-2); font-size: var(--fs-caption); color: var(--accent); border: var(--hairline) solid var(--rule-strong); }
+.mx pre { margin: 0; padding: var(--space-5) 0; overflow-x: auto; font-family: var(--f-mono); font-weight: 500; font-size: 13px; line-height: 1.75; color: var(--ink); }
+.mx code { display: grid; min-width: max-content; }
+.mx-line { display: block; padding-right: var(--space-5); white-space: pre; }
+.mx-line.is-hit { background: var(--band-rose); box-shadow: inset 3px 0 0 var(--accent); }
+.mx-ln { display: inline-block; width: 3.5em; padding-right: 1.25em; text-align: right; color: var(--ink-3); user-select: none; }
+.mx-k { color: var(--accent); }
+.mx-f { color: var(--clr-pink); }
+.mx-n { color: var(--prod); }
+.mx-s { color: var(--ver); }
+.mx-foot { border-top: var(--hairline) solid var(--rule); font-size: var(--fs-small); color: var(--ink-2); }
+.mx-foot b { font-weight: 300; color: var(--ink); }
+
+/* 4. OwnershipProof: two stacks, "Same code" between them. */
+.own { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: var(--space-4); align-items: stretch; margin: 0; }
+.own-side { display: grid; gap: var(--space-3); align-content: start; padding: 0 0 var(--space-5); }
+.own-side--hosted { background: linear-gradient(var(--band-rose), var(--band-rose)), var(--paper); }
+.own-head { display: grid; gap: var(--space-1); margin: 0 0 var(--space-2); padding: var(--space-4) var(--space-5); border-bottom: var(--hairline) solid var(--rule); font-size: var(--fs-h4); letter-spacing: var(--track-h3); }
+.own-who { font-size: var(--fs-small); letter-spacing: 0; color: var(--ink-2); }
+.own-layer { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: var(--space-3); align-items: center; margin-inline: var(--space-5); padding: var(--space-4); border: var(--hairline) solid var(--rule-strong); background: var(--paper); font-size: var(--fs-body); }
+.own-layer svg { width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 1.2; }
+.own-layer--data { border-style: dashed; }
+.own-tag { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); letter-spacing: var(--track-mono); color: var(--ink-2); }
+.own-same { display: grid; place-items: center; margin: 0; }
+.own-same span { writing-mode: vertical-rl; transform: rotate(180deg); padding: var(--space-3) var(--space-1); font-size: var(--fs-small); color: var(--accent); border-block: var(--hairline) solid var(--accent); }
+
+/* 5. Mafinga: photo across the frame, then four places. */
+.maf-figure { position: relative; margin: 0; }
+.maf-figure img { display: block; width: 100%; height: auto; aspect-ratio: 21 / 8; min-height: var(--photo-min); object-fit: cover; object-position: center 60%; }
+.maf-figure figcaption { position: absolute; right: var(--frame-pad); bottom: var(--space-4); padding: var(--space-1) var(--space-2); background: var(--page); }
+.maf-places { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--hairline); margin: 0; padding: 0; list-style: none; background: var(--rule); border-top: var(--hairline) solid var(--rule); }
+.maf-place { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-7) var(--frame-pad) var(--space-8); background: var(--page); }
+.maf-art { height: 120px; margin-bottom: var(--space-4); color: var(--ink); }
+.maf-art svg { stroke-width: 1.1; }
+.maf-name { margin: 0; font-size: var(--fs-h4); font-weight: 300; letter-spacing: var(--track-h3); }
+
+@media (max-width: 1000px) {
+  .pr-in, .pr--wide .pr-in { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
+  .pr-copy { position: static; }
+  .pr--wide .pr-copy { grid-template-columns: minmax(0, 1fr); }
+  .pr--wide .pr-n { grid-row: auto; }
+  .maf-places { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .evp { grid-template-columns: minmax(0, 1fr); }
+  .evp-link { justify-self: center; transform: rotate(90deg); }
+  .mx { box-shadow: none; }
+  .mx pre { font-size: 11px; }
+  .mx-ln { width: 2.6em; padding-right: 0.9em; }
+  .own { grid-template-columns: minmax(0, 1fr); }
+  .own-same span { writing-mode: horizontal-tb; transform: none; border-block: 0; border-inline: var(--hairline) solid var(--accent); padding: var(--space-1) var(--space-3); }
+  .maf-figure img { aspect-ratio: 4 / 3; min-height: 0; }
+  .maf-figure figcaption { position: static; padding: var(--space-3) var(--frame-pad); }
+  .maf-place { padding: var(--space-6) var(--frame-pad) var(--space-7); }
+  .maf-art { height: 64px; margin-bottom: var(--space-2); }
+}
