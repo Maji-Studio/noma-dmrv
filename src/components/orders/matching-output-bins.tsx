@@ -1,7 +1,6 @@
 "use client";
 import { useSimplePresence } from "@/components/forms/form-detail-context";
 import { OutputStockAvailability } from "@/components/storage-locations/output-stock-preview";
-import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { StockNotice } from "@/components/storage-locations/stock-figures";
 import type { MatchingOutputBin } from "@/types/output-stock";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -48,7 +47,6 @@ function MatchingOutputBinCard({ bin, facilityId }: {
       dryKg={preview?.beforeDryKg ?? bin.dryMassKg}
       wetEstimate={bin.estimatedWetMassKg == null ? null : { kg: bin.estimatedWetMassKg, basis: "At the latest moisture reading of each batch" }}
       allocations={preview?.beforeAllocations}
-      actions={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={bin.id} facilityId={facilityId} />}
     />
     {stock.isLoading && <p role="status" className={STATUS_CLASS}>Loading stock details</p>}
     {stock.error && <p role="status" className={STATUS_CLASS}>Stock details could not be loaded. You can still save this order.</p>}

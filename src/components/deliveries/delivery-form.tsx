@@ -14,7 +14,6 @@ import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormS
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
-import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { Delivery } from "@/db/schema";
@@ -385,10 +384,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
             {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting} showErrors={attempted} />}
             {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
-            {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
+            {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
             {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
-            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} />}
           </div>
         </div>
       </FormSection>

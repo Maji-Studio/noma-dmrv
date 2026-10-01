@@ -236,9 +236,9 @@ const SIMPLE_BOUNDARIES: { block: string; presence: string; element: ReactNode; 
   { block: "Stock movement preview, blocked", presence: "notices only",
     element: <OutputStockPreview variant="movement" preview={preview} />,
     present: ["Correction blocked", "Count exceeds tracked solids"], absent: ["Product bin", "Batch A", "Show calculation"] },
-  { block: "Delivery stock", presence: "picture and its history action",
-    element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} />,
-    present: ["Delivery stock", "B-001", "80 kg", "Stock history"], absent: ["Wet mass", "Show calculation"] },
+  { block: "Delivery stock", presence: "picture",
+    element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" wetMassKg={100} dryMassKg={80} />,
+    present: ["Delivery stock", "B-001", "80 kg"], absent: ["Wet mass", "Show calculation", "Stock history"] },
 ];
 
 describe("Simple boundary table", () => {

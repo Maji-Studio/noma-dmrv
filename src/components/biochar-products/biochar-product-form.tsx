@@ -17,7 +17,6 @@ import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
-import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { StockChangeLabel } from "@/components/storage-locations/stock-change-label";
 import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
@@ -95,20 +94,16 @@ export function BiocharSourceMassFields({
 /**
  * The product composition under the mix fields. Simple draws it once the
  * biochar or an ingredient has a mass; before that it would be a key of
- * "Not available" rows. Detailed always draws it, with the bin's stock history.
+ * "Not available" rows. Detailed always draws it.
  */
 export function ProductCompositionBlock({
   composition,
   massKg,
   ingredientBins,
-  storageLocationId,
-  facilityId,
 }: {
   composition: FormProductComposition;
   massKg: number | null;
   ingredientBins: ReadonlyArray<{ massKg?: unknown }>;
-  storageLocationId: string | null | undefined;
-  facilityId: string;
 }) {
   const { detailed } = useSimplePresence("picture");
   const started = massKg !== null || ingredientBins.some((ingredient) => typeof ingredient.massKg === "number");
@@ -118,14 +113,6 @@ export function ProductCompositionBlock({
       wetMassKg={composition.wetProductKg}
       components={composition.components}
       note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
-      actions={detailed && storageLocationId ? (
-        <OutputStockHistory
-          compact
-          storageLocationId={storageLocationId}
-          facilityId={facilityId}
-          triggerLabel="Stock history"
-        />
-      ) : undefined}
     />
   );
 }
@@ -682,8 +669,6 @@ export function BiocharProductForm({
           composition={composition}
           massKg={massKgNum}
           ingredientBins={watchedIngredientBins ?? []}
-          storageLocationId={storageLocationId}
-          facilityId={selectedFacilityId}
         />
       </FormSection>
       </FormSpine>

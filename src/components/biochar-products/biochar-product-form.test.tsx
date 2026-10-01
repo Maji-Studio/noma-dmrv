@@ -50,7 +50,7 @@ describe("ProductCompositionBlock", () => {
     recordedSourceDryMassKg: null, ingredients: [], allocationFrozen: false,
   });
   const block = (massKg: number | null, ingredientBins: Array<{ massKg?: unknown }> = []) => (
-    <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} storageLocationId={null} facilityId="facility" />
+    <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} />
   );
   // A provider starts in Simple; outside one the form reads as Detailed.
   const simple = (node: ReturnType<typeof block>) =>

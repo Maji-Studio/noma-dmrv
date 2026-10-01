@@ -631,7 +631,7 @@ export function DeliveryList() {
                     },
                   ],
                   content: (
-                    <DeliveryStockDetails deliveryId={sideSheetEntity.id} storageLocationId={sideSheetEntity.storageLocationId} facilityId={sideSheetEntity.facilityId} wetMassKg={sideSheetEntity.deliveredWetMassKg} dryMassKg={sideSheetEntity.massDryKg} />
+                    <DeliveryStockDetails deliveryId={sideSheetEntity.id} storageLocationId={sideSheetEntity.storageLocationId} wetMassKg={sideSheetEntity.deliveredWetMassKg} dryMassKg={sideSheetEntity.massDryKg} />
                   ),
                 },
                 {
