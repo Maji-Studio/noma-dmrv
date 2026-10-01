@@ -11,13 +11,15 @@
  * Each noma source fact carries its readiness provenance and repair
  * destination once, in `SOURCE_FACTS`; bindings reference facts by key.
  *
- * `INPUT_MAPPING` and `PERIOD_INPUT_TUPLES` (transformers/datapoint.ts) are
- * projections of this catalog. Sequestration (measurement-sample) bindings stay
- * in transformers/sequestration-binding.ts, and `CERTIFY_FIELD_REGISTRY` /
- * `TRANSPORT_SOURCE_TO_CATEGORY` keep their own mirrors until the next #291
- * slices move them here.
+ * Every other table that names a binding tuple is a projection of this
+ * catalog: `INPUT_MAPPING` and `PERIOD_INPUT_TUPLES` (transformers/datapoint.ts),
+ * the input tuples behind `CERTIFY_FIELD_REGISTRY` sources, and the required
+ * transport categories (#637). Sequestration (measurement-sample) bindings stay
+ * in transformers/sequestration-binding.ts until #638.
+ * tests/binding-tuple-literal-guard.test.ts fails on a new literal mirror.
  */
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
+import type { TransportCategory } from "@/lib/certification/readiness";
 import type { components } from "./generated/certify";
 import type {
   AggregatedProductionData,
@@ -88,11 +90,41 @@ export const SOURCE_FACTS = {
 
 export type SourceFactKey = keyof typeof SOURCE_FACTS;
 
+function ownValue<T>(record: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+}
+
 /** The source fact behind an aggregated source key, if the catalog knows it. */
 export function lookupSourceFact(source: string): SourceFact | undefined {
-  return Object.prototype.hasOwnProperty.call(SOURCE_FACTS, source)
-    ? SOURCE_FACTS[source as SourceFactKey]
-    : undefined;
+  return ownValue<SourceFact>(SOURCE_FACTS, source);
+}
+
+/**
+ * The one mass-distance fact each transport category submits. Transport
+ * coverage, readiness routing and the certify field registry all resolve
+ * transport through this map.
+ */
+export const TRANSPORT_SOURCE_FACTS = {
+  feedstock: "feedstockTransportMassDistanceTonneKm",
+  biochar: "biocharTransportMassDistanceTonneKm",
+  sample: "sampleTransportMassDistanceTonneKm",
+} as const satisfies Record<TransportCategory, SourceFactKey>;
+
+export const TRANSPORT_CATEGORIES = Object.keys(
+  TRANSPORT_SOURCE_FACTS,
+) as readonly TransportCategory[];
+
+/** Where an operator repairs a transport category's legs. */
+export function transportRepairDestination(
+  category: TransportCategory,
+): RepairDestination {
+  return SOURCE_FACTS[TRANSPORT_SOURCE_FACTS[category]].repairDestination;
+}
+
+function transportCategoryForSource(source: string): TransportCategory | undefined {
+  return TRANSPORT_CATEGORIES.find(
+    (category) => TRANSPORT_SOURCE_FACTS[category] === source,
+  );
 }
 
 /** The registry-side shape of a Datapoint value: identical in every group. */
@@ -410,6 +442,34 @@ export type PeriodInputTupleTable = Record<
   Record<string, Record<string, { category: string }>>
 >;
 
+export type TransportCategoryTable = Record<
+  string,
+  Record<string, Record<string, TransportCategory>>
+>;
+
+/** One removal-template input, addressed by its stable keys. */
+export interface BindingInputTuple {
+  groupKey: string;
+  blueprintKey: string;
+  inputKey: string;
+}
+
+export type InputTuplesBySource = Partial<
+  Record<SourceFactKey, readonly BindingInputTuple[]>
+>;
+
+/** Own-property lookup in a (group, blueprint, input) table. */
+export function lookupBindingTriple<T>(
+  table: Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, T>>>>>>,
+  groupKey: string,
+  blueprintKey: string,
+  inputKey: string,
+): T | undefined {
+  const blueprints = ownValue(table, groupKey);
+  const inputs = blueprints ? ownValue(blueprints, blueprintKey) : undefined;
+  return inputs ? ownValue(inputs, inputKey) : undefined;
+}
+
 function setTriple<T>(
   table: Record<string, Record<string, Record<string, T>>>,
   groupKey: string,
@@ -481,6 +541,51 @@ export function projectPeriodInputTuples(
             ? role.category
             : role.projectScopeCategory;
         if (category) setTriple(table, groupKey, blueprintKey, inputKey, { category });
+      }
+    }
+  }
+  return table;
+}
+
+/**
+ * Every transport-category tuple: the aggregated roles whose source is a
+ * transport category's mass-distance fact.
+ */
+export function projectTransportCategories(
+  catalog: SemanticBindingCatalog = SEMANTIC_BINDING_CATALOG,
+): TransportCategoryTable {
+  const table: TransportCategoryTable = {};
+  for (const [blueprintKey, inputs] of Object.entries(catalog)) {
+    for (const [inputKey, binding] of Object.entries(inputs)) {
+      for (const [groupKey, role] of Object.entries(binding.roles)) {
+        if (role.strategy !== "aggregated-datapoint") continue;
+        const category = transportCategoryForSource(role.source);
+        if (category) setTriple(table, groupKey, blueprintKey, inputKey, category);
+      }
+    }
+  }
+  return table;
+}
+
+/**
+ * The removal-template inputs each source fact feeds, including the inputs
+ * where it is a per-component source.
+ */
+export function projectInputTuplesBySource(
+  catalog: SemanticBindingCatalog = SEMANTIC_BINDING_CATALOG,
+): InputTuplesBySource {
+  const table: Partial<Record<SourceFactKey, BindingInputTuple[]>> = {};
+  for (const [blueprintKey, inputs] of Object.entries(catalog)) {
+    for (const [inputKey, binding] of Object.entries(inputs)) {
+      for (const [groupKey, role] of Object.entries(binding.roles)) {
+        if (role.strategy !== "aggregated-datapoint") continue;
+        const sources = new Set<SourceFactKey>([
+          role.source,
+          ...Object.values(role.sourceByComponent ?? {}),
+        ]);
+        for (const source of sources) {
+          (table[source] ??= []).push({ groupKey, blueprintKey, inputKey });
+        }
       }
     }
   }

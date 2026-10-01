@@ -262,5 +262,5 @@ export const certificationSubmissionStatus = pgEnum(
 
 // (The `project_emission_category` pgEnum lived here for the ADR 0005
 // LCA journal; removed per ADR 0018. The category strings survive as
-// self-contained literals in PERIOD_INPUT_TUPLES,
-// src/lib/isometric/transformers/datapoint.ts.)
+// self-contained literals on the project-scope roles of the semantic binding
+// catalog, src/lib/isometric/semantic-binding-catalog.ts.)
