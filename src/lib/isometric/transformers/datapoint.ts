@@ -3,6 +3,7 @@ import type { components } from "../generated/certify";
 import type { AggregatedProductionData } from "../utils/aggregation";
 import { payloadHash } from "../utils/payload-hash";
 import {
+  lookupBindingTriple,
   projectInputMapping,
   projectPeriodInputTuples,
   type InputMappingEntry,
@@ -36,20 +37,6 @@ export function normalizeComponentDisplayName(
   return (componentDisplayName ?? "").trim().toLowerCase();
 }
 
-function lookupThreeLevelValue<T>(
-  table: Readonly<
-    Record<string, Readonly<Record<string, Readonly<Record<string, T>>>>>
-  >,
-  firstKey: string,
-  secondKey: string,
-  thirdKey: string,
-): T | undefined {
-  const secondLevel = ownValue(table, firstKey);
-  if (!secondLevel) return undefined;
-  const thirdLevel = ownValue(secondLevel, secondKey);
-  return thirdLevel ? ownValue(thirdLevel, thirdKey) : undefined;
-}
-
 // Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
 // source field. A projection of the semantic binding catalog
 // (src/lib/isometric/semantic-binding-catalog.ts), which owns every entry and
@@ -67,7 +54,7 @@ export function lookupInputMapping(
   blueprintKey: string,
   inputKey: string,
 ): InputMappingEntry | undefined {
-  return lookupThreeLevelValue(
+  return lookupBindingTriple(
     INPUT_MAPPING,
     groupKey,
     blueprintKey,
@@ -124,7 +111,7 @@ export function lookupPeriodInputTuple(
   // (fail-closed default).
   componentDisplayName?: string,
 ): { category: string } | undefined {
-  const tuple = lookupThreeLevelValue(
+  const tuple = lookupBindingTriple(
     PERIOD_INPUT_TUPLES,
     groupKey,
     blueprintKey,
