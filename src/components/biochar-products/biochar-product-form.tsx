@@ -111,6 +111,7 @@ export function ProductCompositionBlock({
     <ProductCompositionPreview
       wetMassKg={composition.wetProductKg}
       components={composition.components}
+      sources={composition.sources}
       note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
     />
   );

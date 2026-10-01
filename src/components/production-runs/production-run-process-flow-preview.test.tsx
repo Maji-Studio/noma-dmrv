@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 // environment does not have; the hint's copy is not what these tests assert.
 vi.mock("@/components/ui/tooltip", () => ({ InfoHint: () => null }));
 import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-detail-context";
-import { ProcessFlowPreview } from "./production-run-process-flow-preview";
+import { processFlowDiagram, ProcessFlowPreview } from "./production-run-process-flow-preview";
 
 const run = {
   sourceBinName: "Feedstock July",
@@ -34,45 +34,32 @@ function text(node: ReactElement): string {
 }
 
 describe("ProcessFlowPreview", () => {
-  it("reads as a journey: feedstock in under the source bin, the reactor, biochar out under the destination bin", () => {
+  it("draws the run as a mass flow: source bin, reactor, destination bin, then what left the process", () => {
     const rendered = text(<ProcessFlowPreview {...run} />);
 
-    expect(rendered).toContain("Feedstock July");
-    expect(rendered).toContain("Reactor 1");
-    expect(rendered).toContain("Biochar July");
-    expect(rendered).toContain("Feedstock in");
-    expect(rendered).toContain("100 kg wet");
-    expect(rendered).toContain("Dry feedstock 90 kg");
-    expect(rendered).toContain("Biochar out");
-    expect(rendered).toContain("50 kg wet");
-    expect(rendered).toContain("Dry biochar 45 kg");
     expect(rendered).toContain("Dry yield 50%");
-    // Source bin, reactor, destination bin in order; each mass sits under the
-    // bin it belongs to, and the reactor carries none.
-    expect(rendered.indexOf("Feedstock July")).toBeLessThan(rendered.indexOf("Feedstock in"));
-    expect(rendered.indexOf("Feedstock in")).toBeLessThan(rendered.indexOf("Reactor 1"));
+    expect(rendered).toContain("Feedstock July 100 kg wet, 90 kg dry");
+    expect(rendered).toContain("Reactor 1");
+    expect(rendered).toContain("Biochar July 50 kg wet, 45 kg dry");
+    expect(rendered).toContain("Water driven off 10 kg");
+    expect(rendered).toContain("Conversion loss 45 kg");
+    expect(rendered.indexOf("Feedstock July")).toBeLessThan(rendered.indexOf("Reactor 1"));
     expect(rendered.indexOf("Reactor 1")).toBeLessThan(rendered.indexOf("Biochar July"));
-    expect(rendered.indexOf("Biochar July")).toBeLessThan(rendered.indexOf("Biochar out"));
   });
 
-  it("draws both bars to one mass scale, with no rail beside the stops", () => {
-    const html = renderToStaticMarkup(<ProcessFlowPreview {...run} feedstockKg={1000} feedstockDryKg={900} biocharKg={300} biocharDryKg={270} />);
-    const widths = [...html.matchAll(/role="img"[^>]*style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
+  it("drives the water off before the reactor and the conversion loss out of it, on the dry basis", () => {
+    const diagram = processFlowDiagram(run);
 
-    expect(widths).toHaveLength(2);
-    expect(widths[0]).toBe(100);
-    expect(widths[1]).toBeCloseTo(30, 5);
-    // The old rail: a dot per stop and a line between them.
-    expect(html).not.toContain("rounded-full");
-  });
-
-  it("draws an unresolved bar to the same scale", () => {
-    const html = renderToStaticMarkup(
-      <ProcessFlowPreview {...run} feedstockKg={1000} feedstockMoisturePercent={10} feedstockDryKg={900} biocharKg={300} biocharMoisturePercent={null} biocharDryKg={null} />,
-    );
-    const hatched = [...html.matchAll(/border-dashed[^>]*style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
-
-    expect(hatched).toEqual([30]);
+    expect(diagram?.links).toEqual([
+      { from: "feed-dry", to: "reactor" },
+      { from: "made", to: "biochar-dry" },
+    ]);
+    expect(diagram?.exits?.map((exit) => [exit.from, exit.name])).toEqual([
+      ["feed-water", "Water driven off"],
+      ["loss", "Conversion loss"],
+    ]);
+    const masses = Object.fromEntries(diagram!.nodes.flatMap((node) => node.segments.map((segment) => [segment.id, segment.kg])));
+    expect(masses).toEqual({ "feed-water": 10, "feed-dry": 90, loss: 45, made: 45, "biochar-dry": 45, "biochar-water": 5 });
   });
 
   it("keeps the yield arithmetic behind the block's own disclosure", () => {
@@ -84,7 +71,7 @@ describe("ProcessFlowPreview", () => {
     expect(html).toContain("Dry yield = biochar out / feedstock in. 45 kg / 90 kg = 50%.");
   });
 
-  it("shows the yield headline and the rail at both levels and adds the calculation in Detailed", async () => {
+  it("shows the yield headline and the flow at both levels and adds the calculation in Detailed", async () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<FormDetailProvider scope="production-run"><FormDetailControl /><ProcessFlowPreview {...run} /></FormDetailProvider>);
@@ -93,7 +80,7 @@ describe("ProcessFlowPreview", () => {
     expect(simple).toContain("Dry yield");
     expect(simple).toContain("50%");
     expect(simple).toContain("Feedstock July");
-    expect(simple).toContain("Feedstock in");
+    expect(simple).toContain("Conversion loss");
     expect(simple).not.toContain("Show calculation");
 
     await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
@@ -103,21 +90,22 @@ describe("ProcessFlowPreview", () => {
     await act(async () => renderer.unmount());
   });
 
-  it("falls back to wet yield when the output dry mass is unresolved", () => {
+  it("falls back to a wet flow, with water and conversion loss as one exit, when the output dry mass is unresolved", () => {
     const rendered = text(<ProcessFlowPreview {...run} biocharMoisturePercent={null} biocharDryKg={null} />);
 
     expect(rendered).toContain("Wet yield 50%");
-    expect(rendered).toContain("Moisture not recorded. Biochar dry mass cannot be calculated.");
-    expect(rendered).toContain("Dry feedstock 90 kg");
-    expect(rendered).not.toContain("Dry biochar 45 kg");
+    expect(rendered).toContain("Feedstock July 100 kg wet");
+    expect(rendered).toContain("Water and conversion loss 50 kg");
+    expect(rendered).not.toContain("Water driven off");
+    expect(rendered).not.toContain("kg dry");
   });
 
-  it("falls back to wet yield when the input dry mass is unresolved", () => {
+  it("falls back to a wet flow when the input dry mass is unresolved", () => {
     const rendered = text(<ProcessFlowPreview {...run} feedstockMoisturePercent={null} feedstockDryKg={null} />);
 
     expect(rendered).toContain("Wet yield 50%");
-    expect(rendered).toContain("Moisture not recorded. Feedstock dry mass cannot be calculated.");
-    expect(rendered).toContain("Dry biochar 45 kg");
+    expect(rendered).toContain("Water and conversion loss 50 kg");
+    expect(rendered).not.toContain("kg dry");
   });
 
   it("names the field to fill at every unpicked stop, and renders nothing before the first one", () => {
@@ -133,13 +121,16 @@ describe("ProcessFlowPreview", () => {
     ).toBe("");
   });
 
-  it("leaves a mass out rather than captioning it as recorded", () => {
-    const rendered = text(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />);
+  it("draws nothing to scale until both wet masses are in, and names the ones missing", () => {
+    const noOutput = renderToStaticMarkup(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />);
+    const neither = text(
+      <ProcessFlowPreview {...run} feedstockKg={null} feedstockDryKg={null} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />,
+    );
 
-    expect(rendered).toContain("Biochar out");
-    expect(rendered).not.toContain("Not recorded wet");
+    expect(noOutput).not.toContain("data-mass-flow");
+    expect(noOutput).toContain("Record the biochar wet mass to draw the flow.");
     // No yield resolves, so the headline names the missing figure, not a basis.
-    expect(rendered).toContain("Yield Not available");
-    expect(rendered).not.toContain("Wet yield");
+    expect(text(<ProcessFlowPreview {...run} biocharKg={null} biocharMoisturePercent={null} biocharDryKg={null} />)).toContain("Yield Not available");
+    expect(neither).toContain("Record the feedstock wet mass and the biochar wet mass to draw the flow.");
   });
 });

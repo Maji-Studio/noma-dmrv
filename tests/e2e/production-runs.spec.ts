@@ -169,15 +169,15 @@ test.describe("Production Run + Sample UI CRUD", () => {
         .fill("70");
       await page.locator('input[name="feedstockMoisturePercent"]').fill("15");
       // The "Total wet input" recap is gone; the Detailed composition ledger
-      // carries the summed wet mass and the process flow names the bin count.
+      // carries the summed wet mass. With no biochar mass yet the process flow
+      // is not drawn and names the mass still to record instead.
       await page.getByRole("radio", { name: "Detailed", exact: true }).locator("..").click();
       await expect(
         page.getByRole("table", { name: /^Feedstock composition/ })
           .getByRole("row").filter({ hasText: "Wet total" }),
       ).toContainText("120 kg");
-      // The hidden calculation repeats the bin name, so match only the visible copy.
       await expect(
-        page.getByText(`${seededData.feedstockStorageLocation.name} + 1 more`, { exact: true }).locator("visible=true"),
+        page.getByText("Record the biochar wet mass to draw the flow.", { exact: true }),
       ).toBeVisible();
       await submitCreate(page);
       await waitForSideSheetClose(page);

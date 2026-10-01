@@ -40,6 +40,7 @@ import { sumNullable } from "@/lib/nullable-sum";
 import {
   ingredientComponents,
   productCompositionComponents,
+  productFlowSources,
   sourceComponents,
 } from "./product-composition-components";
 import { ZeroSourceBiocharWarning } from "./zero-source-biochar-warning";
@@ -80,16 +81,19 @@ export function savedProductComposition(product: BiocharProductWithRelations) {
   const waterKg = product.waterAddedKg;
   const sourceTotalKg = sourceWetKg === null ? null : sumNullable([sourceWetKg, waterKg]);
   const productTotalKg = product.massKg === null ? null : sumNullable([product.massKg, waterKg]);
+  const source = sourceComponents({ wetKg: sourceWetKg, dryKg: sourceDryKg, addedWaterKg: waterKg });
+  const grouped = ingredients.map(ingredient => ({
+    label: ingredient.feedstockTypeName,
+    parts: ingredientComponents(ingredient, { frozen: true }),
+  }));
   return {
     ingredients,
     sourceWetKg,
     sourceDryKg,
     sourceTotalKg,
     productTotalKg,
-    productComponents: productCompositionComponents(
-      sourceComponents({ wetKg: sourceWetKg, dryKg: sourceDryKg, addedWaterKg: waterKg }),
-      ingredients.flatMap(ingredient => ingredientComponents(ingredient, { frozen: true })),
-    ),
+    productComponents: productCompositionComponents(source, grouped.flatMap(ingredient => ingredient.parts)),
+    productSources: productFlowSources(source, grouped),
   };
 }
 
@@ -103,6 +107,7 @@ function SavedProductComposition({ product, composition }: {
       testId="saved-product-composition"
       wetMassKg={total}
       components={composition.productComponents}
+      sources={composition.productSources}
       wetLabel={WET_PRODUCT_LABEL}
       note={COMPOSITION_HINT}
       formatMass={formatSavedPart}
