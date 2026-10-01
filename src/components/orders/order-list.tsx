@@ -36,6 +36,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
 import { OrderForm } from "./order-form";
 import { orderSheetSections } from "./order-read-sections";
+import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Column Definitions
@@ -327,7 +328,7 @@ export function OrderList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<PackageIcon size={48} />}
+            icon={hasActiveFilters ? <PackageIcon size={48} /> : <OrderArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No orders found" : "No orders yet"}
             description={hasActiveFilters ? "Try adjusting your search or filters." : undefined}
             action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create your first order</Button> : undefined}

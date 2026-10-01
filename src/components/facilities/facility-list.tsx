@@ -56,6 +56,7 @@ import type { FacilityWithRelations } from "@/data-access/facilities";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { CardSkeleton } from "@/components/ui/loading-skeleton";
 import { facilitySheetSections } from "./facility-read-sections";
+import { FacilityArt, ILLUSTRATION_SIZE } from "@/components/ui/illustrations";
 
 /** Placeholder cards shown while the first page of facilities loads. */
 const LOADING_CARD_COUNT = 3;
@@ -374,7 +375,7 @@ export function FacilityList() {
       ) : facilities.length === 0 ? (
         <EmptyState
           padding="lg"
-          icon={<FactoryIcon size={48} />}
+          icon={hasActiveFilters || showArchived ? <FactoryIcon size={48} /> : <FacilityArt size={ILLUSTRATION_SIZE.empty} />}
           title={
             hasActiveFilters
               ? showArchived

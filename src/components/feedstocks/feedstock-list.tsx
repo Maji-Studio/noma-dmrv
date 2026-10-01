@@ -57,6 +57,7 @@ import {
   useFeedstockTypeFilter,
   useFeedstockTypeFilterOptions,
 } from "./use-feedstock-type-filter";
+import { ILLUSTRATION_SIZE, FeedstockArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Column Definitions
@@ -568,7 +569,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<PackageIcon size={48} />}
+            icon={hasActiveFilters ? <PackageIcon size={48} /> : <FeedstockArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No matching feedstocks" : "No feedstocks yet"}
             description={
               hasActiveFilters ? "Try clearing your search or filter." : undefined

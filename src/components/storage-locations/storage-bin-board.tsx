@@ -39,6 +39,7 @@ import {
   type StorageBinTypeFilter,
 } from "./bin-display";
 import { StorageBinTile, type BinRowAction } from "./storage-bin-tile";
+import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations";
 
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
@@ -306,7 +307,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         ) : bins.length === 0 ? (
           <EmptyState
             padding="md"
-            icon={<WarehouseIcon size={40} />}
+            icon={hasActiveFilters || showArchived ? <WarehouseIcon size={40} /> : <StorageBinArt size={ILLUSTRATION_SIZE.empty} />}
             title={
               hasActiveFilters
                 ? showArchived

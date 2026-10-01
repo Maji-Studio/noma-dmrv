@@ -62,6 +62,7 @@ import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 import { DeliveryForm } from "./delivery-form";
 import { deliverySheetSections } from "./delivery-read-sections";
+import { ILLUSTRATION_SIZE, DeliveryTruckArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Helper Functions
@@ -513,7 +514,7 @@ export function DeliveryList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<TruckIcon size={48} />}
+            icon={hasActiveFilters ? <TruckIcon size={48} /> : <DeliveryTruckArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No deliveries match" : "No deliveries yet"}
             description={
               hasActiveFilters

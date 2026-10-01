@@ -60,6 +60,7 @@ import {
   SAMPLE_CREATE_CREDIT_BATCH_PARAM,
 } from "@/lib/sample-create-intent";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { ILLUSTRATION_SIZE, SampleVialArt } from "@/components/ui/illustrations";
 
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
@@ -605,7 +606,7 @@ export function SampleList({
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<FlaskIcon size={48} />}
+            icon={hasActiveFilters ? <FlaskIcon size={48} /> : <SampleVialArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No Samples found" : "No Samples yet"}
             description={
               hasActiveFilters

@@ -59,6 +59,7 @@ import {
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
 function productionRunDetailHref(run: ProductionRunWithRelations) {
   const params = new URLSearchParams({
@@ -513,7 +514,7 @@ export function ProductionRunList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<FireIcon size={48} />}
+            icon={creditBatchFilter || hasActiveFilters ? <FireIcon size={48} /> : <ReactorArt size={ILLUSTRATION_SIZE.empty} />}
             title={
               creditBatchFilter
                 ? "No production runs in this credit batch"

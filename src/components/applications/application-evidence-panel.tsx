@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 import {
-  CameraIcon,
-  MapPinIcon,
   MapTrifoldIcon,
   PlusIcon,
-  PolygonIcon,
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
@@ -21,28 +18,27 @@ import type { GisBoundary } from "@/schemas/gis-boundary";
 import { GisReferenceDialog } from "./gis-reference-dialog";
 import { GisReferenceSummary } from "./gis-reference-summary";
 import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { EVIDENCE_METHOD_ART } from "./evidence-method-art";
 
 const GIS_BOUNDARY_DOC_TYPE: DocumentType = "gis_boundary";
-
-const METHOD_ART_SIZE = 20;
 
 const METHOD_OPTIONS = [
   {
     value: "location",
     title: "Customer location",
-    art: <MapPinIcon size={METHOD_ART_SIZE} weight="bold" />,
+    art: EVIDENCE_METHOD_ART.location,
     description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.location,
   },
   {
     value: "boundary",
     title: "GIS reference",
-    art: <PolygonIcon size={METHOD_ART_SIZE} weight="bold" />,
+    art: EVIDENCE_METHOD_ART.boundary,
     description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.boundary,
   },
   {
     value: "visual",
     title: "Visual evidence",
-    art: <CameraIcon size={METHOD_ART_SIZE} weight="bold" />,
+    art: EVIDENCE_METHOD_ART.visual,
     description: APPLICATION_EVIDENCE_METHOD_DESCRIPTIONS.visual,
     disabled: true,
     badge: "Available later",

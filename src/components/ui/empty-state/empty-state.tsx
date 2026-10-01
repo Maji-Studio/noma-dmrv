@@ -6,6 +6,11 @@
  * for top-level "no data yet" / "select a facility" states, `padding="md"`
  * for mid-tier empty sections, `padding="sm"` for nested empties (e.g.,
  * inside a card body or subsection).
+ *
+ * A top-level "no X yet" state may carry a drawing from
+ * `@/components/ui/illustrations` at `ILLUSTRATION_SIZE.empty`; the root is an
+ * `illo-host`, so hovering the card plays the drawing's loop. Filtered,
+ * error and nested empties keep a Phosphor icon.
  */
 "use client";
 
@@ -20,7 +25,7 @@ const PADDING_CLASSES = {
 export type EmptyStatePadding = keyof typeof PADDING_CLASSES;
 
 export interface EmptyStateProps {
-  /** Phosphor icon (or any element) — caller sizes it. Typical: 48px for lg, 40px for md, 32px for sm. */
+  /** Phosphor icon or illustration; caller sizes it. Icons: 48px for lg, 40px for md, 32px for sm. Drawings: ILLUSTRATION_SIZE.empty. */
   icon: ReactNode;
   /** Heading text — rendered as `title-heading-3`. */
   title: string;
@@ -41,7 +46,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-16 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${PADDING_CLASSES[padding]}`}
+      className={`illo-host flex flex-col items-center justify-center gap-16 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${PADDING_CLASSES[padding]}`}
     >
       <span className="text-[var(--color-text-tertiary)]">{icon}</span>
       <div className="flex flex-col gap-8 text-center max-w-[520px]">

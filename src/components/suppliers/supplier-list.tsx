@@ -39,6 +39,7 @@ import { MISSING_VALUE } from "@/lib/copy-utils";
 import { ENTITY_DEEP_LINK_EDIT_MODE, ENTITY_DEEP_LINK_MODE_PARAM, SUPPLIER_QUERY_PARAM } from "@/lib/entity-deep-link";
 import { toSaveErrorMessage } from "@/lib/stale-version";
 import { supplierSheetSections } from "./supplier-read-sections";
+import { ILLUSTRATION_SIZE, SupplierArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Column Definitions
@@ -348,7 +349,7 @@ export function SupplierList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<UsersIcon size={48} />}
+            icon={hasActiveSearch ? <UsersIcon size={48} /> : <SupplierArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveSearch ? "No matching suppliers" : "No suppliers yet"}
             description={
               hasActiveSearch
