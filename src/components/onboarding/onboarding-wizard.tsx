@@ -30,6 +30,7 @@ import type { FacilityFormData } from "@/schemas/facilities";
 import type { CreateReactorData } from "@/schemas/reactors";
 import type { OnboardingWizardControls } from "./use-onboarding-gate";
 import { WizardRegistryStep } from "./wizard-registry-step";
+import { FacilityArt, ILLUSTRATION_SIZE } from "@/components/ui/illustrations";
 
 const WIZARD_TITLE_ID = "onboarding-wizard-title";
 
@@ -269,7 +270,8 @@ const WELCOME_ROWS = [
 
 function WelcomeStep() {
   return (
-    <div className="flex flex-col gap-16">
+    <div className="illo-host flex flex-col gap-16">
+      <FacilityArt size={ILLUSTRATION_SIZE.empty} className="text-[var(--color-text-tertiary)]" />
       <p className="body-medium text-[var(--color-text-primary)]">
         A few steps to get your facility producing verified carbon removals.
       </p>

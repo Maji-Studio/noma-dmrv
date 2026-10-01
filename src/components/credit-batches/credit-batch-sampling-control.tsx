@@ -1,15 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CalculatorIcon, TestTubeIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField } from "@/components/forms/form-field";
 import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
 import type { MethodBEligibility } from "@/lib/certification/method-b-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 import { formatCount } from "@/lib/copy-utils";
 import { Notice } from "@/components/ui/notice";
-
-const SAMPLING_ART_SIZE = 20;
+import { ComputedEstimateArt, SampleVialArt } from "@/components/ui/illustrations";
 
 interface CreditBatchSamplingControlProps {
   visible: boolean;
@@ -77,14 +75,14 @@ export function CreditBatchSamplingControl({
               value: "sampled",
               title: "Sampled",
               description: "Method A, lab sampled",
-              art: <TestTubeIcon size={SAMPLING_ART_SIZE} weight="bold" />,
+              art: <SampleVialArt />,
               disabled,
             },
             {
               value: "unsampled",
               title: "Unsampled",
               description: "Method B, computed",
-              art: <CalculatorIcon size={SAMPLING_ART_SIZE} weight="bold" />,
+              art: <ComputedEstimateArt />,
               disabled: unsampledDisabled,
             },
           ]}

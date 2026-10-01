@@ -39,6 +39,7 @@ import { toSaveErrorMessage } from "@/lib/stale-version";
 import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
+import { ILLUSTRATION_SIZE, CustomerArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Column Definitions
@@ -360,7 +361,7 @@ export function CustomerList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<UsersIcon size={48} />}
+            icon={hasActiveSearch ? <UsersIcon size={48} /> : <CustomerArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveSearch ? "No matching customers" : "No customers yet"}
             description={hasActiveSearch ? "Try clearing your search." : undefined}
             action={

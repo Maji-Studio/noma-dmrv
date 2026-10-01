@@ -40,6 +40,7 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { formatTotalThroughputTph } from "./reactor-throughput";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { reactorSheetSections } from "./reactor-read-sections";
+import { ILLUSTRATION_SIZE, ReactorArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Column Definitions
@@ -307,7 +308,7 @@ export function ReactorList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<LightningIcon size={48} />}
+            icon={hasActiveSearch ? <LightningIcon size={48} /> : <ReactorArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveSearch ? "No matching reactors" : "No reactors yet"}
             description={hasActiveSearch ? "Try clearing your search." : undefined}
             action={
