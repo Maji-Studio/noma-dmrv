@@ -2,7 +2,7 @@
 
 **Owner:** Kenji Nguyen · **Status:** superseded by the multi-page site on branch `prototype/landing-preview-pages` (routes `/`, `/product`, `/why` and `/get-started`; editorial pages with dark keynote "stage" bands; flat nav). Kept as the record of the decisions from three grilling rounds and the variant A verdict (2026-09-29) · **Last reviewed:** 2026-10-01
 
-The decisions below came out of three grilling rounds recorded on the [noma landing page review](https://claude.ai/artifact/9fMhFy8wuMmHqLA64uVfwM). That page also has the research, five rejected alternatives and the approved draft, and it is the prototype this plan refers to: its **Draft page** tab is the page to build and its **Visuals** tab has the interactive pieces. Its code is a reference to port, not production code.
+The decisions below came out of three grilling rounds recorded on the [noma landing page review](https://claude.ai/artifact/9fMhFy8wuMmHqLA64uVfwM). That page also has the research, five rejected alternatives and the approved draft, and it is the prototype this plan refers to: its **Draft page** tab was the page this plan set out to build and its **Visuals** tab has the interactive pieces. The build now follows the multi-page site on `prototype/landing-preview-pages`, so treat the prototype as historical reference only.
 
 ## Purpose
 
@@ -49,7 +49,7 @@ Checked against the code on 2026-09-29. Copy must stay inside these.
 Copy is final unless marked. The prototype's Draft page tab shows the layout.
 
 1. **Nav.** "noma" with "by MAJI"; links to Trace, Features, Registry, Open source; "Book a walkthrough" button.
-2. **Hero.** Headline as above. Lead: "noma records biochar production from feedstock delivery to field application, and builds your registry submission from the same records. Click any square to see what it came from and what it became." Button: Book a walkthrough. Below: the **simple trace** (visual A). Then the logo row ("Built with and supported by": DEC, REPIC, FiBL, Isometric) and the figures line: "1,800 t of biochar a year at the first site in Mafinga, Tanzania. [figure] t traced in noma so far."
+2. **Hero.** Headline as above. Lead: "noma records biochar production from feedstock delivery to field application, and builds your registry submission from the same records. Click any square to see what it came from and what it became." Button: Book a walkthrough. Below: the **simple trace** (visual A). Then the logo row ("Built with and supported by": DEC, REPIC, FiBL, Isometric) and the figures line: "1,800 t of biochar a year at the Mafinga site, Tanzania. [figure] t traced in noma so far."
 3. **Dense trace.** "Real plants are messy. The trace still holds." Lead: "Split bins, mix bins, several deliveries per run. Hover a mix bin to see how far one merge reaches, or a field to walk it back to the sawmills." Visual B, then the three screenshots.
 4. **Map.** "Same records, on the map." Lead: "Suppliers, the plant and every field where biochar went into the soil, with haul distances from the record." Visual C.
 5. **Features.** "Everything a biochar plant records, linked." Lead: "What's shipped today, and five things we're building next."
