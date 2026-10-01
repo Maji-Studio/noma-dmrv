@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "astro": "7.3.5",
-    "maplibre-gl": "^5.24.0"
+    "maplibre-gl": "^6.4.1"
   }
 }
