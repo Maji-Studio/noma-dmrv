@@ -72,7 +72,7 @@ export function StorageBinActions({ storageLocationId }: StorageBinActionsProps)
     <>
       <Tooltip content="View bin">
         <Button
-          width="square"
+          size="icon" variant="noOutline"
           aria-label="View bin"
           busy={loading === "view"}
           disabled={loading !== null}
@@ -84,7 +84,7 @@ export function StorageBinActions({ storageLocationId }: StorageBinActionsProps)
       </Tooltip>
       <Tooltip content="Edit bin">
         <Button
-          width="square"
+          size="icon" variant="noOutline"
           aria-label="Edit bin"
           busy={loading === "edit"}
           disabled={loading !== null}
