@@ -2,6 +2,7 @@
  * Client-side narrowing of an energy breakdown: the credit batch filter,
  * per-source totals for the activity panel, and the list ranking.
  */
+import { creditBatchInPeriod } from "./period";
 import {
   DIESEL_SOURCE_KEYS,
   ENERGY_SOURCE_KEYS,
@@ -9,11 +10,49 @@ import {
   type EnergySourceKey,
 } from "./sources";
 import type {
+  EnergyCreditBatchInput,
   EnergyFlow,
   EnergyGap,
+  EnergyPeriod,
   EnergyProduction,
   EnergyRecord,
 } from "./types";
+
+/**
+ * The credit batch a selection resolves to. A batch counts when its dates
+ * overlap the period or when energy in the period reaches it: a July batch's
+ * delivery in September puts a July node on September's Sankey, and clicking
+ * that node must filter by it.
+ */
+export function resolveSelectedBatch(
+  creditBatches: EnergyCreditBatchInput[],
+  period: EnergyPeriod,
+  flows: EnergyFlow[],
+  requestedId: string | null,
+): EnergyCreditBatchInput | null {
+  if (requestedId == null) return null;
+  const batch = creditBatches.find((candidate) => candidate.id === requestedId);
+  if (!batch) return null;
+  return creditBatchInPeriod(batch, period) || flows.some((flow) => flow.creditBatchId === requestedId)
+    ? batch
+    : null;
+}
+
+/**
+ * Credit batch select options: the batches whose dates overlap the period,
+ * plus the selected one when it reached the period only through its energy,
+ * so the select can show what is selected.
+ */
+export function creditBatchOptions(
+  creditBatches: EnergyCreditBatchInput[],
+  period: EnergyPeriod,
+  selected: EnergyCreditBatchInput | null,
+): EnergyCreditBatchInput[] {
+  const options = creditBatches.filter((batch) => creditBatchInPeriod(batch, period));
+  return selected && !options.some((batch) => batch.id === selected.id)
+    ? [...options, selected]
+    : options;
+}
 
 export function flowsForBatch(flows: EnergyFlow[], batchId: string | null): EnergyFlow[] {
   return batchId == null ? flows : flows.filter((flow) => flow.creditBatchId === batchId);

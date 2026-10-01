@@ -24,9 +24,11 @@ import {
   type EnergyPeriodPreset,
 } from "@/lib/energy/period";
 import {
+  creditBatchOptions,
   flowsForBatch,
   gapsForBatch,
   recordsForBatch,
+  resolveSelectedBatch,
 } from "@/lib/energy/selection";
 import type { EnergyRecordScope } from "@/lib/energy/types";
 import { formatDateRange } from "@/lib/format-utils";
@@ -74,10 +76,13 @@ export function EnergyPage() {
   }
 
   const resolvedPeriod = { from: data?.from ?? period.from, to: period.to };
-  const periodBatches = (data?.creditBatches ?? []).filter((batch) =>
-    creditBatchInPeriod(batch, resolvedPeriod),
+  const selectedBatch = resolveSelectedBatch(
+    data?.creditBatches ?? [],
+    resolvedPeriod,
+    data?.flows ?? [],
+    requestedBatchId,
   );
-  const selectedBatch = periodBatches.find((batch) => batch.id === requestedBatchId) ?? null;
+  const batchOptions = creditBatchOptions(data?.creditBatches ?? [], resolvedPeriod, selectedBatch);
   const batchId = selectedBatch?.id ?? null;
   const periodText = resolvedPeriod.from
     ? formatDateRange(resolvedPeriod.from, resolvedPeriod.to)
@@ -124,7 +129,7 @@ export function EnergyPage() {
           onViewChange={setView}
           preset={preset}
           onPresetChange={changePreset}
-          creditBatches={periodBatches}
+          creditBatches={batchOptions}
           batchId={batchId}
           onBatchChange={setRequestedBatchId}
         />
