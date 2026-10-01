@@ -1,7 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { useForm, type Control, type FieldValues } from "react-hook-form";
 import { describe, expect, it } from "vitest";
-import { FormDetailProvider } from "@/components/forms/form-detail-context";
 import { IngredientMassSplit } from "./ingredient-mass-split";
 
 function Harness({ frozen = false, massDryKg }: { frozen?: boolean; massDryKg?: number }) {
@@ -35,10 +34,7 @@ describe("IngredientMassSplit", () => {
     expect(text(html)).toContain("Water 40 kg");
   });
 
-  it("offers the bin history at both levels", () => {
-    const simple = renderToStaticMarkup(<FormDetailProvider scope="s"><Harness /></FormDetailProvider>);
-    expect(simple).toContain('aria-label="Stock history, Compost bin"');
-    const detailed = renderToStaticMarkup(<Harness />);
-    expect(detailed).toContain('aria-label="Stock history, Compost bin"');
+  it("offers no bin history; that lives on the storage bin", () => {
+    expect(renderToStaticMarkup(<Harness />)).not.toContain("Stock history");
   });
 });

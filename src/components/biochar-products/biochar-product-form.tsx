@@ -17,8 +17,8 @@ import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
 } from "@/components/forms/entity-select";
-import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { StockChangeLabel } from "@/components/storage-locations/stock-change-label";
+import { StorageBinActions } from "@/components/storage-locations/storage-bin-actions";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -92,24 +92,19 @@ export function BiocharSourceMassFields({
 }
 
 /**
- * The product composition under the mix fields, with the source bin's stock
- * history, at both levels once the biochar or an ingredient has a mass or a
- * source bin is chosen (its history is an action). Before that it is a key of
+ * The product composition under the mix fields, at both levels once the
+ * biochar or an ingredient has a mass. Before that it is a key of
  * "Not available" rows that only explains what will appear, so only Detailed
- * shows it.
+ * shows it. Stock history lives on the storage bin, not here.
  */
 export function ProductCompositionBlock({
   composition,
   massKg,
   ingredientBins,
-  storageLocationId,
-  facilityId,
 }: {
   composition: FormProductComposition;
   massKg: number | null;
   ingredientBins: ReadonlyArray<{ massKg?: unknown }>;
-  storageLocationId: string | null | undefined;
-  facilityId: string;
 }) {
   const started = massKg !== null || ingredientBins.some((ingredient) => typeof ingredient.massKg === "number");
   const preview = (
@@ -118,17 +113,9 @@ export function ProductCompositionBlock({
       components={composition.components}
       sources={composition.sources}
       note="Dry biochar is what leaves the biochar bin. Each ingredient splits into solids and water at its own moisture. Water counts the water in the biochar and in every ingredient."
-      actions={storageLocationId ? (
-        <OutputStockHistory
-          compact
-          storageLocationId={storageLocationId}
-          facilityId={facilityId}
-          triggerLabel="Stock history"
-        />
-      ) : undefined}
     />
   );
-  return <DetailedOnly unless={started || Boolean(storageLocationId)}>{preview}</DetailedOnly>;
+  return <DetailedOnly unless={started}>{preview}</DetailedOnly>;
 }
 
 /**
@@ -487,6 +474,7 @@ export function BiocharProductForm({
                     : "/storage-locations",
                   linkLabel: "Open storage bins",
                 }}
+                trailingActions={<StorageBinActions storageLocationId={field.value} />}
               />
             )}
           />
@@ -665,6 +653,7 @@ export function BiocharProductForm({
                 }}
                 allowCreate
                 onCreateNew={() => storageLocationDialog.open()}
+                trailingActions={<StorageBinActions storageLocationId={field.value} />}
               />
             )}
           />
@@ -682,8 +671,6 @@ export function BiocharProductForm({
           composition={composition}
           massKg={massKgNum}
           ingredientBins={watchedIngredientBins ?? []}
-          storageLocationId={storageLocationId}
-          facilityId={selectedFacilityId}
         />
       </FormSection>
       </FormSpine>

@@ -242,6 +242,7 @@ export const deleteStorageLocationSchema = z.object({
 /**
  * Schemas for reversible storage-location lifecycle actions.
  */
+export const getStorageLocationSchema = deleteStorageLocationSchema;
 export const archiveStorageLocationSchema = deleteStorageLocationSchema;
 export const restoreStorageLocationSchema = deleteStorageLocationSchema;
 

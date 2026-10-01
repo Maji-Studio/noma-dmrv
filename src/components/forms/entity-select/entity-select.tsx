@@ -122,6 +122,7 @@ export function EntitySelect({
   formatSelectedLabel,
   emptyHint,
   noneOption,
+  trailingActions,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
 }: EntitySelectProps) {
@@ -408,8 +409,11 @@ export function EntitySelect({
   const defaultPlaceholder = `Select ${ENTITY_TYPE_LABELS[entityType] || entityType}...`;
   const defaultCreateLabel = `Add new ${ENTITY_TYPE_LABELS[entityType] || entityType}`;
 
-  return (
-    <div ref={containerRef} className={cn("relative", className)}>
+  const select = (
+    <div
+      ref={containerRef}
+      className={cn("relative", trailingActions ? "min-w-0 flex-1" : className)}
+    >
       {/* Trigger */}
       <div className="relative flex items-center">
         <button
@@ -674,6 +678,17 @@ export function EntitySelect({
         onClose={() => setIsFormulationDialogOpen(false)}
         onSuccess={handleCreatedEntity}
       />
+    </div>
+  );
+
+  if (!trailingActions) return select;
+
+  // Actions sit outside the select's own box, so the dropdown and the stock
+  // caption keep the trigger's width.
+  return (
+    <div className={cn("flex items-start gap-8", className)}>
+      {select}
+      {trailingActions}
     </div>
   );
 }
