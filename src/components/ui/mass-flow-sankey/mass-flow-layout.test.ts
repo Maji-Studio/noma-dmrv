@@ -50,6 +50,33 @@ describe("layoutMassFlow", () => {
     expect(bin.y).toBeCloseTo(made.y);
   });
 
+  it("keeps minimum-height bands that pool into one segment inside it", () => {
+    const pooled: MassFlowDiagram = {
+      nodes: [
+        { id: "char", column: 0, name: "Biochar", segments: [{ id: "char-water", kg: 1, kind: "water" }, { id: "char-dry", kg: 999, kind: "dry" }] },
+        { id: "blend", column: 0, name: "Ingredient", segments: [{ id: "blend-water", kg: 1, kind: "water" }, { id: "blend-solids", kg: 999, kind: "solids" }] },
+        { id: "product", column: 1, name: "Product", segments: [{ id: "out-water", kg: 2, kind: "water" }, { id: "out-dry", kg: 999, kind: "dry" }, { id: "out-solids", kg: 999, kind: "solids" }] },
+      ],
+      links: [
+        { from: "char-water", to: "out-water" },
+        { from: "char-dry", to: "out-dry" },
+        { from: "blend-water", to: "out-water" },
+        { from: "blend-solids", to: "out-solids" },
+      ],
+    };
+    const layout = layoutMassFlow(pooled, WIDTH)!;
+    const water = layout.nodes[2].segments.find((segment) => segment.id === "out-water")!;
+    expect(water.h).toBe(MIN_SEGMENT_PX);
+
+    for (const key of ["char-water->out-water", "blend-water->out-water"]) {
+      const path = layout.bands.find((band) => band.key === key)!.path;
+      // The band's end edge: "L x1,bottom" after the curve that ends at "x1,top".
+      const [, top, bottom] = /C[^C]* [\d.]+,([\d.]+) L[\d.]+,([\d.]+)/.exec(path)!.map(Number);
+      expect(top).toBeGreaterThanOrEqual(water.y);
+      expect(bottom).toBeLessThanOrEqual(water.y + water.h + 1e-9);
+    }
+  });
+
   it("takes a band's colour from the segment it delivers into", () => {
     const bands = layoutMassFlow(run, WIDTH)!.bands;
 

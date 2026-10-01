@@ -291,7 +291,11 @@ export function layoutMassFlow(
     const targetNode = placed.get(link.to) ?? segmentOwner.get(link.to);
     if (!source || !sourceNode || !targetNode || source.h <= 0) continue;
     const targetTop = placed.get(link.to)?.y ?? segmentById.get(link.to)?.y ?? targetNode.y;
+    const targetH = placed.get(link.to)?.h ?? segmentById.get(link.to)?.h ?? targetNode.h;
     const enteredSoFar = inOffset.get(link.to) ?? 0;
+    // Slivers held at the minimum height can add up to more than the segment
+    // they pool into; the last ones overlap inside it rather than spill past it.
+    const entry = Math.min(enteredSoFar, Math.max(0, targetH - source.h));
     const leftSoFar = outOffset.get(link.from) ?? 0;
     // A band is the mass it delivers: into a segment it takes that segment's
     // kind (the reactor's output arrives as dry biochar), into a whole node
@@ -301,7 +305,7 @@ export function layoutMassFlow(
       key: `${link.from}->${link.to}`,
       kind: delivered.kind,
       fill: delivered.fill,
-      path: bandPath(sourceNode.x + NODE_WIDTH_PX, source.y + leftSoFar, targetNode.x, targetTop + enteredSoFar, source.h),
+      path: bandPath(sourceNode.x + NODE_WIDTH_PX, source.y + leftSoFar, targetNode.x, targetTop + entry, source.h),
     });
     inOffset.set(link.to, enteredSoFar + source.h);
     outOffset.set(link.from, leftSoFar + source.h);
