@@ -1,6 +1,6 @@
 # noma landing page
 
-**Owner:** Kenji Nguyen · **Status:** in progress. Approved in three grilling rounds; five structural variants prototyped and **variant A chosen** (2026-09-29). Next: website styling and components. Logos, DEC figures, screenshots and the inbox address still to come from the owner · **Last reviewed:** 2026-09-29
+**Owner:** Kenji Nguyen · **Status:** superseded by the multi-page site on branch `prototype/landing-preview-pages` (routes `/`, `/product`, `/why` and `/get-started`; editorial pages with dark keynote "stage" bands; flat nav). Kept as the record of the decisions from three grilling rounds and the variant A verdict (2026-09-29) · **Last reviewed:** 2026-10-01
 
 The decisions below came out of three grilling rounds recorded on the [noma landing page review](https://claude.ai/artifact/9fMhFy8wuMmHqLA64uVfwM). That page also has the research, five rejected alternatives and the approved draft, and it is the prototype this plan refers to: its **Draft page** tab is the page to build and its **Visuals** tab has the interactive pieces. Its code is a reference to port, not production code.
 
