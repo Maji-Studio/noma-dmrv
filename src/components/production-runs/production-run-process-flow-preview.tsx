@@ -6,7 +6,7 @@
  * band thickness in kilograms on one scale, so 4 t in and 1 t out look like
  * it. On the dry basis the feedstock splits into its water, which is driven
  * off before the reactor, and its dry matter, which enters it; the reactor
- * splits the dry matter into the conversion loss, which leaves as gas, and the
+ * splits the dry matter into the conversion loss (syngas, vapour, ash) and the
  * dry biochar, which runs on to the bin and meets the biochar's own water
  * there. The exits are the run's losses made visible rather than implied by
  * two bars of different length.
@@ -33,7 +33,7 @@ import { StockRows, type StockRow } from "@/components/storage-locations/stock-f
 const YIELD_DIGITS = 1;
 
 const PROCESS_FLOW_HINT =
-  "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses. Conversion loss is the mass the reactor releases as gas.";
+  "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses. Conversion loss is the pyrolysis mass not kept in the biochar: syngas, vapour and ash.";
 
 const PLACEHOLDERS = {
   source: "Select source bin",
