@@ -87,7 +87,8 @@ export const STORAGE_BLUEPRINTS: Readonly<Record<string, StorageBlueprint>> = {
     tier: "200_year",
     sampling: "unsampled",
     support: "gated",
-    // Mass-only body; the exact wire format is unconfirmed (docs/open-questions.md).
+    // Mass-only body; the exact wire format is unconfirmed
+    // (docs/open-questions-isometric.md).
     inputs: { product_mass: IDENTITY },
   },
   [CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]: {

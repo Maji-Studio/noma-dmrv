@@ -28,7 +28,8 @@ export const PERCENT_TO_FRACTION = {
 
 /**
  * A dimensionless ratio to the `%` the 200-year `h_c_molar_ratios` input
- * declares. Unconfirmed against the sandbox; see docs/open-questions.md.
+ * declares. Unconfirmed against the sandbox; see
+ * docs/open-questions-isometric.md.
  */
 export const RATIO_TO_PERCENT = {
   apply: (value: number) => value * PERCENT,

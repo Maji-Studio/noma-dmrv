@@ -22,8 +22,9 @@
  * transport categories, and the Source binding rules and persisted Source
  * target schema (certification/removal-source-bindings.ts). The one literal
  * mirror left is the diesel template walk in
- * fn/certification/submission-warnings.ts (#639).
- * tests/binding-tuple-literal-guard.test.ts fails on a new one.
+ * fn/certification/submission-warnings.ts (#639); storage-blueprints.ts names
+ * storage inputs beside blueprint keys without binding them.
+ * tests/binding-tuple-literal-guard.test.ts fails on a new pair in any file.
  */
 import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import type { TransportCategory } from "@/lib/certification/readiness";
@@ -186,9 +187,8 @@ export interface EvidenceTarget {
  * Certify exposes no stable per-component semantic key, so the component
  * display name (compared trimmed and lowercased) is the only discriminator.
  * Each named component gets its own source fact; resolveDatapointSource fails
- * closed on any other name. Assigning live template components to these roles
- * by template-component ID, so a rename needs no deployment, is the rest of
- * #638.
+ * closed on any other name. The data-driven replacement is tracked in
+ * docs/open-questions-isometric.md (template-component-source-wizard).
  */
 export interface ComponentDisambiguationRule {
   name: string;

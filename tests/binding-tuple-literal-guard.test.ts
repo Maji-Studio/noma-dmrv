@@ -16,13 +16,20 @@ import { SEMANTIC_BINDING_CATALOG } from "@/lib/isometric/semantic-binding-catal
 
 const ROOT = join(__dirname, "..");
 const SOURCE_DIR = join(ROOT, "src");
-const CATALOG_MODULES = [
-  "src/lib/isometric/semantic-binding-catalog.ts",
-  "src/lib/isometric/storage-blueprints.ts",
-];
+const CATALOG_MODULE = "src/lib/isometric/semantic-binding-catalog.ts";
 const GENERATED_DIR = "src/lib/isometric/generated/";
 
 const KNOWN_MIRRORS: Record<string, string[]> = {
+  // The catalog's storage companion: blueprint keys sit beside the declared
+  // inputs of the unbound (200-year, deprecated) blueprints, so the bound
+  // blueprint's input names co-occur without binding anything.
+  "src/lib/isometric/storage-blueprints.ts": [
+    "carbon_rich_substance_sequestration/product_mass",
+    "biochar_sequestration_1000_year_f_durable_max/total_carbon_contents",
+    "biochar_sequestration_1000_year_f_durable_max/inorganic_carbon_contents",
+    "biochar_sequestration_1000_year_f_durable_max/product_mass",
+    "biochar_sequestration_1000_year_f_durable_max/s_fraction",
+  ],
   // Template walk for the diesel warning; #639's compiled plan replaces it.
   "src/fn/certification/submission-warnings.ts": ["fuel_usage_by_volume/volume_of_fuel"],
 };
@@ -58,7 +65,7 @@ function mirroredPairs(text: string): string[] {
 function literalMirrors(): Record<string, string[]> {
   const mirrors: Record<string, string[]> = {};
   for (const file of sourceFiles(SOURCE_DIR)) {
-    if (CATALOG_MODULES.includes(file) || file.startsWith(GENERATED_DIR)) continue;
+    if (file === CATALOG_MODULE || file.startsWith(GENERATED_DIR)) continue;
     const pairs = mirroredPairs(readFileSync(join(ROOT, file), "utf8"));
     if (pairs.length) mirrors[file] = pairs;
   }
