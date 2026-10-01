@@ -35,7 +35,7 @@ vi.mock("@/hooks/use-output-stock", async (importOriginal) => ({
 }));
 vi.mock("@/components/storage-locations/output-stock-history", () => ({ OutputStockHistory: ({ triggerLabel }: { triggerLabel?: string }) => <button type="button">{triggerLabel ?? "Stock history"}</button> }));
 vi.mock("@/components/storage-locations/bin-movement-history-modal", () => ({ BinMovementHistoryModal: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button> }));
-vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: stub("Transport legs"), TransportEvidencePanel: stub("Transport evidence") }));
+vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: stub("Transport legs"), TransportRoutePreview: stub("Transport route"), TransportEvidencePanel: stub("Transport evidence") }));
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: stub("Manure store") }));
 vi.mock("@/components/feedstock-types/feedstock-type-sampling", () => ({ FeedstockTypeSampling: stub("Feedstock sampling") }));
 vi.mock("@/components/production-runs/production-incident-table", () => ({ ProductionIncidentTable: stub("Incidents") }));

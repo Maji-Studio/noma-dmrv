@@ -12,11 +12,9 @@
 
 import dynamic from "next/dynamic";
 import { useRouteGeometries } from "@/hooks/use-geo";
-import { formatDistanceKm } from "@/lib/format-utils";
-import {
-  DISTANCE_SOURCE_LABELS,
-  type DistanceSourceValue,
-} from "@/schemas/distance-source";
+import { TransportRoutePreview } from "@/components/transport-legs";
+import { useLegVariant } from "@/components/transport-legs/leg-display-prototype";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { resolveCustomerLocationRoutePreview } from "./customer-location-route-preview";
 
 // Inlined at build time — public, domain-locked key (browser-safe).
@@ -80,6 +78,7 @@ export function CustomerLocationDetails({
   location,
   facility,
 }: CustomerLocationDetailsProps) {
+  const legVariant = useLegVariant();
   const localityLine = [location.city, location.stateRegion, location.country]
     .filter(Boolean)
     .join(", ");
@@ -144,20 +143,27 @@ export function CustomerLocationDetails({
               {localityLine}
             </p>
           )}
-          <p
-            className="body-caption text-[var(--color-text-tertiary)]"
-            data-testid="order-location-distance"
-          >
-            {location.distanceFromFacilityKm != null
-              ? `${formatDistanceKm(location.distanceFromFacilityKm)} from ${facility?.name ?? "facility"}`
-              : "Distance from facility not recorded"}
-            {location.distanceFromFacilityKm != null &&
-              location.distanceSource != null &&
-              ` (${DISTANCE_SOURCE_LABELS[location.distanceSource].toLowerCase()})`}
-          </p>
         </div>
 
-        {mapPoints && (
+        {/* The route this order's deliveries will drive, drawn like every saved leg. */}
+        <div data-testid="order-location-distance">
+          <TransportRoutePreview
+            entityType="biochar"
+            title="Delivery route"
+            originName={facility?.name}
+            destinationName={location.name}
+            distanceKm={location.distanceFromFacilityKm}
+            distanceSource={location.distanceSource}
+            loadMassKg={null}
+            plannedRoute
+            originPoint={{ lat: facility?.gpsLatitude ?? null, lng: facility?.gpsLongitude ?? null }}
+            destinationPoint={{ lat: location.gpsLatitude, lng: location.gpsLongitude }}
+            emptyMessage="Distance from facility not recorded."
+          />
+        </div>
+
+        {/* PROTOTYPE: the route variants open the map from "View map" instead. */}
+        {mapPoints && legVariant === "0" && (
           <div className="space-y-6">
             <div
               className={`${MINI_MAP_HEIGHT_CLASS} border border-[var(--clr-dark-purple-30)]`}

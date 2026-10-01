@@ -50,6 +50,8 @@ import { FeedstockAllocationSummary } from "./feedstock-allocation-summary";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import { TransportRoutePreview } from "@/components/transport-legs";
+import { useFacility } from "@/hooks/use-facilities";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
@@ -59,6 +61,8 @@ const DISTANCE_INPUT_STYLE = { paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) }
 
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
+
+const ROUTE_EMPTY = "Select a supplier and enter the wet mass to see the route.";
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
@@ -214,6 +218,7 @@ export function FeedstockForm({
   );
   const defaultSupplierLocation =
     supplierLocationList?.find((location) => location.isDefault) ?? null;
+  const { data: watchedFacility } = useFacility(watchedFacilityId ?? "");
   const { data: existingLegs } = useTransportLegsForEntity("feedstock", feedstock?.id ?? "", {
     enabled: isEditMode,
   });
@@ -603,6 +608,19 @@ export function FeedstockForm({
               </FormField>
             </ActionableFocusTarget>
           </div>
+          {/* Origin mirrors the saved leg: the supplier's default location, else the supplier. */}
+          <TransportRoutePreview
+            entityType="feedstock"
+            originName={defaultSupplierLocation?.name ?? selectedSupplier?.name}
+            originPoint={{ lat: defaultSupplierLocation?.gpsLatitude ?? null, lng: defaultSupplierLocation?.gpsLongitude ?? null }}
+            destinationPoint={{ lat: watchedFacility?.gpsLatitude ?? null, lng: watchedFacility?.gpsLongitude ?? null }}
+            destinationName={watchedFacility?.name}
+            distanceKm={countedTransportDistanceKm}
+            distanceSource={draftTransportDistanceSource}
+            loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
+            saved={isEditMode}
+            emptyMessage={ROUTE_EMPTY}
+          />
         </FormSection>
 
         {/* Material Details */}
