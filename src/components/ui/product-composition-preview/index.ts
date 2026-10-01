@@ -3,4 +3,5 @@ export type {
   ProductCompositionIngredient,
   ProductCompositionPart,
   ProductCompositionPartKind,
+  ProductFlowSource,
 } from "./product-composition-preview";

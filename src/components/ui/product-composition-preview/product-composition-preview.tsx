@@ -39,7 +39,8 @@ import {
   batchAccentFill,
   type SegmentFormat,
 } from "@/components/ui/segment-bar";
-import { formatMoisturePercent, MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
+import { MassFlowSankey, type MassFlowDiagram, type MassFlowNode, type MassFlowSegment } from "@/components/ui/mass-flow-sankey";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS, PERCENT_SCALE } from "@/lib/mass-moisture";
 
 /**
  * What the parts mean. A definition, not arithmetic, so it rides on the caption
@@ -74,11 +75,23 @@ export interface ProductCompositionPart {
   kind: ProductCompositionPartKind;
 }
 
+/** One input to the product with its own parts, for the mass flow. */
+export interface ProductFlowSource {
+  label: string;
+  parts: readonly ProductCompositionPart[];
+}
+
 interface ProductCompositionPreviewProps {
   wetMassKg: number | null | undefined;
   dryBiocharKg?: number | null | undefined;
   /** Every part, already split into solids and water. Wins over `ingredients`. */
   components?: readonly ProductCompositionPart[];
+  /**
+   * The same parts grouped by the input they came from. When every part
+   * resolves, the picture is a mass flow from the inputs into the product in
+   * place of the bar; the key underneath stays.
+   */
+  sources?: readonly ProductFlowSource[];
   /** Blend masses as received, one segment and one ledger row each. */
   ingredients?: readonly ProductCompositionIngredient[];
   /** Water added after the biochar was weighed. */
@@ -199,6 +212,92 @@ function resolveSegments({
   ];
 }
 
+const FLOW_KINDS: Record<ProductCompositionPartKind, MassFlowSegment["kind"]> = {
+  biochar: "dry",
+  ingredient: "solids",
+  water: "water",
+  addedWater: "addedWater",
+};
+
+/**
+ * Whole-number shares that add up to exactly 100: each share is rounded down,
+ * then the points still missing go to the largest remainders.
+ */
+function wholeShares(masses: readonly number[], totalKg: number): number[] {
+  const exact = masses.map((kg) => (kg / totalKg) * PERCENT_SCALE);
+  const shares = exact.map(Math.floor);
+  const missing = Math.round(PERCENT_SCALE - shares.reduce((sum, share) => sum + share, 0));
+  exact
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort((a, b) => b.remainder - a.remainder)
+    .slice(0, Math.max(0, missing))
+    .forEach(({ index }) => { shares[index] += 1; });
+  return shares;
+}
+
+/**
+ * The inputs flowing into the product, or null unless every part is known.
+ * Each input is a stop with its own parts. The product regroups them by kind,
+ * in the composition's order (dry biochar, each ingredient's solids, all the
+ * water, water added), and names each part beside it with its share of the
+ * product, so how much of it is dry biochar and how much is ingredients and
+ * water reads where the bands arrive. Ingredient solids take the same entity
+ * accents, in the same order, as the bar. A part with no mass (no water
+ * added) drops out, as it does from the bar.
+ */
+function productFlowDiagram(
+  sources: readonly ProductFlowSource[],
+  parts: readonly ProductCompositionPart[],
+  productLabel: string,
+  totalKg: number,
+  format: SegmentFormat,
+): MassFlowDiagram | null {
+  const known = [...parts, ...sources.flatMap((source) => source.parts)].every((part) => resolvedMass(part.massKg) !== null);
+  if (!known || totalKg <= 0) return null;
+
+  // One product part per kind, except ingredients, which stay one per material.
+  const partKey = (part: ProductCompositionPart) => (part.kind === "ingredient" ? `ingredient:${part.label}` : part.kind);
+  let ingredientIndex = 0;
+  const fills = new Map<string, string>();
+  const present = parts.filter((part) => (part.massKg ?? 0) > 0);
+  const shares = wholeShares(present.map((part) => part.massKg ?? 0), totalKg);
+  const product: MassFlowSegment[] = present
+    .map((part, index) => {
+      const key = partKey(part);
+      if (part.kind === "ingredient") fills.set(key, batchAccentFill(ingredientIndex++));
+      const kg = part.massKg ?? 0;
+      return {
+        id: `out-${key}`,
+        kg,
+        kind: FLOW_KINDS[part.kind],
+        fill: fills.get(key),
+        label: { name: part.label, figure: `${format(kg)} (${shares[index]}%)` },
+      };
+    });
+  const productIds = new Set(product.map((segment) => segment.id));
+
+  const links: MassFlowDiagram["links"][number][] = [];
+  const inputs: MassFlowNode[] = sources.flatMap((source, sourceIndex) => {
+    const segments = source.parts
+      .filter((part) => (part.massKg ?? 0) > 0)
+      .map((part, partIndex): MassFlowSegment => {
+        const id = `in-${sourceIndex}-${partIndex}`;
+        const target = `out-${partKey(part)}`;
+        if (productIds.has(target)) links.push({ from: id, to: target });
+        return { id, kg: part.massKg ?? 0, kind: FLOW_KINDS[part.kind], fill: fills.get(partKey(part)) };
+      });
+    const kg = segments.reduce((total, segment) => total + segment.kg, 0);
+    if (kg <= 0) return [];
+    const wet = source.parts.some((part) => part.kind !== "addedWater");
+    return [{ id: `source-${sourceIndex}`, column: 0, name: source.label, caption: wet ? `${format(kg)} wet` : format(kg), segments }];
+  });
+
+  return {
+    nodes: [...inputs, { id: "product", column: 1, name: productLabel, caption: format(totalKg), segments: product }],
+    links,
+  };
+}
+
 /** The addition behind the total, for operators who want to check the figure. */
 function formatCompositionArithmetic(
   wetLabel: string,
@@ -223,6 +322,7 @@ export function ProductCompositionPreview({
   wetMassKg,
   dryBiocharKg,
   components,
+  sources,
   ingredients,
   addedWaterKg,
   moisturePercent,
@@ -245,7 +345,15 @@ export function ProductCompositionPreview({
   // reads "Not available" instead of vanishing from the product.
   const partlyKnown = split !== null && split.some((segment) => segment.mass !== null);
 
-  const visual = segments ? (
+  const totalKg = resolvedMass(wetMassKg);
+  const flow = segments && sources && components && totalKg !== null
+    ? productFlowDiagram(sources, components, wetLabel, totalKg, formatMass)
+    : null;
+
+  // The flow names every part beside the product, so it needs no key.
+  const visual = flow ? (
+    <MassFlowSankey diagram={flow} />
+  ) : segments ? (
     <div className="flex flex-col gap-8">
       <SegmentBar segments={segments} label={`${wetLabel} composition`} format={formatMass} />
       <SegmentKey segments={segments} format={formatMass} className="tabular-nums" />
