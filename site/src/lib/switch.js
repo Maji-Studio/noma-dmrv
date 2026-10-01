@@ -29,6 +29,7 @@ if (bar) {
 }
 // Every variant reuses the same section ids, so resolve in-page links inside the visible variant only.
 document.addEventListener("click", (e) => {
+  if (e.defaultPrevented) return;
   const a = e.target.closest && e.target.closest('a[href^="#"]');
   if (!a || a.getAttribute("href").length < 2) return;
   const root = roots.find((r) => !r.hidden);
