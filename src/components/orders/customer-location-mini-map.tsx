@@ -34,6 +34,15 @@ import {
   OWN_LAYER_PREFIX,
 } from "@/components/map";
 import type { RouteGeometry } from "@/lib/geo/types";
+import "@/components/chain-of-custody/map/carbon-viewer.css";
+import {
+  createPopupCardElement,
+  type PopupCardInput,
+} from "@/components/chain-of-custody/map/viewer-elements";
+import {
+  POPUP_OFFSET_PX,
+  POPUP_WIDTH_PX,
+} from "@/components/chain-of-custody/map/viewer-constants";
 import {
   resolveCustomerLocationRoutePreview,
   type CustomerLocationMapPoint,
@@ -58,10 +67,15 @@ const FIT_PADDING = 48;
 /** Don't zoom past street level when the endpoints are very close. */
 const FIT_MAX_ZOOM = 13;
 
+/** PROTOTYPE: the Carbon Viewer card shown on hover or click of an endpoint. */
+export type EndpointCard = Pick<PopupCardInput, "kind" | "typeLabel" | "code" | "details">;
+
 export interface CustomerLocationMiniMapProps {
   facility: CustomerLocationMapPoint;
   destination: CustomerLocationMapPoint;
   routeGeometry: RouteGeometry | null | undefined;
+  /** Cards for the two endpoints; left out, the markers stay inert. */
+  endpointCards?: { facility: EndpointCard; destination: EndpointCard };
 }
 
 interface MiniMapPreview {
@@ -116,12 +130,62 @@ function boundsFor({
   return bounds;
 }
 
+type EndpointEnd = "facility" | "destination";
+
+/**
+ * Hover shows an endpoint's card; a click pins it until the other marker or
+ * the map is clicked. Same card as the Carbon Viewer.
+ */
+function wireEndpoint(
+  map: maplibregl.Map,
+  el: HTMLDivElement,
+  end: EndpointEnd,
+  refs: {
+    cards: { current: CustomerLocationMiniMapProps["endpointCards"] };
+    preview: { current: MiniMapPreview };
+    popup: { current: maplibregl.Popup | null };
+    pinned: { current: EndpointEnd | null };
+  },
+) {
+  if (!refs.cards.current) return;
+  el.style.cursor = "pointer";
+  const show = () => {
+    const card = refs.cards.current?.[end];
+    const point = refs.preview.current[end];
+    if (!card || !refs.popup.current) return;
+    refs.popup.current
+      .setLngLat([point.lng, point.lat])
+      .setDOMContent(createPopupCardElement({ ...card, status: null }))
+      .addTo(map);
+  };
+  el.addEventListener("mouseenter", () => {
+    if (refs.pinned.current === null) show();
+  });
+  el.addEventListener("mouseleave", () => {
+    if (refs.pinned.current === null) refs.popup.current?.remove();
+  });
+  el.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (refs.pinned.current === end) {
+      refs.pinned.current = null;
+      refs.popup.current?.remove();
+      return;
+    }
+    refs.pinned.current = end;
+    show();
+  });
+}
+
 export default function CustomerLocationMiniMap({
   facility,
   destination,
   routeGeometry,
+  endpointCards,
 }: CustomerLocationMiniMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const cardsRef = useRef(endpointCards);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+  const pinnedRef = useRef<EndpointEnd | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const facilityMarkerRef = useRef<maplibregl.Marker | null>(null);
   const destinationMarkerRef = useRef<maplibregl.Marker | null>(null);
@@ -139,7 +203,9 @@ export default function CustomerLocationMiniMap({
 
   useEffect(() => {
     previewRef.current = { facility, destination, routeGeometry };
+    cardsRef.current = endpointCards;
   });
+
 
   /** (Re)place both markers and the connector line on a loaded map. */
   const paintPreview = (map: maplibregl.Map, preview: MiniMapPreview) => {
@@ -155,6 +221,7 @@ export default function CustomerLocationMiniMap({
     if (!facilityMarkerRef.current) {
       const el = createMarkerElement("purple");
       el.style.cursor = "default";
+      wireEndpoint(map, el, "facility", { cards: cardsRef, preview: previewRef, popup: popupRef, pinned: pinnedRef });
       facilityMarkerRef.current = new maplibregl.Marker({ element: el })
         .setLngLat(facilityLngLat)
         .addTo(map);
@@ -165,6 +232,7 @@ export default function CustomerLocationMiniMap({
     if (!destinationMarkerRef.current) {
       const el = createMarkerElement("pink");
       el.style.cursor = "default";
+      wireEndpoint(map, el, "destination", { cards: cardsRef, preview: previewRef, popup: popupRef, pinned: pinnedRef });
       destinationMarkerRef.current = new maplibregl.Marker({ element: el })
         .setLngLat(destinationLngLat)
         .addTo(map);
@@ -200,6 +268,17 @@ export default function CustomerLocationMiniMap({
       return;
     }
     mapRef.current = map;
+    popupRef.current = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: POPUP_OFFSET_PX,
+      className: "cvm-pop",
+      maxWidth: `${POPUP_WIDTH_PX + 8}px`,
+    });
+    map.on("click", () => {
+      pinnedRef.current = null;
+      popupRef.current?.remove();
+    });
 
     map.once("load", () => {
       applyBrandRecolor(map);
@@ -248,6 +327,8 @@ export default function CustomerLocationMiniMap({
     });
 
     return () => {
+      popupRef.current?.remove();
+      popupRef.current = null;
       facilityMarkerRef.current = null;
       destinationMarkerRef.current = null;
       mapRef.current = null;

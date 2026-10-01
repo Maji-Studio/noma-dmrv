@@ -10,6 +10,10 @@ interface TransportLegsSummaryProps {
   title?: string;
   /** Override the no-legs message (e.g. for auto-derived categories). */
   emptyMessage?: string;
+  /** Drop the caption and CERT chip when the step already names and badges the route. */
+  hideHeader?: boolean;
+  /** PROTOTYPE: carry the CERT chip on the Route label. */
+  routeCert?: boolean;
 }
 
 /**
@@ -22,6 +26,8 @@ export function TransportLegsSummary({
   entityId,
   title,
   emptyMessage,
+  hideHeader,
+  routeCert,
 }: TransportLegsSummaryProps) {
   return (
     <TransportLegsEditor
@@ -30,6 +36,8 @@ export function TransportLegsSummary({
       title={title}
       emptyMessage={emptyMessage}
       readOnly
+      hideHeader={hideHeader}
+      routeCert={routeCert}
     />
   );
 }
