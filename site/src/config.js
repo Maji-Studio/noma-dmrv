@@ -18,6 +18,7 @@ export const NAV_CTA = { key: "get-started", label: "Get started", href: "/get-s
 export const PRODUCT_SECTIONS = [
   { id: "trace", label: "Trace" },
   { id: "bins", label: "Bins and stock" },
+  { id: "emissions", label: "Emissions" },
   { id: "evidence", label: "Evidence and reporting" },
   { id: "next", label: "What’s next" },
 ];

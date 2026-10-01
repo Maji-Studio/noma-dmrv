@@ -1,0 +1,231 @@
+---
+/**
+ * EmissionsSection (#emissions): the carbon cost of the bins story's 400 kg of dry biochar, on a light stage.
+ * One waterfall chart: a tall column for the carbon stored, one floating step down per emission line
+ * (grouped under the record it is kept on, each with a small line icon), and the net column as the one lit
+ * element. Dotted connectors carry each step's level across to the next column. Beside it, the net figure.
+ * Choreography (emissions.js): on first view the stored column grows, each step drops in order while the net
+ * figure counts down, then the net column grows and lights. Hovering, focusing or tapping a column shows its
+ * activity data in the caption row under the chart.
+ * At rest (no JS, reduced motion) the chart shows the end state and every caption is listed.
+ * Phone (760px and under): the same chart redrawn as horizontal bars, one row per line. No props.
+ *
+ * Illustrative numbers in kg CO2e, chosen to add up, not taken from a real plant. Only sources the app
+ * records: production run electricity, genset and plant diesel, preprocessing fuel; transport legs by
+ * distance and cargo mass, return trip counted. Prototype variants: branch prototype/emissions-variants-2026-10-01.
+ *
+ * SVG geometry is in user units. Vertical chart: column width CW at pitch P, an extra gap G between
+ * records, BASE is the zero line, S user units per kg CO2e, icons IC square under the baseline.
+ * Horizontal chart: rows of height RH with a bar of height BH, group header rows of height GH, SX user
+ * units per kg CO2e, icons HIC square before each name. Icons are drawn on a 24-unit grid.
+ */
+import GridFrame from "../GridFrame.astro";
+import "./emissions.css";
+
+const STORED = 620; // kg CO2e stored in 400 kg of dry biochar
+const DRY_KG = 400;
+const FIELD = "Field 1";
+const GROUPS = [
+  { record: "Feedstock delivery", lines: [
+    { key: "fd", icon: "truck", name: "Feedstock transport", activity: "1.5 t over 15 km, return trip counted", basis: "Measured", from: "Bill of lading", kg: 5, transport: true },
+  ] },
+  { record: "Production run", lines: [
+    { key: "chip", icon: "log", name: "Chipping", activity: "3 L diesel", basis: "Measured", from: "Fuel log", kg: 8 },
+    { key: "grid", icon: "plug", name: "Grid electricity", activity: "96 kWh", basis: "Measured", from: "Meter reading", kg: 48 },
+    { key: "genset", icon: "genset", name: "Genset energy", activity: "14 L diesel, 42 kWh at the site’s yield", basis: "Estimate", from: "From litres", kg: 37 },
+    { key: "plant", icon: "can", name: "Plant diesel", activity: "6 L diesel", basis: "Measured", from: "Fuel log", kg: 16 },
+  ] },
+  { record: "Biochar delivery", lines: [
+    { key: "del", icon: "truck", name: "Biochar transport", activity: "0.47 t over 240 km, return trip counted", basis: "Estimate", from: "Map route", kg: 23, transport: true },
+  ] },
+];
+const EMITTED = GROUPS.flatMap((g) => g.lines).reduce((s, l) => s + l.kg, 0); // 137
+const NET = STORED - EMITTED; // 483
+const MINUS = "−";
+
+// Line icons on a 24-unit grid, stroked in currentColor (emissions.css sizes and colours them).
+const ICONS = {
+  soil: "M2 9H22M12 9V4M12 6C10 4 8 4 7 5M12 5C14 3 16 3 17 4M5 13H8V16H5ZM10.5 13H13.5V16H10.5ZM16 13H19V16H16ZM7.5 18H10.5V21H7.5ZM13 18H16V21H13Z",
+  truck: "M2 6H14V16H2ZM14 9H18L21 12V16H14M7.5 18A1.5 1.5 0 1 0 7.5 21A1.5 1.5 0 1 0 7.5 18ZM16.5 18A1.5 1.5 0 1 0 16.5 21A1.5 1.5 0 1 0 16.5 18Z",
+  log: "M4 8H14M4 16H14M4 8A2 4 0 0 0 4 16M14 8A2 4 0 1 1 14 16A2 4 0 1 1 14 8ZM18 7L20 8M19 12H21.5M18 17L20 16",
+  plug: "M9 3V8M15 3V8M6 8H18V11A6 6 0 0 1 6 11ZM12 17V21",
+  genset: "M3 8H21V19H3ZM13 10L10 14H14L11 18M6 19V21M18 19V21M17 8V4H20",
+  can: "M6 5H15L19 9V21H6ZM8 5V3H12V5M9 11L15 17M15 11L9 17",
+  sprout: "M2 20H22M12 20V9M12 13C9 13 6 11 6 7C9 7 12 9 12 13ZM12 11C12 7 15 4 19 4C19 8 16 11 12 11Z",
+};
+
+// Choreography, ms from the moment the chart plays. The stored column grows for --dur-draw; then the steps
+// drop one per STEP; after a short pause the net column grows and lights.
+const T = { stored: 0, step0: 1000, step: 340, netPause: 260 };
+
+const STEPS = [];
+let level = STORED;
+GROUPS.forEach((g, gi) => g.lines.forEach((l) => {
+  STEPS.push({ ...l, kind: "step", record: g.record, group: gi + 1, top: level, bottom: level - l.kg, at: T.step0 + STEPS.length * T.step });
+  level -= l.kg;
+}));
+const NET_AT = T.step0 + STEPS.length * T.step + T.netPause;
+const ITEMS = [
+  { key: "stored", kind: "stored", icon: "soil", name: "Carbon stored", group: 0, top: STORED, bottom: 0, at: T.stored, label: String(STORED) },
+  ...STEPS.map((s) => ({ ...s, label: `${MINUS}${s.kg}` })),
+  { key: "net", kind: "net", icon: "sprout", name: "Net removal", group: GROUPS.length + 1, top: NET, bottom: 0, at: NET_AT, label: String(NET) },
+];
+// Level carried from each item to the next one: the stored top, each step's bottom (the net top is the last).
+const levelAfter = (it) => (it.kind === "step" ? it.bottom : it.top);
+
+// Vertical chart
+const CW = 56, P = 100, G = 40, X0 = 56, IC = 26;
+const BASE = 380, S = (BASE - 44) / STORED;
+const VW = 990, VH = 480;
+const y = (v) => BASE - v * S;
+const colX = (i, it) => X0 + i * P + it.group * G;
+const V = ITEMS.map((it, i) => ({ ...it, x: colX(i, it), cx: colX(i, it) + CW / 2 }));
+const TICKS = [0, 200, 400, 600];
+const BRACKETS = GROUPS.map((g, k) => {
+  const cols = V.filter((c) => c.group === k + 1);
+  const x1 = cols[0].x, x2 = cols[cols.length - 1].x + CW;
+  return { label: g.record.toUpperCase(), x1, x2, cx: (x1 + x2) / 2 };
+});
+
+// Horizontal chart (phone)
+const HW = 360, RH = 42, BH = 12, GH = 26, NET_GAP = 10, HIC = 16;
+const SX = (HW - 8) / STORED;
+const hx = (v) => v * SX;
+let cy = 0;
+const H = [];
+ITEMS.forEach((it) => {
+  if (it.kind === "step" && !H.some((r) => r.group === it.group)) {
+    H.push({ header: true, group: it.group, label: GROUPS[it.group - 1].record.toUpperCase(), y: cy });
+    cy += GH;
+  }
+  if (it.kind === "net") cy += NET_GAP;
+  H.push({ ...it, y: cy, by: cy + 22 });
+  cy += RH;
+});
+const HVH = cy;
+const HROWS = H.filter((r) => !r.header);
+
+const ms = (n) => `${n}ms`;
+const kgFull = (n) => `${n.toLocaleString("en-GB")} kg CO₂e`;
+const ariaOf = (it) => it.kind === "step" ? `${it.name}, ${it.record}: ${MINUS}${it.kg} kg CO₂e` : `${it.name}: ${kgFull(it.top)}`;
+---
+<GridFrame id="emissions" pad="none" flush aria-labelledby="emissions-title">
+<svg class="em-sprite" aria-hidden="true" focusable="false">
+  {Object.entries(ICONS).map(([k, d]) => <symbol id={`em-i-${k}`} viewBox="0 0 24 24"><path d={d} fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>)}
+</svg>
+<div class="pd-head">
+  <h2 id="emissions-title" class="t-h2">Net is what’s left.</h2>
+  <p class="t-lead t-muted">The diesel, electricity and road kilometres it took to get biochar into the ground come off the carbon it stores. noma keeps each amount on the record where the work happened, so the net figure adds up step by step.</p>
+</div>
+
+<div class="em-stage" data-em data-em-net={NET} data-em-stored={STORED} data-em-done={NET_AT + 900}>
+  <p class="em-bar"><span>Emissions</span><span>{DRY_KG} kg dry biochar, {FIELD}</span></p>
+
+  <div class="em-body">
+    <div class="em-fig">
+      <p class="em-num"><span data-em-count>{NET}</span></p>
+      <p class="em-unit">kg CO₂e net removal</p>
+      <p class="em-sum">{STORED} kg stored, less {EMITTED} kg from six emission lines on three records.</p>
+    </div>
+
+    <div class="em-chart" data-em-chart>
+      <svg class="em-svg em-v" viewBox={`0 0 ${VW} ${VH}`} role="group" aria-label="Waterfall chart, kg CO₂e: carbon stored, each emission line, net removal">
+        <defs>
+          <pattern id="em-hatch-v" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line class="em-hatch" x1="0" y1="0" x2="0" y2="6" />
+          </pattern>
+        </defs>
+        <text class="em-mono" x="0" y="14">KG CO₂E</text>
+        {TICKS.map((t) => (
+          <g>
+            <line class:list={["em-grid", t === 0 && "em-zero"]} x1={X0 - 8} x2={VW} y1={y(t)} y2={y(t)} />
+            <text class="em-mono em-tick" x={X0 - 14} y={y(t) + 4} text-anchor="end">{t}</text>
+          </g>
+        ))}
+        {V.slice(0, -1).map((c, i) => (
+          <line class="em-link em-fade" x1={c.x + CW} x2={V[i + 1].x} y1={y(levelAfter(c))} y2={y(levelAfter(c))} style={`--d:${ms(V[i + 1].at)}`} />
+        ))}
+        {V.map((c) => (
+          <g class:list={["em-col", `em-col--${c.kind}`, c.transport && "em-col--transport"]} data-em-col={c.key} data-em-at={c.at} data-em-kg={c.kind === "step" ? c.kg : undefined} tabindex="0" aria-label={ariaOf(c)}>
+            <rect class="em-hit" x={c.x - (P - CW) / 2} y="0" width={P} height={VH} />
+            <rect
+              class:list={["em-rect", c.kind === "step" ? "em-drop" : "em-grow"]}
+              x={c.x} y={y(c.top)} width={CW} height={Math.max((c.top - c.bottom) * S, 1)}
+              fill={c.kind === "step" ? "url(#em-hatch-v)" : undefined}
+              style={`--d:${ms(c.at)}`}
+            />
+            <text class:list={["em-val", c.kind !== "step" && "em-val--big", "em-fade"]} x={c.cx} y={y(c.top) - 10} text-anchor="middle" style={`--d:${ms(c.at)}`}>{c.label}</text>
+            <use class="em-ico" href={`#em-i-${c.icon}`} x={c.cx - IC / 2} y={BASE + 12} width={IC} height={IC} />
+            <text class="em-name" x={c.cx} y={BASE + 56} text-anchor="middle">{c.name}</text>
+          </g>
+        ))}
+        {BRACKETS.map((b) => (
+          <g class="em-group">
+            <path class="em-bracket" d={`M${b.x1} ${BASE + 64}v6H${b.x2}v-6`} />
+            <text class="em-mono" x={b.cx} y={BASE + 90} text-anchor="middle">{b.label}</text>
+          </g>
+        ))}
+      </svg>
+
+      <svg class="em-svg em-h" viewBox={`0 0 ${HW} ${HVH}`} role="group" aria-label="Waterfall chart, kg CO₂e: carbon stored, each emission line, net removal">
+        <defs>
+          <pattern id="em-hatch-h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line class="em-hatch" x1="0" y1="0" x2="0" y2="6" />
+          </pattern>
+        </defs>
+        {HROWS.slice(0, -1).map((r, i) => (
+          <line class="em-link em-fade" x1={hx(levelAfter(r))} x2={hx(levelAfter(r))} y1={r.by + BH} y2={HROWS[i + 1].by} style={`--d:${ms(HROWS[i + 1].at)}`} />
+        ))}
+        {H.map((r) => r.header ? (
+          <text class="em-mono" x="0" y={r.y + 16}>{r.label}</text>
+        ) : (
+          <g class:list={["em-col", `em-col--${r.kind}`, r.transport && "em-col--transport"]} data-em-col={r.key} tabindex="0" aria-label={ariaOf(r)}>
+            <rect class="em-hit" x="0" y={r.y} width={HW} height={RH} />
+            <use class="em-ico" href={`#em-i-${r.icon}`} x="0" y={r.y + 1} width={HIC} height={HIC} />
+            <text class="em-name em-name--h" x={HIC + 8} y={r.y + 14}>{r.name}</text>
+            <text class:list={["em-val", "em-val--h", "em-fade"]} x={hx(r.top) - 6} y={r.y + 14} text-anchor="end" style={`--d:${ms(r.at)}`}>{r.label}</text>
+            <rect
+              class:list={["em-rect", r.kind === "step" ? "em-drop" : "em-grow em-grow--x"]}
+              x={hx(r.bottom)} y={r.by} width={Math.max((r.top - r.bottom) * SX, 1)} height={BH}
+              fill={r.kind === "step" ? "url(#em-hatch-h)" : undefined}
+              style={`--d:${ms(r.at)}`}
+            />
+          </g>
+        ))}
+      </svg>
+    </div>
+  </div>
+
+  <div class="em-caps" aria-live="polite">
+    <p class="em-cap em-cap--default is-on" data-em-cap="">
+      <span class="em-only-v">Read it left to right. The first column is the carbon the biochar stores. Each step down is one emission line, kept on the record where the work happened. The lit column is what is left.</span><span class="em-only-h">Read it top to bottom. The first bar is the carbon the biochar stores. Each step back is one emission line, kept on the record where the work happened. The lit bar is what is left.</span> <span class="em-hint">Hover or tap a <span class="em-only-v">column</span><span class="em-only-h">row</span> for its activity data.</span>
+    </p>
+    <div class="em-cap" data-em-cap="stored">
+      <span class="em-cap-rec">Application</span>
+      <span class="em-cap-name"><svg class="em-cap-ico" aria-hidden="true"><use href="#em-i-soil" /></svg>Carbon stored</span>
+      <span class="em-cap-act">{DRY_KG} kg of dry biochar applied on {FIELD}</span>
+      <span class="em-cap-basis"></span>
+      <span class="em-cap-v">{kgFull(STORED)}</span>
+    </div>
+    {STEPS.map((s) => (
+      <div class="em-cap" data-em-cap={s.key}>
+        <span class="em-cap-rec">{s.record}</span>
+        <span class="em-cap-name"><svg class="em-cap-ico" aria-hidden="true"><use href={`#em-i-${s.icon}`} /></svg>{s.name}</span>
+        <span class="em-cap-act">{s.activity}</span>
+        <span class="em-cap-basis"><span class:list={["em-chip", s.basis === "Estimate" && "em-chip--est"]}>{s.basis}</span>{s.from}</span>
+        <span class="em-cap-v">{MINUS}{kgFull(s.kg)}</span>
+      </div>
+    ))}
+    <div class="em-cap" data-em-cap="net">
+      <span class="em-cap-rec">Removal</span>
+      <span class="em-cap-name"><svg class="em-cap-ico" aria-hidden="true"><use href="#em-i-sprout" /></svg>Net removal</span>
+      <span class="em-cap-act">{STORED} kg stored, {MINUS}{EMITTED} kg emitted. The figure the removal reports.</span>
+      <span class="em-cap-basis"></span>
+      <span class="em-cap-v em-cap-v--lit">{kgFull(NET)}</span>
+    </div>
+  </div>
+
+  <p class="em-note">Illustrative figures. The registry’s emission factors turn litres, kWh and tonne-kilometres into CO₂e. Transport (dashed) counts the trip back. A routed distance or genset kWh worked out from litres is an estimate, labelled and editable until a bill of lading or meter reading replaces it. A credit batch’s production emissions go to one removal only.</p>
+</div>
+</GridFrame>
+<script>import "./emissions.js";</script>
