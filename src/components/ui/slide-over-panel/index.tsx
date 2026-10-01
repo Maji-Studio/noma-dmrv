@@ -239,7 +239,9 @@ const Title = React.forwardRef<HTMLHeadingElement, SlideOverPanelTitleProps>(
         ref={ref}
         className={cn(
           "title-heading-4 text-[var(--color-text-primary)]",
-          "truncate",
+          // Wrap, never truncate: at phone width the title shares its row
+          // with the Simple/Detailed toggle and the close button.
+          "text-balance break-words",
           className
         )}
       >
