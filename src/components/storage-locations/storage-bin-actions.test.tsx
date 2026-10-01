@@ -8,13 +8,23 @@ const sheetProps = vi.hoisted(() => ({ current: null as null | { state: unknown 
 vi.mock('@/hooks/use-storage-locations', () => ({ useLoadStorageLocation: () => load }));
 vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ error: toastError }) }));
 vi.mock('@/components/ui/tooltip', () => ({ Tooltip: ({ children }: { children: React.ReactNode }) => children }));
-vi.mock('./bin-reconcile-sheet', () => ({ BinReconcileSheet: () => null }));
+const seenSheetActions = vi.hoisted(() => ({ current: 'unset' as unknown }));
+vi.mock('./bin-reconcile-sheet', () => ({
+  BinReconcileSheet: () => {
+    seenSheetActions.current = useSideSheetActions();
+    return null;
+  },
+}));
 vi.mock('./storage-bin-sheet', () => ({
   StorageBinSheet: (props: { state: unknown }) => {
     sheetProps.current = props;
     return null;
   },
 }));
+import {
+  SideSheetActionsContext,
+  useSideSheetActions,
+} from '@/components/ui/entity-side-sheet/side-sheet-context';
 import { StorageBinActions } from './storage-bin-actions';
 
 const bin = { id: 'bin-1', name: 'Forestry waste', archivedAt: null } as unknown as StorageLocationWithFacility;
@@ -73,5 +83,17 @@ describe('StorageBinActions', () => {
     const stopPropagation = vi.fn();
     boundary.props.onSubmit({ stopPropagation });
     expect(stopPropagation).toHaveBeenCalledOnce();
+  });
+
+  it('hides the entry sheet actions from the reconcile sheet so its Cancel stays its own', async () => {
+    const outer = { cancel: vi.fn(), reportDirty: vi.fn() };
+    await act(async () => {
+      create(
+        <SideSheetActionsContext.Provider value={outer as never}>
+          <StorageBinActions storageLocationId="bin-1" />
+        </SideSheetActionsContext.Provider>,
+      );
+    });
+    expect(seenSheetActions.current).toBeNull();
   });
 });
