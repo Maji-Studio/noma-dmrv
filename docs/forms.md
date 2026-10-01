@@ -438,7 +438,8 @@ under the inputs that drive it, with no tint and no frame: a sentence case
 caption with its one-sentence definition behind an ⓘ `hint`, an optional
 `headline`, the picture as `children`, and one action row holding the block's
 own `actions` (a fix such as "Balance to 100%"). Stock history lives on the
-storage bin, never on an entry form's block. All of that
+storage bin and its own loss, count and correction form, never on the block of a
+form that only draws from a bin. All of that
 shows at both levels. Detailed adds the `detail` rows (explanation such as a
 ledger, never decision info) and Show calculation, which opens `calculation`:
 arithmetic the block does not already show. Omit it and no control renders. Do
