@@ -53,7 +53,7 @@ import { LeafIcon, MapPinIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dis
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApplicationForm } from "./application-form";
 import { applicationSheetSections } from "./application-read-sections";
 import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
@@ -307,11 +307,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
 
+  // The exact-id read answers an unknown id with an empty page rather than an
+  // error, so the effect can see "missing" again before the cleared param
+  // lands. Report each linked id once.
+  const reportedMissingIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!focusedApplicationMissing) return;
+    if (!focusedApplicationMissing || reportedMissingIdRef.current === focusedApplicationId) return;
+    reportedMissingIdRef.current = focusedApplicationId;
     void setFocusedApplicationId(null);
     toast.error("Linked application could not be opened");
-  }, [focusedApplicationMissing, setFocusedApplicationId, toast]);
+  }, [focusedApplicationId, focusedApplicationMissing, setFocusedApplicationId, toast]);
   const createWithEvidence = useCreateWithEvidence({
     entityType: "application",
     entityNoun: "Application",
