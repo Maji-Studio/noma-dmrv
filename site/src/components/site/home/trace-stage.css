@@ -66,7 +66,7 @@
   .ts .ts-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; min-height: var(--ts-row-h); padding-top: 0; border-top: var(--hairline) solid var(--stage-grid); }
   .ts .ts-mark { position: relative; top: auto; left: auto; grid-column: 1; justify-self: center; }
   .ts .ts-seg { top: 50%; left: calc((var(--ts-mark-w) - var(--stage-stroke)) / 2); width: var(--stage-stroke); height: 100%; --ts-fill-from: scaleY(0); --ts-fill-origin: top; }
-  .ts .ts-text { display: grid; grid-column: 2 / -1; grid-template-columns: subgrid; align-items: center; align-self: stretch; gap: 0; }
+  .ts .ts-text { display: grid; grid-column: 2 / -1; grid-template-columns: subgrid; align-items: center; align-self: stretch; row-gap: 0; column-gap: inherit; }
   .ts .ts-icon { margin-bottom: 0; }
   .ts .ts-row:last-child > .ts-text::after { bottom: 0; }
 

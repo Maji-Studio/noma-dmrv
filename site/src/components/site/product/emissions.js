@@ -1,7 +1,9 @@
 // EmissionsSection. Hover, focus or tap a column to show its caption;
 // on first view play the waterfall (data-em="armed" -> "play" -> "done") while the net figure counts down
 // from the carbon stored. Without JS or with reduced motion the markup is the end state.
-import { onFirstView, reducedMotion } from "../motion.js";
+import { keepInView, onFirstView, reducedMotion } from "../motion.js";
+
+const STACKED = "(max-width: 1100px)";
 
 document.querySelectorAll("[data-em]").forEach((root) => {
   const cols = [...root.querySelectorAll("[data-em-col]")];
@@ -22,12 +24,16 @@ document.querySelectorAll("[data-em]").forEach((root) => {
   cols.forEach((c) => {
     c.removeAttribute("disabled");
     const key = c.dataset.emCol;
-    c.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") focus(key); });
-    c.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") focus(pinned); });
+    c.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse" && !matchMedia(STACKED).matches) focus(key); });
+    c.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse" && !matchMedia(STACKED).matches) focus(pinned); });
     c.addEventListener("focus", () => focus(key));
     c.addEventListener("blur", () => focus(pinned));
     // Tap (touch) or click pins a column; a second tap on it unpins.
-    c.addEventListener("click", () => { pinned = pinned === key ? "" : key; focus(pinned); });
+    c.addEventListener("click", () => {
+      pinned = pinned === key ? "" : key;
+      focus(pinned);
+      if (matchMedia(STACKED).matches) keepInView(root.querySelector(".em-caps"));
+    });
     c.addEventListener("keydown", (e) => {
       if (!c.matches("button") && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault();

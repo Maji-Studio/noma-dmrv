@@ -4,9 +4,10 @@
 // growing rail segment (.is-cycling). Selecting a row pauses the walk so the record can be read. A play/pause control
 // lets the viewer resume it. It also pauses off screen and in a background tab. Reduced motion or no JS: no walk, the application card stays open and
 // rows still switch the view.
-import { reducedMotion } from "../motion.js";
+import { durationMs, keepInView, reducedMotion } from "../motion.js";
 
 const DEFAULT_DWELL_MS = 3000;
+const STACKED = "(max-width: 900px)";
 
 export function initTraceStage(root) {
   const stage = root.closest("[data-reveal]");
@@ -14,7 +15,7 @@ export function initTraceStage(root) {
   const rows = [...root.querySelectorAll(".ts-row[data-step]")];
   const steps = rows.map((r) => r.dataset.step);
   const cards = new Map([...root.querySelectorAll(".ts-card")].map((c) => [c.dataset.step, c]));
-  const dwell = parseFloat(getComputedStyle(root).getPropertyValue("--ts-dwell")) || DEFAULT_DWELL_MS;
+  const dwell = durationMs(getComputedStyle(root).getPropertyValue("--ts-dwell"), DEFAULT_DWELL_MS);
   let current = rows.find((r) => r.querySelector("[aria-current]"))?.dataset.step;
   let timer = 0;
   let started = false;
@@ -76,9 +77,11 @@ export function initTraceStage(root) {
   rows.forEach((row) => {
     const id = row.dataset.step;
     const button = row.querySelector("button");
-    row.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") pick(id); });
     button.addEventListener("focus", () => pick(id));
-    button.addEventListener("click", () => pick(id));
+    button.addEventListener("click", () => {
+      pick(id);
+      if (matchMedia(STACKED).matches) keepInView(view);
+    });
   });
   document.addEventListener("visibilitychange", schedule);
   if ("IntersectionObserver" in window) {

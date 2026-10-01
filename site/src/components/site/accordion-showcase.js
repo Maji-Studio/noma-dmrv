@@ -4,7 +4,10 @@
 // sits in the panel) and data-shown (the right-hand visual, which stays on the last opened item).
 // The first render skips transitions (data-acc-still) so nothing animates shut on load.
 
+import { keepInView } from "./motion.js";
+
 const KEYS = { ArrowDown: 1, ArrowUp: -1 };
+const STACKED = "(max-width: 899px)";
 
 export function mountAccordion(root) {
   const buttons = [...root.querySelectorAll(":scope > .acc-h > .acc-btn")];
@@ -29,9 +32,17 @@ export function mountAccordion(root) {
   }
 
   function set(i) {
+    const previous = open;
+    const stacked = matchMedia(STACKED).matches;
+    // Collapsing a tall visual above the tapped heading must not hide that heading.
+    if (stacked) root.setAttribute("data-acc-still", "");
     open = i;
     if (i >= 0) shown = i;
     render();
+    if (stacked) {
+      keepInView(items[i >= 0 ? i : previous].btn);
+      requestAnimationFrame(() => root.removeAttribute("data-acc-still"));
+    }
     root.dispatchEvent(new CustomEvent("accordion:open", {
       detail: { index: i, id: i >= 0 ? items[i].btn.id : null, visual: i >= 0 ? items[i].visual : null },
     }));

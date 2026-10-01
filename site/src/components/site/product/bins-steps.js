@@ -1,7 +1,9 @@
 // BinsSection stepper. Arms the stage (.is-live, tabs and Back / Next shown), parks the squares above the bin
 // (step 0) and fills the bin on first view. Tabs jump to a step; Next walks forward and, on the last step,
 // starts again with a fresh fill. data-step on the stage drives the picture (bins-steps.css).
-import { onFirstView, reducedMotion } from "../motion.js";
+import { keepInView, onFirstView, reducedMotion } from "../motion.js";
+
+const STACKED = "(max-width: 900px)";
 
 document.querySelectorAll("[data-bs]").forEach((root) => {
   const tabs = [...root.querySelectorAll("[data-bs-go]")];
@@ -38,8 +40,9 @@ document.querySelectorAll("[data-bs]").forEach((root) => {
   root.querySelector(".bs-tabs").hidden = false;
   root.querySelector(".bs-nav").hidden = false;
   tabs.forEach((t) => t.addEventListener("click", () => go(Number(t.dataset.bsGo))));
-  back.addEventListener("click", () => go(Math.max(1, step - 1)));
-  next.addEventListener("click", () => (step >= last ? fill() : go(step + 1)));
+  const revealStep = () => { if (matchMedia(STACKED).matches) keepInView(root.querySelector(".bs-tabs")); };
+  back.addEventListener("click", () => { go(Math.max(1, step - 1)); revealStep(); });
+  next.addEventListener("click", () => { if (step >= last) fill(); else go(step + 1); revealStep(); });
 
   go(reducedMotion() ? 1 : 0);
   onFirstView(root, () => { if (step === 0) fill(); });

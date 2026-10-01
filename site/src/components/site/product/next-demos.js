@@ -1,7 +1,7 @@
 // "What's next" demos (NextShowcase). Each demo plays when its accordion item opens: CSS owns the timed
 // parts (data-anim="armed" then "play"), JS adds what CSS cannot do (values flying between cards, messages typing in). Reduced motion, no
 // IntersectionObserver or no JS: every demo shows its end state and nothing is ever hidden at rest.
-import { motionToken, onFirstView, reducedMotion } from "../motion.js";
+import { durationMs, motionToken, onFirstView, reducedMotion } from "../motion.js";
 
 const MS = {
   documents: 2300, reactor: 2000, telegram: 3400, connections: 1900, checks: 1900, // total per demo
@@ -22,7 +22,7 @@ function finish(demo) {
 
 // documents: each value leaves the ticket and lands in its field on the record.
 function flyValues(demo) {
-  const gap = parseFloat(motionToken("--stagger-slow")), easing = motionToken("--ease-draw");
+  const gap = durationMs(motionToken("--stagger-slow")), easing = motionToken("--ease-draw");
   demo.querySelectorAll("[data-fly-to]").forEach((to, i) => {
     const from = demo.querySelector(`[data-fly-from="${to.dataset.flyTo}"]`);
     later(demo, () => {

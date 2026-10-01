@@ -7,7 +7,7 @@
 //   onFirstView(el, cb, options?)      run cb(el) once, when el first intersects (immediately if no IO)
 //   reducedMotion()                    true when the viewer prefers reduced motion
 //   motionToken(name)                  a motion token from tokens.css, for JS-driven animation
-//                                      (e.g. motionToken("--ease-draw"); parseFloat() it for ms values)
+//                                      (e.g. motionToken("--ease-draw"); durationMs() for CSS times)
 //
 // Optional attributes:
 //   data-reveal-ms="2600"   when "done" is applied (default 3000)
@@ -16,6 +16,21 @@
 export const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export const motionToken = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// CSS minifiers can turn 3000ms into 3s. JavaScript timers always need milliseconds.
+export function durationMs(value, fallback = 0) {
+  const match = value.trim().match(/^(\d*\.?\d+)(ms|s)$/);
+  return match ? Number(match[1]) * (match[2] === "s" ? 1000 : 1) : fallback;
+}
+
+// Explicit selections should reveal their result without moving keyboard focus.
+export function keepInView(element) {
+  const box = element.getBoundingClientRect();
+  const top = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+  if (box.top < top || box.bottom > innerHeight) {
+    element.scrollIntoView({ block: "start", behavior: reducedMotion() ? "instant" : "smooth" });
+  }
+}
 
 export function onFirstView(el, cb, { threshold = 0.3, rootMargin = "0px 0px -8% 0px" } = {}) {
   if (!("IntersectionObserver" in window)) { cb(el); return; }
