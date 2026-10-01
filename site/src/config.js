@@ -1,7 +1,9 @@
 // Site configuration shared by the shell and every page.
-// Login stays hidden until the app is public: flip SHOW_LOGIN to render the nav link.
-export const LOGIN_URL = "https://app.noma.maji.studio";
-export const SHOW_LOGIN = false;
+// The app's address comes from PUBLIC_APP_URL, set per Vercel environment (staging:
+// https://staging.app.noma.maji.studio). Without it the header's "Log in" link stays hidden.
+export const APP_URL = import.meta.env.PUBLIC_APP_URL || "";
+export const LOGIN_URL = APP_URL ? `${APP_URL}/login` : "";
+export const SHOW_LOGIN = Boolean(APP_URL);
 export const GITHUB_URL = "https://github.com/Maji-Studio/noma-dmrv";
 
 export const BRAND = { name: "noma", by: "by MAJI" };

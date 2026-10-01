@@ -120,3 +120,6 @@ body.site { min-height: 100vh; display: flex; flex-direction: column; }
 .site-footer { flex: 1 0 auto; display: flex; flex-direction: column; }
 .site-footer > .gf { flex: 1 0 auto; display: flex; }
 .site-footer > .gf > .gf-in { align-content: flex-start; }
+
+/* Stand-in for a local-only photo (src/lib/assets.js): same box, hatched. */
+.photo-missing { width: 100%; aspect-ratio: 3 / 2; background: var(--hatch), var(--band-purple); }

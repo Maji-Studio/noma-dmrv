@@ -5,6 +5,7 @@
  * Home's trace). No props.
  */
 import ContourArt from "../contours/ContourArt.astro";
+import { HAS_MAFINGA_PHOTO, MAFINGA_PHOTO } from "../../../lib/assets.js";
 const PLACES = [
   { station: "feedstock-delivery", name: "Weighbridge", line: "Feedstock in, weighed wet, moisture read." },
   { station: "production-run", name: "Reactor", line: "Each run, feedstock in and biochar out." },
@@ -14,7 +15,9 @@ const PLACES = [
 ---
 <div class="maf">
   <figure class="maf-figure">
-    <img src="/preview/mafinga-field-trial.jpg" alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" />
+    {HAS_MAFINGA_PHOTO
+      ? <img src={MAFINGA_PHOTO} alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" />
+      : <div class="photo-missing" role="img" aria-label="Field trial plots in Mafinga, Tanzania" />}
     <figcaption class="t-caption">Field trial plots, Mafinga, Tanzania</figcaption>
   </figure>
   <ul class="maf-places">
