@@ -3,7 +3,12 @@ import {
   collectTransportEntityIds,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
+import {
+  lookupBindingTriple,
+  projectTransportCategories,
+  TRANSPORT_CATEGORIES,
+  type TransportCategoryTable,
+} from "@/lib/isometric/semantic-binding-catalog";
 import type { TransportLegsByCategory } from "./shared";
 
 export interface TransportCoverageBucket {
@@ -25,37 +30,31 @@ export interface TransportCoverage {
 
 export type TransportCategory = keyof TransportCoverage;
 
-// Maps an input-mapping source to its transport category. Keep in sync with
-// the three transport rows in transformers/datapoint.ts.
-const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
-  feedstockTransportMassDistanceTonneKm: "feedstock",
-  biocharTransportMassDistanceTonneKm: "biochar",
-  sampleTransportMassDistanceTonneKm: "sample",
-};
+// (group, blueprint, input) → transport category, projected from the
+// semantic binding catalog.
+const TRANSPORT_CATEGORY_TUPLES: TransportCategoryTable =
+  projectTransportCategories();
 
 export function deriveRequiredTransportCategories(
   template: IsometricGhgEntryTemplate,
+  categoryTuples: TransportCategoryTable = TRANSPORT_CATEGORY_TUPLES,
 ): TransportCategory[] {
   const seen = new Set<TransportCategory>();
   for (const group of template.groups) {
     for (const component of group.components) {
       for (const rtcInput of component.inputs) {
         if (rtcInput.type !== "monitored") continue;
-        const mapping = lookupInputMapping(
+        const category = lookupBindingTriple(
+          categoryTuples,
           group.key,
           component.blueprint_key,
           rtcInput.input_key,
         );
-        const category = mapping
-          ? TRANSPORT_SOURCE_TO_CATEGORY[mapping.source]
-          : undefined;
         if (category) seen.add(category);
       }
     }
   }
-  return (["feedstock", "biochar", "sample"] as const).filter((category) =>
-    seen.has(category),
-  );
+  return TRANSPORT_CATEGORIES.filter((category) => seen.has(category));
 }
 
 export function buildTransportCoverage(

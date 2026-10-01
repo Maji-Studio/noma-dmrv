@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   AGGREGATED_PRODUCTION_DATA_KEYS,
   CERTIFY_FIELD_REGISTRY,
+  resolveCertifyFieldInputTuples,
 } from "@/lib/certification/certify-field-registry";
-import { INPUT_MAPPING } from "@/lib/isometric/transformers/datapoint";
+import {
+  INPUT_MAPPING,
+  lookupInputMapping,
+} from "@/lib/isometric/transformers/datapoint";
 
 function inputMappingSources(): Set<string> {
   const sources = new Set<string>();
@@ -48,31 +52,28 @@ describe("CERTIFY_FIELD_REGISTRY drift guard", () => {
     ).toEqual([]);
   });
 
-  it("keeps declared INPUT_MAPPING tuples in sync with their sources", () => {
+  it("resolves each field's input tuples to mappings that submit its sources", () => {
     const mismatches: string[] = [];
 
     for (const [entityKind, descriptors] of Object.entries(
       CERTIFY_FIELD_REGISTRY,
     )) {
       for (const descriptor of descriptors) {
-        for (const registryMapping of descriptor.mappings ?? []) {
-          for (const inputTuple of registryMapping.inputTuples ?? []) {
-            const mapping =
-              INPUT_MAPPING[inputTuple.groupKey]?.[inputTuple.blueprintKey]?.[
-                inputTuple.inputKey
-              ];
-            const tupleKey = `${inputTuple.groupKey}/${inputTuple.blueprintKey}/${inputTuple.inputKey}`;
-            if (!mapping) {
-              mismatches.push(`${entityKind}.${descriptor.key}: missing ${tupleKey}`);
-              continue;
-            }
-            if (mapping.source !== registryMapping.source) {
-              mismatches.push(
-                `${entityKind}.${descriptor.key}: ${tupleKey} maps to ${String(
-                  mapping.source,
-                )}, registry says ${String(registryMapping.source)}`,
-              );
-            }
+        const fieldSources = new Set<string>(
+          (descriptor.mappings ?? []).map((mapping) => mapping.source),
+        );
+        for (const inputTuple of resolveCertifyFieldInputTuples(descriptor)) {
+          const tupleKey = `${inputTuple.groupKey}/${inputTuple.blueprintKey}/${inputTuple.inputKey}`;
+          const mapping = lookupInputMapping(
+            inputTuple.groupKey,
+            inputTuple.blueprintKey,
+            inputTuple.inputKey,
+          );
+          const submitted = mapping
+            ? [mapping.source, ...Object.values(mapping.sourceByComponent ?? {})]
+            : [];
+          if (!submitted.some((source) => fieldSources.has(source))) {
+            mismatches.push(`${entityKind}.${descriptor.key}: ${tupleKey}`);
           }
         }
       }

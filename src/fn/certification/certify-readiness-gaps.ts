@@ -4,6 +4,7 @@ import type {
   BatchHealthAffectedRecord,
   BatchHealthFixTarget,
 } from "@/lib/certification/batch-health";
+import { transportRepairDestination } from "@/lib/isometric/semantic-binding-catalog";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportCategory } from "./certify-context-core";
@@ -134,12 +135,7 @@ export function buildEntityReadinessResult(
         {
           key: `${category}-transport-evidence`,
           label: `${category[0]?.toUpperCase()}${category.slice(1)} transport evidence`,
-          fixTarget:
-            category === "feedstock"
-              ? "feedstocks"
-              : category === "sample"
-                ? "labSamples"
-                : "deliveries",
+          fixTarget: transportRepairDestination(category),
         },
         readiness.gaps,
       );

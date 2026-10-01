@@ -62,8 +62,9 @@ export interface AggregatedProductionData {
 // front-load IN FULL on the credit batch's claiming GHG entry — no
 // applied-mass weighting. DELIVERY and STORED sources scale with the mass
 // actually applied in this removal. The submit-side classification is the
-// `bucket` attribute on INPUT_MAPPING entries (transformers/datapoint.ts);
-// tests/isometric-emission-buckets.test.ts welds the two so they cannot drift.
+// `bucket` on each aggregated-datapoint role in the semantic binding catalog
+// (semantic-binding-catalog.ts); tests/isometric-emission-buckets.test.ts
+// welds the two so they cannot drift.
 export type EmissionInputBucket = "production" | "delivery" | "stored";
 
 export const SOURCE_BUCKETS = {

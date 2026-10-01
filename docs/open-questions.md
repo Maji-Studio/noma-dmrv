@@ -541,11 +541,11 @@ companion inherits this file's schema, invariants, and resolution rules.
   workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
   against the registry.
 - The binding is still live in code and docs:
-  `src/lib/isometric/semantic-binding-catalog.ts` (projected as `INPUT_MAPPING`) and
-  `src/lib/certification/certify-field-registry.ts` both declare
+  `src/lib/isometric/semantic-binding-catalog.ts` declares
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
-  mass_distance`, and `docs/isometric/sandbox-template-authoring.md` still lists
-  the row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
+  mass_distance` (`INPUT_MAPPING`, the certify field registry tuples and the
+  transport categories are projections of it), and
+  `docs/isometric/sandbox-template-authoring.md` still lists the row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
   derives required categories from the live template, so a category the template
   drops is silently no longer collected or submitted.
 - Two explanations are open and only a registry probe separates them: the
