@@ -7,8 +7,9 @@
 import ts from "typescript";
 import {
   carriesAnyContext,
-  elementAt,
+  elementCandidates,
   elementTypes,
+  fixedPrefixLength,
   unwrapExpression,
   type ParameterInspector,
 } from "./server-action-types";
@@ -27,8 +28,11 @@ export interface InvokedFunction {
   signatures: readonly ts.Signature[];
   /** Index of the first argument that binds a parameter. */
   firstArgument: number;
-  /** Parameters already bound by `.bind(this, …)` before this call. */
-  boundParameters: number;
+  /**
+   * Parameters already bound by `.bind(this, …)` before this call, or null
+   * when a spread inside the `.bind` hides how many.
+   */
+  boundParameters: number | null;
   /** `.apply`: the arguments arrive as one array. */
   applied: boolean;
 }
@@ -128,30 +132,38 @@ export function invokedFunction(
       return {
         signatures: signaturesOf(checker, bound.target),
         firstArgument: 0,
-        boundParameters: Math.max(0, callee.arguments.length - 1),
+        boundParameters: callee.arguments.some(ts.isSpreadElement)
+          ? null
+          : Math.max(0, callee.arguments.length - 1),
         applied: false,
       };
     }
   }
-  // A direct call: the declared (uninstantiated) signature, so a generic
-  // `<T extends OrgContext>(ctx: T)` keeps its constraint instead of the
-  // `any` that inference substitutes for T.
-  const declaration = checker.getResolvedSignature(call)?.getDeclaration();
+  // A direct call: the resolved signature keeps parameter types fixed by the
+  // receiver (`push(...items)` on an `OrgContext[]`); the declared one keeps a
+  // generic constraint (`<T extends OrgContext>(ctx: T)`) that inference
+  // replaces with the argument's `any`.
+  const resolved = checker.getResolvedSignature(call);
+  const declaration = resolved?.getDeclaration();
   const declared =
     declaration && ts.isFunctionLike(declaration)
       ? checker.getSignatureFromDeclaration(declaration)
       : undefined;
-  return declared
-    ? { signatures: [declared], firstArgument: 0, boundParameters: 0, applied: false }
+  const signatures = [resolved, declared].filter(
+    (signature, index, all): signature is ts.Signature =>
+      !!signature && all.indexOf(signature) === index,
+  );
+  return signatures.length > 0
+    ? { signatures, firstArgument: 0, boundParameters: 0, applied: false }
     : null;
 }
 
-/** The declared type of parameter `index`, reading into a rest parameter. */
-function parameterTypeAt(
+/** The declared parameter types that may receive the value at `index`. */
+function parameterCandidates(
   checker: ts.TypeChecker,
   signature: ts.Signature,
   index: number,
-): ts.Type | undefined {
+): readonly ts.Type[] {
   const parameters = signature.getParameters();
   const last = parameters[parameters.length - 1];
   const lastDeclaration = last?.valueDeclaration;
@@ -161,10 +173,13 @@ function parameterTypeAt(
       : -1;
   if (restIndex >= 0 && index >= restIndex) {
     const restType = checker.getTypeOfSymbol(last);
-    return elementAt(checker, restType, index - restIndex) ?? restType;
+    // A generic rest (`...args: T`) has no elements to read; compare it whole.
+    return elementTypes(checker, restType)
+      ? elementCandidates(checker, restType, index - restIndex)
+      : [restType];
   }
   const parameter = parameters[index];
-  return parameter ? checker.getTypeOfSymbol(parameter) : undefined;
+  return parameter ? [checker.getTypeOfSymbol(parameter)] : [];
 }
 
 interface ArgumentSlot {
@@ -177,38 +192,98 @@ interface ArgumentSlot {
 }
 
 /**
+ * The values a spread (or `.apply` list) yields when it is not an array or
+ * tuple: an `ArrayLike`'s number index (`arguments`), an iterable's type
+ * arguments (`Set<any>`), or `any` when neither says, so the check fails
+ * closed.
+ */
+function iteratedTypes(checker: ts.TypeChecker, type: ts.Type): readonly ts.Type[] {
+  if (type.flags & ts.TypeFlags.Any) return [type];
+  const numberIndex = checker.getIndexInfoOfType(type, ts.IndexKind.Number)?.type;
+  if (numberIndex) return [numberIndex];
+  const typeArguments =
+    type.flags & ts.TypeFlags.Object &&
+    (type as ts.ObjectType).objectFlags & ts.ObjectFlags.Reference
+      ? checker.getTypeArguments(type as ts.TypeReference)
+      : [];
+  return typeArguments.length > 0 ? typeArguments : [checker.getAnyType()];
+}
+
+/**
+ * The slots a spread value fills from `position`: one per element of a
+ * tuple's known prefix, then (variable tail, array, iterable) values whose
+ * position is unknown.
+ */
+function spreadSlots(
+  checker: ts.TypeChecker,
+  node: ts.Expression,
+  type: ts.Type,
+  position: number,
+  open: boolean,
+): { slots: ArgumentSlot[]; next: number; open: boolean } {
+  const elements = elementTypes(checker, type);
+  const prefix = elements && checker.isTupleType(type) ? fixedPrefixLength(checker, type) : 0;
+  const slots: ArgumentSlot[] = (elements ?? [])
+    .slice(0, prefix)
+    .map((element, index) => ({ node, type: element, position: position + index, open }));
+  const tail = elements ? elements.slice(prefix) : iteratedTypes(checker, type);
+  if (elements && tail.length === 0) return { slots, next: position + prefix, open };
+  for (const element of tail) {
+    slots.push({ node, type: element, position: position + prefix, open: true });
+  }
+  return { slots, next: position + prefix, open: true };
+}
+
+/**
  * The value types an argument list feeds into each parameter position. A
- * spread of a tuple occupies one position per element; a spread whose length
- * is unknown makes every later position unknown, so its values are matched
- * against all remaining parameters.
+ * spread of unknown length makes every later position unknown, so its values
+ * (and everything after it) are matched against all remaining parameters.
  */
 function argumentSlots(
   checker: ts.TypeChecker,
   args: readonly ts.Expression[],
   firstParameter: number,
+  initiallyOpen = false,
+  reportAs?: ts.Expression,
 ): ArgumentSlot[] {
   const slots: ArgumentSlot[] = [];
   let position = firstParameter;
-  let open = false;
+  let open = initiallyOpen;
   for (const argument of args) {
+    const node = reportAs ?? argument;
     if (!ts.isSpreadElement(argument)) {
-      slots.push({ node: argument, type: checker.getTypeAtLocation(argument), position, open });
+      slots.push({ node, type: checker.getTypeAtLocation(argument), position, open });
       position += 1;
       continue;
     }
-    const spreadType = checker.getTypeAtLocation(argument.expression);
-    const elements = elementTypes(checker, spreadType);
-    if (elements && checker.isTupleType(spreadType)) {
-      for (const element of elements) {
-        slots.push({ node: argument, type: element, position, open });
-        position += 1;
-      }
-      continue;
-    }
-    slots.push({ node: argument, type: elements?.[0] ?? spreadType, position, open: true });
-    open = true;
+    const spread = spreadSlots(
+      checker,
+      node,
+      checker.getTypeAtLocation(argument.expression),
+      position,
+      open,
+    );
+    slots.push(...spread.slots);
+    position = spread.next;
+    open = spread.open;
   }
   return slots;
+}
+
+/** `.apply(this, args)` / `Reflect.apply(fn, this, args)`: the list's values. */
+function appliedSlots(
+  checker: ts.TypeChecker,
+  argsArray: ts.Expression | undefined,
+  firstParameter: number,
+  open: boolean,
+): ArgumentSlot[] {
+  if (!argsArray) return [];
+  const literal = unwrapExpression(argsArray);
+  if (ts.isArrayLiteralExpression(literal)) {
+    return argumentSlots(checker, literal.elements, firstParameter, open, argsArray);
+  }
+  return spreadSlots(checker, argsArray, checker.getTypeAtLocation(argsArray), firstParameter, open)
+    .slots;
 }
 
 /** Arguments that hand an `any` to a context-shaped declared parameter, with why. */
@@ -221,20 +296,28 @@ export function declaredParameterFindings(
   isExempt: (argument: ts.Expression) => boolean,
 ): Map<ts.Expression, string> {
   const findings = new Map<ts.Expression, string>();
-  const args = (call.arguments ?? []).slice(invoked.firstArgument);
-  const slots = invoked.applied
-    ? appliedSlots(checker, args[0], invoked.boundParameters)
-    : argumentSlots(checker, args, invoked.boundParameters);
+  const allArgs = call.arguments ?? [];
+  // A spread before the first parameter-binding argument (`core.call(...xs)`)
+  // or inside `.bind` hides every position: match all arguments everywhere.
+  const positionsKnown =
+    invoked.boundParameters !== null &&
+    !allArgs.slice(0, invoked.firstArgument).some(ts.isSpreadElement);
+  const slots = !positionsKnown
+    ? argumentSlots(checker, allArgs, 0, true)
+    : invoked.applied
+      ? appliedSlots(checker, allArgs[invoked.firstArgument], invoked.boundParameters ?? 0, false)
+      : argumentSlots(checker, allArgs.slice(invoked.firstArgument), invoked.boundParameters ?? 0);
   for (const slot of slots) {
     if (findings.has(slot.node) || isExempt(slot.node)) continue;
     for (const signature of invoked.signatures) {
-      const count = Math.max(signature.getParameters().length, slot.position + 1);
+      const from = positionsKnown ? Math.max(0, slot.position) : 0;
+      const count = Math.max(signature.getParameters().length, from + 1);
       const positions = slot.open
-        ? Array.from({ length: count - slot.position }, (_, i) => slot.position + i)
+        ? Array.from({ length: count - from }, (_, i) => from + i)
         : [slot.position];
       const target = positions
-        .map((position) => parameterTypeAt(checker, signature, position))
-        .find((type) => type && carriesAnyContext(checker, inspector, slot.type, type));
+        .flatMap((position) => parameterCandidates(checker, signature, position))
+        .find((type) => carriesAnyContext(checker, inspector, slot.type, type));
       if (target) {
         findings.set(slot.node, inspector.describe(target) ?? "");
         break;
@@ -242,33 +325,4 @@ export function declaredParameterFindings(
     }
   }
   return findings;
-}
-
-/** `.apply(this, args)`: the array literal's elements, or its element type. */
-function appliedSlots(
-  checker: ts.TypeChecker,
-  argsArray: ts.Expression | undefined,
-  firstParameter: number,
-): ArgumentSlot[] {
-  if (!argsArray) return [];
-  const literal = unwrapExpression(argsArray);
-  if (ts.isArrayLiteralExpression(literal)) {
-    return argumentSlots(checker, literal.elements, firstParameter).map((slot) => ({
-      ...slot,
-      node: argsArray,
-    }));
-  }
-  const arrayType = checker.getTypeAtLocation(argsArray);
-  const elements = elementTypes(checker, arrayType);
-  if (elements && checker.isTupleType(arrayType)) {
-    return elements.map((type, index) => ({
-      node: argsArray,
-      type,
-      position: firstParameter + index,
-      open: false,
-    }));
-  }
-  return [
-    { node: argsArray, type: elements?.[0] ?? arrayType, position: firstParameter, open: true },
-  ];
 }

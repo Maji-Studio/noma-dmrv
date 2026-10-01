@@ -173,6 +173,19 @@ export async function namedPropertyBesideNumericIndex(input: any) {
   });
 }
 
+// Known positions of a rest tuple, template-literal index keys and a spread
+// of session contexts stay precise.
+export async function preciseSlots(input: any) {
+  return withAction(async (ctx) => {
+    const restCore = (...args: [OrgContext, ...unknown[]]) => args.length;
+    restCore(ctx, input);
+    const prefixed = (scopes: { [key: \`scope_\${string}\`]: OrgContext }) => scopes;
+    prefixed({ scope_primary: ctx, metadata: input });
+    const many = (...scopes: OrgContext[]) => scopes.length;
+    return many(...new Set([ctx]));
+  });
+}
+
 export async function renameReport(input: unknown) {
   return withAction(async (ctx) => {
     const scope = ctx;
@@ -298,6 +311,29 @@ export async function optionalCallIntoCore(input: any, maybeCore?: typeof issueU
 
 export async function variadicIntoCore(input: any) {
   return trailingScope(["report", "report", input]);
+}
+
+export async function pushIntoContexts(raw: string) {
+  const scopes: OrgContext[] = [];
+  scopes.push(...JSON.parse(raw));
+  return scopes.length;
+}
+
+export async function reflectArguments(input: any, reportId: string) {
+  void input; void reportId;
+  return Reflect.apply(issueUrl, undefined, arguments);
+}
+
+export async function iterableIntoRest(input: Set<any>) {
+  return manyScopes(...input);
+}
+
+export async function spreadThisIntoCall(input: any) {
+  return issueUrl.call(...([undefined, input, "report"] as const));
+}
+
+function manyScopes(...scopes: OrgContext[]) {
+  return scopes.length;
 }
 
 function trailingScope(args: [...string[], OrgContext]) {
@@ -461,6 +497,10 @@ describe("check-server-action-exports", () => {
           'Reflect.apply(issueUrl, undefined, [input, "report"])',
           'maybeCore?.call(undefined, input, "report")',
           'trailingScope(["report", "report", input])',
+          "scopes.push(...JSON.parse(raw))",
+          "Reflect.apply(issueUrl, undefined, arguments)",
+          "manyScopes(...input)",
+          'issueUrl.call(...([undefined, input, "report"] as const))',
         ]) {
           expect(reasons(lineOf(needle)), needle).toEqual([
             expect.stringMatching(/call argument/),

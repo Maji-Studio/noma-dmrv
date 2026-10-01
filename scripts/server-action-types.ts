@@ -141,46 +141,48 @@ export function elementTypes(checker: ts.TypeChecker, type: ts.Type): readonly t
     : null;
 }
 
-/** A tuple whose element positions are known: no `...rest` or variadic part. */
-function isFixedTuple(checker: ts.TypeChecker, type: ts.Type): boolean {
-  return (
-    checker.isTupleType(type) &&
-    !(type as ts.TupleTypeReference).target.elementFlags.some(
-      (flags) => flags & ts.ElementFlags.Variable,
-    )
-  );
+/**
+ * How many leading elements of a tuple sit at a known position: all of them
+ * for a fixed tuple, the part before `...rest` for `[OrgContext, ...unknown[]]`.
+ */
+export function fixedPrefixLength(checker: ts.TypeChecker, type: ts.Type): number {
+  if (!checker.isTupleType(type)) return 0;
+  const flags = (type as ts.TupleTypeReference).target.elementFlags;
+  const variable = flags.findIndex((flag) => flag & ts.ElementFlags.Variable);
+  return variable === -1 ? flags.length : variable;
 }
 
 /**
- * Element `index` of a fixed tuple, or the element type of an array. A
- * variadic tuple (`[...string[], OrgContext]`) has no element at a known
- * index, so it returns undefined and callers compare the whole type.
+ * The element types that may sit at `index` of an array or tuple: the exact
+ * element inside a tuple's known prefix, otherwise every element from the
+ * variable part on (`[...string[], OrgContext]` may put either at index 2).
  */
-export function elementAt(
+export function elementCandidates(
   checker: ts.TypeChecker,
   type: ts.Type,
   index: number,
-): ts.Type | undefined {
+): readonly ts.Type[] {
   const elements = elementTypes(checker, type);
-  if (!elements) return undefined;
-  if (!checker.isTupleType(type)) return elements[0];
-  return isFixedTuple(checker, type) ? elements[index] : undefined;
+  if (!elements) return [];
+  if (!checker.isTupleType(type)) return elements.slice(0, 1);
+  const prefix = fixedPrefixLength(checker, type);
+  if (index < prefix) return [elements[index]];
+  return prefix === elements.length ? [] : elements.slice(prefix);
 }
 
-/** Index signatures of `target` that a property called `name` can populate. */
+/** Index signatures of `target` whose key type admits a property called `name`. */
 function indexTypesFor(
   checker: ts.TypeChecker,
   target: ts.Type,
   name: string,
 ): ts.Type[] {
-  const numeric = name.trim() !== "" && !Number.isNaN(Number(name));
+  const keys: ts.Type[] = [checker.getStringLiteralType(name)];
+  if (name.trim() !== "" && !Number.isNaN(Number(name))) {
+    keys.push(checker.getNumberLiteralType(Number(name)));
+  }
   return checker
     .getIndexInfosOfType(target)
-    .filter(
-      ({ keyType }) =>
-        !(keyType.flags & (ts.TypeFlags.Number | ts.TypeFlags.ESSymbol)) ||
-        (numeric && (keyType.flags & ts.TypeFlags.Number) !== 0),
-    )
+    .filter(({ keyType }) => keys.some((key) => checker.isTypeAssignableTo(key, keyType)))
     .map((info) => info.type);
 }
 
@@ -213,14 +215,15 @@ export function carriesAnyContext(
       const valueElements = elementTypes(checker, value);
       const targetElements = elementTypes(checker, target);
       if (valueElements && targetElements) {
-        // Pair by position only when both positions are known; otherwise any
-        // value element may land in any target element.
-        const positional = isFixedTuple(checker, value) && isFixedTuple(checker, target);
+        // A value element inside the value's known prefix meets the target
+        // elements that may sit at its index; past it, its index is unknown.
+        const valuePrefix = checker.isTupleType(value) ? fixedPrefixLength(checker, value) : 0;
         if (
           valueElements.some((element, index) =>
-            positional
-              ? carries(element, targetElements[index])
-              : targetElements.some((targetElement) => carries(element, targetElement)),
+            (index < valuePrefix
+              ? elementCandidates(checker, target, index)
+              : targetElements
+            ).some((targetElement) => carries(element, targetElement)),
           )
         ) {
           return true;
