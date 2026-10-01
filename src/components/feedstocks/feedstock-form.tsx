@@ -219,6 +219,12 @@ export function FeedstockForm({
   const defaultSupplierLocation =
     supplierLocationList?.find((location) => location.isDefault) ?? null;
   const { data: watchedFacility } = useFacility(watchedFacilityId ?? "");
+  // Same rule as the saved leg (syncFeedstockTransportLeg): the default
+  // location's coordinates when it has both, else the supplier's.
+  const supplierRoutePoint =
+    defaultSupplierLocation?.gpsLatitude != null && defaultSupplierLocation.gpsLongitude != null
+      ? { lat: defaultSupplierLocation.gpsLatitude, lng: defaultSupplierLocation.gpsLongitude }
+      : { lat: selectedSupplier?.gpsLatitude, lng: selectedSupplier?.gpsLongitude };
   const { data: existingLegs } = useTransportLegsForEntity("feedstock", feedstock?.id ?? "", {
     enabled: isEditMode,
   });
@@ -612,7 +618,7 @@ export function FeedstockForm({
           <TransportRoutePreview
             entityType="feedstock"
             originName={defaultSupplierLocation?.name ?? selectedSupplier?.name}
-            originPoint={{ lat: defaultSupplierLocation?.gpsLatitude ?? null, lng: defaultSupplierLocation?.gpsLongitude ?? null }}
+            originPoint={supplierRoutePoint}
             destinationPoint={{ lat: watchedFacility?.gpsLatitude ?? null, lng: watchedFacility?.gpsLongitude ?? null }}
             destinationName={watchedFacility?.name}
             distanceKm={countedTransportDistanceKm}

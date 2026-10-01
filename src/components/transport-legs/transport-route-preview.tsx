@@ -6,7 +6,8 @@ import { positiveOrNull } from "@/lib/calculations/transport-leg";
 import { TransportLegsEditor } from "./transport-legs-editor";
 import type { JourneyLegInput } from "./transport-journey-model";
 
-interface RoutePoint {
+/** An end as the caller holds it: either coordinate may be missing. */
+interface RoutePointInput {
   lat: number | null | undefined;
   lng: number | null | undefined;
 }
@@ -17,8 +18,8 @@ interface TransportRoutePreviewProps {
   originName: string | null | undefined;
   destinationName: string | null | undefined;
   /** Coordinates of each end; with both, the route offers its map. */
-  originPoint?: RoutePoint;
-  destinationPoint?: RoutePoint;
+  originPoint?: RoutePointInput;
+  destinationPoint?: RoutePointInput;
   /** One-way distance; the rail adds the round trip it counts. */
   distanceKm: number | null | undefined;
   distanceSource: DistanceSourceValue | null | undefined;

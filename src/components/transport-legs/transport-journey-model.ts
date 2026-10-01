@@ -6,6 +6,7 @@
 import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 import { DISTANCE_SOURCE_LABELS, type DistanceSourceValue } from "@/schemas/distance-source";
 import type { TransportMethodValue } from "@/schemas/transport-legs";
+import type { RoutePoint } from "./route-line";
 
 export interface JourneyLegInput {
   originName?: string | null;
@@ -20,19 +21,14 @@ export interface JourneyLegInput {
   loadMassKg: number | null | undefined;
 }
 
-export interface JourneyPoint {
-  lat: number;
-  lng: number;
-}
-
 export interface JourneyLeg {
   /** Position in the caller's leg list; edit and delete key on it. */
   index: number;
   /** Trimmed stop names; null when the leg does not record one. */
   originName: string | null;
   destinationName: string | null;
-  originPoint: JourneyPoint | null;
-  destinationPoint: JourneyPoint | null;
+  originPoint: RoutePoint | null;
+  destinationPoint: RoutePoint | null;
   method: string;
   oneWayKm: number | null;
   /** The one-way distance with its round trip, as emissions count it. */
@@ -78,7 +74,7 @@ function finiteOrNull(value: number | null | undefined): number | null {
 function pointOrNull(
   lat: number | null | undefined,
   lng: number | null | undefined,
-): JourneyPoint | null {
+): RoutePoint | null {
   return lat != null && lng != null ? { lat, lng } : null;
 }
 
@@ -87,7 +83,7 @@ function pointOrNull(
  * and a stop with neither is never identified: two blank stops are not
  * evidence of one place, so they stay two stops.
  */
-function stopIdentity(name: string | null, point: JourneyPoint | null): string | null {
+function stopIdentity(name: string | null, point: RoutePoint | null): string | null {
   if (name) return name.toLowerCase();
   if (point) return `${point.lat},${point.lng}`;
   return null;

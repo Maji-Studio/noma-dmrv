@@ -99,7 +99,7 @@ function LegRow({
   const method = transportMethodLabel(leg.method);
   const source = leg.sourceLabel ?? "Distance source not recorded";
   const load = showLoad
-    ? ` · ${leg.loadKg == null ? "load not recorded" : `${formatMass(leg.loadKg)} load`}`
+    ? ` · ${leg.loadKg == null ? `load ${MISSING_VALUE.notRecorded.toLowerCase()}` : `${formatMass(leg.loadKg)} load`}`
     : "";
 
   return (

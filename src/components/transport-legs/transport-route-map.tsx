@@ -2,9 +2,9 @@
 
 /**
  * "View map" for one transport leg: opens the road route between its two ends
- * in a dialog. Hovering a marker shows that end's card (the Carbon Viewer
- * card); a click pins it. Renders nothing without a MapTiler key or unless
- * both ends have coordinates.
+ * in a dialog, in the direction the goods travelled. Hovering or focusing a
+ * marker shows that end's card (the Carbon Viewer card); a click pins it.
+ * Renders nothing without a MapTiler key or unless both ends have coordinates.
  */
 import { useState } from "react";
 import dynamic from "next/dynamic";
@@ -16,7 +16,8 @@ import { useRouteGeometries } from "@/hooks/use-geo";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDistanceKm, formatMass } from "@/lib/format-utils";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
-import type { JourneyLeg, JourneyPoint } from "./transport-journey-model";
+import type { JourneyLeg } from "./transport-journey-model";
+import type { RoutePoint } from "./route-line";
 
 // Inlined at build time: public, domain-locked key (browser-safe).
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
@@ -32,62 +33,93 @@ const RouteMiniMap = dynamic(() => import("./route-mini-map"), {
   loading: () => <div className="h-full w-full bg-[var(--color-background-light)]" />,
 });
 
-// The end that is not the facility, named by the goods the leg carries.
-// Feedstock arrives at the facility; biochar and samples leave it.
-const FAR_END: Record<
+type EndRole = Pick<EndpointCard, "kind" | "typeLabel">;
+
+// What each end of a leg is, by the goods it carries. `marked` is the end
+// drawn in the facility colour: feedstock arrives at the facility, biochar
+// leaves it, and a sample leg is drawn from wherever it starts.
+const LEG_ENDS: Record<
   TransportEntityTypeValue,
-  Pick<EndpointCard, "kind" | "typeLabel"> & { facilityAtOrigin: boolean }
+  { origin: EndRole; destination: EndRole; marked: "origin" | "destination" }
 > = {
-  feedstock: { kind: "supplier", typeLabel: "Supplier location", facilityAtOrigin: false },
-  biochar: { kind: "field", typeLabel: "Customer location", facilityAtOrigin: true },
-  sample: { kind: "field", typeLabel: "Lab", facilityAtOrigin: true },
+  feedstock: {
+    origin: { kind: "supplier", typeLabel: "Supplier location" },
+    destination: { kind: "facility", typeLabel: "Facility" },
+    marked: "destination",
+  },
+  biochar: {
+    origin: { kind: "facility", typeLabel: "Facility" },
+    destination: { kind: "field", typeLabel: "Customer location" },
+    marked: "origin",
+  },
+  sample: {
+    origin: { kind: "facility", typeLabel: "Origin" },
+    destination: { kind: "field", typeLabel: "Lab" },
+    marked: "origin",
+  },
 };
 
-function formatCoordinates(point: JourneyPoint): string {
+function formatCoordinates(point: RoutePoint): string {
   return `${point.lat.toFixed(COORDINATE_DECIMALS)}, ${point.lng.toFixed(COORDINATE_DECIMALS)}`;
 }
 
-function endpointCards(leg: JourneyLeg, entityType: TransportEntityTypeValue, facility: JourneyPoint, far: JourneyPoint) {
-  const { facilityAtOrigin, ...farEnd } = FAR_END[entityType];
-  const facilityName = facilityAtOrigin ? leg.originName : leg.destinationName;
-  const farName = facilityAtOrigin ? leg.destinationName : leg.originName;
+/** The origin card names the load; the destination card the distances. */
+function legCards(
+  leg: JourneyLeg,
+  entityType: TransportEntityTypeValue,
+  origin: RoutePoint,
+  destination: RoutePoint,
+): { origin: EndpointCard; destination: EndpointCard } {
+  const ends = LEG_ENDS[entityType];
   return {
-    facility: {
-      kind: "facility",
-      typeLabel: "Facility",
-      code: facilityName ?? MISSING_VALUE.notRecorded,
+    origin: {
+      ...ends.origin,
+      code: leg.originName ?? MISSING_VALUE.notRecorded,
       details: [
-        { label: "Coordinates", value: formatCoordinates(facility) },
+        { label: "Coordinates", value: formatCoordinates(origin) },
         ...(leg.loadKg != null ? [{ label: "Load", value: formatMass(leg.loadKg) }] : []),
       ],
     },
     destination: {
-      ...farEnd,
-      code: farName ?? MISSING_VALUE.notRecorded,
+      ...ends.destination,
+      code: leg.destinationName ?? MISSING_VALUE.notRecorded,
       details: [
-        { label: "Coordinates", value: formatCoordinates(far) },
+        { label: "Coordinates", value: formatCoordinates(destination) },
         { label: "One way", value: formatDistanceKm(leg.oneWayKm) },
         { label: "Counted", value: formatDistanceKm(leg.countedKm) },
         ...(leg.sourceLabel ? [{ label: "Source", value: leg.sourceLabel }] : []),
       ],
     },
-  } satisfies { facility: EndpointCard; destination: EndpointCard };
+  };
 }
 
 function RouteMap({
-  facility,
-  far,
+  origin,
+  destination,
+  entityType,
   cards,
 }: {
-  facility: JourneyPoint;
-  far: JourneyPoint;
-  cards: { facility: EndpointCard; destination: EndpointCard };
+  origin: RoutePoint;
+  destination: RoutePoint;
+  entityType: TransportEntityTypeValue;
+  cards: { origin: EndpointCard; destination: EndpointCard };
 }) {
-  const query = useRouteGeometries({ legs: [{ id: ROUTE_ID, origin: facility, destination: far }] });
+  // The road route in the direction the goods travelled; one-way streets
+  // make the reverse request a different route.
+  const query = useRouteGeometries({ legs: [{ id: ROUTE_ID, origin, destination }] });
   const geometry = query.isPending ? undefined : (query.data?.[ROUTE_ID] ?? null);
+  const markedAtOrigin = LEG_ENDS[entityType].marked === "origin";
   return (
     <div className={`${MAP_HEIGHT_CLASS} border border-[var(--clr-dark-purple-30)]`}>
-      <RouteMiniMap facility={facility} destination={far} routeGeometry={geometry} endpointCards={cards} />
+      <RouteMiniMap
+        facility={markedAtOrigin ? origin : destination}
+        destination={markedAtOrigin ? destination : origin}
+        routeGeometry={geometry}
+        endpointCards={{
+          facility: markedAtOrigin ? cards.origin : cards.destination,
+          destination: markedAtOrigin ? cards.destination : cards.origin,
+        }}
+      />
     </div>
   );
 }
@@ -101,9 +133,8 @@ export function TransportRouteMapButton({
 }) {
   const [open, setOpen] = useState(false);
   if (!MAPTILER_KEY || !leg.originPoint || !leg.destinationPoint) return null;
-  const { facilityAtOrigin } = FAR_END[entityType];
-  const facility = facilityAtOrigin ? leg.originPoint : leg.destinationPoint;
-  const far = facilityAtOrigin ? leg.destinationPoint : leg.originPoint;
+  const origin = leg.originPoint;
+  const destination = leg.destinationPoint;
   const from = leg.originName ?? MISSING_VALUE.notRecorded;
   const to = leg.destinationName ?? MISSING_VALUE.notRecorded;
 
@@ -121,7 +152,12 @@ export function TransportRouteMapButton({
         testId="transport-route-map"
       >
         {open && (
-          <RouteMap facility={facility} far={far} cards={endpointCards(leg, entityType, facility, far)} />
+          <RouteMap
+            origin={origin}
+            destination={destination}
+            entityType={entityType}
+            cards={legCards(leg, entityType, origin, destination)}
+          />
         )}
         <p className="mt-8 body-caption text-[var(--color-text-tertiary)]">
           Hover or click a marker for its details.

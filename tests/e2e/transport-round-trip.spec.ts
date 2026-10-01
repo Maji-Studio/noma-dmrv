@@ -101,17 +101,16 @@ test.describe("Transport round trip (#852)", () => {
     await dialog.locator('button:has-text("Create feedstock")').click();
     await waitForSideSheetClose(page);
 
-    // Reopen: the view sheet shows the one-way entry with the counted round trip.
+    // Reopen: the route rail shows the one-way entry with the counted round trip.
     await page.waitForLoadState("networkidle");
     // Target the row by its date: a bare first row can race the re-sort.
     await page.locator("table tbody tr", { hasText: FUTURE_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
-    await expect(
-      page
-        .locator('[role="dialog"]')
-        .getByText("40 km one way · 80 km round trip counted", { exact: true })
-        .first()
-    ).toBeVisible({ timeout: 15000 });
+    const feedstockRoute = page
+      .locator('[role="dialog"]')
+      .getByRole("list", { name: "Feedstock to processing journey" });
+    await expect(feedstockRoute).toContainText("40 km one way", { timeout: 15000 });
+    await expect(feedstockRoute).toContainText(/80 km\s*round trip/);
   });
 
   test("delivery form has no trip type and shows the counted round trip", async ({
@@ -149,11 +148,11 @@ test.describe("Transport round trip (#852)", () => {
     // Target the row by its date: a bare first row can race the re-sort.
     await page.locator("table tbody tr", { hasText: FUTURE_DATE_LABEL }).first().click();
     await waitForSideSheet(page);
-    await expect(
-      page
-        .locator('[role="dialog"]')
-        .getByText("25 km one way · 50 km round trip counted", { exact: true })
-    ).toBeVisible({ timeout: 15000 });
+    const deliveryRoute = page
+      .locator('[role="dialog"]')
+      .getByRole("list", { name: "Biochar distribution journey" });
+    await expect(deliveryRoute).toContainText("25 km one way", { timeout: 15000 });
+    await expect(deliveryRoute).toContainText(/50 km\s*round trip/);
   });
 
   test("organization defaults have no trip type setting", async ({ adminPage: page }) => {

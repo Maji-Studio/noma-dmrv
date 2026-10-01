@@ -35,15 +35,12 @@ import {
   OWN_LAYER_PREFIX,
 } from "@/components/map";
 import type { RouteGeometry } from "@/lib/geo/types";
-import "@/components/chain-of-custody/map/carbon-viewer.css";
 import {
   createPopupCardElement,
-  type PopupCardInput,
-} from "@/components/chain-of-custody/map/viewer-elements";
-import {
+  POPUP_MAX_WIDTH_PX,
   POPUP_OFFSET_PX,
-  POPUP_WIDTH_PX,
-} from "@/components/chain-of-custody/map/viewer-constants";
+  type PopupCardInput,
+} from "@/components/chain-of-custody/map";
 import {
   resolveRouteLine,
   type RoutePoint,
@@ -133,23 +130,48 @@ function boundsFor({
 
 type EndpointEnd = "facility" | "destination";
 
+interface EndpointRefs {
+  cards: { current: RouteMiniMapProps["endpointCards"] };
+  preview: { current: MiniMapPreview };
+  popup: { current: maplibregl.Popup | null };
+  pinned: { current: EndpointEnd | null };
+}
+
 /**
- * Hover shows an endpoint's card; a click pins it until the other marker or
- * the map is clicked. Same card as the Carbon Viewer.
+ * The element MapLibre places for one end. Without cards it is the bare 12px
+ * marker. With cards the marker sits inside a 44px focusable button, so the
+ * touch target meets the design system minimum and the keyboard reaches it.
+ */
+function endpointElement(
+  accent: "purple" | "pink",
+  card: EndpointCard | undefined,
+): HTMLDivElement {
+  const marker = createMarkerElement(accent);
+  marker.style.cursor = "default";
+  if (!card) return marker;
+  marker.style.cursor = "pointer";
+  const button = document.createElement("div");
+  button.setAttribute("role", "button");
+  button.tabIndex = 0;
+  button.setAttribute("aria-label", `${card.typeLabel}: ${card.code}`);
+  button.className =
+    "flex size-44 cursor-pointer items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--clr-dark-purple)]";
+  button.appendChild(marker);
+  return button;
+}
+
+/**
+ * Hover or keyboard focus shows an endpoint's card; a click, Enter or Space
+ * pins it until the other marker or the map is clicked, or Escape. Same card
+ * as the Carbon Viewer.
  */
 function wireEndpoint(
   map: maplibregl.Map,
   el: HTMLDivElement,
   end: EndpointEnd,
-  refs: {
-    cards: { current: RouteMiniMapProps["endpointCards"] };
-    preview: { current: MiniMapPreview };
-    popup: { current: maplibregl.Popup | null };
-    pinned: { current: EndpointEnd | null };
-  },
+  refs: EndpointRefs,
 ) {
   if (!refs.cards.current) return;
-  el.style.cursor = "pointer";
   const show = () => {
     const card = refs.cards.current?.[end];
     const point = refs.preview.current[end];
@@ -159,14 +181,10 @@ function wireEndpoint(
       .setDOMContent(createPopupCardElement({ ...card, status: null }))
       .addTo(map);
   };
-  el.addEventListener("mouseenter", () => {
-    if (refs.pinned.current === null) show();
-  });
-  el.addEventListener("mouseleave", () => {
+  const hideUnlessPinned = () => {
     if (refs.pinned.current === null) refs.popup.current?.remove();
-  });
-  el.addEventListener("click", (event) => {
-    event.stopPropagation();
+  };
+  const togglePin = () => {
     if (refs.pinned.current === end) {
       refs.pinned.current = null;
       refs.popup.current?.remove();
@@ -174,6 +192,28 @@ function wireEndpoint(
     }
     refs.pinned.current = end;
     show();
+  };
+  el.addEventListener("mouseenter", () => {
+    if (refs.pinned.current === null) show();
+  });
+  el.addEventListener("mouseleave", hideUnlessPinned);
+  el.addEventListener("focus", () => {
+    if (refs.pinned.current === null) show();
+  });
+  el.addEventListener("blur", hideUnlessPinned);
+  el.addEventListener("click", (event) => {
+    event.stopPropagation();
+    togglePin();
+  });
+  el.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      togglePin();
+    } else if (event.key === "Escape" && refs.pinned.current !== null) {
+      event.stopPropagation();
+      refs.pinned.current = null;
+      refs.popup.current?.remove();
+    }
   });
 }
 
@@ -220,8 +260,7 @@ export default function RouteMiniMap({
     ];
 
     if (!facilityMarkerRef.current) {
-      const el = createMarkerElement("purple");
-      el.style.cursor = "default";
+      const el = endpointElement("purple", cardsRef.current?.facility);
       wireEndpoint(map, el, "facility", { cards: cardsRef, preview: previewRef, popup: popupRef, pinned: pinnedRef });
       facilityMarkerRef.current = new maplibregl.Marker({ element: el })
         .setLngLat(facilityLngLat)
@@ -231,8 +270,7 @@ export default function RouteMiniMap({
     }
 
     if (!destinationMarkerRef.current) {
-      const el = createMarkerElement("pink");
-      el.style.cursor = "default";
+      const el = endpointElement("pink", cardsRef.current?.destination);
       wireEndpoint(map, el, "destination", { cards: cardsRef, preview: previewRef, popup: popupRef, pinned: pinnedRef });
       destinationMarkerRef.current = new maplibregl.Marker({ element: el })
         .setLngLat(destinationLngLat)
@@ -274,7 +312,7 @@ export default function RouteMiniMap({
       closeOnClick: false,
       offset: POPUP_OFFSET_PX,
       className: "cvm-pop",
-      maxWidth: `${POPUP_WIDTH_PX + 8}px`,
+      maxWidth: `${POPUP_MAX_WIDTH_PX}px`,
     });
     map.on("click", () => {
       pinnedRef.current = null;
