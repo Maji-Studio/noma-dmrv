@@ -753,12 +753,12 @@ export async function seedUngroupedReadyBatchWithChain(
       // never sent anywhere on the committed (no-submit) path; a real
       // E2E_LIVE_SUBMIT=1 run would need a sandbox catalogue id here instead.
       const [priorType] = await tx
-        .select({ id: schema.feedstockTypes.isometricFeedstockTypeId })
+        .select({ isometricFeedstockTypeId: schema.feedstockTypes.isometricFeedstockTypeId })
         .from(schema.feedstockTypes)
         .where(eq(schema.feedstockTypes.id, feedstockRow.feedstockTypeId));
       linkedFeedstockType = {
         id: feedstockRow.feedstockTypeId,
-        priorIsometricId: priorType?.id ?? null,
+        priorIsometricId: priorType?.isometricFeedstockTypeId ?? null,
       };
       await tx
         .update(schema.feedstockTypes)
