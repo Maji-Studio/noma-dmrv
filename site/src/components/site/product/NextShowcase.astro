@@ -1,0 +1,41 @@
+---
+/**
+ * NextShowcase (#next): the five upcoming concept demos as an accordion beside one large visual
+ * (AccordionShowcase). Each open item shows the Upcoming chip and its description; its demo is the visual
+ * and plays when the item opens (and on first view for the open item). No props.
+ */
+import GridFrame from "../GridFrame.astro";
+import Chip from "../Chip.astro";
+import AccordionShowcase from "../AccordionShowcase.astro";
+import NextDemo from "./NextDemo.astro";
+import "./next.css";
+
+const PREVIEW = "Concept preview with illustrative data";
+const UPCOMING = [
+  { id: "documents", title: "Read documents into records.", text: "Use weighbridge tickets and lab reports to fill in records, ready for your review." },
+  { id: "reactor", title: "Bring in reactor readings.", text: "Record temperature and energy data from your reactor without entering each reading by hand." },
+  { id: "telegram", title: "Record work through Telegram.", text: "Log deliveries, production runs and readings from a chat." },
+  { id: "connections", title: "Connect your other tools.", text: "Use an open API and MCP to work with noma’s records from other software and AI tools." },
+  { id: "checks", title: "Catch unusual readings earlier.", text: "Use AI checks to flag values that need a closer look before reporting." },
+].map((u) => ({ ...u, visualLabel: `${PREVIEW}: ${u.title.replace(/\.$/, "").toLowerCase()}` }));
+---
+<GridFrame id="next" pad="none" flush aria-labelledby="next-title">
+  <AccordionShowcase id="next" items={UPCOMING} class="nx">
+    <Fragment slot="head">
+      <h2 id="next-title" class="t-h2">What we’re building next.</h2>
+      <p class="t-lead">Less manual work. More connected records.</p>
+      <p class="t-body t-muted">Explore the planned document capture, reactor readings, Telegram, API and AI features.</p>
+    </Fragment>
+    {UPCOMING.map((u) => (
+      <Fragment slot={`panel-${u.id}`}>
+        <Chip>Upcoming</Chip>
+        <p class="t-body t-muted">{u.text}</p>
+      </Fragment>
+    ))}
+    {UPCOMING.map((u) => <Fragment slot={`visual-${u.id}`}><NextDemo kind={u.id} /></Fragment>)}
+  </AccordionShowcase>
+</GridFrame>
+<script>
+  import { mountNextDemos } from "./next-demos.js";
+  document.querySelectorAll("[data-accordion].nx").forEach((root) => mountNextDemos(root));
+</script>

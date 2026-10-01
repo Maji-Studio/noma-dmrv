@@ -1,0 +1,9 @@
+packages:
+  - "."
+
+# Standalone until the site joins the root workspace (see the handoff).
+minimumReleaseAge: 4320
+
+allowBuilds:
+  esbuild: true
+  sharp: true

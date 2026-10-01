@@ -1,0 +1,33 @@
+/* Product page (/product): intro, section heads, and the editorial restyle of the shared
+   map visual. Page-scoped: every selector starts with a .pd- class. Values come from tokens.css. */
+.pd { --pd-side: clamp(260px, 24vw, 320px); }
+
+/* Inset sheets: every section is a head on the page ground over one exhibit, a sheet that runs frame to frame
+   under a hairline, like the trace explorer. The bins, emissions and evidence sheets are dark stages (stage
+   tokens), so the one lit element reads as on the home and why stages. */
+.pd :is(.bs-stage, .em-stage, .stg-figure) { background: var(--stage); color: var(--stage-ink); border-top: var(--hairline) solid var(--rule); }
+/* The evidence stage sits in the grid frame like the other sections: section head size and padding, a top
+   rule with cross marks, no kicker, and the figure as the sheet. */
+.pd .stg { padding-block: 0; background: transparent; color: var(--ink); }
+.pd .stg-copy { --stage-ink: var(--ink); --stage-ink-2: var(--ink-2); --stage-ink-3: var(--ink-3); --stage-lit: var(--accent); --stage-line: var(--link-rule); }
+.pd .stg--frame .stg-in::before, .pd .stg--frame .stg-in::after { background: linear-gradient(var(--cross), var(--cross)) center / var(--hairline) 100% no-repeat, linear-gradient(var(--cross), var(--cross)) center / 100% var(--hairline) no-repeat; }
+.pd .stg--frame .stg-in { margin-block: 0; padding-block: var(--section) 0; border-color: var(--rule); border-top: var(--hairline) solid var(--rule); }
+.pd .stg-title { font-size: var(--fs-h2); line-height: var(--lh-heading); letter-spacing: var(--track-h2); max-width: 14ch; }
+.pd .stg-copy { padding-bottom: var(--space-8); }
+.pd .stg-kicker { display: none; }
+.pd .stg-figure { margin: 0 calc(var(--frame-pad) * -1); padding: var(--space-8) var(--frame-pad) var(--space-7); }
+
+/* Intro: same rhythm as Home's hero copy. */
+.pd-intro { display: grid; gap: var(--space-6); padding: var(--section) var(--frame-pad) var(--space-8); }
+.pd-intro h1 { max-width: 14ch; }
+.pd-intro-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--gap); align-items: end; margin-top: var(--space-5); }
+.pd-intro-row .actions { justify-content: flex-end; }
+
+/* Section head: headline left, lead right, like Home's tour head. */
+.pd-head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: end; padding: var(--section) var(--frame-pad) var(--space-8); }
+.pd-head h2 { max-width: 14ch; }
+
+@media (max-width: 760px) {
+  .pd-intro-row, .pd-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+  .pd-intro-row .actions { justify-content: flex-start; }
+}

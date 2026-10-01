@@ -1,0 +1,138 @@
+/* BinsSection (#bins), "Step through": a dark stage panel (stage tokens) with step tabs, one panel of text per step
+   beside one picture of 10 kg squares, and Back / Next. Scoped under .bs. Numbers inside the SVG rules
+   (font sizes, stroke widths, delay per square) are SVG user units or part of the drawing's choreography.
+   Without JS (no .is-live) every panel is listed and the picture shows the last step. */
+.bs .pd-head p { color: var(--ink-2); }
+.site .bs-stage :focus-visible { outline-color: var(--stage-lit); }
+
+.bs-stage {
+  background: var(--stage); color: var(--stage-ink);
+  padding: var(--space-8) var(--frame-pad) var(--space-7);
+  display: grid; gap: var(--space-7);
+}
+
+/* Step tabs: four segments with a bar on top; the current one lit, the ones behind it solid. */
+.bs-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+.bs-tabs button {
+  display: flex; align-items: baseline; gap: var(--space-3); width: 100%; min-height: var(--tap);
+  padding: var(--space-4) 0 0; border: 0; border-top: 2px solid var(--stage-line-dim); background: none;
+  color: var(--stage-ink-3); font: inherit; font-size: var(--fs-lead); font-weight: 300; text-align: left; cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-base);
+}
+.bs-tabs button:hover { color: var(--stage-ink); }
+.bs-tabs button[data-done] { border-top-color: var(--stage-ink-2); color: var(--stage-ink-2); }
+.bs-tabs button[aria-current="step"] { border-top-color: var(--stage-lit); color: var(--stage-ink); }
+.bs-n { font-size: var(--fs-small); color: var(--stage-ink-3); }
+.bs-tabs button[aria-current="step"] .bs-n { color: var(--stage-lit); }
+
+/* Body: the step's text beside the picture */
+.bs-body { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-8); align-items: center; }
+.bs-panels { display: grid; gap: var(--space-8); }
+.bs-stage.is-live .bs-panels { gap: 0; }
+.bs-stage.is-live .bs-panel { grid-area: 1 / 1; }
+.bs-stage.is-live .bs-panel:not(.is-on) { visibility: hidden; opacity: 0; }
+.bs-stage.is-live .bs-panel.is-on { animation: bs-in var(--dur-base) var(--ease-out) both; }
+@keyframes bs-in { from { opacity: 0; transform: translateY(var(--space-2)); } }
+
+.bs-panel { display: grid; align-content: start; }
+.bs-num { font-size: var(--fs-display); font-weight: 300; line-height: var(--lh-display); letter-spacing: var(--track-display); white-space: nowrap; }
+.bs-label { margin-top: var(--space-3); font-size: var(--fs-lead); color: var(--stage-ink-2); }
+.bs-num.is-lit, .bs-label.is-lit { color: var(--stage-lit); }
+.bs-text { margin-top: var(--space-6); max-width: var(--measure); font-size: var(--fs-body); color: var(--stage-ink-2); }
+.bs-rows { display: grid; gap: var(--space-2); margin: var(--space-5) 0 0; padding: var(--space-4) 0 0; list-style: none; border-top: var(--hairline) solid var(--stage-grid); }
+.bs-rows li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); font-size: var(--fs-ui); color: var(--stage-ink-2); }
+.bs-v { color: var(--stage-ink); font-variant-numeric: tabular-nums; }
+.bs-sw { display: block; width: var(--space-3); height: var(--space-3); }
+.bs-sw--l1 { background: var(--l1); }
+.bs-sw--l2 { background: var(--l2); }
+.bs-sw--l3 { background: var(--l3); }
+.bs-sw--dry { background: linear-gradient(90deg, var(--l1) 50%, var(--l2) 50%); }
+.bs-sw--w { background: var(--infra-bg); border: var(--hairline) dashed var(--infra); }
+.bs-aside { margin-top: var(--space-4); font-size: var(--fs-small); color: var(--stage-ink-3); }
+
+/* Picture */
+.bs-art { display: block; width: 100%; height: auto; overflow: hidden; }
+.bs-line { fill: none; stroke: var(--stage-line); stroke-width: 1.5; stroke-linejoin: miter; }
+.bs-wheel { fill: var(--stage); stroke: var(--stage-line); stroke-width: 1.5; }
+.bs-cap { font-family: var(--f-sans); font-size: 13px; fill: var(--stage-ink-3); }
+.bs-read { font-family: var(--f-sans); font-weight: 300; font-size: 22px; fill: var(--stage-lit); }
+.bs-scale .bs-line { stroke: var(--stage-lit); stroke-width: 3; }
+.bs-sq--l1 { fill: var(--l1); }
+.bs-sq--l2 { fill: var(--l2); }
+.bs-sq--l3 { fill: var(--l3); }
+.bs-sq--w { fill: var(--infra-bg); stroke: var(--infra); stroke-width: 1; stroke-dasharray: 2 2; }
+
+/* Choreography. Each layer square has four places (--x0/--y0 above the bin, --x1/--y1 in the full bin,
+   --x2/--y2 after the draw, --x3/--y3 on the field); data-step picks one. The last step's places are the default. */
+.bs-sq {
+  --x: var(--x3); --y: var(--y3);
+  transform: translate(calc(var(--x) * 1px), calc(var(--y) * 1px));
+  transition: transform var(--dur-draw) var(--ease-draw) calc(var(--i) * 8ms), opacity var(--dur-base) var(--ease-out) calc(var(--i) * 8ms);
+}
+:is([data-step="2"], [data-step="3"]) .bs-sq { --x: var(--x2); --y: var(--y2); }
+[data-step="1"] .bs-sq { --x: var(--x1); --y: var(--y1); }
+[data-step="0"] .bs-sq { --x: var(--x0); --y: var(--y0); opacity: 0; transition: none; }
+.bs-truck, .bs-scale, .bs-bin, .bs-field, .bs-field-read { transition: opacity var(--dur-base) var(--ease-out); }
+:is([data-step="0"], [data-step="1"], [data-step="4"]) .bs-truck,
+.bs-stage:not([data-step="3"]) .bs-scale,
+.bs-stage:not([data-step="4"]) :is(.bs-field, .bs-field-read) { opacity: 0; }
+[data-step="3"] .bs-scale, [data-step="4"] .bs-field { transition-delay: var(--dur-base); }
+/* Apply: the bin and what stays in it step aside so the field has the whole picture. */
+[data-step="4"] :is(.bs-bin, .bs-sq:not(.is-drawn)) { opacity: 0; transition-delay: 0s; }
+/* Weigh: the water riding on the truck lights up, so the extra weight has a visible source. */
+.bs-sq--w { transition-property: transform, opacity, stroke; }
+[data-step="3"] .bs-sq--w.is-drawn { stroke: var(--stage-lit); stroke-width: 2; stroke-dasharray: none; }
+/* Apply: the water is on the field too but does not count, so it dims. */
+[data-step="4"] .bs-sq--w.is-drawn { opacity: 0.35; }
+
+/* Apply, the field. The truck leaves with its load, the tractor drives across left to right, and each
+   square drops into the topsoil as the hopper passes over it (--sow), each plant grows soon after (--t);
+   the frontmatter times both to the tractor's speed. The picture clips, so the tractor drives in and out
+   of frame. The reading lights up once the tractor has gone. */
+.bs-dim { fill: none; stroke: var(--stage-line-dim); stroke-width: 1.5; }
+.bs-soil { fill: none; stroke: var(--stage-line); stroke-width: 1.5; stroke-dasharray: 1 6; stroke-linecap: round; }
+.bs-root { fill: none; stroke: var(--stage-line-dim); stroke-width: 1.2; }
+.bs-plant { fill: none; stroke: var(--stage-ink-2); stroke-width: 1.5; stroke-linecap: round; }
+.bs-tread { fill: none; stroke: var(--stage-line); stroke-width: 1.5; stroke-dasharray: 4 5; transform-box: fill-box; transform-origin: center; }
+.bs-tractor { opacity: 0; }
+:is(.bs-plant, .bs-root) { stroke-dasharray: 1; stroke-dashoffset: 1; }
+[data-step="4"] :is(.bs-plant, .bs-root) { stroke-dashoffset: 0; transition: stroke-dashoffset var(--dur-draw) var(--ease-out) calc(var(--dur-base) + var(--t)); }
+[data-step="4"] .bs-field-read { transition-delay: calc(var(--dur-base) + var(--t)); }
+[data-step="4"] .bs-sq.is-drawn { transition: none; animation: bs-sow var(--dur-base) var(--ease-out) calc(var(--dur-base) + var(--sow)) both; }
+[data-step="4"] .bs-tractor { opacity: 1; animation: bs-drive var(--drive) linear var(--dur-base) both; }
+[data-step="4"] .bs-tread { animation: bs-roll var(--rev) linear infinite; }
+@keyframes bs-sow { from { opacity: 0; transform: translate(calc(var(--x) * 1px), calc((var(--y) - 16) * 1px)); } }
+@keyframes bs-drive { to { transform: translateX(calc(var(--dist) * 1px)); } }
+@keyframes bs-roll { to { transform: rotate(360deg); } }
+
+/* Foot: footnote left, Back / Next right */
+.bs-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-4) var(--space-6); padding-top: var(--space-5); border-top: var(--hairline) solid var(--stage-grid); }
+.bs-note { font-size: var(--fs-caption); color: var(--stage-ink-3); }
+.bs-nav { display: flex; gap: var(--space-3); }
+.bs-nav .btn { min-width: calc(var(--space-9) * 1.5); }
+.bs-back {
+  min-height: var(--btn-h); padding: 0 var(--space-5); border: var(--hairline) solid var(--stage-line); border-radius: var(--r-square);
+  background: none; color: var(--stage-ink); font: inherit; font-size: var(--fs-ui); cursor: pointer; transition: border-color var(--dur-fast);
+}
+.bs-back:hover { border-color: var(--stage-ink); }
+.bs-back:disabled { opacity: 0.4; cursor: default; border-color: var(--stage-line); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bs-sq, .bs-truck, .bs-scale, .bs-bin, .bs-field, .bs-field-read, .bs-plant, .bs-root { transition: none !important; animation: none !important; }
+  .bs-tractor { display: none; }
+  .bs-stage.is-live .bs-panel.is-on { animation: none; }
+}
+@media (max-width: 900px) {
+  .bs-body { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); }
+  .bs-art { order: -1; }
+}
+@media (max-width: 760px) {
+  .bs-stage { padding-top: var(--space-6); gap: var(--space-6); }
+  .bs-tabs { gap: var(--space-2); }
+  .bs-tabs button { font-size: var(--fs-ui); flex-direction: column; gap: 0; }
+  .bs-num { font-size: var(--fs-h2); }
+  .bs-foot { flex-direction: column-reverse; align-items: stretch; }
+  .bs-nav > * { flex: 1; }
+  .bs-nav .btn { min-width: 0; }
+  .bs-nav { flex-wrap: wrap; }
+}

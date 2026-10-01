@@ -1,0 +1,20 @@
+<section class="pv-trace" aria-label="Interactive biochar trace" data-preview-trace>
+  <div class="pv-trace-toolbar">
+    <div><strong>Follow the biochar</strong><span>Upstream and downstream.</span></div>
+    <div class="pv-switch" role="group" aria-label="Operation size">
+      <button type="button" data-scale="simple" aria-pressed="true">Simple example</button>
+      <button type="button" data-scale="large" aria-pressed="false">Larger operation</button>
+    </div>
+  </div>
+  <div class="pv-stage-labels" aria-hidden="true"><span>Source</span><span>Intake</span><span>Production</span><span>Storage</span><span>Product</span><span>Delivery</span><span>Application</span></div>
+  <p class="pv-trace-mobile-hint">Swipe across the trace, or choose a record below.</p>
+  <div class="pv-graph-scroll"><svg class="pv-graph" viewBox="0 0 1080 300" role="group" aria-label="Select a biochar record to trace its origins and destinations"></svg></div>
+  <div class="pv-trace-tools">
+    <label>Explore a record <select data-trace-select aria-label="Explore a record"></select></label>
+    <button type="button" class="pv-text-button" data-clear-trace>Show all connections</button>
+    <span>Illustrative records</span>
+  </div>
+  <div class="pv-record" aria-live="polite" data-record-detail></div>
+  <noscript><p class="pv-noscript">Enable JavaScript to explore this example. noma links feedstock, production, storage, deliveries and applications in both directions.</p></noscript>
+</section>
+<script>import './trace-preview.js';</script>

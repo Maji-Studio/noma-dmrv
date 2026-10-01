@@ -1,0 +1,11 @@
+---
+import Shell from '../../components/preview/preview-shell.astro';
+---
+<Shell title="Explore noma | Content preview" current="product">
+  <section class="pv-page-intro pv-wrap"><p class="pv-category">The product</p><h1>One operation.<br/>Connected records.</h1><p>Follow material through the plant, keep the evidence with the work, and prepare your reporting from the same records.</p></section>
+  <section class="pv-deep-section pv-wrap"><div class="pv-deep-intro"><h2>Know what’s in the bin.</h2><p>Keep track of material as it is stored, mixed and drawn. Explore how wet and dry quantities change in this example.</p></div><div data-visual="bins"></div></section>
+  <section class="pv-deep-section pv-wrap"><div class="pv-deep-intro"><h2>See where it went.</h2><p>Connect suppliers, production and application sites. Select a field to trace its sources, or a supplier to see the destinations.</p></div><div data-visual="map" data-side="right"></div></section>
+  <section class="pv-deep-section pv-wrap" id="reporting"><div class="pv-deep-intro"><h2>Keep the evidence<br/>with the record.</h2><div><p>Attach weighbridge tickets, transport documents, photos and lab results where they belong. See what is missing as you prepare a submission.</p><p class="pv-muted">The registry workflow is being developed against Isometric’s data model. Production submission is not available yet.</p></div></div><a class="pv-button" href="/preview#walkthrough">Book a walkthrough</a></section>
+  <section class="pv-deep-section pv-wrap"><div class="pv-deep-intro"><h2>More connections.<br/>Less manual work.</h2><p>Explore the planned document capture, reactor readings, Telegram, API and AI features.</p></div><a class="pv-link" href="/preview#next">See what’s next</a></section>
+</Shell>
+<script>import { mountVisuals } from '../../visuals/index.js'; mountVisuals(document.querySelector('main'));</script>

@@ -1,0 +1,44 @@
+---
+/**
+ * MathExcerpt: proof for principle 3. The real dry-mass function from the app
+ * (src/lib/calculations/mass-dry.ts, deriveMassDryKg, lines 17 to 30), quoted verbatim, the arithmetic line
+ * highlighted, linked to the file on GitHub. If that function changes, update CODE. No props.
+ */
+import { GITHUB_URL } from "../../../config.js";
+import TextLink from "../TextLink.astro";
+
+const FILE = "src/lib/calculations/mass-dry.ts";
+const FILE_URL = `${GITHUB_URL}/blob/staging/${FILE}`;
+const FIRST_LINE = 17;
+// Verbatim from the app. Tokens: [text, kind] where kind is k (keyword), f (function), n (number), s (string), or plain.
+const CODE = [
+  [["export function ", "k"], ["deriveMassDryKg", "f"], ["("]],
+  [["  deliveredWetMassKg: number,"]],
+  [["  moisturePercent: number"]],
+  [["): number {"]],
+  [["  if ", "k"], ["(deliveredWetMassKg < "], ["0", "n"], [") {"]],
+  [["    throw new ", "k"], ["RangeError", "f"], ["("], ["'deliveredWetMassKg must be >= 0'", "s"], [");"]],
+  [["  }"]],
+  [[""]],
+  [["  if ", "k"], ["(moisturePercent < "], ["0", "n"], [" || moisturePercent > "], ["100", "n"], [") {"]],
+  [["    throw new ", "k"], ["RangeError", "f"], ["("], ["'moisturePercent must be between 0 and 100'", "s"], [");"]],
+  [["  }"]],
+  [[""]],
+  [["  return ", "k"], ["roundKg", "f"], ["(deliveredWetMassKg * ("], ["1", "n"], [" - moisturePercent / "], ["100", "n"], ["));"]],
+  [["}"]],
+];
+const HIT = 12; // the line that does the arithmetic
+---
+<figure class="mx">
+  <figcaption class="mx-head">
+    <span class="mx-file">{FILE}</span>
+    <span class="mx-lic">MIT</span>
+  </figcaption>
+  <pre tabindex="0" role="region" aria-label={`The deriveMassDryKg function from ${FILE}: it checks that wet mass is not negative and moisture is between 0 and 100 percent, then returns wet mass times one minus moisture over 100, rounded to the gram.`}><code>{CODE.map((line, i) => (
+<span class:list={["mx-line", i === HIT && "is-hit"]}><span class="mx-ln" aria-hidden="true">{FIRST_LINE + i}</span>{line.map(([t, k]) => k ? <span class={`mx-${k}`}>{t}</span> : t)}</span>
+))}</code></pre>
+  <p class="mx-foot">
+    <span>1,000 kg wet at 15% moisture returns <b>850 kg dry</b>.</span>
+    <TextLink href={FILE_URL} external>Open the file</TextLink>
+  </p>
+</figure>

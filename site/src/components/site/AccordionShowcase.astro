@@ -1,0 +1,61 @@
+---
+/**
+ * AccordionShowcase: a heading and an accordion on the left (about a third), one large visual on the right
+ * that swaps to match the open item. The visual sits in a hatched frame with cross marks at its corners.
+ * Place it inside a flush GridFrame (pad="none" flush): it runs edge to edge between the frame lines.
+ * Props:
+ *   id: string            prefix for every generated id; unique on the page (e.g. "tour", "next")
+ *   items: { id: string, title: string, visualLabel: string }[]
+ *                         title is the header button's text; visualLabel names the visual for screen readers
+ *   visualRole?: "group" | "img"   default "group" (the visual has readable content);
+ *                         "img" when the visual is a drawing and visualLabel is its text alternative
+ *   ratio?: string        CSS aspect-ratio of the desktop frame, default "3 / 4" (stacked visuals are square)
+ *   titleTag?: "h3" | "h4"   heading element around each header button, default "h3"
+ *   class?: string        merged onto the root
+ * Slots:
+ *   head                  top of the left column: the section's h2 (give it an id for aria-labelledby) and lead
+ *   panel-{item.id}       the open item's copy: description, chip, link
+ *   visual-{item.id}      the item's visual, centred in the frame
+ * Behaviour (accordion-showcase.js): the first item opens by default and opening one closes the others;
+ * Enter or Space toggles, Up and Down (Home, End) move between headers. No auto-advance.
+ * Each open dispatches "accordion:open" on the root, detail { index, id, visual } (index -1 when all close;
+ * the right-hand visual then keeps showing the last opened item).
+ * Without JS every item is open and every visual shows under its copy. Below 900px it is one column and each
+ * visual sits inside its open item, under the description.
+ */
+import "./accordion-showcase.css";
+
+const { id, items = [], visualRole = "group", ratio = "3 / 4", titleTag: Title = "h3", class: className } = Astro.props;
+const rendered = await Promise.all(items.map(async (item) => ({
+  ...item,
+  panel: await Astro.slots.render(`panel-${item.id}`),
+  visual: await Astro.slots.render(`visual-${item.id}`),
+})));
+const ids = (item) => ({ btn: `${id}-btn-${item.id}`, panel: `${id}-panel-${item.id}`, visual: `${id}-visual-${item.id}` });
+---
+<div class:list={["acc", className]} data-accordion style={`--acc-n:${items.length};--acc-ratio:${ratio}`}>
+  <div class="acc-head"><slot name="head" /></div>
+  <div class="acc-rail" aria-hidden="true"></div>
+  <div class="acc-frame" aria-hidden="true"></div>
+  {rendered.map((item, i) => {
+    const k = ids(item), last = i === rendered.length - 1;
+    return <>
+      <Title class:list={["acc-h", i === 0 && "is-first"]} style={`--r:${2 + i * 2}`}>
+        <button type="button" class="acc-btn" id={k.btn} aria-expanded="true" aria-controls={`${k.panel} ${k.visual}`} data-panel={k.panel} data-visual={k.visual}>
+          <span class="acc-title">{item.title}</span>
+          <svg class="acc-chev" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 6l5 5 5-5" /></svg>
+        </button>
+      </Title>
+      <div class:list={["acc-panel", last && "is-last"]} id={k.panel} role="region" aria-labelledby={k.btn} style={`--r:${3 + i * 2}`}>
+        <div class="acc-clip"><div class="acc-copy"><Fragment set:html={item.panel} /></div></div>
+      </div>
+      <div class:list={["acc-visual", last && "is-last"]} id={k.visual} role={visualRole} aria-label={item.visualLabel}>
+        <div class="acc-clip"><div class="acc-art"><Fragment set:html={item.visual} /></div></div>
+      </div>
+    </>;
+  })}
+</div>
+<script>
+  import { mountAccordion } from "./accordion-showcase.js";
+  document.querySelectorAll("[data-accordion]").forEach((root) => mountAccordion(root));
+</script>

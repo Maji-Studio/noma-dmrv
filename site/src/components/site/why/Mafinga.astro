@@ -1,0 +1,32 @@
+---
+/**
+ * Mafinga: proof for principle 5 (wide). The field-trial photo across the frame, then the four places a
+ * working plant keeps records, each as its station's contour drawing (ContourArt, the same drawings as
+ * Home's trace). No props.
+ */
+import ContourArt from "../contours/ContourArt.astro";
+import { HAS_MAFINGA_PHOTO, MAFINGA_PHOTO } from "../../../lib/assets.js";
+const PLACES = [
+  { station: "feedstock-delivery", name: "Weighbridge", line: "Feedstock in, weighed wet, moisture read." },
+  { station: "production-run", name: "Reactor", line: "Each run, feedstock in and biochar out." },
+  { station: "mix-bin", name: "Bins", line: "Every draw, oldest layer first." },
+  { station: "application", name: "Fields", line: "Where the biochar goes into the soil." },
+];
+---
+<div class="maf">
+  <figure class="maf-figure">
+    {HAS_MAFINGA_PHOTO
+      ? <img src={MAFINGA_PHOTO} alt="Field trial plots in Mafinga, Tanzania" width="1400" height="933" loading="lazy" decoding="async" />
+      : <div class="photo-missing" role="img" aria-label="Field trial plots in Mafinga, Tanzania" />}
+    <figcaption class="t-caption">Field trial plots, Mafinga, Tanzania</figcaption>
+  </figure>
+  <ul class="maf-places">
+    {PLACES.map((p) => (
+      <li class="maf-place">
+        <ContourArt station={p.station} scope={`maf-${p.station}`} class="maf-art" />
+        <h3 class="maf-name">{p.name}</h3>
+        <p class="t-body t-muted">{p.line}</p>
+      </li>
+    ))}
+  </ul>
+</div>

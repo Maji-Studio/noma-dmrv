@@ -1,0 +1,152 @@
+/* EmissionsSection (#emissions): a dark stage panel (stage tokens) with the net figure beside one waterfall chart,
+   a caption row under it and a footnote. Everything dim; the net column is the one lit element. Scoped .em-. Numbers inside the SVG rules (font sizes, stroke widths, dash arrays) are SVG user units.
+   Without JS (no .is-live) every caption is listed and the chart shows its end state. */
+
+.em-stage {
+  background: var(--stage); color: var(--stage-ink);
+  padding: var(--space-6) var(--frame-pad) var(--space-7);
+  display: grid; gap: var(--space-7);
+}
+
+/* Top bar: mono label row, like the evidence stage's caption bar */
+.em-bar {
+  display: flex; justify-content: space-between; gap: var(--space-4); padding-bottom: var(--space-3);
+  border-bottom: var(--hairline) solid var(--stage-grid);
+  font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono);
+  text-transform: uppercase; color: var(--stage-ink-3);
+}
+.em-bar span:first-child { color: var(--stage-ink-2); }
+
+/* Body: the figure beside the chart */
+.em-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 9fr); gap: var(--space-7); align-items: end; }
+.em-fig { display: grid; align-content: end; padding-bottom: var(--space-8); }
+.em-num { font-size: var(--fs-display); font-weight: 300; line-height: var(--lh-display); letter-spacing: var(--track-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.em-unit { margin-top: var(--space-3); font-size: var(--fs-lead); color: var(--stage-ink-2); }
+.em-sum { margin-top: var(--space-5); padding-top: var(--space-4); border-top: var(--hairline) solid var(--stage-grid); font-size: var(--fs-ui); color: var(--stage-ink-3); max-width: 28ch; }
+
+/* Chart */
+.em-chart { min-width: 0; }
+.em-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.em-mobile { display: none; list-style: none; padding: 0; margin: 0; }
+.em-mobile-group { padding-block: var(--space-5) var(--space-2); font-size: var(--fs-small); color: var(--stage-ink-2); }
+.em-mobile-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); width: 100%; min-height: var(--btn-h); padding: var(--space-3) 0; border: 0; background: none; color: var(--stage-ink); text-align: left; font-size: var(--fs-small); cursor: pointer; }
+.em-mobile-name { display: flex; align-items: center; gap: var(--space-2); }
+.em-mobile-name svg { flex: none; }
+.em-mobile-value { font-variant-numeric: tabular-nums; }
+.em-mobile-track { grid-column: 1 / -1; position: relative; height: var(--space-3); }
+.em-mobile-bar { position: absolute; left: var(--start); width: max(var(--hairline), var(--length)); height: 100%; border: var(--hairline) solid var(--stage-line); background: var(--stage-band); }
+.em-col--step .em-mobile-bar { background: var(--stage-line); }
+.em-col--transport .em-mobile-bar { border-style: dashed; }
+.em-col--net .em-mobile-bar { background: var(--stage-lit); }
+.em-col--net.em-mobile-row { color: var(--stage-lit); }
+.em-mobile-row.is-focus { background: var(--stage-band); }
+.site .em-mobile-row:focus-visible { outline: 2px solid var(--stage-lit); outline-offset: var(--space-1); }
+.em-mono { font-family: var(--f-mono); font-weight: 500; font-size: 10px; letter-spacing: var(--track-mono); fill: var(--stage-ink-3); }
+.em-grid { stroke: var(--stage-grid); stroke-width: 1; }
+.em-zero { stroke: var(--stage-line); }
+.em-bracket { fill: none; stroke: var(--stage-line-dim); stroke-width: 1; }
+.em-link { stroke: var(--stage-line); stroke-width: 1.25; stroke-dasharray: 1 4; stroke-linecap: round; }
+.em-hatch { stroke: var(--stage-line); stroke-width: 1.25; }
+
+/* Icons: one 24-unit line drawing per column, from the sprite at the top of the section. */
+.em-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.em-ico { color: var(--stage-ink-2); transition: color var(--dur-fast); }
+.em-col--net .em-ico, .em-col.is-focus .em-ico { color: var(--stage-lit); }
+.em-col--stored.is-focus .em-ico, .em-col--step.is-focus .em-ico { color: var(--stage-ink); }
+.em-cap-ico { width: var(--space-6); height: var(--space-6); flex: none; color: var(--stage-ink-2); }
+[data-em-cap="net"] .em-cap-ico { color: var(--stage-lit); }
+
+.em-col { cursor: default; outline: none; }
+.em-col.em-mobile-row { cursor: pointer; }
+.em-hit { fill: transparent; }
+.em-rect { stroke-width: 1.25; transition: stroke var(--dur-fast), opacity var(--dur-fast); }
+.em-col--stored .em-rect { fill: var(--stage-band); stroke: var(--stage-line); }
+.em-col--step .em-rect { stroke: var(--stage-ink-2); }
+.em-col--transport .em-rect { stroke-dasharray: 3 2; }
+.em-col--net .em-rect { fill: var(--stage-lit); stroke: var(--stage-lit); filter: drop-shadow(0 0 var(--space-3) var(--stage-lit-glow)); }
+
+.em-val { font-family: var(--f-sans); font-weight: 300; font-size: 16px; fill: var(--stage-ink-2); font-variant-numeric: tabular-nums; transition: fill var(--dur-fast); }
+.em-val--big { font-size: 22px; fill: var(--stage-ink); }
+.em-col--net .em-val { fill: var(--stage-lit); }
+.em-name { font-family: var(--f-sans); font-weight: 300; font-size: 13px; fill: var(--stage-ink-3); transition: fill var(--dur-fast); }
+.em-col--net .em-name { fill: var(--stage-lit); }
+
+/* Focus: the focused column brightens, the rest step back. */
+.em-stage[data-em-focus] .em-col:not(.is-focus, .em-col--net) :is(.em-rect, .em-val) { opacity: 0.45; }
+.em-only-h { display: none; }
+.em-col.is-focus .em-rect { stroke: var(--stage-ink); }
+.em-col.is-focus :is(.em-val, .em-name) { fill: var(--stage-ink); }
+.em-col--net.is-focus :is(.em-val, .em-name) { fill: var(--stage-lit); }
+.em-col:focus-visible .em-hit { stroke: var(--stage-lit); stroke-width: 2; }
+
+/* Caption row: one ledger line per column; with JS they stack and only the current one shows. */
+.em-caps { display: grid; gap: var(--space-4); padding-top: var(--space-4); border-top: var(--hairline) solid var(--stage-grid); min-height: calc(var(--space-8) + var(--space-4)); }
+.em-stage.is-live .em-caps { gap: 0; }
+.em-stage.is-live .em-cap { grid-area: 1 / 1; }
+.em-stage.is-live .em-cap:not(.is-on) { visibility: hidden; opacity: 0; }
+.em-stage.is-live .em-cap.is-on { animation: em-in var(--dur-fast) var(--ease-out) both; }
+@keyframes em-in { from { opacity: 0; } }
+
+.em-cap {
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 3fr) minmax(0, 2fr) auto;
+  gap: var(--space-2) var(--space-5); align-items: baseline;
+  font-size: var(--fs-ui); color: var(--stage-ink-2);
+}
+.em-cap--default { display: block; max-width: 80ch; font-size: var(--fs-body); }
+.em-hint { color: var(--stage-ink-3); }
+.em-stage:not(.is-live) .em-hint { display: none; }
+.em-cap-rec { font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono); text-transform: uppercase; color: var(--stage-ink-3); }
+.em-cap-name { display: flex; align-items: center; gap: var(--space-3); font-size: var(--fs-lead); color: var(--stage-ink); }
+.em-cap-basis { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); color: var(--stage-ink-3); }
+.em-cap-v { color: var(--stage-ink); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.em-cap-v--lit { color: var(--stage-lit); }
+.em-chip { padding: var(--space-1) var(--space-2); border: var(--hairline) solid var(--stage-line); color: var(--stage-ink-2); font-size: var(--fs-caption); line-height: 1.2; }
+.em-chip--est { border-style: dashed; }
+
+.em-note { max-width: 110ch; font-size: var(--fs-caption); color: var(--stage-ink-3); }
+
+/* Choreography: data-em goes armed (start state) -> play -> done. --d is each element's delay. */
+.em-grow { transform-box: fill-box; transform-origin: 50% 100%; }
+.em-grow--x { transform-origin: 0 50%; }
+.em-stage[data-em="armed"] :is(.em-grow, .em-drop, .em-fade) { opacity: 0; }
+.em-stage[data-em="play"] .em-grow { animation: em-grow var(--dur-draw) var(--ease-draw) var(--d) both; }
+.em-stage[data-em="play"] .em-grow--x { animation-name: em-grow-x; }
+.em-stage[data-em="play"] .em-drop { animation: em-drop var(--dur-base) var(--ease-out) var(--d) both; }
+.em-stage[data-em="play"] .em-fade { animation: em-fade var(--dur-base) var(--ease-out) var(--d) both; }
+.em-stage[data-em="play"] .em-col--net .em-rect { animation-duration: var(--dur-base); }
+@keyframes em-grow { from { transform: scaleY(0); } }
+@keyframes em-grow-x { from { transform: scaleX(0); } }
+@keyframes em-drop { from { opacity: 0; transform: translateY(calc(var(--space-6) * -1)); } }
+@keyframes em-fade { from { opacity: 0; } }
+.em-num { transition: color var(--dur-base); }
+
+@media (prefers-reduced-motion: reduce) {
+  .em-stage :is(.em-grow, .em-drop, .em-fade, .em-cap) { animation: none !important; opacity: 1; }
+}
+
+@media (max-width: 1100px) {
+  .em-body { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .em-fig { padding-bottom: 0; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-5); align-items: end; }
+  .em-unit { margin-top: 0; padding-bottom: var(--space-3); }
+  .em-sum { grid-column: 1 / -1; max-width: none; }
+  .em-cap { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; }
+  .em-cap-rec { grid-column: 1 / -1; }
+  .em-cap-act { grid-column: 1 / 3; grid-row: 3; }
+  .em-cap-basis { grid-column: 2 / 3; grid-row: 2; }
+}
+@media (max-width: 1100px) {
+  .em-stage { gap: var(--space-6); padding-bottom: var(--space-6); }
+  .em-bar span:last-child { display: none; }
+  .em-v { display: none; }
+  .em-mobile { display: block; }
+  .em-only-v { display: none; }
+  .em-only-h { display: inline; }
+  .em-fig { grid-template-columns: minmax(0, 1fr); }
+  .em-unit { padding-bottom: 0; margin-top: var(--space-2); }
+  .em-cap { grid-template-columns: minmax(0, 1fr) auto; }
+  .em-cap-name { grid-column: 1; grid-row: 2; }
+  .em-cap-v { grid-column: 2; grid-row: 2; }
+  .em-cap-act { grid-column: 1 / -1; grid-row: 3; }
+  .em-cap-basis { grid-column: 1 / -1; grid-row: 4; }
+  .em-cap--default { font-size: var(--fs-ui); }
+}

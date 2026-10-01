@@ -1,0 +1,22 @@
+---
+/** ProductIntro: the page headline and lead, same rhythm as Home's hero copy. No props. */
+import GridFrame from "../GridFrame.astro";
+import Button from "../Button.astro";
+import TextLink from "../TextLink.astro";
+---
+<GridFrame class="pd-intro-frame" pad="none" flush aria-labelledby="page-title">
+  <div class="pd-intro">
+    <p class="t-category">The product</p>
+    <h1 id="page-title" class="t-display">One operation.<br />Connected records.</h1>
+    <div class="pd-intro-row">
+      <div class="stack-tight">
+        <p class="t-lead">Follow material through the plant, keep the evidence with the work, and prepare your reporting from the same records.</p>
+        <p class="t-body t-muted">The examples on this page use illustrative records.</p>
+      </div>
+      <div class="actions">
+        <Button href="/get-started">Book a walkthrough</Button>
+        <TextLink href="/why">Why noma</TextLink>
+      </div>
+    </div>
+  </div>
+</GridFrame>

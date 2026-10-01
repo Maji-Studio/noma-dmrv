@@ -1,0 +1,77 @@
+---
+/**
+ * WalkthroughForm (site copy): the walkthrough request form for /get-started, square and editorial.
+ * A styled copy of src/components/WalkthroughForm.astro (which the variants still use), because this page
+ * needs the "Book a walkthrough" label, inline error states and an honest preview note.
+ * PROTOTYPE: submit is stubbed and sends nothing; the real endpoint is plan slice 4.
+ * Props:
+ *   idPrefix?: string   prefix for field ids, default "wf"
+ * Fields and plant sizes come from src/content/copy.js (copy.walkthrough).
+ */
+import { copy } from "../../../content/copy.js";
+import Button from "../Button.astro";
+import "./get-started.css";
+const { idPrefix = "wf" } = Astro.props;
+const w = copy.walkthrough;
+const id = (name) => `${idPrefix}-${name}`;
+const ERRORS = {
+  name: "Enter your name.",
+  email: "Enter your work email, like name@company.com.",
+  company: "Enter your company name.",
+};
+const TEXT_FIELDS = [
+  { name: "name", label: w.fields.name, autocomplete: "name", type: "text" },
+  { name: "email", label: w.fields.email, autocomplete: "email", type: "email" },
+  { name: "company", label: w.fields.company, autocomplete: "organization", type: "text" },
+];
+---
+<form class="wf" data-wf method="post" novalidate aria-describedby={id("note")}>
+  <div class="wf-grid">
+    {TEXT_FIELDS.map((f) => (
+      <div class="wf-field" data-wf-field>
+        <label for={id(f.name)}>{f.label}</label>
+        <input id={id(f.name)} name={f.name} type={f.type} autocomplete={f.autocomplete} required aria-describedby={id(`${f.name}-error`)} />
+        <p class="wf-error" id={id(`${f.name}-error`)} data-message={ERRORS[f.name]}></p>
+      </div>
+    ))}
+    <div class="wf-field">
+      <label for={id("size")}>{w.fields.size}</label>
+      <span class="wf-select"><select id={id("size")} name="size"><option value="" disabled selected>Choose a size</option>{w.sizes.map((s) => <option>{s}</option>)}</select></span>
+    </div>
+    <div class="wf-field wf-field--wide">
+      <label for={id("msg")}>{w.fields.message}</label>
+      <textarea id={id("msg")} name="message" rows="4"></textarea>
+    </div>
+  </div>
+  <input class="wf-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
+  <div class="wf-actions">
+    <Button type="submit" disabled>Book a walkthrough</Button>
+    <p class="t-caption" id={id("note")}>Preview only. This form does not send a request.</p>
+  </div>
+  <noscript><p class="t-caption">Enable JavaScript to try this preview form. No request will be sent.</p></noscript>
+  <p class="wf-status" role="status" data-wf-status></p>
+</form>
+<script>
+  // Validates on submit, then live per field once a field has shown an error. Sends nothing.
+  const SENT = "Nothing was sent. This preview does not send requests yet.";
+  document.querySelectorAll<HTMLFormElement>("form[data-wf]").forEach((form) => {
+    const status = form.querySelector<HTMLElement>("[data-wf-status]");
+    const fields = [...form.querySelectorAll<HTMLInputElement>("[data-wf-field] input")];
+    const check = (input: HTMLInputElement) => {
+      const error = document.getElementById(input.getAttribute("aria-describedby") || "");
+      const ok = input.value.trim() !== "" && input.checkValidity();
+      if (ok) input.removeAttribute("aria-invalid"); else input.setAttribute("aria-invalid", "true");
+      if (error) error.textContent = ok ? "" : error.dataset.message || "";
+      return ok;
+    };
+    fields.forEach((input) => input.addEventListener("input", () => { if (input.hasAttribute("aria-invalid")) check(input); }));
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (status) status.textContent = "";
+      const invalid = fields.filter((input) => !check(input));
+      if (invalid.length) { invalid[0].focus(); return; }
+      if (status) status.textContent = SENT;
+    });
+    form.querySelector<HTMLButtonElement>('button[type="submit"]')?.removeAttribute("disabled");
+  });
+</script>
