@@ -20,6 +20,7 @@ import {
   getSequestrationInputBinding,
   SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
 } from "@/lib/isometric/transformers/sequestration-binding";
+import { lookupSourceFact } from "@/lib/isometric/semantic-binding-catalog";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import {
   attachRemovalCompilationToDiagnostic,
@@ -129,20 +130,6 @@ export interface BuildRemovalTemplateDiagnosticArgs {
 const GHG_ENTRY_INPUT_PATH =
   "/ghg-entries.ghg_entry_template_components[].inputs[]";
 
-const SOURCE_LABELS: Partial<Record<string, string>> = {
-  weightedOrganicCarbonPercent: "Sample organic carbon, applied-mass weighted",
-  totalBiocharDryMassKg: "Attribution-scaled dry applied biochar mass",
-  totalFeedstockDryMassKg: "Production-run dry feedstock mass",
-  totalStartupDieselLitres: "Production-run startup diesel",
-  totalGensetDieselLitres: "Production-run generator and preprocessing diesel",
-  totalDieselLitres: "Production-run total diesel",
-  totalElectricityKwh: "Production-run electricity",
-  feedstockTransportMassDistanceTonneKm:
-    "Feedstock transport mass-distance",
-  biocharTransportMassDistanceTonneKm: "Biochar transport mass-distance",
-  sampleTransportMassDistanceTonneKm: "Sample transport mass-distance",
-};
-
 const STATUS_PRIORITY: Record<RemovalTemplateDiagnosticStatus, number> = {
   mapped: 0,
   "registry-owned-fixed": 0,
@@ -162,7 +149,7 @@ function readableKey(key: string): string {
 }
 
 function sourceLabel(source: string): string {
-  return SOURCE_LABELS[source] ?? readableKey(source);
+  return lookupSourceFact(source)?.provenance ?? readableKey(source);
 }
 
 export const IDENTITY_TRANSFORM_LABEL = "Unchanged";

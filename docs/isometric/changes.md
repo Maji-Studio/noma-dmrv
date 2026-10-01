@@ -1,5 +1,22 @@
 # Isometric Docs Change Log
 
+## 2026-10-01: Removal input bindings live in one semantic catalog
+
+- `src/lib/isometric/semantic-binding-catalog.ts` now owns every ordinary
+  removal-template binding, keyed by `(blueprint_key, input_key)` with an
+  explicit role per allowed group: the source fact, datapoint contract
+  (unit, quantity kind, type, transform), attribution bucket, strategy
+  (aggregated Datapoint or PROJECT-scope forbidden) and the per-component
+  carve-outs. `SOURCE_FACTS` carries each fact's readiness provenance and
+  repair destination once; the Removal template diagnostic reads its source
+  labels from there.
+- `INPUT_MAPPING` and `PERIOD_INPUT_TUPLES` in
+  `src/lib/isometric/transformers/datapoint.ts` are projections of the
+  catalog. No binding changed: `tests/semantic-binding-catalog.test.ts` pins
+  both tables and `MAPPING_REVISION` to their pre-catalog values (#636, part
+  of #291). Sequestration bindings, `CERTIFY_FIELD_REGISTRY` and
+  `TRANSPORT_SOURCE_TO_CATEGORY` move in the next slices.
+
 ## 2026-09-16: Source audit events are staged outside the mirror transaction
 
 - `mirrorDocumentToSourceForUser` (`src/fn/certification/sources.ts`) runs its

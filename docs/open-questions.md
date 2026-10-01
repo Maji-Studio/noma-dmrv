@@ -541,7 +541,7 @@ companion inherits this file's schema, invariants, and resolution rules.
   workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
   against the registry.
 - The binding is still live in code and docs:
-  `src/lib/isometric/transformers/datapoint.ts:INPUT_MAPPING` and
+  `src/lib/isometric/semantic-binding-catalog.ts` (projected as `INPUT_MAPPING`) and
   `src/lib/certification/certify-field-registry.ts` both declare
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
   mass_distance`, and `docs/isometric/sandbox-template-authoring.md` still lists

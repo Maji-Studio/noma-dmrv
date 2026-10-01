@@ -15,8 +15,9 @@ API.
 
 Before editing a template, inspect:
 
-- `src/lib/isometric/transformers/datapoint.ts` for ordinary monitored inputs,
-  component-name discriminators, and PROJECT-scope guards;
+- `src/lib/isometric/semantic-binding-catalog.ts` for ordinary monitored
+  inputs, component-name discriminators, and PROJECT-scope tuples (enforced in
+  `src/lib/isometric/transformers/datapoint.ts`);
 - `src/lib/isometric/transformers/sequestration-binding.ts` for explicit
   durability component inputs;
 - `src/lib/certification/removal-source-bindings.ts` for exact evidence targets;

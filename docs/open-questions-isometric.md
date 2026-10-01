@@ -91,7 +91,7 @@ retired questions do not belong in this file.
 - **Decision needed** — where should the "this template component carries this
   dmrv aggregated source" mapping live? Today it's the code constant
   `PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`
-  (`src/lib/isometric/transformers/datapoint.ts`), keyed by component **display
+  (`src/lib/isometric/semantic-binding-catalog.ts`), keyed by component **display
   name** because Certify exposes no stable per-component key. Full rationale is
   in the code comment above that constant — do not restate it here.
 - **Why it matters** — a display-name rename in the Isometric UI fails closed
