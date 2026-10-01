@@ -50,7 +50,7 @@ import {
   type OrganizationSettingsValues,
 } from "@/schemas/organization-settings";
 import { useState } from "react";
-import { EVIDENCE_METHOD_ART } from "@/components/applications/evidence-method-art";
+import { EVIDENCE_METHOD_ART } from "@/components/applications";
 
 const CURRENCY_OPTIONS = currencyCodes.map((code) => ({
   value: code,
