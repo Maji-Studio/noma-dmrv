@@ -17,6 +17,7 @@
  * `TRANSPORT_SOURCE_TO_CATEGORY` keep their own mirrors until the next #291
  * slices move them here.
  */
+import type { BatchHealthFixTarget } from "@/lib/certification/batch-health";
 import type { components } from "./generated/certify";
 import type {
   AggregatedProductionData,
@@ -26,13 +27,15 @@ import type {
 type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
 
-/** Where an operator repairs a missing or wrong source fact. */
-export type RepairDestination =
-  | "productionRuns"
-  | "labSamples"
-  | "applications"
-  | "feedstockDeliveries"
-  | "biocharDeliveries";
+/**
+ * Where an operator repairs a missing or wrong source fact: the readiness
+ * fix-target vocabulary, routed as readiness already routes these facts
+ * (transport legs: src/fn/certification/certify-readiness-gaps.ts).
+ */
+export type RepairDestination = Extract<
+  BatchHealthFixTarget,
+  "productionRuns" | "labSamples" | "applications" | "feedstocks" | "deliveries"
+>;
 
 export interface SourceFact {
   /** Which noma records supply the fact, as shown on readiness surfaces. */
@@ -71,11 +74,11 @@ export const SOURCE_FACTS = {
   },
   feedstockTransportMassDistanceTonneKm: {
     provenance: "Feedstock transport mass-distance",
-    repairDestination: "feedstockDeliveries",
+    repairDestination: "feedstocks",
   },
   biocharTransportMassDistanceTonneKm: {
     provenance: "Biochar transport mass-distance",
-    repairDestination: "biocharDeliveries",
+    repairDestination: "deliveries",
   },
   sampleTransportMassDistanceTonneKm: {
     provenance: "Sample transport mass-distance",
@@ -178,8 +181,11 @@ const REPORTED_TONNE_KM: DatapointContract = {
 // by normalized (trimmed + lowercased) display name. The Dark Earth removal
 // template declares TWO such components — "Generator diesel usage"
 // (generator + preprocessing, the "summarized" figure) and "Startup diesel
-// usage" (reactor-startup / plant diesel). Keys MUST match the template
-// component display names (case/whitespace-insensitive).
+// usage" (reactor-startup / plant diesel) — and Certify exposes no stable
+// per-component key, so the display name is the only discriminator. Keys MUST
+// match the template component display names (case/whitespace-insensitive). A
+// facility-configurable mapping + assignment wizard is the planned replacement
+// (docs/open-questions.md).
 const PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT: Readonly<
   Record<string, SourceFactKey>
 > = {

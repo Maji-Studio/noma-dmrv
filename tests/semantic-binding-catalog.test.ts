@@ -165,7 +165,9 @@ const PRE_CATALOG_PERIOD_INPUT_TUPLES: Record<string, { category: string }> = {
 
 type FrozenTable = Record<string, Record<string, Record<string, Record<string, unknown>>>>;
 
-function triples(table: FrozenTable): [string, string, string][] {
+function triples(
+  table: Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>>,
+): [string, string, string][] {
   return Object.entries(table).flatMap(([group, blueprints]) =>
     Object.entries(blueprints).flatMap(([blueprint, inputs]) =>
       Object.keys(inputs).map((input): [string, string, string] => [group, blueprint, input]),
@@ -213,7 +215,7 @@ describe("semantic binding catalog parity", () => {
   it("projects PERIOD_INPUT_TUPLES to the pre-catalog literal", () => {
     const projected = projectPeriodInputTuples();
     const flattened = Object.fromEntries(
-      triples(projected as FrozenTable).map(([group, blueprint, input]) => [
+      triples(projected).map(([group, blueprint, input]) => [
         `${group}/${blueprint}/${input}`,
         projected[group][blueprint][input],
       ]),
@@ -235,7 +237,7 @@ describe("semantic binding catalog parity", () => {
   });
 
   it("gives every bound source fact a provenance and a repair destination", () => {
-    for (const [group, blueprint, input] of triples(INPUT_MAPPING as FrozenTable)) {
+    for (const [group, blueprint, input] of triples(INPUT_MAPPING)) {
       const entry = INPUT_MAPPING[group][blueprint][input];
       for (const source of [entry.source, ...Object.values(entry.sourceByComponent ?? {})]) {
         const fact = lookupSourceFact(source);
