@@ -437,7 +437,8 @@ A derived block is a `CompositionCard` (`@/components/forms`) that sits flat
 under the inputs that drive it, with no tint and no frame: a sentence case
 caption with its one-sentence definition behind an ⓘ `hint`, an optional
 `headline`, the picture as `children`, and one action row holding the block's
-own `actions` (a stock history, a fix such as "Balance to 100%"). All of that
+own `actions` (a fix such as "Balance to 100%"). Stock history lives on the
+storage bin, never on an entry form's block. All of that
 shows at both levels. Detailed adds the `detail` rows (explanation such as a
 ledger, never decision info) and Show calculation, which opens `calculation`:
 arithmetic the block does not already show. Omit it and no control renders. Do
@@ -446,8 +447,7 @@ not draw proportions from an incomplete or zero basis.
 Before any input, a form's moisture split and product composition are
 explanation of what will appear, so only Detailed draws their unresolved
 state (`<DetailedOnly unless={started}>`, which keeps one wrapper so the block
-never remounts when the first value arrives). The product composition also draws once a source bin is chosen,
-because its stock history is an action. Explanation parts stay mounted behind
+never remounts when the first value arrives). Explanation parts stay mounted behind
 `hidden`, so an open disclosure survives a level switch.
 
 `DerivedHeadline` is the block's one figure, at most one per block: a caption

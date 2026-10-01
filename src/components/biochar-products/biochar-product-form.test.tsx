@@ -1,10 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { UseFormRegisterReturn } from "react-hook-form";
 
-vi.mock("@/components/storage-locations/output-stock-history", () => ({
-  OutputStockHistory: ({ triggerLabel }: { triggerLabel: string }) => <button type="button">{triggerLabel}</button>,
-}));
 import {
   BiocharSourceMassFields,
   prepareBiocharProductSubmission,
@@ -54,13 +51,13 @@ describe("ProductCompositionBlock", () => {
     recordedSourceDryMassKg: null, ingredients: [], allocationFrozen: false,
   });
   const block = (massKg: number | null, ingredientBins: Array<{ massKg?: unknown }> = []) => (
-    <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} storageLocationId={null} facilityId="facility" />
+    <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} />
   );
   // A provider starts in Simple; outside one the form reads as Detailed.
   const simple = (node: ReturnType<typeof block>) =>
     renderToStaticMarkup(<FormDetailProvider scope="form">{node}</FormDetailProvider>);
 
-  it("stays out of Simple until the biochar or an ingredient has a mass or a source bin is chosen", () => {
+  it("stays out of Simple until the biochar or an ingredient has a mass", () => {
     expect(simple(block(null))).not.toContain("Product composition");
     expect(simple(block(null, [{ massKg: undefined }]))).not.toContain("Product composition");
   });
@@ -70,10 +67,8 @@ describe("ProductCompositionBlock", () => {
     expect(simple(block(null, [{ massKg: 20 }]))).toContain("Product composition");
   });
 
-  it("draws in Simple with its stock history once a source bin is chosen", () => {
-    const html = simple(<ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId="bin" facilityId="facility" />);
-    expect(html).toContain("Product composition");
-    expect(html).toContain("Stock history");
+  it("offers no stock history; that lives on the storage bin", () => {
+    expect(renderToStaticMarkup(block(100))).not.toContain("Stock history");
   });
 
   it("always draws in Detailed", () => {

@@ -40,7 +40,7 @@ export function deliverySheetSections(delivery: DeliveryWithRelations, facilitie
         },
       ],
       content: (
-        <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />
+        <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />
       ),
     },
     {

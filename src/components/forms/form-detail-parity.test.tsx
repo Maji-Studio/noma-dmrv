@@ -168,8 +168,8 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
   { name: "wet mass and moisture, untouched", element: massFields(null) },
   { name: "wet mass and moisture, started", element: massFields(100) },
   { name: "product composition", element: <ProductCompositionPreview wetMassKg={100} dryBiocharKg={60} /> },
-  { name: "product form composition, untouched", blankInSimple: true, element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId={null} facilityId="facility" /> },
-  { name: "product form composition, source bin chosen", element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} storageLocationId="bin" facilityId="facility" /> },
+  { name: "product form composition, untouched", blankInSimple: true, element: <ProductCompositionBlock composition={composition} massKg={null} ingredientBins={[]} /> },
+  { name: "product form composition, started", element: <ProductCompositionBlock composition={composition} massKg={100} ingredientBins={[]} /> },
   { name: "ingredient split", element: <IngredientHarness /> },
   { name: "bin picker remaining mass", element: <EntitySelect entityType="storageLocation" value="bin" onChange={() => undefined} /> },
   { name: "formulation form, balanced", element: <FormulationForm formulation={balanced} onSubmit={() => undefined} /> },
@@ -181,7 +181,7 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
   { name: "stock load preview", element: <OutputStockPreview variant="load" preview={acceptedPreview} /> },
   { name: "stock availability", element: <OutputStockAvailability binName="Product bin" dryKg={1500} wetEstimate={{ kg: 1800, basis: "At the latest moisture reading of each batch" }} allocations={[{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1500, runs: [] }] as never} /> },
   { name: "matching stock", element: <MatchingOutputBins facilityId="facility" formulationId="formulation" /> },
-  { name: "delivery stock", element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" facilityId="facility" wetMassKg={100} dryMassKg={80} /> },
+  { name: "delivery stock", element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" wetMassKg={100} dryMassKg={80} /> },
   { name: "mix pile", element: <MixPileCard binName="Product bin" wetKg={1800} moisturePercent={20} dryKg={1440} batches={[{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] as never} /> },
 ];
 
