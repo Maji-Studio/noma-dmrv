@@ -8,6 +8,7 @@ import {
   saveFacilityEmissionFactors,
 } from "@/fn/energy";
 import { unwrap } from "@/hooks/types";
+import { throwActionError } from "@/lib/stale-version";
 import type { EnergyBreakdownInput } from "@/schemas/energy";
 import type { SaveFacilityEmissionFactorsData } from "@/schemas/emission-factors";
 
@@ -47,8 +48,11 @@ export function useFacilityEmissionFactors(facilityId: string | null) {
 export function useSaveFacilityEmissionFactors() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: SaveFacilityEmissionFactorsData) =>
-      unwrap(await saveFacilityEmissionFactors(input)),
+    mutationFn: async (input: SaveFacilityEmissionFactorsData) => {
+      const result = await saveFacilityEmissionFactors(input);
+      if (!result.success) throwActionError(result);
+      return result.data;
+    },
     onSuccess: (factors, input) => {
       queryClient.setQueryData(energyKeys.emissionFactors(input.facilityId), {
         factors,

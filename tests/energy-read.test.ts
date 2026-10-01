@@ -22,6 +22,8 @@ import {
   upsertFacilityEmissionFactors,
 } from "@/data-access/facility-emission-factors";
 import { buildEnergyBreakdown } from "@/lib/energy/attribution";
+import { ActionConflictError } from "@/lib/errors";
+import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import {
   cleanupPostedStock,
   postDelivery,
@@ -157,6 +159,58 @@ describe.sequential("facility emission factors", () => {
       .from(facilityEmissionFactors)
       .where(eq(facilityEmissionFactors.facilityId, fixture.facility.id));
     expect(rows).toHaveLength(1);
+  });
+
+  it("refuses a save built on a stale version, and a second first save", async () => {
+    const saved = await getFacilityEmissionFactors(fixture.ctx, fixture.facility.id);
+    if (!saved) throw new Error("expected saved factors");
+    const opened = saved.updatedAt;
+
+    const fresh = await upsertFacilityEmissionFactors(fixture.ctx, {
+      facilityId: fixture.facility.id,
+      ...FACTORS,
+      gridKgCo2ePerKwh: 0.6,
+      expectedUpdatedAt: opened,
+    });
+    expect(fresh.gridKgCo2ePerKwh).toBe(0.6);
+
+    const staleSave = upsertFacilityEmissionFactors(fixture.ctx, {
+      facilityId: fixture.facility.id,
+      ...FACTORS,
+      gridKgCo2ePerKwh: 0.7,
+      expectedUpdatedAt: opened,
+    });
+    await expect(staleSave).rejects.toBeInstanceOf(ActionConflictError);
+    await expect(staleSave).rejects.toMatchObject({
+      conflict: { code: STALE_VERSION_CONFLICT_CODE },
+    });
+
+    // A form that opened on no row must not overwrite a row saved since.
+    await expect(
+      upsertFacilityEmissionFactors(fixture.ctx, {
+        facilityId: fixture.facility.id,
+        ...FACTORS,
+        expectedUpdatedAt: null,
+      }),
+    ).rejects.toMatchObject({ conflict: { code: STALE_VERSION_CONFLICT_CODE } });
+    await expect(getFacilityEmissionFactors(fixture.ctx, fixture.facility.id)).resolves.toMatchObject({
+      gridKgCo2ePerKwh: 0.6,
+    });
+  });
+
+  it("lets only one of two concurrent first saves win", async () => {
+    await db.delete(facilityEmissionFactors).where(eq(facilityEmissionFactors.facilityId, fixture.facility.id));
+    const first = (grid: number) =>
+      upsertFacilityEmissionFactors(fixture.ctx, {
+        facilityId: fixture.facility.id,
+        ...FACTORS,
+        gridKgCo2ePerKwh: grid,
+        expectedUpdatedAt: null,
+      });
+    const results = await Promise.allSettled([first(0.31), first(0.32)]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const [refused] = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(refused.reason).toMatchObject({ conflict: { code: STALE_VERSION_CONFLICT_CODE } });
   });
 
   it("hides the factors from another organization and refuses its write", async () => {

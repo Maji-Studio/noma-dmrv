@@ -33,6 +33,7 @@ import {
   useSaveFacilityEmissionFactors,
 } from "@/hooks/use-energy";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { toSaveErrorMessage } from "@/lib/stale-version";
 import {
   facilityEmissionFactorsFormSchema,
   type FacilityEmissionFactorsInput,
@@ -152,12 +153,16 @@ function FactorsForm({
   async function onSubmit(values: FacilityEmissionFactorsValues) {
     setServerError("");
     try {
-      await saveMutation.mutateAsync({ ...values, facilityId });
+      await saveMutation.mutateAsync({
+        ...values,
+        facilityId,
+        // The version this form opened on; null when it opened on no row, so a
+        // concurrent first save is refused instead of overwritten.
+        expectedUpdatedAt: factors?.updatedAt ?? null,
+      });
       toast.success("Emission factors saved.");
     } catch (error) {
-      setServerError(
-        error instanceof Error ? error.message : "The emission factors were not saved. Try again.",
-      );
+      setServerError(toSaveErrorMessage(error, "The emission factors were not saved. Try again."));
     }
   }
 

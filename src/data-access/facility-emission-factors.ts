@@ -8,12 +8,15 @@
  */
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { facilityEmissionFactors } from "@/db/schema";
+import { facilities, facilityEmissionFactors } from "@/db/schema";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import type { EnergyFactors } from "@/lib/energy/types";
 import { SafeError } from "@/lib/errors";
 import type { SaveFacilityEmissionFactorsData } from "@/schemas/emission-factors";
-import { requireOrgFacility, requireOrgScope } from "./utils";
+import { assertExpectedVersion, staleVersionConflict } from "./expected-version";
+import { requireOrgScope } from "./utils";
+
+const EMISSION_FACTORS_CONFLICT_ENTITY = "facilityEmissionFactors";
 
 export interface FacilityEmissionFactors extends EnergyFactors {
   sourceNote: string | null;
@@ -52,7 +55,7 @@ export async function upsertFacilityEmissionFactors(
 ): Promise<FacilityEmissionFactors> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
-  await requireOrgFacility(ctx, input.facilityId);
+  const { facilityId, expectedUpdatedAt } = input;
 
   const values = {
     dieselKgCo2ePerLitre: input.dieselKgCo2ePerLitre,
@@ -60,20 +63,60 @@ export async function upsertFacilityEmissionFactors(
     roadFreightKgCo2ePerTonneKm: input.roadFreightKgCo2ePerTonneKm,
     sourceNote: input.sourceNote,
   };
-  const [row] = await db
-    .insert(facilityEmissionFactors)
-    .values({ organizationId: ctx.organizationId, facilityId: input.facilityId, ...values })
-    .onConflictDoUpdate({
-      target: facilityEmissionFactors.facilityId,
-      // The unique key is the facility alone; the org predicate keeps an
-      // upsert from ever touching another organization's row.
-      setWhere: eq(facilityEmissionFactors.organizationId, ctx.organizationId),
-      set: { ...values, updatedAt: new Date() },
-    })
-    .returning(factorColumns);
 
-  if (!row) {
-    throw new SafeError("Emission factors were not saved.");
-  }
-  return row;
+  return db.transaction(async (tx) => {
+    // The facility row lock serializes saves for the facility, including two
+    // first saves when no factors row exists yet to lock (issue #768 pattern).
+    const [facility] = await tx
+      .select({ id: facilities.id })
+      .from(facilities)
+      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .for("no key update");
+    if (!facility) throw new SafeError("Facility not found");
+
+    const [existing] = await tx
+      .select({ updatedAt: facilityEmissionFactors.updatedAt })
+      .from(facilityEmissionFactors)
+      .where(
+        and(
+          eq(facilityEmissionFactors.facilityId, facilityId),
+          eq(facilityEmissionFactors.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update");
+
+    if (existing) {
+      if (expectedUpdatedAt === null) {
+        throw staleVersionConflict(EMISSION_FACTORS_CONFLICT_ENTITY, facilityId);
+      }
+      assertExpectedVersion({
+        entity: EMISSION_FACTORS_CONFLICT_ENTITY,
+        id: facilityId,
+        expectedUpdatedAt,
+        actualUpdatedAt: existing.updatedAt,
+      });
+      const [row] = await tx
+        .update(facilityEmissionFactors)
+        .set({ ...values, updatedAt: new Date() })
+        .where(
+          and(
+            eq(facilityEmissionFactors.facilityId, facilityId),
+            eq(facilityEmissionFactors.organizationId, ctx.organizationId),
+          ),
+        )
+        .returning(factorColumns);
+      if (!row) throw new SafeError("Emission factors were not saved.");
+      return row;
+    }
+
+    if (expectedUpdatedAt) {
+      throw staleVersionConflict(EMISSION_FACTORS_CONFLICT_ENTITY, facilityId);
+    }
+    const [row] = await tx
+      .insert(facilityEmissionFactors)
+      .values({ organizationId: ctx.organizationId, facilityId, ...values })
+      .returning(factorColumns);
+    if (!row) throw new SafeError("Emission factors were not saved.");
+    return row;
+  });
 }
