@@ -27,6 +27,14 @@ import { conflictCode } from "@/lib/conflict-ref";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import { readInput, readResponse } from "./read-response";
 
+// Mirrors the 16 KiB read cap in read-response.ts. Three 8 KiB chunks pass it,
+// so a bounded reader stops by the third pull; a reader that buffers the whole
+// body would keep pulling until the stream's sentinel tail errors.
+const READ_CAP_BYTES = 16 * 1024;
+const STREAM_CHUNK_BYTES = 8 * 1024;
+const PULLS_TO_PASS_CAP = Math.floor(READ_CAP_BYTES / STREAM_CHUNK_BYTES) + 1;
+const STREAM_CHUNKS_BEFORE_SENTINEL = 400;
+
 const ORG_CONTEXT = {
   userId: "user-1",
   organizationId: "org-1",
@@ -42,6 +50,8 @@ function request(body: string, headers?: HeadersInit): Request {
   });
 }
 
+const MALFORMED_BODY_ERROR =
+  "The request could not be read. Refresh the page and try again.";
 const OVERSIZED_BODY_ERROR =
   "The request was too large to read. Narrow the filters and try again.";
 
@@ -253,6 +263,45 @@ describe("read input decoding", () => {
     await expect(readInput(request(oversized))).rejects.toThrow(
       OVERSIZED_BODY_ERROR,
     );
+  });
+
+  it("stops reading a headerless stream once it passes the cap", async () => {
+    let pulls = 0;
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls <= STREAM_CHUNKS_BEFORE_SENTINEL) controller.enqueue(new Uint8Array(STREAM_CHUNK_BYTES));
+        else controller.error(new Error("TAIL_READ_SENTINEL"));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const streamed = new Request("https://app.example/api/reads/test", {
+      method: "POST",
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    await expect(readInput(streamed)).rejects.toThrow(OVERSIZED_BODY_ERROR);
+    expect(cancelled).toBe(true);
+    expect(pulls).toBeLessThanOrEqual(PULLS_TO_PASS_CAP);
+  });
+
+  it("answers a failing body stream as a malformed body", async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error("socket reset"));
+      },
+    });
+    const broken = new Request("https://app.example/api/reads/test", {
+      method: "POST",
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+
+    await expect(readInput(broken)).rejects.toThrow(MALFORMED_BODY_ERROR);
   });
 
   it("refuses an oversized body before buffering it", async () => {

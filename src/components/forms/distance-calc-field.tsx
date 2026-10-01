@@ -1,22 +1,23 @@
 "use client";
 
 /**
- * DistanceCalcField — distance number input with an inline CALC button that
+ * DistanceCalcField — distance number input with an inline Estimate button that
  * estimates the road distance between two resolved endpoints via the geo
  * server actions (map integration plan, Phase 1 §7).
  *
  * Provenance rules (plan decision 2):
- * - CALC fill            → distanceSource = "map_estimate"
+ * - Estimate fill       → distanceSource = "map_estimate"
  * - hand-typed value     → distanceSource = "manual"
  * - cleared              → distanceSource = null
- * CALC is enabled only when both endpoints have coordinates AND routing is
+ * Estimate is enabled only when both endpoints have coordinates AND routing is
  * configured server-side; when disabled, the tooltip names what's missing.
  */
 
-import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { Button } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
-import { FormField } from "@/components/forms/form-field";
+import { ControlUnitSuffix, FormField, unitEndPadding } from "@/components/forms/form-field";
 import { FormInput } from "@/components/forms/form-input";
 import { useGeoCapabilities, useRouteDistance } from "@/hooks/use-geo";
 import {
@@ -30,6 +31,8 @@ interface DistanceCalcFieldProps {
   id: string;
   label: string;
   helperText?: string;
+  /** Visible line under the control (FormField `cue`), e.g. the counted round trip. */
+  cue?: string;
   error?: string;
   required?: boolean;
   certifyRequired?: boolean;
@@ -43,13 +46,19 @@ interface DistanceCalcFieldProps {
   distanceKm: number | null | undefined;
   distanceSource: DistanceSourceValue | null | undefined;
   onDistanceChange: (km: number | null, source: DistanceSourceValue | null) => void;
-  /** Resolved CALC endpoints — null while the endpoint has no coordinates. */
+  /** Resolved Estimate endpoints — null while the endpoint has no coordinates. */
   origin: GeoPoint | null;
   destination: GeoPoint | null;
   /** Human endpoint names for the disabled explanation (e.g. "supplier position"). */
   originLabel: string;
   destinationLabel: string;
 }
+
+/** The distance unit, shown as the input suffix and in the accessible name. */
+export const DISTANCE_UNIT = "km";
+
+const ROUTING_UNAVAILABLE_MESSAGE =
+  "Routing is not set up. Enter the distance by hand.";
 
 export function formatDistance(value: number | null): string {
   return value == null ? "" : String(value);
@@ -63,10 +72,49 @@ export function parseDistanceDraft(raw: string): number | null | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/**
+ * FormField clones its single child to attach `aria-describedby` and
+ * `aria-invalid`. The input sits beside the button, so this wrapper takes
+ * those props and hands them to the input instead of the layout div.
+ */
+function DistanceControl({
+  inputProps,
+  action,
+  footer,
+  ...aria
+}: {
+  inputProps: ComponentProps<typeof FormInput>;
+  action: ReactNode;
+  footer?: ReactNode;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+}) {
+  return (
+    <div>
+      <div className="flex items-stretch gap-6">
+        {/* The unit sits inside the input; the Estimate button beside it. */}
+        <div className="relative grow">
+          <FormInput
+            {...inputProps}
+            className={cn(inputProps.className, "peer w-full")}
+            style={{ paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) }}
+            aria-describedby={aria["aria-describedby"]}
+            {...(aria["aria-invalid"] === true ? { "aria-invalid": true } : {})}
+          />
+          <ControlUnitSuffix unit={DISTANCE_UNIT} />
+        </div>
+        {action}
+      </div>
+      {footer}
+    </div>
+  );
+}
+
 export function DistanceCalcField({
   id,
   label,
   helperText,
+  cue,
   error,
   required = false,
   certifyRequired = false,
@@ -89,7 +137,7 @@ export function DistanceCalcField({
   const route = useRouteDistance();
 
   // Text draft so in-flight typing survives; resync when the value changes
-  // from outside (CALC fill) — adjust-state-during-render pattern.
+  // from outside (Estimate fill) — adjust-state-during-render pattern.
   const [draft, setDraft] = useState(formatDistance(value));
   const [syncedValue, setSyncedValue] = useState(value);
   if (value !== syncedValue) {
@@ -98,7 +146,7 @@ export function DistanceCalcField({
   }
 
   const handleManualChange = (raw: string) => {
-    // A failed CALC keeps isError until reset(), so the red message would sit
+    // A failed Estimate keeps isError until reset(), so the red message would sit
     // next to a hand-typed value the operator just fixed. Clear the mutation
     // itself, not only its rendering.
     if (route.isError) route.reset();
@@ -112,16 +160,15 @@ export function DistanceCalcField({
   };
 
   const missing: string[] = [];
-  if (!routingConfigured) {
-    missing.push("routing service (OPENROUTESERVICE_API_KEY not configured)");
-  }
   if (!origin) missing.push(`${originLabel} coordinates`);
   if (!destination) missing.push(`${destinationLabel} coordinates`);
-  const canCalc = missing.length === 0 && !disabled && !route.isPending;
+  const canCalc =
+    routingConfigured && missing.length === 0 && !disabled && !route.isPending;
 
-  const tooltipContent =
-    missing.length > 0
-      ? `CALC needs: ${missing.join(", ")}.`
+  const tooltipContent = !routingConfigured
+    ? ROUTING_UNAVAILABLE_MESSAGE
+    : missing.length > 0
+      ? `Estimate needs: ${missing.join(", ")}.`
       : `Estimate road distance ${originLabel} → ${destinationLabel}. The result stays editable.`;
 
   const handleCalc = () => {
@@ -144,50 +191,60 @@ export function DistanceCalcField({
       label={label}
       error={error ?? (route.isError ? route.error.message : undefined)}
       helperText={helperText}
+      cue={cue}
+      labelUnit={DISTANCE_UNIT}
       required={required}
       certifyRequired={certifyRequired}
       certifyStatus={certifyStatus}
     >
-      <div>
-        <div className="flex items-stretch gap-6">
-          <FormInput
-            id={id}
-            type="number"
-            step="any"
-            min={0}
-            placeholder="e.g., 85"
-            className="grow"
-            disabled={disabled}
-            error={!!error}
-            value={draft}
-            onChange={(event) => handleManualChange(event.target.value)}
-          />
+      <DistanceControl
+        inputProps={{
+          id,
+          type: "number",
+          step: "any",
+          min: 0,
+          placeholder: "e.g., 85",
+                    disabled,
+          error: !!error,
+          value: draft,
+          onChange: (event) => handleManualChange(event.target.value),
+        }}
+        action={
           <Tooltip content={tooltipContent} side="top">
             {/* span trigger: disabled buttons swallow hover, and the tooltip
-                matters most exactly when the button is disabled */}
-            <span tabIndex={0} className="inline-flex focus-visible:outline-none">
+                matters most exactly when the button is disabled. It is only a
+                tab stop while the button cannot take focus itself, so the
+                control is never two stops; focus on the enabled button
+                bubbles to the trigger and still opens the tooltip. */}
+            <span
+              tabIndex={canCalc ? undefined : 0}
+              className="inline-flex focus-visible:outline-none"
+            >
               <Button
                 type="button"
                 variant="default"
-                className="h-40 px-12 label-button uppercase"
+                className="h-40 px-12"
                 disabled={!canCalc}
-                aria-label={`Calculate road distance ${originLabel} to ${destinationLabel}`}
+                busy={route.isPending}
+                aria-label={`Estimate road distance ${originLabel} to ${destinationLabel}`}
                 onClick={handleCalc}
               >
-                {route.isPending ? "…" : "CALC"}
+                Estimate
               </Button>
             </span>
           </Tooltip>
-        </div>
-        {showSourceBadge && source && (
-          <p
-            className="body-caption text-[var(--color-text-tertiary)] mt-6"
-            data-testid={`${id}-distance-source`}
-          >
-            Source: {DISTANCE_SOURCE_LABELS[source]}
-          </p>
-        )}
-      </div>
+        }
+        footer={
+          showSourceBadge && source ? (
+            <p
+              className="body-caption text-[var(--color-text-tertiary)] mt-6"
+              data-testid={`${id}-distance-source`}
+            >
+              Source: {DISTANCE_SOURCE_LABELS[source]}
+            </p>
+          ) : null
+        }
+      />
     </FormField>
   );
 }

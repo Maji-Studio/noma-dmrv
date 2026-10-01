@@ -58,15 +58,16 @@ code today; breaking one compiles cleanly and fails silently.
   executor cannot be threaded through, stage the work and flush it after the
   transaction settles (`src/fn/certification/sync-event-stage.ts`). Applies to
   every tx-scoped read, not just this helper.
-- **`transport_legs.tripType` defaults to `'return'` and is credit-bearing.**
-  `roundTripDistanceFactor` (defined in `src/schemas/trip-type.ts`; imported by
+- **Every transport leg counts its round trip, and the ×2 is credit-bearing.**
+  `ROUND_TRIP_DISTANCE_FACTOR` (`src/lib/calculations/round-trip.ts`; used by
   `src/lib/isometric/utils/aggregation.ts` and
-  `src/lib/certification/evidence-ledger/build-model.ts`) applies
-  ×2 for `return` and ×1 for `one_way` (issue #316, §4.2 — conservative by
-  default; `one_way` requires an evidenced onward destination). "Simplifying"
-  the default or the multiplier halves submitted transport emissions in the
+  `src/lib/certification/evidence-ledger/build-model.ts`) doubles each leg's
+  stored one-way distance (Transportation v1.1 §5: the vehicle returns empty,
+  so the full round trip counts; issue #852 removed the One-way option).
+  Removing the multiplier halves submitted transport emissions in the
   **anti-conservative** direction — the same integrity class as the
-  `pyrolyzer_direct` zero-stub trap below.
+  `pyrolyzer_direct` zero-stub trap below. An evidenced onward-journey
+  exception is out of scope until a real case needs it.
 - **`sReflectanceFraction` is stored 0–1 but captured as a percentage.** The
   form converts on entry and clears the field on a durability-mode switch
   (`src/components/samples/sample-form.tsx`); `src/schemas/samples.ts` makes it
@@ -465,6 +466,25 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
+### Form cleanup leftovers (`forms/cleanup-leftovers`, opened 2026-10-01)
+
+- **Observed:** the [form cleanup plan](./archive/plans/2026-09-29-form-cleanup.md)
+  shipped and was archived with these still open:
+  - The final rescan (Instruments A to C) never ran. It needs dev servers
+    started outside the agent sandbox. The harness is
+    `tests/visual/form-capture.spec.ts`.
+  - #867: should the stock mode captions and hints say "draw" instead of
+    "removal"?
+  - Eight Phase 2 questions on the
+    [decisions page](https://claude.ai/artifact/GtrtrafKdcbmZVon646Sk9). The
+    proposal was to keep them as built, except #7.
+  - `.label-button` is still uppercase, for example "OPEN REMOVALS" on the
+    dashboard and the map record panel actions.
+  - The sidebar group labels (Production, Infrastructure, ...) are still mono
+    caps.
+- **Resolve via:** Kenji answers each item. Run the rescan once someone can
+  start the servers (M).
+
 ### Only the GHG statement report PDF renders deterministic bytes (`certification/ledger-pdf-determinism`, opened 2026-08-06)
 
 - **Observed:** @react-pdf/pdfkit writes each compressed object when its own
@@ -521,11 +541,11 @@ companion inherits this file's schema, invariants, and resolution rules.
   workflows were repaired, so `sampling-required-for-mrv` is no longer exercised
   against the registry.
 - The binding is still live in code and docs:
-  `src/lib/isometric/transformers/datapoint.ts:INPUT_MAPPING` and
-  `src/lib/certification/certify-field-registry.ts` both declare
+  `src/lib/isometric/semantic-binding-catalog.ts` declares
   `sampling-required-for-mrv / mass_distance_based_ci_emissions /
-  mass_distance`, and `docs/isometric/sandbox-template-authoring.md` still lists
-  the row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
+  mass_distance` (`INPUT_MAPPING`, the certify field registry tuples and the
+  transport categories are projections of it), and
+  `docs/isometric/sandbox-template-authoring.md` still lists the row. `src/fn/certification/certify-transport-coverage.ts:deriveRequiredTransportCategories`
   derives required categories from the live template, so a category the template
   drops is silently no longer collected or submitted.
 - Two explanations are open and only a registry probe separates them: the
@@ -623,6 +643,21 @@ Audit follow-ups opened 2026-05-25 are in [open-questions-audit-follow-ups.md](.
   [#313](https://github.com/Maji-Studio/noma-dmrv/issues/313) — either keep the
   refusal and point operators at archive plus a new bin, or allow the change on
   an emptied bin and define what happens to the history that still names it.
+
+### Lane totals count receipts the bin tiles do not show yet (`product-bins/lane-total-future-receipts`, opened 2026-09-29) — **decision pending**
+
+- An output bin has two dry figures (`outputStockBalance` in
+  `src/lib/output-stock/layer-projection.ts`). `allLayersDryKg` counts every
+  layer, including a run or product placed later than now. `availableDryKg`
+  counts only layers placed by now.
+- The storage list's lane summary adds `allLayersDryKg`, while each bin's tile
+  and every selector shows `availableDryKg`. After a future-dated receipt, the
+  lane total is higher than the sum of its tiles.
+- Guards must keep the all-layers balance, so a later receipt is never drawn
+  twice or archived away. The lane total is display only.
+- **Resolve via:** a product call on what the lane total means. Either it
+  switches to `availableDryKg` so it matches the tiles, or it keeps the
+  all-layers figure and labels the difference.
 
 ## E2E walkthrough follow-ups (opened 2026-06-07)
 
@@ -835,11 +870,12 @@ bound); these are the decisions it deliberately did not make.
   "Most/least on hand" is missing from that list, and it is the sort an operator
   asks for first when deciding where to put a delivery.
 - It is missing because on-hand mass is not a column. `binCurrentMassKg` reads
-  the enriched row, and that enrichment runs **after** pagination: feedstock and
-  biochar stock come from `deriveLaneStock` (several aggregates over feedstocks,
-  production runs, production-run feedstocks, biochar products and bin
-  movements), and product stock additionally subtracts delivered mass. Sorting
-  on it means replicating all of that inside the paginated query.
+  the enriched row, and that enrichment runs **after** pagination: feedstock
+  stock comes from `deriveLaneStock` (aggregates over feedstocks, production-run
+  draws, product ingredients and feedstock bin movements), and biochar and
+  product bin stock comes from the dry-biochar FIFO layers
+  (`getOutputBinStocks`, ADR 0029). Sorting on it means replicating both
+  inside the paginated query.
 - Sorting the page in the client is not a substitute: it would order the twenty
   rows already fetched, so a nearly-full bin on page 3 would never rise to
   page 1. The board deliberately does no client-side re-sort for this reason.
@@ -1037,21 +1073,3 @@ operational tradeoff, and this is not a registry requirement we verified.
 
 ## Design review 2026-08-13 follow-ups (opened 2026-08-14)
 
-### The two requiredness systems have no legend, and its wording is undecided (`ui/requiredness-legend`) — DR-015
-
-A form carries two independent requiredness markers and explains neither. The
-red asterisk rendered by `FormField` (`src/components/forms/form-field.tsx`)
-means the field blocks **saving**; the `CertificationFieldTag`
-(`src/components/ui/certification-field-tag/index.tsx`) means the field blocks
-**certification**. An operator sees a red star and an orange "CERT" chip on the
-same row with nothing that distinguishes them.
-
-The fix is one legend, mounted once per form and read sheet, built from
-`CERT_FIELD_STATUS_DESCRIPTION` plus the asterisk's `sr-only` "Required" copy
-(both already single-sourced — the seam is marked in the tag module). What is
-**not** decided is the legend's wording, its placement (sheet header vs footer
-vs an info hint), and whether it appears on every form or only on
-certification-bearing ones. Those are stakeholder calls, so #689 Phase A
-deliberately shipped the seam and no copy. **Resolve via:** a wording decision
-from the product owner, then a `RequirednessLegend` in
-`src/components/forms/`.

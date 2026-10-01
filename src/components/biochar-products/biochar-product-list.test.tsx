@@ -29,7 +29,7 @@ describe("BiocharProductPageMassSummary", () => {
       />,
     );
 
-    expect(html).toContain("Mass on This Page");
+    expect(html).toContain("Mass on this page");
     expect(html).toContain("Combined product mass on the current page");
     expect(html).toContain("150 kg");
     expect(html).toContain(MISSING_VALUE.notRecorded);

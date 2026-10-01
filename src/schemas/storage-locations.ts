@@ -82,8 +82,23 @@ export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
   mix: "Mix: one blended pile",
 };
 
+/** The bin types that choose a stock mode. */
+export type OutputBinType = Extract<StorageLocationType, "biochar_bin" | "product_bin">;
+
+/** Stock mode card captions by bin type: what stays apart or blends, and what a removal takes. */
+export const OUTPUT_STOCK_MODE_DESCRIPTIONS: Record<OutputBinType, Record<OutputStockMode, string>> = {
+  biochar_bin: {
+    split: "Each production run stays in its own bay, bag or heap. A removal records which runs it came from.",
+    mix: "All runs go into one pile. A removal takes from each run in proportion.",
+  },
+  product_bin: {
+    split: "Each product batch stays apart. A removal records which batches it came from.",
+    mix: "All batches go into one pile. A removal takes from each batch in proportion.",
+  },
+};
+
 /** Only biochar and product bins choose a stock mode. */
-export function isOutputBinType(type: StorageLocationType | undefined | null): boolean {
+export function isOutputBinType(type: StorageLocationType | undefined | null): type is OutputBinType {
   return type === "biochar_bin" || type === "product_bin";
 }
 
@@ -184,7 +199,7 @@ export const updateStorageLocationSchema = z.object({
     .optional(),
   name: z.string().trim().min(1).max(255).optional(),
   type: z.enum(storageLocationTypes).optional(),
-  facilityId: z.string().uuid().optional(),
+  // No facilityId: a bin never changes facility through the update action.
   capacityKg: positiveMassKgSchema().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -227,6 +242,7 @@ export const deleteStorageLocationSchema = z.object({
 /**
  * Schemas for reversible storage-location lifecycle actions.
  */
+export const getStorageLocationSchema = deleteStorageLocationSchema;
 export const archiveStorageLocationSchema = deleteStorageLocationSchema;
 export const restoreStorageLocationSchema = deleteStorageLocationSchema;
 
@@ -292,6 +308,13 @@ export type StorageLocationFilterData = z.infer<
 /**
  * Format storage location type for display
  */
+/** Segment labels for the storage type control, where the field name already says "bin". */
+export const STORAGE_LOCATION_TYPE_SHORT_LABELS: Record<StorageLocationType, string> = {
+  feedstock_bin: "Feedstock",
+  biochar_bin: "Biochar",
+  product_bin: "Product",
+};
+
 export function formatStorageLocationType(type: StorageLocationType): string {
   const labels: Record<StorageLocationType, string> = {
     feedstock_bin: "Feedstock bin",

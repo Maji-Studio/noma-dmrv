@@ -16,7 +16,7 @@
  *
  * The supplier create sheet drives the picker through its per-location editor
  * (suppliers carry many source locations, mirroring customers — there is no
- * single supplier-level position). Open "New Supplier" → "Add Location" to
+ * single supplier-level position). Open "New supplier" → "Add location" to
  * open the centered PositionPicker dialog (idPrefix `pending-loc-gps`) and the
  * DistanceCalcField (`pending-loc-distance`).
  *
@@ -63,26 +63,26 @@ async function blockExternalMapHosts(page: Page) {
  */
 async function openNewSupplierLocationEditor(page: Page, facilityId: string) {
   await page.goto(`/suppliers?facility=${facilityId}`);
-  await page.getByRole("button", { name: "New Supplier" }).click();
+  await page.getByRole("button", { name: "New supplier" }).click();
 
-  const supplierSheet = page.getByRole("dialog", { name: "Create Supplier" });
+  const supplierSheet = page.getByRole("dialog", { name: "Create supplier" });
   await expect(supplierSheet).toBeVisible();
-  await supplierSheet.getByRole("button", { name: "Add Location" }).click();
+  await supplierSheet.getByRole("button", { name: "Add location" }).click();
 
-  const locationDialog = page.getByRole("dialog", { name: "Add Location" });
+  const locationDialog = page.getByRole("dialog", { name: "Add location" });
   await expect(locationDialog).toBeVisible();
   return locationDialog;
 }
 
 async function openNewCustomerLocationEditor(page: Page, facilityId: string) {
   await page.goto(`/customers?facility=${facilityId}`);
-  await page.getByRole("button", { name: "New Customer" }).click();
+  await page.getByRole("button", { name: "New customer" }).click();
 
-  const customerSheet = page.getByRole("dialog", { name: "Create Customer" });
+  const customerSheet = page.getByRole("dialog", { name: "Create customer" });
   await expect(customerSheet).toBeVisible();
-  await customerSheet.getByRole("button", { name: "Add Location" }).click();
+  await customerSheet.getByRole("button", { name: "Add location" }).click();
 
-  const locationDialog = page.getByRole("dialog", { name: "Add Location" });
+  const locationDialog = page.getByRole("dialog", { name: "Add location" });
   await expect(locationDialog).toBeVisible();
   return locationDialog;
 }
@@ -196,7 +196,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       .fill(String(SEED_SUPPLIER_POINT.lng));
 
     const calcButton = dialog.getByRole("button", {
-      name: /Calculate road distance/i,
+      name: /Estimate road distance/i,
     });
     await expect(calcButton).toBeEnabled();
     await calcButton.click();
@@ -231,7 +231,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
 
     // New location has no coordinates yet → CALC must be disabled.
     const calcButton = dialog.getByRole("button", {
-      name: /Calculate road distance/i,
+      name: /Estimate road distance/i,
     });
     await expect(calcButton).toBeDisabled();
 
@@ -273,14 +273,15 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await page.getByRole("option", { name: DODOMA.label }).click();
     await expect(latitudeInput).not.toHaveValue(String(DAR.lat));
     await expect(longitudeInput).not.toHaveValue(String(DAR.lng));
+    // By role: the field's ⓘ button is named "More about Default soil temperature (°C)".
     await expect(
-      dialog.getByLabel("Default soil temperature (°C)")
+      dialog.getByRole("spinbutton", { name: "Default soil temperature (°C)" })
     ).toBeVisible();
     const distanceInput = dialog.getByRole("spinbutton", {
-      name: "One-way distance from facility (per leg, km)",
+      name: "Distance from facility",
     });
     const calcButton = dialog.getByRole("button", {
-      name: /Calculate road distance selected facility to application site position/i,
+      name: /Estimate road distance selected facility to application site position/i,
     });
     await expect(distanceInput).toBeVisible();
     await expect(calcButton).toBeEnabled();
@@ -325,11 +326,11 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       // saved with only a name, country, and GPS position must be accepted.
       await dialog.getByLabel("GPS latitude").fill(String(DAR.lat));
       await dialog.getByLabel("GPS longitude").fill(String(DAR.lng));
-      await dialog.getByRole("button", { name: "Add Location" }).click();
+      await dialog.getByRole("button", { name: "Add location" }).click();
 
       await expect(dialog).not.toBeVisible();
       const customerSheet = page.getByRole("dialog", {
-        name: "Create Customer",
+        name: "Create customer",
       });
       await expect(customerSheet).toBeVisible();
       await expect(customerSheet.getByText(locationName)).toBeVisible();
@@ -338,7 +339,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       // createCustomerLocationFn once the customer itself is created.
       await customerSheet.getByLabel("Customer name").fill(customerName);
       await customerSheet
-        .getByRole("button", { name: "Create Customer" })
+        .getByRole("button", { name: "Create customer" })
         .click();
       await expect(customerSheet).toBeHidden();
 
@@ -355,15 +356,13 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       createdCustomerId = savedLocation?.customerId;
 
       // The stored NULL reads back as the shared missing-value token.
-      await page.goto(`/customers/${createdCustomerId}`);
-      const locationRow = page
-        .getByRole("row")
-        .filter({ hasText: locationName });
-      await expect(locationRow).toBeVisible();
-      // Column order: name, country, state / region, city, site description.
-      await expect(locationRow.getByRole("cell").nth(4)).toHaveText(
-        MISSING_VALUE.notRecorded
-      );
+      await page.goto(`/customers?customer=${createdCustomerId}`);
+      const customerView = page.getByRole("dialog");
+      await expect(customerView.getByText(locationName).first()).toBeVisible();
+      await expect(customerView.getByText("Site description")).toBeVisible();
+      await expect(
+        customerView.getByText(MISSING_VALUE.notRecorded).first(),
+      ).toBeVisible();
     } finally {
       try {
         if (createdCustomerId) {
@@ -389,48 +388,56 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       seededData.facility.id
     );
 
-    await dialog.getByLabel("Location name").fill("E2E Supplier Site");
+    // By role: the field's ⓘ button is named "More about Location name".
+    await dialog
+      .getByRole("textbox", { name: "Location name" })
+      .fill("E2E Supplier Site");
     await dialog.getByLabel("Country").fill("Tanzania");
     await dialog
       .getByLabel("Address / description")
       .fill("E2E feedstock source");
     await dialog.getByLabel("GPS latitude").fill(String(DAR.lat));
     await dialog.getByLabel("GPS longitude").fill(String(DAR.lng));
-    await dialog.getByRole("button", { name: "Add Location" }).click();
+    await dialog.getByRole("button", { name: "Add location" }).click();
 
     await expect(dialog).not.toBeVisible();
     const supplierSheet = page.getByRole("dialog", {
-      name: "Create Supplier",
+      name: "Create supplier",
     });
     await expect(supplierSheet).toBeVisible();
     await expect(supplierSheet.getByText("E2E Supplier Site")).toBeVisible();
   });
 
-  test("party detail pages open location dialogs", async ({
+  test("party pages open location dialogs", async ({
     adminPage: page,
     seededData,
   }) => {
-    await page.goto(`/customers/${seededData.customer.id}`);
-    await page.getByRole("button", { name: "Add Location" }).click();
+    await page.goto(`/customers?customer=${seededData.customer.id}`);
+    await page.getByRole("button", { name: "Edit customer" }).click();
+    await page.getByRole("button", { name: "Add location" }).click();
 
     const customerAddDialog = page.getByRole("dialog", {
-      name: "Add Location",
+      name: "Add location",
     });
     await expect(customerAddDialog).toBeVisible();
     await customerAddDialog.getByRole("button", { name: "Close" }).click();
     await expect(customerAddDialog).not.toBeVisible();
 
-    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByRole("button", { name: /^Edit / }).first().click();
     const customerEditDialog = page.getByRole("dialog", {
-      name: "Edit Location",
+      name: "Edit location",
     });
     await expect(customerEditDialog).toBeVisible();
     await customerEditDialog.getByRole("button", { name: "Close" }).click();
 
-    await page.goto(`/suppliers/${seededData.supplier.id}`);
-    await page.getByRole("button", { name: "Add Location" }).click();
+    // Suppliers manage locations inside their edit sheet; the dashboard gap
+    // link opens it with these params.
+    await page.goto(
+      `/suppliers?supplier=${seededData.supplier.id}&mode=edit`,
+    );
+    await page.getByRole("button", { name: "Add location" }).click();
     await expect(
-      page.getByRole("dialog", { name: "Add Location" }),
+      page.getByRole("dialog", { name: "Add location" }),
     ).toBeVisible();
   });
 });

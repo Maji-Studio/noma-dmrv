@@ -32,7 +32,8 @@ import {
   type RemoteGhgStatus,
 } from "@/lib/certification/status";
 import { formatCount } from "@/lib/copy-utils";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { DetailField } from "@/components/ui/detail-panel";
+import { PeriodStrip } from "./ghg-statement-period-strip";
 import {
   buildSubmitGhgStatementDialogSchema,
   type SubmitGhgStatementDialogFormInput,
@@ -41,6 +42,7 @@ import {
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { ProductionConfirmation } from "./production-confirmation";
 import { SubmissionProgress } from "./submission-progress";
+import { Notice } from "@/components/ui/notice";
 
 const STEPS: StepFlowStep[] = [
   { key: "report", label: "Report", description: "Choose the attachment" },
@@ -485,12 +487,7 @@ function GhgStatementSubmitDialogContent({
         ) : (
           <>
             {!canSubmit && generationUnavailableReason && (
-              <p
-                className="border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8 body-small text-[var(--color-signal-orange-strong)]"
-                role="status"
-              >
-                {generationUnavailableReason}
-              </p>
+              <Notice tone="warning">{generationUnavailableReason}</Notice>
             )}
             <StepFlow
               orientation="vertical"
@@ -620,7 +617,7 @@ function GhgStatementSubmitDialogContent({
                         <FormField
                           id="externalReportUrl"
                           label="External report URL"
-                          helperText="The verifier must be able to open this controlled document."
+                          cue="The verifier must be able to open this controlled document."
                           required
                           error={errors.externalReportUrl?.message}
                         >
@@ -702,15 +699,6 @@ function GeneratedReportPreview({
   onReview: () => void;
 }) {
   const data = query.data?.status === "available" ? query.data.value : null;
-  const period = data
-    ? data.reportingPeriodStartOn
-      ? formatDateRange(
-          data.reportingPeriodStartOn,
-          data.reportingPeriodEndOn,
-        )
-      : `Ends ${formatDate(data.reportingPeriodEndOn)}`
-    : null;
-
   return (
     <section className="flex flex-col gap-12" aria-labelledby="report-preview">
       <div className="flex flex-col gap-4">
@@ -723,7 +711,7 @@ function GeneratedReportPreview({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-12 border-y border-[var(--color-border-secondary)] py-12">
+      <div className="flex flex-wrap items-center justify-between gap-12">
         <span className="body-small text-[var(--color-text-secondary)]">
           {reviewed
             ? `Version ${report.version} opened for review.`
@@ -741,24 +729,20 @@ function GeneratedReportPreview({
       </div>
 
       {data && (
-        <dl className="grid grid-cols-1 gap-12 sm:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-              Reporting period
-            </dt>
-            <dd className="body-small text-[var(--color-text-primary)]">
-              {period}
-            </dd>
-          </div>
-          <div className="flex flex-col gap-2">
-            <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-              Contents
-            </dt>
-            <dd className="body-small text-[var(--color-text-primary)]">
-              {formatCount(data.memberGhgEntryCount, "GHG Entry", "GHG Entries")}
-            </dd>
-          </div>
-        </dl>
+        <>
+          <PeriodStrip
+            start={data.reportingPeriodStartOn ?? null}
+            end={data.reportingPeriodEndOn}
+          />
+          <DetailField
+            label="Contents"
+            value={formatCount(
+              data.memberGhgEntryCount,
+              "GHG Entry",
+              "GHG Entries",
+            )}
+          />
+        </>
       )}
 
       <GhgStatementCarbonBreakdown query={query} />
@@ -777,16 +761,10 @@ function ExternalReportPreview({ url }: { url: string }) {
           noma attaches this controlled document when you submit.
         </p>
       </div>
-      <dl className="border-y border-[var(--color-border-secondary)] py-12">
-        <div className="flex flex-col gap-2">
-          <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-            External report URL
-          </dt>
-          <dd className="body-small break-all font-mono text-[var(--color-text-primary)]">
-            {url}
-          </dd>
-        </div>
-      </dl>
+      <DetailField
+        label="External report URL"
+        value={<span className="break-all font-mono">{url}</span>}
+      />
     </section>
   );
 }

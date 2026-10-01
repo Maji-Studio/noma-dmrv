@@ -32,9 +32,6 @@ export function SetupGuide({
     >
       <header className="flex flex-wrap items-start justify-between gap-16">
         <div className="flex min-w-0 flex-col gap-6">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
-            Setup
-          </span>
           <h2 className="title-heading-3">
             Build your first traceability chain
           </h2>
@@ -44,7 +41,7 @@ export function SetupGuide({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-12">
-          <span className="label-micro text-[var(--color-text-tertiary)]">
+          <span className="body-caption text-[var(--color-text-tertiary)]">
             {doneCount} of {total} done
           </span>
           <Button

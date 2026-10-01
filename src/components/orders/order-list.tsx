@@ -36,6 +36,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
 import { OrderForm } from "./order-form";
 import { orderSheetSections } from "./order-read-sections";
+import { ILLUSTRATION_SIZE, OrderArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Column Definitions
@@ -281,7 +282,7 @@ export function OrderList() {
   const sideSheetEntity = sideSheet?.entity ?? null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Order" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create order" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -295,14 +296,14 @@ export function OrderList() {
         title="Orders"
         subtitle="Customer orders for biochar products"
         actions={
-          <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New Order</Button>
+          <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New order</Button>
         }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard title="Total Orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
-        <StatCard title="Total Deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
-        <StatCard title="Total Quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
+        <StatCard title="Total orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
+        <StatCard title="Total deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
+        <StatCard title="Total quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
       </div>
 
       <DataTable
@@ -327,7 +328,7 @@ export function OrderList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<PackageIcon size={48} />}
+            icon={hasActiveFilters ? <PackageIcon size={48} /> : <OrderArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No orders found" : "No orders yet"}
             description={hasActiveFilters ? "Try adjusting your search or filters." : undefined}
             action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create your first order</Button> : undefined}
@@ -388,7 +389,7 @@ export function OrderList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Order"
+        editLabel="Edit order"
         sections={sideSheetEntity ? orderSheetSections(sideSheetEntity) : undefined}
       >
         <OrderForm
@@ -398,12 +399,12 @@ export function OrderList() {
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheetMode === "create" ? "Create Order" : "Save Changes"}
+          submitLabel={sideSheetMode === "create" ? "Create order" : "Save changes"}
         />
       </EntitySideSheet>
 
       {deleteError && <ServerError message={deleteError} />}
-      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete Order" message="Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} />
+      <DeleteConfirmDialog isOpen={!!deletingOrderId} title="Delete order" message="Are you sure you want to delete this order? This action cannot be undone. Note: Orders with deliveries cannot be deleted." onConfirm={handleDeleteConfirm} onCancel={() => { setDeletingOrderId(null); setDeleteError(null); }} isPending={deleteOrder.isPending} />
     </div>
   );
 }

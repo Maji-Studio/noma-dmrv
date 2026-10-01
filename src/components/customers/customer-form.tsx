@@ -124,7 +124,7 @@ export function CustomerForm({
     },
   });
 
-  const defaultSubmitLabel = isEditMode ? "Update Customer" : "Create Customer";
+  const defaultSubmitLabel = isEditMode ? "Update customer" : "Create customer";
 
   const handleFormSubmit = handleSubmit((data) => {
     if (!isEditMode && pendingLocations.length === 0) {
@@ -146,37 +146,22 @@ export function CustomerForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Required Fields Section */}
-      <FormSection title="Required information" divider={false}>
+      {/* Section 1: the customer itself */}
+      <FormSection title="Customer" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="name" label="Customer name" error={errors.name?.message} required>
-            <FormInput
-              id="name"
-              type="text"
-              placeholder="e.g., Regenerative Farm Partner"
-              disabled={isSubmitting}
-              error={!!errors.name}
-              {...register("name")}
-            />
-          </FormField>
-        </div>
-      </FormSection>
+          <div className="md:col-span-2">
+            <FormField id="name" label="Customer name" error={errors.name?.message} required>
+              <FormInput
+                id="name"
+                type="text"
+                placeholder="e.g., Regenerative Farm Partner"
+                disabled={isSubmitting}
+                error={!!errors.name}
+                {...register("name")}
+              />
+            </FormField>
+          </div>
 
-      {/* Locations Section */}
-      {isEditMode && customerId ? (
-        <LocationsSection customerId={customerId} />
-      ) : (
-        <CreateModeLocationsSection
-          locations={pendingLocations}
-          onAdd={handleAddPendingLocation}
-          onRemove={handleRemovePendingLocation}
-          error={locationError}
-        />
-      )}
-
-      {/* Contact Information Section */}
-      <FormSection title="Contact information">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField id="contactEmail" label="Contact email" error={errors.contactEmail?.message}>
             <FormInput
               id="contactEmail"
@@ -203,12 +188,7 @@ export function CustomerForm({
               {...register("contactPhone")}
             />
           </FormField>
-        </div>
-      </FormSection>
 
-      {/* Business Information Section */}
-      <FormSection title="Business information">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="cropType"
             label="Crop type"
@@ -238,6 +218,18 @@ export function CustomerForm({
           </div>
         </div>
       </FormSection>
+
+      {/* Section 2: locations */}
+      {isEditMode && customerId ? (
+        <LocationsSection customerId={customerId} />
+      ) : (
+        <CreateModeLocationsSection
+          locations={pendingLocations}
+          onAdd={handleAddPendingLocation}
+          onRemove={handleRemovePendingLocation}
+          error={locationError}
+        />
+      )}
 
       <FormActions
         control={control}
@@ -287,7 +279,7 @@ function CreateModeLocationsSection({
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
-          Add Location
+          Add location
         </Button>
       }
     >
@@ -350,7 +342,7 @@ function CreateModeLocationsSection({
       <QuickAddDialogShell
         isOpen={isLocationDialogOpen}
         onClose={() => setIsLocationDialogOpen(false)}
-        title="Add Location"
+        title="Add location"
         width="lg"
         testId="location-quick-add-dialog"
       >
@@ -408,7 +400,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
           className="text-[var(--color-interaction)]"
         >
           <PlusIcon size={14} weight="bold" />
-          Add Location
+          Add location
         </Button>
       }
     >
@@ -473,7 +465,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
 
       <DeleteConfirmDialog
         isOpen={!!deletingLocationId}
-        title="Delete Location"
+        title="Delete location"
         message="Are you sure you want to delete this location? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingLocationId(null)}

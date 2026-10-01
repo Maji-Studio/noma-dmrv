@@ -43,7 +43,7 @@ Completion: PR open against `staging`, issue linked, board moved.
 Three reviews converge on the PR. Keep the reviewer **fresh** — never the implementer — so it stays unbiased. Run the first two concurrently:
 
 - **Fresh reviewer subagent** — review the diff against the brief/issue and repo standards. Verify every finding against the actual code before reporting; false positives (even bogus P0s) are common here. Post ONE PR comment, signed as a session-local reviewer.
-- **Codex** (best-effort) — a subagent runs a gpt-6-astra review via the **codex-review** skill (playbook) and posts the findings as a PR comment under a "Codex review (gpt-6-astra)" heading, labeled as unverified — Phase 5 verifies every comment anyway. If the binary is absent or errors, skip and note it.
+- **Codex** (best-effort) — a subagent runs a gpt-6-astra review via the **codex-review** skill (playbook; use the skill's gpt-6-astra escalation flags, since PR reviews run on astra) and posts the findings as a PR comment under a "Codex review (gpt-6-astra)" heading, labeled as unverified — Phase 5 verifies every comment anyway. If the binary is absent or errors, skip and note it.
 - **CodeRabbit** — auto-reviews PRs to `staging`. Wait for its review to land before Phase 5 (poll `gh pr view <n> --json reviews` until a coderabbit review appears or ~10 min elapse; proceed with what exists if it doesn't).
 
 Completion: fresh review posted, codex attempted, CodeRabbit review present (or waited-out and noted).

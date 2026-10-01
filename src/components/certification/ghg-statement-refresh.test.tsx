@@ -685,9 +685,8 @@ describe("GHG Statement route refreshes", () => {
     const next = findButton(renderer!, "Next");
     expect(next?.props.disabled).toBe(true);
     expect(
-      renderer!.root.findAllByType("p").some((node) =>
-        String(node.props.children).includes(warning),
-      ),
+      renderer!.root.findAll((node) => node.props.children === warning)
+        .length > 0,
     ).toBe(true);
     expect(renderer!.root.findAllByProps({ id: "report-preview" })).toHaveLength(
       0,
@@ -787,9 +786,8 @@ describe("GHG Statement route refreshes", () => {
     });
 
     expect(
-      renderer!.root.findAllByType("p").some((node) =>
-        String(node.props.children).includes(warning),
-      ),
+      renderer!.root.findAll((node) => node.props.children === warning)
+        .length > 0,
     ).toBe(true);
     expect(findButton(renderer!, "Generate new version")).toBeUndefined();
     expect(findButton(renderer!, "Submit")).toBeUndefined();

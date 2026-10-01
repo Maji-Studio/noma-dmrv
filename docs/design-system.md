@@ -33,9 +33,10 @@ Read these first. Each one fails quietly rather than loudly.
   an arbitrary value (`w-[120px]`) when a real off-scale number is intended.
   **44px is on the scale** because it is the minimum touch target; six controls
   had written `size-44` / `min-h-44` / `h-44` and were rendering at icon size.
-  One sanctioned exception: the inline `InfoHint` glyph keeps a 24px hit area
-  (the WCAG 2.5.8 floor) — a 44px box on an in-text hint would break label-row
-  alignment wherever it appears.
+  Two sanctioned exceptions keep a 24px hit area (the WCAG 2.5.8 floor): the
+  inline `InfoHint` glyph, and the icon-only `IsometricLink` beside the ID it
+  opens. A 44px box on either would break label-row alignment wherever it
+  appears.
 - **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
   the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
   the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
@@ -109,8 +110,8 @@ applied **through shared components** (StatCard, DataTable frame, Card, entity
 cards), never as per-page classes. Falls out of this:
 
 - **Tables never sit flush on the field** — DataTable renders as a framed panel
-  (toolbar inside, pagination as the footer row); headers are mono uppercase
-  `.label-micro` on the `--sea` wash; rows separate with `--row-divider`,
+  (toolbar inside, pagination as the footer row); headers are sentence case
+  `body-small font-medium` in secondary ink on the `--sea` wash; rows separate with `--row-divider`,
   **no zebra striping**.
 - **Elevated surfaces (side sheets, menus, dialogs) are pure `--paper` with a
   full-ink `--hair` border and no shadow** — scrim + border do the elevation.
@@ -136,6 +137,39 @@ specialized renderers (map pills, graph pills) must use that shared mapping.
 **Never pick an `--st-*` token in a feature component off an entity status.**
 The ramp stays available for non-status uses (charts, feedback, accents).
 
+### Notice
+
+`Notice` (`@/components/ui/notice`) is the one style for in-flow information,
+warnings and blockers. Never hand-roll a tinted box, a left-rule callout or a
+red bordered panel. It is a Phosphor icon, an optional `title`, one line of text
+and an optional `action` (a link or button); no eyebrow, no uppercase.
+
+| Tone | Use | Look | Role |
+| --- | --- | --- | --- |
+| `info` | Context the user may want, nothing to fix | grey icon, no tint | `status` |
+| `warning` | The user can continue, something needs review | orange icon, no tint | `status` |
+| `success` | An action completed and the page stays | green icon, no tint | `status` |
+| `error` | The task is blocked or a save failed | red icon, **tinted** | `alert` |
+
+Only `error` is tinted, so one blocker stands out on a page of advisories. Keep
+`alert` for blocking errors; do not upgrade a warning to it. Field-level
+feedback stays in `FormField` (`error`, `warning`), not a Notice. `ServerError`
+renders through `Notice`. For loading failures with a retry, pass the button as
+`action`.
+
+### Flat controls
+
+Inputs, native selects, textareas, the entity select trigger and the date and
+time inputs share one look: a 1px `--color-border-secondary` border, a white
+fill, 40px height (textarea grows), the interaction-colour border and ring on
+focus, a red border on error and 50% opacity when disabled. There is no inset
+shadow. Do not add one to a control; elevation is border and paper (above).
+
+The entity select popover separates options with spacing, a hover fill and a
+selected fill, not per-row rules, and uses Phosphor icons. The search box and
+the "Add new" row are part of the same list, not boxed apart. Give the trigger
+the `FormField` id (`FormEntitySelect` does) so the field label names it.
+
 ---
 
 ## Typography
@@ -143,7 +177,7 @@ The ramp stays available for non-status uses (charts, feedback, accents).
 Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
-- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase table headers)
+- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
 - **14px:** `.body-small`, `.label-button` (secondary text, buttons)
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
@@ -170,7 +204,7 @@ use at most four text styles:
 
 | Style | Classes | Used for |
 |---|---|---|
-| Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, helper cues, calculation rows' labels |
+| Caption | `body-caption` | derived block captions, key lines, `DerivedHeadline` labels and sub lines, `FormField` cues, calculation rows' labels |
 | Label | `body-small font-medium` | field labels (secondary ink) and section titles (primary ink) |
 | Value | `body-small` | figures in a derived block's rows (`StockRows`) |
 | Headline figure | `body-large font-medium` | the one `DerivedHeadline` figure per block |
@@ -185,13 +219,36 @@ caption.
   `body-small font-medium` title in primary ink on a `min-h-24` row, not an
   uppercase tracked micro label. The sheet title and the spine's numbered
   marker already carry the hierarchy. No mono uppercase micro labels inside
-  forms either; `label-micro` belongs to table headers.
+  forms, sheets, dialogs or read views either (accordion triggers, side
+  panels, settings panes). Table headers everywhere (DataTable and hand-rolled
+  tables) are one style: sentence case `body-small font-medium` in secondary ink. The `PageHeader` area eyebrow is the one exception.
 - **Lines only where they separate things of a different kind.** Kept: the
   `FormSpine` rail, the hairline between plain `FormSection`s, and the
   `CompositionCard` action row's top rule. Not drawn: rules between a caption
   and its content, rules under headlines, doubled dividers, and borders or
   tints around a derived value.
-- **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose.
+- **Explanations go in the ⓘ `InfoHint`**, not in always-visible prose. A
+  `FormField` keeps one visible `cue` line only for a unit, a limit or a
+  consequence (plus three named exceptions listed in forms.md), and a `unit`
+  suffix inside the control replaces "(kg)" in the label
+  ([forms.md](./forms.md#components)).
+- **The ⓘ is a toggletip.** `InfoHint` opens on a tap or click, on hover and
+  on keyboard focus; a press keeps it open until a second press, Escape or an
+  outside press. Its 24px trigger sits beside the label, never inside the
+  `<label>`, and its text is the trigger's description: `aria-describedby` to
+  FormField's screen-reader copy, or `aria-description` elsewhere. It adds no
+  hidden copy to the DOM, so a heading holding an ⓘ keeps its own text. Its
+  name is "More about <label>", so in specs locate the control by role
+  (`getByRole("textbox", { name })`), not `getByLabel`, which also matches the
+  ⓘ. Use
+  the plain `Tooltip` only for hover extras that are also available another
+  way (the CERT chip's own explanation, a disabled button's reason).
+- **Certification is a CERT chip, explained once.** A field required for
+  certification carries a "CERT" chip on its label row
+  (`CertificationFieldTag`): neutral when no record is saved, orange with a
+  warning mark when the saved record lacks it, green with a check when it has
+  it. It shows in Simple and Detailed alike. There is no sheet legend: the
+  chip explains itself through its tooltip and screen-reader text.
 - **Spacing, one rhythm per level:** the form `space-y-20` between sections,
   `FormSection` `space-y-16` inside one ([forms.md](./forms.md#vertical-rhythm)),
   derived blocks `gap-12` between their parts, key lines and captions
@@ -221,11 +278,14 @@ symbols (`mL`, `ha`, `kg/m³`, `H:C`, `R₀`), and any term whose canonical form
 [CONTEXT.md](../CONTEXT.md) is capitalised — check the glossary before you
 rename a domain term.
 
-Page titles (`PageHeader`), `StatCard` titles, button text, dialog titles and
-side-sheet titles are **outside** this rule and keep their existing casing. One
-exception: where a dialog title or button **names an entity the operator just
-saw on a select**, the noun follows the select's label rather than the chrome's
-casing — "Feedstock type" on the select, "New feedstock type" as the quick-add
+Button text, submit labels, dialog and side-sheet titles, delete-confirm titles
+and `StatCard` titles follow the same rule ("Create storage bin", "Save changes",
+"Total customers"). Page titles (`PageHeader`) and sidebar navigation labels are
+**outside** it and keep their existing casing. Entity nouns are lowercase mid-label;
+glossary terms that are capitalised in CONTEXT.md (Sample, Removal, GHG Statement)
+keep their capital ("Create Sample"). Where a dialog title or button **names an
+entity the operator just saw on a select**, the noun follows the select's label
+rather than the chrome's casing — "Feedstock type" on the select, "New feedstock type" as the quick-add
 title, "Create feedstock type" on its submit button. One action, one name,
 through the whole flow. Those nouns live in `ENTITY_TYPE_LABELS`
 (`components/forms/entity-select/entity-labels.ts`) — the single source shared by
@@ -444,11 +504,111 @@ restore for free.
   (`src/components/certification/confirm-action-dialog.tsx`) — reuse it there
   instead of hand-rolling.
 
+### Choice controls — `src/components/forms`
+
+Three ways to pick one of a few options. Choose by what the choice does.
+
+| Control | Use when | Examples |
+|---|---|---|
+| `ChoiceCardGroup` | The choice has a consequence the operator should read before picking: 2 to 6 options, each with a one-line caption and optionally a small drawing | evidence method, GIS boundary entry, stock mode |
+| `SegmentedControl` | Short, equal options that read as a mode: 2 to 5, labels only | loss / count, storage type, run status, severity, order packaging |
+| `FormSelect` | Everything else: long or dynamic lists, secondary fields | timezone, currency, category |
+
+A one-option enum is a fixed value, not a control.
+
+Both controls are native radios in a `fieldset` with an `sr-only` legend, so
+the browser gives one tab stop and arrow keys that move and select. Do not add
+`role`, `tabIndex` or key handlers. The selected option carries a check glyph
+plus a heavier border (not colour alone; both survive forced-colors). Wire them
+like `FormSelect` (`{...register("field")}`) or controlled
+(`value` + `onValueChange`). Inside a `FormField`, give the control the same
+`id` and pass `legend` for the accessible name: the visible label stays
+`FormField`'s.
+
+Cards size to their group, not the viewport (CSS container queries): one
+column below about 272px, two columns above it (art beside the text from
+352px, hidden below), three at about 544px for three or more options with the
+art above the text, all rows equal height. Sheets
+are 360 to 640px wide, so give a card group the full row (`md:col-span-2` in a
+two-column grid) or it stacks. Write the consequence as the card caption, not
+as helper text. Art is a drawing from the illustration set at card size
+(see [Illustrations](#illustrations--srccomponentsuiillustrations)). Either
+every card in a group has one or none does.
+Wide art (stock mode, 112x44) uses `stackArt` to sit above the text at every
+width. It is the one exception to monoline: filled grains in three fixed batch
+tones (`--stock-batch-*` in `globals.css`). It can play a loop on card hover and focus through CSS in
+`globals.css` ("Stock mode art"), gated by `prefers-reduced-motion`; the
+settled state is the static drawing.
+
+The old `RadioCardGroup` is gone; `ChoiceCardGroup` replaces it. The sr-only
+input is not the touch target: the whole label is, and `SegmentedControl`
+segments are at least 44px tall. The sheet header Simple/Detailed toggle
+(`FormDetailToggle`) is sheet chrome, not a form field, and stays a separate
+component.
+
+### Illustrations — `src/components/ui/illustrations`
+
+A small set of monoline drawings, one per thing an operator picks or has none
+of yet: evidence methods, GIS entry, sampling, and the core records (storage
+bin, reactor, facility, delivery, customer, supplier, feedstock, order, biochar
+product, credit batch, sample, members, invitations). They are decoration
+(`aria-hidden`); the text next to them carries the meaning.
+
+**Where they go.** Three places, nowhere else.
+
+- Choice cards (`ChoiceCardGroup` `art`), at the default card size (56px wide).
+  If one card in a group has a drawing, all of them do.
+- The top-level "No X yet" empty state of each record the set draws, at
+  `ILLUSTRATION_SIZE.empty` (96px) in the `EmptyState` `icon` slot. Lists the
+  set doesn't draw yet (removals, formulations, feedstock types and others)
+  keep Phosphor until a drawing exists. The filtered branch of the same empty state keeps
+  its Phosphor icon, so the `icon` prop switches with the title. Error states,
+  filtered states and nested `padding="sm"` empties never get a drawing.
+- Onboarding: the welcome step and the setup-in-progress state.
+
+Everything else (buttons, table rows, KPI cards, nav) stays on Phosphor.
+
+**Style.** Every drawing sits on a 56x40 view box inside `IllustrationFrame`:
+flat front view, `currentColor`, round caps and joins, no fills except the
+small solid dots (`Dots`) for grains, corners and hubs. The frame holds the
+on-screen stroke at 1.5px up to 80px wide and 2px above that, so a drawing never
+turns heavy when scaled. An optional half-opacity ground line (solid, or dotted
+for a road) sits at y 37. Keep lines from crossing where you can: the flames
+stand on the kiln rim's back edge, the wheels hang below the chassis. Every coordinate is a named constant.
+The stock mode art (`stock-mode-art.tsx`) is the one older exception, wider and
+with tinted grains.
+
+**Motion.** Hovering the host plays a short loop: the choice card's label, or
+any element with the `illo-host` class. `EmptyState` and the onboarding welcome
+step are hosts. Keyboard focus inside the host plays it too, and a disabled card
+stays still. Wrap the moving part in `<Motion kind="…">`. The kinds are `bob`,
+`rise`, `flicker`, `sway`, `pop`, `drop`, `lift`, `draw` (give the path
+`pathLength={1}`) and `stamp`. The dotted ground scrolls on its own. `delay`
+staggers sibling parts. A card-size drawing plays only its key part, the one
+part per drawing without `largeOnly`. Large drawings play every part. The
+keyframes live in `globals.css` under "Illustrations", behind
+`prefers-reduced-motion: no-preference`, and they are CSS only: no state, no
+`useEffect`. Each keyframe starts and ends on the settled drawing, so leaving
+the host snaps back to the static picture.
+
+**Adding one.** Draw it in the file for its group (`site-art.tsx`,
+`field-art.tsx`, `record-art.tsx`, `entity-art.tsx`), export it from `index.ts`
+and bump the count in `illustrations.test.tsx`. The test checks that each
+drawing is decorative, keeps its stroke weight at both sizes and has a part
+that moves at card size. Check it at 56px and 96px beside its neighbours
+before wiring it: at card size a detail under about 3px turns into a blot.
+
+### AuthResult — `src/components/auth`
+
+The one outcome screen for auth pages (check your email, email verified, verification failed, invitation not usable, password reset done). `tone` is `pending`, `info`, `success` or `error` and picks the 32px glyph and tint; one title, one message (the only announced part: `alert` for errors, `status` otherwise). `actions` are full-width buttons or `AuthPrimaryLink`; `footer` is quiet navigation (`AuthLink`) and always last. `framed={false}` drops the page card and renders the title as an h2, for use inside a card that already has an h1.
+
 ### Other primitives — intent only, props at source
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
   filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
-  caller-owned. Two copy rules, both load-bearing:
+  caller-owned. The "No X yet" state of a record the illustration set draws
+  carries its drawing at `ILLUSTRATION_SIZE.empty` (see Illustrations); every
+  other branch keeps a Phosphor icon. Two copy rules, both load-bearing:
   - **The zero-state CTA is `Create your first <entity>`, never a copy of the
     `PageHeader` button.** Both buttons render at once on an empty list, and two
     controls with the same accessible name break `getByRole("button", { name })`
@@ -517,6 +677,19 @@ dry biochar (an application) gets that against one `Ingredients + water`
 remainder. Show measured finished-product moisture separately as delivery
 evidence; never use it to recalculate a composition mass.
 
+Where a surface knows where every part came from, the composition is drawn as
+a **`MassFlowSankey`** (`@/components/ui/mass-flow-sankey`) instead of the bar:
+the product form and read view pass `sources` (each input with its own parts,
+from `productFlowSources`), and the product regroups the bands by kind beside
+its node, each part named with its mass and whole-number share ("Dry biochar
+270 kg (45%)"). The production run's process flow uses the same component:
+source bin, reactor, destination bin, with water driven off and conversion loss
+as exits that rise and fade. The Sankey keeps the moisture split's fills (plum
+dry, hatched water, purple added water, entity accents for ingredient solids,
+bands at a lighter tint), draws at the measured container width so labels stay
+14px and 12px on a phone, and keeps every name and figure as HTML text. It is
+drawn only on a complete basis; until then the block shows its unresolved state.
+
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
   `MoistureField` attaches to every moisture input.
@@ -525,9 +698,9 @@ evidence; never use it to recalculate a composition mass.
   (text only — table cells, option labels). The `detail` surface carries **no
   card, no frame and no tinted panel**: the bar sits directly under the wet-mass
   and moisture inputs it describes and moves as they change, with one key line
-  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). Its Simple presence
-  is `picture`: the bar and key line stay in **Simple**, because they are what
-  the two inputs mean, and **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
+  of swatches under it ("Dry 3,200 kg", "Water 800 kg"). The bar and key line
+  show at both levels, because they are what the two inputs mean, and
+  **Detailed** adds the calculation table below them: the `CompositionLedger` plus the wet-basis arithmetic in
   words ("Dry = wet × (1 - moisture). 4,000 kg × (1 - 20%) = 3,200 kg."). There
   is no "Show calculation" disclosure on this surface, and `calculation={false}`
   drops the table where the host surface owns one (the stock movement card: its
@@ -595,11 +768,9 @@ Reference implementations: `facility-list.tsx`, `reactor-list.tsx`,
 
 Routes themselves are 5–10 line server wrappers — `src/app/(app)/orders/page.tsx`
 renders `src/components/orders/order-list.tsx`. The shell and all state live in
-that `"use client"` component, **not** in `page.tsx`. Detail routes usually
-redirect into the list's side sheet (`production-runs/[id]/page.tsx`,
-`credit-batches/[id]/page.tsx`); genuine detail pages follow
-`suppliers/[supplierId]/page.tsx` — `requireOrgContext` → uuid `safeParse` →
-`notFound()`, plus a sibling `not-found.tsx`.
+that `"use client"` component, **not** in `page.tsx`. Records open in their
+list's side sheet; detail routes only redirect there
+(`production-runs/[id]/page.tsx`, `credit-batches/[id]/page.tsx`).
 
 ```tsx
 <div className="container-max page-shell">
@@ -741,6 +912,8 @@ resolver, `FormSection` / `DetailSection`, the section rhythm, the Simple and
 Detailed levels and derived blocks, and the `@/schemas/helpers` numeric
 helpers. This doc owns only the form type set, lines and spacing
 ([above](#form-type-lines-and-spacing)).
+
+Simple and Detailed differ only in explanation: see [forms.md](./forms.md#simple-and-detailed-presentation).
 
 ## Naming, file structure, React rules
 

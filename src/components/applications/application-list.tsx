@@ -5,7 +5,6 @@
  */
 "use client";
 
-import { ApplicationAllocationShares } from "./application-allocation-shares";
 
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
@@ -30,7 +29,6 @@ import {
 } from "@/hooks/use-applications";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
-import { StockNotice } from "@/components/storage-locations/stock-figures";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -38,7 +36,6 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
@@ -50,48 +47,19 @@ import {
   toSaveErrorMessage,
 } from "@/lib/stale-version";
 import type { ApplicationFormData } from "@/schemas/applications";
-import {
-  applicationEvidenceMethods,
-  applicationStatuses,
-  formatApplicationEvidenceMethod,
-  formatApplicationMethod,
-  formatApplicationStatus,
-  formatSoilTemperatureSource,
-  type ApplicationEvidenceMethod,
-  type ApplicationMethod,
-  type ApplicationStatus,
-  type SoilTemperatureSource,
-} from "@/schemas/applications";
+import { applicationEvidenceMethods, applicationStatuses, formatApplicationEvidenceMethod, formatApplicationMethod, formatApplicationStatus, type ApplicationEvidenceMethod, type ApplicationMethod, type ApplicationStatus } from "@/schemas/applications";
 import { LeafIcon, MapPinIcon, PlusIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
-import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { ApplicationForm } from "./application-form";
-import { ApplicationStorageLocationSync } from "./application-storage-location-sync";
-import { ApplicationSupportingEvidencePanel } from "./application-supporting-evidence-panel";
-import {
-  formatApplicationDeliveryDay,
-  formatApplicationKgFromTons,
-  formatFieldSizeHa,
-  type ApplicationDeliveryOption,
-} from "./mass-utils";
-
-/** Mix-bin biochar is recorded as usual but feeds no credit batch until the PDD covers mixing (ADR 0030). */
-const MIX_BIN_CREDIT_HOLD_NOTICE = "Not in a credit batch: this biochar was drawn from a mix bin. Mix-bin biochar is held out of credit batches until the project design document (PDD) covers mixing.";
+import { applicationSheetSections } from "./application-read-sections";
+import { formatApplicationKgFromTons, formatFieldSizeHa, type ApplicationDeliveryOption } from "./mass-utils";
 
 // ============================================
 // Column Definitions
 // ============================================
-
-function formatFieldPosition(
-  latitude: number | null,
-  longitude: number | null,
-): string | null {
-  if (latitude == null || longitude == null) return null;
-  return `${latitude}, ${longitude}`;
-}
 
 function createColumns(
   onEdit: (application: ApplicationListItem) => void,
@@ -528,7 +496,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     : null;
 
   const sideSheetTitle =
-    sideSheetMode === "create" ? "Create Application" : sideSheetEntity?.code ?? "";
+    sideSheetMode === "create" ? "Create application" : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
     sideSheetMode === "create"
@@ -549,7 +517,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Application
+            New application
           </Button>
         }
       />
@@ -557,14 +525,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-24">
         <StatCard
-          title="Total Applications"
+          title="Total applications"
           value={totalApplications}
           icon={<MapPinIcon size={24} weight="bold" />}
           description="Field applications"
           isLoading={isLoading}
         />
         <StatCard
-          title="Biochar Applied"
+          title="Biochar applied"
           value={formatApplicationKgFromTons(totalBiochar)}
           icon={<LeafIcon size={24} weight="bold" />}
           description="Biochar applied on this page"
@@ -700,7 +668,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       {/* Delete Confirmation Dialog */}
       <DeleteConfirmDialog
         isOpen={!!deletingApplicationId}
-        title="Delete Application"
+        title="Delete application"
         message="Are you sure you want to delete this application? This action cannot be undone."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -723,132 +691,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         canEdit={fieldsEditable}
-        editLabel="Edit Application"
+        editLabel="Edit application"
         size="wide"
-        sections={sideSheetEntity ? [
-          {
-            title: "Application details",
-            fields: [
-              { label: "Application date", value: formatDate(sideSheetEntity.applicationDate) },
-              {
-                label: "Delivery source",
-                value: sideSheetDelivery
-                  ? `${
-                      sideSheetDelivery.productBinName ??
-                      sideSheetDelivery.formulationName ??
-                      "Biochar delivery"
-                    } · ${formatApplicationDeliveryDay(sideSheetDelivery)}`
-                  : null,
-              },
-              {
-                label: "Biochar product applied (kg)",
-                ...certificationDetailField("application", "biocharAppliedTons"),
-                value: sideSheetEntity.biocharAppliedTons != null
-                  ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
-                  : null,
-              },
-              {
-                label: "Dry biochar applied (kg)",
-                detailedOnly: true,
-                ...certificationDetailField("application", "biocharAppliedDryTons"),
-                value: sideSheetEntity.biocharAppliedDryTons != null
-                  ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
-                  : null,
-              },
-            ],
-            content: sideSheetEntity.heldOutOfCredits
-              ? <StockNotice>{MIX_BIN_CREDIT_HOLD_NOTICE}</StockNotice>
-              : undefined,
-          },
-          ...(sideSheetEntity.allocationShares.length > 0 ? [{
-            // The bar and key line are Simple content; the block itself
-            // holds back its ledger and source runs until Detailed.
-            title: "Batch shares",
-            fields: [],
-            content: <ApplicationAllocationShares shares={sideSheetEntity.allocationShares} />,
-          }] : []),
-          {
-            title: "Field details",
-            fields: [
-              { label: "Field size", value: formatFieldSizeHa(sideSheetEntity.fieldSizeHa) },
-              { label: "Field identifier", value: sideSheetEntity.fieldIdentifier },
-              { label: "Crop type", value: sideSheetEntity.cropType },
-              {
-                label: "Application method",
-                value: sideSheetEntity.applicationMethodType
-                  ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
-                  : null,
-              },
-              {
-                label: "Field position",
-                value: formatFieldPosition(
-                  sideSheetEntity.gpsLatitude,
-                  sideSheetEntity.gpsLongitude,
-                ),
-              },
-            ],
-          },
-          {
-            title: "Evidence method",
-            fields: [
-              {
-                label: "Evidence method",
-                value: formatApplicationEvidenceMethod(
-                  (sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod,
-                ),
-              },
-            ],
-            content: (
-              <ApplicationEvidencePanel
-                mode={(sideSheetEntity.evidenceMethod ?? "location") as ApplicationEvidenceMethod}
-                boundary={sideSheetEntity.gisBoundary ?? null}
-                readOnly
-              />
-            ),
-          },
-          {
-            title: "Supporting evidence",
-            fields: applicationLock.data ? [{ label: "Certification", value: "Application fields are locked by certification. Supporting uploads are saved separately; including new evidence requires a Removal evidence review." }] : applicationLock.isPending ? [{ label: "Certification", value: "Checking whether Application fields can be edited." }] : [],
-            content: (
-              <>
-                {applicationLock.error && (
-                  <div className="flex flex-col gap-8">
-                    <ServerError message="The certification lock could not be checked. Fields remain view-only until the check succeeds." />
-                    <Button type="button" variant="weak" disabled={applicationLock.isFetching} onClick={() => void applicationLock.refetch()}>Retry certification check</Button>
-                  </div>
-                )}
-                <ApplicationSupportingEvidencePanel applicationId={sideSheetEntity.id} />
-              </>
-            ),
-          },
-          {
-            title: "Application site",
-            fields: [],
-            content: (
-              <ApplicationStorageLocationSync
-                applicationId={sideSheetEntity.id}
-              />
-            ),
-          },
-          ...((sideSheetEntity.durabilityOption ?? durabilityOption) === "1000_year" ? [] : [{
-            title: "Soil temperature",
-            fields: [
-              {
-                label: "Temperature source",
-                value: sideSheetEntity.soilTemperatureSource
-                  ? formatSoilTemperatureSource(sideSheetEntity.soilTemperatureSource as SoilTemperatureSource)
-                  : null,
-              },
-              {
-                label: "Soil temperature (°C)",
-                ...certificationDetailField("application", "soilTemperatureC"),
-                value: sideSheetEntity.soilTemperatureC != null
-                  ? `${sideSheetEntity.soilTemperatureC} °C`
-                  : null,
-              },
-            ],
-          }]),
-        ] : undefined}
+        sections={sideSheetEntity ? applicationSheetSections(sideSheetEntity, { delivery: sideSheetDelivery, lock: applicationLock, durabilityOption }) : undefined}
       >
         <ApplicationForm
           key={sideSheetEntity?.id ?? "create"}

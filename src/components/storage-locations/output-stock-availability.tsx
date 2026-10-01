@@ -1,14 +1,12 @@
 "use client";
 
 import { CompositionCard, DerivedHeadline } from "@/components/forms";
-import { formatCompositionMass } from "@/components/forms/composition-ledger";
 import { SegmentBar, SegmentKey } from "@/components/ui/segment-bar";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMassKg } from "@/lib/format-utils";
 import type { OutputStockAllocationView } from "@/types/output-stock";
 import type { ReactNode } from "react";
-import { StockRows } from "./stock-figures";
-import { batchSegments, formatWetEstimate } from "./stock-preview-shared";
+import { batchSegments, formatDryKeyMass, formatWetEstimate } from "./stock-preview-shared";
 
 /** The one definition the availability block cannot show as a number. */
 const AVAILABILITY_HINT =
@@ -45,17 +43,12 @@ export function OutputStockAllocations({ allocations }: { allocations: OutputSto
   );
 }
 
-/** Key figures under a wet headline: batches are tracked dry, so they say so. */
-function formatDryKeyMass(kg: number | null): string {
-  return `${formatCompositionMass(kg)} dry`;
-}
-
 /**
  * A bin's current stock, for surfaces that pick a bin rather than move material.
  *
  * Same shape as the movement blocks: caption, one headline figure, the batches
- * the bin holds as one bar and its key, then the tracked dry stock as a row in
- * Detailed, then one action row. There is no before and after because nothing
+ * the bin holds as one bar and its key, then one action row. Under a wet
+ * headline the tracked dry stock is a secondary line at both levels. There is no before and after because nothing
  * is moving yet.
  *
  * Operators plan loads in wet mass, so the headline is the wet estimate when a
@@ -82,9 +75,14 @@ export function OutputStockAvailability({ binName, dryKg, wetEstimate = null, al
       actions={actions}
       calculation={held.length > 0 ? <OutputStockAllocations allocations={held} /> : undefined}
       headline={wetEstimate
-        ? <DerivedHeadline label="Available wet stock, estimate" value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`} sub={wetEstimate.basis} />
+        ? <DerivedHeadline
+            label="Available wet stock, estimate"
+            value={`≈ ${formatWetEstimate(wetEstimate.kg)} kg wet`}
+            // Dry stock is a balance, not a calculation: a secondary line at both levels.
+            secondary={{ label: "Available dry stock", value: dryKg == null ? null : formatMassKg(dryKg) }}
+            sub={wetEstimate.basis}
+          />
         : <DerivedHeadline label="Available dry stock" value={dry} />}
-      detail={wetEstimate ? <StockRows label="Tracked stock" rows={[{ label: "Available dry stock", value: dry }]} /> : undefined}
     >
       {segments.length > 0 && <div className="flex flex-col gap-6">
         <SegmentBar label={`Batches in ${binName}`} segments={segments} />

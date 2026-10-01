@@ -1,6 +1,7 @@
 "use client";
 
 import { useForm, useWatch } from "react-hook-form";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   DistanceCalcField,
@@ -22,9 +23,8 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
-import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { ONE_WAY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
 
@@ -37,10 +37,8 @@ interface TransportLegFormProps {
   errorMessage?: string;
 }
 
-const transportMethodOptions = selectableTransportMethods.map((m) => ({
-  value: m,
-  label: m.charAt(0).toUpperCase() + m.slice(1),
-}));
+const formatTransportMethod = (method: string) =>
+  method.charAt(0).toUpperCase() + method.slice(1);
 
 const MIN_LOAD_MASS_KG = 0.000001;
 const isTransportLegCertifyField = (field: string) =>
@@ -54,8 +52,6 @@ function isSavedTransportLeg(
 
 function legToFormDefaults(
   leg: TransportLeg | TransportLegFormData | null | undefined,
-  /** Organization default, for a leg being created. */
-  defaultTripType: TripTypeValue,
 ) {
   return {
     originGpsLatitude: leg?.originGpsLatitude ?? null,
@@ -71,7 +67,6 @@ function legToFormDefaults(
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
-    tripType: leg?.tripType ?? defaultTripType,
     calculationMethodType: "distance_based" as const,
     billOfLading: leg?.billOfLading ?? "",
     weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
@@ -91,10 +86,7 @@ export function TransportLegForm({
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
   const isPersisted = !!leg && isSavedTransportLeg(leg);
-  // Organization operating defaults seed create mode only; a saved leg always
-  // wins. Server-seeded in the `(app)` layout, so this is synchronous.
-  const { defaults: orgDefaults } = useOrganizationDefaultValues();
-  const defaultValues = legToFormDefaults(leg, orgDefaults.defaultTripType);
+  const defaultValues = legToFormDefaults(leg);
 
   const {
     register,
@@ -128,6 +120,10 @@ export function TransportLegForm({
   const destinationLat = useWatch({ control, name: "destinationGpsLatitude" }) as number | null | undefined;
   const destinationLng = useWatch({ control, name: "destinationGpsLongitude" }) as number | null | undefined;
   const distanceKm = useWatch({ control, name: "distanceKm" }) as number | null | undefined;
+  // A saved leg keeps its own method; new legs default to the one selectable method.
+  const transportMethod =
+    (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
+    selectableTransportMethods[0];
 
   const originPoint =
     originLat != null && originLng != null ? { lat: originLat, lng: originLng } : null;
@@ -156,10 +152,12 @@ export function TransportLegForm({
         hint="We record distance and cargo mass; Isometric applies the transport emissions factor."
       >
         <div className="flex flex-col gap-16">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+          {/* From → To: the two names read as one pair; the arrow only shows
+              when they sit side by side. */}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-16">
             <FormField
               id="originName"
-              label="Origin name"
+              label="From"
               error={errors.originName?.message}
             >
               <FormInput
@@ -169,9 +167,15 @@ export function TransportLegForm({
                 {...register("originName")}
               />
             </FormField>
+            <ArrowRightIcon
+              size={16}
+              weight="bold"
+              aria-hidden="true"
+              className="hidden sm:block mt-[calc(var(--spacing-24)+var(--spacing-12))] text-[var(--color-text-tertiary)]"
+            />
             <FormField
               id="destinationName"
-              label="Destination name"
+              label="To"
               error={errors.destinationName?.message}
             >
               <FormInput
@@ -187,7 +191,7 @@ export function TransportLegForm({
               each preview, search box, and the lat/lng pair. */}
           <PositionPicker
             idPrefix="origin"
-            label="Origin position"
+            label="From position"
             accent="orange"
             latitude={originLat ?? null}
             longitude={originLng ?? null}
@@ -201,7 +205,7 @@ export function TransportLegForm({
           />
           <PositionPicker
             idPrefix="destination"
-            label="Destination position"
+            label="To position"
             accent="pink"
             latitude={destinationLat ?? null}
             longitude={destinationLng ?? null}
@@ -217,7 +221,9 @@ export function TransportLegForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
           <DistanceCalcField
             id="distanceKm"
-            label="Distance (km)"
+            label="Distance"
+            // Every leg counts its round trip; show what the entry counts.
+            cue={oneWayDistanceCue(distanceKm, ONE_WAY_CUE)}
             required
             certifyRequired={isTransportLegCertifyField("distanceKm")}
             certifyStatus={certStatus("distanceKm")}
@@ -257,36 +263,22 @@ export function TransportLegForm({
               {...register("distanceSource")}
             />
           </FormField>
-          <FormField
-            id="transportMethodType"
-            label="Transport method"
-            required
-            error={errors.transportMethodType?.message}
-          >
-            <FormSelect
-              id="transportMethodType"
-              options={transportMethodOptions}
-              error={!!errors.transportMethodType}
-              {...register("transportMethodType")}
-            />
+          {/* Road is the only method the registry accepts, so it is a fixed
+              value: shown as text, still submitted through the hidden input. */}
+          <FormField id="transportMethodType-value" label="Transport method">
+            <output
+              id="transportMethodType-value"
+              className="block body-medium"
+              data-testid="transportMethodType-value"
+            >
+              {formatTransportMethod(transportMethod)}
+            </output>
           </FormField>
-          <FormField
-            id="tripType"
-            label="Trip type"
-            error={errors.tripType?.message}
-            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
-          >
-            <FormSelect
-              id="tripType"
-              options={TRIP_TYPE_OPTIONS}
-              disabled={isSubmitting}
-              error={!!errors.tripType}
-              {...register("tripType")}
-            />
-          </FormField>
+          <input type="hidden" {...register("transportMethodType")} />
           <FormField
             id="loadMassKg"
-            label="Load mass (kg)"
+            label="Load mass"
+            unit="kg"
             required
             error={errors.loadMassKg?.message}
             helperText="Mass moved on this leg. Used to weight transport emissions."

@@ -166,17 +166,20 @@ describe("credit batch CO₂e stored", () => {
       missingInputs: [],
       warnings: [],
     }];
-    const fields = creditBatchSheetSections({
+    const section = creditBatchSheetSections({
       ...baseOptions,
       creditBatch: makeBatch({ co2eStoredPreview: preview }),
-    }).find((section) => section.title === "Batch definition")?.fields;
+    }).find((entry) => entry.title === "Batch definition");
 
-    expect(fields).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Raw durability estimate", value: "97.0%" }),
-      expect.objectContaining({ label: "Capped durability estimate", value: "95.0%" }),
-      expect.objectContaining({ label: "Durability cap applied", value: "Yes" }),
-      expect.objectContaining({ label: "Preview formula", value: "organic-carbon-cap-v1" }),
+    // The result is a field at both levels; how it was reached is explanation.
+    expect(section?.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Durability estimate (capped)", value: "95.0%" }),
     ]));
+    const explanation = renderToStaticMarkup(<>{section?.explanation}</>);
+    expect(explanation).toContain("Raw durability estimate");
+    expect(explanation).toContain("97.0%");
+    expect(explanation).toContain("Durability cap applied");
+    expect(explanation).toContain("organic-carbon-cap-v1");
   });
 });
 
@@ -227,7 +230,7 @@ describe("credit batch production-run preview", () => {
 function visibleText(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.props.hidden ? "" : node.children.map(visibleText).join(" ");
 }
-it("keeps saved fields and the carbon estimate figure in Simple while calculation rows are Detailed only", async () => {
+it("shows saved fields, the durability result and the carbon estimate figure at both levels while calculation rows are Detailed only", async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const preview = makePreview(12.5, []);
   preview.applicationResults = [{ applicationId: "app", applicationCode: "APP-001", co2eStoredTonnes: 12.5, rawFDurable: 0.97, fDurable: 0.95, durabilityCapped: true, organicCarbonPercent: 79, effectiveSoilTemperatureC: null, missingInputs: [], warnings: [] }];
@@ -235,7 +238,9 @@ it("keeps saved fields and the carbon estimate figure in Simple while calculatio
   let renderer!: ReactTestRenderer;
   await act(async () => { renderer = create(<FormDetailProvider scope="batch"><FormDetailControl /><EntitySideSheetSections sections={sections} /></FormDetailProvider>); });
   const simple = visibleText(renderer.root);
-  for (const label of ["Carbon ledger", "Show calculation", "Feedstock dry mass", "Applied biochar", "Capped durability estimate", "Raw durability estimate", "Preview formula"]) expect(simple).not.toContain(label);
+  for (const label of ["Carbon ledger", "Show calculation", "Feedstock dry mass", "Raw durability estimate", "Preview formula"]) expect(simple).not.toContain(label);
+  expect(simple).toContain("Applied biochar");
+  expect(simple).toContain("Durability estimate (capped) 95.0%");
   // The estimate closes the Production runs section and Simple keeps its figure.
   expect(simple).toContain("Carbon estimate, before project emissions");
   expect(simple).toContain("≈ 12.50 t CO₂e");
@@ -246,9 +251,9 @@ it("keeps saved fields and the carbon estimate figure in Simple while calculatio
   await act(async () => renderer.root.findAllByType("input").find(node => node.props.value === "detailed")!.props.onChange());
   const detailed = visibleText(renderer.root);
   expect(detailed).toContain("12.50");
-  // Detailed no longer hides recorded fields behind a disclosure; they are rows.
-  expect(detailed).toContain("Capped durability estimate");
-  expect(detailed).toContain("Applied biochar");
+  // Detailed adds the basis of the durability result as explanation rows.
+  expect(detailed).toContain("Raw durability estimate");
+  expect(detailed).toContain("Preview formula");
   expect(detailed).not.toContain("Preview authority");
   await act(async () => renderer.unmount());
 });

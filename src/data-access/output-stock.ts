@@ -2,151 +2,212 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, biocharProductSourceAllocations, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations, productIngredientSnapshots, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
-import { add, decimal, grams, GRAMS_PER_KG, kilograms, planOutputStock, rational, readRational, subtract, type OutputStockLayer } from '@/lib/output-stock';
+import type { OutputStockLayer } from '@/lib/output-stock';
+import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type MoistureReadingRow } from '@/lib/output-stock/layer-projection';
 import { estimateStock, type LayerMoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { requireOrgScope } from './utils';
 
+export { UnresolvedOutputStockError };
+
 type Reader = Pick<DbTransaction, 'select'>;
 type ReadOptions = { includeArchived?: boolean; excludeUnresolvedRunId?: string };
-export class UnresolvedOutputStockError extends SafeError {}
+type OutputBinType = 'biochar_bin' | 'product_bin';
+/** An output bin already found in scope: whose facility its layers must share, and whether archived layers count. */
+interface OutputBinRef { id: string; type: OutputBinType; facilityId: string; includeArchived: boolean }
+
+const isOutputBinType = (type: string): type is OutputBinType => type === 'biochar_bin' || type === 'product_bin';
 
 /** Saved history, including linked reversals. Never rerun FIFO for provenance consumers. */
-export async function getOutputStockAllocationProjection(ctx: OrgContext, filter: { sourceStorageLocationId?: string; deliveryId?: string }, reader: Reader = db) {
+export async function getOutputStockAllocationProjection(ctx: OrgContext, filter: { sourceStorageLocationId?: string; sourceStorageLocationIds?: readonly string[]; deliveryId?: string }, reader: Reader = db) {
   requireOrgScope(ctx);
-  if (!filter.sourceStorageLocationId && !filter.deliveryId) throw new SafeError('A bin or delivery is required');
+  const sourceIds = filter.sourceStorageLocationIds ?? (filter.sourceStorageLocationId ? [filter.sourceStorageLocationId] : undefined);
+  if (!sourceIds && !filter.deliveryId) throw new SafeError('A bin or delivery is required');
+  if (sourceIds && !sourceIds.length) return [];
   return reader.select({ allocation: outputStockAllocations, run: outputStockRunAllocations, movement: binMovements })
     .from(outputStockAllocations)
     .innerJoin(binMovements, and(eq(binMovements.id, outputStockAllocations.movementId), eq(binMovements.organizationId, ctx.organizationId)))
     .leftJoin(outputStockRunAllocations, and(eq(outputStockRunAllocations.allocationId, outputStockAllocations.id), eq(outputStockRunAllocations.organizationId, ctx.organizationId)))
     .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId),
-      filter.sourceStorageLocationId ? eq(outputStockAllocations.sourceStorageLocationId, filter.sourceStorageLocationId) : undefined,
+      sourceIds ? inArray(outputStockAllocations.sourceStorageLocationId, [...sourceIds]) : undefined,
       filter.deliveryId ? eq(outputStockAllocations.deliveryId, filter.deliveryId) : undefined))
     .orderBy(asc(binMovements.postingSequence), asc(outputStockAllocations.id), asc(outputStockRunAllocations.productionRunId));
 }
 
 /**
+ * Every saved row that shapes the layers of `bins`, in one query per table
+ * whatever the bin count. Rows are grouped per bin in memory, where the
+ * facility and archived rules of each bin apply.
+ */
+async function readLayerRows(ctx: OrgContext, bins: readonly OutputBinRef[], reader: Reader) {
+  const biocharBinIds = bins.filter(bin => bin.type === 'biochar_bin').map(bin => bin.id);
+  const productBinIds = bins.filter(bin => bin.type === 'product_bin').map(bin => bin.id);
+  const [runs, biocharSources, products, effects] = await Promise.all([
+    biocharBinIds.length ? reader.select({ id: productionRuns.id, binId: productionRuns.biocharStorageLocationId, facilityId: productionRuns.facilityId, archivedAt: productionRuns.archivedAt,
+      endTime: productionRuns.endTime, dryKg: sql<string | null>`${productionRuns.biocharDryMassKg}::text`, postingSequence: productionRuns.stockPostingSequence })
+      .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds), eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS))) : [],
+    biocharBinIds.length ? reader.select({ binId: biocharProductSourceAllocations.sourceStorageLocationId, productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId,
+      dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` }).from(biocharProductSourceAllocations)
+      .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.sourceStorageLocationId, biocharBinIds))) : [],
+    productBinIds.length ? reader.select({ id: biocharProducts.id, binId: biocharProducts.storageLocationId, facilityId: biocharProducts.facilityId, archivedAt: biocharProducts.archivedAt,
+      placedAt: biocharProducts.placedAt, postingSequence: biocharProducts.stockPostingSequence, composition: biocharProducts.composition })
+      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds))) : [],
+    getOutputStockAllocationProjection(ctx, { sourceStorageLocationIds: bins.map(bin => bin.id) }, reader),
+  ]);
+  const productIds = products.map(product => product.id);
+  const [productSources, ingredients] = await Promise.all([
+    productIds.length ? reader.select({ productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId, runFacilityId: productionRuns.facilityId,
+      dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` })
+      .from(biocharProductSourceAllocations).innerJoin(productionRuns, and(eq(productionRuns.id, biocharProductSourceAllocations.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
+      .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.biocharProductId, productIds))).orderBy(asc(biocharProductSourceAllocations.productionRunId)) : [],
+    productIds.length ? reader.select({ biocharProductId: productIngredientSnapshots.biocharProductId, formulationIngredientId: productIngredientSnapshots.formulationIngredientId, drySolidsKg: productIngredientSnapshots.drySolidsKg })
+      .from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), inArray(productIngredientSnapshots.biocharProductId, productIds))) : [],
+  ]);
+  return { runs, biocharSources, products, productSources, ingredients, effects };
+}
+
+type LayerRows = Awaited<ReturnType<typeof readLayerRows>>;
+
+/** One bin's layers from the shared rows. Throws UnresolvedOutputStockError when its facts are incomplete. */
+function projectBinLayers(bin: OutputBinRef, rows: LayerRows, options: { excludeUnresolvedRunId?: string } = {}): OutputStockLayer[] {
+  const inScope = (row: { binId: string | null; facilityId: string; archivedAt: Date | null }) => row.binId === bin.id && row.facilityId === bin.facilityId && (bin.includeArchived || row.archivedAt == null);
+  const effects = rows.effects.filter(effect => effect.allocation.sourceStorageLocationId === bin.id);
+  if (bin.type === 'biochar_bin') {
+    return projectBiocharLayers({ runs: rows.runs.filter(inScope), sources: rows.biocharSources.filter(source => source.binId === bin.id), effects }, options);
+  }
+  const products = rows.products.filter(inScope);
+  const productIds = new Set(products.map(product => product.id));
+  return projectProductLayers({ products, effects,
+    sources: rows.productSources.filter(source => productIds.has(source.productId) && source.runFacilityId === bin.facilityId),
+    ingredients: rows.ingredients.filter(ingredient => productIds.has(ingredient.biocharProductId)) });
+}
+
+/**
+ * A posting reader: the bin must be in scope, at the facility, of the lane's
+ * type and (unless reading an archived bin on purpose) not archived. Save
+ * callers supply their locked transaction.
+ */
+async function getOutputStockLayers(ctx: OrgContext, type: OutputBinType, input: { storageLocationId: string; facilityId: string; occurredAt: string }, reader: Reader, options: ReadOptions) {
+  requireOrgScope(ctx);
+  const [bin] = await reader.select({ id: storageLocations.id }).from(storageLocations).where(and(
+    eq(storageLocations.id, input.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId),
+    eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, type), options.includeArchived ? undefined : isNull(storageLocations.archivedAt)));
+  if (!bin) throw new SafeError(type === 'product_bin' ? 'Product bin not found or archived' : 'Biochar bin not found or archived');
+  const ref: OutputBinRef = { id: bin.id, type, facilityId: input.facilityId, includeArchived: options.includeArchived ?? false };
+  const layers = projectBinLayers(ref, await readLayerRows(ctx, [ref], reader), options);
+  return { layers, ...outputStockBalance(layers, input.occurredAt) };
+}
+
+/**
  * Authoritative product-bin layers use frozen ingredient and source-run facts.
- * Unresolved composition fails closed. Save callers supply their locked transaction.
+ * Unresolved composition fails closed.
  */
-export async function getProductOutputStockLayers(ctx: OrgContext, input: { storageLocationId: string; facilityId: string; occurredAt: string }, reader: Reader = db, options: ReadOptions = {}) {
-  requireOrgScope(ctx);
-  const [bin] = await reader.select({ id: storageLocations.id }).from(storageLocations).where(and(
-    eq(storageLocations.id, input.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId),
-    eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, 'product_bin'), options.includeArchived ? undefined : isNull(storageLocations.archivedAt)));
-  if (!bin) throw new SafeError('Product bin not found or archived');
-  const products = await reader.select({ id: biocharProducts.id, placedAt: biocharProducts.placedAt, postingSequence: biocharProducts.stockPostingSequence, composition: biocharProducts.composition })
-    .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, input.storageLocationId), eq(biocharProducts.facilityId, input.facilityId), options.includeArchived ? undefined : isNull(biocharProducts.archivedAt)));
-  const ids = products.map(p => p.id);
-  if (!ids.length) return { layers: [] as OutputStockLayer[], expectedSolidsKg: planOutputStock([], input.occurredAt, { kind: 'count', wetKg: 0 }).expectedSolidsKg, remainingDryKg: '0.000' };
-  const sources = await reader.select({ productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId, dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` })
-    .from(biocharProductSourceAllocations).innerJoin(productionRuns, and(eq(productionRuns.id, biocharProductSourceAllocations.productionRunId), eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, input.facilityId)))
-    .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.biocharProductId, ids))).orderBy(asc(biocharProductSourceAllocations.productionRunId));
-  const ingredients = await reader.select().from(productIngredientSnapshots).where(and(eq(productIngredientSnapshots.organizationId, ctx.organizationId), inArray(productIngredientSnapshots.biocharProductId, ids)));
-  const effects = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: input.storageLocationId }, reader);
-  const layers: OutputStockLayer[] = products.map(product => {
-    if (!product.placedAt) throw new UnresolvedOutputStockError('Product placement time is unresolved');
-    const snapshotIngredients = ingredients.filter(i => i.biocharProductId === product.id);
-    const composition = product.composition as { ingredients?: { formulationIngredientId: string; massKg: number }[] };
-    const ingredientLines = composition.ingredients ?? [];
-    if (ingredientLines.some(i => !Number.isFinite(i.massKg) || i.massKg < 0)) throw new UnresolvedOutputStockError('Ingredient dry solids are unresolved');
-    const positiveIngredients = ingredientLines.filter(i => i.massKg > 0);
-    if (positiveIngredients.length !== snapshotIngredients.length || positiveIngredients.some(line =>
-      snapshotIngredients.filter(snapshot => snapshot.formulationIngredientId === line.formulationIngredientId).length !== 1,
-    )) throw new UnresolvedOutputStockError('Ingredient dry solids are unresolved');
-    const layerEffects = effects.filter(e => e.allocation.biocharProductId === product.id);
-    const uniqueEffects = [...new Map(layerEffects.map(e => [e.allocation.id, e.allocation])).values()];
-    const runs = sources.filter(s => s.productId === product.id).map(source => ({ productionRunId: source.runId, establishedDryKg: source.dryKg,
-      remainingDryKg: kilograms(grams(source.dryKg) - layerEffects.filter(e => e.run?.productionRunId === source.runId).reduce((sum, e) => sum + gramsSigned(e.run!.dryMassKg), BigInt(0))) }));
-    const established = runs.reduce((sum, r) => sum + grams(r.establishedDryKg), BigInt(0));
-    const ingredientGrams = snapshotIngredients.reduce((sum, i) => sum + grams(i.drySolidsKg), BigInt(0));
-    const consumedSolidsKg = uniqueEffects.reduce((sum, effect) => add(sum, readRational(effect.basisSnapshot.solidsKg)), rational(BigInt(0)));
-    return { id: product.id, placedAt: product.placedAt.toISOString(), postingSequence: product.postingSequence, establishedDryBiocharKg: kilograms(established),
-      ingredientDrySolidsKg: kilograms(ingredientGrams),
-      remainingSolidsKg: subtract(rational(established + ingredientGrams, GRAMS_PER_KG), consumedSolidsKg),
-      remainingDryBiocharKg: kilograms(established - uniqueEffects.reduce((sum, e) => sum + gramsSigned(e.dryMassKg), BigInt(0))), runs };
-  });
-  // A pure closure plan validates all layer/run invariants without persisting effects.
-  const validated = planOutputStock(layers, input.occurredAt, { kind: 'count', wetKg: 0 });
-  return { layers, expectedSolidsKg: validated.expectedSolidsKg,
-    remainingDryKg: kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))) };
+export function getProductOutputStockLayers(ctx: OrgContext, input: { storageLocationId: string; facilityId: string; occurredAt: string }, reader: Reader = db, options: ReadOptions = {}) {
+  return getOutputStockLayers(ctx, 'product_bin', input, reader, options);
 }
 
-function gramsSigned(value: string): bigint {
-  return value.startsWith('-') ? -grams(value.slice(1)) : grams(value);
-}
-
-/** Completed production layers. Existing source snapshots remain facts; when a
- * product draw has ledger allocations its target ID prevents counting it twice.
- * Missing established dry mass/completion is unresolved, never inferred from wet stock.
+/**
+ * Completed production layers. Missing established dry mass or completion is
+ * unresolved, never inferred from wet stock.
  */
-export async function getBiocharOutputStockLayers(ctx: OrgContext, input: { storageLocationId: string; facilityId: string; occurredAt: string }, reader: Reader = db, options: ReadOptions = {}) {
-  requireOrgScope(ctx);
-  const [bin] = await reader.select({ id: storageLocations.id }).from(storageLocations).where(and(
-    eq(storageLocations.id, input.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId),
-    eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, 'biochar_bin'), options.includeArchived ? undefined : isNull(storageLocations.archivedAt)));
-  if (!bin) throw new SafeError('Biochar bin not found or archived');
-  const runs = await reader.select({ id: productionRuns.id, endTime: productionRuns.endTime,
-    dryKg: sql<string | null>`${productionRuns.biocharDryMassKg}::text`, postingSequence: productionRuns.stockPostingSequence })
-    .from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, input.facilityId),
-      eq(productionRuns.biocharStorageLocationId, input.storageLocationId), eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS), options.includeArchived ? undefined : isNull(productionRuns.archivedAt)));
-  const sources = await reader.select({ productId: biocharProductSourceAllocations.biocharProductId, runId: biocharProductSourceAllocations.productionRunId,
-    dryKg: sql<string>`${biocharProductSourceAllocations.allocatedDryMassKg}::text` }).from(biocharProductSourceAllocations)
-    .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), eq(biocharProductSourceAllocations.sourceStorageLocationId, input.storageLocationId)));
-  const projections = await getOutputStockAllocationProjection(ctx, { sourceStorageLocationId: input.storageLocationId }, reader);
-  const effects = [...new Map(projections.map(p => [p.allocation.id, p.allocation])).values()];
-  const postedProducts = new Set(effects.flatMap(e => e.targetBiocharProductId ? [e.targetBiocharProductId] : []));
-  const layers: OutputStockLayer[] = runs.filter(run => {
-    if (run.id !== options.excludeUnresolvedRunId) return true;
-    if (run.endTime && run.dryKg != null && Number.isFinite(Number(run.dryKg)) && Number(run.dryKg) > 0) throw new SafeError('Only unresolved production stock can be excluded for repair');
-    if (sources.some(source => source.runId === run.id) || projections.some(effect => effect.run?.productionRunId === run.id || effect.allocation.productionRunId === run.id)) {
-      throw new SafeError('Production stock has downstream allocations and cannot be excluded for repair');
-    }
-    return false;
-  }).map(run => {
-    if (!run.endTime || run.dryKg == null || !Number.isFinite(Number(run.dryKg)) || Number(run.dryKg) <= 0) throw new UnresolvedOutputStockError('Production dry mass or completion date is unresolved. Complete the production run mass and date.');
-    const sourceDraw = sources.filter(s => s.runId === run.id && !postedProducts.has(s.productId)).reduce((sum, s) => sum + grams(s.dryKg), BigInt(0));
-    const runEffects = effects.filter(e => e.productionRunId === run.id);
-    const ledgerDraw = runEffects.reduce((sum, e) => sum + gramsSigned(e.dryMassKg), BigInt(0));
-    const consumedSolidsKg = runEffects.reduce((sum, effect) => add(sum, readRational(effect.basisSnapshot.solidsKg)), rational(sourceDraw, GRAMS_PER_KG));
-    const remainingDryBiocharKg = kilograms(grams(run.dryKg) - sourceDraw - ledgerDraw);
-    return { id: run.id, placedAt: run.endTime.toISOString(), postingSequence: run.postingSequence, establishedDryBiocharKg: run.dryKg,
-      ingredientDrySolidsKg: '0.000', remainingDryBiocharKg,
-      remainingSolidsKg: subtract(rational(grams(run.dryKg), GRAMS_PER_KG), consumedSolidsKg),
-      runs: [{ productionRunId: run.id, establishedDryKg: run.dryKg, remainingDryKg: remainingDryBiocharKg }] };
-  });
-  const validated = planOutputStock(layers, input.occurredAt, { kind: 'count', wetKg: 0 });
-  return { layers, expectedSolidsKg: validated.expectedSolidsKg,
-    remainingDryKg: kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))) };
+export function getBiocharOutputStockLayers(ctx: OrgContext, input: { storageLocationId: string; facilityId: string; occurredAt: string }, reader: Reader = db, options: ReadOptions = {}) {
+  return getOutputStockLayers(ctx, 'biochar_bin', input, reader, options);
 }
 
-/** Authoritative dry balance for existing stock summaries and archive guards. */
-export async function getOutputBinDryBalance(ctx: OrgContext, storageLocationId: string, reader: Reader = db, options: ReadOptions = {}): Promise<number> {
+/**
+ * Every layer's dry biochar, including receipts placed after now. Archive and
+ * mutation guards conserve all of it; draws use dated availability instead.
+ */
+export async function getOutputBinAllLayersDryKg(ctx: OrgContext, storageLocationId: string, reader: Reader = db, options: ReadOptions = {}): Promise<number> {
+  requireOrgScope(ctx);
+  return Number((await readOutputBinAllLayers(ctx, storageLocationId, reader, options)).allLayersDryKg);
+}
+
+/** Every layer of one output bin, including receipts placed after now, with the guard balance. */
+export async function readOutputBinAllLayers(ctx: OrgContext, storageLocationId: string, reader: Reader = db, options: ReadOptions = {}) {
   requireOrgScope(ctx);
   const [bin] = await reader.select({ facilityId: storageLocations.facilityId, type: storageLocations.type }).from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
   if (!bin) throw new SafeError('Storage bin not found');
   const input = { storageLocationId, facilityId: bin.facilityId, occurredAt: new Date().toISOString() };
-  const state = bin.type === 'product_bin' ? await getProductOutputStockLayers(ctx, input, reader, options) : await getBiocharOutputStockLayers(ctx, input, reader, options);
-  // Archive and mutation guards conserve all stock, including future receipts.
-  return Number(kilograms(state.layers.reduce((sum, layer) => sum + grams(layer.remainingDryBiocharKg), BigInt(0))));
+  return getOutputStockLayers(ctx, bin.type === 'product_bin' ? 'product_bin' : 'biochar_bin', input, reader, options);
+}
+
+/** What an output bin holds now. Every figure is null when the bin's layers do not resolve. */
+export interface OutputBinStock {
+  /** All layers, including ones placed later than now: the guard balance. */
+  allLayersDryKg: number | null;
+  /** Layers placed by now: what an operator can draw. */
+  availableDryKg: number | null;
+  estimatedWetMassKg: number | null;
+  estimatedMoisturePercent: number | null;
+}
+
+const UNRESOLVED_STOCK: OutputBinStock = { allLayersDryKg: null, availableDryKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null };
+
+/**
+ * Stock of many output bins in one pass: a fixed number of queries whatever
+ * the bin count. An unresolved bin reads as unavailable and never fails the
+ * others. Ids that are not output bins in scope are left out.
+ */
+export async function getOutputBinStocks(ctx: OrgContext, storageLocationIds: readonly string[], reader: Reader = db): Promise<Map<string, OutputBinStock>> {
+  requireOrgScope(ctx);
+  if (!storageLocationIds.length) return new Map();
+  const found = await reader.select({ id: storageLocations.id, type: storageLocations.type, facilityId: storageLocations.facilityId, archivedAt: storageLocations.archivedAt })
+    .from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), inArray(storageLocations.id, [...storageLocationIds])));
+  const bins = found.flatMap(bin => isOutputBinType(bin.type) ? [{ id: bin.id, type: bin.type, facilityId: bin.facilityId, includeArchived: bin.archivedAt != null }] : []);
+  if (!bins.length) return new Map();
+  const at = new Date().toISOString();
+  const [rows, moisture] = await Promise.all([readLayerRows(ctx, bins, reader), readMoistureRows(ctx, bins, reader)]);
+  return new Map(bins.map(bin => {
+    let layers: OutputStockLayer[];
+    try {
+      layers = projectBinLayers(bin, rows, {});
+    } catch (error) {
+      if (!(error instanceof UnresolvedOutputStockError)) throw error;
+      return [bin.id, UNRESOLVED_STOCK] as const;
+    }
+    const balance = outputStockBalance(layers, at);
+    const estimate = estimateStock(projectMoistureBases(layers, moistureRowsFor(bin, moisture)), at);
+    return [bin.id, { allLayersDryKg: Number(balance.allLayersDryKg), availableDryKg: Number(balance.availableDryKg),
+      estimatedWetMassKg: estimate.wetKg, estimatedMoisturePercent: estimate.moisturePercent }] as const;
+  }));
 }
 
 /** A bin's wet stock and moisture, estimated from each batch's latest reading. */
 export async function getOutputBinStockView(ctx: OrgContext, storageLocationId: string, reader: Reader = db) {
-  requireOrgScope(ctx);
-  const [bin] = await reader.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, storageLocationId)));
-  if (!bin) throw new SafeError('Storage bin not found');
-  const input = { storageLocationId, facilityId: bin.facilityId, occurredAt: new Date().toISOString() };
-  let state;
-  try {
-    state = bin.type === 'product_bin' ? await getProductOutputStockLayers(ctx, input, reader, { includeArchived: bin.archivedAt != null }) : await getBiocharOutputStockLayers(ctx, input, reader, { includeArchived: bin.archivedAt != null });
-  } catch (error) {
-    if (!(error instanceof UnresolvedOutputStockError)) throw error;
-    return { dryMassKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null };
-  }
-  const estimate = estimateStock(await getLayerMoistureBases(ctx, bin, state.layers, reader), input.occurredAt);
-  return { dryMassKg: Number(state.remainingDryKg), estimatedWetMassKg: estimate.wetKg, estimatedMoisturePercent: estimate.moisturePercent };
+  const stock = (await getOutputBinStocks(ctx, [storageLocationId], reader)).get(storageLocationId);
+  if (!stock) throw new SafeError('Storage bin not found');
+  return { dryMassKg: stock.availableDryKg, estimatedWetMassKg: stock.estimatedWetMassKg, estimatedMoisturePercent: stock.estimatedMoisturePercent };
+}
+
+/** Recorded wet mass per layer, moisture readings and reversed movements for `bins`, one query per table. */
+async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRef, 'id' | 'type'>[], reader: Reader) {
+  const biocharBinIds = bins.filter(bin => bin.type === 'biochar_bin').map(bin => bin.id);
+  const productBinIds = bins.filter(bin => bin.type === 'product_bin').map(bin => bin.id);
+  const binIds = bins.map(bin => bin.id);
+  const [runWet, productWet, readings, corrections] = await Promise.all([
+    biocharBinIds.length ? reader.select({ id: productionRuns.id, wet: sql<string | null>`${productionRuns.biocharOutputKg}::text` }).from(productionRuns)
+      .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds))) : [],
+    productBinIds.length ? reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
+      .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds))) : [],
+    reader.select({ reading: outputStockMoistureReadings, sequence: binMovements.postingSequence }).from(outputStockMoistureReadings)
+      .innerJoin(binMovements, and(eq(binMovements.id, outputStockMoistureReadings.movementId), eq(binMovements.organizationId, ctx.organizationId)))
+      .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), inArray(outputStockMoistureReadings.storageLocationId, binIds))),
+    reader.select({ binId: binMovements.storageLocationId, correctsMovementId: binMovements.correctsMovementId }).from(binMovements)
+      .where(and(eq(binMovements.organizationId, ctx.organizationId), inArray(binMovements.storageLocationId, binIds), isNotNull(binMovements.correctsMovementId))),
+  ]);
+  return { recordedWetKg: new Map([...runWet, ...productWet].map(row => [row.id, row.wet])), readings, corrections };
+}
+
+function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType<typeof readMoistureRows>>, ignoreMovementId?: string) {
+  const reversedMovementIds = new Set(rows.corrections.flatMap(row => row.binId === bin.id && row.correctsMovementId ? [row.correctsMovementId] : []));
+  if (ignoreMovementId) reversedMovementIds.add(ignoreMovementId);
+  const readings: MoistureReadingRow[] = rows.readings.flatMap(({ reading, sequence }) => {
+    const layerId = reading.biocharProductId ?? reading.productionRunId;
+    return reading.storageLocationId === bin.id && layerId ? [{ layerId, movementId: reading.movementId, moisturePercent: reading.moisturePercent, occurredAt: reading.occurredAt, sequence }] : [];
+  });
+  return { recordedWetKg: rows.recordedWetKg, readings, reversedMovementIds };
 }
 
 /**
@@ -157,25 +218,6 @@ export async function getOutputBinStockView(ctx: OrgContext, storageLocationId: 
  */
 export async function getLayerMoistureBases(ctx: OrgContext, bin: { id: string; type: string }, layers: readonly OutputStockLayer[], reader: Reader = db, options: { ignoreMovementId?: string } = {}): Promise<LayerMoistureBasis[]> {
   requireOrgScope(ctx);
-  const recordedRows = bin.type === 'product_bin'
-    ? await reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
-    : await reader.select({ id: productionRuns.id, wet: sql<string | null>`${productionRuns.biocharOutputKg}::text` }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, bin.id)));
-  const readings = await reader.select({ reading: outputStockMoistureReadings, sequence: binMovements.postingSequence }).from(outputStockMoistureReadings)
-    .innerJoin(binMovements, and(eq(binMovements.id, outputStockMoistureReadings.movementId), eq(binMovements.organizationId, ctx.organizationId)))
-    .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), eq(outputStockMoistureReadings.storageLocationId, bin.id)));
-  const corrections = await reader.select({ correctsMovementId: binMovements.correctsMovementId }).from(binMovements)
-    .where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, bin.id), isNotNull(binMovements.correctsMovementId)));
-  const reversed = new Set(corrections.map(row => row.correctsMovementId));
-  if (options.ignoreMovementId) reversed.add(options.ignoreMovementId);
-  const recordedWet = new Map(recordedRows.map(row => [row.id, row.wet]));
-  return layers.map(layer => {
-    const wet = recordedWet.get(layer.id);
-    const recordedWetKg = wet == null || !/^\d+(\.\d+)?$/.test(wet) ? null : decimal(wet);
-    return {
-      layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg!,
-      recorded: recordedWetKg ? { solidsKg: rational(grams(layer.establishedDryBiocharKg) + grams(layer.ingredientDrySolidsKg), GRAMS_PER_KG), wetKg: recordedWetKg } : null,
-      readings: readings.filter(({ reading }) => (reading.biocharProductId ?? reading.productionRunId) === layer.id && !reversed.has(reading.movementId))
-        .map(({ reading, sequence }) => ({ moisturePercent: reading.moisturePercent, occurredAt: reading.occurredAt.toISOString(), sequence })),
-    };
-  });
+  const rows = await readMoistureRows(ctx, [{ id: bin.id, type: bin.type === 'product_bin' ? 'product_bin' : 'biochar_bin' }], reader);
+  return projectMoistureBases(layers, moistureRowsFor(bin, rows, options.ignoreMovementId));
 }

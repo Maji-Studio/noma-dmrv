@@ -1,34 +1,31 @@
 /**
- * The run as a journey: where the material came from, what it passed through,
- * where it ended up.
+ * The run as a mass flow: what went into the reactor, what left it, and where
+ * the rest went.
  *
- * Three stops on a rail, source bins to reactor to destination bin, and the two
- * segments between them carry the masses. The first segment is the feedstock
- * going in, drawn as its moisture split so the dry matter the yield is measured
- * on is visible rather than implied. The second is the biochar coming out, the
- * same way. The yield is the block's one headline figure, above the rail.
+ * A Sankey from the source bin through the reactor to the destination bin,
+ * band thickness in kilograms on one scale, so 4 t in and 1 t out look like
+ * it. On the dry basis the feedstock splits into its water, which is driven
+ * off before the reactor, and its dry matter, which enters it; the reactor
+ * splits the dry matter into the conversion loss (syngas, vapour, ash) and the
+ * dry biochar, which runs on to the bin and meets the biochar's own water
+ * there. The exits are the run's losses made visible rather than implied by
+ * two bars of different length.
  *
- * It replaces a three-box recap that read as three unrelated cards: a run is a
- * sequence, so it is drawn as one, and it reuses the transport journey's shape
- * (nodes on a rail, the leg between them) because an operator has already
- * learnt to read that on the delivery and sample sheets. A transport leg keeps
- * its box because it is a record with its own actions; a segment here is only
- * derived figures, so it sits flat on the rail.
+ * Both bases are honest. When either dry mass is missing the flow falls back
+ * to wet mass end to end, with water and conversion loss as one exit, and the
+ * yield's label says so, rather than mixing a dry numerator with a wet
+ * denominator. Until both wet masses are entered nothing is drawn to scale:
+ * an unresolved bar names the masses still to enter.
  *
- * Simple keeps the yield headline only: the fields above already hold the two
- * masses, and the yield is what they add up to. Detailed adds the rail and the
- * yield arithmetic behind Show calculation. Both bases
- * are honest: when either dry mass is missing the whole equation falls back to
- * wet mass and says so in the yield's own label, rather than mixing a dry
- * numerator with a wet denominator. The segment whose dry mass is missing
- * already carries the unresolved split bar naming the field to fill.
+ * Both levels show the yield headline and the flow, because the flow is what
+ * the masses above add up to. Detailed adds only the yield arithmetic behind
+ * Show calculation.
  */
 "use client";
 
-import type { ReactNode } from "react";
 import { CompositionCard } from "@/components/forms/composition-card";
 import { DerivedHeadline } from "@/components/forms/derived-headline";
-import { MoistureSplit } from "@/components/ui/moisture-split";
+import { MassFlowSankey, type MassFlowDiagram } from "@/components/ui/mass-flow-sankey";
 import { formatMassKg, formatPercent } from "@/lib/format-utils";
 import { PERCENT_SCALE } from "@/lib/mass-moisture";
 import { StockRows, type StockRow } from "@/components/storage-locations/stock-figures";
@@ -36,7 +33,13 @@ import { StockRows, type StockRow } from "@/components/storage-locations/stock-f
 const YIELD_DIGITS = 1;
 
 const PROCESS_FLOW_HINT =
-  "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses.";
+  "Yield is the biochar leaving the reactor as a share of the feedstock entering it. Dry mass is the basis carbon accounting uses. Conversion loss is the pyrolysis mass not kept in the biochar: syngas, vapour and ash.";
+
+const PLACEHOLDERS = {
+  source: "Select source bin",
+  reactor: "Select reactor",
+  destination: "Select destination bin",
+} as const;
 
 interface ProcessFlowProps {
   sourceBinName: string | null;
@@ -70,107 +73,134 @@ function resolveBasis({ feedstockKg, feedstockDryKg, biocharKg, biocharDryKg }: 
   };
 }
 
+function stop(name: string | null, placeholder: string) {
+  return { name: name ?? placeholder, placeholder: name === null };
+}
+
+/**
+ * The flow on the run's basis, or null while a wet mass is missing. A dry
+ * mass that does not fit inside its wet mass cannot be split, so the flow
+ * falls back to wet rather than drawing negative water.
+ */
+export function processFlowDiagram(props: ProcessFlowProps): MassFlowDiagram | null {
+  const { feedstockKg, feedstockDryKg, biocharKg, biocharDryKg } = props;
+  if (feedstockKg === null || biocharKg === null || feedstockKg <= 0) return null;
+  const source = stop(props.sourceBinName, PLACEHOLDERS.source);
+  const reactor = stop(props.reactorName, PLACEHOLDERS.reactor);
+  const destination = stop(props.destinationBinName, PLACEHOLDERS.destination);
+  const splits =
+    feedstockDryKg !== null && biocharDryKg !== null && feedstockDryKg <= feedstockKg && biocharDryKg <= biocharKg;
+
+  if (!splits) {
+    const lossKg = Math.max(0, feedstockKg - biocharKg);
+    return {
+      nodes: [
+        { id: "source", column: 0, ...source, caption: `${formatMassKg(feedstockKg)} wet`, segments: [{ id: "feed", kg: feedstockKg, kind: "wet" }] },
+        {
+          id: "reactor",
+          column: 1,
+          ...reactor,
+          segments: [
+            { id: "loss", kg: lossKg, kind: "released" },
+            { id: "made", kg: biocharKg, kind: "process" },
+          ],
+        },
+        { id: "destination", column: 2, ...destination, caption: `${formatMassKg(biocharKg)} wet`, segments: [{ id: "biochar", kg: biocharKg, kind: "wet" }] },
+      ],
+      links: [
+        { from: "feed", to: "reactor" },
+        { from: "made", to: "biochar" },
+      ],
+      exits: [{ from: "loss", name: "Water and conversion loss", caption: formatMassKg(lossKg) }],
+    };
+  }
+
+  const feedWaterKg = feedstockKg - feedstockDryKg;
+  const lossKg = Math.max(0, feedstockDryKg - biocharDryKg);
+  return {
+    nodes: [
+      {
+        id: "source",
+        column: 0,
+        ...source,
+        caption: `${formatMassKg(feedstockKg)} wet, ${formatMassKg(feedstockDryKg)} dry`,
+        segments: [
+          { id: "feed-water", kg: feedWaterKg, kind: "water" },
+          { id: "feed-dry", kg: feedstockDryKg, kind: "dry" },
+        ],
+      },
+      {
+        id: "reactor",
+        column: 1,
+        ...reactor,
+        segments: [
+          { id: "loss", kg: lossKg, kind: "released" },
+          { id: "made", kg: biocharDryKg, kind: "process" },
+        ],
+      },
+      {
+        id: "destination",
+        column: 2,
+        ...destination,
+        caption: `${formatMassKg(biocharKg)} wet, ${formatMassKg(biocharDryKg)} dry`,
+        segments: [
+          { id: "biochar-dry", kg: biocharDryKg, kind: "dry" },
+          { id: "biochar-water", kg: biocharKg - biocharDryKg, kind: "water" },
+        ],
+      },
+    ],
+    links: [
+      { from: "feed-dry", to: "reactor" },
+      { from: "made", to: "biochar-dry" },
+    ],
+    exits: [
+      { from: "feed-water", name: "Water driven off", caption: formatMassKg(feedWaterKg) },
+      { from: "loss", name: "Conversion loss", caption: formatMassKg(lossKg) },
+    ],
+  };
+}
+
+/** Which wet masses the flow still needs, in the order the form asks for them. */
+function missingMasses({ feedstockKg, biocharKg }: ProcessFlowProps): string {
+  const missing = [
+    feedstockKg === null || feedstockKg <= 0 ? "the feedstock wet mass" : null,
+    biocharKg === null ? "the biochar wet mass" : null,
+  ].filter(Boolean);
+  return missing.join(" and ");
+}
+
 export function ProcessFlowPreview(props: ProcessFlowProps) {
-  const {
-    sourceBinName,
-    feedstockKg,
-    feedstockMoisturePercent,
-    feedstockDryKg,
-    reactorName,
-    biocharKg,
-    biocharMoisturePercent,
-    biocharDryKg,
-    destinationBinName,
-  } = props;
+  const { sourceBinName, reactorName, destinationBinName } = props;
   if (!sourceBinName && !reactorName && !destinationBinName) return null;
   const basis = resolveBasis(props);
   // Until a yield resolves there is no basis to name, only the figure missing.
   const yieldLabel = basis.yieldPercent === null ? "Yield" : `${basis.dry ? "Dry" : "Wet"} yield`;
+  const diagram = processFlowDiagram(props);
 
   return (
     <CompositionCard
       title="Process flow"
       hint={PROCESS_FLOW_HINT}
-      simple="headline"
       headline={<DerivedHeadline
         label={yieldLabel}
         value={basis.yieldPercent === null ? null : formatPercent(basis.yieldPercent, { digits: YIELD_DIGITS })}
       />}
       calculation={basis.yieldPercent !== null ? <YieldCalculation basis={basis} label={yieldLabel} /> : undefined}
     >
-      {/* The block's own section already carries the name. */}
-      <ol>
-        <FlowStop name={sourceBinName} placeholder="Select source bin">
-          <FlowSegment
-            label="Feedstock in"
-            massKg={feedstockKg}
-            moisturePercent={feedstockMoisturePercent}
-            dryMassKg={feedstockDryKg}
-            materialLabel="Feedstock"
+      {diagram ? (
+        <MassFlowSankey diagram={diagram} />
+      ) : (
+        <div className="flex flex-col gap-6">
+          <div
+            aria-hidden="true"
+            className="moisture-water-hatch h-10 w-full border border-dashed border-[var(--color-border-secondary)]"
           />
-        </FlowStop>
-        <FlowStop name={reactorName} placeholder="Select reactor">
-          <FlowSegment
-            label="Biochar out"
-            massKg={biocharKg}
-            moisturePercent={biocharMoisturePercent}
-            dryMassKg={biocharDryKg}
-            materialLabel="Biochar"
-          />
-        </FlowStop>
-        <FlowStop name={destinationBinName} placeholder="Select destination bin" />
-      </ol>
+          <p className="body-caption text-[var(--color-text-tertiary)]">
+            Record {missingMasses(props)} to draw the flow.
+          </p>
+        </div>
+      )}
     </CompositionCard>
-  );
-}
-
-/**
- * A stop on the rail: the node, the line down to the next stop, the stop's name
- * and the segment leaving it. The final stop has no segment, so it has no line.
- *
- * An unselected stop still gets a node. The rail is the shape of a run whether
- * or not its bins are picked yet, and the placeholder says which field to fill.
- */
-function FlowStop({ name, placeholder, children }: { name: string | null; placeholder: string; children?: ReactNode }) {
-  return (
-    <li className="flex gap-12">
-      <div className="flex flex-col items-center" aria-hidden="true">
-        <span className="mt-6 size-8 shrink-0 rounded-full bg-[var(--color-text-primary)]" />
-        {children && <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />}
-      </div>
-      <div className={`min-w-0 flex-1 space-y-8 ${children ? "pb-16" : ""}`}>
-        <p className={`body-small font-medium ${name ? "" : "text-[var(--color-text-tertiary)]"}`}>{name ?? placeholder}</p>
-        {children}
-      </div>
-    </li>
-  );
-}
-
-/**
- * The segment between two stops: what travelled it, how much of it, and the
- * split between the dry matter and the water. It sits flat on the rail with no
- * box of its own: the rail line already joins it to the stops either side, and
- * a frame around derived figures would only decorate them. The mass stays
- * pinned right against the wrapping label, the way a transport leg pins its
- * distance.
- */
-function FlowSegment({ label, massKg, moisturePercent, dryMassKg, materialLabel }: {
-  label: string;
-  massKg: number | null;
-  moisturePercent: number | null;
-  dryMassKg: number | null;
-  materialLabel: string;
-}) {
-  return (
-    <div className="space-y-8">
-      <div className="flex items-baseline justify-between gap-8">
-        <p className="body-small text-[var(--color-text-secondary)]">{label}</p>
-        {/* No mass yet means no figure: the split bar below already names the
-            field that is missing, and "Not recorded wet" reads as a value. */}
-        {massKg !== null && <span className="shrink-0 body-small font-medium tabular-nums">{formatMassKg(massKg)} wet</span>}
-      </div>
-      <MoistureSplit calculation={false} wetMassKg={massKg} moisturePercent={moisturePercent} dryMassKg={dryMassKg} materialLabel={materialLabel} />
-    </div>
   );
 }
 

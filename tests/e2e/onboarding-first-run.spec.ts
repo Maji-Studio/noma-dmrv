@@ -148,8 +148,10 @@ test.describe("First-run onboarding", () => {
         .getByRole("listitem")
         .filter({ hasText: ORG_NAME });
       await expect(organization).toBeVisible();
+      await expect(organization.getByText("Keys saved")).toBeVisible();
+      await organization.getByRole("button", { name: "Isometric keys" }).click();
       await expect(
-        organization.getByText("Ends 9999", { exact: false }),
+        adminPage.getByRole("dialog").getByText("Ends 9999", { exact: false }),
       ).toBeVisible();
 
       // 5. Finish → the guide takes over the dashboard body.
@@ -170,7 +172,7 @@ test.describe("First-run onboarding", () => {
 
       // 6. Collapse to the strip (real dashboard renders), expand back.
       await guide.getByRole("button", { name: "Hide setup guide" }).click();
-      await expect(page.getByText(/Setup · 2\/7/)).toBeVisible();
+      await expect(page.getByText(/Setup, 2 of 7/)).toBeVisible();
       await expect(page.getByTestId("dashboard-kpis")).toBeVisible();
       await page.getByRole("button", { name: "Show guide" }).click();
       await expect(guide).toBeVisible();
@@ -179,18 +181,21 @@ test.describe("First-run onboarding", () => {
       // deep-link, then the step self-clears on client-side dashboard return.
       await guide.getByRole("link", { name: "Add supplier" }).click();
       await expect(page).toHaveURL(/\/suppliers/);
-      const sheet = page.getByRole("dialog", { name: "Create Supplier" });
+      const sheet = page.getByRole("dialog", { name: "Create supplier" });
       await expect(sheet.getByLabel(/supplier name|^name/i)).toBeVisible();
       await sheet.getByLabel(/supplier name|^name/i).fill("CU Test Supplier");
       // Suppliers require at least one committed source location: open the
       // nested dialog, fill its required fields (country and GPS position),
       // and commit it before returning to the still-open supplier sheet.
-      await sheet.getByRole("button", { name: "Add Location" }).click();
+      await sheet.getByRole("button", { name: "Add location" }).click();
       const locationDialog = page.getByRole("dialog", {
-        name: "Add Location",
+        name: "Add location",
       });
       await expect(locationDialog).toBeVisible();
-      const locationName = locationDialog.getByLabel("Location name");
+      // By role: the field's ⓘ button is named "More about Location name".
+      const locationName = locationDialog.getByRole("textbox", {
+        name: "Location name",
+      });
       await expect(locationName).toBeVisible();
       await locationName.fill("CU Source Site");
       await locationDialog.getByLabel("Country").fill("Tanzania");
@@ -204,13 +209,13 @@ test.describe("First-run onboarding", () => {
       await lat.fill("-6.163");
       await lng.fill("35.7516");
       await locationDialog
-        .getByRole("button", { name: "Add Location" })
+        .getByRole("button", { name: "Add location" })
         .click();
       await expect(locationDialog).not.toBeVisible();
       await expect(sheet).toBeVisible();
       // Dialog committed → exactly one pending location row in the supplier sheet.
       await expect(sheet.getByText("CU Source Site")).toBeVisible();
-      await sheet.getByRole("button", { name: "Create Supplier" }).click();
+      await sheet.getByRole("button", { name: "Create supplier" }).click();
       // The sheet closes only after the create mutation succeeds — wait for it
       // so the dashboard return can't race the in-flight write.
       await expect(sheet).not.toBeVisible();

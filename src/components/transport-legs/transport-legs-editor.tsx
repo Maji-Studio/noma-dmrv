@@ -6,6 +6,7 @@ import {
   BoatIcon,
   FileDashedIcon,
   FileTextIcon,
+  MapPinIcon,
   PathIcon,
   PencilSimpleIcon,
   PipeIcon,
@@ -23,7 +24,7 @@ import { ServerError } from "@/components/forms";
 import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Skeleton } from "@/components/ui/loading-skeleton";
-import { formatDistanceKm, formatMass } from "@/lib/format-utils";
+import { formatDistanceKm, formatLegDistanceKm, formatMass, formatRoundTripKm } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { cn } from "@/lib/utils";
 import {
@@ -116,6 +117,7 @@ const TRANSPORT_METHOD_PHRASES: Record<TransportMethodValue, string> = {
   aircraft: "by air",
 };
 
+const STOP_ICON_PX = 16;
 const METHOD_ICON_PX = 16;
 const EVIDENCE_ICON_PX = 16;
 const MENU_ICON_PX = 16;
@@ -276,9 +278,10 @@ function summarizeJourney(
     .map((leg) => leg.loadMassKg)
     .filter((kg): kg is number => kg != null && Number.isFinite(kg));
 
+  // Every leg counts its round trip, so the journey total names both figures.
   const totalDistance =
     distances.length > 0
-      ? formatDistanceKm(distances.reduce((sum, km) => sum + km, 0))
+      ? formatLegDistanceKm(distances.reduce((sum, km) => sum + km, 0))
       : MISSING_VALUE.notRecorded;
   const distanceCaption =
     missingDistances > 0
@@ -332,7 +335,7 @@ function JourneyLeg({
     FALLBACK_METHOD_ICON;
   const EvidenceIcon = evidenceAttached ? FileTextIcon : FileDashedIcon;
   const evidenceLabel = evidenceAttached ? "Evidence attached" : "No evidence";
-  const hasDistance = leg.distanceKm != null;
+  const distanceKm = leg.distanceKm ?? null;
   const distanceSource = describeDistanceSource(leg.distanceSource);
 
   return (
@@ -347,12 +350,15 @@ function JourneyLeg({
         title={distanceSource}
       >
         <span className="sr-only">{`Leg to ${arrivalStopName}. `}</span>
-        {hasDistance ? (
+        {distanceKm != null ? (
           <>
             <span className="font-medium tabular-nums text-[var(--color-text-primary)]">
-              {formatDistanceKm(leg.distanceKm)}
+              {formatDistanceKm(distanceKm)}
             </span>{" "}
-            {formatMethodPhrase(leg.transportMethodType)}
+            {`one way ${formatMethodPhrase(leg.transportMethodType)} · `}
+            <span className="tabular-nums">
+              {formatRoundTripKm(distanceKm)}
+            </span>
           </>
         ) : (
           `${capitalize(formatMethodPhrase(leg.transportMethodType))}, distance not recorded`
@@ -412,7 +418,7 @@ function JourneyLeg({
  * a caption + add button, the legs as one journey timeline, and a centered
  * add/edit dialog. Pass `readOnly` for the view-mode summary.
  *
- * Every mount is a 390px side sheet, so the legs read as stops on a rail rather
+ * Every mount is a 390px side sheet, so the legs read as pinned stops rather
  * than as a table: consecutive legs share a stop, which is what the operator
  * recorded, and each leg sits as a one-line box between the two stops it joins.
  * Long stop names wrap; the load, evidence icon and actions menu stay pinned
@@ -603,25 +609,16 @@ export function TransportLegsEditor({
                   .transportEvidenceDocumentCount,
               );
             return (
-              <li key={stop.key} className="flex gap-12">
-                <div
-                  className="flex flex-col items-center"
-                  aria-hidden="true"
-                >
-                  <span className="mt-6 size-8 shrink-0 rounded-full bg-[var(--color-text-primary)]" />
-                  {!isFinalStop && (
-                    <span className="w-1 flex-1 bg-[var(--color-border-secondary)]" />
-                  )}
-                </div>
-                <div
-                  className={cn(
-                    "min-w-0 flex-1 space-y-8",
-                    !isFinalStop && "pb-16",
-                  )}
-                >
-                  <p className="body-small font-medium text-[var(--color-text-primary)]">
-                    {stop.name}
-                  </p>
+              <li key={stop.key} className={cn("space-y-8", !isFinalStop && "pb-16")}>
+                <p className="flex items-start gap-8 body-small font-medium text-[var(--color-text-primary)]">
+                  <MapPinIcon
+                    size={STOP_ICON_PX}
+                    className="mt-2 shrink-0 text-[var(--color-text-tertiary)]"
+                    aria-hidden
+                  />
+                  <span className="min-w-0">{stop.name}</span>
+                </p>
+                <div className="min-w-0 space-y-8 pl-24">
                   {leg && (
                     <JourneyLeg
                       leg={leg}

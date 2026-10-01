@@ -1,7 +1,7 @@
+import type { ReactNode } from "react";
 import {
   ArrowsClockwiseIcon,
   FactoryIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { SectionLabel } from "@/components/forms";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import type { CreditBatchProductionRunOption } from "@/data-access/credit-batche
 import { formatDate } from "@/lib/format-utils";
 import { formatWetDryMass } from "@/lib/mass-moisture";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { Notice } from "@/components/ui/notice";
 
 export interface RetainedProductionRunPreview {
   id: string;
@@ -26,6 +27,8 @@ interface CreditBatchProductionRunsPreviewProps {
   isError: boolean;
   isRetrying: boolean;
   onRetry: () => void;
+  /** Derived totals for the selected cohort, shown above the run rows so the cohort reads as one block. */
+  summary?: ReactNode;
 }
 
 function ProductionRunPreviewRow({
@@ -74,9 +77,6 @@ function ProductionRunPreviewRow({
       <span className="flex shrink-0 items-center gap-10">
         {isPreview && <StatusBadge status={run.status} size="small" />}
         <span className="text-right">
-          <span className="block label-micro text-[var(--color-text-tertiary)]">
-            Biochar output
-          </span>
           <span className="block body-small tabular-nums text-[var(--color-text-secondary)]">
             {formatWetDryMass({
               wetKg: run.biocharOutputKg,
@@ -120,6 +120,7 @@ export function CreditBatchProductionRunsPreview({
   isError,
   isRetrying,
   onRetry,
+  summary,
 }: CreditBatchProductionRunsPreviewProps) {
   const retainedKnownRuns = retainedRuns.flatMap(({ run }) => (run ? [run] : []));
   const unavailableRunIds = retainedRuns.flatMap(({ id, run }) =>
@@ -135,33 +136,20 @@ export function CreditBatchProductionRunsPreview({
   return (
     <section
       data-testid="credit-batch-production-run-cohort"
-      className="space-y-12 border-t border-[var(--color-border-tertiary)] pt-16"
+      className="space-y-12"
     >
       <SectionLabel hint="Completed runs matching this feedstock and production window are attached automatically. Non-complete runs are shown as previews.">
         Production runs
       </SectionLabel>
 
       {!isReady ? (
-        <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            Select a feedstock type and set the production window to load runs.
-          </span>
-        </div>
+        <Notice tone="info">
+          Select a feedstock type and set the production window to load runs.
+        </Notice>
       ) : isError ? (
-        <div
-          role="alert"
-          className="flex items-start gap-10 border-l-2 border-[var(--st-bad)] bg-[var(--st-bad-bg)] px-16 py-12"
-        >
-          <WarningCircleIcon
-            size={16}
-            weight="fill"
-            aria-hidden
-            className="mt-1 shrink-0 text-[var(--st-bad)]"
-          />
-          <div className="flex flex-1 items-center justify-between gap-12">
-            <span className="body-small text-[var(--st-bad)]">
-              Couldn&apos;t load production runs for this window. Try again.
-            </span>
+        <Notice
+          tone="error"
+          action={
             <Button
               type="button"
               variant="noOutline"
@@ -172,17 +160,17 @@ export function CreditBatchProductionRunsPreview({
               <ArrowsClockwiseIcon size={14} aria-hidden />
               Retry
             </Button>
-          </div>
-        </div>
+          }
+        >
+          Couldn&apos;t load production runs for this window. Try again.
+        </Notice>
       ) : isLoading ? (
-        <div
-          className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
+        <span
+          className="body-small text-[var(--color-text-tertiary)]"
           aria-busy
         >
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            Loading production runs…
-          </span>
-        </div>
+          Loading production runs…
+        </span>
       ) : !hasVisibleRows ? (
         <EmptyState
           icon={<FactoryIcon size={32} weight="bold" aria-hidden />}
@@ -199,12 +187,15 @@ export function CreditBatchProductionRunsPreview({
             </p>
           )}
           <p className="body-caption text-[var(--color-text-tertiary)]">
-            {completedCount} completed · {previewCount}{" "}
-            {previewCount === 1 ? "preview" : "previews"}
-            {unavailableRunIds.length > 0
-              ? ` · ${unavailableRunIds.length} retained`
-              : ""}
+            {[
+              `${completedCount} completed`,
+              `${previewCount} ${previewCount === 1 ? "preview" : "previews"}`,
+              ...(unavailableRunIds.length > 0
+                ? [`${unavailableRunIds.length} retained`]
+                : []),
+            ].join(" · ")}
           </p>
+          {summary}
           <div className="grid grid-cols-1 gap-8">
             {visibleRuns.map((run) => (
               <ProductionRunPreviewRow

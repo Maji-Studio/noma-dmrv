@@ -25,7 +25,8 @@
 import dynamic from "next/dynamic";
 import { useState, type CSSProperties } from "react";
 import { MapTrifoldIcon } from "@phosphor-icons/react/dist/ssr";
-import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import type { ChainFacility, ChainOfCustodyData } from "@/data-access/chain-of-custody";
+import type { ChainRunRollForward } from "@/data-access/chain-of-custody-roll-forward";
 import { ROUTE_GEOMETRY_MAX_LEGS } from "@/config/geo";
 import {
   useChainOfCustodyGeo,
@@ -34,7 +35,7 @@ import {
 import { useRouteGeometries } from "@/hooks/use-geo";
 import { LINEAGE_NODE_STYLES } from "../chain-constants";
 import type { ChainNodeSheetNode } from "../chain-node-sheet";
-import { buildLineageNodes } from "../use-chain-graph";
+import { buildLineageNodes, buildRollForwardNodes } from "../use-chain-graph";
 import type { PopupContentByNodeId } from "./carbon-transit-map";
 import { CustodyStagesRail, RAIL_WIDTH_PX } from "./custody-stages-rail";
 import { RECORD_PANEL_WIDTH_PX, RecordDetailPanel } from "./record-detail-panel";
@@ -59,7 +60,7 @@ const CarbonTransitMap = dynamic(() => import("./carbon-transit-map"), {
       className="flex h-full w-full items-center justify-center bg-[var(--color-background-light)]"
       data-testid="carbon-viewer-map-loading"
     >
-      <span className="label-button uppercase text-[var(--color-text-tertiary)]">
+      <span className="body-small font-medium text-[var(--color-text-tertiary)]">
         Loading map…
       </span>
     </div>
@@ -89,10 +90,13 @@ const MAP_VIEW_STACK_VARS = {
   "--cv-record-panel-w": `${RECORD_PANEL_WIDTH_PX}px`,
 } as CSSProperties;
 
-/** Which anchor the panel plots: a single application or a batch roll-up. */
+/**
+ * Which anchor the panel plots: a single application or a batch roll-up,
+ * optionally narrowed to the lineages flowing through one production run.
+ */
 export type ChainGeoSource =
   | { kind: "application"; id: string }
-  | { kind: "creditBatch"; id: string };
+  | { kind: "creditBatch"; id: string; runId: string | null };
 
 export interface CarbonTransitPanelProps {
   source: ChainGeoSource;
@@ -101,6 +105,10 @@ export interface CarbonTransitPanelProps {
    * One entry for an application anchor; one per member for a batch.
    */
   lineages: ChainOfCustodyData[] | undefined;
+  /** Batch only: member runs' roll-forwards, for records no rollback reaches. */
+  rollForwards?: ChainRunRollForward[];
+  /** Batch only: the facility popup when no rollback carries one. */
+  facility?: ChainFacility;
   /** map = full side rails; split = collapsed not-geolocated chip box. */
   view: "map" | "split";
   /** Cross-link highlight from the DAG (nonce re-triggers repeat clicks). */
@@ -129,24 +137,28 @@ export interface CarbonTransitPanelProps {
 }
 
 function buildPopupContent(
-  lineages: ChainOfCustodyData[] | undefined
+  lineages: ChainOfCustodyData[] | undefined,
+  rollForwards: ChainRunRollForward[] = [],
+  batchFacility?: ChainFacility,
 ): PopupContentByNodeId {
   const content: PopupContentByNodeId = {};
-  if (!lineages || lineages.length === 0) return content;
-  for (const chainData of lineages) {
-    for (const node of buildLineageNodes(chainData)) {
-      if (content[node.id]) continue;
-      content[node.id] = {
-        typeLabel: LINEAGE_NODE_STYLES[node.kind].label,
-        status: node.status ?? null,
-        details: [
-          ...(node.date ? [{ label: "Date", value: node.date }] : []),
-          ...node.details,
-        ],
-      };
-    }
+  const nodes = [
+    ...(lineages ?? []).flatMap((chainData) => buildLineageNodes(chainData)),
+    ...buildRollForwardNodes(rollForwards),
+  ];
+  for (const node of nodes) {
+    if (content[node.id]) continue;
+    content[node.id] = {
+      typeLabel: LINEAGE_NODE_STYLES[node.kind].label,
+      status: node.status ?? null,
+      details: [
+        ...(node.date ? [{ label: "Date", value: node.date }] : []),
+        ...node.details,
+      ],
+    };
   }
-  const facility = lineages[0].facility;
+  const facility = lineages?.[0]?.facility ?? batchFacility;
+  if (!facility) return content;
   content[`facility:${facility.id}`] = {
     typeLabel: "Facility",
     status: null,
@@ -160,6 +172,8 @@ function buildPopupContent(
 export function CarbonTransitPanel({
   source,
   lineages,
+  rollForwards,
+  facility,
   view,
   highlight,
   focusNodeIds,
@@ -181,7 +195,9 @@ export function CarbonTransitPanel({
   // from the previous application/batch points at a leg that no longer exists,
   // which would pin the whole map in isolation mode. Reset during render (the
   // React-recommended reset-on-prop-change) rather than via useEffect.
-  const sourceKey = `${source.kind}:${source.id}`;
+  const sourceKey = `${source.kind}:${source.id}:${
+    source.kind === "creditBatch" ? (source.runId ?? "") : ""
+  }`;
   const [hoverSourceKey, setHoverSourceKey] = useState(sourceKey);
   if (hoverSourceKey !== sourceKey) {
     setHoverSourceKey(sourceKey);
@@ -193,7 +209,8 @@ export function CarbonTransitPanel({
     source.kind === "application" ? source.id : null
   );
   const batchGeo = useCreditBatchChainGeo(
-    source.kind === "creditBatch" ? source.id : null
+    source.kind === "creditBatch" ? source.id : null,
+    source.kind === "creditBatch" ? source.runId : null
   );
   const { data: geo, isLoading, isError, error } =
     source.kind === "application" ? applicationGeo : batchGeo;
@@ -241,7 +258,7 @@ export function CarbonTransitPanel({
     geo.nodes.some(
       (node) => node.positionSource === "own" || node.positionSource === "leg_origin"
     );
-  const popupContent = buildPopupContent(lineages);
+  const popupContent = buildPopupContent(lineages, rollForwards, facility);
 
   // A leg belongs to the focus when its chain-side anchor node sits in the
   // reachable sub-chain. Single-app view dims the sibling inbound legs (they

@@ -477,3 +477,168 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Stock mode art (src/components/storage-locations/stock-mode-art.tsx).
+   Settled state by default: bins full of grains, no draw. Hover (a tap on
+   touch screens) and keyboard focus play the loop from its start. */
+.stock-art {
+  --stock-batch-a: var(--color-icon-secondary);
+  --stock-batch-b: var(--color-signal-orange);
+  --stock-batch-c: var(--st-ok);
+  --stock-loop: 2800ms;
+  /* Clears the bin top; keep in step with BIN_TOP and CHIP_START_Y in stock-mode-art.tsx. */
+  --stock-chip-lift: -13px;
+  overflow: visible;
+}
+.stock-art .stock-chip {
+  opacity: 0;
+}
+@keyframes stock-chip-lift {
+  0%, 58% { opacity: 0; transform: translateY(0); }
+  62% { opacity: 1; transform: translateY(0); }
+  84% { opacity: 1; transform: translateY(var(--stock-chip-lift)); }
+  92%, 100% { opacity: 0; transform: translateY(var(--stock-chip-lift)); }
+}
+@keyframes stock-grain-in-a {
+  0% { opacity: 0; }
+  20%, 100% { opacity: 1; }
+}
+@keyframes stock-grain-in-b {
+  0%, 12% { opacity: 0; }
+  32%, 100% { opacity: 1; }
+}
+@keyframes stock-grain-in-c {
+  0%, 24% { opacity: 0; }
+  44%, 100% { opacity: 1; }
+}
+/* Top rows arrive with their tone, then leave on the draw (one animation each, so the exit cannot override the arrival). */
+@keyframes stock-grain-top-a {
+  0% { opacity: 0; }
+  20%, 60% { opacity: 1; }
+  74%, 100% { opacity: 0; }
+}
+@keyframes stock-grain-top-b {
+  0%, 12% { opacity: 0; }
+  32%, 60% { opacity: 1; }
+  74%, 100% { opacity: 0; }
+}
+@keyframes stock-grain-top-c {
+  0%, 24% { opacity: 0; }
+  44%, 60% { opacity: 1; }
+  74%, 100% { opacity: 0; }
+}
+@keyframes stock-reset {
+  0%, 92% { opacity: 1; }
+  98%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :is(label:hover, label:has(input:focus-visible)) .stock-art {
+    animation: stock-reset var(--stock-loop) ease-in-out infinite backwards;
+  }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain,
+  :is(label:hover, label:has(input:focus-visible)) .stock-chip {
+    animation-duration: var(--stock-loop);
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: backwards;
+  }
+  :is(label:hover, label:has(input:focus-visible)) .stock-chip { animation-name: stock-chip-lift; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-a { animation-name: stock-grain-in-a; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-b { animation-name: stock-grain-in-b; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-c { animation-name: stock-grain-in-c; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-a.stock-grain-top { animation-name: stock-grain-top-a; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-b.stock-grain-top { animation-name: stock-grain-top-b; }
+  :is(label:hover, label:has(input:focus-visible)) .stock-grain-c.stock-grain-top { animation-name: stock-grain-top-c; }
+}
+
+/* Illustrations (src/components/ui/illustrations). Settled state by default.
+   Hovering or keyboard-focusing the host (a choice card's label, or any
+   .illo-host such as an empty state) plays each Motion part's loop. Every
+   keyframe starts and ends on the settled state. Card-size drawings play only
+   their key part; .illo-lg-only parts move on large drawings alone.
+   Transforms are in view-box units. */
+.illo {
+  --illo-loop: 2400ms;
+  overflow: visible;
+}
+.illo-m {
+  --illo-delay: 0ms;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.illo-flicker,
+.illo-sway { transform-origin: center bottom; }
+.illo-draw { stroke-dasharray: 1; }
+.illo-bob { --illo-kind: illo-bob; }
+.illo-rise { --illo-kind: illo-rise; }
+.illo-flicker { --illo-kind: illo-flicker; }
+.illo-sway { --illo-kind: illo-sway; }
+.illo-pop { --illo-kind: illo-pop; }
+.illo-drop { --illo-kind: illo-drop; }
+.illo-lift { --illo-kind: illo-lift; }
+.illo-draw { --illo-kind: illo-draw; }
+.illo-stamp { --illo-kind: illo-stamp; }
+/* The dotted road under the truck: one period of its 1 4 dash is 5 units. */
+.illo-road { --illo-kind: illo-road; --illo-ease: linear; }
+@keyframes illo-bob {
+  0%, 55%, 100% { transform: translateY(0); }
+  22% { transform: translateY(-2px); }
+  38% { transform: translateY(0); }
+  46% { transform: translateY(-0.6px); }
+}
+@keyframes illo-rise {
+  0%, 70%, 100% { opacity: 1; transform: translateY(0); }
+  40% { opacity: 0; transform: translateY(-3px); }
+  41% { opacity: 0; transform: translateY(1.5px); }
+}
+@keyframes illo-flicker {
+  0%, 100% { transform: scale(1, 1); }
+  15% { transform: scale(0.92, 1.14); }
+  32% { transform: scale(1.04, 0.9); }
+  50% { transform: scale(0.95, 1.1); }
+  68% { transform: scale(1.02, 0.95); }
+  84% { transform: scale(0.97, 1.05); }
+}
+@keyframes illo-sway {
+  0%, 80%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(3deg); }
+  45% { transform: rotate(-2deg); }
+  65% { transform: rotate(1deg); }
+}
+@keyframes illo-pop {
+  0%, 45%, 100% { opacity: 1; transform: scale(1); }
+  8% { opacity: 0; transform: scale(0); }
+  28% { opacity: 1; transform: scale(1.25); }
+}
+@keyframes illo-drop {
+  0%, 44%, 100% { opacity: 1; transform: translateY(0); }
+  6% { opacity: 0; transform: translateY(-5px); }
+  30% { opacity: 1; transform: translateY(0); }
+  37% { opacity: 1; transform: translateY(-0.8px); }
+}
+@keyframes illo-lift {
+  0%, 66%, 78%, 100% { transform: translateY(0); }
+  22%, 50% { transform: translateY(-2.5px); }
+  72% { transform: translateY(-0.5px); }
+}
+@keyframes illo-draw {
+  0%, 40%, 100% { opacity: 1; stroke-dashoffset: 0; }
+  6% { opacity: 0; stroke-dashoffset: 1; }
+  8% { opacity: 1; stroke-dashoffset: 1; }
+}
+@keyframes illo-stamp {
+  0%, 28%, 100% { opacity: 1; transform: scale(1); }
+  6% { opacity: 0; transform: scale(1.5); }
+  20% { opacity: 1; transform: scale(0.94); }
+}
+@keyframes illo-road {
+  to { stroke-dashoffset: 10; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :is(label:not(:has(input:disabled)):hover, label:has(input:focus-visible), .illo-host:hover, .illo-host:has(:focus-visible)) .illo-m {
+    animation: var(--illo-kind) var(--illo-loop) var(--illo-ease, ease-in-out) var(--illo-delay) infinite backwards;
+  }
+  :is(label:hover, label:has(input:focus-visible), .illo-host:hover, .illo-host:has(:focus-visible)) .illo:not(.illo-lg) .illo-lg-only {
+    animation: none;
+  }
+}

@@ -40,7 +40,7 @@ describe("credit-batch accounting read contract", () => {
     );
     expect(selectable).toContain("buildCreditBatchContexts(");
     expect(traceability).toContain(
-      "loadCreditBatchRollups(ctx, [creditBatchId])",
+      "loadCreditBatchRollups(ctx, [creditBatchId], {",
     );
   });
 

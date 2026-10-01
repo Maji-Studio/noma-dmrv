@@ -16,10 +16,10 @@
 import { Button, EmptyState, ListPagination } from "@/components/ui";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { LIST_PAGE_SIZE_OPTIONS } from "@/config/list-controls";
+import type { StorageLocationLaneSummary } from "@/data-access/storage-location-lane-summary";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatMass } from "@/lib/format-utils";
-import type { StorageLocationType } from "@/schemas/storage-locations";
 import {
   ArchiveIcon,
   ArrowCounterClockwiseIcon,
@@ -39,6 +39,7 @@ import {
   type StorageBinTypeFilter,
 } from "./bin-display";
 import { StorageBinTile, type BinRowAction } from "./storage-bin-tile";
+import { ILLUSTRATION_SIZE, StorageBinArt } from "@/components/ui/illustrations";
 
 /** Placeholder tiles while the first page loads — roughly one grid row on a
  *  laptop, enough to show the shape without pretending to know the count. */
@@ -50,10 +51,7 @@ const SMALLEST_PAGE_SIZE = Math.min(...LIST_PAGE_SIZE_OPTIONS);
 const CONTROL_CLASSES =
   "h-36 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
-export type LaneSummary = Record<
-  StorageLocationType,
-  { binCount: number; onHandKg: number }
->;
+export type LaneSummary = StorageLocationLaneSummary;
 
 export interface StorageBinBoardProps {
   bins: StorageLocationWithFacility[];
@@ -132,7 +130,8 @@ function filterFigure(
     const bins = filterBinCount(summary, "all") ?? 0;
     return `${bins} ${bins === 1 ? "bin" : "bins"}`;
   }
-  return formatMass(summary[filter].onHandKg);
+  const onHandKg = summary[filter].onHandKg;
+  return onHandKg == null ? MISSING_VALUE.notAvailable : formatMass(onHandKg);
 }
 
 /**
@@ -261,7 +260,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         {/* The select shows a value ("Recent activity"), not what it acts on,
             so this one control does need a label. */}
         <label className="flex flex-col gap-6">
-          <span className="label-micro text-[var(--color-text-tertiary)]">Sort by</span>
+          <span className="body-small font-medium text-[var(--color-text-secondary)]">Sort by</span>
           <select
             value={sortValue}
             onChange={(event) => onSortChange(event.target.value)}
@@ -308,7 +307,7 @@ export function StorageBinBoard(props: StorageBinBoardProps) {
         ) : bins.length === 0 ? (
           <EmptyState
             padding="md"
-            icon={<WarehouseIcon size={40} />}
+            icon={hasActiveFilters || showArchived ? <WarehouseIcon size={40} /> : <StorageBinArt size={ILLUSTRATION_SIZE.empty} />}
             title={
               hasActiveFilters
                 ? showArchived
@@ -423,7 +422,7 @@ function RailFilter({
             <meta.Icon size={16} weight="bold" />
           </span>
         )}
-        <span className={`label-micro ${isActive ? "" : "opacity-80"}`}>
+        <span className={`body-small font-medium ${isActive ? "" : "opacity-80"}`}>
           {binTypeFilterLabel(filter)}
         </span>
       </span>

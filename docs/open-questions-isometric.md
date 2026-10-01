@@ -91,7 +91,7 @@ retired questions do not belong in this file.
 - **Decision needed** — where should the "this template component carries this
   dmrv aggregated source" mapping live? Today it's the code constant
   `PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`
-  (`src/lib/isometric/transformers/datapoint.ts`), keyed by component **display
+  (`src/lib/isometric/semantic-binding-catalog.ts`), keyed by component **display
   name** because Certify exposes no stable per-component key. Full rationale is
   in the code comment above that constant — do not restate it here.
 - **Why it matters** — a display-name rename in the Isometric UI fails closed
@@ -213,10 +213,16 @@ uses it.
   exceeding that account-visible bound blocks new application registration.
   Both paths fail loudly instead of risking a duplicate POST
   (`src/lib/isometric/storage-locations.ts`,
-  `src/lib/isometric/biochar-applications.ts`).
+  `src/lib/isometric/biochar-applications.ts`). Every other list read,
+  including the Production Batch and measurement-sample lookups, stops at the
+  client's 10,000-record default (`DEFAULT_MAX_PAGES` in
+  `src/lib/isometric/client.ts`) with `IsometricPageLimitError`.
 - **Resolve via:** ask Isometric for a supplier-reference filter (report via
   MCP `submit_feedback`), or raise `DEFAULT_LOOKUP_MAX_PAGES` when a project or
-  credential/account approaches its respective bound.
+  credential/account approaches its respective bound. The account-wide
+  Production Batch and measurement-sample lists hit the client default first;
+  raise `DEFAULT_MAX_PAGES` for them, since exceeding it also blocks Removal
+  deletion.
 
 ### Biochar Application GHG Entry association timing (`isometric/biochar-application-ghg-entry-association`, opened 2026-08-27)
 
@@ -336,9 +342,10 @@ itself is **built and enforced** — see the invariants section,
     rail/pipeline ≤7 y), round-trip vs. onward-leg evidence, distance-method
     fallback justification (§3.1 "appropriately evidenced"), weigh-scale
     calibration record, vehicle class/model year.
-  - **Current state** (`src/db/schema/logistics.ts`): `tripType` **exists**
-    (`'return'` default, ×2 multiplier — see the invariants section), as do
-    `billOfLading` and `weighScaleTicketRef`. There is **no**
+  - **Current state** (`src/db/schema/logistics.ts`): every leg counts its
+    round trip (×2 of the stored one-way distance, no trip type since issue
+    #852; see the invariants section in `open-questions.md`), and
+    `billOfLading` and `weighScaleTicketRef` exist. There is **no**
     `emissionFactorSource` column anywhere in the schema, and none for factor
     vintage, onward destination, or fallback evidence. Form text mentions §3.2
     but validators do not enforce.

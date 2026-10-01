@@ -25,7 +25,7 @@ import type { ReactNode } from "react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField } from "./form-field";
 import { FormInput } from "./form-input";
-import { useSimplePresence } from "./form-detail-context";
+import { DetailedOnly } from "./form-detail-context";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 import { moistureReadingGuidance, type MoistureFieldEstimate } from "@/lib/output-stock/moisture-guidance";
@@ -57,9 +57,11 @@ interface MassMoistureInputProps {
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
-  /** Overrides the short always-visible cue rendered under the input. */
+  /** Explanation added behind the ⓘ, after `hint`. */
   helperText?: string;
   hint?: ReactNode;
+  /** Overrides the short visible line under the input (a limit or unit). */
+  cue?: string;
   certifyRequired?: boolean;
   certifyStatus?: CertFieldStatus;
   /**
@@ -72,7 +74,7 @@ interface MassMoistureInputProps {
 
 /**
  * A stock reading: the estimate it is checked against, and the value as typed.
- * With an estimate the field shows it as one line under the input, dates it
+ * With an estimate the field shows it as its cue under the input, dates it
  * behind the ⓘ, and warns (never blocks) when the reading is far from it. The
  * estimate is never filled in: every reading is measured.
  */
@@ -95,7 +97,8 @@ export function MoistureField({
   required,
   disabled,
   placeholder = "e.g. 20",
-  helperText = MOISTURE_RANGE_HELPER,
+  helperText,
+  cue,
   hint = MOISTURE_BASIS_HINT,
   certifyRequired,
   certifyStatus,
@@ -111,7 +114,9 @@ export function MoistureField({
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       error={error}
       warning={guidance?.warning ?? warning}
-      helperText={guidance?.helperText ?? helperText}
+      // The 0 to 100% range sits behind the ⓘ with the basis (Kenji, cue review 2026-09-30).
+      helperText={[MOISTURE_RANGE_HELPER, helperText].filter(Boolean).join(" ")}
+      cue={guidance?.cue ?? cue}
       hint={guidance?.basisText ? <>{guidance.basisText} {hint}</> : hint}
       required={required}
       certifyRequired={certifyRequired}
@@ -143,6 +148,7 @@ export function WetMassField({
   disabled,
   placeholder = "e.g. 1000",
   helperText,
+  cue,
   hint = "As-received weight, water included.",
   certifyRequired,
   certifyStatus,
@@ -156,6 +162,7 @@ export function WetMassField({
       error={error}
       warning={warning}
       helperText={helperText}
+      cue={cue}
       hint={hint}
       required={required}
       certifyRequired={certifyRequired}
@@ -209,9 +216,9 @@ interface MassMoistureFieldsProps {
  * The split is unframed on purpose: it is not a separate panel of output, it is
  * what the two inputs above it mean, so the bar and its key sit directly under
  * them and move as they change. `MoistureSplit` decides how much of the
- * calculation to show from the form detail level. Simple draws the split only
- * once wet mass or moisture has a value, so an untouched form shows no empty
- * picture; Detailed keeps the unresolved state visible.
+ * calculation to show from the form detail level. Both levels draw the split
+ * once wet mass or moisture has a value. Before that, the unresolved state is
+ * explanation of what will appear, so only Detailed shows it.
  */
 export function MassMoistureFields({
   wet,
@@ -227,10 +234,20 @@ export function MassMoistureFields({
   finalMoistureLabel,
   splitFooter,
 }: MassMoistureFieldsProps) {
-  const { detailed } = useSimplePresence("picture");
   const wetKg = parseWatchedNumber(wetMassKg);
   const moistureValue = parseWatchedNumber(moisturePercent);
-  const showSplit = detailed || wetKg !== null || moistureValue !== null;
+  const started = wetKg !== null || moistureValue !== null;
+  const split = (
+    <MoistureSplit
+      wetMassKg={wetKg}
+      moisturePercent={moistureValue}
+      addedWaterKg={parseWatchedNumber(addedWaterKg)}
+      materialLabel={materialLabel}
+      wetLabel={wetSplitLabel}
+      dryLabel={drySplitLabel}
+      finalMoistureLabel={finalMoistureLabel}
+    />
+  );
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
       <WetMassField {...wet} materialLabel={materialLabel} />
@@ -240,22 +257,11 @@ export function MassMoistureFields({
           {addedWaterField}
         </div>
       )}
-      {(showSplit || splitFooter) && (
-        <div data-testid="mass-moisture-split" className="md:col-span-2">
-          {showSplit && (
-            <MoistureSplit
-              wetMassKg={wetKg}
-              moisturePercent={moistureValue}
-              addedWaterKg={parseWatchedNumber(addedWaterKg)}
-              materialLabel={materialLabel}
-              wetLabel={wetSplitLabel}
-              dryLabel={drySplitLabel}
-              finalMoistureLabel={finalMoistureLabel}
-            />
-          )}
-          {splitFooter}
-        </div>
-      )}
+      {/* Hidden while nothing inside has content, so Simple adds no empty grid row. */}
+      <div data-testid="mass-moisture-split" className="md:col-span-2 [&:not(:has(*:not(:empty)))]:hidden">
+        <DetailedOnly unless={started}>{split}</DetailedOnly>
+        {splitFooter}
+      </div>
     </div>
   );
 }

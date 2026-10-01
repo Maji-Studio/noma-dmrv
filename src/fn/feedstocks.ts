@@ -214,7 +214,6 @@ export async function updateFeedstockFn(
       feedstockId,
       transportDistanceKm,
       transportDistanceSource,
-      transportTripType,
       ...updateData
     } = updateFeedstockSchema.parse(input);
     const data = await updateFeedstock(ctx, feedstockId, {
@@ -224,7 +223,6 @@ export async function updateFeedstockFn(
         transportDistanceKm,
         transportDistanceSource,
       ),
-      transportTripType,
     });
 
     return { success: true, data };

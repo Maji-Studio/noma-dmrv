@@ -55,14 +55,14 @@ test.describe("Feedstock Types UI CRUD", () => {
     await page.waitForLoadState("networkidle");
 
     // ── Create ────────────────────────────────────────────────────────────
-    await page.click('button:has-text("New Feedstock Type")');
+    await page.click('button:has-text("New feedstock type")');
     await waitForSideSheet(page);
-    await page.selectOption("#usage", "pyrolysis");
+    await page.getByRole("radio", { name: "Pyrolysis", exact: true }).locator("..").click();
     await page.fill("#name", uniqueName);
     await page.selectOption("#category", "agricultural");
     await page
       .locator('[role="dialog"]')
-      .locator('button:has-text("Create Feedstock Type")')
+      .locator('button:has-text("Create feedstock type")')
       .click();
     await waitForSideSheetClose(page);
 
@@ -86,7 +86,7 @@ test.describe("Feedstock Types UI CRUD", () => {
     await page.fill("#name", editedName);
     await page
       .locator('[role="dialog"]')
-      .locator('button:has-text("Save Changes")')
+      .locator('button:has-text("Save changes")')
       .click();
     await waitForSideSheetClose(page);
     const editedRow = page.locator("table tbody tr", { hasText: editedName });

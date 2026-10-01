@@ -12,14 +12,9 @@ import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { Button, PageHeader } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import {
-  EntitySideSheet,
-  type SideSheetMode,
-} from "@/components/ui/entity-side-sheet";
 import { useToast } from "@/components/ui/toast";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import type { StorageLocation } from "@/db/schema";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -28,147 +23,21 @@ import {
 } from "@/hooks/use-list-pagination";
 import {
   useArchiveStorageLocation,
-  useCreateStorageLocation,
   useDeleteStorageLocation,
   useRestoreStorageLocation,
   useStorageLocations,
-  useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
-import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { toSaveErrorMessage } from "@/lib/stale-version";
-import {
-  formatStorageLocationType,
-  OUTPUT_STOCK_MODE_LABELS,
-  type StorageLocationFilterData,
-  type StorageLocationFormData,
-} from "@/schemas/storage-locations";
-import { ArrowsClockwiseIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import type { StorageLocationFilterData } from "@/schemas/storage-locations";
+import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import {
   DEFAULT_BIN_SORT,
   parseBinSortValue,
   type StorageBinTypeFilter,
 } from "./bin-display";
-import { BinMovementHistoryModal } from "./bin-movement-history-modal";
 import { BinReconcileSheet } from "./bin-reconcile-sheet";
-import { OutputBinBalance } from "./output-bin-balance";
-import { OutputStockHistory } from "./output-stock-history";
 import { StorageBinBoard } from "./storage-bin-board";
-import { StorageLocationForm } from "./storage-location-form";
-
-type SideSheetState =
-  | { mode: "create"; entity: null }
-  | { mode: "view"; entity: StorageLocationWithFacility }
-  | { mode: "edit"; entity: StorageLocationWithFacility };
-
-function formatDateOrFallback(value: Date | null) {
-  if (!value) return "No completed applications";
-  return formatDate(value);
-}
-
-/**
- * Per-bin figures are fixed kg (`formatMassKg`) on every branch and in the card
- * that opens this sheet — capacity, stock, allocations and movement deltas are
- * read against each other, and auto-tonne would round a wet/dry pair to the
- * same string. Facility-wide roll-ups (the KPI strip, the lane headers) stay on
- * auto-tonne `formatMass`.
- */
-function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {
-  if (storageLocation.type === "feedstock_bin") {
-    return [
-      {
-        label: "Current wet stock",
-        value: formatMassKg(storageLocation.feedstockInventory.currentWetMassKg),
-      },
-      ...(storageLocation.feedstockInventory.pendingWetMassKg > 0
-        ? [
-            {
-              label: "Pending intake (wet)",
-              value: formatMassKg(storageLocation.feedstockInventory.pendingWetMassKg),
-            },
-            {
-              label: "Pending feedstocks",
-              value: String(storageLocation.feedstockInventory.pendingBatchCount),
-            },
-          ]
-        : []),
-      {
-        label: "Estimated dry mass (non-binding)",
-        value: formatMassKg(storageLocation.feedstockInventory.estimatedDryMassKg),
-      },
-      {
-        label: "Estimated moisture",
-        value: formatMoisturePercent(storageLocation.feedstockInventory.estimatedMoisturePercent),
-      },
-      {
-        label: "Feedstock types",
-        value:
-          storageLocation.feedstockInventory.feedstockTypes.join(", ") || null,
-        emptySituation: "none" as const,
-      },
-    ];
-  }
-
-  if (storageLocation.type === "biochar_bin") {
-    return [
-      {
-        // Lifetime running total, never decremented — qualified so it cannot
-        // be read as stock still on hand next to "Available biochar"
-        // (DR-002 / BB-26-001).
-        label: "Allocated to products, all time",
-        value: formatMassKg(storageLocation.biocharInventory.allocatedToProductsKg),
-      },
-      {
-        label: "Production runs",
-        value: String(storageLocation.biocharInventory.productionRunCount),
-      },
-      {
-        label: "Downstream formulations",
-        value:
-          storageLocation.biocharInventory.downstreamFormulations.join(", ") || null,
-        emptySituation: "none" as const,
-      },
-    ];
-  }
-
-  return [
-    {
-      // Lifetime running total of source biochar across every product ever
-      // stored here, never decremented on delivery — qualified so it cannot
-      // be read as stock still on hand next to "Current product mass"
-      // (DR-002 / PB-26-001).
-      label: "Biochar received, all time",
-      value: formatMassKg(storageLocation.productInventory.biocharEquivalentKg),
-    },
-    {
-      label: "Product batches",
-      value: String(storageLocation.productInventory.batchCount),
-    },
-    {
-      // Dry basis, unlike the as-is masses above it — the label has to say so.
-      label: "Applied, dry",
-      value:
-        storageLocation.productInventory.appliedApplicationCount > 0
-          ? formatMassKg(storageLocation.productInventory.appliedDryMassKg)
-          : "No completed applications",
-    },
-    {
-      label: "Applied events",
-      value: String(storageLocation.productInventory.appliedApplicationCount),
-    },
-    {
-      label: "Last application",
-      value: formatDateOrFallback(storageLocation.productInventory.lastAppliedAt),
-    },
-    {
-      label: "Formulations",
-      value:
-        storageLocation.productInventory.formulationNames.join(", ") || null,
-      emptySituation: "none" as const,
-    },
-  ];
-}
+import { StorageBinSheet, type StorageBinSheetState } from "./storage-bin-sheet";
 
 export function StorageLocationList() {
   const { facilityId } = useFacilityContext();
@@ -184,12 +53,11 @@ export function StorageLocationList() {
     LIST_SEARCH_DEBOUNCE_MS,
   );
 
-  const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
+  const [sideSheet, setSideSheet] = useState<StorageBinSheetState | null>(null);
   const [reconcileKind, setReconcileKind] = useState<"loss" | "count">("count");
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
   const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const sort = parseBinSortValue(sortValue);
@@ -211,8 +79,6 @@ export function StorageLocationList() {
     error: fetchError,
   } = useStorageLocations(filters, { enabled: !!facilityId });
 
-  const createStorageLocation = useCreateStorageLocation();
-  const updateStorageLocation = useUpdateStorageLocation();
   const archiveStorageLocation = useArchiveStorageLocation();
   const restoreStorageLocation = useRestoreStorageLocation();
   const deleteStorageLocation = useDeleteStorageLocation();
@@ -228,37 +94,6 @@ export function StorageLocationList() {
     isLoading,
     setCurrentPage,
   });
-
-  const handleCreate = async (data: StorageLocationFormData) => {
-    setFormError(null);
-    try {
-      await createStorageLocation.mutateAsync(data);
-      setSideSheet(null);
-      toast.success("Storage bin created.");
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Storage bin was not created. Check the form.");
-    }
-  };
-
-  const handleUpdate = async (data: StorageLocationFormData) => {
-    if (sideSheet?.mode !== "edit") return;
-    setFormError(null);
-    try {
-      await updateStorageLocation.mutateAsync({
-        storageLocationId: sideSheet.entity.id,
-        // The version the side sheet opened on, never a refetched one, so a
-        // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: sideSheet.entity.updatedAt,
-        ...data,
-      });
-      setSideSheet(null);
-      toast.success("Storage bin updated.");
-    } catch (error) {
-      // The side sheet stays open on every failure, so the operator's draft
-      // survives an expected-version refusal untouched.
-      setFormError(toSaveErrorMessage(error, "Storage bin was not saved. Try again."));
-    }
-  };
 
   const handleDelete = (id: string) => setDeletingStorageLocationId(id);
 
@@ -304,20 +139,13 @@ export function StorageLocationList() {
     }
   };
 
-  const openCreate = () => {
-    setFormError(null);
-    setSideSheet({ mode: "create", entity: null });
-  };
+  const openCreate = () => setSideSheet({ mode: "create", entity: null });
 
-  const openView = (storageLocation: StorageLocationWithFacility) => {
-    setFormError(null);
+  const openView = (storageLocation: StorageLocationWithFacility) =>
     setSideSheet({ mode: "view", entity: storageLocation });
-  };
 
-  const openEdit = (storageLocation: StorageLocationWithFacility) => {
-    setFormError(null);
+  const openEdit = (storageLocation: StorageLocationWithFacility) =>
     setSideSheet({ mode: "edit", entity: storageLocation });
-  };
 
   // Reconcile lives in its own side sheet — close the detail sheet first so the
   // two panels never stack.
@@ -325,17 +153,6 @@ export function StorageLocationList() {
     setReconcileKind(kind);
     setSideSheet(null);
     setReconcilingBin(storageLocation);
-  };
-
-  const closeSideSheet = () => {
-    setSideSheet(null);
-    setFormError(null);
-  };
-
-  const handleModeChange = (mode: SideSheetMode) => {
-    if (!sideSheet || !sideSheet.entity) return;
-    setFormError(null);
-    setSideSheet({ mode: mode === "edit" ? "edit" : "view", entity: sideSheet.entity });
   };
 
   const clearFilters = () => {
@@ -351,8 +168,6 @@ export function StorageLocationList() {
   };
 
   const hasActiveFilters = Boolean(searchQuery) || typeFilter !== "all";
-  const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
-  const isSubmitting = createStorageLocation.isPending || updateStorageLocation.isPending;
 
   if (!facilityId) {
     return (
@@ -384,7 +199,7 @@ export function StorageLocationList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New Storage Bin
+            New storage bin
           </Button>
         }
       />
@@ -435,7 +250,7 @@ export function StorageLocationList() {
 
       <DeleteConfirmDialog
         isOpen={!!deletingStorageLocationId}
-        title="Delete Storage Bin"
+        title="Delete storage bin"
         message="Permanently delete this unused storage bin? Bins with stock or operational history must be archived instead."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
@@ -446,93 +261,11 @@ export function StorageLocationList() {
         errorMessage={deleteError ?? undefined}
       />
 
-      <EntitySideSheet
-        open={!!sideSheet}
-        onOpenChange={(open) => {
-          if (!open) closeSideSheet();
-        }}
-        mode={sideSheet?.mode ?? "create"}
-        onModeChange={handleModeChange}
-        // A mix bin's batch shares are the sheet's only Detailed content.
-        detailToggle={sideSheet?.entity?.stockMode === "mix" ? "view" : false}
-        detailScope={sideSheet?.entity?.id ?? "create"}
-        // Bins lead with their name, not their code — the one entity where the
-        // house convention (code as the sheet title) puts an opaque lookup key
-        // where the operator's own word for the thing belongs. The code stays,
-        // small, on the line beneath.
-        title={sideSheet?.mode === "create" ? "Create Storage Bin" : sideSheet?.entity?.name ?? ""}
-        subtitle={
-          sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.code
-        }
-        editLabel="Edit Storage Bin"
-        canEdit={sideSheet?.entity?.archivedAt == null}
-        sections={
-          sideSheet?.mode === "view" && sideSheet.entity
-            ? [
-                {
-                  title: "Storage details",
-                  fields: [
-                    {
-                      label: "Storage type",
-                      value: formatStorageLocationType(sideSheet.entity.type),
-                    },
-                    { label: "Bin name", value: sideSheet.entity.name },
-                    {
-                      // Capacity and the current mass below it are the canonical
-                      // related pair — same formatter, so "1,800 kg of 2,500 kg"
-                      // never reads as "1,800 kg of 2.5 t".
-                      label: "Capacity",
-                      value: sideSheet.entity.capacityKg != null
-                        ? formatMassKg(sideSheet.entity.capacityKg)
-                        : null,
-                    },
-                    {
-                      label: "Storage method",
-                      value: sideSheet.entity.storageMethod,
-                    },
-                    ...(sideSheet.entity.type === "feedstock_bin"
-                      ? [{ label: "Feedstock type", value: sideSheet.entity.feedstockTypeName }]
-                      : []),
-                    ...(sideSheet.entity.type === "product_bin"
-                      ? [{ label: "Formulation", value: sideSheet.entity.formulationName }]
-                      : []),
-                    ...(sideSheet.entity.type !== "feedstock_bin"
-                      ? [{ label: "Stock mode", value: OUTPUT_STOCK_MODE_LABELS[sideSheet.entity.stockMode] }]
-                      : []),
-                    { label: "Description", value: sideSheet.entity.storageDescription },
-                  ],
-                },
-                {
-                  title: "Inventory",
-                  fields: buildStorageDetailFields(sideSheet.entity),
-                  content: (
-                    <div className="flex flex-col gap-16">
-                      {sideSheet.entity.type !== "feedstock_bin" && <Button variant="default" onClick={() => openReconcile(sideSheet.entity, "loss")}>Record loss</Button>}
-                      <Button
-                        variant="default"
-                        onClick={() => openReconcile(sideSheet.entity)}
-                      >
-                        <ArrowsClockwiseIcon size={18} weight="bold" />
-                        Reconcile stock
-                      </Button>
-                      {sideSheet.entity.type === "feedstock_bin" ? <BinMovementHistoryModal compact triggerLabel="Stock history" storageLocationId={sideSheet.entity.id} /> : <><OutputBinBalance storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /><OutputStockHistory compact triggerLabel="Stock history" storageLocationId={sideSheet.entity.id} facilityId={sideSheet.entity.facilityId} /></>}
-                    </div>
-                  ),
-                },
-              ]
-            : undefined
-        }
-      >
-        <StorageLocationForm
-          key={editingEntity?.id ?? "create"}
-          storageLocation={editingEntity as StorageLocation | undefined}
-          onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={isSubmitting}
-          errorMessage={formError ?? undefined}
-          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Storage Bin"}
-        />
-      </EntitySideSheet>
+      <StorageBinSheet
+        state={sideSheet}
+        onStateChange={setSideSheet}
+        onReconcile={openReconcile}
+      />
 
       <BinReconcileSheet
         key={`${reconcilingBin?.id}-${reconcileKind}`}

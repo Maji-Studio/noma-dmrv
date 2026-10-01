@@ -47,8 +47,9 @@ import {
   FEEDSTOCK_TYPE_QUERY_PARAM,
 } from "@/lib/entity-deep-link";
 import { FeedstockTypeForm } from "./feedstock-type-form";
-import { FeedstockTypeSampling } from "./feedstock-type-sampling";
+import { feedstockTypeSheetSections, titleCase } from "./feedstock-type-read-sections";
 import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
+import { Notice } from "@/components/ui/notice";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -61,12 +62,6 @@ interface SideSheetState {
   mode: SideSheetMode;
 }
 
-function titleCase(value: string) {
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
 
 export function shouldShowFeedstockTypeSampling(params: {
   feedstockType: FeedstockType | null;
@@ -110,23 +105,18 @@ export function FeedstockDeleteConflictNotice({
   isPending: boolean;
 }) {
   return (
-    <div
-      role="alert"
-      className="flex flex-col gap-12 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] p-16 sm:flex-row sm:items-center sm:justify-between"
+    <Notice
+      tone="warning"
+      title={`${name} is in use and cannot be deleted.`}
+      action={
+        <Button variant="default" onClick={onArchive} busy={isPending}>
+          <ArchiveIcon size={16} weight="bold" />
+          Archive instead
+        </Button>
+      }
     >
-      <div className="flex flex-col gap-2">
-        <p className="body-medium font-medium text-[var(--color-text-primary)]">
-          {name} is in use and cannot be deleted.
-        </p>
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Archive it instead. Historical records keep the type, while active pickers hide it.
-        </p>
-      </div>
-      <Button variant="default" onClick={onArchive} busy={isPending}>
-        <ArchiveIcon size={16} weight="bold" />
-        Archive instead
-      </Button>
-    </div>
+      Archive it instead. Historical records keep the type, while active pickers hide it.
+    </Notice>
   );
 }
 
@@ -409,39 +399,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     facilityId,
   });
   const detailSections = sideSheetEntity
-    ? [
-        {
-          title: "Catalogue",
-          fields: [
-            { label: "Name", value: sideSheetEntity.name },
-            { label: "Code", value: sideSheetEntity.code },
-            { label: "Category", value: titleCase(sideSheetEntity.category) },
-            { label: "Usage", value: sideSheetEntity.usage === "blend" ? "Blend" : "Pyrolysis" },
-            { label: "State", value: sideSheetEntity.archivedAt ? "Archived" : "Active" },
-            {
-              label: "Isometric feedstock ID",
-              value: sideSheetEntity.isometricFeedstockTypeId,
-            },
-            { label: "Registry URL", value: sideSheetEntity.registryUrl },
-            { label: "Description", value: sideSheetEntity.description },
-          ],
-        },
-        ...(showSampling && facilityId
-          ? [
-              {
-                title: "Sampling",
-                fields: [],
-                content: (
-                  <FeedstockTypeSampling
-                    facilityId={facilityId}
-                    feedstockTypeId={sideSheetEntity.id}
-                    canManage={canManage}
-                  />
-                ),
-              },
-            ]
-          : []),
-      ]
+    ? feedstockTypeSheetSections(sideSheetEntity, showSampling && facilityId ? { facilityId, canManage } : null)
     : undefined;
 
   return (
@@ -461,7 +419,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
               )}
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
-                New Feedstock Type
+                New feedstock type
               </Button>
             </div>
           ) : undefined
@@ -470,14 +428,14 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
       <div className="grid grid-cols-1 gap-24 md:grid-cols-3">
         <StatCard
-          title="Total Types"
+          title="Total types"
           value={feedstockTypes.length}
           icon={<DatabaseIcon size={24} weight="bold" />}
           description="Pyrolysis and blend catalogue entries"
           isLoading={feedstockTypesQuery.isLoading}
         />
         <StatCard
-          title="Pyrolysis Types"
+          title="Pyrolysis types"
           value={pyrolysisCount}
           icon={<LeafIcon size={24} weight="bold" />}
           description="Eligible for production feedstock selection"
@@ -562,7 +520,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
       <DeleteConfirmDialog
         isOpen={!!deletingType}
-        title="Delete Feedstock Type"
+        title="Delete feedstock type"
         message="Delete this feedstock type permanently? Types referenced by operational records cannot be deleted and should be archived instead."
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingType(null)}
@@ -581,7 +539,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
             setSideSheet({ ...displaySideSheet, mode });
           }
         }}
-        title={displaySideSheet?.mode === "create" ? "Create Feedstock Type" : sideSheetEntity?.code ?? ""}
+        title={displaySideSheet?.mode === "create" ? "Create feedstock type" : sideSheetEntity?.code ?? ""}
         subtitle={displaySideSheet?.mode === "create" ? undefined : sideSheetEntity?.name}
         sections={displaySideSheet?.mode === "view" ? detailSections : undefined}
         editLabel={FEEDSTOCK_TYPE_EDIT_LABEL}
@@ -594,7 +552,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
           onCancel={closeSideSheet}
           isSubmitting={createFeedstockType.isPending || updateFeedstockType.isPending}
           errorMessage={formError ?? undefined}
-          submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Feedstock Type"}
+          submitLabel={displaySideSheet?.mode === "edit" ? "Save changes" : "Create feedstock type"}
         />
       </EntitySideSheet>
 

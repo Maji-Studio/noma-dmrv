@@ -3,7 +3,7 @@ import { conflictCode } from '@/lib/conflict-ref';
 import { ActionConflictError } from '@/lib/errors';
 import { rational } from '@/lib/output-stock';
 
-const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), view: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
+const mocks = vi.hoisted(() => ({ reads: [] as unknown[], state: vi.fn(), stocks: vi.fn(), correction: vi.fn(), lineage: vi.fn() }));
 vi.mock('@/db', () => {
   const tx = { select: () => {
     const query = { from: () => query, where: () => query, orderBy: () => query, then: (resolve: (value: unknown) => unknown) => Promise.resolve(mocks.reads.shift()).then(resolve) };
@@ -11,7 +11,7 @@ vi.mock('@/db', () => {
   } };
   return { db: { ...tx, transaction: (run: (reader: unknown) => unknown) => run(tx) } };
 });
-vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStockView: mocks.view, getLayerMoistureBases: async (_ctx: unknown, _bin: unknown, layers: { id: string; placedAt: string; remainingSolidsKg: unknown }[]) =>
+vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStocks: mocks.stocks, getLayerMoistureBases: async (_ctx: unknown, _bin: unknown, layers: { id: string; placedAt: string; remainingSolidsKg: unknown }[]) =>
   layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [] })) }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
@@ -53,17 +53,20 @@ it('passes the blocking movement through when a correction is refused', async ()
   expect(result.blockers).toEqual([movement]);
 });
 
-it('reads each matching bin from its stock view and keeps an unresolved bin in the list', async () => {
+it('reads every matching bin in one stock batch and keeps an unresolved bin in the list', async () => {
   mocks.reads = [[{ id: 'recipe' }], [{ id: 'bin', code: 'BIN', name: 'E2E bin' }, { id: 'broken', code: 'BIN-2', name: 'Unresolved bin' }]];
   mocks.state.mockClear();
-  mocks.view.mockImplementation(async (_ctx: unknown, id: string) => id === 'bin'
-    ? { dryMassKg: 100, estimatedWetMassKg: 118, estimatedMoisturePercent: 15.3 }
-    : { dryMassKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null });
+  mocks.stocks.mockResolvedValue(new Map([
+    ['bin', { allLayersDryKg: 100, availableDryKg: 100, estimatedWetMassKg: 118, estimatedMoisturePercent: 15.3 }],
+    ['broken', { allLayersDryKg: null, availableDryKg: null, estimatedWetMassKg: null, estimatedMoisturePercent: null }],
+  ]));
   const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
   expect(await getMatchingOutputBins(ctx, { facilityId: 'facility', formulationId: 'recipe' })).toEqual([
     { id: 'bin', code: 'BIN', name: 'E2E bin', dryMassKg: 100, estimatedWetMassKg: 118 },
     { id: 'broken', code: 'BIN-2', name: 'Unresolved bin', dryMassKg: null, estimatedWetMassKg: null },
   ]);
-  // The stock view owns the facility-local date; the list no longer computes layers itself.
+  // The stock batch owns the current instant; the list no longer computes layers itself.
+  expect(mocks.stocks).toHaveBeenCalledTimes(1);
+  expect(mocks.stocks.mock.calls[0][1]).toEqual(['bin', 'broken']);
   expect(mocks.state).not.toHaveBeenCalled();
 });

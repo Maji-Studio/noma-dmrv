@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UseFormRegisterReturn } from "react-hook-form";
+
 import {
   BiocharSourceMassFields,
   prepareBiocharProductSubmission,
@@ -50,7 +51,7 @@ describe("ProductCompositionBlock", () => {
     recordedSourceDryMassKg: null, ingredients: [], allocationFrozen: false,
   });
   const block = (massKg: number | null, ingredientBins: Array<{ massKg?: unknown }> = []) => (
-    <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} storageLocationId={null} facilityId="facility" />
+    <ProductCompositionBlock composition={composition} massKg={massKg} ingredientBins={ingredientBins} />
   );
   // A provider starts in Simple; outside one the form reads as Detailed.
   const simple = (node: ReturnType<typeof block>) =>
@@ -64,6 +65,10 @@ describe("ProductCompositionBlock", () => {
   it("draws in Simple once a mass is set", () => {
     expect(simple(block(100))).toContain("Product composition");
     expect(simple(block(null, [{ massKg: 20 }]))).toContain("Product composition");
+  });
+
+  it("offers no stock history; that lives on the storage bin", () => {
+    expect(renderToStaticMarkup(block(100))).not.toContain("Stock history");
   });
 
   it("always draws in Detailed", () => {

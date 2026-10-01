@@ -1,5 +1,5 @@
 import type { DbTransaction } from "@/db";
-import { getOutputBinDryBalance } from "./output-stock";
+import { getOutputBinAllLayersDryKg } from "./output-stock";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   deriveBiocharAvailableKg,
@@ -88,7 +88,7 @@ export async function deriveProductionRunBiocharStockState(
   for (const storageLocationId of uniqueIds) {
     stockState.push({
       storageLocationId,
-      availableKg: await getOutputBinDryBalance(ctx, storageLocationId, tx, { excludeUnresolvedRunId }),
+      availableKg: await getOutputBinAllLayersDryKg(ctx, storageLocationId, tx, { excludeUnresolvedRunId }),
     });
   }
   return stockState;

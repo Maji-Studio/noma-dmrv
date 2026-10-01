@@ -25,7 +25,7 @@ export function IngredientMoistureField({ control, index, frozen, disabled }: { 
     typeof estimatedMoisture === "number" ? { moisturePercent: estimatedMoisture, basisText: INGREDIENT_ESTIMATE_BASIS } : null,
     typeof value === "number" ? value : null,
   );
-  return <FormField id={name} label="Ingredient moisture (%)" required={Number(massKg) > 0} error={fieldState.error?.message} warning={guidance.warning} helperText={guidance.helperText} hint={guidance.basisText ? <>{guidance.basisText} {MOISTURE_BASIS_HINT}</> : MOISTURE_BASIS_HINT}>
+  return <FormField id={name} label="Ingredient moisture (%)" required={Number(massKg) > 0} error={fieldState.error?.message} warning={guidance.warning} cue={guidance.cue} hint={guidance.basisText ? <>{guidance.basisText} {MOISTURE_BASIS_HINT}</> : MOISTURE_BASIS_HINT}>
     <FormInput id={name} name={name} ref={ref} onBlur={onBlur} type="number" min="0" max="99.999" step="any" value={value ?? ""} disabled={disabled || frozen} onChange={event => onChange(event.target.value === "" ? null : Number(event.target.value))} />
   </FormField>;
 }

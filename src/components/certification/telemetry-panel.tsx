@@ -18,7 +18,6 @@
 import {
   ArrowsClockwiseIcon,
   CloudArrowUpIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui";
 import { StatusBadge, type StatusValue } from "@/components/ui/status-badge";
@@ -28,6 +27,7 @@ import {
   useTelemetrySubmissionState,
 } from "@/hooks/use-telemetry-submission";
 import { Section } from "./panel-layout";
+import { Notice } from "@/components/ui/notice";
 
 interface TelemetryPanelProps {
   removalId: string;
@@ -147,18 +147,8 @@ function TelemetryError({ state }: { state: TelemetryState }) {
   const message = state?.latestStatus?.error_message;
   if (!message) return null;
   return (
-    <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-12">
-      <WarningCircleIcon
-        size={16}
-        weight="bold"
-        className="text-[var(--color-signal-orange)] shrink-0"
-      />
-      <div className="flex flex-col gap-4">
-        <span className="body-small-bold">Isometric error</span>
-        <span className="body-caption text-[var(--color-text-secondary)]">
-          {message}
-        </span>
-      </div>
-    </div>
+    <Notice tone="warning" title="Isometric error">
+      {message}
+    </Notice>
   );
 }

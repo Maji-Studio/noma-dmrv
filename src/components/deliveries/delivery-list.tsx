@@ -8,7 +8,6 @@
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { TransportEvidencePanel } from "@/components/transport-legs";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
@@ -38,7 +37,6 @@ import {
   useListPagination,
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
@@ -46,26 +44,12 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
-import {
-  formatDateRange,
-  formatDistanceKm,
-  formatFacilityDateTime,
-  formatFacilityDay,
-  formatMassKg,
-} from "@/lib/format-utils";
-import {
-  formatMoisturePercent,
-  MASS_MOISTURE_LABELS,
-  MOISTURE_FIELD_LABEL,
-  qualifyMassLabel,
-  WET_MASS_FIELD_LABEL,
-} from "@/lib/mass-moisture";
+import { formatDateRange, formatFacilityDay, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent, MASS_MOISTURE_LABELS, qualifyMassLabel } from "@/lib/mass-moisture";
 import type {
   CreateDeliveryData,
   DeliveryFormData,
 } from "@/schemas/deliveries";
-import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import {
   CalendarIcon,
   PlusIcon,
@@ -77,7 +61,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useState } from "react";
 import { DeliveryForm } from "./delivery-form";
-import { DeliveryStockDetails } from "./delivery-stock-details";
+import { deliverySheetSections } from "./delivery-read-sections";
+import { ILLUSTRATION_SIZE, DeliveryTruckArt } from "@/components/ui/illustrations";
 
 // ============================================
 // Helper Functions
@@ -455,7 +440,7 @@ export function DeliveryList() {
 
   const sideSheetTitle =
     sideSheetMode === "create"
-      ? "Create Delivery"
+      ? "Create delivery"
       : sideSheetEntity?.code ?? "";
 
   const sideSheetSubtitle =
@@ -472,7 +457,7 @@ export function DeliveryList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={18} weight="bold" />
-            New Delivery
+            New delivery
           </Button>
         }
       />
@@ -480,13 +465,13 @@ export function DeliveryList() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
-          title="Total Deliveries"
+          title="Total deliveries"
           value={statsData?.totalDeliveries ?? 0}
           icon={<TruckIcon size={24} weight="bold" />}
           isLoading={statsLoading}
         />
         <StatCard
-          title="Delivered Mass"
+          title="Delivered mass"
           value={
             <MassPair
               wetKg={statsData?.totalDeliveredWetMassKg ?? 0}
@@ -529,7 +514,7 @@ export function DeliveryList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<TruckIcon size={48} />}
+            icon={hasActiveFilters ? <TruckIcon size={48} /> : <DeliveryTruckArt size={ILLUSTRATION_SIZE.empty} />}
             title={hasActiveFilters ? "No deliveries match" : "No deliveries yet"}
             description={
               hasActiveFilters
@@ -599,70 +584,10 @@ export function DeliveryList() {
         }}
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
-        editLabel="Edit Delivery"
+        editLabel="Edit delivery"
         sections={
           sideSheetEntity
-            ? [
-                {
-                  title: "Delivery information",
-                  fields: [
-                    { label: "Delivery date and time", value: formatFacilityDateTime(sideSheetEntity.deliveryDate, resolveFacilityTimezone(facilities, sideSheetEntity.facilityId)) },
-                    { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
-                    { label: "Order", value: sideSheetEntity.orderCode },
-                  ],
-                },
-                {
-                  title: "Mass and moisture",
-                  fields: [
-                    {
-                      label: qualifyMassLabel(
-                        WET_MASS_FIELD_LABEL,
-                        "Biochar product",
-                      ),
-                      ...certificationDetailField("delivery", "deliveredWetMassKg"),
-                      value: formatMassKg(sideSheetEntity.deliveredWetMassKg),
-                    },
-                    {
-                      label: qualifyMassLabel(
-                        MOISTURE_FIELD_LABEL,
-                        "Biochar product",
-                      ),
-                      value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
-                    },
-                  ],
-                  content: (
-                    <DeliveryStockDetails deliveryId={sideSheetEntity.id} storageLocationId={sideSheetEntity.storageLocationId} facilityId={sideSheetEntity.facilityId} wetMassKg={sideSheetEntity.deliveredWetMassKg} dryMassKg={sideSheetEntity.massDryKg} />
-                  ),
-                },
-                {
-                  title: "Transport",
-                  fields: [
-                    { label: "One-way distance (per leg, km)", value: formatDistanceKm(sideSheetEntity.effectiveDistanceKm) },
-                    { label: "Trip type", value: TRIP_TYPE_LABELS[sideSheetEntity.tripType ?? DEFAULT_TRIP_TYPE] },
-                    ...(sideSheetEntity.distanceKmOverride != null
-                      ? [{ label: "Distance note", value: sideSheetEntity.distanceNote }]
-                      : []),
-                    {
-                      label: "Distance source",
-                      value: sideSheetEntity.effectiveDistanceSource
-                        ? DISTANCE_SOURCE_LABELS[sideSheetEntity.effectiveDistanceSource]
-                        : null,
-                    },
-                  ],
-                },
-                {
-                  title: "Delivery evidence",
-                  fields: [],
-                  content: (
-                    <TransportEvidencePanel
-                      entityType="delivery"
-                      entityId={sideSheetEntity.id}
-                      readOnly
-                      embedded
-                    />
-                  ),
-                },
-              ]
+            ? deliverySheetSections(sideSheetEntity, facilities)
             : undefined
         }
       >
@@ -673,7 +598,7 @@ export function DeliveryList() {
           onCancel={attemptCloseSideSheet}
           isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheetMode === "create" ? "Create Delivery" : "Save Changes"}
+          submitLabel={sideSheetMode === "create" ? "Create delivery" : "Save changes"}
           deferredAttachments={deferredAttachments}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
         />

@@ -142,8 +142,12 @@ vi.mock("@/components/forms/form-actions", () => ({
 
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   DatabaseIcon: () => <span />,
+  CheckIcon: () => null,
   SealCheckIcon: () => <span />,
   WarningCircleIcon: () => <span />,
+  InfoIcon: () => null,
+  WarningIcon: () => null,
+  CheckCircleIcon: () => null,
 }));
 
 vi.mock("@/hooks/use-facility-context", () => ({

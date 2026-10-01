@@ -7,7 +7,12 @@ const MAX_ARRAY_ITEMS = 20;
 const MAX_DEPTH = 6;
 const REDACTED = "[REDACTED]";
 
-/** Exact provider absence evidence; transport and unrelated request errors propagate. */
+/**
+ * Exact provider absence evidence; transport and unrelated request errors
+ * propagate. Pass `kind: null` for resources whose absence is a plain 404:
+ * the sandbox returned `404 {"detail":"Not Found"}` for a missing Biochar
+ * Application and Storage Location on 2026-09-29.
+ */
 export function isMissingIsometricResource(
   error: unknown,
   kind: "ProductionBatch" | "MeasurementSample" | "Source" | null,

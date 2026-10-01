@@ -224,7 +224,7 @@ export function ProductionReadingsDocuments({
       {deleteError && <ServerError message={deleteError} />}
       <DeleteConfirmDialog
         isOpen={!!deletingId}
-        title="Delete Readings File"
+        title="Delete readings file"
         message="Are you sure you want to delete this readings file? The file will be removed from storage."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {

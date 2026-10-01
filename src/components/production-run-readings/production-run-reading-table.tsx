@@ -2,7 +2,7 @@
  * ProductionRunReadingTable component
  * Read-only table of imported production run readings. Telemetry is sourced
  * from readings CSV imports — there is no manual add/edit. The only
- * mutation is "Delete All", which clears the run so a corrected CSV can be
+ * mutation is "Delete all", which clears the run so a corrected CSV can be
  * re-uploaded and imported.
  */
 "use client";
@@ -90,7 +90,7 @@ export function ProductionRunReadingTable({
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
       {/* Header */}
       <div className="flex items-center justify-between gap-12">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+        <h3 className="body-small font-medium text-[var(--color-text-primary)]">
           Imported readings{readingCount > 0 ? ` (${readingCount})` : ""}
         </h3>
         {!readOnly && readingCount > 0 && (
@@ -100,7 +100,7 @@ export function ProductionRunReadingTable({
             onClick={() => setConfirmingDeleteAll(true)}
           >
             <TrashIcon size={16} />
-            Delete All
+            Delete all
           </Button>
         )}
       </div>
@@ -124,7 +124,7 @@ export function ProductionRunReadingTable({
                 scrolls past the capped height. bg matches the side-sheet paper
                 so rows don't bleed through behind it. */}
             <thead className="sticky top-0 z-10 bg-[var(--color-background-white)]">
-              <tr className="border-b border-[var(--color-border-primary)] text-left text-[var(--color-text-tertiary)]">
+              <tr className="border-b border-[var(--color-border-primary)] text-left body-small text-[var(--color-text-secondary)]">
                 <th className="py-8 pr-12 font-medium">
                   Time ({timeZone.replace(/_/g, " ")})
                 </th>
@@ -158,7 +158,7 @@ export function ProductionRunReadingTable({
       {!readOnly && (
         <DeleteConfirmDialog
           isOpen={confirmingDeleteAll}
-          title="Delete All Readings"
+          title="Delete all readings"
           message={`This permanently deletes all ${readingCount} reading${readingCount === 1 ? "" : "s"} for this production run. To restore them, re-upload a readings CSV and import it. This cannot be undone.`}
           onConfirm={handleDeleteAllConfirm}
           onCancel={() => setConfirmingDeleteAll(false)}

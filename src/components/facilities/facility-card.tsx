@@ -8,6 +8,7 @@ import {
   PencilSimpleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { formatMass } from "@/lib/format-utils";
 import { MISSING_VALUE } from "@/lib/copy-utils";
@@ -36,16 +37,17 @@ export function FacilityCard({
       <div className="flex flex-1 flex-col gap-16 p-20">
         {/* Header: badge + country */}
         <div className="flex items-center justify-between gap-12">
-          <span className="inline-flex items-center gap-6 border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-purple)]">
+          <span className="inline-flex items-center gap-6 border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] px-10 py-4 text-[11px] font-medium text-[var(--clr-purple)]">
             <FactoryIcon size={12} weight="bold" />
             {facility.code}
           </span>
           <span className="flex items-center gap-8">
             {isArchived && (
-              <span className="inline-flex items-center gap-6 border border-[var(--color-border-primary)] bg-[var(--color-surface-light)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
-                <ArchiveIcon size={12} weight="bold" />
-                Archived
-              </span>
+              <StatusBadge
+                status="archived"
+                size="small"
+                icon={<ArchiveIcon size={12} weight="bold" />}
+              />
             )}
             <span className="body-caption text-[var(--color-text-tertiary)]">
               {facility.country}

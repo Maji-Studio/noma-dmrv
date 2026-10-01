@@ -40,6 +40,7 @@ import { CreditBatchSamplingControl } from "./credit-batch-sampling-control";
 import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CreditBatchProductionRunsPreview } from "./credit-batch-production-runs-preview";
+import { Notice } from "@/components/ui/notice";
 
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
@@ -280,8 +281,8 @@ export function CreditBatchForm({
   ]);
 
   const defaultSubmitLabel = isEditMode
-    ? "Update Credit Batch"
-    : "Create Credit Batch";
+    ? "Update credit batch"
+    : "Create credit batch";
 
   const handleFormSubmit = handleSubmit((data) => {
     const sampling =
@@ -383,6 +384,7 @@ export function CreditBatchForm({
         isError={productionRunOptionsErrored}
         onRetry={() => refetchProductionRunOptions()}
         isRetrying={productionRunOptionsFetching}
+        summary={<CohortInputLedger runs={selectedRuns} />}
       />
 
       {errors.productionRunIds?.message && (
@@ -392,26 +394,20 @@ export function CreditBatchForm({
       )}
 
       {droppedSavedRunIds.length > 0 && (
-        <div
-          role="alert"
-          className="flex flex-col gap-4 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-16 py-12"
-        >
-          <span className="body-small font-medium text-[var(--st-wait)]">
-            {droppedSavedRunIds.length === 1
+        <Notice
+          tone="warning"
+          title={
+            droppedSavedRunIds.length === 1
               ? "Saving removes a claimed production run from this batch"
-              : `Saving removes ${droppedSavedRunIds.length} claimed production runs from this batch`}
-          </span>
-          <span className="body-caption text-[var(--color-text-secondary)]">
-            {droppedSavedRunCodes.every(Boolean)
-              ? `No longer in the production window: ${droppedSavedRunCodes.join(", ")}. `
-              : "The edited production window no longer covers them. "}
-            Restore the dates or feedstock type to keep the claims.
-          </span>
-        </div>
+              : `Saving removes ${droppedSavedRunIds.length} claimed production runs from this batch`
+          }
+        >
+          {droppedSavedRunCodes.every(Boolean)
+            ? `No longer in the production window: ${droppedSavedRunCodes.join(", ")}. `
+            : "The edited production window no longer covers them. "}
+          Restore the dates or feedstock type to keep the claims.
+        </Notice>
       )}
-
-      {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
-      <CohortInputLedger runs={selectedRuns} />
 
       {/* Free-form notes trail the operational inputs and their live preview. */}
       <FormSection title="Additional information">

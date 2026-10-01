@@ -66,6 +66,7 @@ import type {
   BatchLineageRunFact,
   CreditBatchLineageFacts,
 } from "./credit-batch-lineage-types";
+import { loadRunForwardFactsWithExecutor } from "./credit-batch-run-forward-facts";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
 export type {
@@ -77,6 +78,8 @@ export type {
   BatchLineageApplicationFact,
   BatchLineageFeedstockFact,
   BatchLineageRunFact,
+  BatchRunForwardDeliveryFact,
+  BatchRunForwardProductFact,
   CreditBatchLineageFacts
 } from "./credit-batch-lineage-types";
 
@@ -634,6 +637,7 @@ async function loadCreditBatchRollupsWithExecutor(
   executor: Executor,
   removalId?: string,
   unassignedOnly = false,
+  includeRunForwards = false,
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -684,9 +688,23 @@ async function loadCreditBatchRollupsWithExecutor(
     removalId,
     unassignedOnly,
   );
+  const runForwards = includeRunForwards
+    ? await loadRunForwardFactsWithExecutor(
+        ctx,
+        uniqueSorted(Object.values(factsByBatch).flatMap((facts) => facts.productionRunIds)),
+        executor,
+      )
+    : null;
   return Object.fromEntries(
     rollupIdentities.map(({ batch, feedstockType }) => {
-      const lineageFacts = factsByBatch[batch.id];
+      const lineageFacts = runForwards
+        ? {
+            ...factsByBatch[batch.id],
+            runForwards: Object.fromEntries(
+              factsByBatch[batch.id].productionRunIds.map((runId) => [runId, runForwards[runId] ?? []]),
+            ),
+          }
+        : factsByBatch[batch.id];
       return [
         batch.id,
         {
@@ -708,7 +726,12 @@ async function loadCreditBatchRollupsWithExecutor(
 export async function loadCreditBatchRollups(
   ctx: OrgContext,
   batchIds: string[],
-  options?: { removalId?: string; unassignedOnly?: boolean },
+  options?: {
+    removalId?: string;
+    unassignedOnly?: boolean;
+    /** Also load each member run's product layers and shipments (roll-forwards). */
+    includeRunForwards?: boolean;
+  },
 ): Promise<CreditBatchRollupsByBatch> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
@@ -720,6 +743,7 @@ export async function loadCreditBatchRollups(
       tx,
       options?.removalId,
       options?.unassignedOnly,
+      options?.includeRunForwards,
     ),
     {
       isolationLevel: "repeatable read",

@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { formatLocalDateTime } from "@/lib/date-utils";
 import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
 import { FormTextarea } from "@/components/forms/form-textarea";
-import { FormSelect } from "@/components/forms/form-select";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { EntitySelect } from "@/components/forms/entity-select";
 import {
   productionIncidentFormSchema,
@@ -98,8 +98,9 @@ export function ProductionIncidentForm({
             error={errors.severity?.message}
             required
           >
-            <FormSelect
+            <SegmentedControl
               id="severity"
+              legend="Severity"
               disabled={isSubmitting}
               error={!!errors.severity}
               options={severityOptions}
@@ -110,7 +111,7 @@ export function ProductionIncidentForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
-            id="operatorId"
+            id="incident-operatorId"
             label="Operator"
             error={errors.operatorId?.message}
           >
@@ -119,6 +120,7 @@ export function ProductionIncidentForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="incident-operatorId"
                   entityType="operator"
                   value={field.value ?? ""}
                   onChange={field.onChange}
@@ -131,7 +133,7 @@ export function ProductionIncidentForm({
           </FormField>
 
           <FormField
-            id="reactorId"
+            id="incident-reactorId"
             label="Reactor"
             error={errors.reactorId?.message}
           >
@@ -140,6 +142,7 @@ export function ProductionIncidentForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="incident-reactorId"
                   entityType="reactor"
                   value={field.value ?? ""}
                   onChange={field.onChange}
@@ -205,7 +208,7 @@ export function ProductionIncidentForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitLabel={isEditMode ? "Save Changes" : "Add Incident"}
+        submitLabel={isEditMode ? "Save changes" : "Add incident"}
       />
     </form>
   );

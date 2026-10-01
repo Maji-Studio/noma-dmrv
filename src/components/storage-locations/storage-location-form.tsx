@@ -13,16 +13,17 @@ import {
   FormTextarea,
   ResolvedErrorRevalidator,
 } from "@/components/forms";
-import { FormSelect } from "@/components/forms/form-select";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { SegmentedControl } from "@/components/forms/segmented-control";
+import { stockModeOptions } from "./stock-mode-art";
 import { FormActions } from "@/components/forms/form-actions";
 import {
   storageLocationFormSchema,
   storageLocationTypes,
+  STORAGE_LOCATION_TYPE_SHORT_LABELS,
   formatStorageLocationType,
   isFeedstockBinType,
   isOutputBinType,
-  OUTPUT_STOCK_MODE_LABELS,
-  outputStockModes,
   STORAGE_LOCATION_TYPE_DESCRIPTIONS,
   type StorageLocationFormData,
   type StorageLocationType,
@@ -30,10 +31,8 @@ import {
 import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 
-const STOCK_MODE_OPTIONS = outputStockModes.map((mode) => ({ value: mode, label: OUTPUT_STOCK_MODE_LABELS[mode] }));
-
 const STOCK_MODE_HINT =
-  "Split keeps every batch in its own bay, bag or heap, and each removal records which batches it came from. Mix is one blended pile: every removal takes each batch in proportion to what it holds.";
+  "Split keeps every production run or batch in its own bay, bag or heap, and each removal records which ones it came from. Mix is one blended pile: every removal takes from each in proportion to what it holds.";
 const MERGE_TIME_HINT =
   "Removals from this time on take every batch in proportion. Entries already saved keep their shares.";
 
@@ -79,9 +78,11 @@ export function StorageLocationForm({
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const typeChoices = allowedTypes ?? storageLocationTypes;
+  // A caller that allows one type (quick-add) fixes it: no choice to draw.
+  const fixedType = typeChoices.length === 1 ? typeChoices[0] : undefined;
   const storageTypeOptions = typeChoices.map((type) => ({
     value: type,
-    label: formatStorageLocationType(type),
+    label: STORAGE_LOCATION_TYPE_SHORT_LABELS[type],
   }));
 
   const {
@@ -96,7 +97,7 @@ export function StorageLocationForm({
     resolver: zodResolver(storageLocationFormSchema),
     defaultValues: {
       name: storageLocation?.name ?? "",
-      type: storageLocation?.type ?? defaultType ?? undefined,
+      type: storageLocation?.type ?? defaultType ?? fixedType,
       facilityId: storageLocation?.facilityId ?? defaultFacilityId ?? contextFacilityId ?? "",
       capacityKg: storageLocation?.capacityKg ?? undefined,
       feedstockTypeId: storageLocation?.feedstockTypeId ?? defaultFeedstockTypeId ?? "",
@@ -129,8 +130,8 @@ export function StorageLocationForm({
     : "Restricts this bin to one feedstock type. For certified production, choose a Pyrolysis type that matches Isometric.";
 
   const defaultSubmitLabel = isEditMode
-    ? "Update Storage Bin"
-    : "Create Storage Bin";
+    ? "Update storage bin"
+    : "Create storage bin";
 
   const handleFormSubmit = handleSubmit((data) => {
     const normalized = { ...data } as StorageLocationFormData;
@@ -153,22 +154,32 @@ export function StorageLocationForm({
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField
-          id="type"
-          label="Storage type"
-          error={errors.type?.message}
-          helperText={typeDescription}
-          required
-        >
-          <FormSelect
+        {fixedType ? (
+          <div className="flex flex-col gap-6">
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">Storage type</span>
+            <span className="flex min-h-40 items-center body-small text-[var(--color-text-primary)]">
+              {formatStorageLocationType(fixedType)}
+            </span>
+            <input type="hidden" {...register("type")} />
+          </div>
+        ) : (
+          <FormField
             id="type"
-            placeholder="Select storage type..."
-            disabled={isSubmitting}
-            error={!!errors.type}
-            options={storageTypeOptions}
-            {...register("type")}
-          />
-        </FormField>
+            label="Storage type"
+            error={errors.type?.message}
+            helperText={typeDescription}
+            required
+          >
+            <SegmentedControl
+              id="type"
+              legend="Storage type"
+              disabled={isSubmitting}
+              error={!!errors.type}
+              options={storageTypeOptions}
+              {...register("type")}
+            />
+          </FormField>
+        )}
 
         <FormField id="name" label="Bin name" error={errors.name?.message} required>
           <FormInput
@@ -217,6 +228,7 @@ export function StorageLocationForm({
 
       {showStockMode && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
+          <div className="md:col-span-2">
           <FormField
             id="stockMode"
             label="Stock mode"
@@ -225,11 +237,13 @@ export function StorageLocationForm({
             helperText={unmixing ? "Only an empty bin can switch to split." : merging ? "Switching back to split needs an empty bin." : undefined}
             required
           >
-            <FormSelect
+            <ChoiceCardGroup
               id="stockMode"
+              legend="Stock mode"
               disabled={isSubmitting}
               error={!!errors.stockMode}
-              options={STOCK_MODE_OPTIONS}
+              stackArt
+              options={stockModeOptions(watchedType)}
               {...register("stockMode", {
                 // Merging starts from now, which the operator can move back.
                 onChange: (event) => {
@@ -240,17 +254,19 @@ export function StorageLocationForm({
               })}
             />
           </FormField>
+          </div>
           {merging && (
-            <FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} helperText={clock.hint} required>
+            <div className="md:col-span-2"><FormField id="mergedAt" label="Merged at" hint={MERGE_TIME_HINT} error={errors.mergedAt?.message} cue={clock.hint} required>
               <EventTimeInput control={control} name="mergedAt" id="mergedAt" timeZone={clock.timeZone} disabled={isSubmitting} />
-            </FormField>
+            </FormField></div>
           )}
         </div>
       )}
 
       {showFeedstockType && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormEntitySelect
+          <div className="md:col-span-2">
+<FormEntitySelect
             control={control}
             name="feedstockTypeId"
             label="Feedstock type"
@@ -263,12 +279,14 @@ export function StorageLocationForm({
             createLabel="Add new feedstock type"
             filterBy={feedstockTypeFilter}
           />
+          </div>
         </div>
       )}
 
       {showFormulation && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormEntitySelect
+          <div className="md:col-span-2">
+<FormEntitySelect
             control={control}
             name="formulationId"
             label="Formulation"
@@ -279,6 +297,7 @@ export function StorageLocationForm({
             allowCreate
             createLabel="Add new formulation"
           />
+          </div>
         </div>
       )}
 

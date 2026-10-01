@@ -1,11 +1,15 @@
 ---
 name: codex-review
-description: Ask Codex CLI (gpt-6-astra at low reasoning effort) for an independent code review of uncommitted changes, a branch diff, a commit, or a specific implementation. This is how the Codex model is invoked for review work. Use when the user asks for a Codex/gpt-6-astra review or second opinion, or when the model-selection rubric calls for an extra independent review perspective. For a review by Claude itself, use the normal review process instead.
+description: Ask Codex CLI (gpt-6.1-sol at high reasoning effort) for an independent code review of uncommitted changes, a branch diff, a commit, or a specific implementation. This is how the Codex model is invoked for review work. Use when the user asks for a Codex/gpt-6.1-sol review or second opinion, or when the model-selection rubric calls for an extra independent review perspective. For a review by Claude itself, use the normal review process instead.
 ---
 
-Delegate a code review to the Codex CLI (gpt-6-astra, low reasoning, explicitly selected below) and bring the findings back for Claude to
+Delegate a code review to the Codex CLI (gpt-6.1-sol, high reasoning, explicitly selected below) and bring the findings back for Claude to
 verify before presenting them. Claude stays responsible for judging the findings — Codex's
 output is **evidence, not authority**.
+
+**Model:** gpt-6.1-sol at `high` is the default reviewer. Swap in
+`-m gpt-6-astra -c 'model_reasoning_effort="medium"'` for plan reviews and for diffs that touch
+security, auth/tenancy, money or data integrity, or when a gpt-6.1-sol review looks shallow.
 
 ## Shared invocation rules
 
@@ -13,10 +17,11 @@ output is **evidence, not authority**.
   ```bash
   CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"
   ```
-  Last resort: the ChatGPT.app bundle at `/Applications/ChatGPT.app/Contents/Resources/codex`.
-  (The old `/Applications/Codex.app/Contents/Resources/codex` path no longer exists.)
-- If the CLI reports `"requires a newer version of Codex"`, upgrade with
-  `pnpm add -g @openai/codex@latest` and retry.
+  Both `~/.local/bin/codex` (standalone, first on PATH) and the pnpm global must be
+  codex-cli 0.159.2 or newer for gpt-6.1-sol.
+- If the CLI reports `"requires a newer version of Codex"` or `"model is not supported"`,
+  upgrade with `codex update` (standalone) and `pnpm add -g @openai/codex@<latest version>`
+  (pnpm may hold back the newest release unless you name it), then retry.
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
   `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
 - If `codex` is not installed or the command fails, report the error and offer to do the
@@ -74,15 +79,15 @@ The target flags are **mutually exclusive with a custom prompt** (re-verified on
 
 ```bash
 # Mode A — default review instructions, structured target flag:
-"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review --uncommitted > "$REPORT"    # staged + unstaged + untracked
-"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review --base staging > "$REPORT"   # branch vs base (this repo: staging)
-"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review --commit <sha> > "$REPORT"   # a single commit
+"$CODEX" -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -C "$PWD" review --uncommitted > "$REPORT"    # staged + unstaged + untracked
+"$CODEX" -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -C "$PWD" review --base staging > "$REPORT"   # branch vs base (this repo: staging)
+"$CODEX" -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -C "$PWD" review --commit <sha> > "$REPORT"   # a single commit
 ```
 
 ```bash
 # Mode B — custom instructions via stdin; NO target flag allowed. Name the review
 # target in the prompt's first line — codex resolves the diff itself with git:
-"$CODEX" -m gpt-6-astra -c 'model_reasoning_effort="low"' -C "$PWD" review - < "$PROMPT" > "$REPORT"
+"$CODEX" -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -C "$PWD" review - < "$PROMPT" > "$REPORT"
 ```
 
 Prefer Mode B whenever task-specific context matters (it usually does); use Mode A for a

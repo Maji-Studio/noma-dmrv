@@ -100,7 +100,7 @@ export function ProductionSampleForm({
           </FormField>
 
           <FormField
-            id="sampledById"
+            id="production-sample-sampledById"
             label="Sampled by"
             error={errors.sampledById?.message}
           >
@@ -109,6 +109,7 @@ export function ProductionSampleForm({
               control={control}
               render={({ field }) => (
                 <EntitySelect
+                  id="production-sample-sampledById"
                   entityType="operator"
                   value={field.value ?? ""}
                   onChange={field.onChange}
@@ -309,7 +310,7 @@ export function ProductionSampleForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         errorMessage={errorMessage}
-        submitLabel={isEditMode ? "Save Changes" : "Add Sample"}
+        submitLabel={isEditMode ? "Save changes" : "Add Sample"}
       />
     </form>
   );

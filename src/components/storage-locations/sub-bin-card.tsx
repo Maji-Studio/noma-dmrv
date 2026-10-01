@@ -124,7 +124,7 @@ function SubBinRowItem({ subBin, timeZone }: { subBin: OutputSubBin; timeZone: s
 export function SubBinList({ subBins, timeZone, label }: { subBins: OutputSubBin[]; timeZone: string; label: string }) {
   if (subBins.length > SUB_BIN_CARD_LIMIT) {
     return (
-      <ul aria-label={label} className="divide-y divide-[var(--color-border-primary)]">
+      <ul aria-label={label} className="flex flex-col gap-4">
         {subBins.map((subBin) => <SubBinRowItem key={subBin.layerId} subBin={subBin} timeZone={timeZone} />)}
       </ul>
     );

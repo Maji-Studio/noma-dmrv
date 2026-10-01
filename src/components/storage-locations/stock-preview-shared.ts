@@ -2,8 +2,7 @@
  * Figures and wording the stock preview blocks share: the movement block, the
  * load block and the availability block read a bin the same way.
  */
-import type { SimplePresence } from "@/components/forms/form-detail-context";
-import type { MassSegment } from "@/components/forms/composition-ledger";
+import { formatCompositionMass, type MassSegment } from "@/components/forms/composition-ledger";
 import { batchAccentFill } from "@/components/ui/segment-bar";
 import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/types/output-stock";
 
@@ -15,9 +14,6 @@ import type { AffectedStockPreview as Preview, OutputStockBalanceView } from "@/
  * the balance pair keeps the tracked quantity.
  */
 export const SPLIT_MATERIAL_LABEL = "Solids";
-
-/** Stock movement blocks are optional in Simple; see `OutputStockPreview`. */
-export const STOCK_SIMPLE_PRESENCE: SimplePresence = "hidden";
 
 /**
  * Wet estimates are whole kilograms. They are computed at an entered moisture,
@@ -42,6 +38,11 @@ export function batchSegments(allocations: readonly OutputStockBalanceView[]): M
 }
 
 /** Whole kilograms without the unit, for the muted before figure of a pair. */
+/** Key figures under a wet headline: batches are tracked dry, so they say so. */
+export function formatDryKeyMass(kg: number | null): string {
+  return `${formatCompositionMass(kg)} dry`;
+}
+
 export function formatWetEstimate(kg: number): string {
   return kg.toLocaleString(undefined, { maximumFractionDigits: WET_ESTIMATE_DIGITS });
 }

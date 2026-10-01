@@ -1,8 +1,8 @@
 /**
  * FacilityIsometricConnector
- * Lightweight inline registry connector for the facility edit form: shows the
- * facility's Isometric link status and lets an admin pick a project and
- * connect in place. Deliberately minimal — only the project link
+ * Registry connector for the facility edit form: one row with the facility's
+ * Isometric link status and a Manage button that opens a modal where an admin
+ * picks a project and connects. Deliberately minimal — only the project link
  * (`externalProjectId`) is editable here; template / facility-id / protocol
  * binding stays in Certification → Settings (linked in the header). Saving
  * goes through the same admin-gated `saveFacilityCertifierMapping` action as
@@ -20,9 +20,9 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { FormField, FormInput, FormSelect, ServerError } from "@/components/forms";
 import {
@@ -35,7 +35,9 @@ import {
   DEFAULT_PROTOCOL_LABEL,
   DEFAULT_PROTOCOL_SLUG,
 } from "@/config/certification";
+import { MISSING_VALUE } from "@/lib/copy-utils";
 import { EnvBanner } from "./env-banner";
+import { Notice } from "@/components/ui/notice";
 
 // Carry the edited facility through to Settings — the facility side-sheet can
 // show a facility other than the sidebar-selected one (same rationale as
@@ -47,6 +49,7 @@ interface FacilityIsometricConnectorProps {
   facilityId: string;
 }
 
+/** Status row plus the modal that holds the connect controls. */
 export function FacilityIsometricConnector({
   facilityId,
 }: FacilityIsometricConnectorProps) {
@@ -61,7 +64,80 @@ export function FacilityIsometricConnector({
     facilityId,
     viewerCanManage,
   );
+  // Owned here so the modal can refuse to close while a save is in flight.
   const saveMutation = useSaveFacilityCertifierMapping();
+  const [isOpen, setIsOpen] = useState(false);
+  const titleId = useId();
+
+  if (!viewerCanManage) return null;
+
+  const projectLabel = connectedProjectLabel(data);
+  const status = isLoading
+    ? "Loading…"
+    : error || !data
+      ? MISSING_VALUE.notAvailable
+      : projectLabel
+        ? `Connected to ${projectLabel}`
+        : MISSING_VALUE.notSet;
+
+  return (
+    <div className="flex items-center justify-between gap-12">
+      <div className="min-w-0">
+        <p className="body-small font-medium text-[var(--color-text-secondary)]">
+          Registry connection
+        </p>
+        <p className="body-small truncate text-[var(--color-text-primary)]">
+          {status}
+        </p>
+      </div>
+      <Button type="button" variant="default" onClick={() => setIsOpen(true)}>
+        Manage
+      </Button>
+      <Modal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        dismissible={!saveMutation.isPending}
+        ariaLabelledBy={titleId}
+        width="md"
+      >
+        <ConnectorBody
+          facilityId={facilityId}
+          titleId={titleId}
+          saveMutation={saveMutation}
+        />
+      </Modal>
+    </div>
+  );
+}
+
+type FacilityCertifierMappingData = NonNullable<
+  ReturnType<typeof useFacilityCertifierMapping>["data"]
+>;
+
+/** The connected project's name (its id when the name is unknown), or null when none is linked. */
+function connectedProjectLabel(
+  data: FacilityCertifierMappingData | undefined,
+): string | null {
+  const mapping = data?.mapping;
+  if (!mapping) return null;
+  return (
+    data.availableProjects.find((p) => p.id === mapping.externalProjectId)
+      ?.name ?? mapping.externalProjectId
+  );
+}
+
+function ConnectorBody({
+  facilityId,
+  titleId,
+  saveMutation,
+}: FacilityIsometricConnectorProps & {
+  titleId: string;
+  saveMutation: ReturnType<typeof useSaveFacilityCertifierMapping>;
+}) {
+  const { data, isLoading, error } = useFacilityCertifierMapping(
+    facilityId,
+    true,
+  );
   const toast = useToast();
 
   // null = untouched (select shows the currently-connected project).
@@ -77,11 +153,11 @@ export function FacilityIsometricConnector({
   // minimal connector must gather it. Advanced binding stays in Settings.
   const [facilityIdInput, setFacilityIdInput] = useState("");
 
-  if (!viewerCanManage) return null;
-
   const header = (
-    <div className="flex items-center justify-between gap-12">
-      <h3 className="title-chapter-title">Isometric Certify</h3>
+    <div className="flex flex-col gap-4 pr-40">
+      <h2 id={titleId} className="title-heading-3">
+        Isometric Certify
+      </h2>
       <Link
         href={settingsHref(facilityId)}
         className="body-caption text-[var(--color-text-tertiary)] underline underline-offset-2 hover:text-[var(--color-text-secondary)]"
@@ -137,9 +213,6 @@ export function FacilityIsometricConnector({
   const selected = selectedProjectId ?? currentProjectId;
   const isDirty = !!selected && selected !== currentProjectId;
 
-  const connectedProjectName = mapping
-    ? (availableProjects.find((p) => p.id === currentProjectId)?.name ?? null)
-    : null;
 
   // Other facilities already linked to the selected project → sharing needs an
   // explicit opt-in before save (parity with FacilityCertifierDialog).
@@ -215,7 +288,7 @@ export function FacilityIsometricConnector({
         <p className="body-small text-[var(--color-text-secondary)]">
           Connected to{" "}
           <span className="body-small-bold text-[var(--color-text-primary)]">
-            {connectedProjectName ?? currentProjectId}
+            {connectedProjectLabel(data)}
           </span>{" "}
           ·{" "}
           <a
@@ -303,7 +376,7 @@ export function FacilityIsometricConnector({
       )}
 
       {requiresShareAck && (
-        <div className="flex flex-col gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16">
+        <Notice tone="warning">
           <p className="body-small text-[var(--color-text-primary)]">
             This project is already linked to{" "}
             <strong className="body-small-bold">
@@ -312,7 +385,7 @@ export function FacilityIsometricConnector({
             . Submissions from this and the listed facilities will target the
             same Isometric project.
           </p>
-          <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
+          <label className="mt-12 flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
             <input
               type="checkbox"
               className="mt-2 shrink-0"
@@ -323,7 +396,7 @@ export function FacilityIsometricConnector({
             />
             <span>I intend to share this project across facilities.</span>
           </label>
-        </div>
+        </Notice>
       )}
 
       {isProduction && isDirty && (
@@ -357,7 +430,7 @@ function ConnectorShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-16 border-t border-[var(--color-border-secondary)] pt-20">
+    <div className="flex flex-col gap-16">
       {header}
       {children}
     </div>

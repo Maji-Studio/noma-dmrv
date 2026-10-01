@@ -54,7 +54,7 @@ export function QuickAddDialogShell({
     >
       <div className="flex flex-col" data-testid={testId}>
         {/* Header */}
-        <div className="flex items-center p-24 border-b border-[var(--color-border-primary)]">
+        <div className="flex flex-col gap-4 p-24 border-b border-[var(--color-border-primary)]">
           <h2 id={titleId} className="title-heading-3">
             {title}
           </h2>

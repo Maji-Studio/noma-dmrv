@@ -466,12 +466,20 @@ batches, through the custody path Feedstock (+ Reactor) → Production Run
 → Biochar Product → Order → Delivery → Application.
 _Avoid_: trace-back, upstream graph.
 
+**Roll-forward**:
+The downstream trace from one member **production run** to wherever its
+biochar is now: Feedstock (+ Reactor) → Production Run → Biochar Product
+→ Delivery, stopping at the last recorded step. It makes a credit batch
+traceable before its first application.
+_Avoid_: forward trace, pending lineage.
+
 **Roll-up**:
 The merged lineage of one **credit batch** — every derived member
-application's **rollback** combined, production runs deduped,
-applied-biochar scoped. Mirrors how a **Removal** aggregates runs. The
-chain-of-custody page is anchored on this; a single application's
-rollback is its drill-down.
+application's **rollback** combined, plus each member run's
+**roll-forward** for records no rollback reaches, production runs
+deduped. Applied masses come from the rollbacks only. Mirrors how a
+**Removal** aggregates runs. The chain-of-custody page is anchored on
+this; a single application's rollback is its drill-down.
 _Avoid_: aggregate view, batch graph.
 
 **Trail**:
@@ -511,7 +519,7 @@ surfaces as evidence health, never as an upload error.
 _Avoid_: validation failure (the photo is not rejected).
 
 **Distance override**:
-A per-trip distance recorded on a delivery only when that trip's
+A one-way distance recorded on a delivery only when that delivery's
 routing differs from the destination's stored distance. Absence means
 the stored distance governs — so later corrections to the stored
 distance keep propagating.
@@ -520,8 +528,9 @@ _Avoid_: treating the override as the primary distance value.
 ### Geography & transport
 
 **Transport distance**:
-The road distance (km) of a **transport leg**, fed to Isometric's
-distance-based transport equation. A distance computed from coordinates
+The one-way road distance (km) of a **transport leg**. Every leg counts
+its round trip, twice this distance, in Isometric's distance-based transport
+equation, because the vehicle returns empty. A distance computed from coordinates
 by the map's routing service is an **estimate** — modeled from a road
 graph, not the hauled distance on a bill of lading or weigh ticket. It
 is a *suggested default*, always operator-editable, and in the same

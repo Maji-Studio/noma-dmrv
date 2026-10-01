@@ -12,14 +12,12 @@
  * the block's other controls (a history dialog, a link) so they never scatter
  * across the block.
  *
- * `simple` is the block's Simple boundary, declared once here instead of in
- * each block: `picture` keeps caption, headline, picture and the block's own
- * `actions` (a stock history, a fix like "Balance to 100%"), `headline` keeps
- * caption and headline, `hidden` keeps nothing. `detail` rows and Show
- * calculation are Detailed only. Outside a detail provider the level is
- * Detailed, so unmanaged surfaces show the whole block. Parts outside the
- * boundary stay mounted behind `hidden`, so an open history dialog or a half
- * written correction survives a level switch.
+ * Simple and Detailed show the same block: caption, headline, picture
+ * and the block's own `actions` (a stock history, a fix like "Balance to
+ * 100%") render at both levels. Detailed adds only explanation: the `detail`
+ * rows and Show calculation, both marked with `DETAIL_EXPLANATION_ATTR`.
+ * Outside a detail provider the level is Detailed. Explanation parts stay
+ * mounted behind `hidden`, so an open disclosure survives a level switch.
  *
  * `hint` is the one-sentence definition behind an InfoHint beside the caption.
  * `calculation` is arithmetic the operator cannot already read off the block;
@@ -28,73 +26,80 @@
  */
 "use client";
 
+import { cn } from "@/lib/utils";
 import { useId, useState, type ReactNode } from "react";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { InfoHint } from "@/components/ui/tooltip";
-import { useSimplePresence, type SimplePresence } from "./form-detail-context";
+import { DETAIL_EXPLANATION_ATTR, useFormDetailLevel } from "./form-detail-context";
 
 const CARET_ICON_PX = 14;
 
 export function CompositionCard({
   title,
   hint,
-  simple = "picture",
   headline,
   children,
   detail,
   calculation,
   actions,
+  ruleOnlyWithCalculation = false,
 }: {
   title: string;
   /** One sentence defining the block. Rendered as an InfoHint beside the caption. */
   hint?: string;
-  /** What Simple keeps of this block. Defaults to the picture. */
-  simple?: SimplePresence;
   /** The block's one figure, usually a `DerivedHeadline`. Shown whenever the block is. */
   headline?: ReactNode;
   /** The picture: a bar and its key, or the figures the block is made of. */
   children?: ReactNode;
-  /** Rows Detailed shows in place under the picture, such as a ledger. */
+  /** Explanation rows Detailed shows in place under the picture, such as a ledger. Never decision info. */
   detail?: ReactNode;
   /** Arithmetic the block does not already show. Omit and no control renders. */
   calculation?: ReactNode;
   /** Other controls for this block, rendered in the action row after Show calculation. */
   actions?: ReactNode;
+  /** Draw the action row's rule only above the Show calculation control, so actions alone sit rule-free. */
+  ruleOnlyWithCalculation?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
-  const parts = useSimplePresence(simple);
+  const detailed = useFormDetailLevel() === "detailed";
+  const explanation = { [DETAIL_EXPLANATION_ATTR]: true };
   const CaretIcon = open ? CaretUpIcon : CaretDownIcon;
   const hasActions = Boolean(calculation) || Boolean(actions);
-  const showActionRow = parts.detailed || (parts.picture && Boolean(actions));
+  const showActionRow = detailed || Boolean(actions);
   // Flex gap rather than space-y: a part hidden by the level leaves no margin
   // behind, so Simple ends on its last visible part.
   return (
-    <section aria-label={title} hidden={!parts.block} className="flex flex-col gap-12">
+    <section aria-label={title} className="flex flex-col gap-12">
       <h3 className="flex min-w-0 items-center gap-4 body-caption text-[var(--color-text-secondary)]">
         <span>{title}</span>
         {hint && <InfoHint label={`About ${title.toLowerCase()}`}>{hint}</InfoHint>}
       </h3>
       {headline}
       {children != null && children !== false && (
-        <div hidden={!parts.picture} className="flex flex-col gap-12">
+        <div className="flex flex-col gap-12">
           {children}
         </div>
       )}
       {detail != null && detail !== false && (
-        <div hidden={!parts.detailed} className="flex flex-col gap-12">
+        <div {...explanation} hidden={!detailed} className="flex flex-col gap-12">
           {detail}
         </div>
       )}
       {hasActions && (
         <div
           hidden={!showActionRow}
-          className="flex flex-wrap items-center gap-x-8 gap-y-4 border-t border-[var(--color-border-tertiary)] pt-8"
+          className={cn(
+            "flex flex-wrap items-center gap-x-8 gap-y-4",
+            (!ruleOnlyWithCalculation || (calculation && detailed)) &&
+              "border-t border-[var(--color-border-tertiary)] pt-8",
+          )}
         >
           {calculation && (
             <Button
-              hidden={!parts.detailed}
+              {...explanation}
+              hidden={!detailed}
               data-presentation-control
               type="button"
               variant="noOutline"
@@ -112,7 +117,7 @@ export function CompositionCard({
         </div>
       )}
       {calculation && (
-        <div id={id} hidden={!open || !parts.detailed} className="flex flex-col gap-12">
+        <div {...explanation} id={id} hidden={!open || !detailed} className="flex flex-col gap-12">
           {calculation}
         </div>
       )}

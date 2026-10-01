@@ -49,26 +49,28 @@ test.describe("Organization operating defaults", () => {
     ).toBeVisible({ timeout: 30_000 });
 
     // The system fallback, before this organization has chosen anything.
-    const currency = page.getByLabel("Currency");
+    // By role: each defaults field also has an ⓘ button named "More about <label>".
+    const currency = page.getByRole("combobox", { name: "Currency" });
     await expect(currency).toHaveValue("TZS");
 
     await currency.selectOption("KES");
-    await page.getByLabel("Order packaging").selectOption("bagged");
+    // Order packaging is a segmented control (native radios).
+    await page.getByText("Bagged", { exact: true }).click();
     await page.getByRole("button", { name: "Save defaults" }).click();
 
     await expect(page.getByText("Operating defaults saved.")).toBeVisible();
 
     // Survives a reload: the value is stored, not just held in the form.
     await page.reload();
-    await expect(page.getByLabel("Currency")).toHaveValue("KES");
-    await expect(page.getByLabel("Order packaging")).toHaveValue("bagged");
+    await expect(page.getByRole("combobox", { name: "Currency" })).toHaveValue("KES");
+    await expect(page.getByRole("radio", { name: "Bagged" })).toBeChecked();
 
     // And reaches the form it says it seeds. This is the assertion that would
     // catch the default being saved into a table nothing reads.
     // The orders list has no `?create=true` intent handler; the header button
     // is the only way in.
     await page.goto(`/orders?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Order" }).click();
+    await page.getByRole("button", { name: "New order" }).click();
     await expect(page.getByLabel("Currency")).toHaveValue("KES", {
       timeout: 30_000,
     });

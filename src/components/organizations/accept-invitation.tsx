@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { acceptInvitationAction } from "@/fn/organizations";
 import { useResetAfterOrgSwitch } from "@/hooks/use-organizations";
+import { Notice } from "@/components/ui/notice";
 
 export function AcceptInvitation({
   invitationId,
@@ -51,9 +52,7 @@ export function AcceptInvitation({
         . Accept the invitation to join the organization.
       </p>
       {error && (
-        <p className="body-small text-[var(--st-bad)] border border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] p-12">
-          {error}
-        </p>
+        <Notice tone="error">{error}</Notice>
       )}
       <Button
         type="button"

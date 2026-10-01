@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { lockBinStock } from "@/data-access/bin-stock-guards";
 import { archiveFacility } from "@/data-access/facilities";
 import { createStorageLocation } from "@/data-access/quick-add";
+import { createReactor, updateReactor } from "@/data-access/reactors";
 import {
   createFeedstock,
   updateFeedstock,
@@ -367,6 +368,7 @@ async function archiveBeforeReferenceWrite<T>(
 async function archiveFacilityBeforeReferenceWrite<T>(
   fixture: Fixture,
   write: () => Promise<T>,
+  options: { cascadeReactors?: boolean } = {},
 ): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> {
   let releaseArchive = () => {};
   let signalArchiveReady = () => {};
@@ -406,6 +408,12 @@ async function archiveFacilityBeforeReferenceWrite<T>(
       .update(productionRuns)
       .set({ archivedAt })
       .where(eq(productionRuns.facilityId, fixture.facilityId));
+    if (options.cascadeReactors) {
+      await tx
+        .update(reactors)
+        .set({ archivedAt })
+        .where(eq(reactors.facilityId, fixture.facilityId));
+    }
     const backend = await tx.execute<{ pid: number }>(
       sql`select pg_backend_pid() as pid`,
     );
@@ -696,6 +704,82 @@ describe(
         .where(eq(productionRuns.id, fixture.existingProductionRunId));
       expect(stored).toMatchObject({ facilityId: fixture.facilityId });
       expect(stored.archivedAt).not.toBeNull();
+    });
+
+    it("rejects a reactor moved onto a facility that is being archived", async () => {
+      const fixture = await createFixture();
+
+      const outcome = await archiveFacilityBeforeReferenceWrite(
+        fixture,
+        () =>
+          updateReactor(ctx, fixture.targetReactorId, {
+            facilityId: fixture.facilityId,
+          }),
+      );
+
+      expectArchivedReferenceRejected(outcome);
+      const [stored] = await db
+        .select({ facilityId: reactors.facilityId })
+        .from(reactors)
+        .where(eq(reactors.id, fixture.targetReactorId));
+      expect(stored).toEqual({ facilityId: fixture.targetFacilityId });
+    });
+
+    it("rejects a reactor created while its facility is being archived", async () => {
+      const fixture = await createFixture();
+      const identifier = `Storage Reference Atomicity Race Reactor ${fixture.tag}`;
+
+      const outcome = await archiveFacilityBeforeReferenceWrite(
+        fixture,
+        () =>
+          createReactor(ctx, {
+            code: `R-SRA-RACE-${fixture.tag}`,
+            identifier,
+            facilityId: fixture.facilityId,
+            reactorType: "auger",
+          }),
+      );
+
+      expectArchivedReferenceRejected(outcome);
+      const [stranded] = await db
+        .select({ id: reactors.id })
+        .from(reactors)
+        .where(eq(reactors.identifier, identifier));
+      expect(stranded).toBeUndefined();
+    });
+
+    it("rejects a reactor move after its source facility archive wins", async () => {
+      const fixture = await createFixture();
+
+      const outcome = await archiveFacilityBeforeReferenceWrite(
+        fixture,
+        () =>
+          updateReactor(ctx, fixture.reactorId, {
+            facilityId: fixture.targetFacilityId,
+          }),
+        { cascadeReactors: true },
+      );
+
+      expectArchivedReferenceRejected(outcome);
+      const [stored] = await db
+        .select({
+          facilityId: reactors.facilityId,
+          archivedAt: reactors.archivedAt,
+        })
+        .from(reactors)
+        .where(eq(reactors.id, fixture.reactorId));
+      expect(stored).toMatchObject({ facilityId: fixture.facilityId });
+      expect(stored.archivedAt).not.toBeNull();
+    });
+
+    it("translates a duplicate reactor code on update", async () => {
+      const fixture = await createFixture();
+
+      await expect(
+        updateReactor(ctx, fixture.reactorId, {
+          code: `R-SRA-TARGET-${fixture.tag}`,
+        }),
+      ).rejects.toThrow("A reactor with this code already exists");
     });
 
     it("keeps moved rows active when their move wins before source archive", async () => {

@@ -57,7 +57,7 @@ vi.mock("@/data-access/certifier-document-uploads", () => ({
   getDocumentUploadByDocument: vi.fn(async () => null),
   deleteDocumentUploadByDocument: vi.fn(async () => {}),
 }));
-vi.mock("@/fn/certification/sources", () => ({
+vi.mock("@/fn/certification/sources-mirror-core", () => ({
   mirrorDocumentToSourceForUser: vi.fn(async () => ({
     externalDocumentId: "src_new",
     isPublic: false,
@@ -95,7 +95,7 @@ import {
 } from "@/data-access/certifier-document-uploads";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
-import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
+import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources-mirror-core";
 import { ensureTransportEvidenceLedgerSourceFromContext } from "@/fn/certification/evidence-ledger";
 import { EvidenceLedgerRetirementError } from "@/fn/certification/evidence-ledger-core";
 
@@ -202,10 +202,11 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     expect(meta.removalId).toBe(REMOVAL);
     expect(typeof meta.contentHash).toBe("string");
 
-    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(makeTestOrgContext(USER), {
-      removalId: REMOVAL,
-      documentId: "doc-new",
-    });
+    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(
+      makeTestOrgContext(USER),
+      { removalId: REMOVAL, documentId: "doc-new" },
+      { enforceRemovalLifecycle: false },
+    );
 
     expect(result).toMatchObject({
       status: "created",

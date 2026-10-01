@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { DatabaseIcon, SealCheckIcon, WarningCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { DatabaseIcon, SealCheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import {
   ResolvedErrorRevalidator,
 } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
+import { SegmentedControl } from "@/components/forms/segmented-control";
 import { FormActions } from "@/components/forms/form-actions";
 import {
   feedstockTypeFormSchema,
@@ -36,6 +37,7 @@ import {
   shouldShowIsometricFeedstockSection,
   visibleFeedstockTypeSection,
 } from "./feedstock-type-form-logic";
+import { Notice } from "@/components/ui/notice";
 
 // General = the local record (the only editable surface). Isometric =
 // read-only browse of the registry catalogue. Selecting a registry row pre-fills
@@ -219,19 +221,11 @@ export function FeedstockTypeForm({
     });
   };
   const defaultSubmitLabel = isEditMode
-    ? "Update Feedstock Type"
-    : "Create Feedstock Type";
+    ? "Update feedstock type"
+    : "Create feedstock type";
   const selectedIsometricSummary = selectedIsometricFeedstock && (
-    <div className="flex gap-10 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-12 py-10">
-      <SealCheckIcon
-        aria-hidden
-        className="mt-1 size-18 shrink-0 text-[var(--st-ok)]"
-        weight="bold"
-      />
+    <Notice tone="success" title={`Selected from Isometric: ${selectedIsometricFeedstock.name}`}>
       <div className="flex flex-col gap-2">
-        <p className="body-small text-[var(--color-text-primary)]">
-          Selected from Isometric: {selectedIsometricFeedstock.name}
-        </p>
         <p className="body-caption font-mono text-[var(--color-text-tertiary)]">
           {selectedIsometricFeedstock.id}
           {selectedIsometricFeedstock.supplier_reference_id
@@ -244,7 +238,7 @@ export function FeedstockTypeForm({
           </p>
         )}
       </div>
-    </div>
+    </Notice>
   );
 
   return (
@@ -323,16 +317,16 @@ export function FeedstockTypeForm({
               {selectedIsometricSummary}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-                <div className="space-y-10">
+                <div className="space-y-10 md:col-span-2">
                   <FormField
                     id="usage"
                     label="Usage"
                     error={errors.usage?.message}
                     required
                   >
-                    <FormSelect
+                    <SegmentedControl
                       id="usage"
-                      placeholder="Select usage..."
+                      legend="Usage"
                       disabled={isSubmitting}
                       error={!!errors.usage}
                       options={usageOptions}
@@ -366,16 +360,9 @@ export function FeedstockTypeForm({
                 </FormField>
 
                 {showCertifiedFeedstockWarning && (
-                  <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10 md:col-span-2">
-                    <WarningCircleIcon
-                      aria-hidden
-                      className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
-                      weight="bold"
-                    />
-                    <p className="body-small text-[var(--color-text-primary)]">
-                      {CERTIFIED_FEEDSTOCK_WARNING}
-                    </p>
-                  </div>
+                  <Notice tone="warning" className="md:col-span-2">
+                    {CERTIFIED_FEEDSTOCK_WARNING}
+                  </Notice>
                 )}
 
                 <FormField

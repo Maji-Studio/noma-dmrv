@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import { TransportLegsEditor } from "@/components/transport-legs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { formatLegDistanceKm } from "@/lib/format-utils";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import type { SampleWithRelations } from "@/data-access/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
@@ -160,7 +161,7 @@ export function SampleTransportSection({
                         <div className="flex items-baseline gap-4">
                           <dt className="text-[var(--color-text-tertiary)]">Distance</dt>
                           <dd className="tabular-nums text-[var(--color-text-secondary)]">
-                            {leg.distanceKm} km
+                            {formatLegDistanceKm(leg.distanceKm)}
                           </dd>
                         </div>
                       </dl>

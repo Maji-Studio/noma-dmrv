@@ -14,16 +14,23 @@
 import type { ReactNode } from "react";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { SecondaryFigure } from "@/components/ui/secondary-figure";
 
 const ARROW_ICON_PX = 18;
 
-export function DerivedHeadline({ label, value, before, sub, figureLabel }: {
+export function DerivedHeadline({ label, value, before, secondary, sub, figureLabel }: {
   /** Names the figure. Caption style, above it. */
   label?: ReactNode;
   /** The figure, or the value after the change when `before` is set. Null when it cannot be derived. */
   value: ReactNode;
   /** The value before the change, muted and followed by an arrow. */
   before?: ReactNode;
+  /**
+   * A second figure under the headline, such as the dry stock under a wet
+   * estimate. Data, so it shows at both detail levels. Null value reads
+   * "Not available".
+   */
+  secondary?: { label: ReactNode; value: ReactNode };
   /** One caption line under the figure, such as the entry behind it. */
   sub?: ReactNode;
   /**
@@ -59,6 +66,13 @@ export function DerivedHeadline({ label, value, before, sub, figureLabel }: {
           ? <span className="font-light text-[var(--color-text-tertiary)]">{MISSING_VALUE.notAvailable}</span>
           : <span>{value}</span>}
       </div>
+      {secondary && (
+        <SecondaryFigure
+          label={secondary.label}
+          value={secondary.value ?? MISSING_VALUE.notAvailable}
+          empty={secondary.value == null}
+        />
+      )}
       {sub != null && (
         <div className="body-caption text-[var(--color-text-secondary)]">{sub}</div>
       )}

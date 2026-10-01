@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   CheckCircleIcon,
   UploadSimpleIcon,
-  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -12,7 +11,9 @@ import { GEOJSON_MAX_INPUT_BYTES } from "@/config/geo";
 import { useNormalizeGisBoundary } from "@/hooks/use-gis-boundary";
 import { cn } from "@/lib/utils";
 import type { GisBoundary } from "@/schemas/gis-boundary";
-import { RadioCardGroup } from "./radio-card-group";
+import { Notice } from "@/components/ui/notice";
+import { ChoiceCardGroup } from "@/components/forms/choice-card-group";
+import { FileUploadArt, PasteTextArt } from "@/components/ui/illustrations";
 
 const DIALOG_TITLE_ID = "gis-reference-dialog-title";
 const FILE_INPUT_ID = "gis-reference-file";
@@ -27,14 +28,16 @@ type AddMode = "upload" | "manual";
 
 const MODE_OPTIONS = [
   {
-    key: "upload",
+    value: "upload",
     title: "Upload a file",
     description: "A .geojson file exported from your GIS tool.",
+    art: <FileUploadArt />,
   },
   {
-    key: "manual",
+    value: "manual",
     title: "Insert manually",
     description: "Paste the GeoJSON text straight in.",
+    art: <PasteTextArt />,
   },
 ] as const;
 
@@ -156,13 +159,13 @@ function DialogBody({
         </p>
       </div>
 
-      <RadioCardGroup
-        label="How to add the boundary"
+      <ChoiceCardGroup
+        legend="How to add the boundary"
         value={mode}
         options={MODE_OPTIONS}
         disabled={normalizeMutation.isPending}
-        onChange={(key) => {
-          setMode(key as AddMode);
+        onValueChange={(next) => {
+          setMode(next as AddMode);
           setErrorMessage(null);
         }}
       />
@@ -289,17 +292,7 @@ function DialogBody({
 
 function DialogError({ message }: { message: string }) {
   return (
-    <p
-      role="alert"
-      className="flex items-start gap-6 border border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] px-12 py-10 body-small text-[var(--color-text-primary)]"
-    >
-      <WarningCircleIcon
-        size={16}
-        weight="bold"
-        className="mt-1 shrink-0 text-[var(--st-bad)]"
-      />
-      {message}
-    </p>
+    <Notice tone="error">{message}</Notice>
   );
 }
 

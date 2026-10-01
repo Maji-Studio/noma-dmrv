@@ -27,6 +27,7 @@ import { createHash } from "node:crypto";
 import { SafeError } from "@/lib/errors";
 import { type IsometricClient } from "./client";
 import { isMissingIsometricResource } from "./error-utils";
+import { findRegistryRecord } from "./find-record";
 import type { components } from "./generated/certify";
 import {
   ISOMETRIC_KILOGRAM_UNIT,
@@ -195,23 +196,20 @@ export async function getProductionBatch(
  * `findMeasurementSampleBySupplierRef`). Returns the unique match or null;
  * duplicate references fail closed.
  */
-export async function findProductionBatchBySupplierRef(
+export function findProductionBatchBySupplierRef(
   client: IsometricClient,
   supplierReferenceId: string,
 ): Promise<IsometricProductionBatch | null> {
-  let match: IsometricProductionBatch | null = null;
-  for await (const batch of client.paginate<IsometricProductionBatch>(
+  return findRegistryRecord<IsometricProductionBatch>(
+    client,
     "/production_batches",
-  )) {
-    if (batch.supplier_reference_id !== supplierReferenceId) continue;
-    if (match && match.id !== batch.id) {
-      throw new SafeError(
+    {
+      match: "unique",
+      duplicateMessage:
         "Multiple production batches have this supplier reference in Isometric. Resolve the duplicates before submitting again.",
-      );
-    }
-    match = batch;
-  }
-  return match;
+      where: (batch) => batch.supplier_reference_id === supplierReferenceId,
+    },
+  );
 }
 
 /** Deletes only the addressed registry artifact. Missing-resource handling belongs to the caller. */
