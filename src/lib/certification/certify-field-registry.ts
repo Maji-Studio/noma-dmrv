@@ -1,3 +1,10 @@
+import {
+  projectInputTuplesBySource,
+  TRANSPORT_CATEGORIES,
+  TRANSPORT_SOURCE_FACTS,
+  type BindingInputTuple,
+  type InputTuplesBySource,
+} from "@/lib/isometric/semantic-binding-catalog";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 export type CertifyEntityKind =
@@ -16,15 +23,11 @@ export type CertifyFieldKind = "entered" | "derived";
 
 export type AggregatedProductionSource = keyof AggregatedProductionData;
 
-export interface CertifyInputTuple {
-  groupKey: string;
-  blueprintKey: string;
-  inputKey: string;
-}
-
+// A field names only the aggregated facts it feeds. Which removal-template
+// inputs those facts reach is owned by the semantic binding catalog and
+// resolved by `resolveCertifyFieldInputTuples`.
 export interface CertifySourceMapping {
   source: AggregatedProductionSource;
-  inputTuples?: readonly CertifyInputTuple[];
 }
 
 export type CertifyFieldCondition =
@@ -83,55 +86,28 @@ export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "warnings",
 ] as const satisfies readonly AggregatedProductionSource[];
 
-const tuple = (
-  groupKey: string,
-  blueprintKey: string,
-  inputKey: string,
-): CertifyInputTuple => ({ groupKey, blueprintKey, inputKey });
-
-const mapping = (
-  source: AggregatedProductionSource,
-  inputTuples?: readonly CertifyInputTuple[],
-): CertifySourceMapping => ({ source, inputTuples });
+const mapping = (source: AggregatedProductionSource): CertifySourceMapping => ({
+  source,
+});
 
 // Pyrolysis energy: one grid-electricity datapoint plus diesel volume via
 // `fuel_usage_by_volume` (ADR 0015, amended by #319 then the generator/startup
 // diesel split — docs/isometric/changes.md). The Dark Earth template declares
 // two `fuel_usage_by_volume` components (generator + preprocessing vs. startup)
-// sharing one fixed volumetric EF; datapoint.ts resolves each to its own
-// source. `dieselFuelVolumeMapping` links the shared input tuple for badge
+// sharing one fixed volumetric EF; the catalog resolves each to its own
+// source. `dieselFuelVolumeMapping` names the combined litres for badge
 // traceability — the per-field source (startup vs. genset litres) is set on
 // each descriptor.
-const electricityMapping = mapping("totalElectricityKwh", [
-  tuple("pyrolysis", "grid_electricity_use", "electricity_use"),
-]);
+const electricityMapping = mapping("totalElectricityKwh");
 
-const dieselFuelVolumeMapping = mapping("totalDieselLitres", [
-  tuple("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel"),
-]);
+const dieselFuelVolumeMapping = mapping("totalDieselLitres");
 
 // Each transport category submits a single `mass_distance` (tonne·km) datapoint
 // = Σⱼ(distⱼ × massⱼ). Both a leg's distance AND its load mass feed that figure,
 // so the transportLeg.distanceKm and .loadMassKg fields share these mappings.
-const transportMassDistanceMappings = [
-  mapping("feedstockTransportMassDistanceTonneKm", [
-    tuple(
-      "biomass-feedstock-transport",
-      "mass_distance_based_ci_emissions",
-      "mass_distance",
-    ),
-  ]),
-  mapping("biocharTransportMassDistanceTonneKm", [
-    tuple("biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"),
-  ]),
-  mapping("sampleTransportMassDistanceTonneKm", [
-    tuple(
-      "sampling-required-for-mrv",
-      "mass_distance_based_ci_emissions",
-      "mass_distance",
-    ),
-  ]),
-] as const;
+const transportMassDistanceMappings = TRANSPORT_CATEGORIES.map((category) =>
+  mapping(TRANSPORT_SOURCE_FACTS[category]),
+);
 
 export const CERTIFY_FIELD_REGISTRY: Record<
   CertifyEntityKind,
@@ -154,15 +130,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "feedstockWetMassKg",
       label: "Feedstock wet mass",
       kind: "entered",
-      mappings: [
-        mapping("totalFeedstockDryMassKg", [
-          tuple(
-            "biomass-feedstock-transport",
-            "specific_volume_based_emissions",
-            "feedstock_mass",
-          ),
-        ]),
-      ],
+      mappings: [mapping("totalFeedstockDryMassKg")],
     },
     {
       key: "feedstockMoisturePercent",
@@ -174,16 +142,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "biocharOutputKg",
       label: "Biochar wet mass",
       kind: "entered",
-      mappings: [
-        mapping("totalBiocharDryMassKg", [
-          tuple("co2-stored", "carbon_rich_substance_sequestration", "product_mass"),
-          tuple(
-            "biochar-transport",
-            "specific_volume_based_emissions",
-            "feedstock_mass",
-          ),
-        ]),
-      ],
+      mappings: [mapping("totalBiocharDryMassKg")],
     },
     {
       key: "biocharMoisturePercent",
@@ -251,11 +210,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       key: "organicCarbonPercent",
       label: "Organic carbon",
       kind: "entered",
-      mappings: [
-        mapping("weightedOrganicCarbonPercent", [
-          tuple("co2-stored", "carbon_rich_substance_sequestration", "carbon_content"),
-        ]),
-      ],
+      mappings: [mapping("weightedOrganicCarbonPercent")],
     },
     {
       key: "hToCOrgRatio",
@@ -461,6 +416,29 @@ export const CERTIFY_FIELD_REGISTRY: Record<
     },
   ],
 } as const;
+
+const INPUT_TUPLES_BY_SOURCE: InputTuplesBySource = projectInputTuplesBySource();
+
+/**
+ * The removal-template inputs a certify field feeds, resolved through the
+ * semantic binding catalog from the facts its mappings name.
+ */
+export function resolveCertifyFieldInputTuples(
+  descriptor: CertifyFieldDescriptor,
+  tuplesBySource: InputTuplesBySource = INPUT_TUPLES_BY_SOURCE,
+): BindingInputTuple[] {
+  const seen = new Set<string>();
+  const tuples: BindingInputTuple[] = [];
+  for (const { source } of descriptor.mappings ?? []) {
+    for (const tuple of tuplesBySource[source as keyof InputTuplesBySource] ?? []) {
+      const key = `${tuple.groupKey}/${tuple.blueprintKey}/${tuple.inputKey}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      tuples.push(tuple);
+    }
+  }
+  return tuples;
+}
 
 export function getCertifyFieldDescriptors(
   entityKind: CertifyEntityKind,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ingredientComponents,
   productCompositionComponents,
+  productFlowSources,
   sourceComponents,
 } from "./product-composition-components";
 
@@ -54,5 +55,18 @@ describe("productCompositionComponents", () => {
     const product = productCompositionComponents(source, ingredientComponents(ingredient));
     expect(product.find((component) => component.kind === "water")?.massKg).toBeNull();
     expect(product.find((component) => component.kind === "biochar")?.massKg).toBeNull();
+  });
+});
+
+describe("productFlowSources", () => {
+  it("keeps each input's own parts, biochar first and added water last, without pooling the water", () => {
+    const source = sourceComponents({ wetKg: 300, dryKg: 270, addedWaterKg: 20 });
+    const manure = { label: "Chicken manure", parts: ingredientComponents({ ...ingredient, massKg: 300 }) };
+    const sources = productFlowSources(source, [manure]);
+
+    expect(sources.map((input) => input.label)).toEqual(["Biochar", "Chicken manure", "Water added"]);
+    expect(sources[0].parts.map((part) => [part.kind, part.massKg])).toEqual([["biochar", 270], ["water", 30]]);
+    expect(sources[1]).toBe(manure);
+    expect(sources[2].parts.map((part) => [part.kind, part.massKg])).toEqual([["addedWater", 20]]);
   });
 });

@@ -677,6 +677,19 @@ dry biochar (an application) gets that against one `Ingredients + water`
 remainder. Show measured finished-product moisture separately as delivery
 evidence; never use it to recalculate a composition mass.
 
+Where a surface knows where every part came from, the composition is drawn as
+a **`MassFlowSankey`** (`@/components/ui/mass-flow-sankey`) instead of the bar:
+the product form and read view pass `sources` (each input with its own parts,
+from `productFlowSources`), and the product regroups the bands by kind beside
+its node, each part named with its mass and whole-number share ("Dry biochar
+270 kg (45%)"). The production run's process flow uses the same component:
+source bin, reactor, destination bin, with water driven off and conversion loss
+as exits that rise and fade. The Sankey keeps the moisture split's fills (plum
+dry, hatched water, purple added water, entity accents for ingredient solids,
+bands at a lighter tint), draws at the measured container width so labels stay
+14px and 12px on a phone, and keeps every name and figure as HTML text. It is
+drawn only on a complete basis; until then the block shows its unresolved state.
+
 - **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
   ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
   `MoistureField` attaches to every moisture input.

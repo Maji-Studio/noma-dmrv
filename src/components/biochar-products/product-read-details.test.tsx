@@ -70,7 +70,13 @@ describe("Product read view levels", () => {
     // The form's split rule and labels: each ingredient as its solids, one pooled water.
     expect(simple).toContain("Chicken manure solids 80 kg");
     expect(simple).toContain("Water 70 kg");
-    expect(renderer.root.findAll(node => node.props.role === "img")).toHaveLength(1);
+    // The picture is the mass flow: each input, then the product it makes.
+    const flows = renderer.root.findAll(node => node.props["data-mass-flow"] !== undefined && typeof node.type === "string");
+    expect(flows).toHaveLength(1);
+    expect(text(flows[0]).trim()).toBe(
+      "Biochar 250 kg wet Chicken manure 100 kg wet Water added 50 kg Wet biochar product 400 kg " +
+        "Dry biochar 200 kg (50%) Chicken manure solids 80 kg (20%) Water 70 kg (18%) Water added 50 kg (12%)",
+    );
     // Dry figures are data: a secondary line under each wet mass.
     expect(simple).toContain("Source biochar wet mass (kg) 250 kg Dry biochar 200 kg");
     expect(simple).toContain("Chicken manure wet mass (kg) 100 kg Dry solids 80 kg");
