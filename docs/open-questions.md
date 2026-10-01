@@ -466,17 +466,24 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
   and delete this entry (S).
 
-### Is the global Simple/Detailed toggle still worth its place? (`forms/detail-toggle-value`, opened 2026-09-29)
+### Form cleanup leftovers (`forms/cleanup-leftovers`, opened 2026-10-01)
 
-- **Observed:** since Simple and Detailed differ only in explanation
-  ([`forms.md`](./forms.md#simple-and-detailed-presentation)), the toggle in
-  `src/components/forms/form-detail-context.tsx:FormDetailControl` only reveals
-  calculation rows, basis captions and provenance. Storage bin sheets
-  (`src/components/storage-locations/storage-location-list.tsx:StorageLocationList`)
-  already dropped it because it switched nothing there.
-- **Resolve via:** decide whether to keep the toggle per sheet, replace it with
-  inline "Show calculation" disclosures only, or remove it; the parity guards in
-  `src/components/forms/form-detail-parity*.test.tsx` hold either way (M).
+- **Observed:** the [form cleanup plan](./archive/plans/2026-09-29-form-cleanup.md)
+  shipped and was archived with these still open:
+  - The final rescan (Instruments A to C) never ran. It needs dev servers
+    started outside the agent sandbox. The harness is
+    `tests/visual/form-capture.spec.ts`.
+  - #867: should the stock mode captions and hints say "draw" instead of
+    "removal"?
+  - Eight Phase 2 questions on the
+    [decisions page](https://claude.ai/artifact/GtrtrafKdcbmZVon646Sk9). The
+    proposal was to keep them as built, except #7.
+  - `.label-button` is still uppercase, for example "OPEN REMOVALS" on the
+    dashboard and the map record panel actions.
+  - The sidebar group labels (Production, Infrastructure, ...) are still mono
+    caps.
+- **Resolve via:** Kenji answers each item. Run the rescan once someone can
+  start the servers (M).
 
 ### Only the GHG statement report PDF renders deterministic bytes (`certification/ledger-pdf-determinism`, opened 2026-08-06)
 
