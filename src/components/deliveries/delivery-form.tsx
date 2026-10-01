@@ -18,9 +18,11 @@ import { FormSelect } from "@/components/forms/form-select";
 import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useFacility } from "@/hooks/use-facilities";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useMatchingOutputBins } from "@/hooks/use-output-stock";
@@ -47,6 +49,8 @@ const SET_VALUE_OPTS = {
   shouldTouch: true,
   shouldValidate: true,
 } as const;
+
+const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
   isCertifyFormField("delivery", field);
@@ -82,6 +86,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const { facilityId: contextFacilityId } = useFacilityContext();
   const formFacilityId = delivery?.facilityId ?? contextFacilityId;
   const deliveryClock = useFacilityClock(formFacilityId);
+  const { data: formFacility } = useFacility(formFacilityId ?? "");
 
   // The order picker fetches its own options (FormEntitySelect); this query
   // only backs the stored-distance prefill for the selected order below.
@@ -471,6 +476,18 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           </FormField>
         )}
         </ActionableFocusTarget>
+        <TransportRoutePreview
+          entityType="biochar"
+          originName={formFacility?.name}
+          destinationName={selectedOrder?.destinationName}
+          originPoint={{ lat: formFacility?.gpsLatitude ?? null, lng: formFacility?.gpsLongitude ?? null }}
+          destinationPoint={{ lat: selectedOrder?.destinationGpsLatitude ?? null, lng: selectedOrder?.destinationGpsLongitude ?? null }}
+          distanceKm={effectiveDistanceKm}
+          distanceSource={effectiveDraftDistanceSource}
+          loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
+          saved={isEditMode}
+          emptyMessage={ROUTE_EMPTY}
+        />
       </FormSection>
 
       </form>

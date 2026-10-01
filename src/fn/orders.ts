@@ -68,6 +68,7 @@ export async function getOrdersForSelectFn(
       formulationName: string | null;
       formulationId: string;
       quantityKg: number;
+      destinationName: string | null;
       destinationGpsLatitude: number | null;
       destinationGpsLongitude: number | null;
       destinationDistanceKm: number | null;
