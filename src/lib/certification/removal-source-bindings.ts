@@ -1,8 +1,19 @@
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
-import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
-import { normalizeComponentDisplayName } from "@/lib/isometric/transformers/datapoint";
+import {
+  normalizeComponentDisplayName,
+  type NomaEvidenceRole,
+} from "@/lib/isometric/semantic-binding-catalog";
+import {
+  projectDurabilityLedgerInputKeys,
+  projectEvidenceTargets,
+  type EvidenceIntendedTarget,
+} from "@/lib/isometric/semantic-binding-projections";
+import {
+  isSequestrationBlueprintFamily,
+  isStorageBlueprintKey,
+} from "@/lib/isometric/storage-blueprints";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
   isApplicationBoundaryLogbookEvidenceType,
@@ -10,13 +21,7 @@ import {
 import { TRANSPORT_EVIDENCE_LEDGER_KIND } from "./evidence-ledger/types";
 import { DURABILITY_EVIDENCE_LEDGER_KIND } from "./evidence-ledger/durability-types";
 
-export type NomaEvidenceRole =
-  | "inventory"
-  | "feedstock_bill_of_lading"
-  | "delivery_bill_of_lading"
-  | "transport_evidence_ledger"
-  | "durability_evidence_ledger"
-  | "lab_report";
+export type { NomaEvidenceRole };
 
 export interface RemovalSourceLineage {
   entityType: string;
@@ -24,36 +29,8 @@ export interface RemovalSourceLineage {
   entityLabel: string;
 }
 
-export type RemovalSourceIntendedTarget =
-  | {
-      kind: "sequestration";
-      groupKey: "co2-stored";
-      inputKey:
-        | "product_mass"
-        | "carbon_contents"
-        | "s_fraction"
-        | "h_c_molar_ratios"
-        | "total_carbon_contents"
-        | "inorganic_carbon_contents";
-      /** Generated ledgers can target template-dependent durability inputs. */
-      optionalInTemplate?: boolean;
-    }
-  | {
-      kind: "ordinary";
-      groupKey:
-        | "biomass-feedstock-transport"
-        | "biochar-transport"
-        | "sampling-required-for-mrv"
-        | "miscellaneous";
-      componentBlueprintKey:
-        | "mass_distance_based_ci_emissions"
-        | "mass_based_ci_emissions";
-      /** Exact component name discriminator after trimming and lowercasing. */
-      componentDisplayName?: string;
-      inputKey: "mass_distance" | "mass";
-      /** The facility template can omit a transport category with no component. */
-      optionalInTemplate?: boolean;
-    };
+/** A Source's intended registry input, projected from the catalog's evidence targets. */
+export type RemovalSourceIntendedTarget = EvidenceIntendedTarget;
 
 export interface ClassifiedRemovalSource {
   nomaRole: NomaEvidenceRole;
@@ -91,115 +68,73 @@ export interface OptionalRemovalEvidenceTarget
   nomaRoleLabel: string;
 }
 
+const EVIDENCE_TARGETS = projectEvidenceTargets();
+
+function sourceBindingRule(
+  nomaRole: Exclude<NomaEvidenceRole, "durability_evidence_ledger">,
+  nomaRoleLabel: string,
+): SourceBindingRule {
+  const [intendedTarget, ...additionalIntendedTargets] =
+    EVIDENCE_TARGETS[nomaRole] ?? [];
+  if (!intendedTarget) {
+    throw new Error(`Noma evidence role "${nomaRole}" targets no catalog input`);
+  }
+  return additionalIntendedTargets.length > 0
+    ? { nomaRole, nomaRoleLabel, intendedTarget, additionalIntendedTargets }
+    : { nomaRole, nomaRoleLabel, intendedTarget };
+}
+
+// The targets come from the semantic binding catalog's evidence declarations;
+// this table only names each role.
 const SOURCE_BINDING_RULES = {
-  labReport: {
-    nomaRole: "lab_report",
-    nomaRoleLabel: "Sample lab report",
-    intendedTarget: {
-      kind: "sequestration",
-      groupKey: "co2-stored",
-      inputKey: "total_carbon_contents",
-      optionalInTemplate: true,
-    },
-    additionalIntendedTargets: [
-      {
-        kind: "sequestration",
-        groupKey: "co2-stored",
-        inputKey: "inorganic_carbon_contents",
-        optionalInTemplate: true,
-      },
-    ],
-  },
-  inventory: {
-    nomaRole: "inventory",
-    nomaRoleLabel: "Inventory",
-    intendedTarget: {
-      kind: "sequestration",
-      groupKey: "co2-stored",
-      inputKey: "product_mass",
-    },
-    additionalIntendedTargets: [
-      {
-        // The safety-margin deduction multiplies the SAME biochar mass the
-        // sequestration claim uses, so the same mass evidence justifies it.
-        // Optional: the two legacy templates declare an empty `miscellaneous`
-        // group.
-        kind: "ordinary",
-        groupKey: "miscellaneous",
-        componentBlueprintKey: "mass_based_ci_emissions",
-        componentDisplayName: "Safety margin",
-        inputKey: "mass",
-        optionalInTemplate: true,
-      },
-    ],
-  },
-  feedstockBillOfLading: {
-    nomaRole: "feedstock_bill_of_lading",
-    nomaRoleLabel: "Feedstock bill of lading",
-    intendedTarget: {
-      kind: "ordinary",
-      groupKey: "biomass-feedstock-transport",
-      componentBlueprintKey: "mass_distance_based_ci_emissions",
-      inputKey: "mass_distance",
-    },
-  },
-  deliveryBillOfLading: {
-    nomaRole: "delivery_bill_of_lading",
-    nomaRoleLabel: "Delivery bill of lading",
-    intendedTarget: {
-      kind: "ordinary",
-      groupKey: "biochar-transport",
-      componentBlueprintKey: "mass_distance_based_ci_emissions",
-      inputKey: "mass_distance",
-    },
-  },
-  transportEvidenceLedger: {
-    nomaRole: "transport_evidence_ledger",
-    nomaRoleLabel: "Transport evidence ledger",
-    intendedTarget: {
-      kind: "ordinary",
-      groupKey: "biomass-feedstock-transport",
-      componentBlueprintKey: "mass_distance_based_ci_emissions",
-      inputKey: "mass_distance",
-      optionalInTemplate: true,
-    },
-    additionalIntendedTargets: [
-      {
-        kind: "ordinary",
-        groupKey: "biochar-transport",
-        componentBlueprintKey: "mass_distance_based_ci_emissions",
-        inputKey: "mass_distance",
-        optionalInTemplate: true,
-      },
-      {
-        kind: "ordinary",
-        groupKey: "sampling-required-for-mrv",
-        componentBlueprintKey: "mass_distance_based_ci_emissions",
-        inputKey: "mass_distance",
-        optionalInTemplate: true,
-      },
-    ],
-  },
+  labReport: sourceBindingRule("lab_report", "Sample lab report"),
+  inventory: sourceBindingRule("inventory", "Inventory"),
+  feedstockBillOfLading: sourceBindingRule(
+    "feedstock_bill_of_lading",
+    "Feedstock bill of lading",
+  ),
+  deliveryBillOfLading: sourceBindingRule(
+    "delivery_bill_of_lading",
+    "Delivery bill of lading",
+  ),
+  transportEvidenceLedger: sourceBindingRule(
+    "transport_evidence_ledger",
+    "Transport evidence ledger",
+  ),
 } as const satisfies Record<string, SourceBindingRule>;
 
-const DURABILITY_LEDGER_TARGETS = {
-  "1000_year": [
-    "total_carbon_contents",
-    "inorganic_carbon_contents",
-    "product_mass",
-    "s_fraction",
-    // Historical deprecated removals used this total-carbon input. It remains
-    // optional so old remote records stay classifiable without making the
-    // deprecated component eligible for a newly configured template.
-    "carbon_contents",
-  ],
-  "200_year": [
-    "h_c_molar_ratios",
-    "total_carbon_contents",
-    "inorganic_carbon_contents",
-    "product_mass",
-  ],
-} as const;
+// Historical deprecated 1,000-year removals target `carbon_contents`; it stays
+// listed so old remote records remain classifiable without making the
+// deprecated component eligible for a newly configured template.
+const DURABILITY_LEDGER_TARGETS = projectDurabilityLedgerInputKeys();
+
+/**
+ * Every key a persisted Source target may carry. Snapshot readers validate
+ * stored candidates against this vocabulary.
+ */
+export const REMOVAL_SOURCE_TARGET_VOCABULARY = (() => {
+  const targets = [
+    ...Object.values(SOURCE_BINDING_RULES).flatMap(
+      (rule: SourceBindingRule) => [
+        rule.intendedTarget,
+        ...(rule.additionalIntendedTargets ?? []),
+      ],
+    ),
+  ];
+  const unique = (values: string[]) => [...new Set(values)];
+  const ordinary = targets.filter((target) => target.kind === "ordinary");
+  return {
+    sequestrationInputKeys: unique([
+      ...targets
+        .filter((target) => target.kind === "sequestration")
+        .map((target) => target.inputKey),
+      ...Object.values(DURABILITY_LEDGER_TARGETS).flat(),
+    ]),
+    ordinaryGroupKeys: unique(ordinary.map((target) => target.groupKey)),
+    ordinaryBlueprintKeys: unique(ordinary.map((target) => target.componentBlueprintKey)),
+    ordinaryInputKeys: unique(ordinary.map((target) => target.inputKey)),
+  };
+})();
 
 // Bump whenever the immutable plan is materialized differently on registry
 // Datapoints. This makes the semantic submission hash supersede an already
@@ -369,17 +304,13 @@ export interface RemovalSourceBindingPlanEntry {
   mappingRevision: string;
 }
 
-const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
-  "carbon_rich_substance_sequestration";
-
 function matchesIntendedComponent(
   blueprintKey: string,
   componentDisplayName: string | undefined,
   target: RemovalSourceIntendedTarget,
 ): boolean {
   return target.kind === "sequestration"
-    ? blueprintKey === LEGACY_SEQUESTRATION_BLUEPRINT_KEY ||
-        isSequestrationBlueprintFamily(blueprintKey)
+    ? isStorageBlueprintKey(blueprintKey)
     : blueprintKey === target.componentBlueprintKey &&
         (target.componentDisplayName === undefined ||
           normalizeComponentDisplayName(componentDisplayName) ===

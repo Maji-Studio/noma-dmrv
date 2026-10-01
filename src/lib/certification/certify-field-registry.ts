@@ -1,10 +1,12 @@
 import {
-  projectInputTuplesBySource,
   TRANSPORT_CATEGORIES,
   TRANSPORT_SOURCE_FACTS,
+} from "@/lib/isometric/semantic-binding-catalog";
+import {
+  projectInputTuplesBySource,
   type BindingInputTuple,
   type InputTuplesBySource,
-} from "@/lib/isometric/semantic-binding-catalog";
+} from "@/lib/isometric/semantic-binding-projections";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 export type CertifyEntityKind =

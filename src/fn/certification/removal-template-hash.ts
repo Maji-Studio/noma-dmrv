@@ -1,5 +1,5 @@
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
+import { isSequestrationBlueprintFamily } from "@/lib/isometric/storage-blueprints";
 
 /** Stable, order-independent template surface included in Removal review hashes. */
 export function normalizeSequestrationTemplateForHash(

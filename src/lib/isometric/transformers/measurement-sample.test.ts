@@ -9,30 +9,31 @@ import {
   buildBiocharSoilSample,
   CARBON_CONTENT_UNIT,
   CARBON_CONTENTS_1000_YEAR_UNIT,
-  classifySequestration1000YearComponent,
-  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-  expectedSequestrationBlueprintKeys,
-  H_C_MOLAR_RATIO_PERCENT_SCALE,
   H_TO_C_ORG_MEASUREMENT_PROPERTY,
   INORGANIC_CARBON_MEASUREMENT_PROPERTY,
-  isSequestrationBlueprintFamily,
-  isSequestrationBlueprintKey,
   PRODUCT_MASS_MEASUREMENT_PROPERTY,
   PRODUCT_MASS_UNIT,
   S_FRACTION_MEASUREMENT_PROPERTY,
   S_FRACTION_UNIT,
   TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
-  UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-  SEQUESTRATION_BLUEPRINT_SAMPLED,
-  SEQUESTRATION_BLUEPRINT_UNSAMPLED,
   SOIL_TEMPERATURE_MEASUREMENT_PROPERTY,
-  selectSequestrationBlueprintKey,
   toCarbonContentFraction,
   TOTAL_CARBON_MEASUREMENT_PROPERTY,
   toHcMolarRatioPercent,
 } from "./measurement-sample";
+import {
+  classifySequestration1000YearComponent,
+  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  expectedSequestrationBlueprintKeys,
+  isSequestrationBlueprintFamily,
+  isSequestrationBlueprintKey,
+  UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
+  SEQUESTRATION_BLUEPRINT_SAMPLED,
+  SEQUESTRATION_BLUEPRINT_UNSAMPLED,
+  selectSequestrationBlueprintKey,
+} from "../storage-blueprints";
 
 function batch(
   overrides: Partial<PerBatchDurabilityDatapoint>,
@@ -89,7 +90,7 @@ describe("selectSequestrationBlueprintKey (D6 — blueprint IS the A/B distincti
 
 describe("toHcMolarRatioPercent (⚠️ sandbox-gated ×100 transform)", () => {
   it("scales the dimensionless ratio by the percent scale", () => {
-    expect(H_C_MOLAR_RATIO_PERCENT_SCALE).toBe(100);
+    expect(toHcMolarRatioPercent(1)).toBe(100);
     expect(toHcMolarRatioPercent(0.3)).toBeCloseTo(30, 5);
   });
 });

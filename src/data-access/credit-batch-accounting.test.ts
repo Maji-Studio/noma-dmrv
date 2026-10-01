@@ -9,7 +9,7 @@ import {
   type CreditBatchChemistry,
   type CreditBatchLineageFacts,
 } from "./credit-batch-accounting";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
 
