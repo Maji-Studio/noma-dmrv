@@ -146,6 +146,19 @@ export async function recursiveInput(input: Recursive) {
   return input.length;
 }
 
+// An \`any\` that lands in a non-context slot is ordinary input, however the
+// core is invoked.
+export async function anyIntoReportId(input: any) {
+  return withAction(async (ctx) => {
+    const direct = await issueUrl(ctx, input.reportId);
+    const called = await issueUrl.call(undefined, ctx, input.reportId);
+    const applied = await issueUrl.apply(undefined, [ctx, input.reportId]);
+    const bound = await issueUrl.bind(undefined, ctx)(input.reportId);
+    const spread = await issueUrl(...([ctx, input.reportId] as const));
+    return [direct, called, applied, bound, spread];
+  });
+}
+
 export async function renameReport(input: unknown) {
   return withAction(async (ctx) => {
     const scope = ctx;
@@ -218,6 +231,55 @@ export async function anyLiteralIntoCore(input: any) {
 
 function scopedUrl(args: { scope: OrgContext }) {
   return issueUrl(args.scope, "report");
+}
+
+export async function spreadIntoCore(input: any) {
+  return issueUrl(...[input, "report"]);
+}
+
+export async function spreadTupleIntoCore(input: any) {
+  const args: [any, string] = [input, "report"];
+  return issueUrl(...args);
+}
+
+export async function callIntoCore(input: any) {
+  return issueUrl.call(undefined, input, "report");
+}
+
+export async function applyIntoCore(input: any) {
+  return issueUrl.apply(undefined, [input, "report"]);
+}
+
+export async function bindIntoCore(input: any) {
+  return issueUrl.bind(undefined, input)("report");
+}
+
+export async function boundThenCalled(input: any) {
+  return issueUrl.bind(undefined)(input, "report");
+}
+
+export async function genericIntoCore(input: any) {
+  return forwardScope(input);
+}
+
+export async function tupleIntoCore(input: any) {
+  return pairedUrl(["report", input]);
+}
+
+export async function indexedIntoCore(input: any) {
+  return keyedUrl({ primary: input });
+}
+
+function forwardScope<T extends OrgContext>(ctx: T) {
+  return issueUrl(ctx, "report");
+}
+
+function pairedUrl([reportId, scope]: [string, OrgContext]) {
+  return issueUrl(scope, reportId);
+}
+
+function keyedUrl(scopes: Record<string, OrgContext>) {
+  return issueUrl(scopes.primary, "report");
 }
 `;
 
@@ -346,6 +408,23 @@ describe("check-server-action-exports", () => {
           "scopedUrl({ scope: input })",
         ]) {
           expect(reasons(lineOf(needle))).toEqual([
+            expect.stringMatching(/call argument/),
+          ]);
+        }
+        // Indirect calls, generic forwarding, later tuple elements and index
+        // signatures hide the context slot from the contextual type (#877).
+        for (const needle of [
+          'issueUrl(...[input, "report"])',
+          "issueUrl(...args)",
+          'issueUrl.call(undefined, input, "report")',
+          'issueUrl.apply(undefined, [input, "report"])',
+          "issueUrl.bind(undefined, input)",
+          'issueUrl.bind(undefined)(input, "report")',
+          "forwardScope(input)",
+          'pairedUrl(["report", input])',
+          "keyedUrl({ primary: input })",
+        ]) {
+          expect(reasons(lineOf(needle)), needle).toEqual([
             expect.stringMatching(/call argument/),
           ]);
         }
