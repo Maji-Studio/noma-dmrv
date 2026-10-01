@@ -1,6 +1,6 @@
 # Form cleanup
 
-**Owner:** Kenji Nguyen · **Status:** approved 2026-09-29; Phase 0 shipped, Phase 1 in progress · **Last reviewed:** 2026-09-30
+**Owner:** Kenji Nguyen · **Status:** implemented and archived 2026-10-01. Phases 0 to 4 shipped, the last one as #878. The final rescan (Instruments A to C) was not run before archiving; leftovers are in [`open-questions.md`](../../open-questions.md#form-cleanup-leftovers-formscleanup-leftovers-opened-2026-10-01) · **Last reviewed:** 2026-10-01
 
 Audit, patterns and decisions: [Noma form cleanup page](https://claude.ai/artifact/Mfd8PEovxmGWqBt9jMKh9C). Five code audits covered about 70 create, edit and read surfaces. gpt-6-astra cross-checked the result, and every refuted claim is listed on that page.
 
