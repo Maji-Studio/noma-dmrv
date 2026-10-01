@@ -1,14 +1,13 @@
 // Home hero: the map at rest under the copy; "Follow one delivery" enters a scroll tour down the chain.
-// At rest the map cycles through tracing each field and sawmill (hover or focus a site to trace it).
+// At rest the map traces one field; hover, focus or activate a site to explore another.
 // On tour, each step card that reaches the middle of the viewport moves the camera to its stop. The
 // tour ends with "Exit tour", Escape, "Back to the map", or by scrolling past the hero.
 import { createHeroMap, recordCard, kindOf } from "./map.js";
 import { SITES, STOPS, TRACES } from "./data.js";
 import { reducedMotion } from "../../motion.js";
 
-const REST_CYCLE_MS = 3800;
 const REST_ORDER = ["field-coffee", "sawmill-a", "field-maize", "sawmill-b"];
-const WIDE = "(min-width: 761px)"; // matches the 760px breakpoint in hero-map.css
+const WIDE = "(min-width: 901px)"; // matches the phone/tablet layout in hero-map.css
 const CLOSE_ZOOM = 12.8; // plant close-up
 const CLOSE_PITCH = 50;
 const STOP_ZOOM = 11.2;
@@ -23,6 +22,7 @@ export async function initHomeHero(root) {
   const container = root.querySelector("[data-hero-map]");
   const steps = [...root.querySelectorAll("[data-step]")];
   const stops = [...root.querySelectorAll("[data-jump]")];
+  const stopList = root.querySelector(".home-hero-stops");
   const panel = root.querySelector(".home-hero-panel");
   const firstCard = root.querySelector(".home-hero-card");
   const wide = () => matchMedia(WIDE).matches;
@@ -46,6 +46,8 @@ export async function initHomeHero(root) {
   function enter() {
     touring = true;
     root.classList.add("is-touring");
+    stopList.inert = false;
+    container.inert = true;
     onScroll();
     requestAnimationFrame(() => {
       jump(1);
@@ -62,6 +64,8 @@ export async function initHomeHero(root) {
     html.style.overflowAnchor = "none";
     touring = false;
     root.classList.remove("is-touring");
+    stopList.inert = true;
+    container.inert = !wide();
     onScroll();
     if (keepPlace) scrollTo({ top: y - (tall - root.offsetHeight), behavior: "instant" });
     else {
@@ -82,22 +86,9 @@ export async function initHomeHero(root) {
   }).observe(root);
 
   let resting = true;
-  let hovering = false;
   let current = 0;
-  let i = 0;
   let h = null;
   function trace(id) { h.highlight(TRACES[id]); h.openCard(id); }
-
-  /** The step card's drawing, copied for the map's record card; ids renamed so they stay unique. */
-  function cardArt(step) {
-    const art = step.querySelector(".contour-art");
-    if (!art) return undefined;
-    const copy = art.cloneNode(true);
-    copy.setAttribute("class", "contour-art");
-    for (const node of copy.querySelectorAll("[id]")) node.id = `card-${node.id}`;
-    for (const use of copy.querySelectorAll("use")) use.setAttribute("href", `#card-${use.getAttribute("href").slice(1)}`);
-    return copy;
-  }
 
   function go(k) {
     current = k;
@@ -106,12 +97,12 @@ export async function initHomeHero(root) {
     if (!h) return;
     if (resting) {
       h.frame(ALL, { padding: restPadding(), zoom: REST_ZOOM });
-      trace(REST_ORDER[i % REST_ORDER.length]);
+      trace(REST_ORDER[0]);
       return;
     }
     const stop = STOPS[k - 1];
     h.highlight(stop.lit);
-    h.openCard(stop.at, stop.card ? recordCard({ kind: kindOf(stop.at), type: stop.label, code: stop.records.join(", "), rows: stop.card, art: cardArt(steps[k]) }) : undefined);
+    h.openCard(stop.at, stop.card ? recordCard({ kind: kindOf(stop.at), type: stop.label, code: stop.records.join(", "), rows: stop.card }) : undefined);
     const cardH = container.querySelector(".hm-pop")?.offsetHeight ?? 0;
     h.frame(stop.focus, { padding: tourPadding(cardH), zoom: stop.close ? CLOSE_ZOOM : stop.end ? REST_ZOOM : STOP_ZOOM, pitch: stop.close ? CLOSE_PITCH : stop.end ? 0 : STOP_PITCH });
   }
@@ -135,14 +126,15 @@ export async function initHomeHero(root) {
     card: wide() ? { anchor: "bottom-left", offset: [12, -20] } : undefined, // up and right, clear of the site label
     onSite(id, e) {
       if (!resting) return;
-      if (e.type === "mouseenter" || e.type === "focus") { hovering = true; trace(id); }
-      if (e.type === "mouseleave" || e.type === "blur") hovering = false;
+      if (["mouseenter", "focus", "click"].includes(e.type)) trace(id);
     },
   });
   if (!h) return;
   root.classList.add("has-map");
   go(current);
-  setInterval(() => { if (resting && !hovering) trace(REST_ORDER[++i % REST_ORDER.length]); }, REST_CYCLE_MS);
-
-  addEventListener("resize", () => { if (resting) h.frame(ALL, { padding: restPadding(), zoom: REST_ZOOM, animate: false }); });
+  container.inert = touring || !wide();
+  addEventListener("resize", () => {
+    container.inert = touring || !wide();
+    if (resting) h.frame(ALL, { padding: restPadding(), zoom: REST_ZOOM, animate: false });
+  });
 }

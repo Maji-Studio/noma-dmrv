@@ -34,7 +34,7 @@ const HIT = 12; // the line that does the arithmetic
     <span class="mx-file">{FILE}</span>
     <span class="mx-lic">MIT</span>
   </figcaption>
-  <pre aria-label={`The deriveMassDryKg function from ${FILE}: it checks that wet mass is not negative and moisture is between 0 and 100 percent, then returns wet mass times one minus moisture over 100, rounded to the gram.`}><code>{CODE.map((line, i) => (
+  <pre tabindex="0" role="region" aria-label={`The deriveMassDryKg function from ${FILE}: it checks that wet mass is not negative and moisture is between 0 and 100 percent, then returns wet mass times one minus moisture over 100, rounded to the gram.`}><code>{CODE.map((line, i) => (
 <span class:list={["mx-line", i === HIT && "is-hit"]}><span class="mx-ln" aria-hidden="true">{FIRST_LINE + i}</span>{line.map(([t, k]) => k ? <span class={`mx-${k}`}>{t}</span> : t)}</span>
 ))}</code></pre>
   <p class="mx-foot">

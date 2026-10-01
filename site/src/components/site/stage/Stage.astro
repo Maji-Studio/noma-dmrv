@@ -14,13 +14,14 @@
  *   reveal?: boolean       default true: the diagram plays its draw-in when it scrolls into view
  *   revealMs?: number      total choreography length in ms, default 3000
  *   frame?: boolean        default true: carries the page's hairline frame through the band, dimmed
+ *   interactive?: boolean  default false: the diagram has controls, so it stays in the accessibility tree
  * Slots: default = the diagram; "action" = a link under the lead; "after" = content under the diagram.
  * The stage is sized as one keynote slide: head and diagram fit about one 1440x900 or 1280x800 screen.
  * Motion plays when the figure (data-reveal-trigger), not the band's top edge, scrolls into view.
  * Choreography: primitives take `index` (stagger slot) and `delay`; see stage.css for the states.
  */
 import "./stage.css";
-const { id, title, titleTag: H = "h2", kicker, lead, alt, layout = "stack", reveal = true, revealMs, frame = true } = Astro.props;
+const { id, title, titleTag: H = "h2", kicker, lead, alt, layout = "stack", reveal = true, revealMs, frame = true, interactive = false } = Astro.props;
 const uid = id || `stage-${Math.random().toString(36).slice(2, 8)}`;
 ---
 <section id={id} class:list={["stg", `stg--${layout}`, frame && "stg--frame"]} aria-labelledby={`${uid}-title`} data-reveal={reveal ? "" : undefined} data-reveal-ms={revealMs}>
@@ -38,7 +39,7 @@ const uid = id || `stage-${Math.random().toString(36).slice(2, 8)}`;
       )}
     </div>
     <figure class="stg-figure" aria-describedby={`${uid}-alt`} data-reveal-trigger>
-      <div class="stg-diagram" aria-hidden="true"><slot /></div>
+      <div class="stg-diagram" aria-hidden={interactive ? undefined : "true"}><slot /></div>
       <figcaption class="sr-only" id={`${uid}-alt`}>{alt}</figcaption>
     </figure>
     {Astro.slots.has("after") && <div class="stg-after"><slot name="after" /></div>}

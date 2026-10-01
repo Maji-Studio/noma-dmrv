@@ -9,7 +9,7 @@
 /* The evidence stage sits in the grid frame like the other sections: section head size and padding, a top
    rule with cross marks, no kicker, and the figure as the sheet. */
 .pd .stg { padding-block: 0; background: transparent; color: var(--ink); }
-.pd .stg-copy { --stage-ink: var(--ink); --stage-ink-2: var(--ink-2); --stage-ink-3: var(--ink-3); }
+.pd .stg-copy { --stage-ink: var(--ink); --stage-ink-2: var(--ink-2); --stage-ink-3: var(--ink-3); --stage-lit: var(--accent); }
 .pd .stg--frame .stg-in::before, .pd .stg--frame .stg-in::after { background: linear-gradient(var(--cross), var(--cross)) center / var(--hairline) 100% no-repeat, linear-gradient(var(--cross), var(--cross)) center / 100% var(--hairline) no-repeat; }
 .pd .stg--frame .stg-in { margin-block: 0; padding-block: var(--section) 0; border-color: var(--rule); border-top: var(--hairline) solid var(--rule); }
 .pd .stg-title { font-size: var(--fs-h2); line-height: var(--lh-heading); letter-spacing: var(--track-h2); max-width: 14ch; }

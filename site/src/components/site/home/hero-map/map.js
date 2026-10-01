@@ -77,12 +77,10 @@ function el(tag, cls, text) {
 
 const ACCENT = { supplier: "var(--prod)", facility: "var(--infra)", field: "var(--dist)" };
 
-/** Record card: the shared record card (../../record-card.js) with type, code and label/value rows, and
- *  optionally a station drawing (a ContourArt node) on top, plotted in and looping while the card is open. */
-export function recordCard({ kind, type, code, rows, art }) {
-  const card = sharedCard({ label: type, code, holds: rows, art, float: true, accent: ACCENT[kind] });
-  if (art) card.classList.add("is-active", "is-plotting");
-  return card;
+/** Record card: the shared record card (../../record-card.js) with type, code and label/value rows. Text
+ *  only: the tour's step card already carries the station drawing. */
+export function recordCard({ kind, type, code, rows }) {
+  return sharedCard({ label: type, code, holds: rows, float: true, accent: ACCENT[kind] });
 }
 
 export function siteCard(id) {
@@ -98,8 +96,14 @@ export const kindOf = (id) => SITES.find((s) => s.id === id)?.kind ?? "facility"
  * opts: padding (initial fit), card ({ anchor, offset } for the MapLibre popup), onSite(id, event).
  */
 export async function createHeroMap(container, opts = {}) {
-  const { default: maplibregl } = await import("maplibre-gl");
-  await import("maplibre-gl/dist/maplibre-gl.css");
+  let maplibregl;
+  try {
+    ({ default: maplibregl } = await import("maplibre-gl"));
+    await import("maplibre-gl/dist/maplibre-gl.css");
+  } catch {
+    container.classList.add("hm-map--blank");
+    return null;
+  }
   const p = palette();
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const coarse = matchMedia("(pointer: coarse)").matches;
@@ -121,8 +125,10 @@ export async function createHeroMap(container, opts = {}) {
       fadeDuration: 0,
     });
   } catch {
+    container.classList.add("hm-map--blank");
     return null;
   }
+  map.getCanvas().tabIndex = -1;
   if (!KEY) container.classList.add("hm-map--blank");
   await new Promise((resolve) => map.once("load", resolve));
   if (KEY) recolor(map, p);
@@ -165,6 +171,9 @@ export async function createHeroMap(container, opts = {}) {
     label.append(el("span", "hm-lbl-code", site.code), el("span", "hm-lbl-sub", site.sub));
     node.append(el("span", "hm-ring"), el("span", "hm-shape"), label);
     for (const type of ["mouseenter", "mouseleave", "focus", "blur", "click"]) node.addEventListener(type, (e) => opts.onSite?.(site.id, e));
+    node.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); node.click(); }
+    });
     markers.set(site.id, new maplibregl.Marker({ element: node }).setLngLat([site.lng, site.lat]).addTo(map));
   }
 

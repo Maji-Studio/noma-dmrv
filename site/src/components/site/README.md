@@ -50,6 +50,6 @@ Home hero map: `home/HomeHero` + `home/hero-map/` (MapLibre, a port of the app's
 needs `PUBLIC_MAPTILER_KEY` (the app's domain-locked MapTiler key; `.env.local` locally, a Vercel env var on the site
 project, with noma.maji.studio allowed on the key). Without it the sites plot on a dotted field.
 Records: `RecordCard` (+ `record-card.js`, its browser twin, and `record-card.css`): a station drawing, label and
-code, one line, what the record holds. Used by the product trace's hover card and the hero map's record card; it
-lays itself out by its own width. Station drawings: `contours/ContourArt` (browser: `contours/index.js`),
+code, one line, what the record holds. Used by `TraceStage`, the product trace's hover card and the hero map's
+record card (text only there); it lays itself out by its own width. Station drawings: `contours/ContourArt` (browser: `contours/index.js`),
 also on the hero's stop cards. The SVGs in `contours/` come from `scripts/export-contours.mjs`; don't hand-edit them.

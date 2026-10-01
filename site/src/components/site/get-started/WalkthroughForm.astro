@@ -25,7 +25,7 @@ const TEXT_FIELDS = [
   { name: "company", label: w.fields.company, autocomplete: "organization", type: "text" },
 ];
 ---
-<form class="wf" data-wf novalidate aria-describedby={id("note")}>
+<form class="wf" data-wf method="post" novalidate aria-describedby={id("note")}>
   <div class="wf-grid">
     {TEXT_FIELDS.map((f) => (
       <div class="wf-field" data-wf-field>
@@ -45,9 +45,10 @@ const TEXT_FIELDS = [
   </div>
   <input class="wf-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
   <div class="wf-actions">
-    <Button type="submit">Book a walkthrough</Button>
+    <Button type="submit" disabled>Book a walkthrough</Button>
     <p class="t-caption" id={id("note")}>Preview only. This form does not send a request.</p>
   </div>
+  <noscript><p class="t-caption">Enable JavaScript to try this preview form. No request will be sent.</p></noscript>
   <p class="wf-status" role="status" data-wf-status></p>
 </form>
 <script>
@@ -71,5 +72,6 @@ const TEXT_FIELDS = [
       if (invalid.length) { invalid[0].focus(); return; }
       if (status) status.textContent = SENT;
     });
+    form.querySelector<HTMLButtonElement>('button[type="submit"]')?.removeAttribute("disabled");
   });
 </script>

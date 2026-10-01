@@ -3,6 +3,7 @@
    (font sizes, stroke widths, delay per square) are SVG user units or part of the drawing's choreography.
    Without JS (no .is-live) every panel is listed and the picture shows the last step. */
 .bs .pd-head p { color: var(--ink-2); }
+.site .bs-stage :focus-visible { outline-color: var(--stage-lit); }
 
 .bs-stage {
   background: var(--stage); color: var(--stage-ink);
@@ -132,4 +133,6 @@
   .bs-num { font-size: var(--fs-h2); }
   .bs-foot { flex-direction: column-reverse; align-items: stretch; }
   .bs-nav > * { flex: 1; }
+  .bs-nav .btn { min-width: 0; }
+  .bs-nav { flex-wrap: wrap; }
 }

@@ -87,23 +87,14 @@ const BRACKETS = GROUPS.map((g, k) => {
   return { label: g.record.toUpperCase(), x1, x2, cx: (x1 + x2) / 2 };
 });
 
-// Horizontal chart (phone)
-const HW = 360, RH = 42, BH = 12, GH = 26, NET_GAP = 10, HIC = 16;
-const SX = (HW - 8) / STORED;
-const hx = (v) => v * SX;
-let cy = 0;
-const H = [];
+// Phone rows use HTML so labels and touch targets do not shrink with an SVG viewBox.
+const MOBILE_ROWS = [];
 ITEMS.forEach((it) => {
-  if (it.kind === "step" && !H.some((r) => r.group === it.group)) {
-    H.push({ header: true, group: it.group, label: GROUPS[it.group - 1].record.toUpperCase(), y: cy });
-    cy += GH;
+  if (it.kind === "step" && !MOBILE_ROWS.some((r) => r.group === it.group)) {
+    MOBILE_ROWS.push({ header: true, group: it.group, label: GROUPS[it.group - 1].record });
   }
-  if (it.kind === "net") cy += NET_GAP;
-  H.push({ ...it, y: cy, by: cy + 22 });
-  cy += RH;
+  MOBILE_ROWS.push(it);
 });
-const HVH = cy;
-const HROWS = H.filter((r) => !r.header);
 
 const ms = (n) => `${n}ms`;
 const kgFull = (n) => `${n.toLocaleString("en-GB")} kg CO₂e`;
@@ -167,32 +158,19 @@ const ariaOf = (it) => it.kind === "step" ? `${it.name}, ${it.record}: ${MINUS}$
         ))}
       </svg>
 
-      <svg class="em-svg em-h" viewBox={`0 0 ${HW} ${HVH}`} role="group" aria-label="Waterfall chart, kg CO₂e: carbon stored, each emission line, net removal">
-        <defs>
-          <pattern id="em-hatch-h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line class="em-hatch" x1="0" y1="0" x2="0" y2="6" />
-          </pattern>
-        </defs>
-        {HROWS.slice(0, -1).map((r, i) => (
-          <line class="em-link em-fade" x1={hx(levelAfter(r))} x2={hx(levelAfter(r))} y1={r.by + BH} y2={HROWS[i + 1].by} style={`--d:${ms(HROWS[i + 1].at)}`} />
-        ))}
-        {H.map((r) => r.header ? (
-          <text class="em-mono" x="0" y={r.y + 16}>{r.label}</text>
+      <ol class="em-mobile" aria-label="Emissions in kg CO₂e">
+        {MOBILE_ROWS.map((r) => r.header ? (
+          <li class="em-mobile-group">{r.label}</li>
         ) : (
-          <g class:list={["em-col", `em-col--${r.kind}`, r.transport && "em-col--transport"]} data-em-col={r.key} tabindex="0" aria-label={ariaOf(r)}>
-            <rect class="em-hit" x="0" y={r.y} width={HW} height={RH} />
-            <use class="em-ico" href={`#em-i-${r.icon}`} x="0" y={r.y + 1} width={HIC} height={HIC} />
-            <text class="em-name em-name--h" x={HIC + 8} y={r.y + 14}>{r.name}</text>
-            <text class:list={["em-val", "em-val--h", "em-fade"]} x={hx(r.top) - 6} y={r.y + 14} text-anchor="end" style={`--d:${ms(r.at)}`}>{r.label}</text>
-            <rect
-              class:list={["em-rect", r.kind === "step" ? "em-drop" : "em-grow em-grow--x"]}
-              x={hx(r.bottom)} y={r.by} width={Math.max((r.top - r.bottom) * SX, 1)} height={BH}
-              fill={r.kind === "step" ? "url(#em-hatch-h)" : undefined}
-              style={`--d:${ms(r.at)}`}
-            />
-          </g>
+          <li>
+            <button type="button" class:list={["em-mobile-row", "em-col", `em-col--${r.kind}`, r.transport && "em-col--transport"]} data-em-col={r.key} aria-label={ariaOf(r)} aria-pressed="false" disabled>
+              <span class="em-mobile-name"><svg class="em-ico" width="20" height="20" aria-hidden="true"><use href={`#em-i-${r.icon}`} /></svg>{r.name}</span>
+              <span class="em-mobile-value">{r.label}</span>
+              <span class="em-mobile-track" aria-hidden="true"><span class="em-mobile-bar" style={`--start:${r.bottom / STORED * 100}%;--length:${(r.top - r.bottom) / STORED * 100}%`} /></span>
+            </button>
+          </li>
         ))}
-      </svg>
+      </ol>
     </div>
   </div>
 

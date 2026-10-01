@@ -16,6 +16,11 @@ const here = (key) => (key === current ? "page" : undefined);
 <header class="site-header">
   <GridFrame as="div" rule={false} cross={false} pad="none">
     <a class="brand" href="/" aria-label={`${BRAND.name} home`}><Logo /><span>{BRAND.by}</span></a>
+    <button class="site-menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu" hidden>
+      <span data-menu-label>Menu</span>
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2 6h16M2 14h16" stroke="currentColor" stroke-width="1.5" /></svg>
+    </button>
+    <div class="site-menu" id="site-menu">
     <nav class="site-nav" aria-label="Main">
       <ul>{NAV.map((item) => <li><a href={item.href} aria-current={here(item.key)}>{item.label}</a></li>)}</ul>
     </nav>
@@ -23,5 +28,7 @@ const here = (key) => (key === current ? "page" : undefined);
       {SHOW_LOGIN && <TextLink href={LOGIN_URL}>Log in</TextLink>}
       <Button href={NAV_CTA.href} size="sm" aria-current={here(NAV_CTA.key)}>{NAV_CTA.label}</Button>
     </div>
+    </div>
   </GridFrame>
 </header>
+<script>import "./site-nav.js";</script>

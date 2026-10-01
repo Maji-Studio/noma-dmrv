@@ -80,7 +80,7 @@ export function mountTrace(root) {
   function render() {
     graph = GRAPHS[scale]();
     root.dataset.size = scale;
-    drawGraph(svg, graph, { size: scale === "simple" ? LAYOUT.smallSize : LAYOUT.largeSize, glyphs: true, labels: scale === "simple", focusable: scale === "simple" });
+    drawGraph(svg, graph, { size: scale === "simple" ? LAYOUT.smallSize : LAYOUT.largeSize, glyphs: true, labels: scale === "simple", focusable: true });
     graph.edgeEls.forEach((p) => { p.setAttribute("pathLength", "1"); p.style.setProperty("--c", graph.byId.get(p._a).col); });
     if (pinned && !graph.byId.has(pinned)) pinned = DEFAULT_RECORD;
     shown = undefined;

@@ -5,7 +5,7 @@
  * sticky layer and each step card that crosses the middle of the viewport moves the camera to its stop,
  * closing in on the plant for production, storage and product. Each stop card carries its station's line
  * drawing (ContourArt, the same drawings as TraceStage), plotted in when the card becomes active; the map's
- * record card repeats it small. Until then the hero is just the map.
+ * record card stays text only. Until then the hero is just the map.
  * The tour ends with "Exit tour", Escape, "Back to the map" on the last card, or scrolling past it.
  * Map and tour: hero-map/ (data.js, map.js, hero-tour.js, hero-map.css). The map needs
  * PUBLIC_MAPTILER_KEY for the basemap; without it the sites plot on a dotted field. The cards are the
@@ -20,23 +20,6 @@ import "./hero-map/hero-map.css";
 const pad = (n) => String(n).padStart(2, "0");
 ---
 <section class="home-hero is-resting" aria-labelledby="home-title" data-home-hero>
-  <div class="home-hero-sticky">
-    <div class="home-hero-map hm-map" data-hero-map></div>
-    <div class="home-hero-foot">
-      <ul class="hm-legend" aria-label="Map key">
-        <li><i></i>Supplier</li>
-        <li><i class="lg-plant"></i>Plant</li>
-        <li><i class="lg-field"></i>Field</li>
-        <li><i class="lg-leg"></i>Delivery, moving toward the field</li>
-      </ul>
-      <p>Illustrative data. Hover a site to trace it.</p>
-    </div>
-    <button type="button" class="home-hero-exit" data-tour-exit>Exit tour</button>
-    <ol class="home-hero-stops" aria-label="Tour stops">
-      <li><button type="button" data-jump aria-label="Back to the top" aria-current="step"></button></li>
-      {STOPS.map((s, i) => <li><button type="button" data-jump aria-label={`Stop ${i + 1}, ${s.label}`}></button></li>)}
-    </ol>
-  </div>
   <div class="home-hero-steps gf">
     <div class="gf-in">
       <div class="home-hero-step home-hero-step--rest is-active" data-step>
@@ -71,6 +54,23 @@ const pad = (n) => String(n).padStart(2, "0");
         </div>
       ))}
     </div>
+  </div>
+  <div class="home-hero-sticky">
+    <div class="home-hero-map hm-map" data-hero-map inert></div>
+    <div class="home-hero-foot">
+      <ul class="hm-legend" aria-label="Map key">
+        <li><i></i>Supplier</li>
+        <li><i class="lg-plant"></i>Plant</li>
+        <li><i class="lg-field"></i>Field</li>
+        <li><i class="lg-leg"></i>Delivery, moving toward the field</li>
+      </ul>
+      <p>Illustrative data. Hover a site to trace it.</p>
+    </div>
+    <button type="button" class="home-hero-exit" data-tour-exit>Exit tour</button>
+    <ol class="home-hero-stops" aria-label="Tour stops" inert>
+      <li><button type="button" data-jump aria-label="Back to the top" aria-current="step"></button></li>
+      {STOPS.map((s, i) => <li><button type="button" data-jump aria-label={`Stop ${i + 1}, ${s.label}`}></button></li>)}
+    </ol>
   </div>
 </section>
 

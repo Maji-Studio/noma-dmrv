@@ -20,7 +20,7 @@
   --paper: #ffffff;
   --ink: #0f021a;
   --ink-2: rgba(15, 2, 26, 0.68);
-  --ink-3: rgba(15, 2, 26, 0.46);
+  --ink-3: rgba(15, 2, 26, 0.64);          /* secondary small text stays AA on paper and rose */
   --hair: rgba(15, 2, 26, 0.12);
   --hair-2: rgba(15, 2, 26, 0.24);
   --hair-strong: rgba(15, 2, 26, 0.86);

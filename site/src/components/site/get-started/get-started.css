@@ -26,6 +26,7 @@
 .wf-field label { font-size: var(--fs-small); color: var(--ink); }
 .wf :is(input, select, textarea) { width: 100%; min-height: var(--btn-h); padding: var(--space-3) var(--space-4); border: var(--hairline) solid var(--rule-strong); border-radius: var(--r-square); background: var(--paper); color: var(--ink); font-size: var(--fs-body); font-weight: 300; line-height: 1.4; transition: border-color var(--dur-fast); }
 .wf textarea { resize: vertical; display: block; }
+.wf :is(input, select, textarea) { border-color: var(--ink-2); }
 /* "Choose a size" is a prompt, not a value: muted until a size is picked. */
 .wf select:has(option[value=""]:checked) { color: var(--ink-2); }
 .wf option { color: var(--ink); }
@@ -41,7 +42,6 @@
 .wf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4) var(--space-6); }
 .wf-actions .t-caption { max-width: 30ch; }
 .wf-status { font-size: var(--fs-ui); color: var(--ink); }
-.wf-status:empty { display: none; }
 .wf-status:not(:empty) { padding: var(--space-4) var(--space-5); border: var(--hairline) solid var(--rule-strong); background: var(--band-purple); }
 
 @media (max-width: 860px) {

@@ -90,7 +90,7 @@
   .evp { grid-template-columns: minmax(0, 1fr); }
   .evp-link { justify-self: center; transform: rotate(90deg); }
   .mx { box-shadow: none; }
-  .mx pre { font-size: 11px; }
+  .mx pre { font-size: var(--fs-small); }
   .mx-ln { width: 2.6em; padding-right: 0.9em; }
   .own { grid-template-columns: minmax(0, 1fr); }
   .own-same span { writing-mode: horizontal-tb; transform: none; border-block: 0; border-inline: var(--hairline) solid var(--accent); padding: var(--space-1) var(--space-3); }

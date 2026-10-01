@@ -22,6 +22,7 @@ document.querySelectorAll("[data-bs]").forEach((root) => {
       t.toggleAttribute("data-done", i + 1 < shown);
     });
     panels.forEach((p, i) => p.classList.toggle("is-on", i + 1 === shown));
+    if (shown === 1 && document.activeElement === back) tabs[0].focus();
     back.disabled = shown === 1;
     next.textContent = shown === last ? "Start again" : `Next: ${names[shown]}`;
   }
