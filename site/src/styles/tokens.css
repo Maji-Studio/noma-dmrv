@@ -81,6 +81,7 @@
   --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
   --measure: 52ch;                          /* about 70 real characters in GT Flexa */
   --tap: 44px;
+  --logo: 48px;                             /* the noma mark in header and footer */
   --header-h: 84px;
   --btn-h: 56px;
   --index-h: 52px;
