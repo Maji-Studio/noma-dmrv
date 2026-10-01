@@ -11,6 +11,7 @@
 import { EyeIcon, PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import { useState, type SyntheticEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { SideSheetActionsContext } from "@/components/ui/entity-side-sheet/side-sheet-context";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -95,6 +96,9 @@ export function StorageBinActions({ storageLocationId }: StorageBinActionsProps)
       </Tooltip>
 
       <div className="contents" onSubmit={stopSubmitBubbling}>
+        {/* Barrier: the reconcile forms must not cancel or report dirty
+            state into the entry sheet this picker sits in. */}
+        <SideSheetActionsContext.Provider value={null}>
         <StorageBinSheet
           state={sheet}
           onStateChange={setSheet}
@@ -109,6 +113,7 @@ export function StorageBinActions({ storageLocationId }: StorageBinActionsProps)
           }}
           storageLocation={reconcilingBin}
         />
+        </SideSheetActionsContext.Provider>
       </div>
     </>
   );
