@@ -4,7 +4,7 @@ Five landing page variants live on one route (`site/src/pages/variants.astro`, s
 
 ## Read first
 
-1. `docs/plans/2026-09-29-landing-page.md`: decisions and **claim boundaries** (binding).
+1. `docs/archive/plans/2026-09-29-landing-page.md`: decisions and **claim boundaries** (binding).
 2. `site/src/content/copy.js`: all approved copy. Use it; don't retype it.
 3. `site/src/visuals/index.js`: the five shared visuals and their data attributes, events and controllers.
 4. `site/src/variants/VariantA.astro`: the reference variant (conventions, how visuals and the form are placed).

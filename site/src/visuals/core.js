@@ -1,5 +1,5 @@
 // Graph engine shared by the trace, dense and map visuals.
-// Ported from docs/plans/assets/2026-09-29-landing-page-prototype.html.
+// Ported from the prototype linked in docs/archive/plans/2026-09-29-landing-page.md.
 export const NS = "http://www.w3.org/2000/svg";
 export const el = (tag, attrs = {}, parent) => {
   const e = document.createElementNS(NS, tag);

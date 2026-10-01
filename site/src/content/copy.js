@@ -1,4 +1,4 @@
-// All landing page copy, approved in docs/plans/2026-09-29-landing-page.md.
+// All landing page copy, approved in docs/archive/plans/2026-09-29-landing-page.md.
 // Claim rules: never "live", "integrated", "certified", "only", "first"; no en or em dashes;
 // sentence case headings; every upcoming feature carries the "Upcoming" chip.
 export const copy = {
