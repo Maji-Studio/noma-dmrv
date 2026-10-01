@@ -24,7 +24,7 @@ One public page at `noma.maji.studio` that tells carbon managers and project dev
 | Comparison | Against spreadsheets only. No competitor names. |
 | Visuals | Interactive drawings on made-up data, plus three product screenshots: traceability DAG, bin history, removal readiness. |
 | Map | Real region (Southern Highlands, Tanzania), made-up points, labelled illustrative. |
-| Look | The app's design system: GT Flexa, the same colours, louder type, light rose page background. |
+| Look | The MAJI website language on the app's design tokens (see Visual language): GT Flexa Light headings, the app's colours, hairline rules, light rose page background. |
 | Language, scope | English only. One long page; docs stay on GitHub. |
 | Launch | Soon, with the honest status wording above. |
 | Build | Astro site in `site/` inside this repo, deployed as its own Vercel project. |
@@ -36,11 +36,11 @@ One public page at `noma.maji.studio` that tells carbon managers and project dev
 Checked against the code on 2026-09-29. Copy must stay inside these.
 
 - **Traceability** (shipped): lineage graph, map, dry-mass Sankey and per-application trail, from feedstock delivery to field application. Don't call it an "immutable ledger": the trail is rebuilt from domain records.
-- **Bins** (shipped): split bins drawn oldest first, mix bins drawn pro-rata, every movement logged with mass, moisture, time and actor. FIFO applies to biochar and product bins only.
+- **Bins** (shipped): split bins drawn oldest first by default or in an order the operator sets, mix bins drawn pro-rata, every movement logged with mass and time, plus moisture and actor where recorded. FIFO applies to biochar and product bins only.
 - **Mass** (shipped): wet and dry side by side; dry biochar carried downstream.
 - **Energy** (partial): entered by hand per production run (electricity kWh, diesel litres). Never "live" or "metered".
 - **Registry** (partial): one action per Removal bundles sources, production batch, datapoints, applications, samples and GHG entry, after a readiness check. Only Isometric exists; there is no multi-registry adapter.
-- **Upcoming** (none built): document recognition, live reactor readings, open API and MCP, Telegram, AI checks. Every tile carries the "Upcoming" chip.
+- **Upcoming** (none built): document recognition, reactor readings as they happen, open API and MCP, Telegram, AI checks. Every tile carries the "Upcoming" chip.
 - **No uniqueness claims.** An earlier positioning study (see Prior work) found that Cula advertises split and recombined material tracking with origin kept. Don't write "only", "first" or "unlike others".
 - Follow [ux-writing.md](../ux-writing.md): no en or em dashes, sentence case headings.
 
@@ -53,7 +53,7 @@ Copy is final unless marked. The prototype's Draft page tab shows the layout.
 3. **Dense trace.** "Real plants are messy. The trace still holds." Lead: "Split bins, mix bins, several deliveries per run. Hover a mix bin to see how far one merge reaches, or a field to walk it back to the sawmills." Visual B, then the three screenshots.
 4. **Map.** "Same records, on the map." Lead: "Suppliers, the plant and every field where biochar went into the soil, with haul distances from the record." Visual C.
 5. **Features.** "Everything a biochar plant records, linked." Lead: "What's shipped today, and five things we're building next."
-   - Featured block "Bins that do the arithmetic" with visual D and: "Split bins keep each batch separate and are drawn oldest first. Mix bins take every layer in proportion. Each draw is logged with mass, moisture, time and who did it."
+   - Featured block "Bins that do the arithmetic" with visual D and: "Split bins keep each batch separate and are drawn oldest first unless the operator sets the order. Mix bins take every layer in proportion. Each draw is logged with mass, time and who recorded it, plus the moisture reading where one was taken."
    - Nine shipped tiles, three columns: Dry and wet mass; Feedstock and formulations; Upstream records; Energy per run; Lab samples; Field boundaries; Evidence on every step; Readiness check; Mass balance. Copy is in `FEATS` in the prototype.
    - Five upcoming tiles in one row (`UPCOMING` in the prototype). AI checks: "Flags readings that don't fit before a verifier sees them." Telegram: "Log deliveries, runs and readings from a Telegram chat."
    - Table "What changes when you leave the spreadsheet", five rows as in the prototype.
@@ -92,6 +92,7 @@ These don't block building. Leave clearly marked placeholders until they arrive.
 - The MAJI inbox address for `WALKTHROUGH_TO`.
 - Logo files for DEC, REPIC, FiBL and Isometric.
 - DEC's written OK for the capacity figure and the current tonnes-traced figure.
+- Isometric's OK to show its logo under "Built with and supported by". Until then, show it only beside the data-model line.
 - The three screenshots, or approval to capture them from staging on the Mafinga seed data (`pnpm db:seed`).
 
 ## Prototype verdict
@@ -102,7 +103,7 @@ The prototype already contains reusable pieces: the five visuals ported to `site
 
 ## Visual language
 
-Use the MAJI website language from the earlier draft on branch `codex/public-website` (its `marketing-pages.module.css` and `website.module.css`), not the app's CRUD look:
+Use the MAJI website language from the earlier draft on branch `codex/public-website` (its `marketing-pages.module.css` and `website.module.css`), not the app's CRUD look. Use the app's design tokens for spacing and colour instead of hardcoding the values below; add a token where one is missing.
 
 - Display and section headings in GT Flexa Light (300), tight tracking (about -0.045em to -0.06em), line height about 1.01 to 1.06. No bold headlines.
 - Editorial grids (1.2fr / 0.8fr and 1fr / 1fr), gutters `clamp(24px, 5vw, 88px)`, section spacing `clamp(64px, 7vw, 112px)`, body copy 18 to 20 px.
