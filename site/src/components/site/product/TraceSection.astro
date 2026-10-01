@@ -33,15 +33,13 @@ const DIRECTIONS = [
   </div>
 </GridFrame>
 <script>
-  // The buttons drive the explorer through its own select, so the explorer stays the one source of state.
+  // The buttons pin through the explorer's trace:pin event, so the explorer stays the one source of state.
   const explorer = document.getElementById("trace-explorer");
-  const select = explorer?.querySelector("[data-trace-select]");
   document.querySelectorAll("[data-pin-record]").forEach((button) => {
-    if (!select) return;
+    if (!explorer) return;
     button.hidden = false;
     button.addEventListener("click", () => {
-      select.value = button.dataset.pinRecord;
-      select.dispatchEvent(new Event("change"));
+      explorer.dispatchEvent(new CustomEvent("trace:pin", { detail: button.dataset.pinRecord }));
       const top = explorer.getBoundingClientRect().top;
       if (top < 0) explorer.scrollIntoView({ block: "start" });
     });

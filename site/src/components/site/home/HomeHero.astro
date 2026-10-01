@@ -1,25 +1,80 @@
 ---
-/** HomeHero: headline, lead and the interactive trace, edge to edge inside the frame. No props. */
-import GridFrame from "../GridFrame.astro";
+/**
+ * HomeHero: the headline on a framed panel over a map of one illustrative operation (a port of the app's
+ * traceability Map tab). "Follow one delivery" enters a scroll tour down the chain: the map pins in a
+ * sticky layer and each step card that crosses the middle of the viewport moves the camera to its stop,
+ * closing in on the plant for production, storage and product. Each stop card carries its station's line
+ * drawing (ContourArt, the same drawings as TraceStage), plotted in when the card becomes active; the map's
+ * record card repeats it small. Until then the hero is just the map.
+ * The tour ends with "Exit tour", Escape, "Back to the map" on the last card, or scrolling past it.
+ * Map and tour: hero-map/ (data.js, map.js, hero-tour.js, hero-map.css). The map needs
+ * PUBLIC_MAPTILER_KEY for the basemap; without it the sites plot on a dotted field. The cards are the
+ * content: without JS every card shows under the hero. No props.
+ */
 import Button from "../Button.astro";
 import TextLink from "../TextLink.astro";
-import TraceExplorer from "../trace/TraceExplorer.astro";
+import ContourArt from "../contours/ContourArt.astro";
+import { STOPS } from "./hero-map/data.js";
 import "./home.css";
+import "./hero-map/hero-map.css";
+const pad = (n) => String(n).padStart(2, "0");
 ---
-<GridFrame class="home-hero" rule={true} pad="none" flush aria-labelledby="home-title">
-  <div class="home-hero-copy">
-    <p class="t-category">Biochar MRV software</p>
-    <h1 id="home-title" class="t-display">Trace your biochar, from feedstock to application.</h1>
-    <div class="home-hero-intro">
-      <div class="stack-tight">
-        <p class="t-lead">See where it came from, what happened during production, and where it went.</p>
-        <p class="t-body t-muted">noma connects your material records and supporting evidence, in both directions.</p>
+<section class="home-hero is-resting" aria-labelledby="home-title" data-home-hero>
+  <div class="home-hero-sticky">
+    <div class="home-hero-map hm-map" data-hero-map></div>
+    <div class="home-hero-foot">
+      <ul class="hm-legend" aria-label="Map key">
+        <li><i></i>Supplier</li>
+        <li><i class="lg-plant"></i>Plant</li>
+        <li><i class="lg-field"></i>Field</li>
+        <li><i class="lg-leg"></i>Delivery, moving toward the field</li>
+      </ul>
+      <p>Illustrative data. Hover a site to trace it.</p>
+    </div>
+    <button type="button" class="home-hero-exit" data-tour-exit>Exit tour</button>
+    <ol class="home-hero-stops" aria-label="Tour stops">
+      <li><button type="button" data-jump aria-label="Back to the top" aria-current="step"></button></li>
+      {STOPS.map((s, i) => <li><button type="button" data-jump aria-label={`Stop ${i + 1}, ${s.label}`}></button></li>)}
+    </ol>
+  </div>
+  <div class="home-hero-steps gf">
+    <div class="gf-in">
+      <div class="home-hero-step home-hero-step--rest is-active" data-step>
+        <div class="home-hero-panel">
+          <p class="t-category">Biochar MRV software</p>
+          <h1 id="home-title">Trace your biochar, from feedstock to application.</h1>
+          <p class="t-lead">See where it came from, what happened during production, and where it went.</p>
+          <div class="actions">
+            <Button href="/get-started">Book a walkthrough</Button>
+            <TextLink href="/product">See the product</TextLink>
+          </div>
+        </div>
+        <button type="button" class="home-hero-tour" data-tour-open>
+          <span class="home-hero-play" aria-hidden="true"></span>
+          <span>Follow one delivery</span>
+        </button>
       </div>
-      <div class="actions">
-        <Button href="/get-started">Book a walkthrough</Button>
-        <TextLink href="/product">See the product</TextLink>
-      </div>
+      {STOPS.map((s, i) => (
+        <div class="home-hero-step" data-step>
+          <div class="home-hero-card">
+            <p class="home-hero-card-n"><span>{pad(i + 1)}</span><span>{s.label}</span><span class="of">of {pad(STOPS.length)}</span></p>
+            {s.station && <ContourArt station={s.station} scope="hero" class="home-hero-art" />}
+            <h2 tabindex="-1">{s.note}</h2>
+            {s.records.length > 0 && <ul class="home-hero-codes" aria-label="Records">{s.records.map((r) => <li>{r}</li>)}</ul>}
+            {s.end && (
+              <div class="actions">
+                <Button href="/get-started">Book a walkthrough</Button>
+                <button type="button" class="tl" data-tour-exit>Back to the map</button>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   </div>
-  <TraceExplorer />
-</GridFrame>
+</section>
+
+<script>
+  import { initHomeHero } from "./hero-map/hero-tour.js";
+  document.querySelectorAll("[data-home-hero]").forEach(initHomeHero);
+</script>

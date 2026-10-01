@@ -41,6 +41,11 @@
 
   /* map */
   --map-land: #fbf1ee; --map-line: rgba(72, 11, 115, 0.13);
+  /* home hero map: the MapLibre canvas reads these at runtime (home/hero-map/map.js) */
+  --hero-map-sea: #f7e3ed;
+  --hero-map-land: var(--paper);
+  --hero-map-boundary: rgba(72, 11, 115, 0.28);
+  --hero-map-detail: rgba(72, 11, 115, 0.07);
 
   /* app tints (globals.css) used by the editorial site */
   --clr-purple-5: rgba(72, 11, 115, 0.05);
@@ -86,6 +91,7 @@
 
   /* type scale: GT Flexa Light 300 display, tight tracking */
   --fs-display: clamp(46px, 6.6vw, 108px);
+  --fs-hero: clamp(42px, 4.6vw, 80px);       /* home hero headline, on the panel over the map */
   --fs-h2: clamp(34px, 4.4vw, 68px);
   --fs-h3: clamp(24px, 2.2vw, 32px);
   --fs-h4: clamp(20px, 1.55vw, 26px);       /* accordion item titles */

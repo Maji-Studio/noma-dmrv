@@ -1,0 +1,109 @@
+/* Home hero map. Map pieces are ported from the app's carbon-viewer.css onto the site tokens;
+   at rest the map fills the hero; on tour it pins in a sticky layer and the step cards scroll over it. */
+.home-hero {
+  --hm-mark: 12px; --hm-mark-facility: 20px; --hm-punch: 5px; --hm-ring: 28px; --hm-ring-facility: 36px;
+  --hm-label-gap: 16px; --hm-label-size: 11px; --hm-chip-size: 10px; --hm-card-w: 264px; --hm-card-accent: 3px;
+  --hero-card-w: 460px; --hero-panel-w: 620px; --hero-step: 90svh; --hero-stop: 24px; --hero-stop-dot: 8px;
+  --hero-play: 40px; --hero-foot-h: 44px; --hero-art-h: clamp(140px, 22svh, 200px); --hm-card-art-h: 128px;
+}
+
+/* ── map surface ─────────────────────────────────────────────────────────── */
+.hm-map { background: var(--hero-map-sea); }
+.hm-map--blank { background-image: radial-gradient(circle, var(--clr-purple-10) 1.5px, transparent 1.5px); background-size: 28px 28px; }
+.hm-map .maplibregl-ctrl-attrib { font-size: var(--fs-micro); background: color-mix(in srgb, var(--paper) 70%, transparent); color: var(--ink-2); }
+.hm-map .maplibregl-ctrl-attrib a { color: inherit; }
+
+/* site markers: the anchor is a 0x0 point, shapes centre on it */
+.hm-mk { position: relative; width: 0; height: 0; cursor: pointer; transition: opacity var(--dur-base) var(--ease-out); --acc: var(--infra); }
+.hm-mk--supplier { --acc: var(--prod); }
+.hm-mk--field { --acc: var(--dist); }
+.hm-mk:focus-visible { outline: none; }
+.hm-shape { position: absolute; left: calc(var(--hm-mark) / -2); top: calc(var(--hm-mark) / -2); width: var(--hm-mark); height: var(--hm-mark); background: var(--acc); }
+.hm-mk--field .hm-shape { transform: rotate(45deg); }
+.hm-mk--facility .hm-shape { left: calc(var(--hm-mark-facility) / -2); top: calc(var(--hm-mark-facility) / -2); width: var(--hm-mark-facility); height: var(--hm-mark-facility); }
+.hm-mk--facility .hm-shape::after { content: ""; position: absolute; inset: var(--hm-punch); background: var(--hero-map-land); }
+.hm-ring { position: absolute; left: calc(var(--hm-ring) / -2); top: calc(var(--hm-ring) / -2); width: var(--hm-ring); height: var(--hm-ring); border: var(--stage-stroke) solid var(--acc); opacity: 0; transition: opacity var(--dur-fast); }
+.hm-mk--field .hm-ring { transform: rotate(45deg); }
+.hm-mk--facility .hm-ring { left: calc(var(--hm-ring-facility) / -2); top: calc(var(--hm-ring-facility) / -2); width: var(--hm-ring-facility); height: var(--hm-ring-facility); }
+.hm-mk:hover .hm-ring, .hm-mk:focus-visible .hm-ring, .hm-mk.hm-focus .hm-ring { opacity: 1; }
+.hm-lbl { position: absolute; left: var(--hm-label-gap); top: calc(var(--hm-label-size) * -1); display: grid; gap: 1px; white-space: nowrap; pointer-events: none; }
+.hm-mk--facility .hm-lbl { left: calc(var(--hm-label-gap) + var(--space-2)); }
+.hm-lbl-code, .hm-lbl-sub { text-shadow: 0 0 3px var(--paper), 0 0 6px var(--paper), 0 0 9px var(--paper); }
+.hm-lbl-code { font-family: var(--f-mono); font-weight: 500; font-size: var(--hm-label-size); letter-spacing: var(--track-mono); text-transform: uppercase; color: var(--ink); }
+.hm-lbl-sub { font-size: var(--hm-label-size); color: var(--ink-2); }
+.hm-dim { opacity: 0.22; }
+
+/* distance chips */
+.hm-chip { padding: 2px 6px; background: var(--paper); border: var(--hairline) solid var(--rule-strong); font-family: var(--f-mono); font-weight: 500; font-size: var(--hm-chip-size); letter-spacing: var(--track-mono); color: var(--ink); white-space: nowrap; pointer-events: none; transition: opacity var(--dur-base); }
+
+/* record card (MapLibre popup) */
+.hm-pop .maplibregl-popup-content { padding: 0; border-radius: var(--r-square); background: none; box-shadow: none; }
+.hm-pop .maplibregl-popup-tip { display: none; }
+/* the shared record card (../../record-card.css) at popup size: stacked, small drawing, thicker strokes */
+.hm-pop .rc { width: var(--hm-card-w); --rc-art-stack-h: var(--hm-card-art-h); --rc-art-stroke: 2.4; --rc-pad: var(--space-4); animation: hm-card-in var(--dur-base) var(--ease-out); }
+@keyframes hm-card-in { from { opacity: 0; transform: translateY(4px); } }
+
+/* legend */
+.hm-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); list-style: none; margin: 0; padding: 0; }
+.hm-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
+.hm-legend i { width: 9px; height: 9px; background: var(--prod); }
+.hm-legend .lg-plant { width: 11px; height: 11px; background: none; border: 3px solid var(--infra); }
+.hm-legend .lg-field { background: var(--dist); transform: rotate(45deg) scale(0.9); }
+.hm-legend .lg-leg { width: 18px; height: 0; border-top: var(--stage-stroke) dashed var(--ink); background: none; }
+
+/* ── hero layout: sticky map layer + scrolling steps in one grid cell ───────── */
+.home-hero { position: relative; display: grid; border-top: var(--hairline) solid var(--rule); }
+.home-hero-sticky, .home-hero-steps { grid-area: 1 / 1; }
+.home-hero-sticky { position: sticky; top: 0; height: 100svh; align-self: start; overflow: hidden; }
+/* two classes: beats maplibre-gl.css (.maplibregl-map { position: relative }), which loads later */
+.home-hero .home-hero-map { position: absolute; inset: 0; }
+/* At rest (JS on, not touring) the hero is one screen: the map fills it and the stop cards are gone. */
+.home-hero.has-js:not(.is-touring) .home-hero-sticky { position: absolute; inset: 0; height: auto; align-self: stretch; } /* an abspos grid item only fills its area when stretched */
+.home-hero.has-js:not(.is-touring) .home-hero-step:not(.home-hero-step--rest) { display: none; }
+.home-hero:not(.has-js) .home-hero-tour, .home-hero:not(.is-touring) .home-hero-exit, .home-hero.is-touring .home-hero-tour { display: none; }
+.home-hero .maplibregl-ctrl-bottom-right { bottom: calc(var(--hero-foot-h) + var(--hero-lift, 0px)); }
+/* --hero-lift: how much of the page header is still on screen, so the strip starts above the fold */
+.home-hero-foot { position: absolute; left: 0; right: 0; bottom: var(--hero-lift, 0px); z-index: 1; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3) var(--space-6); min-height: var(--hero-foot-h); padding: var(--space-3) calc(var(--gutter) + var(--space-5)); background: color-mix(in srgb, var(--page) 92%, transparent); border-top: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--ink-2); }
+.home-hero-stops { position: absolute; right: calc(var(--gutter) + var(--space-4)); top: 50%; z-index: 1; display: grid; gap: 2px; list-style: none; margin: 0; padding: 0; transform: translateY(-50%); transition: opacity var(--dur-base); }
+.home-hero.is-resting .home-hero-stops, .home-hero:not(.is-touring) .home-hero-stops { opacity: 0; pointer-events: none; }
+.home-hero-stops button { display: grid; place-items: center; width: var(--hero-stop); height: var(--hero-stop); padding: 0; border: 0; background: none; cursor: pointer; }
+.home-hero-stops button::before { content: ""; width: var(--hero-stop-dot); height: var(--hero-stop-dot); border: var(--hairline) solid var(--rule-strong); background: var(--paper); transition: background var(--dur-fast); }
+.home-hero-stops button[aria-current="step"]::before { background: var(--accent); border-color: var(--accent); }
+
+.home-hero-steps { position: relative; z-index: 2; pointer-events: none; }
+.home-hero-step { min-height: var(--hero-step); display: grid; align-items: center; padding-block: var(--space-8); }
+.home-hero-step:last-child { min-height: 100svh; }
+.home-hero-step--rest { min-height: calc(100svh - var(--header-h)); grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-6); padding-bottom: var(--space-9); }
+.home-hero-panel, .home-hero-card, .home-hero-tour { pointer-events: auto; }
+.home-hero-panel { width: min(var(--hero-panel-w), 100%); display: grid; gap: var(--space-5); padding: var(--space-7) var(--space-7) var(--space-6); background: color-mix(in srgb, var(--page) 94%, transparent); border: var(--hairline) solid var(--rule); backdrop-filter: blur(6px); }
+.home-hero-panel h1 { font-size: var(--fs-hero); line-height: var(--lh-display); letter-spacing: var(--track-display); }
+
+.home-hero-tour { display: inline-flex; align-items: center; gap: var(--space-4); min-height: var(--btn-h); padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3); border: var(--hairline) solid var(--cta); background: var(--paper); color: var(--ink); text-align: left; cursor: pointer; transition: background var(--dur-fast); }
+.home-hero-tour:hover { background: var(--band-purple); }
+.home-hero-tour { font-size: var(--fs-ui); }
+.home-hero-exit { position: absolute; top: var(--space-5); right: calc(var(--gutter) + var(--space-5)); z-index: 3; min-height: var(--tap); padding: 0 var(--space-4); border: var(--hairline) solid var(--rule-strong); background: var(--paper); font-size: var(--fs-small); color: var(--link); cursor: pointer; }
+.home-hero-exit:hover { background: var(--band-purple); }
+.home-hero-card h2:focus { outline: none; }
+.home-hero-card button.tl { border: 0; background: none; padding: 0; cursor: pointer; }
+.home-hero-play { display: grid; place-items: center; width: var(--hero-play); height: var(--hero-play); background: var(--cta); }
+.home-hero-play::after { content: ""; margin-left: 3px; border-block: 7px solid transparent; border-left: 11px solid var(--cta-ink); }
+
+.home-hero-card { width: min(var(--hero-card-w), 100%); display: grid; gap: var(--space-4); padding: var(--space-5) var(--space-6) var(--space-6); background: var(--paper); border: var(--hairline) solid var(--rule-strong); border-top: var(--hm-card-accent) solid var(--accent); transition: opacity var(--dur-base); }
+.home-hero.has-map .home-hero-step:not(.is-active) .home-hero-card { opacity: 0.35; }
+.home-hero-card-n { display: flex; gap: var(--space-3); font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-mono); letter-spacing: var(--track-mono); color: var(--accent); }
+.home-hero-card-n .of { margin-left: auto; color: var(--ink-3); }
+.home-hero-card h2 { font-size: var(--fs-h3); line-height: 1.15; letter-spacing: var(--track-h3); }
+.home-hero-art { height: var(--hero-art-h); color: var(--ink-2); }
+.home-hero-codes { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
+.home-hero-codes li { padding: 2px var(--space-2); border: var(--hairline) solid var(--rule-strong); font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-micro); letter-spacing: var(--track-mono); text-transform: uppercase; }
+
+@media (max-width: 760px) {
+  .home-hero-step--rest { grid-template-columns: minmax(0, 1fr); align-content: start; padding-top: 0; }
+  .home-hero-panel { width: auto; margin-inline: calc(var(--frame-pad) * -1); border: 0; border-bottom: var(--hairline) solid var(--rule); padding: var(--space-8) var(--frame-pad) var(--space-6); background: var(--page); backdrop-filter: none; }
+  .home-hero-step { align-items: end; padding-bottom: var(--space-9); }
+  .home-hero-stops { display: none; }
+  .home-hero-foot p { display: none; }
+  /* The step card covers the lower map on a phone: a shorter drawing, and none repeated on the map. */
+  .home-hero { --hero-art-h: clamp(96px, 15svh, 140px); }
+  .hm-pop .rc-art { display: none; }
+}

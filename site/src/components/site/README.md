@@ -14,10 +14,12 @@ Light editorial pages with one dark keynote stage per page. Brief: owner's 2026-
 
 ```text
  +---------------------------------------------+
- | Trace your biochar,         lead            |
- | from feedstock              [Book a walk…]  |
- | to application.                             |
- | [ interactive trace, square, hairline ]     |
+ | map of one operation, full bleed            |
+ |  +------------------+    [> Follow one      |
+ |  | Trace your       |       delivery]       |
+ |  | biochar, ...     |   entered: map pins,  |
+ |  +------------------+   8 stop cards scroll |
+ |                          and the camera dives|
  +---------------------------------------------+
  ███ STAGE: huge line, then a dot-and-dash timeline ███
  +--------------+------------------------------+
@@ -44,3 +46,10 @@ Each `.astro` file documents its props at the top. Shell: `SiteShell`, `SiteNav`
 Layout: `GridFrame`, `SectionIndex`, `AccordionShowcase` (Home tour, Product "What's next"). Actions: `Button`, `TextLink`, `Chip`. Stage: `stage/Stage`,
 `stage/StageCheckRow`, `stage/StageConnector`, `stage/StageDot`, `stage/StageMark`. Motion: `motion.js`.
 Config (nav, login flag, section anchors): `src/config.js`.
+Home hero map: `home/HomeHero` + `home/hero-map/` (MapLibre, a port of the app's traceability Map tab). The basemap
+needs `PUBLIC_MAPTILER_KEY` (the app's domain-locked MapTiler key; `.env.local` locally, a Vercel env var on the site
+project, with noma.maji.studio allowed on the key). Without it the sites plot on a dotted field.
+Records: `RecordCard` (+ `record-card.js`, its browser twin, and `record-card.css`): a station drawing, label and
+code, one line, what the record holds. Used by the product trace's hover card and the hero map's record card; it
+lays itself out by its own width. Station drawings: `contours/ContourArt` (browser: `contours/index.js`),
+also on the hero's stop cards. The SVGs in `contours/` come from `scripts/export-contours.mjs`; don't hand-edit them.
