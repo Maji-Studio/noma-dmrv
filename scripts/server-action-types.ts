@@ -141,7 +141,21 @@ export function elementTypes(checker: ts.TypeChecker, type: ts.Type): readonly t
     : null;
 }
 
-/** Element `index` of a tuple, or the element type of an array. */
+/** A tuple whose element positions are known: no `...rest` or variadic part. */
+function isFixedTuple(checker: ts.TypeChecker, type: ts.Type): boolean {
+  return (
+    checker.isTupleType(type) &&
+    !(type as ts.TupleTypeReference).target.elementFlags.some(
+      (flags) => flags & ts.ElementFlags.Variable,
+    )
+  );
+}
+
+/**
+ * Element `index` of a fixed tuple, or the element type of an array. A
+ * variadic tuple (`[...string[], OrgContext]`) has no element at a known
+ * index, so it returns undefined and callers compare the whole type.
+ */
 export function elementAt(
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -149,7 +163,25 @@ export function elementAt(
 ): ts.Type | undefined {
   const elements = elementTypes(checker, type);
   if (!elements) return undefined;
-  return checker.isTupleType(type) ? elements[index] : elements[0];
+  if (!checker.isTupleType(type)) return elements[0];
+  return isFixedTuple(checker, type) ? elements[index] : undefined;
+}
+
+/** Index signatures of `target` that a property called `name` can populate. */
+function indexTypesFor(
+  checker: ts.TypeChecker,
+  target: ts.Type,
+  name: string,
+): ts.Type[] {
+  const numeric = name.trim() !== "" && !Number.isNaN(Number(name));
+  return checker
+    .getIndexInfosOfType(target)
+    .filter(
+      ({ keyType }) =>
+        !(keyType.flags & (ts.TypeFlags.Number | ts.TypeFlags.ESSymbol)) ||
+        (numeric && (keyType.flags & ts.TypeFlags.Number) !== 0),
+    )
+    .map((info) => info.type);
 }
 
 /**
@@ -179,28 +211,33 @@ export function carriesAnyContext(
   for (const value of withoutNullish(valueType)) {
     for (const target of withoutNullish(targetType)) {
       const valueElements = elementTypes(checker, value);
-      if (valueElements && elementTypes(checker, target)) {
+      const targetElements = elementTypes(checker, target);
+      if (valueElements && targetElements) {
+        // Pair by position only when both positions are known; otherwise any
+        // value element may land in any target element.
+        const positional = isFixedTuple(checker, value) && isFixedTuple(checker, target);
         if (
           valueElements.some((element, index) =>
-            carries(element, elementAt(checker, target, index)),
+            positional
+              ? carries(element, targetElements[index])
+              : targetElements.some((targetElement) => carries(element, targetElement)),
           )
         ) {
           return true;
         }
         continue;
       }
-      const targetIndexTypes = checker
-        .getIndexInfosOfType(target)
-        .map((info) => info.type);
       for (const valueProperty of checker.getPropertiesOfType(value)) {
         const property = checker.getPropertyOfType(target, valueProperty.name);
         const propertyValue = checker.getTypeOfSymbol(valueProperty);
-        if (property) {
-          if (carries(propertyValue, checker.getTypeOfSymbol(property))) return true;
-        } else if (targetIndexTypes.some((indexType) => carries(propertyValue, indexType))) {
-          return true;
-        }
+        const slots = property
+          ? [checker.getTypeOfSymbol(property)]
+          : indexTypesFor(checker, target, valueProperty.name);
+        if (slots.some((slot) => carries(propertyValue, slot))) return true;
       }
+      const targetIndexTypes = checker
+        .getIndexInfosOfType(target)
+        .map((info) => info.type);
       for (const info of checker.getIndexInfosOfType(value)) {
         if (targetIndexTypes.some((indexType) => carries(info.type, indexType))) {
           return true;

@@ -159,6 +159,20 @@ export async function anyIntoReportId(input: any) {
   });
 }
 
+// A numeric index signature takes no named property, and a callable
+// object's own \`call\` method is not Function.prototype.call.
+export async function namedPropertyBesideNumericIndex(input: any) {
+  return withAction(async (ctx) => {
+    const byPosition = (scopes: Record<number, OrgContext>) => scopes[0];
+    const value = { metadata: input, 0: ctx };
+    byPosition(value);
+    const callable = Object.assign((scope: OrgContext) => scope.userId, {
+      call: (payload: unknown) => payload,
+    });
+    return callable.call(input);
+  });
+}
+
 export async function renameReport(input: unknown) {
   return withAction(async (ctx) => {
     const scope = ctx;
@@ -268,6 +282,26 @@ export async function tupleIntoCore(input: any) {
 
 export async function indexedIntoCore(input: any) {
   return keyedUrl({ primary: input });
+}
+
+export async function elementAccessIntoCore(input: any) {
+  return issueUrl["call"](undefined, input, "report");
+}
+
+export async function reflectIntoCore(input: any) {
+  return Reflect.apply(issueUrl, undefined, [input, "report"]);
+}
+
+export async function optionalCallIntoCore(input: any, maybeCore?: typeof issueUrl) {
+  return maybeCore?.call(undefined, input, "report");
+}
+
+export async function variadicIntoCore(input: any) {
+  return trailingScope(["report", "report", input]);
+}
+
+function trailingScope(args: [...string[], OrgContext]) {
+  return args.length;
 }
 
 function forwardScope<T extends OrgContext>(ctx: T) {
@@ -423,6 +457,10 @@ describe("check-server-action-exports", () => {
           "forwardScope(input)",
           'pairedUrl(["report", input])',
           "keyedUrl({ primary: input })",
+          'issueUrl["call"](undefined, input, "report")',
+          'Reflect.apply(issueUrl, undefined, [input, "report"])',
+          'maybeCore?.call(undefined, input, "report")',
+          'trailingScope(["report", "report", input])',
         ]) {
           expect(reasons(lineOf(needle)), needle).toEqual([
             expect.stringMatching(/call argument/),

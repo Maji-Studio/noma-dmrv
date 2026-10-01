@@ -33,16 +33,66 @@ export interface InvokedFunction {
   applied: boolean;
 }
 
+/** Interfaces in the default lib that declare `call`/`apply`/`bind`. */
+const FUNCTION_INTERFACES = new Set(["Function", "CallableFunction", "NewableFunction"]);
+
+function isDefaultLib(declaration: ts.Declaration): boolean {
+  return declaration.getSourceFile().hasNoDefaultLib;
+}
+
+/** Call signatures of a possibly nullable function (`maybeCore?.call(…)`). */
+function signaturesOf(checker: ts.TypeChecker, target: ts.Expression): readonly ts.Signature[] {
+  return checker.getNonNullableType(checker.getTypeAtLocation(target)).getCallSignatures();
+}
+
+/** `core.call`, `core["call"]`, `maybeCore?.call`: the built-in forwarder only. */
 function forwarderTarget(
   checker: ts.TypeChecker,
   callee: ts.Expression,
 ): { method: string; target: ts.Expression } | null {
-  if (!ts.isPropertyAccessExpression(callee)) return null;
-  const method = callee.name.text;
-  if (!FUNCTION_FORWARDERS.has(method)) return null;
-  const target = callee.expression;
-  if (checker.getTypeAtLocation(target).getCallSignatures().length === 0) return null;
+  let method: string | null = null;
+  let target: ts.Expression | null = null;
+  if (ts.isPropertyAccessExpression(callee)) {
+    method = callee.name.text;
+    target = callee.expression;
+  } else if (
+    ts.isElementAccessExpression(callee) &&
+    ts.isStringLiteralLike(callee.argumentExpression)
+  ) {
+    method = callee.argumentExpression.text;
+    target = callee.expression;
+  }
+  if (!method || !target || !FUNCTION_FORWARDERS.has(method)) return null;
+  if (signaturesOf(checker, target).length === 0) return null;
+  // A callable object's own `call` method is not Function.prototype.call.
+  const member = checker.getPropertyOfType(
+    checker.getApparentType(checker.getNonNullableType(checker.getTypeAtLocation(target))),
+    method,
+  );
+  const owner = member?.declarations?.[0]?.parent;
+  if (
+    !owner ||
+    !ts.isInterfaceDeclaration(owner) ||
+    !FUNCTION_INTERFACES.has(owner.name.text) ||
+    !isDefaultLib(owner)
+  ) {
+    return null;
+  }
   return { method, target };
+}
+
+/** `Reflect.apply(fn, thisArg, args)` from the default lib. */
+function isReflectApply(checker: ts.TypeChecker, callee: ts.Expression): boolean {
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "apply") return false;
+  const declaration = checker.getSymbolAtLocation(callee.name)?.declarations?.[0];
+  const namespace = declaration?.parent?.parent;
+  return (
+    !!declaration &&
+    isDefaultLib(declaration) &&
+    !!namespace &&
+    ts.isModuleDeclaration(namespace) &&
+    namespace.name.getText() === "Reflect"
+  );
 }
 
 export function invokedFunction(
@@ -50,13 +100,25 @@ export function invokedFunction(
   call: ts.CallExpression | ts.NewExpression,
 ): InvokedFunction | null {
   const callee = unwrapExpression(call.expression);
+  // Overloads: the one implementation behind them receives the argument
+  // whichever overload TypeScript picks for the forwarder, so every declared
+  // signature is checked.
   const forwarded = forwarderTarget(checker, callee);
   if (forwarded) {
     return {
-      signatures: checker.getTypeAtLocation(forwarded.target).getCallSignatures(),
+      signatures: signaturesOf(checker, forwarded.target),
       firstArgument: 1,
       boundParameters: 0,
       applied: forwarded.method === "apply",
+    };
+  }
+  const [reflectTarget] = call.arguments ?? [];
+  if (reflectTarget && isReflectApply(checker, callee)) {
+    return {
+      signatures: signaturesOf(checker, reflectTarget),
+      firstArgument: 2,
+      boundParameters: 0,
+      applied: true,
     };
   }
   // `fn.bind(this, a)(b)`: b binds the parameter after the bound ones.
@@ -64,7 +126,7 @@ export function invokedFunction(
     const bound = forwarderTarget(checker, unwrapExpression(callee.expression));
     if (bound?.method === "bind") {
       return {
-        signatures: checker.getTypeAtLocation(bound.target).getCallSignatures(),
+        signatures: signaturesOf(checker, bound.target),
         firstArgument: 0,
         boundParameters: Math.max(0, callee.arguments.length - 1),
         applied: false,
