@@ -104,17 +104,13 @@ describe("updateFeedstockSchema transport distance", () => {
 });
 
 describe("updateOrderSchema value", () => {
-  it("separates omitted, cleared and zero", () => {
-    expect(
-      parsed(updateOrderSchema, { orderId: ORDER_ID }).value,
-    ).toBeUndefined();
-    expect(
-      parsed(updateOrderSchema, { orderId: ORDER_ID, value: null }).value,
-    ).toBeNull();
-    expect(parsed(updateOrderSchema, { orderId: ORDER_ID, value: 0 }).value).toBe(0);
-    expect(
-      parsed(updateOrderSchema, { orderId: ORDER_ID, value: 50_000 }).value,
-    ).toBe(50_000);
+  it("no longer accepts a price, so an edit cannot clear or overwrite one", () => {
+    const result = parsed(updateOrderSchema, {
+      orderId: ORDER_ID,
+      value: null,
+    });
+    expect(result).not.toHaveProperty("value");
+    expect(result).not.toHaveProperty("currency");
   });
 });
 

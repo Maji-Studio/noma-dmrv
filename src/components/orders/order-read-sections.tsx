@@ -59,8 +59,6 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
           value: formatMassKg(order.quantityKg, { digits: MASS_KG_STORAGE_DECIMALS }),
         },
         { label: "Packaging", value: <span className="capitalize">{order.packaging}</span> },
-        { label: "Value", value: order.value },
-        { label: "Currency", value: order.currency },
       ],
     },
     ...(order.formulationId

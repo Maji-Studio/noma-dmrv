@@ -320,7 +320,7 @@ async function validateCustomerLocationBelongsToCustomer(
 /** Orders request a formulation and wet mass; they never reserve physical stock. */
 export async function createOrder(ctx: OrgContext, data: {
   code: string; facilityId: string; customerId: string; customerLocationId?: string | null;
-  formulationId: string; orderDate: Date; quantityKg: number; packaging: 'loose' | 'bagged'; value?: number | null; currency?: string;
+  formulationId: string; orderDate: Date; quantityKg: number; packaging: 'loose' | 'bagged';
 }): Promise<Order> {
   requireOrgScope(ctx);
   await assertSameOrg(ctx, customers, data.customerId);

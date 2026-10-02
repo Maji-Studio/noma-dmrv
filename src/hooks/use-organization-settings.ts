@@ -6,7 +6,7 @@
  * field from them wants only the values, and wants them **synchronously** —
  * react-hook-form reads `defaultValues` exactly once at mount, so a form that
  * opens before the values arrive captures the system fallback permanently and
- * silently creates a record with the wrong currency or packaging.
+ * silently creates a record with the wrong packaging or evidence method.
  *
  * That is why the `(app)` layout resolves them server-side and seeds this query
  * through `FacilityProvider`: with `initialData` the very first client render

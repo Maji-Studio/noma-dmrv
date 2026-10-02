@@ -8,7 +8,6 @@ const queryState = vi.hoisted(() => ({
   isLoading: false,
   data: {
     defaults: {
-      defaultCurrency: "KES",
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
       defaultEvidenceMethod: "location" as const,
@@ -41,6 +40,20 @@ describe("OrganizationDefaultsForm", () => {
     expect(html).toContain("<form");
     expect(html).toContain("Save defaults");
     expect(html).not.toContain("Couldn&#x27;t load the operating defaults");
+  });
+
+  it("offers Region without a currency field", () => {
+    const html = renderToStaticMarkup(
+      <ToastProvider>
+        <OrganizationDefaultsForm />
+      </ToastProvider>,
+    );
+
+    expect(html).toContain("Region");
+    expect(html).toContain("Country");
+    expect(html).toContain("Timezone");
+    expect(html).not.toContain("Currency");
+    expect(html).not.toContain("default-currency");
   });
 
   it("uses the canonical application evidence labels", () => {

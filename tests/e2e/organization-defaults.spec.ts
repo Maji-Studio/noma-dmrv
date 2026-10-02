@@ -49,11 +49,8 @@ test.describe("Organization operating defaults", () => {
     ).toBeVisible({ timeout: 30_000 });
 
     // The system fallback, before this organization has chosen anything.
-    // By role: each defaults field also has an ⓘ button named "More about <label>".
-    const currency = page.getByRole("combobox", { name: "Currency" });
-    await expect(currency).toHaveValue("TZS");
+    await expect(page.getByLabel("Currency")).toHaveCount(0);
 
-    await currency.selectOption("KES");
     // Order packaging is a segmented control (native radios).
     await page.getByText("Bagged", { exact: true }).click();
     await page.getByRole("button", { name: "Save defaults" }).click();
@@ -62,7 +59,6 @@ test.describe("Organization operating defaults", () => {
 
     // Survives a reload: the value is stored, not just held in the form.
     await page.reload();
-    await expect(page.getByRole("combobox", { name: "Currency" })).toHaveValue("KES");
     await expect(page.getByRole("radio", { name: "Bagged" })).toBeChecked();
 
     // And reaches the form it says it seeds. This is the assertion that would
@@ -71,10 +67,10 @@ test.describe("Organization operating defaults", () => {
     // is the only way in.
     await page.goto(`/orders?facility=${seededData.facility.id}`);
     await page.getByRole("button", { name: "New order" }).click();
-    await expect(page.getByLabel("Currency")).toHaveValue("KES", {
+    await expect(page.getByLabel("Packaging")).toHaveValue("bagged", {
       timeout: 30_000,
     });
-    await expect(page.getByLabel("Packaging")).toHaveValue("bagged");
+    await expect(page.getByLabel("Currency")).toHaveCount(0);
   });
 
   test("a member cannot reach the defaults route", async ({

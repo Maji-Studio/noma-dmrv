@@ -5,7 +5,7 @@
 "use client";
 
 import { formatLocalDate } from "@/lib/date-utils";
-import { nullableNumericValue, numericValue } from "@/lib/form-utils";
+import { numericValue } from "@/lib/form-utils";
 
 import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
@@ -108,8 +108,6 @@ export function OrderForm({
       quantityKg: order?.quantityKg ?? undefined,
       packaging:
         (order?.packaging as PackagingType) ?? orgDefaults.defaultPackaging,
-      value: order?.value ?? undefined,
-      currency: order?.currency ?? orgDefaults.defaultCurrency,
     },
   });
 
@@ -255,7 +253,7 @@ export function OrderForm({
       <FormSection
         title="Product details"
         icon={<PackageIcon size={14} weight="bold" />}
-        fields={["formulationId", "packaging", "quantityKg", "value", "currency"]}
+        fields={["formulationId", "quantityKg", "packaging"]}
       >
         <FormEntitySelect control={control} name="formulationId" label="Formulation" entityType="formulation" placeholder="Select formulation..." required disabled={isSubmitting} />
 
@@ -278,12 +276,7 @@ export function OrderForm({
               })}
             />
           </FormField>
-        </div>
-        {/* Right after the quantity, so the operator compares the request
-            with what the matching bins hold. */}
-        <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
           <FormField
             id="packaging"
             label="Packaging"
@@ -298,40 +291,10 @@ export function OrderForm({
               {...register("packaging")}
             />
           </FormField>
-
-          <FormField
-            id="value"
-            label="Value"
-            error={errors.value?.message}
-          >
-            <FormInput
-              id="value"
-              type="number"
-              step="any"
-              placeholder="e.g., 50000"
-              disabled={isSubmitting}
-              error={!!errors.value}
-              {...register("value", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="currency"
-            label="Currency"
-            error={errors.currency?.message}
-          >
-            <FormInput
-              id="currency"
-              type="text"
-              placeholder="e.g., TZS"
-              disabled={isSubmitting}
-              error={!!errors.currency}
-              {...register("currency")}
-            />
-          </FormField>
         </div>
+        {/* Right after the wet mass and packaging row, so the operator
+            compares the request with what the matching bins hold. */}
+        <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
       </FormSection>
       </FormSpine>
 
