@@ -36,7 +36,10 @@ vi.mock("@/components/storage-locations/storage-bin-actions", () => ({
 
 import { ProductionRunFeedstockDrawRow } from "./production-run-feedstock-draw-row";
 
-function render(productionRunId?: string): string {
+function render(
+  productionRunId?: string,
+  { wetMassKg = 1_000, wetMassError }: { wetMassKg?: number | null; wetMassError?: string } = {},
+): string {
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
       <ProductionRunFeedstockDrawRow
@@ -44,7 +47,8 @@ function render(productionRunId?: string): string {
         facilityId="facility-1"
         productionRunId={productionRunId}
         storageLocationId={BIN.id}
-        wetMassKg={1_000}
+        wetMassKg={wetMassKg}
+        wetMassError={wetMassError}
         selectedStorageLocationIds={[BIN.id]}
         onStorageLocationChange={() => undefined}
         onWetMassChange={() => undefined}
@@ -84,6 +88,23 @@ describe("ProductionRunFeedstockDrawRow stock figure", () => {
     const html = render("run-1");
 
     expect(html).toContain("2,000 kg available to this run");
+    expect(html).not.toContain("Remaining now");
+  });
+
+  it("shows the bin's remaining stock when a mass error replaces the cue", () => {
+    availability.availableKg = 1_000;
+    const html = render(undefined, { wetMassKg: null, wetMassError: "Enter wet mass." });
+
+    expect(html).toContain("Enter wet mass.");
+    expect(html).not.toContain("available in this bin");
+    expect(html).toContain("Remaining now: 1,000 kg wet, 800 kg dry feedstock");
+  });
+
+  it("keeps one figure when the over-draw error states what is available", () => {
+    availability.availableKg = 1_000;
+    const html = render(undefined, { wetMassKg: 1_500 });
+
+    expect(html).toContain("Only 1,000 kg of wet feedstock is available.");
     expect(html).not.toContain("Remaining now");
   });
 });

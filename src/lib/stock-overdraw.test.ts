@@ -8,6 +8,7 @@ import {
   formatStockMinimumKg,
   formatStockKg,
   isStockOverdraw,
+  pickerShowsRemainingStock,
   productStockOverdrawMessage,
 } from "./stock-overdraw";
 
@@ -72,5 +73,35 @@ describe("stock overdraw", () => {
     expect(binStockOverdrawInlineMessage("product", 100)).toBe(
       "Only 100 kg of biochar is available. Reduce the mass.",
     );
+  });
+});
+
+describe("pickerShowsRemainingStock", () => {
+  it("hides the picker figure while the availability cue shows", () => {
+    expect(pickerShowsRemainingStock({ availableKg: 1_000 })).toBe(false);
+  });
+
+  it("shows the picker figure when availability is unknown", () => {
+    expect(pickerShowsRemainingStock({ availableKg: null })).toBe(true);
+  });
+
+  it("shows the picker figure when a mass error replaces the cue", () => {
+    expect(
+      pickerShowsRemainingStock({
+        availableKg: 1_000,
+        massError: "Enter wet mass.",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps it hidden when the error is the over-draw that states the figure", () => {
+    const overdrawError = binStockOverdrawInlineMessage("feedstock", 1_000);
+    expect(
+      pickerShowsRemainingStock({
+        availableKg: 1_000,
+        massError: overdrawError,
+        overdrawError,
+      }),
+    ).toBe(false);
   });
 });

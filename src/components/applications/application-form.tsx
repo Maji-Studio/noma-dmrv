@@ -332,11 +332,6 @@ export function ApplicationForm({
       alreadyAppliedDryKg - currentApplicationDryKg,
     ),
   });
-  const stockCues = applicationStockCues({
-    delivery: selectedDelivery,
-    availableKg,
-    isEditMode,
-  });
   const applicationStockError =
     availableKg !== null &&
     appliedKgValid !== null &&
@@ -356,6 +351,13 @@ export function ApplicationForm({
     errors.biocharAppliedTons?.message ??
     applicationStockError ??
     routedServerError.inlineError;
+  const stockCues = applicationStockCues({
+    delivery: selectedDelivery,
+    availableKg,
+    isEditMode,
+    massError: biocharAppliedError,
+    overdrawError: applicationStockError,
+  });
 
   const handleFormSubmit = handleSubmit(async (data) => {
     if (applicationStockError) return;

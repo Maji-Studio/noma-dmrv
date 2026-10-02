@@ -9,6 +9,7 @@ import {
   binStockOverdrawInlineMessage,
   formatStockLimitKg,
   isStockOverdraw,
+  pickerShowsRemainingStock,
 } from "@/lib/stock-overdraw";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
@@ -123,7 +124,11 @@ export function ProductionRunFeedstockDrawRow({
             autoSelectSingle={false}
             // The wet mass cue states what this draw may take; the bin's
             // Remaining now line would be a second, near-identical figure.
-            showRemainingMass={availableKg == null}
+            showRemainingMass={pickerShowsRemainingStock({
+              availableKg,
+              massError: resolvedWetMassError,
+              overdrawError: stockError,
+            })}
             trailingActions={<StorageBinActions storageLocationId={storageLocationId} />}
           />
         </FormField>
