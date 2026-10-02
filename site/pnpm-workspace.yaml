@@ -1,7 +1,7 @@
 packages:
   - "."
 
-# Standalone until the site joins the root workspace (see the handoff).
+# Standalone on purpose: joining the root workspace pulls the app's Vitest onto Vite 8 (docs/site.md).
 minimumReleaseAge: 4320
 
 allowBuilds:

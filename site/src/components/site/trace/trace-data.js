@@ -1,6 +1,5 @@
-// Illustrative records for the interactive trace. Same records as the content preview
-// (src/components/preview/trace-preview.js); the larger operation adds context rows around them.
-import { makeGraph, STAGES } from "../../../visuals/core.js";
+// Illustrative records for the interactive trace; the larger operation adds context rows around them.
+import { makeGraph, STAGES } from "../../../data/core.js";
 
 export const LAYOUT = { width: 1080, height: 300, smallSize: 36, largeSize: 17,
   x: [65, 218, 372, 526, 680, 834, 1000], contextY: [18, 51, 116, 242, 277], extraShift: 14 };

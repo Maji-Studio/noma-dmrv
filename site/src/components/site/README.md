@@ -46,6 +46,9 @@ Each `.astro` file documents its props at the top. Shell: `SiteShell`, `SiteNav`
 Layout: `GridFrame`, `SectionIndex`, `AccordionShowcase` (Home tour, Product "What's next"). Actions: `Button`, `TextLink`, `Chip`. Stage: `stage/Stage`,
 `stage/StageCheckRow`, `stage/StageConnector`, `stage/StageDot`, `stage/StageMark`. Motion: `motion.js`.
 Config (nav, login flag, section anchors): `src/config.js`.
+Example data and the trace graph engine: `src/data/` (`core.js` draws the product trace, `data.js` holds the bin
+layers). Walkthrough form copy: `src/content/copy.js`. Local-only images (the Mafinga photo, gitignored until Dark
+Earth Carbon approves publishing it): `public/images/`, resolved by `src/lib/assets.js`.
 Home hero map: `home/HomeHero` + `home/hero-map/` (MapLibre, a port of the app's traceability Map tab). The basemap
 needs `PUBLIC_MAPTILER_KEY` (the app's domain-locked MapTiler key; `.env.local` locally, a Vercel env var on the site
 project, with noma.maji.studio allowed on the key). Without it the sites plot on a dotted field.

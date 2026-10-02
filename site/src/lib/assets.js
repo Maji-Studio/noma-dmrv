@@ -4,5 +4,5 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-export const MAFINGA_PHOTO = "/preview/mafinga-field-trial.jpg";
+export const MAFINGA_PHOTO = "/images/mafinga-field-trial.jpg";
 export const HAS_MAFINGA_PHOTO = existsSync(join(process.cwd(), "public", MAFINGA_PHOTO));

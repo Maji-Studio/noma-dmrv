@@ -1,4 +1,4 @@
-/* Styles for the shared visuals (nv- prefix). Variants may override layout, never colours outside tokens.
+/* Styles for the trace graph drawn by core.js (nv- prefix). Colours only from tokens.
    Defaults follow the editorial site: square corners (--r-square) and sentence-case labels. */
 .nv-viz { display: grid; grid-template-columns: minmax(0, 1fr) 280px; background: var(--paper); border: 1.5px solid var(--hair-2); border-radius: var(--r-square); overflow: hidden; }
 .nv-viz.nv-side-below, .nv-viz.nv-side-none { grid-template-columns: 1fr; }

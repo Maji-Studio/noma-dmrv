@@ -1,4 +1,4 @@
-// Graph engine shared by the trace, dense and map visuals.
+// Graph engine for the interactive trace (src/components/site/trace/).
 // Ported from the prototype linked in docs/archive/plans/2026-09-29-landing-page.md.
 export const NS = "http://www.w3.org/2000/svg";
 export const el = (tag, attrs = {}, parent) => {
@@ -7,17 +7,6 @@ export const el = (tag, attrs = {}, parent) => {
   if (parent) parent.appendChild(e);
   return e;
 };
-export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-export const fmt = (n) => Math.round(n).toLocaleString("en-US");
-export const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-export function rng(seed) {
-  return function () {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 export const STAGES = {
   sup: { label: "Supplier", plural: "suppliers", dom: "infra", g: "M8 2.5l5 7.5H3z M8 10v3.5" },
@@ -34,13 +23,6 @@ export const STAGES = {
   rem: { label: "Removal", plural: "removals", dom: "ver", g: "M8 2l5.5 2.5v3.8c0 3-2.6 5-5.5 5.7-2.9-.7-5.5-2.7-5.5-5.7V4.5z M5.6 8.3l1.7 1.7 3-3.6" },
   plant: { label: "Plant", plural: "plants", dom: "prod", g: "M2.5 13.5V7l3.5 2.2V7l3.5 2.2V3.5h4v10z" },
 };
-export const EXTRA_GLYPHS = {
-  chat: "M2.5 3.5h11v7.5H7l-3.5 3v-3h-1z",
-  spark: "M8 1.8l1.6 4.6 4.6 1.6-4.6 1.6L8 14.2l-1.6-4.6L1.8 8l4.6-1.6z",
-  doc: "M4 2h6l3 3v9H4z M10 2v3h3 M6 8.5h5 M6 11h5",
-  pulse: "M1.5 8.5h3l2-5 3 9 2-4h3",
-  plug: "M6 2v3 M10 2v3 M4 5h8v2.5a4 4 0 0 1-8 0z M8 11.5V14",
-};
 
 export function makeGraph(nodes, edges) {
   const byId = new Map(nodes.map((n) => [n.id, n])), out = new Map(), inn = new Map();
@@ -55,21 +37,6 @@ export function walk(g, start, dir) {
   seen.delete(start);
   return seen;
 }
-const ORDER = ["sup", "fd", "fbin", "ing", "run", "bbin", "cb", "smp", "prod", "del", "app", "rem"];
-export function countsHtml(g, set) {
-  const c = {};
-  set.forEach((id) => { const s = g.byId.get(id).st; c[s] = (c[s] || 0) + 1; });
-  const parts = ORDER.filter((k) => c[k]).map((k) => `<span>${c[k]} ${STAGES[k].plural}</span>`);
-  return parts.length ? `<div class="nv-counts">${parts.join("")}</div>` : `<span class="nv-hint">None</span>`;
-}
-export function detailHtml(g, id) {
-  const n = g.byId.get(id), up = walk(g, id, "up"), dn = walk(g, id, "down");
-  return `<div><div class="nv-stage">${esc(STAGES[n.st].label)}</div><div class="nv-code">${esc(n.code)}</div></div>
-   <div class="nv-meta">${(n.meta || []).map((m) => `<div>${esc(m)}</div>`).join("")}</div>
-   <div class="nv-group"><div class="nv-label">Came from</div>${countsHtml(g, up)}</div>
-   <div class="nv-group"><div class="nv-label">Became</div>${countsHtml(g, dn)}</div>`;
-}
-
 export function drawGraph(svg, g, opt) {
   svg.innerHTML = "";
   const eG = el("g", {}, svg), nG = el("g", {}, svg), s = opt.size;
@@ -110,42 +77,4 @@ export function highlight(svg, g, id) {
     e.classList.toggle("on", on);
     if (on) e.parentNode.appendChild(e);
   });
-}
-/**
- * Hover, tap, focus and keyboard handling. Calls onShow(id|null) after every change.
- * Returns a controller with pin(id) and clear().
- */
-export function wire(svg, g, onShow) {
-  let pinned = null;
-  const show = (id) => { highlight(svg, g, id); onShow(id); };
-  const idOf = (t) => { const n = t && t.closest && t.closest("[data-id]"); return n ? n.getAttribute("data-id") : null; };
-  svg.addEventListener("pointerover", (e) => { const id = idOf(e.target); if (id && !pinned) show(id); });
-  svg.addEventListener("pointerout", (e) => { const id = idOf(e.target); if (id && !pinned && !idOf(e.relatedTarget || document.body)) show(null); });
-  svg.addEventListener("click", (e) => { const id = idOf(e.target); if (!id) { pinned = null; show(null); return; } pinned = pinned === id ? null : id; show(pinned || id); });
-  svg.addEventListener("focusin", (e) => { const id = idOf(e.target); if (id && e.target.matches(":focus-visible")) { pinned = id; show(id); } });
-  svg.addEventListener("keydown", (e) => {
-    const id = idOf(e.target);
-    if (e.key === "Escape") { pinned = null; show(null); e.target.blur && e.target.blur(); return; }
-    if (!id) return;
-    let next = null;
-    if (e.key === "ArrowRight") next = (g.out.get(id) || [])[0];
-    if (e.key === "ArrowLeft") next = (g.inn.get(id) || [])[0];
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      const cur = g.byId.get(id);
-      const same = g.nodes.filter((n) => Math.abs(n.x - cur.x) < 4).sort((a, b) => a.y - b.y);
-      const i = same.findIndex((n) => n.id === id);
-      next = (same[i + (e.key === "ArrowDown" ? 1 : -1)] || {}).id;
-    }
-    if (next) {
-      e.preventDefault();
-      const ne = g.nodeEls.get(next);
-      if (ne.getAttribute("tabindex") === "0") ne.focus(); else { pinned = next; show(next); }
-    }
-  });
-  return { pin(id) { pinned = id || null; show(pinned); }, clear() { pinned = null; show(null); } };
-}
-
-export function featIcon(g, dom) {
-  const d = EXTRA_GLYPHS[g] || STAGES[g].g;
-  return `<svg class="nv-fi" viewBox="0 0 32 32" aria-hidden="true"><g class="nv-node d-${dom}" style="cursor:default"><rect class="nv-body" x="1" y="1" width="30" height="30" rx="4"/><path class="nv-glyph" d="${d}" transform="translate(4,4) scale(1.5)" stroke-width="1"/></g></svg>`;
 }
