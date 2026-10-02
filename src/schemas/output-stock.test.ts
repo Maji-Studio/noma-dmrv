@@ -22,4 +22,21 @@ describe('output operation boundary', () => {
   it('rejects invalid calendar dates', () => {
     expect(outputStockPreviewSchema.safeParse({ ...input, occurredAt: '2026-02-30T12:00:00.000Z' }).success).toBe(false);
   });
+  it('words every operator-facing failure in plain language, never raw Zod text', () => {
+    const messages = (value: unknown) => {
+      const result = outputStockPostSchema.safeParse(value);
+      return result.success ? [] : result.error.issues.map(issue => issue.message);
+    };
+    const base = { ...input, idempotencyKey: 'request', basisFingerprint: 'basis', reason: 'Spillage' };
+    expect(messages({ ...base, wetMassKg: null })).toEqual(['Enter the wet mass.']);
+    expect(messages({ ...base, wetMassKg: undefined })).toEqual(['Enter the wet mass.']);
+    expect(messages({ ...base, moisturePercent: 'x' })).toEqual(['Enter the moisture as a number.']);
+    expect(messages({ ...base, reason: '' })).toEqual(['Enter a reason.']);
+    expect(messages({ ...base, reason: ' ' })).toEqual(['Enter a reason.']);
+    const all = [
+      ...messages({ ...base, wetMassKg: null, reason: '' }),
+      ...messages({ ...base, sources: [{ layerId: 'nope', moisturePercent: null }] }),
+    ];
+    for (const message of all) expect(message).not.toMatch(/Invalid input|expected|Too small/);
+  });
 });

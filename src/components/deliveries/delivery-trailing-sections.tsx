@@ -13,6 +13,7 @@ import {
   ClassifiedTransportEvidenceUploader,
   TransportEvidencePanel,
 } from "@/components/transport-legs";
+import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import type { Delivery } from "@/db/schema";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
@@ -39,6 +40,7 @@ export function DeliveryEvidenceSection({
   return (
     <FormSection
       title="Delivery evidence"
+      hint={TRANSPORT_EVIDENCE_HINTS.delivery}
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >

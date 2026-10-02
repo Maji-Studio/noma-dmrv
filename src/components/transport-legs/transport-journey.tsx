@@ -121,8 +121,8 @@ function LegRow({
             </>
           )}
         </p>
-        <p className="flex flex-wrap items-center gap-8 body-caption text-[var(--color-text-tertiary)]">
-          <span className="tabular-nums">{`${source}${load}`}</span>
+        <p className="flex items-start gap-8 body-caption text-[var(--color-text-tertiary)]">
+          <span className="min-w-0 tabular-nums">{`${source}${load}`}</span>
           {evidenceAttached !== undefined && <EvidenceIcon attached={evidenceAttached} />}
         </p>
       </div>

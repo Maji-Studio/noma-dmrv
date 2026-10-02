@@ -46,7 +46,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
-      className={`illo-host flex flex-col items-center justify-center gap-16 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${PADDING_CLASSES[padding]}`}
+      className={`illo-host flex flex-col items-center justify-center gap-16 px-16 border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] ${PADDING_CLASSES[padding]}`}
     >
       <span className="text-[var(--color-text-tertiary)]">{icon}</span>
       <div className="flex flex-col gap-8 text-center max-w-[520px]">
@@ -57,7 +57,12 @@ export function EmptyState({
           </p>
         )}
       </div>
-      {action}
+      {action && (
+        // Long CTA labels wrap inside the dashed box instead of spilling past it.
+        <div className="flex max-w-full justify-center [&>*]:h-auto [&>*]:py-12 [&>*]:max-w-full [&>*]:whitespace-normal [&>*]:text-center">
+          {action}
+        </div>
+      )}
     </div>
   );
 }

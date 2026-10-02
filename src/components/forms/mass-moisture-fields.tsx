@@ -106,12 +106,14 @@ export function MoistureField({
   step = STORED_PERCENT_INPUT_STEP,
   estimate,
   reading,
-}: MassMoistureInputProps & MoistureReadingProps & { materialLabel?: string }) {
+  unit,
+}: MassMoistureInputProps & MoistureReadingProps & { materialLabel?: string; unit?: string }) {
   const guidance = estimate === undefined ? null : moistureReadingGuidance(estimate, parseWatchedNumber(reading));
   return (
     <FormField
       id={id}
       label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
+      unit={unit}
       error={error}
       warning={guidance?.warning ?? warning}
       // The 0 to 100% range sits behind the ⓘ with the basis (Kenji, cue review 2026-09-30).
@@ -154,11 +156,13 @@ export function WetMassField({
   certifyStatus,
   materialLabel,
   step = MASS_KG_INPUT_STEP,
-}: MassMoistureInputProps & { materialLabel?: string }) {
+  unit,
+}: MassMoistureInputProps & { materialLabel?: string; unit?: string }) {
   return (
     <FormField
       id={id}
       label={label ?? qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel)}
+      unit={unit}
       error={error}
       warning={warning}
       helperText={helperText}
