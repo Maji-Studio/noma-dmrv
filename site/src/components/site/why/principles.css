@@ -73,18 +73,12 @@
 .maf-figure img { display: block; width: 100%; height: auto; aspect-ratio: 21 / 8; min-height: var(--photo-min); object-fit: cover; object-position: center 60%; }
 .maf-figure .photo-missing { aspect-ratio: 21 / 8; min-height: var(--photo-min); }
 .maf-figure figcaption { position: absolute; right: var(--frame-pad); bottom: var(--space-4); padding: var(--space-1) var(--space-2); background: var(--page); }
-.maf-places { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--hairline); margin: 0; padding: 0; list-style: none; background: var(--rule); border-top: var(--hairline) solid var(--rule); }
-.maf-place { display: grid; gap: var(--space-3); align-content: start; padding: var(--space-7) var(--frame-pad) var(--space-8); background: var(--page); }
-.maf-art { height: 120px; margin-bottom: var(--space-4); color: var(--ink); }
-.maf-art svg { stroke-width: 1.1; }
-.maf-name { margin: 0; font-size: var(--fs-h4); font-weight: 300; letter-spacing: var(--track-h3); }
 
 @media (max-width: 1000px) {
   .pr-in, .pr--wide .pr-in { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
   .pr-copy { position: static; }
   .pr--wide .pr-copy { grid-template-columns: minmax(0, 1fr); }
   .pr--wide .pr-n { grid-row: auto; }
-  .maf-places { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .evp { grid-template-columns: minmax(0, 1fr); }
@@ -96,6 +90,4 @@
   .own-same span { writing-mode: horizontal-tb; transform: none; border-block: 0; border-inline: var(--hairline) solid var(--accent); padding: var(--space-1) var(--space-3); }
   .maf-figure img, .maf-figure .photo-missing { aspect-ratio: 4 / 3; min-height: 0; }
   .maf-figure figcaption { position: static; padding: var(--space-3) var(--frame-pad); }
-  .maf-place { padding: var(--space-6) var(--frame-pad) var(--space-7); }
-  .maf-art { height: 64px; margin-bottom: var(--space-2); }
 }

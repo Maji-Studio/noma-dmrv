@@ -35,7 +35,7 @@ export async function initHomeHero(root) {
   root.classList.add("has-js");
   let touring = false;
 
-  // On tour the map is 100svh and pinned: keep its legend strip above the fold while the header shows.
+  // On tour the map is 100svh and pinned: keep the map attribution above the fold while the header shows.
   const onScroll = () => root.style.setProperty("--hero-lift", `${touring ? Math.max(0, root.getBoundingClientRect().top) : 0}px`);
   addEventListener("scroll", onScroll, { passive: true });
 

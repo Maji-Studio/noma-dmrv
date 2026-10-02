@@ -24,7 +24,7 @@ export const PRODUCT_SECTIONS = [
   { id: "evidence", label: "Evidence and reporting" },
   { id: "next", label: "What’s next" },
 ];
-// /why is five principles (the hero lists them as the page index); principle 1 compares with spreadsheets.
+// /why is five principles (the hero lists them as the page index); principle 1 compares with spreadsheets and paper, and other dMRV platforms.
 // Home links to #who (the hero's audiences), #open-source and #mafinga.
 export const WHY_PRINCIPLES = [
   { id: "sources", label: "Every figure has a source" },

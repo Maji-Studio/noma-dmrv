@@ -106,8 +106,7 @@
 @keyframes bs-roll { to { transform: rotate(360deg); } }
 
 /* Foot: footnote left, Back / Next right */
-.bs-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-4) var(--space-6); padding-top: var(--space-5); border-top: var(--hairline) solid var(--stage-grid); }
-.bs-note { font-size: var(--fs-caption); color: var(--stage-ink-3); }
+.bs-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-4) var(--space-6); padding-top: var(--space-5); border-top: var(--hairline) solid var(--stage-grid); }
 .bs-nav { display: flex; gap: var(--space-3); }
 .bs-nav .btn { min-width: calc(var(--space-9) * 1.5); }
 .bs-back {

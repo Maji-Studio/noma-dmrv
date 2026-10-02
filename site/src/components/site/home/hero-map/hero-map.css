@@ -4,7 +4,7 @@
   --hm-mark: 12px; --hm-mark-facility: 20px; --hm-punch: 5px; --hm-ring: 28px; --hm-ring-facility: 36px;
   --hm-label-gap: 16px; --hm-label-size: 11px; --hm-chip-size: 10px; --hm-card-w: 264px; --hm-card-accent: 3px;
   --hero-card-w: 460px; --hero-panel-w: 620px; --hero-step: 90svh; --hero-stop: 24px; --hero-stop-dot: 8px;
-  --hero-play: 40px; --hero-foot-h: 44px; --hero-art-h: clamp(140px, 22svh, 200px);
+  --hero-play: 40px; --hero-art-h: clamp(140px, 22svh, 200px);
 }
 
 /* ── map surface ─────────────────────────────────────────────────────────── */
@@ -44,14 +44,6 @@
 .hm-pop .rc { width: var(--hm-card-w); --rc-pad: var(--space-4); animation: hm-card-in var(--dur-base) var(--ease-out); }
 @keyframes hm-card-in { from { opacity: 0; transform: translateY(4px); } }
 
-/* legend */
-.hm-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); list-style: none; margin: 0; padding: 0; }
-.hm-legend li { display: inline-flex; align-items: center; gap: var(--space-2); }
-.hm-legend i { width: 9px; height: 9px; background: var(--prod); }
-.hm-legend .lg-plant { width: 11px; height: 11px; background: none; border: 3px solid var(--infra); }
-.hm-legend .lg-field { background: var(--dist); transform: rotate(45deg) scale(0.9); }
-.hm-legend .lg-leg { width: 18px; height: 0; border-top: var(--stage-stroke) dashed var(--ink); background: none; }
-
 /* ── hero layout: sticky map layer + scrolling steps in one grid cell ───────── */
 .home-hero { position: relative; display: grid; border-top: var(--hairline) solid var(--rule); }
 .home-hero-sticky, .home-hero-steps { grid-area: 1 / 1; }
@@ -62,17 +54,18 @@
 .home-hero.has-js:not(.is-touring) .home-hero-sticky { position: absolute; inset: 0; height: auto; align-self: stretch; } /* an abspos grid item only fills its area when stretched */
 .home-hero.has-js:not(.is-touring) .home-hero-step:not(.home-hero-step--rest) { display: none; }
 .home-hero:not(.has-js) .home-hero-tour, .home-hero:not(.is-touring) .home-hero-exit, .home-hero.is-touring .home-hero-tour { display: none; }
-.home-hero .maplibregl-ctrl-bottom-right { bottom: calc(var(--hero-foot-h) + var(--hero-lift, 0px)); }
-/* --hero-lift: how much of the page header is still on screen, so the strip starts above the fold */
-.home-hero-foot { position: absolute; left: 0; right: 0; bottom: var(--hero-lift, 0px); z-index: 1; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3) var(--space-6); min-height: var(--hero-foot-h); padding: var(--space-3) calc(var(--gutter) + var(--space-5)); background: color-mix(in srgb, var(--page) 92%, transparent); border-top: var(--hairline) solid var(--rule); font-size: var(--fs-caption); color: var(--ink-2); }
+/* --hero-lift: how much of the page header is still on screen, so the attribution starts above the fold */
+.home-hero .maplibregl-ctrl-bottom-right { bottom: var(--hero-lift, 0px); }
 .home-hero-stops { position: absolute; right: calc(var(--gutter) + var(--space-4)); top: 50%; z-index: 1; display: grid; gap: 2px; list-style: none; margin: 0; padding: 0; transform: translateY(-50%); transition: opacity var(--dur-base); }
 .home-hero.is-resting .home-hero-stops, .home-hero:not(.is-touring) .home-hero-stops { opacity: 0; pointer-events: none; }
 .home-hero.is-resting .home-hero-stops, .home-hero:not(.is-touring) .home-hero-stops { visibility: hidden; }
-.home-hero:not(.has-js) [data-tour-exit], .home-hero:not(.has-map) .home-hero-foot p { display: none; }
+.home-hero:not(.has-js) [data-tour-exit] { display: none; }
 .home-hero-stops button { display: grid; place-items: center; width: var(--hero-stop); height: var(--hero-stop); padding: 0; border: 0; background: none; cursor: pointer; }
 .home-hero-stops button::before { content: ""; width: var(--hero-stop-dot); height: var(--hero-stop-dot); border: var(--hairline) solid var(--rule-strong); background: var(--paper); transition: background var(--dur-fast); }
 .home-hero-stops button[aria-current="step"]::before { background: var(--accent); border-color: var(--accent); }
 
+/* the copy floats on the map: no frame hairlines across it */
+.home-hero-steps > .gf-in { border-inline: 0; }
 .home-hero-steps { position: relative; z-index: 2; pointer-events: none; }
 .home-hero-step { min-height: var(--hero-step); display: grid; align-items: center; padding-block: var(--space-8); }
 .home-hero-step:last-child { min-height: 100svh; }
@@ -105,7 +98,6 @@
   .home-hero-panel { width: auto; margin-inline: calc(var(--frame-pad) * -1); border: 0; border-bottom: var(--hairline) solid var(--rule); padding: var(--space-8) var(--frame-pad) var(--space-6); background: var(--page); backdrop-filter: none; }
   .home-hero-step { align-items: end; padding-bottom: var(--space-9); }
   .home-hero-stops { display: none; }
-  .home-hero-foot p { display: none; }
   .home-hero .hm-pop { display: none; }
   .home-hero.has-map .home-hero-step:not(.is-active) .home-hero-card { opacity: 1; }
   /* The step card covers the lower map on a phone: a shorter drawing. */

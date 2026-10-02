@@ -27,7 +27,9 @@
 .tx-graph.nv-hl .nv-edge.on { stroke: var(--accent); stroke-width: 2; }
 /* Off-path records: the square fades, the labels stay readable (--ink-3 is 3:1 or better on paper). */
 .tx-graph.nv-hl .nv-node:not(.on) { opacity: 1; }
-.tx-graph.nv-hl .nv-node:not(.on) :is(.nv-body, .nv-glyph) { opacity: 0.24; }
+.tx-graph.nv-hl .nv-node:not(.on) :is(.nv-body, .nv-glyph) { opacity: 0.45; }
+/* Off-path links stay drawn as thin grey lines, so the dimmed records still read as one chain. */
+.tx-graph.nv-hl .nv-edge:not(.on) { opacity: 1; stroke: var(--stage-line); }
 .tx-graph.nv-hl .nv-node:not(.on) text { fill: var(--ink-3); }
 .tx-graph.nv-hl .nv-node.self .nv-body { stroke: var(--accent); }
 /* first view: edges draw in column by column */
