@@ -5,6 +5,7 @@
  * Every day is a facility-local `YYYY-MM-DD` string. Every activity reading is
  * nullable: null is a missing reading, never zero.
  */
+import type { TransportMethodValue } from "@/schemas/transport-legs";
 import type { EnergySourceKey, SourceAmounts } from "./sources";
 
 /** kg CO2e per activity unit, configured per facility. */
@@ -36,6 +37,8 @@ export interface EnergyTransportLegInput {
   /** One way. The round trip is applied where the distance is counted. */
   distanceKm: number;
   loadMassKg: number | null;
+  /** Only road legs have a factor; any other method leaves the feedstock missing. */
+  method: TransportMethodValue;
 }
 
 export interface EnergyFeedstockInput {
