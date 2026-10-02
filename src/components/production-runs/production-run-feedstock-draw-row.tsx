@@ -9,6 +9,7 @@ import {
   binStockOverdrawInlineMessage,
   formatStockLimitKg,
   isStockOverdraw,
+  pickerShowsRemainingStock,
 } from "@/lib/stock-overdraw";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
@@ -62,11 +63,12 @@ export function ProductionRunFeedstockDrawRow({
         }
       : null,
   );
+  const availableKg = availability?.availableKg ?? null;
   const stockError =
     typeof wetMassKg === "number" &&
-    availability?.availableKg != null &&
-    isStockOverdraw(wetMassKg, availability.availableKg)
-      ? binStockOverdrawInlineMessage("feedstock", availability.availableKg)
+    availableKg != null &&
+    isStockOverdraw(wetMassKg, availableKg)
+      ? binStockOverdrawInlineMessage("feedstock", availableKg)
       : undefined;
   const resolvedWetMassError = wetMassError ?? stockError;
 
@@ -120,6 +122,13 @@ export function ProductionRunFeedstockDrawRow({
               (id) => id !== storageLocationId,
             )}
             autoSelectSingle={false}
+            // The wet mass cue states what this draw may take; the bin's
+            // Remaining now line would be a second, near-identical figure.
+            showRemainingMass={pickerShowsRemainingStock({
+              availableKg,
+              massError: resolvedWetMassError,
+              overdrawError: stockError,
+            })}
             trailingActions={<StorageBinActions storageLocationId={storageLocationId} />}
           />
         </FormField>
@@ -137,7 +146,7 @@ export function ProductionRunFeedstockDrawRow({
             id={`feedstockDraws.${index}.wetMassKg`}
             label="Wet mass (kg)"
             error={resolvedWetMassError}
-            cue={availability?.availableKg != null ? `${formatStockLimitKg(availability.availableKg)} available ${productionRunId ? "to this run" : "in this bin"}` : undefined}
+            cue={availableKg != null ? `${formatStockLimitKg(availableKg)} available ${productionRunId ? "to this run" : "in this bin"}` : undefined}
             hint="As-received weight from this bin, water included."
             required
           >

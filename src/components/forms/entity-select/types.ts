@@ -85,6 +85,12 @@ export interface EntitySelectProps {
   alwaysShowSearch?: boolean;
   /** Hide the search input entirely */
   hideSearch?: boolean;
+  /**
+   * Whether the selected option's remaining-mass caption shows at all. A form
+   * that states its own availability cue ("N kg available in this bin") turns
+   * it off, so the field carries one stock figure, not two near-identical ones.
+   */
+  showRemainingMass?: boolean;
   /** Whether the selected option's remaining-mass caption includes dry mass. */
   showRemainingDryMass?: boolean;
   /** Custom formatter for the selected value display */

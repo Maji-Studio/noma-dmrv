@@ -529,6 +529,16 @@ while the preview refetches or has failed. The biochar product form's biochar,
 ingredient and product bin selectors are the reference; they replace separate
 per-bin stock blocks above the form.
 
+**One stock figure per draw field.** When the mass field's cue states what can
+be drawn ("N kg available in this bin", "N kg available to this run", "N kg
+available to this application"), the picker drops its "Remaining now" line:
+`EntitySelect` `showRemainingMass={false}`, decided by
+`pickerShowsRemainingStock` in `src/lib/stock-overdraw.ts`. The line comes back
+whenever the cue is not on screen: availability unknown, or a mass error other
+than the over-draw error (which already states the figure). The cue is wet
+only; this is the one exception to "Dry figures are data", and the dry balance
+stays on the bin's View sheet and in the product composition.
+
 Do not add a switch to a short form or a surface already served by an effective
 accordion or history dialog. Verify narrow header layout, radio keyboard
 operation, scope resets, field preservation, and clean-versus-dirty closing

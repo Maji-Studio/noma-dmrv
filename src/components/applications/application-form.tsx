@@ -51,7 +51,7 @@ import type { FieldPositionMode } from "./field-position-field";
 import {
   applicationKgToTons,
   applicationTonsToKg,
-  formatApplicationDeliveryHelperText,
+  applicationStockCues,
   formatApplicationDeliveryOptionLabel,
   resolveApplicationPositionDefault,
   resolveApplicationSoilTemperatureDefault,
@@ -351,6 +351,13 @@ export function ApplicationForm({
     errors.biocharAppliedTons?.message ??
     applicationStockError ??
     routedServerError.inlineError;
+  const stockCues = applicationStockCues({
+    delivery: selectedDelivery,
+    availableKg,
+    isEditMode,
+    massError: biocharAppliedError,
+    overdrawError: applicationStockError,
+  });
 
   const handleFormSubmit = handleSubmit(async (data) => {
     if (applicationStockError) return;
@@ -435,11 +442,7 @@ export function ApplicationForm({
             label="Delivery"
             error={errors.deliveryId?.message}
             required
-            cue={
-              selectedDelivery
-                ? formatApplicationDeliveryHelperText(selectedDelivery)
-                : undefined
-            }
+            cue={stockCues.deliveryCue}
             helperText="Choose a delivery by order, formulation, and kg."
           >
             <FormSelect
@@ -463,11 +466,7 @@ export function ApplicationForm({
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             certifyStatus={certStatus("biocharAppliedTons")}
             hint="As-received mass at delivery, water included."
-            cue={
-              availableKg !== null
-                ? `${formatStockLimitKg(availableKg)} available from this delivery`
-                : undefined
-            }
+            cue={stockCues.appliedMassCue}
           >
             <FormInput
               id="biocharAppliedTons"

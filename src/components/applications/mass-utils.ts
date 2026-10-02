@@ -6,6 +6,10 @@ import { formatRemainingMass } from "@/components/forms/entity-select/remaining-
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import {
+  formatStockLimitKg,
+  pickerShowsRemainingStock,
+} from "@/lib/stock-overdraw";
 
 /** The only source a delivery-derived prefill can assert (approved global dataset). */
 export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
@@ -169,6 +173,48 @@ export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliver
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
   });
+}
+
+export interface ApplicationStockCues {
+  /** Below the delivery picker: the delivery's remaining stock, only while the applied mass cue is hidden. */
+  deliveryCue: string | undefined;
+  /** Below the applied mass: what this application may draw. */
+  appliedMassCue: string | undefined;
+}
+
+/**
+ * The stock figure the application form shows. The applied mass cue states
+ * what this application may draw (on edit it adds back this application's own
+ * draw), so the delivery's Remaining now line only returns while that cue is
+ * hidden: availability unknown, or an applied mass error in its place.
+ */
+export function applicationStockCues({
+  delivery,
+  availableKg,
+  isEditMode,
+  massError,
+  overdrawError,
+}: {
+  delivery: ApplicationDeliveryOption | undefined;
+  availableKg: number | null;
+  isEditMode: boolean;
+  /** The error the applied mass field shows; it hides the cue. */
+  massError?: string;
+  /** The over-draw error, which states the available figure itself. */
+  overdrawError?: string;
+}): ApplicationStockCues {
+  const showDeliveryCue =
+    delivery !== undefined &&
+    pickerShowsRemainingStock({ availableKg, massError, overdrawError });
+  return {
+    deliveryCue: showDeliveryCue
+      ? formatApplicationDeliveryHelperText(delivery)
+      : undefined,
+    appliedMassCue:
+      availableKg !== null
+        ? `${formatStockLimitKg(availableKg)} available ${isEditMode ? "to this application" : "from this delivery"}`
+        : undefined,
+  };
 }
 
 export function formatApplicationKgFromTons(value: number | null | undefined): string {
