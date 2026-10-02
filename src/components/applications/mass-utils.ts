@@ -6,6 +6,7 @@ import { formatRemainingMass } from "@/components/forms/entity-select/remaining-
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 import { MISSING_VALUE } from "@/lib/copy-utils";
+import { formatStockLimitKg } from "@/lib/stock-overdraw";
 
 /** The only source a delivery-derived prefill can assert (approved global dataset). */
 export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
@@ -169,6 +170,39 @@ export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliver
     wetKg: remainingWetKg,
     dryKg: remainingDryKg,
   });
+}
+
+export interface ApplicationStockCues {
+  /** Below the delivery picker: the delivery's remaining stock. */
+  deliveryCue: string | undefined;
+  /** Below the applied mass: what this application may draw. */
+  appliedMassCue: string | undefined;
+}
+
+/**
+ * The stock figures the application form shows. On edit the applied mass cue
+ * already counts this application's own draw, so the delivery's Remaining now
+ * line would be a second, near-identical figure: edit shows one figure only.
+ */
+export function applicationStockCues({
+  delivery,
+  availableKg,
+  isEditMode,
+}: {
+  delivery: ApplicationDeliveryOption | undefined;
+  availableKg: number | null;
+  isEditMode: boolean;
+}): ApplicationStockCues {
+  return {
+    deliveryCue:
+      delivery && !isEditMode
+        ? formatApplicationDeliveryHelperText(delivery)
+        : undefined,
+    appliedMassCue:
+      availableKg !== null
+        ? `${formatStockLimitKg(availableKg)} available ${isEditMode ? "to this application" : "from this delivery"}`
+        : undefined,
+  };
 }
 
 export function formatApplicationKgFromTons(value: number | null | undefined): string {

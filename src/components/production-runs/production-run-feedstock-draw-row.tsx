@@ -120,6 +120,10 @@ export function ProductionRunFeedstockDrawRow({
               (id) => id !== storageLocationId,
             )}
             autoSelectSingle={false}
+            // On edit the wet mass cue states what is available to this run
+            // (the bin's stock plus this run's own draw); the bin's own
+            // Remaining now line would be a second, near-identical figure.
+            showRemainingMass={!productionRunId}
             trailingActions={<StorageBinActions storageLocationId={storageLocationId} />}
           />
         </FormField>

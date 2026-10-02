@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { ApplicationDeliveryOption } from "./mass-utils";
 import {
+  applicationStockCues,
   formatApplicationDeliveryHelperText,
   formatApplicationDeliveryOptionLabel,
   getApplicationDeliveryMassLabel,
@@ -68,6 +69,49 @@ describe("application delivery option mass", () => {
     expect(formatApplicationDeliveryHelperText(option)).toBe(
       "Remaining now: 800 kg wet, 775 kg dry biochar",
     );
+  });
+});
+
+describe("application stock cues", () => {
+  it("shows the delivery's remaining stock and what it offers on create", () => {
+    expect(
+      applicationStockCues({
+        delivery: delivery({ alreadyAppliedWetKg: 50, alreadyAppliedDryKg: 45 }),
+        availableKg: 800,
+        isEditMode: false,
+      }),
+    ).toEqual({
+      deliveryCue: "Remaining now: 800 kg wet, 775 kg dry biochar",
+      appliedMassCue: "800 kg available from this delivery",
+    });
+  });
+
+  it("shows one figure on edit: what is available to this application", () => {
+    // 1,000 kg delivered, this application already holds 400 kg of it.
+    expect(
+      applicationStockCues({
+        delivery: delivery({
+          deliveredWetMassKg: 1_000,
+          alreadyAppliedWetKg: 400,
+          alreadyAppliedDryKg: 180,
+        }),
+        availableKg: 1_000,
+        isEditMode: true,
+      }),
+    ).toEqual({
+      deliveryCue: undefined,
+      appliedMassCue: "1,000 kg available to this application",
+    });
+  });
+
+  it("gives no cues before a delivery is chosen", () => {
+    expect(
+      applicationStockCues({
+        delivery: undefined,
+        availableKg: null,
+        isEditMode: false,
+      }),
+    ).toEqual({ deliveryCue: undefined, appliedMassCue: undefined });
   });
 });
 
