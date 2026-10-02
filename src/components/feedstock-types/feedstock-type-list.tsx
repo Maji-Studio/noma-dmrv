@@ -25,6 +25,7 @@ import {
   EmptyState,
   PageHeader,
   RowActionsMenu,
+  SplitButton,
 } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -410,18 +411,27 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         subtitle="Organization-wide catalogue for pyrolysis feedstocks and blend materials"
         actions={
           canManage ? (
-            <div className="flex flex-wrap gap-12">
-              {hasRegistryConnection && (
-                <Button variant="default" onClick={() => setImportOpen(true)}>
-                  <SealCheckIcon size={20} weight="bold" />
-                  Import from Isometric
-                </Button>
-              )}
+            hasRegistryConnection ? (
+              <SplitButton
+                onClick={openCreate}
+                menuLabel="More ways to add a feedstock type"
+                items={[
+                  {
+                    label: "Import from Isometric",
+                    icon: <SealCheckIcon size={20} weight="bold" />,
+                    onSelect: () => setImportOpen(true),
+                  },
+                ]}
+              >
+                <PlusIcon size={20} weight="bold" />
+                New feedstock type
+              </SplitButton>
+            ) : (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
                 New feedstock type
               </Button>
-            </div>
+            )
           ) : undefined
         }
       />
