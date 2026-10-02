@@ -4,7 +4,7 @@
 // The card is the shared record card (../record-card.js): the record's station drawing, a line and what it
 // holds. The drawings load once the explorer first comes into view; a card opened before its drawing
 // arrives is rebuilt when it does.
-import { drawGraph, highlight, STAGES } from "../../../visuals/core.js";
+import { drawGraph, highlight, STAGES } from "../../../data/core.js";
 import { onFirstView, reducedMotion } from "../motion.js";
 import { recordCard } from "../record-card.js";
 import { STATION_LINES, loadContour, contourNode } from "../contours/index.js";
