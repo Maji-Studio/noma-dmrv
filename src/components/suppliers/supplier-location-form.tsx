@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useController, useForm } from "react-hook-form";
 import { ONE_WAY_EACH_DELIVERY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -84,8 +84,6 @@ export function SupplierLocationForm({
     control,
     register,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(supplierLocationFormSchema),
@@ -95,11 +93,30 @@ export function SupplierLocationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update location" : "Add location";
 
-  // Preprocessed Zod fields have `unknown` input types — narrow the watches.
-  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
-  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
-  const distanceFromFacilityKm = watch("distanceFromFacilityKm") as number | null | undefined;
-  const distanceSource = watch("distanceSource");
+  // Preprocessed Zod fields have `unknown` input types — narrow the values.
+  const { field: gpsLatitudeField } = useController({
+    control,
+    name: "gpsLatitude",
+  });
+  const { field: gpsLongitudeField } = useController({
+    control,
+    name: "gpsLongitude",
+  });
+  const { field: distanceFromFacilityField } = useController({
+    control,
+    name: "distanceFromFacilityKm",
+  });
+  const { field: distanceSourceField } = useController({
+    control,
+    name: "distanceSource",
+  });
+  const gpsLatitude = gpsLatitudeField.value as number | null | undefined;
+  const gpsLongitude = gpsLongitudeField.value as number | null | undefined;
+  const distanceFromFacilityKm = distanceFromFacilityField.value as
+    | number
+    | null
+    | undefined;
+  const distanceSource = distanceSourceField.value;
   const nameId = fieldId(idPrefix, "name");
   const countryId = fieldId(idPrefix, "country");
   const stateRegionId = idPrefix
@@ -227,8 +244,8 @@ export function SupplierLocationForm({
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
           onPositionChange={({ lat, lng }) => {
-            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
-            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
+            gpsLatitudeField.onChange(lat ?? undefined);
+            gpsLongitudeField.onChange(lng ?? undefined);
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}
@@ -253,11 +270,8 @@ export function SupplierLocationForm({
             onDistanceChange={(km, source) => {
               // `null` is the explicit clear; `undefined` would read as
               // "field omitted" and leave the stored distance in place.
-              setValue("distanceFromFacilityKm", km, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              setValue("distanceSource", source, { shouldDirty: true });
+              distanceFromFacilityField.onChange(km);
+              distanceSourceField.onChange(source);
             }}
             origin={locationPoint}
             destination={facilityPoint}

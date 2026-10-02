@@ -148,6 +148,10 @@ gpsLongitude: z.preprocess(toNumberOrNull, longitudeSchema),
 
 Range checks alone are not enough: a half-filled pair otherwise validates. Attach `.superRefine(gpsPairSuperRefine)` to any schema carrying `gpsLatitude` / `gpsLongitude` — it points the error at the coordinate still missing. Reference usage: `src/schemas/customers.ts`.
 
+### Distance and other derived-with-provenance fields
+
+A value that is either typed or derived (a `DistanceCalcField` distance and its `distanceSource`) is wired with `useController`, one per field, and written through `field.onChange(...)`. Do not use `watch` / `useWatch` plus `setValue` for it. The controller keeps the displayed value, dirty state and validation on one path, so a map estimate (`map_estimate`) and a hand edit (`manual`) cannot drift apart. Reference: `src/components/customers/customer-location-fields.tsx`; the supplier location and transport leg forms follow it.
+
 ### Cross-field error revalidation
 
 Every React Hook Form that uses a schema with `.refine()` or `.superRefine()`
