@@ -78,6 +78,7 @@ Shared across all projects in `~/.claude/model-selection.md` (imported by the gl
 - **Where a new file goes** (flat feature folders, global-vs-feature, docs hygiene) → `docs/organization.md`.
 - **Traceability** (DAG | Map | Sankey, Trail; credit-batch anchored) → `docs/traceability.md`.
 - **File uploads / object storage** → `docs/storage.md`.
+- **Marketing site** (`site/`, standalone Astro package, port 3120, two Vercel projects, domains, env) → `docs/site.md`.
 - **Auth email not arriving** (Resend both-or-neither, local fallback) → `docs/mail-setup.md`.
 - **Stuck on a known gotcha** → `docs/troubleshooting.md`.
 - **Library version drift vs training data** (Drizzle callback, Zod 4, async `params`; Cache Components are NOT enabled) → `docs/modern-patterns.md`.

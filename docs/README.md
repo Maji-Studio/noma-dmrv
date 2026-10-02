@@ -13,6 +13,7 @@ QA report.
   [modern library patterns](./modern-patterns.md)
 - [Traceability](./traceability.md), [schema overview](./schema-overview.md),
   [design system](./design-system.md), and [UX writing](./ux-writing.md)
+- [Marketing site](./site.md) (`site/`, its Vercel projects and domains)
 - [Architecture decisions](./adr/)
 
 ## Active work and unresolved decisions
