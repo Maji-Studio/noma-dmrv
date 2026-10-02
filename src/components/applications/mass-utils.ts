@@ -173,16 +173,17 @@ export function formatApplicationDeliveryHelperText(delivery: ApplicationDeliver
 }
 
 export interface ApplicationStockCues {
-  /** Below the delivery picker: the delivery's remaining stock. */
+  /** Below the delivery picker: the delivery's remaining stock, only when availability is unknown. */
   deliveryCue: string | undefined;
   /** Below the applied mass: what this application may draw. */
   appliedMassCue: string | undefined;
 }
 
 /**
- * The stock figures the application form shows. On edit the applied mass cue
- * already counts this application's own draw, so the delivery's Remaining now
- * line would be a second, near-identical figure: edit shows one figure only.
+ * The stock figure the application form shows. When the applied mass cue
+ * states what this application may draw (on edit it adds back this
+ * application's own draw), the delivery's Remaining now line would be a
+ * second, near-identical figure, so it only shows when availability is unknown.
  */
 export function applicationStockCues({
   delivery,
@@ -193,15 +194,15 @@ export function applicationStockCues({
   availableKg: number | null;
   isEditMode: boolean;
 }): ApplicationStockCues {
+  if (availableKg !== null) {
+    return {
+      deliveryCue: undefined,
+      appliedMassCue: `${formatStockLimitKg(availableKg)} available ${isEditMode ? "to this application" : "from this delivery"}`,
+    };
+  }
   return {
-    deliveryCue:
-      delivery && !isEditMode
-        ? formatApplicationDeliveryHelperText(delivery)
-        : undefined,
-    appliedMassCue:
-      availableKg !== null
-        ? `${formatStockLimitKg(availableKg)} available ${isEditMode ? "to this application" : "from this delivery"}`
-        : undefined,
+    deliveryCue: delivery ? formatApplicationDeliveryHelperText(delivery) : undefined,
+    appliedMassCue: undefined,
   };
 }
 

@@ -25,7 +25,7 @@ vi.mock("@/hooks/use-entities", () => ({
   }),
 }));
 
-const availability = vi.hoisted(() => ({ availableKg: 1_000 }));
+const availability = vi.hoisted(() => ({ availableKg: 1_000 as number | null }));
 vi.mock("@/hooks/use-stock-availability", () => ({
   useStockAvailability: () => ({ data: availability }),
 }));
@@ -61,12 +61,20 @@ function render(productionRunId?: string): string {
 }
 
 describe("ProductionRunFeedstockDrawRow stock figure", () => {
-  it("shows the bin's remaining stock and its availability on create", () => {
+  it("shows one figure on create: what is available in this bin", () => {
     availability.availableKg = 1_000;
     const html = render();
 
-    expect(html).toContain("Remaining now: 1,000 kg wet, 800 kg dry feedstock");
     expect(html).toContain("1,000 kg available in this bin");
+    expect(html).not.toContain("Remaining now");
+  });
+
+  it("falls back to the bin's remaining stock when availability is unknown", () => {
+    availability.availableKg = null;
+    const html = render();
+
+    expect(html).toContain("Remaining now: 1,000 kg wet, 800 kg dry feedstock");
+    expect(html).not.toContain("available in this bin");
   });
 
   it("shows one figure on edit: what is available to this run", () => {

@@ -86,9 +86,9 @@ export interface EntitySelectProps {
   /** Hide the search input entirely */
   hideSearch?: boolean;
   /**
-   * Whether the selected option's remaining-mass caption shows at all. An
-   * edit form that states its own "available to this record" figure turns it
-   * off, so the field carries one stock figure, not two near-identical ones.
+   * Whether the selected option's remaining-mass caption shows at all. A form
+   * that states its own availability cue ("N kg available in this bin") turns
+   * it off, so the field carries one stock figure, not two near-identical ones.
    */
   showRemainingMass?: boolean;
   /** Whether the selected option's remaining-mass caption includes dry mass. */

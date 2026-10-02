@@ -73,7 +73,7 @@ describe("application delivery option mass", () => {
 });
 
 describe("application stock cues", () => {
-  it("shows the delivery's remaining stock and what it offers on create", () => {
+  it("shows one figure on create: what is available from this delivery", () => {
     expect(
       applicationStockCues({
         delivery: delivery({ alreadyAppliedWetKg: 50, alreadyAppliedDryKg: 45 }),
@@ -81,8 +81,21 @@ describe("application stock cues", () => {
         isEditMode: false,
       }),
     ).toEqual({
-      deliveryCue: "Remaining now: 800 kg wet, 775 kg dry biochar",
+      deliveryCue: undefined,
       appliedMassCue: "800 kg available from this delivery",
+    });
+  });
+
+  it("falls back to the delivery's remaining stock when availability is unknown", () => {
+    expect(
+      applicationStockCues({
+        delivery: delivery({ deliveredWetMassKg: null }),
+        availableKg: null,
+        isEditMode: false,
+      }),
+    ).toEqual({
+      deliveryCue: "Remaining now: wet not recorded, 820 kg dry biochar",
+      appliedMassCue: undefined,
     });
   });
 
