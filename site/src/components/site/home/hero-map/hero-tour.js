@@ -1,4 +1,4 @@
-// Home hero: the map at rest under the copy; "Follow one delivery" enters a scroll tour down the chain.
+// Home hero: the map at rest under the copy; "Follow one journey" enters a scroll tour down the chain.
 // At rest the map traces one field; hover, focus or activate a site to explore another.
 // On tour, each step card that reaches the middle of the viewport moves the camera to its stop. The
 // tour ends with "Exit tour", Escape, "Back to the map", or by scrolling past the hero.

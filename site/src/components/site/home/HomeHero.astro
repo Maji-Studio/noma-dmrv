@@ -1,7 +1,7 @@
 ---
 /**
  * HomeHero: the headline on a framed panel over a map of one illustrative operation (a port of the app's
- * traceability Map tab). "Follow one delivery" enters a scroll tour down the chain: the map pins in a
+ * traceability Map tab). "Follow one journey" (in the copy panel) enters a scroll tour down the chain: the map pins in a
  * sticky layer and each step card that crosses the middle of the viewport moves the camera to its stop,
  * closing in on the plant for production, storage and product. Each stop card carries its station's line
  * drawing (ContourArt, the same drawings as TraceStage), plotted in when the card becomes active; the map's
@@ -12,7 +12,6 @@
  * content: without JS every card shows under the hero. No props.
  */
 import Button from "../Button.astro";
-import TextLink from "../TextLink.astro";
 import ContourArt from "../contours/ContourArt.astro";
 import { STOPS } from "./hero-map/data.js";
 import "./home.css";
@@ -29,13 +28,12 @@ const pad = (n) => String(n).padStart(2, "0");
           <p class="t-lead">See where it came from, what happened during production, and where it went.</p>
           <div class="actions">
             <Button href="/get-started">Book a walkthrough</Button>
-            <TextLink href="/product">See the product</TextLink>
+            <button type="button" class="home-hero-tour" data-tour-open>
+              <span class="home-hero-play" aria-hidden="true"></span>
+              <span>Follow one journey</span>
+            </button>
           </div>
         </div>
-        <button type="button" class="home-hero-tour" data-tour-open>
-          <span class="home-hero-play" aria-hidden="true"></span>
-          <span>Follow one delivery</span>
-        </button>
       </div>
       {STOPS.map((s, i) => (
         <div class="home-hero-step" data-step>

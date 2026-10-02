@@ -69,14 +69,15 @@
 .home-hero-steps { position: relative; z-index: 2; pointer-events: none; }
 .home-hero-step { min-height: var(--hero-step); display: grid; align-items: center; padding-block: var(--space-8); }
 .home-hero-step:last-child { min-height: 100svh; }
-.home-hero-step--rest { min-height: calc(100svh - var(--header-h)); grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--space-6); padding-bottom: var(--space-9); }
+.home-hero-step--rest { min-height: calc(100svh - var(--header-h)); align-items: start; padding-bottom: var(--space-9); }
 .home-hero-panel, .home-hero-card, .home-hero-tour { pointer-events: auto; }
 .home-hero-panel { width: min(var(--hero-panel-w), 100%); display: grid; gap: var(--space-5); padding: var(--space-7) var(--space-7) var(--space-6); background: color-mix(in srgb, var(--page) 94%, transparent); border: var(--hairline) solid var(--rule); backdrop-filter: blur(6px); }
 .home-hero-panel h1 { font-size: var(--fs-hero); line-height: var(--lh-display); letter-spacing: var(--track-display); }
 
-.home-hero-tour { display: inline-flex; align-items: center; gap: var(--space-4); min-height: var(--btn-h); padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3); border: var(--hairline) solid var(--cta); background: var(--paper); color: var(--ink); text-align: left; cursor: pointer; transition: background var(--dur-fast); }
-.home-hero-tour:hover { background: var(--band-purple); }
-.home-hero-tour { font-size: var(--fs-ui); }
+/* the secondary action beside "Book a walkthrough": a play square and a link-coloured label */
+.home-hero-tour { display: inline-flex; align-items: center; gap: var(--space-3); min-height: var(--btn-h); padding: 0; border: 0; background: none; color: var(--link); font-size: var(--fs-ui); text-align: left; cursor: pointer; }
+.home-hero-tour > span:last-child { text-decoration: underline; text-decoration-color: var(--link-rule); text-underline-offset: 0.3em; }
+.home-hero-tour:hover > span:last-child { text-decoration-color: currentColor; }
 .home-hero-exit { position: absolute; top: var(--space-5); right: calc(var(--gutter) + var(--space-5)); z-index: 3; min-height: var(--tap); padding: 0 var(--space-4); border: var(--hairline) solid var(--rule-strong); background: var(--paper); font-size: var(--fs-small); color: var(--link); cursor: pointer; }
 .home-hero-exit:hover { background: var(--band-purple); }
 .home-hero-card h2:focus { outline: none; }
