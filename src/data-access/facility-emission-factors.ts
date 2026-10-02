@@ -6,7 +6,7 @@
  * write it guards. No row reads as null, which the page shows as "no factors
  * set" and answers with activity units only.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities, facilityEmissionFactors } from "@/db/schema";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
@@ -66,13 +66,20 @@ export async function upsertFacilityEmissionFactors(
 
   return db.transaction(async (tx) => {
     // The facility row lock serializes saves for the facility, including two
-    // first saves when no factors row exists yet to lock (issue #768 pattern).
+    // first saves when no factors row exists yet to lock (issue #768 pattern),
+    // and refuses an archived facility (docs/database.md, Soft Delete).
     const [facility] = await tx
       .select({ id: facilities.id })
       .from(facilities)
-      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .where(
+        and(
+          eq(facilities.id, facilityId),
+          eq(facilities.organizationId, ctx.organizationId),
+          isNull(facilities.archivedAt),
+        ),
+      )
       .for("no key update");
-    if (!facility) throw new SafeError("Facility not found");
+    if (!facility) throw new SafeError("Facility not found or archived");
 
     const [existing] = await tx
       .select({ updatedAt: facilityEmissionFactors.updatedAt })

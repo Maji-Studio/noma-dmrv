@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  facilities,
   facilityEmissionFactors,
   feedstocks,
   productionRunFeedstocks,
@@ -219,6 +220,21 @@ describe.sequential("facility emission factors", () => {
     await expect(
       upsertFacilityEmissionFactors(foreign, { facilityId: fixture.facility.id, ...FACTORS }),
     ).rejects.toThrow();
+  });
+
+  it("refuses a save for an archived facility", async () => {
+    await db.update(facilities).set({ archivedAt: new Date() }).where(eq(facilities.id, fixture.facility.id));
+    try {
+      await expect(
+        upsertFacilityEmissionFactors(fixture.ctx, {
+          facilityId: fixture.facility.id,
+          ...FACTORS,
+          expectedUpdatedAt: null,
+        }),
+      ).rejects.toThrow("Facility was not found or is archived.");
+    } finally {
+      await db.update(facilities).set({ archivedAt: null }).where(eq(facilities.id, fixture.facility.id));
+    }
   });
 
   it("refuses a member below Admin", async () => {
