@@ -1,0 +1,34 @@
+---
+/**
+ * PROTOTYPE V2 "Spec sheet": a two-column comparison where everything that is the same spans both
+ * columns. The page is mostly shared rows; only how it is run splits.
+ */
+const ROWS = [
+  { label: "Code", same: "noma, open source under MIT" },
+  { label: "Database", same: "PostgreSQL" },
+  { label: "Your records", same: "Yours. Your team decides who sees them." },
+  { label: "Who runs it", self: "Your team or your IT partner", hosted: "We do" },
+  { label: "Cost", self: "Free", hosted: "A hosting plan" },
+  { label: "Setup", self: "Install from GitHub", hosted: "Nothing to install" },
+  { label: "Updates", self: "You choose when", hosted: "We install them" },
+];
+---
+<figure class="o2">
+  <table class="o2-table">
+    <caption class="sr-only">Your servers compared with our hosting</caption>
+    <colgroup><col class="o2-label" /><col /><col /></colgroup>
+    <thead>
+      <tr><td></td><th scope="col">Your servers</th><th scope="col" class="o2-hosted">Our hosting</th></tr>
+    </thead>
+    <tbody>
+      {ROWS.map((r) => (
+        <tr class:list={[r.same && "is-same"]}>
+          <th scope="row">{r.label}</th>
+          {r.same
+            ? <td colspan="2"><span>{r.same}</span><span class="op-same">Same</span></td>
+            : <><td>{r.self}</td><td class="o2-hosted">{r.hosted}</td></>}
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</figure>

@@ -1,0 +1,12 @@
+---
+// PROTOTYPE ONLY. The two layers every variant draws: the app over its database. Reuses .own-layer.
+const { compact = false } = Astro.props;
+---
+<div class:list={["own-layer own-layer--app", compact && "op-compact"]}>
+  <svg viewBox="0 0 16 16" focusable="false" aria-hidden="true"><path d="M2 3h12v10H2z M2 6h12" /><circle cx="4" cy="4.5" r=".6" /><circle cx="5.8" cy="4.5" r=".6" /></svg>
+  <span>noma</span><span class="own-tag">MIT</span>
+</div>
+<div class:list={["own-layer own-layer--data", compact && "op-compact"]}>
+  <svg viewBox="0 0 16 16" focusable="false" aria-hidden="true"><ellipse cx="8" cy="3.5" rx="5.5" ry="2" /><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9 M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2" /></svg>
+  <span>Your records</span><span class="own-tag">PostgreSQL</span>
+</div>

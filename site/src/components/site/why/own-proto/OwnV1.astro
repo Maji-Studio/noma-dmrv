@@ -1,0 +1,39 @@
+---
+/**
+ * PROTOTYPE V1 "Flip the switch": one picture and a two-way switch. Flipping it changes only the frame
+ * (who runs it) and the rows that differ; the app and the records never move. Pure CSS (:has), no JS.
+ */
+import Layers from "./Layers.astro";
+const ROWS = [
+  { label: "Who runs it", self: "Your team", hosted: "We do" },
+  { label: "Cost", self: "Free", hosted: "A hosting plan" },
+  { label: "Updates", self: "You install them", hosted: "We install them" },
+  { label: "Backups", self: "Your setup", hosted: "We run them" },
+  { label: "Your records", same: "Yours" },
+  { label: "The code", same: "Open source, MIT" },
+];
+---
+<figure class="o1">
+  <fieldset class="o1-pick">
+    <legend class="sr-only">Where noma runs</legend>
+    <label><input type="radio" name="o1-host" value="self" checked /><span>Your servers</span></label>
+    <label><input type="radio" name="o1-host" value="hosted" /><span>Our hosting</span></label>
+  </fieldset>
+  <div class="o1-host">
+    <p class="o1-host-head">
+      <span class="o1-self">Your servers</span><span class="o1-hosted">Our hosting</span>
+      <span class="own-who"><span class="o1-self">You run it</span><span class="o1-hosted">We run it for you</span></span>
+    </p>
+    <div class="o1-stack"><Layers /></div>
+  </div>
+  <dl class="o1-rows">
+    {ROWS.map((r) => (
+      <div class:list={["o1-row", r.same && "is-same"]}>
+        <dt>{r.label}</dt>
+        {r.same
+          ? <dd>{r.same}<span class="op-same">Same either way</span></dd>
+          : <dd><span class="o1-self">{r.self}</span><span class="o1-hosted">{r.hosted}</span></dd>}
+      </div>
+    ))}
+  </dl>
+</figure>

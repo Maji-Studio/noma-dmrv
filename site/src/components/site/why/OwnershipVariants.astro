@@ -1,0 +1,28 @@
+---
+/**
+ * PROTOTYPE (2026-10-02): the principle 4 proof in five takes, switchable with ?own=0..4 and the floating
+ * bar. 0 is the current OwnershipProof. Question: what proves "your data stays yours" better than two
+ * identical boxes? Variants live in ./own-proto/; throw away the losers once Kenji picks.
+ */
+import PrototypeSwitcher from "../../PrototypeSwitcher.astro";
+import OwnershipProof from "./OwnershipProof.astro";
+import OwnV1 from "./own-proto/OwnV1.astro";
+import OwnV2 from "./own-proto/OwnV2.astro";
+import OwnV3 from "./own-proto/OwnV3.astro";
+import OwnV4 from "./own-proto/OwnV4.astro";
+import "./own-proto/own-proto.css";
+const VARIANTS = [
+  { key: "0", name: "Current" },
+  { key: "1", name: "Flip the switch" },
+  { key: "2", name: "Spec sheet" },
+  { key: "3", name: "Move either way" },
+  { key: "4", name: "One stack, two grounds" },
+];
+---
+<div data-own-variant="0"><OwnershipProof /></div>
+<div data-own-variant="1" hidden><OwnV1 /></div>
+<div data-own-variant="2" hidden><OwnV2 /></div>
+<div data-own-variant="3" hidden><OwnV3 /></div>
+<div data-own-variant="4" hidden><OwnV4 /></div>
+<PrototypeSwitcher variants={VARIANTS} />
+<script>import "./own-proto/switch.js";</script>

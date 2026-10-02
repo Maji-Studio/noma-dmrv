@@ -1,0 +1,27 @@
+---
+/**
+ * PROTOTYPE V3 "Move either way": the two places side by side and one noma (app plus records) that sits in
+ * one of them. The button moves it across; the empty place keeps a dashed outline. Without JS it sits on
+ * our hosting and the caption carries the point.
+ */
+import Layers from "./Layers.astro";
+---
+<figure class="o3" data-o3 data-at="hosted">
+  <div class="o3-places" aria-hidden="true">
+    <div class="o3-place o3-place--hosted"><p class="o3-name">Our hosting<span class="own-who">We run it for you</span></p></div>
+    <div class="o3-place o3-place--self"><p class="o3-name">Your servers<span class="own-who">You run it</span></p></div>
+    <div class="o3-noma"><Layers /></div>
+  </div>
+  <figcaption class="o3-foot">
+    <p>Start on our hosting and move to your own servers later, or the other way. Your records move as one PostgreSQL export.</p>
+    <button type="button" class="btn btn--secondary btn--sm o3-move" data-o3-move>
+      <span class="o3-to-self">Move to your servers →</span><span class="o3-to-hosted">← Move to our hosting</span>
+    </button>
+  </figcaption>
+</figure>
+<script>
+  document.querySelectorAll("[data-o3]").forEach((fig) => {
+    const btn = fig.querySelector("[data-o3-move]");
+    btn?.addEventListener("click", () => { fig.dataset.at = fig.dataset.at === "hosted" ? "self" : "hosted"; });
+  });
+</script>

@@ -11,7 +11,7 @@ import WhyIntro from "../components/site/why/WhyIntro.astro";
 import Principle from "../components/site/why/Principle.astro";
 import EvidenceProof from "../components/site/why/EvidenceProof.astro";
 import MathExcerpt from "../components/site/why/MathExcerpt.astro";
-import OwnershipProof from "../components/site/why/OwnershipProof.astro";
+import OwnershipVariants from "../components/site/why/OwnershipVariants.astro";
 import Mafinga from "../components/site/why/Mafinga.astro";
 import CompareStage from "../components/site/why/CompareStage.astro";
 
@@ -40,7 +40,7 @@ const [, P2, P3, P4, P5] = WHY_PRINCIPLES;
     text="Run noma on your own servers, or let us host it for you. It is the same open-source code either way, and your records stay yours.">
     <Button slot="action" href={GITHUB_URL} variant="secondary" external>View on GitHub</Button>
     <Button slot="action" href="/get-started">Book a walkthrough</Button>
-    <OwnershipProof />
+    <OwnershipVariants />
   </Principle>
 
   <Principle id={P5.id} n={5} title={`${P5.label}.`} wide
