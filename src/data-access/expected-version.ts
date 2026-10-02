@@ -43,7 +43,15 @@ export function assertExpectedVersion({
   if (!expectedUpdatedAt) return;
   if (expectedUpdatedAt.getTime() === actualUpdatedAt.getTime()) return;
 
-  throw new ActionConflictError(STALE_VERSION_MESSAGE, {
+  throw staleVersionConflict(entity, id);
+}
+
+/**
+ * The refusal itself, for an upsert whose form loaded no row: a row that
+ * appeared since is just as stale as one whose version moved on.
+ */
+export function staleVersionConflict(entity: string, id: string): ActionConflictError {
+  return new ActionConflictError(STALE_VERSION_MESSAGE, {
     entity,
     id,
     code: STALE_VERSION_CONFLICT_CODE,

@@ -36,6 +36,16 @@
   backtick and object-key mirrors outside comments. Persisting component
   assignments by template-component ID is #893; the binding editor is #894.
 
+## 2026-10-01: Energy page drops the submission preview and shows estimates
+
+- `/energy` no longer previews the grid electricity and diesel values a
+  Removal submits; the Removal flow already shows what is submitted. The
+  page now estimates CO₂e per record from per-facility emission factors
+  (`facility_emission_factors`, [ADR 0031](../adr/0031-operator-energy-estimates.md)).
+- Display only. No binding, datapoint or submitted value changed, and the
+  estimate factors never reach the registry; Isometric applies the factors on
+  its template ([ADR 0018](../adr/0018-isometric-owns-project-emissions.md)).
+
 ## 2026-10-01: Field registry tuples and transport categories come from the catalog
 
 - `CERTIFY_FIELD_REGISTRY` (`src/lib/certification/certify-field-registry.ts`)

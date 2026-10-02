@@ -38,6 +38,7 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
+import { DELIVERY_DEEP_LINK_PARAM } from "@/lib/delivery-links";
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
@@ -207,7 +208,7 @@ export function DeliveryList() {
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
   const [focusedDeliveryId, setFocusedDeliveryId] = useQueryState(
-    "delivery",
+    DELIVERY_DEEP_LINK_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [deepLinkMode, setDeepLinkMode] = useQueryState(

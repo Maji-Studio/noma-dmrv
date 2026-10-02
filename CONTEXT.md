@@ -54,6 +54,21 @@ A per-facility configured value (genset yield, default soil
 temperature) used to derive submission data noma does not
 measure directly. Distinct from a measured value.
 
+**Emission factor**:
+kg CO₂e per unit of recorded activity (litre of diesel, kWh of grid
+electricity, tonne-km of road freight), set per facility by an Owner or
+Admin. Activity times factor is the estimated CO₂e the Energy page shows.
+Display only: it never reaches a submission, where Isometric applies the
+**fixed constants** on its template (ADR 0031).
+_Avoid_: carbon intensity (the registry's word for its template factor),
+emission estimate (a submission input, above).
+
+**Missing reading**:
+An energy or transport value the operator did not record: a null run
+reading, a feedstock without a loaded transport leg, a delivery without a
+distance or delivered mass. Counted and shown, never read as zero, so
+totals over records with missing readings are a floor.
+
 ### Materials & formulation
 
 **Feedstock type**:

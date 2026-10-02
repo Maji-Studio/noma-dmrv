@@ -30,6 +30,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Bin movements (ledger) | `src/db/schema/bin-movements.ts` |
 | Documents (polymorphic evidence store) | `src/db/schema/documentation.ts` |
 | Organization operating defaults | `src/db/schema/settings.ts` |
+| Facility emission factors (Energy page estimates) | `src/db/schema/emission-factors.ts` |
 | Route cache | `src/db/schema/geo.ts` |
 | Shared enums / shared numeric column types | `src/db/schema/common.ts` · `src/db/schema/numeric-families.ts` |
 
@@ -45,7 +46,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
   that omits organization scope is wrong. See [ADR
   0010](./adr/0010-shared-schema-org-column-tenancy.md) and
   [`organization.md`](./organization.md).
-- **Numeric columns are shared families**, not raw `numeric(p,s)`: use `massKg`, `tonnes`, `ppm`, `fraction`, `percent` from `src/db/schema/numeric-families.ts`. Never hand-roll precision.
+- **Numeric columns are shared families**, not raw `numeric(p,s)`: use `massKg`, `tonnes`, `ppm`, `fraction`, `percent`, `emissionFactor` from `src/db/schema/numeric-families.ts`. Never hand-roll precision.
 - **`bin_movements` is append-only.** Rows are never UPDATEd or DELETEd — correct a mistake with a compensating signed movement. Movements never mutate `biochar_storage_inventory`; derived stock overlays their signed sum. See [ADR 0012](./adr/0012-bin-capability-from-held-feedstock-type.md). Every operator command that writes it (output posts, feedstock losses) carries a client-generated `idempotency_key`, unique per organization: a resubmit replays the saved row and a key reused with different values is refused.
 - **A production run belongs to at most one credit batch** — `credit_batch_production_runs` has composite PK `(credit_batch_id, production_run_id)` plus a unique on `production_run_id` alone. See [ADR 0014](./adr/0014-credit-batch-as-production-cohort.md), [ADR 0020](./adr/0020-production-emissions-front-loaded-per-credit-batch.md).
 - **Some rules live only in raw SQL**, not in Drizzle. Read the migration chain when a schema invariant is unclear; the current Method-B model deliberately has no sample-floor trigger because eligibility is a live read.
@@ -68,6 +69,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
   all management paths remain org-scoped.
 - **`certifier_organization_settings` holds provider policy above the facility scope.** Its Source visibility value is unique per `(organization_id, provider)`, defaults to private when the row is absent, and applies only to newly mirrored registry Sources.
 - **`organization_settings` holds operating defaults that seed forms, never protocol constants.** One row per organization (unique on `organization_id`); every column is NOT NULL with a default mirroring the literal it replaced, and the read falls back to `DEFAULT_ORGANIZATION_SETTINGS` (`src/config/organization-settings.ts`) when no row exists, so consumers never see null. Changing a default never rewrites a saved record. Protocol-derived thresholds stay constants — a settings row that could move the H:C eligibility ceiling or the Method-B sample floor would let an operator weaken a certification gate from a form.
+- **`facility_emission_factors` holds display-only estimate factors**, one row per facility (unique on `facility_id`, composite FK to `facilities(id, organization_id)`): kg CO₂e per litre of diesel, per kWh of grid electricity and per tonne-km of road freight, plus a source note. All three are NOT NULL, so a row is complete or absent; no row means the Energy page shows activity only. They feed no submission; Isometric applies its own template factors ([ADR 0031](./adr/0031-operator-energy-estimates.md), [ADR 0018](./adr/0018-isometric-owns-project-emissions.md)).
 - **Soft delete** via nullable `archived_at` on `facilities` and its operational descendants — see [`database.md`](./database.md) → "Soft Delete — Facility Archive".
 - **All domain enums** are in `src/db/schema/common.ts` — read the file, not a sample.
 

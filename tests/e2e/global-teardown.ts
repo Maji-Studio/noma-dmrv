@@ -569,6 +569,18 @@ export default async function globalTeardown() {
         )
       `);
 
+      // ─── Facility emission factors (FK to facilities) ───
+      await client.query(`
+        DELETE FROM facility_emission_factors
+        WHERE facility_id IN (
+          SELECT id FROM facilities
+          WHERE code LIKE 'E2E-%'
+             OR name LIKE 'UI %'
+             OR name LIKE 'Chain %'
+             OR name LIKE 'Duplicate Test %'
+        )
+      `);
+
       // ─── Facilities ───
       await client.query(`
         DELETE FROM facilities
