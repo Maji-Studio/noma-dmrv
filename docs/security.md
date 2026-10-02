@@ -295,6 +295,11 @@ omit registry credentials.
 - **Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the
   only packages permitted to run install scripts.
 - **Dependabot (security-only)** — `.github/dependabot.yml` sets
-  `open-pull-requests-limit: 0`, disabling routine version bumps; only
-  security-fix PRs open. Severity filtering lives in repo Settings → Advanced
-  Security auto-triage rules, not in `dependabot.yml`.
+  `open-pull-requests-limit: 0` for the app (`/`) and the marketing site
+  (`/site`), disabling routine version bumps; only security-fix PRs open.
+  Severity filtering lives in repo Settings → Advanced Security auto-triage
+  rules. The one per-package rule in `dependabot.yml` ignores `maplibre-gl`
+  major versions, which break the map worker under Turbopack; see
+  [`maps/maplibre-v6`](./open-questions-toolchain.md#maplibre-gl-v6-upgrade-mapsmaplibre-v6-opened-2026-10-02).
+  A security fix that exists only in a new major is never merged on green CI
+  alone: read the changelog and check the Vercel preview first.
