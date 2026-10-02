@@ -148,10 +148,6 @@ gpsLongitude: z.preprocess(toNumberOrNull, longitudeSchema),
 
 Range checks alone are not enough: a half-filled pair otherwise validates. Attach `.superRefine(gpsPairSuperRefine)` to any schema carrying `gpsLatitude` / `gpsLongitude` — it points the error at the coordinate still missing. Reference usage: `src/schemas/customers.ts`.
 
-### Distance and other derived-with-provenance fields
-
-A value that is either typed or derived (a `DistanceCalcField` distance and its `distanceSource`) is wired with `useController`, one per field, and written through `field.onChange(...)`. Do not use `watch` / `useWatch` plus `setValue` for it. The controller keeps the displayed value, dirty state and validation on one path, so a map estimate (`map_estimate`) and a hand edit (`manual`) cannot drift apart. Reference: `src/components/customers/customer-location-fields.tsx`; the supplier location and transport leg forms follow it.
-
 ### Cross-field error revalidation
 
 Every React Hook Form that uses a schema with `.refine()` or `.superRefine()`
@@ -220,7 +216,7 @@ All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — r
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
 - **`ChoiceCardGroup`**, **`SegmentedControl`** — native-radio choice controls, spread `{...register(name)}` like `FormSelect`. When to use which, and the sizing and a11y contract: [design-system.md](./design-system.md#choice-controls--srccomponentsforms). Evidence method is the card reference (`application-evidence-panel.tsx`), loss / count the segmented one (`bin-reconcile-sheet.tsx`).
 - **`MassMoistureFields`** — the canonical wet-mass + moisture pair for an unmixed material, with the live `MoistureSplit` bar spanning both. It owns the labels, wet-basis hint, range helper, and derived readout. A blended biochar product is the exception: pair standalone `WetMassField` and `MoistureField` controls with `ProductCompositionPreview`, because finished-product moisture does not split tracked dry biochar from ingredients and water. The standalone fields also cover lab samples with no paired mass and bin stock-takes whose counted mass is recorded separately. Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify canonical labels, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
-- **`DistanceCalcField`** — derived transport-leg distance.
+- **`DistanceCalcField`** — derived transport-leg distance. It and similar derived-with-provenance fields (distance plus `distanceSource`) are wired with `useController`, one per field, written through `field.onChange(...)`; never `watch` / `useWatch` plus `setValue`. Pass `null` to clear, not `undefined`: `useController` falls back to the default value on `undefined`, so a cleared saved value reappears. A provenance select bound to a controller field spreads `{...field}` instead of `register`, as `transport-leg-form.tsx` does. Reference: `src/components/customers/customer-location-fields.tsx`.
 - **`PositionPicker`** (+ `PositionValue`, `PickerAccent`) — lat/lng entry.
 - **`FormFileUpload`** — see [File upload](#file-upload).
 

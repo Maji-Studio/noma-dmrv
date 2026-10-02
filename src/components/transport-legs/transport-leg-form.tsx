@@ -240,7 +240,7 @@ export function TransportLegForm({
             distanceKm={distanceKm}
             distanceSource={distanceSource}
             onDistanceChange={(km, source) => {
-              distanceKmField.onChange(km ?? undefined);
+              distanceKmField.onChange(km);
               // CALC always claims map_estimate; a hand edit only degrades a
               // map estimate — an explicit manual or legacy document value survives.
               const nextSource = nextTransportDistanceSource(source, distanceSource);
