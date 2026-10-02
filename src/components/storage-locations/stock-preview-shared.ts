@@ -101,12 +101,15 @@ export function dryingNotice(preview: Preview, enteredWetKg: number | null): str
     : null;
 }
 
+const OUTPUT_WET_STOCK_HINT = "Wet stock is the wet mass added less the wet mass taken out, at the moisture the bin already had.";
+
 /** The definition the block cannot show as a number. Kept to one hint. */
 export function stockCardHint(preview: Preview): string {
   if (preview.lane === "ingredient") {
     return "Wet stock is the recorded intake less tracked withdrawals. The moisture entered here describes this withdrawal only.";
   }
-  return preview.removedDryKg === 0
-    ? "Dry biochar is the tracked quantity, and drying alone does not change it. Wet stock is an estimate from each batch's latest moisture reading."
-    : "Dry biochar is the tracked quantity. Wet stock is an estimate from each batch's latest moisture reading, and the reading entered here updates the batch it was taken from.";
+  if (preview.removedDryKg === 0) return `Dry biochar is the tracked quantity, and drying alone does not change it. ${OUTPUT_WET_STOCK_HINT}`;
+  return preview.removedWetKg === null
+    ? "Dry biochar is the tracked quantity. A count sets the wet stock and moisture of everything it weighed."
+    : `${OUTPUT_WET_STOCK_HINT} The moisture entered here sets the dry biochar this removal takes, and dry biochar limits what can leave.`;
 }

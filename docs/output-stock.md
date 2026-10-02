@@ -2,8 +2,12 @@
 
 Biochar bins hold layers from completed production runs. Product bins hold layers
 from products placed in that bin. Stock accounting follows dry biochar and frozen
-source-run shares. Recorded wet masses remain historical measurements; a current
-wet estimate always needs an explicit moisture basis.
+source-run shares. Wet stock is wet mass added less wet mass taken out, per
+layer, from the latest count on (`estimateStock` in
+`src/lib/output-stock/moisture-estimate.ts`). A removal's moisture fixes its dry
+draw only and never changes the bin's moisture; only a count does. Dry biochar
+alone blocks a draw, so wet stock can still show once dried biochar has none
+left.
 
 ## Physical order and mass basis
 
@@ -64,8 +68,9 @@ proportion to its remaining solids (`planOutputStock(…, 'pro_rata')`). The
 draw's exact dry, rounded half up to the gram, is apportioned as whole grams
 across layers; every layer but the largest takes the solids of its grams, and
 the largest takes the rest of the measured solids (floored to the microgram), so
-no layer rounds on its own. One moisture reading resets the whole pile: it is
-saved on every layer present (`planReadings(…, 'pro_rata')`).
+no layer rounds on its own. A removal takes its wet mass from the pile and
+leaves its moisture as it was; a count's reading is saved on every layer
+present (`planReadings`).
 
 The mode is timed. Switching a split bin to mix posts a `merge` movement at
 "Merged at", which must be later than the bin's last recorded movement; switching

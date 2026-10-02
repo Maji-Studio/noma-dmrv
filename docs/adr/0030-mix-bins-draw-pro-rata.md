@@ -8,7 +8,7 @@ Some yards keep biochar or product as one well-mixed pile rather than separate b
 
 - Stock mode is a property of the output bin, chosen at creation (default Split). Split to Mix is a timed merge event that changes no posted allocation. Mix to Split requires an empty bin, because a mixed pile can't be separated back into batches.
 - Every removal from a mix bin (delivery, loss, count difference, product-creation draw) takes each eligible layer in proportion to its remaining solids at the removal's time. Allocations, run shares, gram closure and saved-history rules are ADR 0029's.
-- The pile has one estimated moisture. A measured reading sets it: wet estimate = solids ÷ (1 − reading). An addition adds its own recorded wet mass and solids. A pro-rata removal leaves it unchanged. Dry biochar never moves with moisture.
+- The pile has one estimated moisture. A count sets it, with wet stock = solids ÷ (1 − reading). An addition adds its own recorded wet mass and solids. A removal subtracts the wet mass it took and leaves the moisture unchanged (amended 2026-10-02, see [ADR 0029](./0029-output-bin-stock-is-dry-biochar-drawn-fifo.md)). Dry biochar never moves with moisture.
 - Every removal carries a measured moisture reading (required, never prefilled). The estimate is shown as a hint and triggers an advisory warning beyond a configured gap.
 - Event order within a day matters, so output stock events carry date and time. An entry timed before an already-posted removal leaves that removal's saved shares unchanged; the operator is warned which removals were calculated without it.
 - The UI shows the pile as one box; batch shares stay in the ledger and in Detailed views.

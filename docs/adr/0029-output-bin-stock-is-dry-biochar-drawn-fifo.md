@@ -1,6 +1,14 @@
 # Output bin stock is dry biochar per layer, drawn first-in first-out
 
-**Status: Accepted** (2026-09-14; implemented in [#759](https://github.com/Maji-Studio/noma-dmrv/pull/759); amended 2026-09-28, see below). [Design and examples](../plans/2026-09-14-fifo-bin-accounting.md).
+**Status: Accepted** (2026-09-14; implemented in [#759](https://github.com/Maji-Studio/noma-dmrv/pull/759); amended 2026-09-28 and 2026-10-02, see below). [Design and examples](../plans/2026-09-14-fifo-bin-accounting.md).
+
+## Amendment (2026-10-02): removals keep the bin's moisture
+
+Agreed with Kenji. Where this conflicts with the 2026-09-28 amendment, this wins.
+
+- **Wet stock is wet in minus wet out.** Each layer starts from the wet mass it was added with, or from the latest count, and every later removal (delivery, loss, product creation) subtracts the wet mass it took. 500 kg wet less a 300 kg removal leaves 200 kg, whatever moisture the removal was measured at.
+- **Removal readings never reset moisture.** A removal's measured moisture fixes the dry biochar it takes and nothing else; the remaining layer keeps the moisture it was added with. Only a count, which weighs the whole bin, sets wet stock and moisture again. Replaces "Readings reset moisture" below.
+- **Dry biochar is the limit.** When removals were drier than the bin (the biochar dried in storage), dry biochar runs out while some wet stock still shows; the draw is blocked all the same. A layer with no dry biochar left shows no wet stock. When removals were wetter, wet stock reaches zero first and is shown as zero while dry biochar remains drawable.
 
 ## Amendment (2026-09-28) — split bins, moisture readings, mix bins
 
@@ -8,7 +16,7 @@ Agreed with Kenji in the [split and mix bins plan](../plans/2026-09-28-split-and
 
 - **Stock mode.** Output bins are Split (default, today's behaviour) or Mix. Mix bins draw pro-rata under [ADR 0030](./0030-mix-bins-draw-pro-rata.md).
 - **Split bins are physical.** Layers are physically separate sub-bins. For delivery, loss and product-creation draws, the operator ticks sub-bins and sets the order they were emptied; oldest first is only the default. Each sub-bin in the draw has its own measured moisture, with one load weight: every sub-bin except the last is emptied at its reading, and the last takes the rest. Insufficient stock still blocks the whole action. Counts stay whole-bin. A correction starts from the saved sub-bins, order and readings and may change them (amended 2026-09-29).
-- **Readings reset moisture.** Replaces "Departure readings do not update the remaining pile's moisture or wet estimate". A measured reading now sets the estimated moisture, and so the wet estimate, of the sub-bin or mix pile it describes. It's shown before and after in the preview and logged as its own history row. Dry biochar is unaffected.
+- **Readings reset moisture.** *Superseded 2026-10-02 for removals: only a count resets; see above.* Replaces "Departure readings do not update the remaining pile's moisture or wet estimate". A measured reading now sets the estimated moisture, and so the wet estimate, of the sub-bin or mix pile it describes. It's shown before and after in the preview and logged as its own history row. Dry biochar is unaffected.
 - **No prefilled moisture.** Replaces the ingredient-moisture prefill. Every moisture field in stock forms (delivery, loss, count, product creation, ingredients) is required and starts empty. The current estimate is shown as a hint, and a reading that differs from it by more than a configured margin raises an advisory warning. Ingredient snapshots record a measured value.
 - **Time.** Layer placement and stock events carry date and time; FIFO order and eligibility compare instants.
 
