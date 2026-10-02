@@ -2,7 +2,7 @@
  * Energy attribution (ADR 0031): turns what operators recorded into activity
  * and estimated kg CO2e per record, and into dated flows for the facility.
  *
- * Rules (docs/plans/2026-10-01-energy-page.md, "Sources and attribution"):
+ * Rules (docs/archive/plans/2026-10-01-energy-page.md, "Sources and attribution"):
  *
  * - kg CO2e = activity x factor. Grid electricity takes the run's low-carbon
  *   share off first. A null reading is a missing reading, never zero.

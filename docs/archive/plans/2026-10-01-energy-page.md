@@ -1,8 +1,8 @@
 # Energy page: list and flow over a period
 
 - **Owner:** Kenji Nguyen
-- **Status:** approved, implemented on `feat/energy-list-flow`
-- **Last reviewed:** 2026-10-01
+- **Status:** implemented and archived 2026-10-02 (PR #898)
+- **Last reviewed:** 2026-10-02
 
 ## Why
 
