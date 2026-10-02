@@ -178,7 +178,7 @@ Size tokens live in `src/app/globals.css`; the classes live in
 `src/styles/typography.css`. Size → class ladder:
 
 - **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase): page-level eyebrows only, never labels, table headers or controls
-- **14px:** `.body-small`, `.label-button` (secondary text, buttons)
+- **14px:** `.body-small`, `.label-button` (secondary text, buttons). `.label-button` is mono uppercase everywhere it is used, including link buttons and choice option titles; keep it that way (Kenji, 2026-10-01). The sidebar group labels stay mono caps for the same reason.
 - **16px:** `.body-medium` (default body)
 - **18px:** `.body-large`, `.label-input`
 - **20px:** `.body-lead`
