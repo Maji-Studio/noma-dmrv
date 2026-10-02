@@ -62,8 +62,14 @@ Two Vercel projects build from this one repository:
 
 | Project | Root directory | Skips a build when |
 | --- | --- | --- |
-| `noma-dmrv` (app) | repo root | nothing outside `site/` changed since the last successful deployment (`ignoreCommand` in the root `vercel.json`) |
-| `noma-site` (site) | `site` | the branch has no `site/` folder (Ignored Build Step `test ! -d site`, run from the repo root, set in the project settings) |
+| `noma-dmrv` (app) | repo root | nothing outside `site/` changed since the last successful deployment |
+| `noma-site` (site) | repo root (`cd site` in its build and install commands) | nothing in `site/` or `src/styles/fonts/` changed since the last successful deployment |
+
+Both projects read the root `vercel.json`, whose `ignoreCommand` runs
+`scripts/vercel-ignore-build.sh` and overrides any Ignored Build Step set in the
+dashboard. The script picks the rule by `VERCEL_PROJECT_ID` and builds whenever it
+cannot tell: an unknown project, no previous deployment, or a previous commit
+outside Vercel's shallow clone (a branch that merged in many staging commits).
 
 | Environment | App | Site |
 | --- | --- | --- |
@@ -71,11 +77,14 @@ Two Vercel projects build from this one repository:
 | Production (planned) | `app.noma.maji.studio` | `noma.maji.studio` |
 
 Domain and project settings changes are made in the Vercel dashboard by the
-owner; the repository only carries the app's `vercel.json`.
+owner; the repository carries `vercel.json` and the ignore script.
 
 ## Code Quoted on the Site
 
-`/why` quotes `deriveMassDryKg` from `src/lib/calculations/mass-dry.ts` with
-its line numbers (`site/src/components/site/why/MathExcerpt.astro`).
-`tests/site-math-excerpt.test.ts` fails when the function or its position
-changes; update `CODE` and `FIRST_LINE` in the excerpt to match.
+`/why` quotes four calculations verbatim with their line numbers and a worked
+example each: `deriveMassDryKg`, `countedRoundTripKm`, `computeFDurable200` and
+`computeCo2eStoredTonnes`. The quotes live in
+`site/src/components/site/why/math-excerpts.json` (shown by `MathExcerpt.astro`).
+`tests/site-math-excerpt.test.ts` fails when a quoted function or its position
+changes, or when an example's figure no longer matches what the function returns;
+update `lines` and `firstLine` (or the example) in the JSON to match.
