@@ -38,6 +38,26 @@ export function formatStockMinimumKg(kg: number): string {
   return formatNonNegativeTenthKg(safeMinimumKg);
 }
 
+/**
+ * Whether a source picker shows its own "Remaining now" line. The mass field's
+ * availability cue ("N kg available in this bin") is the one stock figure, but
+ * the field hides its cue behind any error, so the picker line returns then.
+ * An over-draw error states the available figure itself, so it keeps the
+ * picker line hidden.
+ */
+export function pickerShowsRemainingStock({
+  availableKg,
+  massError,
+  overdrawError,
+}: {
+  availableKg: number | null | undefined;
+  massError?: string;
+  overdrawError?: string;
+}): boolean {
+  if (availableKg == null) return true;
+  return Boolean(massError) && massError !== overdrawError;
+}
+
 /** Compact field feedback; detailed reconciliation guidance belongs nearby. */
 export function binStockOverdrawInlineMessage(
   material: StockMaterial,

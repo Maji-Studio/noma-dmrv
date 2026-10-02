@@ -118,6 +118,7 @@ export function EntitySelect({
   autoSelectSingle = false,
   alwaysShowSearch = false,
   hideSearch = false,
+  showRemainingMass = true,
   showRemainingDryMass = true,
   formatSelectedLabel,
   emptyHint,
@@ -192,13 +193,15 @@ export function EntitySelect({
   // Identity remains detail-first, but stock is derived data: use whichever
   // query most recently succeeded. dataUpdatedAt intentionally survives a
   // failed refetch, so retained detail data cannot mask a fresher list result.
-  const remainingMass = selectFreshRemainingMass({
-    listedOption,
-    listDataUpdatedAt,
-    selectedEntity,
-    detailDataUpdatedAt,
-    value,
-  });
+  const remainingMass = showRemainingMass
+    ? selectFreshRemainingMass({
+        listedOption,
+        listDataUpdatedAt,
+        selectedEntity,
+        detailDataUpdatedAt,
+        value,
+      })
+    : undefined;
   // The trigger's aria-label names the field, which hides its content from
   // the accessible name. The selected label can carry the stock change
   // ("(−100 kg wet)"), so it is announced as the first description instead.

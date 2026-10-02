@@ -220,6 +220,31 @@ describe("EntitySelect selected-value display", () => {
     expect(html).not.toContain("dry mass");
   });
 
+  it("leaves the remaining stock caption to the form when it shows its own figure", () => {
+    entityState.selected = {
+      id: "bin-1",
+      code: "BIN-01",
+      name: "North feedstock bin",
+      remainingMass: { wetKg: 1_000, dryKg: 800 },
+    };
+    entityState.selectedPending = false;
+
+    const html = renderToStaticMarkup(
+      <EntitySelect
+        entityType="storageLocation"
+        value="bin-1"
+        onChange={() => undefined}
+        aria-describedby="field-helper"
+        showRemainingMass={false}
+      />,
+    );
+
+    expect(html).toContain("North feedstock bin");
+    expect(html).not.toContain("Remaining now");
+    // The caption is gone, so the control must not point at it.
+    expect(html).not.toContain("-remaining-mass");
+  });
+
   it("uses list stock when its successful query is fresher while keeping the detail label", () => {
     entityState.options = [
       {
