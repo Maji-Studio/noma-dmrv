@@ -82,10 +82,21 @@ vi.mock("@/components/ui", () => ({
     </header>
   ),
   RowActionsMenu: () => null,
-  SplitButton: ({ children, menuLabel }: { children?: ReactNode; menuLabel: string }) => (
+  SplitButton: ({
+    children,
+    menuLabel,
+    items,
+  }: {
+    children?: ReactNode;
+    menuLabel: string;
+    items: Array<{ label: string }>;
+  }) => (
     <div>
       <button>{children}</button>
       <button aria-label={menuLabel} />
+      {items.map((item) => (
+        <span key={item.label}>{item.label}</span>
+      ))}
     </div>
   ),
 }));
@@ -153,6 +164,7 @@ describe("FeedstockTypeList", () => {
 
     // The import item lives inside the closed split-button menu.
     expect(html).toContain('aria-label="More ways to add a feedstock type"');
+    expect(html).toContain("Import from Isometric");
     expect(html).toContain("New feedstock type");
   });
 
@@ -162,6 +174,7 @@ describe("FeedstockTypeList", () => {
       const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
       expect(html).not.toContain("More ways to add a feedstock type");
+      expect(html).not.toContain("Import from Isometric");
       expect(html).toContain("New feedstock type");
     } finally {
       certifier.mapping = { id: "mapping-1" };
@@ -172,6 +185,7 @@ describe("FeedstockTypeList", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage={false} />);
 
     expect(html).not.toContain("More ways to add a feedstock type");
+    expect(html).not.toContain("Import from Isometric");
     expect(html).not.toContain("New feedstock type");
   });
 

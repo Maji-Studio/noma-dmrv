@@ -48,7 +48,7 @@ function SplitButton({
             <Button
               variant={variant}
               aria-label={menuLabel}
-              className="w-[40px] px-0 border-l border-l-[var(--paper)]"
+              className="min-w-44 px-0 border-l border-l-[var(--paper)]"
             />
           }
         >
