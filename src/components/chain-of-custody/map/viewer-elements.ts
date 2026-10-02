@@ -2,9 +2,11 @@
  * DOM factories for the Carbon Viewer's MapLibre-managed elements — site
  * markers, distance chips, and popup cards. Built with createElement +
  * textContent only (codes, supplier names, and field identifiers are user
- * data — never injected as HTML). Styled by carbon-viewer.css.
+ * data — never injected as HTML). Styled by carbon-viewer.css, imported here
+ * so every surface that builds these elements gets their styles.
  */
 
+import "./carbon-viewer.css";
 import { formatLegDistanceCompactKm, formatLegDistanceKm } from "@/lib/format-utils";
 import { STATUS_STATE_BADGE_CLASSES, getStatusState } from "@/lib/status-state";
 import { statusLabels } from "@/components/ui/status-badge";

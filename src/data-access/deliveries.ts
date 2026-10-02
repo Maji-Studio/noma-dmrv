@@ -28,6 +28,13 @@ export interface DeliveryWithRelations extends Delivery {
   orderCode: string | null;
   facilityName: string | null;
   customerName: string | null;
+  /** Delivery's own customer location, else the order's: where the goods went. */
+  destinationName: string | null;
+  /** Route ends for the transport map: the facility, then the destination. */
+  facilityGpsLatitude: number | null;
+  facilityGpsLongitude: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   biocharProductCode: string | null;
   driverName: string | null;
   vehicleName: string | null;
@@ -49,6 +56,12 @@ export interface DeliveryDetail extends Delivery {
   effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
   transportEvidenceDocumentCount: number;
   customerName: string | null;
+  destinationName: string | null;
+  /** Route ends for the transport map: the facility, then the destination. */
+  facilityGpsLatitude: number | null;
+  facilityGpsLongitude: number | null;
+  destinationGpsLatitude: number | null;
+  destinationGpsLongitude: number | null;
   order: {
     id: string;
     code: string;
@@ -264,6 +277,11 @@ export async function getDeliveries(
       orderCode: orders.code,
       facilityName: facilities.name,
       customerName: customers.name,
+      destinationName: customerLocations.name,
+      facilityGpsLatitude: facilities.gpsLatitude,
+      facilityGpsLongitude: facilities.gpsLongitude,
+      destinationGpsLatitude: customerLocations.gpsLatitude,
+      destinationGpsLongitude: customerLocations.gpsLongitude,
       biocharProductCode: biocharProducts.code,
       driverName: drivers.name,
       vehicleName: vehicles.name,
@@ -324,6 +342,11 @@ export async function getDeliveryWithRelations(
       orderDate: orders.orderDate,
       orderQuantityKg: orders.quantityKg,
       customerName: customers.name,
+      destinationName: customerLocations.name,
+      facilityGpsLatitude: facilities.gpsLatitude,
+      facilityGpsLongitude: facilities.gpsLongitude,
+      destinationGpsLatitude: customerLocations.gpsLatitude,
+      destinationGpsLongitude: customerLocations.gpsLongitude,
       facilityCode: facilities.code,
       facilityName: facilities.name,
       biocharProductCode: biocharProducts.code,
@@ -389,6 +412,11 @@ export async function getDeliveryWithRelations(
     transportEvidenceDocumentCount:
       deliveryRow.transportEvidenceDocumentCount,
     customerName: deliveryRow.customerName,
+    destinationName: deliveryRow.destinationName,
+    facilityGpsLatitude: deliveryRow.facilityGpsLatitude,
+    facilityGpsLongitude: deliveryRow.facilityGpsLongitude,
+    destinationGpsLatitude: deliveryRow.destinationGpsLatitude,
+    destinationGpsLongitude: deliveryRow.destinationGpsLongitude,
     order: deliveryRow.orderId
       ? {
           id: deliveryRow.orderId,

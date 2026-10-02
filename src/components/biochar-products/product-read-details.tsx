@@ -10,14 +10,14 @@
  *
  * The composition is the form's `ProductCompositionPreview` fed the saved
  * parts, so one split rule serves both. Both detail levels show every saved
- * field, the dry figures as a secondary line under each wet mass, the
- * composition picture and the derived transport legs. Detailed adds only the
- * ledger and arithmetic behind Show calculation. Masses read at save precision.
+ * field, the dry figures as a secondary line under each wet mass and the
+ * composition picture. Detailed adds only the ledger and arithmetic behind
+ * Show calculation. Masses read at save precision. No transport here: goods
+ * move on deliveries, so the route reads on each delivery.
  */
 "use client";
 
 import { DerivedHeadline } from "@/components/forms/derived-headline";
-import { TransportLegsSummary } from "@/components/transport-legs";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 import { ProductCompositionPreview } from "@/components/ui/product-composition-preview";
@@ -56,8 +56,6 @@ const DERIVED_BASIS =
   "No source allocation was saved with this product, so dry biochar comes from its saved wet mass and moisture.";
 const INGREDIENT_BASIS =
   "Ingredient dry solids come from the snapshot saved with the product, not from today's bin moisture.";
-const TRANSPORT_EMPTY =
-  "Transport legs are derived from this product's deliveries. Record a delivery to a destination with a distance from the facility.";
 
 export function formatSavedMassKg(mass: number | null | undefined): string {
   return formatMassKg(mass, { digits: MASS_KG_STORAGE_DECIMALS });
@@ -166,11 +164,6 @@ export function productSheetSections(product: BiocharProductWithRelations, timeZ
       title: "Product",
       fields: [{ label: "Product bin", value: product.storageLocation?.name }],
       content: <SavedProductComposition product={product} composition={composition} />,
-    },
-    {
-      title: "Derived transport",
-      fields: [],
-      content: <TransportLegsSummary entityType="biochar" entityId={product.id} emptyMessage={TRANSPORT_EMPTY} />,
     },
   ];
 }

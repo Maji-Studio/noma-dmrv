@@ -5,7 +5,6 @@ import { FormDetailControl, FormDetailProvider } from "@/components/forms/form-d
 import { EntitySideSheetSections } from "@/components/ui/entity-side-sheet";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 
-vi.mock("@/components/transport-legs", () => ({ TransportLegsSummary: () => <span>Transport legs</span> }));
 vi.mock("@/components/ui/entity-detail-value", () => ({ EntityDetailValue: () => <span>Manure store</span> }));
 vi.mock("@/components/ui/tooltip", () => ({
   InfoHint: ({ children, label }: { children: ReactNode; label: string }) => <span aria-label={label}>{children}</span>,
@@ -81,8 +80,8 @@ describe("Product read view levels", () => {
     // Dry figures are data: a secondary line under each wet mass.
     expect(simple).toContain("Source biochar wet mass (kg) 250 kg Dry biochar 200 kg");
     expect(simple).toContain("Chicken manure wet mass (kg) 100 kg Dry solids 80 kg");
-    expect(simple).toContain("Derived transport");
-    expect(simple).toContain("Transport legs");
+    // Goods move on deliveries, so transport reads there, not on the product.
+    expect(simple).not.toMatch(/transport/i);
     for (const hidden of ["% of total", "Show calculation"]) {
       expect(simple).not.toContain(hidden);
     }

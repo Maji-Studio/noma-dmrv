@@ -51,7 +51,7 @@ import {
   LEGS_HIT_LAYER_ID,
   LEGS_SOURCE_ID,
   POPUP_OFFSET_PX,
-  POPUP_WIDTH_PX,
+  POPUP_MAX_WIDTH_PX,
   SAT_LAYER_ID,
   SAT_SOURCE_ID,
   type ViewerMarkerKind,
@@ -304,7 +304,7 @@ export default function CarbonTransitMap({
       closeButton: false,
       offset: POPUP_OFFSET_PX,
       className: "cvm-pop",
-      maxWidth: `${POPUP_WIDTH_PX + 8}px`,
+      maxWidth: `${POPUP_MAX_WIDTH_PX}px`,
     });
 
     map.once("load", () => {

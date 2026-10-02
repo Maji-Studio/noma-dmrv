@@ -20,24 +20,38 @@ const location: CustomerLocationDetailsLocation = {
 const facility = { name: "Moshi plant", gpsLatitude: null, gpsLongitude: null };
 
 describe("CustomerLocationDetails", () => {
-  it("does not repeat the selected location name in its header", () => {
+  it("names the delivery location by its address, not by repeating its name in the header", () => {
     const html = renderToStaticMarkup(<CustomerLocationDetails location={location} facility={facility} />);
-    expect(html).toContain("Delivery location");
-    expect(html).not.toContain("North field");
+    const header = html.slice(0, html.indexOf("Plot 12, Kilolo road"));
+
+    expect(header).toContain("Delivery location");
+    expect(header).not.toContain("North field");
   });
 
-  it("names the distance source in sentence case, in parentheses", () => {
-    const html = renderToStaticMarkup(<CustomerLocationDetails location={location} facility={facility} />);
-    expect(html).toContain("25 km from Moshi plant (route calculation)");
-    expect(html).not.toContain(" · ");
-    expect(html).not.toContain("uppercase");
+  it("draws the delivery route from the facility at the stored one-way distance", () => {
+    const rendered = renderToStaticMarkup(<CustomerLocationDetails location={location} facility={facility} />)
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ");
+
+    expect(rendered).toContain("Moshi plant");
+    expect(rendered).toContain("North field");
+    expect(rendered).toContain("Road · 25 km one way");
+    expect(rendered).toContain("50 km round trip");
+    expect(rendered).toContain("Route calculation");
   });
 
-  it("drops the source when no distance is recorded", () => {
+  it("carries no load and no CERT chip before any goods move", () => {
+    const html = renderToStaticMarkup(<CustomerLocationDetails location={location} facility={facility} />);
+
+    expect(html).not.toContain(" load");
+    expect(html).not.toContain("data-cert-field=");
+  });
+
+  it("says when no distance from the facility is recorded", () => {
     const html = renderToStaticMarkup(
       <CustomerLocationDetails location={{ ...location, distanceFromFacilityKm: null }} facility={facility} />,
     );
-    expect(html).toContain("Distance from facility not recorded");
-    expect(html).not.toContain("(route calculation)");
+    expect(html).toContain("Distance from facility not recorded.");
+    expect(html).not.toContain("Route calculation");
   });
 });

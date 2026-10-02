@@ -1,20 +1,20 @@
 import type { RouteGeometry } from "@/lib/geo/types";
 
-export interface CustomerLocationMapPoint {
+export interface RoutePoint {
   lat: number;
   lng: number;
 }
 
-export type CustomerLocationRoutePreviewState =
+export type RouteLineState =
   | "loading"
   | "road"
   | "fallback";
 
-interface CustomerLocationRoutePreview {
+interface RouteLine {
   coordinates: [number, number][];
   boundsCoordinates: [number, number][];
   routed: boolean;
-  state: CustomerLocationRoutePreviewState;
+  state: RouteLineState;
 }
 
 /**
@@ -22,11 +22,11 @@ interface CustomerLocationRoutePreview {
  * Undefined means routing is unresolved; null means routing resolved without
  * geometry. Both draw the endpoint connector, but remain distinct for copy.
  */
-export function resolveCustomerLocationRoutePreview(
-  facility: CustomerLocationMapPoint,
-  destination: CustomerLocationMapPoint,
+export function resolveRouteLine(
+  facility: RoutePoint,
+  destination: RoutePoint,
   routeGeometry: RouteGeometry | null | undefined
-): CustomerLocationRoutePreview {
+): RouteLine {
   const endpointCoordinates: [number, number][] = [
     [facility.lng, facility.lat],
     [destination.lng, destination.lat],
