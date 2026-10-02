@@ -8,7 +8,9 @@
  *   share off first. A null reading is a missing reading, never zero.
  * - Feedstock transport is 2 x one-way km x load tonnes per leg, and is split
  *   across the runs that drew the feedstock by wet mass drawn. What no run
- *   drew stays with the feedstock and reaches no credit batch.
+ *   drew stays with the feedstock and reaches no credit batch. The factor is
+ *   road freight, so a feedstock with a rail, ship, pipeline or air leg counts
+ *   as a missing reading rather than an estimate at road intensity.
  * - Biochar delivery is 2 x effective km x delivered wet tonnes, split across
  *   the delivery's source runs by dry mass.
  * - A delivery or application carries the production energy of the biochar
@@ -111,11 +113,15 @@ function runReadings(
   };
 }
 
-/** Round-trip tonne-km of a set of legs; null when any load is unknown. */
+/**
+ * Round-trip tonne-km of a set of road legs; null when any load is unknown or
+ * any leg is not by road, since only road freight has a factor.
+ */
 function legsTonneKm(feedstock: EnergyFeedstockInput): number | null {
   if (feedstock.legs.length === 0) return null;
   let tonneKm = 0;
   for (const leg of feedstock.legs) {
+    if (leg.method !== "road") return null;
     if (leg.loadMassKg == null || leg.loadMassKg <= 0) return null;
     tonneKm += countedRoundTripKm(leg.distanceKm) * kgToTonnes(leg.loadMassKg);
   }

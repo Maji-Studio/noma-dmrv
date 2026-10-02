@@ -104,7 +104,7 @@ describe.sequential("energy read", () => {
         id: feedstockId,
         day: "2026-09-01",
         wetMassKg: FEEDSTOCK_WET_KG,
-        legs: [{ distanceKm: LEG_KM, loadMassKg: FEEDSTOCK_WET_KG }],
+        legs: [{ distanceKm: LEG_KM, loadMassKg: FEEDSTOCK_WET_KG, method: "road" }],
       }),
     ]);
     expect(inputs.feedstockDraws).toEqual([

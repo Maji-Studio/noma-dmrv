@@ -91,7 +91,7 @@ describe("buildEnergyBreakdown", () => {
       inputs({
         runs: [run({ id: "a" })],
         feedstocks: [
-          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000 }] },
+          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
         ],
         feedstockDraws: [{ runId: "a", feedstockId: "f", wetMassKg: 2000 }],
         deliveries: [
@@ -106,6 +106,34 @@ describe("buildEnergyBreakdown", () => {
     expect(record(breakdown.records, "d").footprint.kg?.biocharTransport).toBeCloseTo(5);
   });
 
+  it("counts a feedstock with a non-road leg as missing instead of pricing it as road freight", () => {
+    const breakdown = buildEnergyBreakdown(
+      inputs({
+        runs: [run({ id: "a" })],
+        feedstocks: [
+          {
+            id: "f",
+            code: "FS-1",
+            day: "2026-09-01",
+            wetMassKg: 2000,
+            legs: [
+              { distanceKm: 10, loadMassKg: 2000, method: "road" },
+              { distanceKm: 300, loadMassKg: 2000, method: "rail" },
+            ],
+          },
+        ],
+        feedstockDraws: [{ runId: "a", feedstockId: "f", wetMassKg: 2000 }],
+      }),
+      FACTORS,
+      ALL_TIME,
+    );
+    const a = record(breakdown.records, "a").footprint;
+    expect(a.activity.feedstockTransport).toBe(0);
+    expect(a.kg?.feedstockTransport).toBe(0);
+    expect(a.gaps.feedstockTransport).toMatchObject({ missing: 1, of: 1, unit: "feedstock" });
+    expect(breakdown.flows.some((flow) => flow.source === "feedstockTransport")).toBe(false);
+  });
+
   it("splits feedstock and delivery transport so the parts add up to the source totals", () => {
     const breakdown = buildEnergyBreakdown(
       inputs({
@@ -115,7 +143,7 @@ describe("buildEnergyBreakdown", () => {
         ],
         runs: [run({ id: "a", creditBatchId: "b1" }), run({ id: "b", creditBatchId: "b2", biocharDryMassKg: 600 })],
         feedstocks: [
-          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 3000, legs: [{ distanceKm: 15, loadMassKg: 3000 }] },
+          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 3000, legs: [{ distanceKm: 15, loadMassKg: 3000, method: "road" }] },
         ],
         // 1,000 kg stays in the bin and reaches no credit batch.
         feedstockDraws: [
@@ -215,7 +243,7 @@ describe("buildEnergyBreakdown", () => {
       inputs({
         runs: [run({ id: "a", biocharDryMassKg: 900 }), run({ id: "b", biocharDryMassKg: null })],
         feedstocks: [
-          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000 }] },
+          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000, method: "road" }] },
         ],
         feedstockDraws: [
           { runId: "a", feedstockId: "f", wetMassKg: 1000 },

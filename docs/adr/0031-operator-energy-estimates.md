@@ -9,7 +9,7 @@ Operators asked how much a credit batch, production run, delivery or application
 - Each facility carries its own **emission factors**: kg CO₂e per litre of diesel, per kWh of grid electricity and per tonne-km of road freight, plus a source note (`facility_emission_factors`). Owners and Admins set them in Certification settings; they need no registry link. Diesel and road freight prefill with the DEFRA 2024 values the sandbox template uses; grid electricity has no default because it is country-specific.
 - The energy page multiplies recorded activity by those factors and labels every result as an estimate. Without factors it shows activity only, in the units operators enter.
 - Estimates never reach a submission. Isometric stays the system of record for project emissions and applies the factors bound on its own template; ADR 0018's journal removal and scope guard are unchanged.
-- A missing reading stays missing. It is counted and shown, never read as zero, so totals over records with gaps are a floor.
+- A missing reading stays missing. It is counted and shown, never read as zero, so totals over records with gaps are a floor. A feedstock moved partly by rail, ship, pipeline or air counts as missing too: only road freight has a factor, and pricing those legs as road would overstate them.
 - Attribution follows the saved provenance: feedstock transport splits across runs by wet mass drawn, a delivery or application carries its source runs' production energy by dry mass, and transport counts the round trip ([`round-trip.ts`](../../src/lib/calculations/round-trip.ts)). The rules are in the plan.
 
 ## Consequences
