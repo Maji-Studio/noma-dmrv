@@ -1,7 +1,8 @@
 #!/bin/sh
 # Vercel Ignored Build Step for both projects that build from this repo (root vercel.json applies to
 # both, overriding any dashboard setting). Exit 0 skips the build, exit 1 builds; when in doubt, build.
-#   noma-site: builds when site/ or the fonts it loads from src/styles/fonts changed.
+#   noma-site: builds when site/, the fonts it loads from src/styles/fonts, or this root vercel.json
+#              (which configures both projects) changed.
 #   noma-dmrv: builds when anything outside site/ changed.
 APP_PROJECT_ID="prj_MAe7LnlVetbWRIPtOLm7kAo2XlJM"
 SITE_PROJECT_ID="prj_ClEafU9NNMK2pCUMzQfnrMd5AtYw"
@@ -21,7 +22,7 @@ if ! git cat-file -e "${prev}^{commit}" 2>/dev/null; then
 fi
 
 case "$project" in
-  "$SITE_PROJECT_ID") git diff --quiet "$prev" HEAD -- site src/styles/fonts ;;
+  "$SITE_PROJECT_ID") git diff --quiet "$prev" HEAD -- site src/styles/fonts vercel.json ;;
   "$APP_PROJECT_ID") git diff --quiet "$prev" HEAD -- . ':(exclude)site' ;;
   *) echo "ignore-build: unknown project, building"; exit 1 ;;
 esac

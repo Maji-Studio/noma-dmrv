@@ -63,13 +63,15 @@ Two Vercel projects build from this one repository:
 | Project | Root directory | Skips a build when |
 | --- | --- | --- |
 | `noma-dmrv` (app) | repo root | nothing outside `site/` changed since the last successful deployment |
-| `noma-site` (site) | repo root (`cd site` in its build and install commands) | nothing in `site/` or `src/styles/fonts/` changed since the last successful deployment |
+| `noma-site` (site) | repo root (`cd site` in its build and install commands) | nothing in `site/`, `src/styles/fonts/` or the root `vercel.json` changed since the last successful deployment |
 
 Both projects read the root `vercel.json`, whose `ignoreCommand` runs
 `scripts/vercel-ignore-build.sh` and overrides any Ignored Build Step set in the
 dashboard. The script picks the rule by `VERCEL_PROJECT_ID` and builds whenever it
 cannot tell: an unknown project, no previous deployment, or a previous commit
 outside Vercel's shallow clone (a branch that merged in many staging commits).
+Because both projects read it, any key added to the root `vercel.json` (crons,
+functions, headers) applies to the site as well as the app.
 
 | Environment | App | Site |
 | --- | --- | --- |

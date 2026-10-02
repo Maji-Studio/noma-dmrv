@@ -2,14 +2,15 @@
 /**
  * OwnershipProof: proof for principle 4. A spec sheet comparing your servers with our hosting. What is the
  * same either way (code, database, your records) spans both columns and is tagged "Same"; only how noma is
- * run splits into two cells. Static. No props.
+ * run splits into two cells. The tag is visual only: a two-column cell already reads as both headers to
+ * assistive tech. Static. No props.
  */
 const ROWS = [
   { label: "Code", same: "noma, open source under MIT" },
   { label: "Database", same: "PostgreSQL" },
   { label: "Your records", same: "Yours. Your team decides who sees them." },
   { label: "Who runs it", self: "Your team or your IT partner", hosted: "We do" },
-  { label: "Cost", self: "Free", hosted: "A hosting plan" },
+  { label: "Cost", self: "No licence fee", hosted: "A hosting plan" },
   { label: "Setup", self: "Install from GitHub", hosted: "Nothing to install" },
   { label: "Updates", self: "You choose when", hosted: "We install them" },
 ];
@@ -26,7 +27,7 @@ const ROWS = [
         <tr class:list={[r.same && "is-same"]}>
           <th scope="row">{r.label}</th>
           {r.same
-            ? <td colspan="2"><span class="own-same-text">{r.same}</span><span class="own-same">Same</span></td>
+            ? <td colspan="2"><span class="own-same-text">{r.same}</span><span class="own-same" aria-hidden="true">Same</span></td>
             : <><td>{r.self}</td><td class="own-hosted">{r.hosted}</td></>}
         </tr>
       ))}

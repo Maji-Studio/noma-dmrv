@@ -82,7 +82,7 @@
 .own-hosted { background: var(--band-rose); }
 .own-table .is-same td { background: var(--band-purple); }
 .own-same-text { font-size: var(--fs-body); }
-.own-same { float: right; margin-left: var(--space-4); padding: 0 var(--space-2); font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-caption); letter-spacing: var(--track-mono); text-transform: uppercase; color: var(--accent); border: var(--hairline) solid var(--rule-strong); }
+.own-same { float: right; margin-left: var(--space-4); padding: 0 var(--space-2); font-weight: 300; font-size: var(--fs-caption); color: var(--accent); border: var(--hairline) solid var(--rule-strong); }
 
 /* 5. Mafinga: photo across the frame, then four places. */
 .maf-figure { position: relative; margin: 0; }
