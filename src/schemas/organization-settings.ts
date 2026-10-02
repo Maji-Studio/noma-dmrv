@@ -3,19 +3,18 @@
  *
  * Shared by `/settings/defaults` (react-hook-form + zodResolver) and
  * `src/fn/organization-settings.ts`, so client validation and the server trust
- * boundary cannot drift. `organizationId` is never in this payload — it is
+ * boundary cannot drift. The default currency is deliberately absent: it has no
+ * form field for now, so a save leaves the stored value alone. `organizationId` is never in this payload — it is
  * stamped server-side from the session's active organization.
  */
 import { z } from "zod";
 import { applicationEvidenceMethods } from "./applications";
-import { currencyCodes } from "./credit-batches";
 import { timezones } from "./facilities";
 import { packagingTypes } from "./orders";
 
 const MAX_ORGANIZATION_COUNTRY_LENGTH = 100;
 
 export const organizationSettingsFormSchema = z.object({
-  defaultCurrency: z.enum(currencyCodes),
   /**
    * Free text, matching `facilities.country`. An empty input means "we have not
    * said", which is stored as null rather than as the `'UNKNOWN'` that facility

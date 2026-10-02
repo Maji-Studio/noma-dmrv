@@ -41,28 +41,29 @@ describe.sequential("organization operating defaults", () => {
   it("round-trips a saved set of defaults", async () => {
     const ctx = makeTestOrgContext();
     const values = {
-      defaultCurrency: "KES" as const,
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
       defaultEvidenceMethod: "boundary" as const,
       defaultPackaging: "bagged" as const,
     };
 
+    const expected = { ...values, defaultCurrency: "TZS" };
+
     await expect(upsertOrganizationDefaults(ctx, values)).resolves.toEqual(
-      values,
+      expected,
     );
-    await expect(getOrganizationDefaults(ctx)).resolves.toEqual(values);
+    await expect(getOrganizationDefaults(ctx)).resolves.toEqual(expected);
   });
 
   it("updates the existing row rather than inserting a second one", async () => {
     const ctx = makeTestOrgContext();
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,
-      defaultCurrency: "USD",
+      defaultPackaging: "bagged",
     });
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,
-      defaultCurrency: "EUR",
+      defaultPackaging: "loose",
     });
 
     const rows = await db
@@ -72,7 +73,25 @@ describe.sequential("organization operating defaults", () => {
 
     expect(rows).toHaveLength(1);
     await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
+      defaultPackaging: "loose",
+    });
+  });
+
+  it("leaves a stored default currency alone when defaults are saved", async () => {
+    const ctx = makeTestOrgContext();
+    await db
+      .insert(organizationSettings)
+      .values({ organizationId: TEST_ORG_ID, defaultCurrency: "EUR" });
+    await upsertOrganizationDefaults(ctx, {
+      defaultCountry: "Kenya",
+      defaultTimezone: "Africa/Nairobi",
+      defaultEvidenceMethod: "location",
+      defaultPackaging: "bagged",
+    });
+
+    await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
       defaultCurrency: "EUR",
+      defaultCountry: "Kenya",
     });
   });
 

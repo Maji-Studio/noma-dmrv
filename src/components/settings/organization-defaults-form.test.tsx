@@ -43,6 +43,20 @@ describe("OrganizationDefaultsForm", () => {
     expect(html).not.toContain("Couldn&#x27;t load the operating defaults");
   });
 
+  it("offers Region without a currency field", () => {
+    const html = renderToStaticMarkup(
+      <ToastProvider>
+        <OrganizationDefaultsForm />
+      </ToastProvider>,
+    );
+
+    expect(html).toContain("Region");
+    expect(html).toContain("Country");
+    expect(html).toContain("Timezone");
+    expect(html).not.toContain("Currency");
+    expect(html).not.toContain("default-currency");
+  });
+
   it("uses the canonical application evidence labels", () => {
     const html = renderToStaticMarkup(
       <ToastProvider>

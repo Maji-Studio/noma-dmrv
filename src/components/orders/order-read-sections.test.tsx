@@ -65,6 +65,8 @@ describe("Order read view levels", () => {
       expect(shown).toContain("Requested wet mass (kg)");
       // Save precision: three decimals, not the display default.
       expect(shown).toContain("130.125 kg");
+      expect(shown).not.toContain("Currency");
+      expect(shown).not.toContain("Value");
       expect(shown).toContain("Matching stock");
       expect(shown).toContain("Fulfillment");
       expect(shown).toContain("No deliveries");

@@ -44,14 +44,9 @@ export const orderFormSchema = z.object({
     .finite("Quantity must be a valid number"),
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
 
-  // Optional fields
-  value: z
-    .number()
-    .min(0, "Value must be non-negative")
-    .finite()
-    .optional()
-    .nullable(),
-  currency: z.string().max(10).default("TZS"),
+  // Price and currency are not collected for now. `orders.value` stays null and
+  // `orders.currency` takes its column default; both parse as unknown keys and
+  // are stripped, so an edit never touches stored values.
 });
 
 // ============================================
@@ -83,8 +78,6 @@ export const updateOrderSchema = z.object({
   orderDate: z.coerce.date().optional(),
   quantityKg: z.number().min(0.01).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).finite().optional(),
   packaging: z.enum(packagingTypes).optional(),
-  value: z.number().min(0).finite().optional().nullable(),
-  currency: z.string().max(10).optional(),
 });
 
 /**

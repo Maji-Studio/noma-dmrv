@@ -52,7 +52,8 @@ export async function getOrganizationDefaults(
 
 export async function upsertOrganizationDefaults(
   ctx: OrgContext,
-  input: OrganizationDefaults,
+  // No currency: it has no form field for now, so a save never overwrites it.
+  input: Omit<OrganizationDefaults, "defaultCurrency">,
 ): Promise<OrganizationDefaults> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");

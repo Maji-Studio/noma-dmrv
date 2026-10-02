@@ -29,7 +29,7 @@ vi.mock("@/hooks/use-facility-context", () => ({
 
 vi.mock("@/hooks/use-organization-settings", () => ({
   useOrganizationDefaultValues: () => ({
-    defaults: { defaultPackaging: "loose", defaultCurrency: "TZS" },
+    defaults: { defaultPackaging: "loose" },
     isLoading: false,
   }),
 }));
@@ -77,6 +77,18 @@ beforeEach(() => {
   state.optionRequests = [];
   state.detailRequests = [];
   state.customersById = {};
+});
+
+describe("OrderForm product details", () => {
+  it("collects no price or currency", () => {
+    const html = renderForm();
+
+    expect(html).toContain('id="quantityKg"');
+    expect(html).toContain('id="packaging"');
+    expect(html).not.toContain('id="value"');
+    expect(html).not.toContain('id="currency"');
+    expect(html).not.toContain("Currency");
+  });
 });
 
 describe("OrderForm customer field", () => {
