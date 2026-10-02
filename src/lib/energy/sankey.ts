@@ -19,10 +19,8 @@ import type { EnergyCreditBatchInput, EnergyFlow } from "./types";
 export const UNASSIGNED_BATCH_KEY = "unassigned";
 /** Batch node for the credit batches past the named ones. */
 export const OTHER_BATCHES_KEY = "other";
-/** Credit batches named in the chart when there are many. */
+/** Most credit batches named in the chart; past it the rest are grouped. */
 export const NAMED_BATCH_LIMIT = 5;
-/** Up to this many batches are all named; one more triggers the grouping. */
-const COLLAPSE_ABOVE = NAMED_BATCH_LIMIT + 1;
 
 export const SANKEY_CHART = {
   width: 800,
@@ -58,8 +56,9 @@ export interface SankeyFlow {
 
 /**
  * Batch nodes for the flows: every batch that received energy, newest first,
- * capped at five named when there are more than six, plus "other" and the
- * unassigned node. A selected batch always keeps its own node.
+ * the five largest named and the rest grouped as "other", plus the unassigned
+ * node. A selected batch always keeps its own node, taking the fifth slot when
+ * it is not among the five largest.
  */
 export function groupSankeyBatches(
   flows: EnergyFlow[],
@@ -75,12 +74,15 @@ export function groupSankeyBatches(
   const ranked = creditBatches
     .filter((batch) => (kgByBatch.get(batch.id) ?? 0) > 0)
     .sort((a, b) => (kgByBatch.get(b.id) ?? 0) - (kgByBatch.get(a.id) ?? 0));
-  const named = new Set(
-    (ranked.length > COLLAPSE_ABOVE ? ranked.slice(0, NAMED_BATCH_LIMIT) : ranked).map(
-      (batch) => batch.id,
-    ),
-  );
-  if (selectedBatchId && kgByBatch.has(selectedBatchId)) named.add(selectedBatchId);
+  const top = ranked.slice(0, NAMED_BATCH_LIMIT).map((batch) => batch.id);
+  if (
+    selectedBatchId &&
+    !top.includes(selectedBatchId) &&
+    ranked.some((batch) => batch.id === selectedBatchId)
+  ) {
+    top[NAMED_BATCH_LIMIT - 1] = selectedBatchId;
+  }
+  const named = new Set(top);
 
   const nodes: SankeyBatchNode[] = ranked
     .filter((batch) => named.has(batch.id))

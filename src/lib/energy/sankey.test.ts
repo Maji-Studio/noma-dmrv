@@ -31,16 +31,25 @@ describe("groupSankeyBatches", () => {
     expect(nodes.at(-1)?.key).toBe(UNASSIGNED_BATCH_KEY);
   });
 
-  it("keeps the selected credit batch named", () => {
+  it("keeps the selected credit batch named within the five", () => {
     const { nodes, flows: mapped } = groupSankeyBatches(flows, batches, "b0");
-    expect(nodes.some((n) => n.key === "b0")).toBe(true);
-    expect(nodes.find((n) => n.key === OTHER_BATCHES_KEY)?.groupedCount).toBe(2);
+    const named = nodes.filter((n) => n.code != null).map((n) => n.key);
+    expect(named).toHaveLength(NAMED_BATCH_LIMIT);
+    expect(named).toContain("b0");
+    expect(named).not.toContain("b3");
+    expect(nodes.find((n) => n.key === OTHER_BATCHES_KEY)?.groupedCount).toBe(3);
     expect(mapped.find((f) => f.kg === 10)?.batchKey).toBe("b0");
   });
 
-  it("names every batch when there are six or fewer", () => {
-    const { nodes } = groupSankeyBatches(flows.slice(0, 6), batches, null);
+  it("names every batch when there are five or fewer", () => {
+    const { nodes } = groupSankeyBatches(flows.slice(0, 5), batches, null);
     expect(nodes.every((n) => n.code != null)).toBe(true);
+  });
+
+  it("groups the sixth batch", () => {
+    const { nodes } = groupSankeyBatches(flows.slice(0, 6), batches, null);
+    expect(nodes.filter((n) => n.code != null)).toHaveLength(NAMED_BATCH_LIMIT);
+    expect(nodes.find((n) => n.key === OTHER_BATCHES_KEY)?.groupedCount).toBe(1);
   });
 });
 
