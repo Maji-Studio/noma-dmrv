@@ -1,7 +1,7 @@
 ---
 // Why noma: a statement and who it's for (hero, with the principles as the page index), then five
 // principles, each with a visual proof. Principle 1 is the page's one dark stage (CompareStage: noma vs
-// spreadsheets and paper). Section ids come from WHY_PRINCIPLES in src/config.js; Home links to #who,
+// spreadsheets and paper, and other biochar dMRVs). Section ids come from WHY_PRINCIPLES in src/config.js; Home links to #who,
 // #open-source and #mafinga.
 import { GITHUB_URL, WHY_PRINCIPLES } from "../config.js";
 import SiteShell from "../components/site/SiteShell.astro";
@@ -27,7 +27,7 @@ const [, P2, P3, P4, P5] = WHY_PRINCIPLES;
   <CompareStage />
 
   <Principle id={P2.id} n={2} title={`${P2.label}.`}
-    text="Tickets, readings and photos are attached to the record they prove, not filed in a folder. Before you prepare a removal, noma shows what is still missing.">
+    text="Tickets, readings and photos are attached to the record they prove, not filed in a folder. A moisture reading far from its estimate, or a lab result outside the limits, is flagged as you enter it. Before you prepare a removal, noma shows what is still missing.">
     <EvidenceProof />
   </Principle>
 
