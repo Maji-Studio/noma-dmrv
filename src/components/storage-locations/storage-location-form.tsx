@@ -32,9 +32,9 @@ import type { FeedstockTypeUsage } from "@/schemas/feedstock-types";
 import type { StorageLocation } from "@/db/schema/facilities";
 
 const STOCK_MODE_HINT =
-  "Split keeps every production run or batch in its own bay, bag or heap, and each removal records which ones it came from. Mix is one blended pile: every removal takes from each in proportion to what it holds.";
+  "Split keeps every production run or batch in its own bay, bag or heap, and each draw records which ones it came from. Mix is one blended pile: every draw takes from each in proportion to what it holds.";
 const MERGE_TIME_HINT =
-  "Removals from this time on take every batch in proportion. Entries already saved keep their shares.";
+  "Draws from this time on take every batch in proportion. Entries already saved keep their shares.";
 
 interface StorageLocationFormProps {
   storageLocation?: StorageLocation;

@@ -85,15 +85,15 @@ export const OUTPUT_STOCK_MODE_LABELS: Record<OutputStockMode, string> = {
 /** The bin types that choose a stock mode. */
 export type OutputBinType = Extract<StorageLocationType, "biochar_bin" | "product_bin">;
 
-/** Stock mode card captions by bin type: what stays apart or blends, and what a removal takes. */
+/** Stock mode card captions by bin type: what stays apart or blends, and what a draw takes. */
 export const OUTPUT_STOCK_MODE_DESCRIPTIONS: Record<OutputBinType, Record<OutputStockMode, string>> = {
   biochar_bin: {
-    split: "Each production run stays in its own bay, bag or heap. A removal records which runs it came from.",
-    mix: "All runs go into one pile. A removal takes from each run in proportion.",
+    split: "Each production run stays in its own bay, bag or heap. A draw records which runs it came from.",
+    mix: "All runs go into one pile. A draw takes from each run in proportion.",
   },
   product_bin: {
-    split: "Each product batch stays apart. A removal records which batches it came from.",
-    mix: "All batches go into one pile. A removal takes from each batch in proportion.",
+    split: "Each product batch stays apart. A draw records which batches it came from.",
+    mix: "All batches go into one pile. A draw takes from each batch in proportion.",
   },
 };
 
