@@ -44,6 +44,21 @@ function isLocalAppUrl(value: string): boolean {
   }
 }
 
+// Hermetic-CI exception shared by the production fail-closed gates in the
+// schema below. ci.yml and e2e.yml compile production bundles against
+// localhost with placeholder config by design (e2e.yml runs `pnpm build &&
+// pnpm start` with GEO_PROVIDER=stub and no real secrets). Requiring the
+// explicit marker, CI flag, and an HTTP(S) loopback URL keeps live CI workflows
+// and every real deployment out of this exception.
+function isHermeticCiBuildFor(appUrl: string): boolean {
+  const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
+  return (
+    process.env.NOMA_HERMETIC_CI === HERMETIC_CI_MARKER &&
+    isCI &&
+    isLocalAppUrl(appUrl)
+  );
+}
+
 /**
  * Environment variable validation schema
  * Ensures all required env vars are present and valid
@@ -247,17 +262,7 @@ const envSchema = z.object({
   // local-fs in production-like environments. In dev/test it's optional and the
   // local-fs provider falls back to an ephemeral random secret with a warning.
 
-  // Hermetic-CI exception shared by the production fail-closed gates below.
-  // ci.yml and e2e.yml compile production bundles against localhost with
-  // placeholder config by design (e2e.yml runs `pnpm build && pnpm start`
-  // with GEO_PROVIDER=stub and no real secrets). Requiring the explicit marker,
-  // CI flag, and an HTTP(S) loopback URL keeps live CI workflows and every real
-  // deployment out of this exception.
-  const isCI = ["1", "true"].includes((process.env.CI ?? "").toLowerCase());
-  const isHermeticCiBuild =
-    process.env.NOMA_HERMETIC_CI === HERMETIC_CI_MARKER &&
-    isCI &&
-    isLocalAppUrl(data.NEXT_PUBLIC_APP_URL);
+  const isHermeticCiBuild = isHermeticCiBuildFor(data.NEXT_PUBLIC_APP_URL);
 
   // Production fail-closed: never serve stubbed geo answers in prod.
   if (
@@ -337,3 +342,10 @@ export type Env = z.infer<typeof envSchema>;
 
 // Validate and export environment variables
 export const env = envSchema.parse(process.env);
+
+/**
+ * True only on a hermetic CI production build (see `isHermeticCiBuildFor`).
+ * Test-only routes such as /e2e/map-smoke gate on this, never on a proxy like
+ * GEO_PROVIDER, so they cannot go live on a real deployment.
+ */
+export const isHermeticCiBuild = isHermeticCiBuildFor(env.NEXT_PUBLIC_APP_URL);
