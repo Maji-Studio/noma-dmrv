@@ -63,7 +63,7 @@ Two Vercel projects build from this one repository:
 | Project | Root directory | Skips a build when |
 | --- | --- | --- |
 | `noma-dmrv` (app) | repo root | nothing outside `site/` changed since the last successful deployment (`ignoreCommand` in the root `vercel.json`) |
-| `noma-site` (site) | `site` | Ignored Build Step `test ! -d site` succeeds (set in the project settings) |
+| `noma-site` (site) | `site` | the branch has no `site/` folder (Ignored Build Step `test ! -d site`, run from the repo root, set in the project settings) |
 
 | Environment | App | Site |
 | --- | --- | --- |
