@@ -192,8 +192,8 @@ export function CustomerLocationFields({
           latitude={gpsLatitude ?? null}
           longitude={gpsLongitude ?? null}
           onPositionChange={({ lat, lng }) => {
-            gpsLatitudeField.onChange(lat ?? undefined);
-            gpsLongitudeField.onChange(lng ?? undefined);
+            gpsLatitudeField.onChange(lat);
+            gpsLongitudeField.onChange(lng);
           }}
           latitudeError={errors.gpsLatitude?.message}
           longitudeError={errors.gpsLongitude?.message}

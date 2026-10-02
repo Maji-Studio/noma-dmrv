@@ -466,28 +466,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   sticky behavior is exercised enough by existing route specs to leave
   unguarded (S).
 
-### Distance fields use two different react-hook-form wiring patterns (`forms/distance-field-controller-drift`, opened 2026-07-29)
-
-- **Observed:** `src/components/customers/customer-location-fields.tsx:CustomerLocationFields`
-  now reads and writes `distanceFromFacilityKm` / `distanceSource` through
-  `useController`, matching the GPS fields beside it. The two other
-  `DistanceCalcField` hosts still use the older wiring:
-  `src/components/suppliers/supplier-location-form.tsx:SupplierLocationForm`
-  (`watch` plus `setValue`) and
-  `src/components/transport-legs/transport-leg-form.tsx:TransportLegForm`
-  (`useWatch` plus `setValue`).
-- The old pattern is not known to be broken. `tests/e2e/position-picker.spec.ts`
-  exercises the supplier CALC path end to end, including the map-estimate to
-  manual provenance flip, and it passes. There is no confirmed repro of a
-  value-sync defect on either remaining form.
-- The cost of leaving it is convention drift: a reader of the three forms sees
-  two answers to the same question, and the next form copies whichever it lands
-  on first.
-- **Resolve via:** decide whether `useController` is the house pattern for
-  `DistanceCalcField` hosts. If it is, convert the supplier and transport-leg
-  forms and note the rule in [`forms.md`](./forms.md). If it is not, leave both
-  and delete this entry (S).
-
 ### Form cleanup leftovers (`forms/cleanup-leftovers`, opened 2026-10-01)
 
 - **Observed:** the [form cleanup plan](./archive/plans/2026-09-29-form-cleanup.md)
