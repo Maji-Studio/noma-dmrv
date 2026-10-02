@@ -62,7 +62,8 @@ For each member credit batch, noma sends:
 - `s_fraction` replicate values, where each value is the fraction of R0
   readings meeting the threshold.
 
-The exact component-input binding lives in
+The exact component-input binding is declared in the semantic binding catalog
+(`src/lib/isometric/semantic-binding-catalog.ts`) and wired by
 `src/lib/isometric/transformers/sequestration-binding.ts`. The registry
 computes the credited result. Production remains blocked, and the difference
 between the live blueprint and module Eq.6 remains an explicit open question.
@@ -128,7 +129,8 @@ Current gaps include:
 
 Removal evidence is not attached wholesale to every Datapoint. The immutable
 Source plan maps each document or generated ledger to exact intended inputs in
-`src/lib/certification/removal-source-bindings.ts`, and the post-submit verifier
+`src/lib/certification/removal-source-bindings.ts`, using the evidence targets
+the semantic binding catalog declares on each input, and the post-submit verifier
 walks GHG-entry component attributions back to the targeted Datapoints.
 
 ## Safety margin

@@ -1,7 +1,7 @@
 import { pluralize } from "@/lib/copy-utils";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { transformSequestrationSourceValue } from "@/lib/isometric/transformers/sequestration-binding";
 import { isUnitFraction } from "@/lib/calculations/biochar-removal";
 

@@ -15,7 +15,8 @@ import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import {
   expectedSequestrationBlueprintKeys,
   isSequestrationBlueprintFamily,
-} from "@/lib/isometric/transformers/measurement-sample";
+  isStorageBlueprintKey,
+} from "@/lib/isometric/storage-blueprints";
 import {
   assertSequestrationTemplateBindings,
   buildDirectSequestrationDatapoints,
@@ -188,17 +189,12 @@ export interface MaterializedRemovalSubmissionSnapshot {
 const DATAPOINT_POST_TARGET = "/datapoints";
 const MEASUREMENT_SAMPLE_POST_TARGET = "/measurement-samples";
 const GHG_ENTRY_POST_TARGET = "/ghg-entries";
-const LEGACY_SEQUESTRATION_BLUEPRINT =
-  "carbon_rich_substance_sequestration";
-
 function hasSupportedSequestrationComponent(
   template: IsometricGhgEntryTemplate,
 ): boolean {
   return (template.groups ?? []).some((group) =>
     group.components.some(
-      (component) =>
-        component.blueprint_key === LEGACY_SEQUESTRATION_BLUEPRINT ||
-        isSequestrationBlueprintFamily(component.blueprint_key),
+      (component) => isStorageBlueprintKey(component.blueprint_key),
     ),
   );
 }

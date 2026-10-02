@@ -48,7 +48,7 @@ import {
   getIsometricClientForOrg,
 } from "@/lib/isometric";
 import { readRemovalDurabilityComponent } from "@/lib/certification/removal-durability-component";
-import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import { loadGhgStatementBreakdown } from "./ghg-statement-breakdown";
 import { loadRemovalBreakdown } from "./removal-breakdown";
 

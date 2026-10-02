@@ -5,7 +5,7 @@ import {
   MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
 import { SEQUESTRATION_COMPONENT_INPUT_BINDINGS } from "@/lib/isometric/transformers/sequestration-binding";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
 const PRE_NORMALIZATION_MAPPING_REVISION =
   "ade17311184266354b7ee20e1ea0b58406c05deae8e2dbb6709d3105e007a2e5";
@@ -90,15 +90,19 @@ describe("Isometric payload hash", () => {
       SEQUESTRATION_COMPONENT_INPUT_BINDINGS[
         CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR
       ];
+    const sFraction = binding.inputs.s_fraction;
+    if (sFraction.source !== "measurement-property") {
+      throw new Error("s_fraction is expected to be a measurement-property binding");
+    }
     const changedMeasurementProperty = {
       ...SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
       [CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]: {
         inputs: {
           ...binding.inputs,
           s_fraction: {
-            ...binding.inputs.s_fraction,
+            ...sFraction,
             measurementProperty: {
-              ...binding.inputs.s_fraction.measurementProperty,
+              ...sFraction.measurementProperty,
               qualifier: "total_inorganic_carbon",
             },
           },

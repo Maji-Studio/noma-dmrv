@@ -20,7 +20,7 @@ import type {
   IsometricComponentBlueprint,
   IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
+import { isSequestrationBlueprintKey } from "@/lib/isometric/storage-blueprints";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_ENABLED,

@@ -10,7 +10,7 @@ import {
   buildCreateDatapointRequest,
   lookupInputMapping,
 } from "@/lib/isometric/transformers/datapoint";
-import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
+import { isSequestrationBlueprintFamily } from "@/lib/isometric/storage-blueprints";
 import {
   sourceIdsForDatapointTarget,
   type RemovalSourceBindingPlanEntry,

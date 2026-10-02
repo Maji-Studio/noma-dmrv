@@ -16,11 +16,14 @@ API.
 Before editing a template, inspect:
 
 - `src/lib/isometric/semantic-binding-catalog.ts` for ordinary monitored
-  inputs, component-name discriminators, and PROJECT-scope tuples (enforced in
-  `src/lib/isometric/transformers/datapoint.ts`);
-- `src/lib/isometric/transformers/sequestration-binding.ts` for explicit
-  durability component inputs;
-- `src/lib/certification/removal-source-bindings.ts` for exact evidence targets;
+  inputs, the named component disambiguation rules (diesel split, Safety
+  margin), PROJECT-scope tuples (enforced in
+  `src/lib/isometric/transformers/datapoint.ts`), explicit durability
+  component inputs, and the evidence targets of each input;
+- `src/lib/isometric/storage-blueprints.ts` for which durability component
+  each tier accepts;
+- `src/lib/certification/removal-source-bindings.ts` for how documents are
+  classified onto those evidence targets;
 - the facility's durability tier and default template mapping;
 - the live template output from:
 

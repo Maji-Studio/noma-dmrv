@@ -47,12 +47,12 @@ vi.mock("@/fn/certification/registry-create", async (importOriginal) => {
 import { submitDurabilityMeasurementSamples } from "@/fn/certification/durability-measurement-samples";
 import { appendSubmissionJournal } from "@/data-access/certification";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
+import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
 import {
-  build1000YearSequestrationSample,
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   UNSAMPLED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-} from "@/lib/isometric/transformers/measurement-sample";
+} from "@/lib/isometric/storage-blueprints";
 import {
   assertSequestrationTemplateBindings,
   assertSequestrationTemplateSelectable,

@@ -9,10 +9,11 @@ import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import type { CreateDatapointRequest } from "@/lib/isometric";
 import { FIRST_REMOVAL_SUBMISSION_VERSION } from "@/lib/isometric/biochar-applications";
-import type {
-  ClassifiedRemovalSource,
-  NomaEvidenceRole,
-  RemovalSourceBindingPlanEntry,
+import {
+  REMOVAL_SOURCE_TARGET_VOCABULARY,
+  type ClassifiedRemovalSource,
+  type NomaEvidenceRole,
+  type RemovalSourceBindingPlanEntry,
 } from "@/lib/certification/removal-source-bindings";
 import type { BiocharApplicationIntent } from "./biochar-application-intents";
 import type { CandidateSourceDocument } from "./source-candidates";
@@ -138,30 +139,17 @@ const removalSourceLineageSchema = z.object({
 const sequestrationSourceTargetSchema = z.object({
   kind: z.literal("sequestration"),
   groupKey: z.literal("co2-stored"),
-  inputKey: z.enum([
-    "product_mass",
-    "carbon_contents",
-    "s_fraction",
-    "h_c_molar_ratios",
-    "total_carbon_contents",
-    "inorganic_carbon_contents",
-  ]),
+  inputKey: z.enum(REMOVAL_SOURCE_TARGET_VOCABULARY.sequestrationInputKeys),
   optionalInTemplate: z.boolean().optional(),
 });
 const ordinarySourceTargetSchema = z.object({
   kind: z.literal("ordinary"),
-  groupKey: z.enum([
-    "biomass-feedstock-transport",
-    "biochar-transport",
-    "sampling-required-for-mrv",
-    "miscellaneous",
-  ]),
-  componentBlueprintKey: z.enum([
-    "mass_distance_based_ci_emissions",
-    "mass_based_ci_emissions",
-  ]),
+  groupKey: z.enum(REMOVAL_SOURCE_TARGET_VOCABULARY.ordinaryGroupKeys),
+  componentBlueprintKey: z.enum(
+    REMOVAL_SOURCE_TARGET_VOCABULARY.ordinaryBlueprintKeys,
+  ),
   componentDisplayName: z.string().optional(),
-  inputKey: z.enum(["mass_distance", "mass"]),
+  inputKey: z.enum(REMOVAL_SOURCE_TARGET_VOCABULARY.ordinaryInputKeys),
   optionalInTemplate: z.boolean().optional(),
 });
 const classifiedRemovalSourceSchema: z.ZodType<ClassifiedRemovalSource> =

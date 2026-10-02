@@ -106,7 +106,7 @@ import { buildThousandYearDurabilityLedgerModel } from "@/lib/certification/evid
 import {
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-} from "@/lib/isometric/transformers/measurement-sample";
+} from "@/lib/isometric/storage-blueprints";
 import { CURRENT_1000_YEAR_PREVIEW_FORMULA_VERSION } from "@/lib/calculations/biochar-removal";
 
 function context(args: {

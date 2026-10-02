@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { renderThousandYearDurabilityLedgerPdf } from "./durability-1000-pdf";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
 describe("renderThousandYearDurabilityLedgerPdf", () => {
   it("renders the submitted replicate values and product mass into a readable PDF", async () => {

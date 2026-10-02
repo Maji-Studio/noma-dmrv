@@ -11,7 +11,7 @@ loadEnv({ path: ".env.local", override: false });
 import { and, eq } from "drizzle-orm";
 import { DEC_ORG_ID } from "@/db/org-defaults";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import * as schema from "../../../src/db/schema";
 import { createDbConnection } from "./db";
 

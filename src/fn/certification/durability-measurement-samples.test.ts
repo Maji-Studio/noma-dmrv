@@ -14,12 +14,12 @@ import {
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import {
-  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   PRODUCT_MASS_MEASUREMENT_PROPERTY,
   S_FRACTION_MEASUREMENT_PROPERTY,
   TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
 } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import {
   buildRemovalSourceBindingPlan,
   classifyRemovalSourceCandidate,

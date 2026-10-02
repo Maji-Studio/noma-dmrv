@@ -15,7 +15,8 @@ import {
 import {
   classifySequestration1000YearComponent,
   isSequestrationBlueprintFamily,
-} from "@/lib/isometric/transformers/measurement-sample";
+  isStorageBlueprintKey,
+} from "@/lib/isometric/storage-blueprints";
 import {
   getSequestrationInputBinding,
   SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
@@ -629,11 +630,7 @@ export function buildRemovalTemplateDiagnostic(
   const optionalTargets = optionalNotPresent(args.template);
   const storageComponentCount = args.template.groups
     .flatMap((group) => group.components)
-    .filter(
-      (component) =>
-        component.blueprint_key === "carbon_rich_substance_sequestration" ||
-        isSequestrationBlueprintFamily(component.blueprint_key),
-    ).length;
+    .filter((component) => isStorageBlueprintKey(component.blueprint_key)).length;
   const templateIssues: string[] = [];
   if (args.template.credit_type !== "REMOVAL") {
     templateIssues.push(

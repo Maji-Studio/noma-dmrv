@@ -9,7 +9,7 @@ vi.mock("./durability-measurement-samples", () => ({
   DURABILITY_SUBMISSION_UNAVAILABLE_MESSAGE: "Durability submission is unavailable.",
 }));
 
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import {
   prepareRemovalSubmission,
   REMOVAL_PREPARATION_BLOCKERS,

@@ -12,11 +12,13 @@
 import { describe, expect, it } from "vitest";
 import {
   lookupSourceFact,
-  projectInputMapping,
-  projectPeriodInputTuples,
   SEMANTIC_BINDING_CATALOG,
   type SemanticBindingCatalog,
 } from "@/lib/isometric/semantic-binding-catalog";
+import {
+  projectInputMapping,
+  projectPeriodInputTuples,
+} from "@/lib/isometric/semantic-binding-projections";
 import {
   INPUT_MAPPING,
   lookupInputMapping,

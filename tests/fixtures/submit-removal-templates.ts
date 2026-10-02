@@ -1,5 +1,5 @@
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
 // Removal templates for the submit-removal orchestrator fixture. Split out of
 // submit-removal-orchestrator.ts (which re-exports them) to keep that file

@@ -1,7 +1,8 @@
 /**
- * Guard for the semantic binding catalog (#291, #637): a source file that
- * quotes both the blueprint key and the input key of a catalog binding is a
- * hand-kept mirror of the catalog. Resolve the binding through the catalog's
+ * Guard for the semantic binding catalog (#291, #637, #638): a source file
+ * that names both the blueprint key and the input key of a catalog binding,
+ * as a string literal or an object key outside comments, is a hand-kept
+ * mirror of the catalog. Resolve the binding through the catalog's
  * projections instead.
  *
  * Tests are exempt: they pin tuples on purpose. KNOWN_MIRRORS names each pair
@@ -19,16 +20,15 @@ const CATALOG_MODULE = "src/lib/isometric/semantic-binding-catalog.ts";
 const GENERATED_DIR = "src/lib/isometric/generated/";
 
 const KNOWN_MIRRORS: Record<string, string[]> = {
-  // Evidence targets for Isometric Sources; #638 moves them onto the catalog
-  // roles.
-  "src/lib/certification/removal-source-bindings.ts": [
+  // The catalog's storage companion: blueprint keys sit beside the declared
+  // inputs of the unbound (200-year, deprecated) blueprints, so the bound
+  // blueprint's input names co-occur without binding anything.
+  "src/lib/isometric/storage-blueprints.ts": [
     "carbon_rich_substance_sequestration/product_mass",
-    "mass_distance_based_ci_emissions/mass_distance",
-    "mass_based_ci_emissions/mass",
-  ],
-  "src/fn/certification/removal-snapshot-readers.ts": [
-    "mass_distance_based_ci_emissions/mass_distance",
-    "mass_based_ci_emissions/mass",
+    "biochar_sequestration_1000_year_f_durable_max/total_carbon_contents",
+    "biochar_sequestration_1000_year_f_durable_max/inorganic_carbon_contents",
+    "biochar_sequestration_1000_year_f_durable_max/product_mass",
+    "biochar_sequestration_1000_year_f_durable_max/s_fraction",
   ],
   // Template walk for the diesel warning; #639's compiled plan replaces it.
   "src/fn/certification/submission-warnings.ts": ["fuel_usage_by_volume/volume_of_fuel"],
@@ -43,15 +43,22 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-const quoted = (key: string) => new RegExp(`["']${key}["']`);
+// A key as a string literal of any quote style, or as an object key.
+const named = (key: string) => new RegExp(`["'\`]${key}["'\`]|\\b${key}\\s*:`);
+
+// Block comments, then line comments that do not start inside a string or URL.
+function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+}
 
 const BINDING_PAIRS = Object.entries(SEMANTIC_BINDING_CATALOG).flatMap(([blueprint, inputs]) =>
   Object.keys(inputs).map((input) => [blueprint, input] as const),
 );
 
 function mirroredPairs(text: string): string[] {
+  const code = stripComments(text);
   return BINDING_PAIRS.filter(
-    ([blueprint, input]) => quoted(blueprint).test(text) && quoted(input).test(text),
+    ([blueprint, input]) => named(blueprint).test(code) && named(input).test(code),
   ).map(([blueprint, input]) => `${blueprint}/${input}`);
 }
 
@@ -76,6 +83,17 @@ describe("binding tuple literals", () => {
       mirroredPairs('tuple("pyrolysis", "grid_electricity_use", "electricity_use")'),
     ).toEqual(["grid_electricity_use/electricity_use"]);
     expect(mirroredPairs("// `grid_electricity_use` / `electricity_use`")).toEqual([]);
+    expect(mirroredPairs('/* "grid_electricity_use" "electricity_use" */')).toEqual([]);
+  });
+
+  it("catches backtick and object-key mirrors", () => {
+    // The pre-#636 INPUT_MAPPING nested the keys as object keys.
+    expect(
+      mirroredPairs("const m = { grid_electricity_use: { electricity_use: { unit: 'kWh' } } };"),
+    ).toEqual(["grid_electricity_use/electricity_use"]);
+    expect(
+      mirroredPairs("const key = `${'x'}`; tuple(`grid_electricity_use`, `electricity_use`);"),
+    ).toEqual(["grid_electricity_use/electricity_use"]);
   });
 
   it("fails on a new pair in a known-mirror file", () => {

@@ -3,7 +3,7 @@ import {
   deriveFacilitySetupGaps,
   facilityBlueprintLabel,
 } from "./facility-setup-gaps";
-import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { DEPRECATED_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 
 const COMPLETE = {
   hasOrgCredentials: true,

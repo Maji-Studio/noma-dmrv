@@ -16,16 +16,18 @@ import {
 } from "@/lib/certification/certify-field-registry";
 import { deriveRequiredTransportCategories } from "@/fn/certification/certify-transport-coverage";
 import {
+  SEMANTIC_BINDING_CATALOG,
+  TRANSPORT_CATEGORIES,
+  transportRepairDestination,
+  type SemanticBindingCatalog,
+} from "@/lib/isometric/semantic-binding-catalog";
+import {
   projectInputMapping,
   projectInputTuplesBySource,
   projectPeriodInputTuples,
   projectTransportCategories,
-  SEMANTIC_BINDING_CATALOG,
-  TRANSPORT_CATEGORIES,
-  transportRepairDestination,
   type BindingInputTuple,
-  type SemanticBindingCatalog,
-} from "@/lib/isometric/semantic-binding-catalog";
+} from "@/lib/isometric/semantic-binding-projections";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 
 const PRE_637_FIELD_SOURCES: Record<string, string[]> = {

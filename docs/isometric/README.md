@@ -56,7 +56,8 @@ candidate list is exhaustive.
   `src/data-access/certifier-credentials.ts`
 - Credit-batch lineage, roll-ups, and stored-CO2e preview:
   `src/data-access/credit-batch-accounting.ts`
-- Exact evidence-to-registry-input rules:
+- Exact evidence-to-registry-input rules: targets declared in
+  `src/lib/isometric/semantic-binding-catalog.ts`, classified by
   `src/lib/certification/removal-source-bindings.ts`
 - Certification workspace UI: `src/components/certification/`
 
