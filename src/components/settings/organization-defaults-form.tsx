@@ -41,7 +41,6 @@ import {
   isSelectableApplicationEvidenceMethod,
   selectableApplicationEvidenceMethods,
 } from "@/schemas/applications";
-import { currencyCodes } from "@/schemas/credit-batches";
 import { timezones, type Timezone } from "@/schemas/facilities";
 import { packagingTypes, type PackagingType } from "@/schemas/orders";
 import {
@@ -51,11 +50,6 @@ import {
 } from "@/schemas/organization-settings";
 import { useState } from "react";
 import { EVIDENCE_METHOD_ART } from "@/components/applications";
-
-const CURRENCY_OPTIONS = currencyCodes.map((code) => ({
-  value: code,
-  label: code,
-}));
 
 const TIMEZONE_OPTIONS = timezones.map((zone) => ({
   value: zone,
@@ -166,24 +160,8 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
       onSubmit={handleSubmit(onSubmit)}
       className="content-measure-preview flex flex-col gap-24"
     >
-      <FormSection title="Region and currency" divider={false}>
+      <FormSection title="Region" divider={false}>
         <div className="grid grid-cols-1 gap-x-16 gap-y-16 sm:grid-cols-2">
-        <FormField
-          id="default-currency"
-          label="Currency"
-          error={errors.defaultCurrency?.message}
-          // Orders only. Credit batches have a currency column but no form
-          // field for it, so claiming this seeds them would be false.
-          helperText="Seeds new orders."
-        >
-          <FormSelect
-            id="default-currency"
-            options={CURRENCY_OPTIONS}
-            error={!!errors.defaultCurrency}
-            {...register("defaultCurrency")}
-          />
-        </FormField>
-
         <FormField
           id="default-country"
           label="Country"
@@ -199,7 +177,6 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           />
         </FormField>
 
-        <div className="sm:col-span-2">
         <FormField
           id="default-timezone"
           label="Timezone"
@@ -214,8 +191,6 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
             {...register("defaultTimezone")}
           />
         </FormField>
-
-        </div>
         </div>
       </FormSection>
 

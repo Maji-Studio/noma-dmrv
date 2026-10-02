@@ -41,7 +41,6 @@ describe.sequential("organization operating defaults", () => {
   it("round-trips a saved set of defaults", async () => {
     const ctx = makeTestOrgContext();
     const values = {
-      defaultCurrency: "KES" as const,
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
       defaultEvidenceMethod: "boundary" as const,
@@ -58,11 +57,11 @@ describe.sequential("organization operating defaults", () => {
     const ctx = makeTestOrgContext();
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,
-      defaultCurrency: "USD",
+      defaultPackaging: "bagged",
     });
     await upsertOrganizationDefaults(ctx, {
       ...DEFAULT_ORGANIZATION_SETTINGS,
-      defaultCurrency: "EUR",
+      defaultPackaging: "loose",
     });
 
     const rows = await db
@@ -72,8 +71,27 @@ describe.sequential("organization operating defaults", () => {
 
     expect(rows).toHaveLength(1);
     await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
-      defaultCurrency: "EUR",
+      defaultPackaging: "loose",
     });
+  });
+
+  it("leaves a stored default currency alone when defaults are saved", async () => {
+    const ctx = makeTestOrgContext();
+    await db
+      .insert(organizationSettings)
+      .values({ organizationId: TEST_ORG_ID, defaultCurrency: "EUR" });
+    await upsertOrganizationDefaults(ctx, {
+      defaultCountry: "Kenya",
+      defaultTimezone: "Africa/Nairobi",
+      defaultEvidenceMethod: "location",
+      defaultPackaging: "bagged",
+    });
+
+    const [row] = await db
+      .select({ defaultCurrency: organizationSettings.defaultCurrency })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, TEST_ORG_ID));
+    expect(row?.defaultCurrency).toBe("EUR");
   });
 
   it("keeps an unset country null rather than storing a placeholder", async () => {

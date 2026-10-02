@@ -116,8 +116,6 @@ export async function createOrderFn(
           orderDate: validated.orderDate,
           quantityKg: validated.quantityKg,
           packaging: validated.packaging,
-          value: validated.value ?? null,
-          currency: validated.currency,
         }),
       CODE_CONFLICT_MESSAGES.order,
     );
@@ -146,8 +144,6 @@ export async function updateOrderFn(
       orderDate: validated.orderDate,
       quantityKg: validated.quantityKg,
       packaging: validated.packaging,
-      value: validated.value,
-      currency: validated.currency,
     });
   }, { fallbackMessage: "Failed to update order" });
 }
