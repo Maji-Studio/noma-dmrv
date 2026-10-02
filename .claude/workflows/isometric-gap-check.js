@@ -44,7 +44,8 @@ Our (non-authoritative) interpretation docs — read these to judge whether a re
 
 const OUR_CODE = `
 Our implementation — read these to judge whether a requirement is BUILT / GATED:
-- src/lib/isometric/semantic-binding-catalog.ts  (SEMANTIC_BINDING_CATALOG, keyed blueprint_key → input_key → role per group_key: source field/unit/type/bucket. INPUT_MAPPING in transformers/datapoint.ts is a projection of it. This is what we actually SUBMIT.)
+- src/lib/isometric/semantic-binding-catalog.ts  (SEMANTIC_BINDING_CATALOG, keyed blueprint_key → input_key → role per group_key: source field/unit/type/bucket for aggregated Datapoints, measurement property/data shape/transform for durability inputs, evidence targets. INPUT_MAPPING in transformers/datapoint.ts and SEQUESTRATION_COMPONENT_INPUT_BINDINGS in transformers/sequestration-binding.ts are projections of it (semantic-binding-projections.ts). This is what we actually SUBMIT.)
+- src/lib/isometric/storage-blueprints.ts  (which sequestration component each durability tier accepts, and its support status)
 - src/lib/isometric/transformers/ghg-entry.ts, measurement-sample.ts, data-upload.ts
 - src/lib/isometric/utils/aggregation.ts        (production-run → AggregatedProductionData)
 - src/lib/isometric/utils/durability-aggregation.ts

@@ -38,7 +38,7 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { evaluateSampled1000YearReplicates } from "@/lib/certification/durability-1000-replicates";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
 import { SafeError } from "@/lib/errors";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import {
   weightedBatchChemistry,
   type WeightedBatchChemistry,

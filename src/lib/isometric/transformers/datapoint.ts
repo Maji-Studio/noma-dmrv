@@ -3,39 +3,28 @@ import type { components } from "../generated/certify";
 import type { AggregatedProductionData } from "../utils/aggregation";
 import { payloadHash } from "../utils/payload-hash";
 import {
+  normalizeComponentDisplayName,
+  ownValue,
+} from "../semantic-binding-catalog";
+import {
   lookupBindingTriple,
   projectInputMapping,
   projectPeriodInputTuples,
   type InputMappingEntry,
   type InputMappingTable,
-} from "../semantic-binding-catalog";
+  type SequestrationBindingTable,
+} from "../semantic-binding-projections";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "../storage-blueprints";
 import {
   RegistryMappingError,
   SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
-  type SequestrationInputBinding,
 } from "./sequestration-binding";
-import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "./measurement-sample";
 
 type ComponentBlueprintInput = components["schemas"]["ComponentBlueprintInput"];
 type GhgEntryTemplateComponentInput =
   components["schemas"]["GhgEntryTemplateComponentInput"];
 
 export type { InputMappingEntry, InputMappingTable };
-
-function ownValue<T>(
-  record: Readonly<Record<string, T>>,
-  key: string,
-): T | undefined {
-  return Object.prototype.hasOwnProperty.call(record, key)
-    ? record[key]
-    : undefined;
-}
-
-export function normalizeComponentDisplayName(
-  componentDisplayName: string | undefined,
-): string {
-  return (componentDisplayName ?? "").trim().toLowerCase();
-}
 
 // Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
 // source field. A projection of the semantic binding catalog
@@ -63,9 +52,10 @@ export function lookupInputMapping(
 }
 
 // Resolves the aggregated-source field for a mapping. Usually just
-// `mapping.source`; when the mapping carries a per-component override (a triple
-// declared by >1 template component — e.g. the pyrolysis diesel split), it
-// resolves by normalized component display name and FAILS CLOSED on an
+// `mapping.source`; when the mapping carries a per-component override (the
+// catalog's disambiguation rule for a triple declared by >1 template
+// component — e.g. the pyrolysis diesel split), it resolves by normalized
+// component display name and FAILS CLOSED on an
 // unrecognized name so a rename/added component can never silently double-count
 // or land in the wrong bucket.
 export function resolveDatapointSource(
@@ -161,14 +151,7 @@ function declarativeInputMappingRevision(
   return groups;
 }
 
-type MappingRevisionSequestrationBindings = Readonly<
-  Record<
-    string,
-    {
-      readonly inputs: Readonly<Record<string, SequestrationInputBinding>>;
-    }
-  >
->;
+type MappingRevisionSequestrationBindings = SequestrationBindingTable;
 
 type SequestrationPresentationRevision = Readonly<
   Record<

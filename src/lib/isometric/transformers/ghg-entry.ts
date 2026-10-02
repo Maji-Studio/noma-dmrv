@@ -1,7 +1,7 @@
 import { SafeError } from "@/lib/errors";
 import { formatCount } from "@/lib/copy-utils";
 import type { components } from "../generated/certify";
-import { isSequestrationBlueprintFamily } from "./measurement-sample";
+import { isSequestrationBlueprintFamily } from "../storage-blueprints";
 import {
   getSequestrationInputBinding,
   hasExplicitSequestrationBinding,

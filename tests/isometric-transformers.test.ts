@@ -13,9 +13,9 @@ import {
 } from "@/lib/isometric/transformers/sequestration-binding";
 import {
   build1000YearSequestrationSample,
-  CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
   PRODUCT_MASS_UNIT,
 } from "@/lib/isometric/transformers/measurement-sample";
+import { CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR } from "@/lib/isometric/storage-blueprints";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 type ComponentBlueprint = components["schemas"]["ComponentBlueprint"];

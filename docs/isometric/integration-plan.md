@@ -298,7 +298,8 @@ Source attribution is target-specific, not Removal-wide.
 
 `src/lib/certification/removal-source-bindings.ts` classifies operator
 documents and generated evidence ledgers into an immutable plan of exact
-component/input targets:
+component/input targets, taken from the evidence targets the semantic binding
+catalog declares on each input:
 
 - feedstock bill of lading to feedstock transport `mass_distance`;
 - delivery bill of lading to biochar transport `mass_distance`;

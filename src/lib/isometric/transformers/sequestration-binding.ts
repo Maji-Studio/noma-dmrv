@@ -3,23 +3,23 @@ import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibi
 import type { components } from "../generated/certify";
 import { buildRemovalSupplierRef } from "../utils/supplier-ref";
 import { encodeMeasurementProperty } from "../utils/measurement-property";
+import { ownValue } from "../semantic-binding-catalog";
+import {
+  lookupMeasurementSampleTransform,
+  projectSequestrationInputBindings,
+  type SequestrationBindingTable,
+  type SequestrationInputBinding,
+} from "../semantic-binding-projections";
 import {
   classifySequestration1000YearComponent,
   CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR,
-  CARBON_CONTENTS_1000_YEAR_UNIT,
-  INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
   isSequestrationBlueprintFamily,
-  PRODUCT_MASS_UNIT,
-  S_FRACTION_MEASUREMENT_PROPERTY,
-  S_FRACTION_UNIT,
-  TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
-} from "./measurement-sample";
+  LEGACY_SEQUESTRATION_BLUEPRINT_KEY,
+} from "../storage-blueprints";
+
+export type { SequestrationInputBinding };
 
 type GhgEntryTemplate = components["schemas"]["GhgEntryTemplate"];
-type InputDataShape = components["schemas"]["InputDataShape"];
-type MeasurementProperty = components["schemas"]["MeasurementProperty"];
-type QuantityKind = components["schemas"]["QuantityKindType"];
-type DatapointType = components["schemas"]["DatapointType"];
 type CreateDatapointRequest =
   components["schemas"]["CreateDatapointRequest"];
 type CreateMeasurementSampleRequest =
@@ -40,42 +40,8 @@ export class RegistryMappingError extends SafeError {
   }
 }
 
-const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
-  "carbon_rich_substance_sequestration";
 const MISSING_DURABILITY_EVIDENCE_MESSAGE =
   "The selected Removal template has no value from the durability evidence. Check the Samples before submitting.";
-
-interface MeasurementPropertyInputBinding {
-  dataShape: InputDataShape;
-  source: "measurement-property";
-  measurementProperty: MeasurementProperty;
-  sourceContract: SequestrationSourceContract;
-}
-
-interface SequestrationSourceContract {
-  nomaSource: string;
-  transformRevision: "identity-v1" | "percent-to-fraction-v1";
-  wireUnit: string;
-  confirmation: "confirmed" | "externally-unconfirmed";
-}
-
-interface CreditBatchMassDirectDatapointInputBinding {
-  dataShape: InputDataShape;
-  source: "direct-datapoint";
-  valueSource: "credit-batch-product-mass";
-  quantityKind: QuantityKind;
-  unit: string;
-  datapointType: DatapointType;
-  sourceContract: SequestrationSourceContract;
-}
-
-export type SequestrationInputBinding =
-  | MeasurementPropertyInputBinding
-  | CreditBatchMassDirectDatapointInputBinding;
-
-interface SequestrationBlueprintBinding {
-  inputs: Readonly<Record<string, SequestrationInputBinding>>;
-}
 
 interface MeasurementSampleSubmission {
   creditBatchId: string;
@@ -93,76 +59,18 @@ export interface DirectSequestrationDatapoint {
 }
 
 /**
- * Explicit component-input bindings confirmed for the live 1000-year removal
- * template. Each input declares whether the GHG entry consumes a datapoint
- * returned by a measurement sample or a direct datapoint posted by the removal
- * orchestrator. This table deliberately owns the input shapes because
- * The replacement component is absent from some component-blueprint catalog
- * responses, so this local contract must be exact and fail closed on drift.
+ * Explicit component-input bindings for the storage components noma submits:
+ * a projection of the semantic binding catalog's measurement-sample roles.
+ * Each input declares whether the GHG entry consumes a datapoint returned by a
+ * measurement sample or a direct datapoint posted by the removal orchestrator.
  */
-export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS = {
-  [CURRENT_SEQUESTRATION_BLUEPRINT_1000_YEAR]: {
-    inputs: {
-      total_carbon_contents: {
-        dataShape: "LIST",
-        source: "measurement-property",
-        measurementProperty:
-          TOTAL_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
-        sourceContract: {
-          nomaSource: "Sample totalCarbonPercent[]",
-          transformRevision: "percent-to-fraction-v1",
-          wireUnit: CARBON_CONTENTS_1000_YEAR_UNIT,
-          confirmation: "confirmed",
-        },
-      },
-      inorganic_carbon_contents: {
-        dataShape: "LIST",
-        source: "measurement-property",
-        measurementProperty:
-          INORGANIC_CARBON_CONTENTS_1000_YEAR_MEASUREMENT_PROPERTY,
-        sourceContract: {
-          nomaSource: "Sample inorganicCarbonPercent[]",
-          transformRevision: "percent-to-fraction-v1",
-          wireUnit: CARBON_CONTENTS_1000_YEAR_UNIT,
-          confirmation: "externally-unconfirmed",
-        },
-      },
-      product_mass: {
-        dataShape: "SCALAR",
-        source: "direct-datapoint",
-        valueSource: "credit-batch-product-mass",
-        quantityKind: "mass",
-        unit: PRODUCT_MASS_UNIT,
-        datapointType: "REPORTED",
-        sourceContract: {
-          nomaSource: "Attribution-scaled dry applied biochar mass",
-          transformRevision: "identity-v1",
-          wireUnit: PRODUCT_MASS_UNIT,
-          // Standalone direct product_mass acceptance is still open in
-          // docs/open-questions-isometric.md (fdurable-1000-r0-semantics);
-          // keep the diagnostic honest until the registry confirms it.
-          confirmation: "externally-unconfirmed",
-        },
-      },
-      s_fraction: {
-        dataShape: "LIST",
-        source: "measurement-property",
-        measurementProperty: S_FRACTION_MEASUREMENT_PROPERTY,
-        sourceContract: {
-          nomaSource: "Sample sReflectanceFraction[]",
-          transformRevision: "identity-v1",
-          wireUnit: S_FRACTION_UNIT,
-          confirmation: "externally-unconfirmed",
-        },
-      },
-    },
-  },
-} as const satisfies Readonly<Record<string, SequestrationBlueprintBinding>>;
+export const SEQUESTRATION_COMPONENT_INPUT_BINDINGS: SequestrationBindingTable =
+  projectSequestrationInputBindings();
 
 export function hasExplicitSequestrationBinding(
   blueprintKey: string,
 ): boolean {
-  return blueprintKey in SEQUESTRATION_COMPONENT_INPUT_BINDINGS;
+  return ownValue(SEQUESTRATION_COMPONENT_INPUT_BINDINGS, blueprintKey) !== undefined;
 }
 
 /**
@@ -194,29 +102,21 @@ export function getSequestrationInputBinding(
   blueprintKey: string,
   inputKey: string,
 ): SequestrationInputBinding | null {
-  const blueprintBinding = (
-    SEQUESTRATION_COMPONENT_INPUT_BINDINGS as Readonly<
-      Record<string, SequestrationBlueprintBinding>
-    >
-  )[blueprintKey];
-  return blueprintBinding?.inputs[inputKey] ?? null;
+  const blueprintBinding = ownValue(SEQUESTRATION_COMPONENT_INPUT_BINDINGS, blueprintKey);
+  return (blueprintBinding && ownValue(blueprintBinding.inputs, inputKey)) ?? null;
 }
 
-const PERCENT_TO_FRACTION_DIVISOR = 100;
-
-/** Applies the declarative source transform used by the active binding. */
+/** Applies the transform the active binding declares. */
 export function transformSequestrationSourceValue(
   blueprintKey: string,
   inputKey: string,
   value: number,
 ): number {
-  const binding = getSequestrationInputBinding(blueprintKey, inputKey);
-  if (!binding) {
+  const transform = lookupMeasurementSampleTransform(blueprintKey, inputKey);
+  if (!transform) {
     throw missingInputBindingError(blueprintKey, inputKey);
   }
-  return binding.sourceContract.transformRevision === "percent-to-fraction-v1"
-    ? value / PERCENT_TO_FRACTION_DIVISOR
-    : value;
+  return transform.apply(value);
 }
 
 /**
@@ -249,11 +149,7 @@ export function assertSequestrationTemplateBindings(
 
   const component = components[0];
   assertSupportedSequestrationBlueprint(component.blueprint_key);
-  const blueprintBinding = (
-    SEQUESTRATION_COMPONENT_INPUT_BINDINGS as Readonly<
-      Record<string, SequestrationBlueprintBinding>
-    >
-  )[component.blueprint_key];
+  const blueprintBinding = SEQUESTRATION_COMPONENT_INPUT_BINDINGS[component.blueprint_key];
 
   for (const input of component.inputs) {
     if (!blueprintBinding.inputs[input.input_key]) {
