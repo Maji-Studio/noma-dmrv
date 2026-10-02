@@ -59,7 +59,7 @@ export function EmptyState({
       </div>
       {action && (
         // Long CTA labels wrap inside the dashed box instead of spilling past it.
-        <div className="flex max-w-full justify-center [&>*]:h-auto [&>*]:py-12 [&>*]:max-w-full [&>*]:whitespace-normal [&>*]:text-center">
+        <div className="flex max-w-full justify-center [&>*]:h-auto [&>*]:min-h-40 [&>*]:py-10 [&>*]:leading-[1.4] [&>*]:max-w-full [&>*]:whitespace-normal [&>*]:text-center">
           {action}
         </div>
       )}

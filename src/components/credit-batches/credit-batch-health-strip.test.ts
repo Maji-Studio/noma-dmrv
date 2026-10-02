@@ -2,62 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { BatchHealthCheck } from "@/lib/certification/batch-health";
 import {
   batchHealthFixLinkFor,
-  compactBatchHealthDetail,
   fallbackBatchHealthFixTarget,
-  NEXT_ACTION_DETAIL_MAX_CHARS,
   resolveBatchHealthFixTarget,
 } from "@/lib/certification/batch-health-links";
-
-describe("compactBatchHealthDetail", () => {
-  it("returns the string unchanged when it is shorter than the limit", () => {
-    expect(compactBatchHealthDetail("Short detail.", 180)).toBe(
-      "Short detail.",
-    );
-  });
-
-  it("returns the string unchanged when its length equals the limit exactly", () => {
-    const exactly180 = "x".repeat(180);
-    expect(compactBatchHealthDetail(exactly180, 180)).toBe(exactly180);
-    expect(compactBatchHealthDetail(exactly180, 180).length).toBe(180);
-  });
-
-  it("truncates and appends an ellipsis when the detail exceeds the limit", () => {
-    const long = "a".repeat(200);
-    const result = compactBatchHealthDetail(long, 180);
-    expect(result.endsWith("…")).toBe(true);
-    expect(result.length).toBe(181);
-  });
-
-  it("trims trailing whitespace from the slice before appending the ellipsis", () => {
-    // Build a string where the 180-char boundary lands on a space.
-    const core = "word ".repeat(36); // 36 × 5 = 180 chars; ends on a space
-    expect(core.length).toBe(180);
-    const long = core + "trailing";
-    const result = compactBatchHealthDetail(long, 180);
-    expect(result).toBe("word ".repeat(36).trimEnd() + "…");
-    expect(result.endsWith(" …")).toBe(false);
-  });
-
-  it("uses NEXT_ACTION_DETAIL_MAX_CHARS as the default production limit", () => {
-    expect(NEXT_ACTION_DETAIL_MAX_CHARS).toBe(180);
-    const boundary = "a".repeat(180);
-    expect(compactBatchHealthDetail(boundary)).toBe(boundary);
-    expect(compactBatchHealthDetail("a".repeat(181))).toMatch(/^a{180}…$/);
-  });
-
-  it("handles an empty string without throwing", () => {
-    expect(compactBatchHealthDetail("", 180)).toBe("");
-    expect(compactBatchHealthDetail("", 0)).toBe("");
-  });
-
-  it("returns just the ellipsis when maxChars is 0 and detail is non-empty", () => {
-    expect(compactBatchHealthDetail("hello", 0)).toBe("…");
-  });
-
-  it("does not add an ellipsis to a string that fits exactly in a small limit", () => {
-    expect(compactBatchHealthDetail("abc", 3)).toBe("abc");
-  });
-});
 
 describe("fallbackBatchHealthFixTarget", () => {
   it("routes carbon check failures to labSamples (where lab inputs are entered)", () => {

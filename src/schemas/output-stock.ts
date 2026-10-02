@@ -5,14 +5,16 @@ const WET_MASS_REQUIRED = 'Enter the wet mass.';
 const MOISTURE_REQUIRED = 'Enter the measured moisture.';
 const REASON_REQUIRED = 'Enter a reason.';
 
+// Not `requiredNumber`: the stock forms coerce at the register site
+// (`setValueAs: toNumberOrNull`), and docs/forms.md forbids a second layer.
 /** Wet mass in kg; a blank or non-numeric entry gets a plain message, not Zod's type error. */
 const wetMassSchema = () => z
   .number({ error: iss => iss.input == null ? WET_MASS_REQUIRED : 'Enter the wet mass as a number.' })
   .pipe(massKgSchema().finite());
-/** Moisture percent; a non-numeric entry gets a plain message, not Zod's type error. */
+/** Moisture percent; blank, non-numeric and out-of-range entries get plain messages, not Zod's. */
 const moistureSchema = () => z
   .number({ error: iss => iss.input == null ? MOISTURE_REQUIRED : 'Enter the moisture as a number.' })
-  .pipe(storedPercentSchema().finite().min(0).lt(100));
+  .pipe(storedPercentSchema().finite().min(0, 'Enter 0% or more.').lt(100, 'Enter less than 100%.'));
 const reasonSchema = (max: number) => z
   .string({ error: REASON_REQUIRED })
   .trim()

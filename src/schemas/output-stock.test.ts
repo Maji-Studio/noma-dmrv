@@ -36,7 +36,12 @@ describe('output operation boundary', () => {
     const all = [
       ...messages({ ...base, wetMassKg: null, reason: '' }),
       ...messages({ ...base, sources: [{ layerId: 'nope', moisturePercent: null }] }),
+      ...messages({ ...base, moisturePercent: 100 }),
+      ...messages({ ...base, moisturePercent: -1 }),
+      ...messages({ ...base, sources: [{ layerId: '00000000-0000-4000-8000-000000000003', moisturePercent: 120 }] }),
     ];
-    for (const message of all) expect(message).not.toMatch(/Invalid input|expected|Too small/);
+    expect(messages({ ...base, moisturePercent: 100 })).toEqual(['Enter less than 100%.']);
+    expect(messages({ ...base, moisturePercent: -1 })).toEqual(['Enter 0% or more.']);
+    for (const message of all) expect(message).not.toMatch(/Invalid input|expected|Too small|Too big/);
   });
 });

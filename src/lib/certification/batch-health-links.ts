@@ -17,22 +17,10 @@ export interface BatchHealthFixLink {
   href: string;
 }
 
-export const NEXT_ACTION_DETAIL_MAX_CHARS = 180;
-
 // Note: the problem-phrased "open check headline" was retired in Phase 0 — every
 // readiness surface now renders the one neutral `BatchHealthCheck.requirementLabel`
 // (see `requirement-labels.ts`), so the batch page and the removal wizard can't
 // phrase the same gap differently.
-
-export function compactBatchHealthDetail(
-  detail: string,
-  maxChars: number = NEXT_ACTION_DETAIL_MAX_CHARS,
-): string {
-  if (detail.length <= maxChars) {
-    return detail;
-  }
-  return `${detail.slice(0, maxChars).trimEnd()}…`;
-}
 
 export function fallbackBatchHealthFixTarget(
   key: BatchHealthCheckKey,
