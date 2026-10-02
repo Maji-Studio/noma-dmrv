@@ -89,9 +89,9 @@ export function EnergyRecordBreakdown({ record }: { record: EnergyRecord }) {
       <dl className="grid grid-cols-1 gap-x-32 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         {ENERGY_SOURCES.filter((source) => sourcesFor(record).includes(source.key)).map((source) => {
           const gap = gaps[source.key];
-          // Absence is not a zero: with every reading missing, the readout is
-          // the token without a unit, never "0 kWh" or "est. 0 kg CO2e".
-          const wholeGap = gap != null && gap.missing === gap.of;
+          // Absence is not a zero: with nothing recorded for the source, the
+          // readout is the token without a unit, never "0 kWh" or "est. 0 kg CO2e".
+          const wholeGap = gap != null && !gap.recorded;
           return (
             <div key={source.key} className="flex items-start justify-between gap-12">
               <dt className="flex items-center gap-8 body-small">

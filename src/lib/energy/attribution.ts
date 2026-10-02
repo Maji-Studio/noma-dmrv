@@ -214,6 +214,7 @@ interface GapTally {
   unit: ReadingGapUnit;
   of: Set<string>;
   missing: Set<string>;
+  recorded: boolean;
 }
 
 interface FootprintTally {
@@ -242,13 +243,14 @@ function count(
   reading: Reading | null,
   scale: number,
 ): void {
-  const gap = tally.gaps[source] ?? { unit, of: new Set(), missing: new Set() };
+  const gap = tally.gaps[source] ?? { unit, of: new Set(), missing: new Set(), recorded: false };
   tally.gaps[source] = gap;
   gap.of.add(id);
   if (reading == null) {
     gap.missing.add(id);
     return;
   }
+  gap.recorded = true;
   tally.activity[source] += reading.activity * scale;
   tally.kg[source] += (reading.kg ?? 0) * scale;
 }
@@ -309,7 +311,12 @@ function finish(tally: FootprintTally, factors: EnergyFactors | null): EnergyFoo
   for (const source of ENERGY_SOURCE_KEYS) {
     const gap = tally.gaps[source];
     if (gap && gap.missing.size > 0) {
-      gaps[source] = { missing: gap.missing.size, of: gap.of.size, unit: gap.unit };
+      gaps[source] = {
+        missing: gap.missing.size,
+        of: gap.of.size,
+        unit: gap.unit,
+        recorded: gap.recorded,
+      };
     }
   }
   return { activity: tally.activity, kg: factors ? tally.kg : null, gaps };

@@ -64,7 +64,7 @@ describe("buildEnergyBreakdown", () => {
       ALL_TIME,
     );
     const a = record(breakdown.records, "a");
-    expect(a.footprint.gaps.grid).toEqual({ missing: 1, of: 1, unit: "run" });
+    expect(a.footprint.gaps.grid).toEqual({ missing: 1, of: 1, unit: "run", recorded: false });
     expect(a.footprint.activity.grid).toBe(0);
     expect(breakdown.flows.some((flow) => flow.source === "grid")).toBe(false);
     expect(breakdown.gaps).toEqual([
@@ -180,7 +180,7 @@ describe("buildEnergyBreakdown", () => {
       ALL_TIME,
     );
     const d = record(breakdown.records, "d");
-    expect(d.footprint.gaps.startup).toEqual({ missing: 1, of: 1, unit: "run" });
+    expect(d.footprint.gaps.startup).toEqual({ missing: 1, of: 1, unit: "run", recorded: false });
     expect(d.footprint.activity.startup).toBe(0);
   });
 
@@ -208,6 +208,33 @@ describe("buildEnergyBreakdown", () => {
       expect(p.creditBatchIds).toEqual(["b1"]);
       expect(p.context).toBe("North block");
     }
+  });
+
+  it("keeps a shared feedstock's recorded share when another carried run cannot be scaled", () => {
+    const breakdown = buildEnergyBreakdown(
+      inputs({
+        runs: [run({ id: "a", biocharDryMassKg: 900 }), run({ id: "b", biocharDryMassKg: null })],
+        feedstocks: [
+          { id: "f", code: "FS-1", day: "2026-09-01", wetMassKg: 2000, legs: [{ distanceKm: 10, loadMassKg: 2000 }] },
+        ],
+        feedstockDraws: [
+          { runId: "a", feedstockId: "f", wetMassKg: 1000 },
+          { runId: "b", feedstockId: "f", wetMassKg: 1000 },
+        ],
+        deliveries: [
+          { id: "d", code: "DL-1", day: "2026-09-20", customerName: null, effectiveDistanceKm: 20, deliveredWetMassKg: 1000, massDryKg: 900 },
+        ],
+        deliveryRunShares: [
+          { ownerId: "d", runId: "a", dryMassKg: 450 },
+          { ownerId: "d", runId: "b", dryMassKg: 450 },
+        ],
+      }),
+      FACTORS,
+      ALL_TIME,
+    );
+    const d = record(breakdown.records, "d");
+    expect(d.footprint.gaps.feedstockTransport).toEqual({ missing: 1, of: 1, unit: "feedstock", recorded: true });
+    expect(d.footprint.activity.feedstockTransport).toBeGreaterThan(0);
   });
 
   it("counts production as missing for an application with no dry mass to scale by", () => {

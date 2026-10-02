@@ -111,6 +111,12 @@ export interface ReadingGap {
   missing: number;
   of: number;
   unit: ReadingGapUnit;
+  /**
+   * Whether any contribution of this source was recorded (a recorded zero
+   * counts). Ids dedupe, so `missing === of` can still hide a recorded share:
+   * one feedstock drawn by a scalable and an unscalable run.
+   */
+  recorded: boolean;
 }
 
 export interface EnergyFootprint {

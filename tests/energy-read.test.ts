@@ -170,7 +170,7 @@ describe.sequential("energy read", () => {
     const breakdown = buildEnergyBreakdown(inputs, null, { from: null, to: "2026-12-31" });
     const delivery = breakdown.records.find((record) => record.scope === "delivery");
     expect(delivery?.runCount).toBeGreaterThan(0);
-    expect(delivery?.footprint.gaps.biocharTransport).toEqual({ missing: 1, of: 1, unit: "delivery" });
+    expect(delivery?.footprint.gaps.biocharTransport).toEqual({ missing: 1, of: 1, unit: "delivery", recorded: false });
     const run = breakdown.records.find((record) => record.id === fixture.runs[0].id);
     expect(run?.footprint.activity.feedstockTransport).toBeCloseTo(
       2 * LEG_KM * (FEEDSTOCK_WET_KG / 1000) * (FEEDSTOCK_DRAW_KG / FEEDSTOCK_WET_KG),
