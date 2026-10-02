@@ -5,10 +5,16 @@
 version: 2
 updates:
   - package-ecosystem: "npm" # covers pnpm-lock.yaml
-    directory: "/"
+    directories: ["/", "/site"]
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 0
+    ignore:
+      # v6 breaks the web worker under Turbopack (blank basemaps, #752/#870).
+      # Its XSS fix only matters for untrusted attribution strings; ours are
+      # constants. Revisit with maplibregl.setWorkerUrl() and the map smoke test.
+      - dependency-name: "maplibre-gl"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
