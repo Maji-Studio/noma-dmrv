@@ -37,10 +37,10 @@ function DerivedRatio({ label, value, certifyRequired, certifyStatus }: {
 }) {
   return (
     <DerivedHeadline
-      label={<>
+      label={<span className="flex min-h-24 items-center gap-8">
         <span>{label}</span>
         {certifyRequired && <CertificationFieldTag status={certifyStatus} />}
-      </>}
+      </span>}
       value={value == null ? null : formatRatio(value)}
     />
   );
@@ -83,9 +83,9 @@ export function SampleDerivedRatios({
     <CompositionCard
       title="Derived ratios"
       headline={<>
-        {/* Bottom-aligned: the CERT tag makes the H:C label row taller than
-            O:C's, and top alignment would drop one figure below the other. */}
-        <div className="flex flex-wrap items-end gap-x-32 gap-y-12">
+        {/* Every label row is min-h-24, so the CERT tag on H:C does not push
+            its figure below O:C's and both labels share a baseline. */}
+        <div className="flex flex-wrap items-start gap-x-32 gap-y-12">
           <DerivedRatio
             label="H:C org"
             value={hToCOrgRatio}

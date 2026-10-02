@@ -6,6 +6,7 @@ import {
   FormSection,
   resolveCertFieldStatus,
 } from "@/components/forms";
+import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import { useDocumentsForEntity } from "@/hooks/use-documents";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
@@ -18,6 +19,8 @@ interface ProductionReadingsFieldProps {
   productionRunId?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
   disabled?: boolean;
+  /** Injected by FormSpine, do not set manually. */
+  __spine?: SpineMeta;
 }
 
 /**
@@ -28,6 +31,7 @@ export function ProductionReadingsField({
   productionRunId,
   deferredAttachments,
   disabled = false,
+  __spine,
 }: ProductionReadingsFieldProps) {
   const { data: documents, isSuccess } = useDocumentsForEntity(
     "production_run",
@@ -41,6 +45,7 @@ export function ProductionReadingsField({
     <FormSection
       title="Readings file"
       icon={<FileCsvIcon size={14} weight="bold" />}
+      __spine={__spine}
     >
       <FormField
         id="readingsCsv"
@@ -61,3 +66,7 @@ export function ProductionReadingsField({
     </FormSection>
   );
 }
+
+(ProductionReadingsField as unknown as Record<string, boolean>)[
+  SPINE_SECTION_TAG
+] = true;

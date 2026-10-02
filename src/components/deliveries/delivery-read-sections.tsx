@@ -1,4 +1,5 @@
 /** Delivery side-sheet view mode: the sections config for EntitySideSheet. */
+import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import { TransportEvidencePanel, TransportRoutePreview } from "@/components/transport-legs";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
@@ -73,6 +74,7 @@ export function deliverySheetSections(delivery: DeliveryWithRelations, facilitie
     },
     {
       title: "Delivery evidence",
+      hint: TRANSPORT_EVIDENCE_HINTS.delivery,
       fields: [],
       content: (
         <TransportEvidencePanel
