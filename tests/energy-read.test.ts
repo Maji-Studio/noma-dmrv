@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  applications,
   facilities,
   facilityEmissionFactors,
   feedstocks,
@@ -121,6 +122,41 @@ describe.sequential("energy read", () => {
     expect(sharedDryKg).toBeCloseTo(delivery.massDryKg ?? Number.NaN, 3);
     expect(inputs.applications).toEqual([]);
     expect(inputs.applicationRunShares).toEqual([]);
+  });
+
+  it("reads application and feedstock calendar days as entered, west of UTC", async () => {
+    const [delivery] = (await getEnergyInputs(fixture.ctx, fixture.facility.id)).inputs.deliveries;
+    const [feedstockBefore] = await db
+      .select({ deliveryDate: feedstocks.deliveryDate })
+      .from(feedstocks)
+      .where(eq(feedstocks.id, feedstockId));
+    // Date-only inputs are stored as the chosen day at UTC midnight.
+    await db.update(feedstocks).set({ deliveryDate: new Date("2026-09-01") }).where(eq(feedstocks.id, feedstockId));
+    await db.update(facilities).set({ timezone: "America/Sao_Paulo" }).where(eq(facilities.id, fixture.facility.id));
+    const [application] = await db
+      .insert(applications)
+      .values({
+        organizationId: fixture.ctx.organizationId,
+        code: `E2E-ENERGY-AP-${fixture.tag}`,
+        applicationDate: new Date("2026-09-15"),
+        deliveryId: delivery.id,
+        biocharAppliedTons: 0.1,
+        biocharAppliedDryTons: 0.05,
+      })
+      .returning({ id: applications.id });
+    try {
+      const { inputs, timeZone } = await getEnergyInputs(fixture.ctx, fixture.facility.id);
+      expect(timeZone).toBe("America/Sao_Paulo");
+      expect(inputs.applications.find((row) => row.id === application.id)?.day).toBe("2026-09-15");
+      expect(inputs.feedstocks.find((row) => row.id === feedstockId)?.day).toBe("2026-09-01");
+    } finally {
+      await db.delete(applications).where(eq(applications.id, application.id));
+      await db.update(facilities).set({ timezone: "UTC" }).where(eq(facilities.id, fixture.facility.id));
+      await db
+        .update(feedstocks)
+        .set({ deliveryDate: feedstockBefore.deliveryDate })
+        .where(eq(feedstocks.id, feedstockId));
+    }
   });
 
   it("reads another organization's facility as empty", async () => {

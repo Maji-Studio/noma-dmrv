@@ -9,7 +9,10 @@
  * well as the facility, so a foreign facility id reads as an empty facility.
  *
  * Runs exclude cancelled and archived ones, like the old facility energy
- * totals did. Days are facility-local `YYYY-MM-DD`.
+ * totals did. Days are facility-local `YYYY-MM-DD`: run starts and deliveries
+ * are instants read in the facility zone, while application dates and
+ * feedstock receipt dates are calendar days stored as UTC midnight, so their
+ * UTC day is the day the operator chose.
  */
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -32,7 +35,7 @@ import {
   transportLegs,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { DEFAULT_FACILITY_TIMEZONE, formatFacilityDate } from "@/lib/date-utils";
+import { DEFAULT_FACILITY_TIMEZONE, formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import type {
   EnergyFeedstockInput,
   EnergyInputs,
@@ -303,7 +306,7 @@ export async function getEnergyInputs(
       feedstocks: feedstockRows.map((feedstock) => ({
         id: feedstock.id,
         code: feedstock.code,
-        day: dayOf(feedstock.deliveryDate ?? feedstock.createdAt),
+        day: feedstock.deliveryDate ? formatUtcDate(feedstock.deliveryDate) : dayOf(feedstock.createdAt),
         wetMassKg: feedstock.wetMassKg,
         legs: legsByFeedstock.get(feedstock.id) ?? [],
       })),
@@ -321,7 +324,7 @@ export async function getEnergyInputs(
       applications: applicationRows.map((application) => ({
         id: application.id,
         code: application.code,
-        day: dayOf(application.applicationDate),
+        day: formatUtcDate(application.applicationDate),
         deliveryId: application.deliveryId,
         dryMassKg: application.dryTons == null ? null : application.dryTons * KG_PER_TONNE,
         fieldName: application.fieldName,
