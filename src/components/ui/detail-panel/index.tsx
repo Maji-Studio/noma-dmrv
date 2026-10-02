@@ -105,6 +105,8 @@ interface DetailSectionProps {
   className?: string;
   /** Positional metadata for the passive read-only step rail. */
   spine?: SpineMeta;
+  /** Explanatory text behind an ⓘ beside the title. */
+  hint?: React.ReactNode;
 }
 
 function DetailSection({
@@ -113,8 +115,9 @@ function DetailSection({
   divider = true,
   className,
   spine,
+  hint,
 }: DetailSectionProps) {
-  const label = <SectionLabel>{title}</SectionLabel>;
+  const label = <SectionLabel hint={hint}>{title}</SectionLabel>;
 
   if (spine) {
     return (
@@ -356,6 +359,8 @@ export interface DetailPanelField {
 /** One read section. Both detail levels show every section and its fields. */
 export interface DetailPanelSection {
   title: string;
+  /** Explanatory text behind an ⓘ beside the title. */
+  hint?: React.ReactNode;
   fields: DetailPanelField[];
   /** Optional extension content that belongs inside this mirrored section. */
   content?: React.ReactNode;
@@ -381,6 +386,7 @@ function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
         <DetailSection
           key={section.title}
           title={section.title}
+          hint={section.hint}
           divider={!numbered && sectionIdx > 0}
           spine={
             numbered

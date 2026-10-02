@@ -1,4 +1,5 @@
 /** Feedstock delivery side-sheet view mode: the sections config for EntitySideSheet. */
+import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
@@ -64,6 +65,7 @@ export function feedstockSheetSections(feedstock: FeedstockWithRelations): Detai
     },
     {
       title: "Transport evidence",
+      hint: TRANSPORT_EVIDENCE_HINTS.feedstock,
       fields: [],
       content: (
         <TransportEvidencePanel

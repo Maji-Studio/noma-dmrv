@@ -19,6 +19,7 @@ import {
 } from "@/hooks/use-documents";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { InfoHint } from "@/components/ui/tooltip";
+import { TRANSPORT_EVIDENCE_HINTS } from "./transport-evidence-hints";
 import { isAcceptedDeliveryEvidenceDocument } from "@/lib/certification/delivery-evidence";
 import { isAcceptedTransportEvidenceDocument } from "@/lib/certification/transport-evidence";
 import {
@@ -37,14 +38,6 @@ const PANEL_HEADINGS: Record<TransportEvidenceEntityType, string> = {
   delivery: "Delivery evidence",
 };
 
-const PANEL_HINTS: Record<TransportEvidenceEntityType, string> = {
-  feedstock:
-    "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
-  transport_leg:
-    "Optional. Attach a bill of lading, weigh-scale ticket, or other transport record if you have one.",
-  delivery:
-    "Optional. Attach a delivery receipt, bill of lading, photo, or other delivery record.",
-};
 
 const PANEL_EMPTY_TITLE: Record<TransportEvidenceEntityType, string> = {
   feedstock: "No transport evidence",
@@ -231,16 +224,18 @@ export function TransportEvidencePanel({
       }
       aria-label={embedded ? heading : undefined}
     >
-      <div className="flex items-center gap-6">
-        {!embedded && (
+      {/* Embedded, the parent section title carries the heading and the hint,
+          so no row of its own is left holding a lone icon. */}
+      {!embedded && (
+        <div className="flex items-center gap-6">
           <h3 className="body-small font-medium text-[var(--color-text-primary)]">
             {heading}
           </h3>
-        )}
-        <InfoHint label={`About ${heading.toLowerCase()}`}>
-          {PANEL_HINTS[entityType]}
-        </InfoHint>
-      </div>
+          <InfoHint label={`About ${heading.toLowerCase()}`}>
+            {TRANSPORT_EVIDENCE_HINTS[entityType]}
+          </InfoHint>
+        </div>
+      )}
       <TransportEvidenceDocuments
         entityType={entityType}
         entityId={entityId}

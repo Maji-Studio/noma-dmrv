@@ -13,6 +13,7 @@ import {
   ClassifiedTransportEvidenceUploader,
   TransportEvidencePanel,
 } from "@/components/transport-legs";
+import { TRANSPORT_EVIDENCE_HINTS } from "@/components/transport-legs/transport-evidence-hints";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
@@ -45,6 +46,7 @@ export function FeedstockEvidenceSection({
   return (
     <FormSection
       title="Transport evidence"
+      hint={TRANSPORT_EVIDENCE_HINTS.feedstock}
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >

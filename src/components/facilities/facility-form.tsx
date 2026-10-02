@@ -234,7 +234,7 @@ export function FacilityForm({
           <FormInput
             id="contactEmail"
             type="email"
-            placeholder="e.g., operations@darkearthcarbon.com"
+            placeholder="e.g., ops@example.com"
             disabled={isSubmitting}
             error={!!errors.contactEmail}
             {...register("contactEmail")}

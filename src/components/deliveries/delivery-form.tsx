@@ -349,7 +349,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <WetMassField
             id="deliveredWetMassKg"
-            materialLabel="Biochar product"
+            label="Biochar product wet mass"
+            unit="kg"
             error={deliveredWetMassError}
             hint="Measured wet mass at departure, water included."
             required
@@ -363,7 +364,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           />
           {draw.usesSingleMoisture && <MoistureField
             id="moistureContentPercent"
-            materialLabel="Biochar product"
+            label="Biochar product moisture"
+            unit="%"
             error={errors.moistureContentPercent?.message}
             required
             disabled={isSubmitting || isEditMode}

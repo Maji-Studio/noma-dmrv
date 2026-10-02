@@ -50,8 +50,11 @@ function PageHeader({
   const eyebrowText = eyebrow ?? meta?.label;
 
   return (
-    <header className={cn("flex items-center justify-between gap-24", className)}>
-      <div className="flex min-w-0 flex-col gap-4">
+    <header className={cn(
+        "flex flex-col items-start gap-16 sm:flex-row sm:items-center sm:justify-between sm:gap-24",
+        className
+      )}>
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-1">
         {eyebrowText && (
           <p
             className={cn(
@@ -67,7 +70,7 @@ function PageHeader({
           <p className="body-small text-[var(--color-text-secondary)]">{subtitle}</p>
         )}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-12">{actions}</div>}
+      {actions && <div className="flex max-w-full shrink-0 flex-wrap items-center gap-12">{actions}</div>}
     </header>
   );
 }
