@@ -82,6 +82,12 @@ vi.mock("@/components/ui", () => ({
     </header>
   ),
   RowActionsMenu: () => null,
+  SplitButton: ({ children, menuLabel }: { children?: ReactNode; menuLabel: string }) => (
+    <div>
+      <button>{children}</button>
+      <button aria-label={menuLabel} />
+    </div>
+  ),
 }));
 vi.mock("@/components/ui/data-table", () => ({
   DataTable: Object.assign(
@@ -142,10 +148,11 @@ describe("FeedstockTypeList", () => {
   // The only other coverage of this trigger is `@live`-tagged and skipped
   // without sandbox credentials, so PR CI would not catch it disappearing
   // again (it already did once). This case keeps it hermetic.
-  it("renders the Isometric import trigger for a manager on a connected facility", () => {
+  it("renders the split-button menu trigger for a manager on a connected facility", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
-    expect(html).toContain("Import from Isometric");
+    // The import item lives inside the closed split-button menu.
+    expect(html).toContain('aria-label="More ways to add a feedstock type"');
     expect(html).toContain("New feedstock type");
   });
 
@@ -154,7 +161,7 @@ describe("FeedstockTypeList", () => {
     try {
       const html = renderToStaticMarkup(<FeedstockTypeList canManage />);
 
-      expect(html).not.toContain("Import from Isometric");
+      expect(html).not.toContain("More ways to add a feedstock type");
       expect(html).toContain("New feedstock type");
     } finally {
       certifier.mapping = { id: "mapping-1" };
@@ -164,7 +171,7 @@ describe("FeedstockTypeList", () => {
   it("withholds both header actions from a viewer who cannot manage", () => {
     const html = renderToStaticMarkup(<FeedstockTypeList canManage={false} />);
 
-    expect(html).not.toContain("Import from Isometric");
+    expect(html).not.toContain("More ways to add a feedstock type");
     expect(html).not.toContain("New feedstock type");
   });
 
