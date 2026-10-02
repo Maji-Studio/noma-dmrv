@@ -16,7 +16,7 @@ const UPCOMING = [
   { id: "reactor", title: "Bring in reactor readings.", text: "Record temperature and energy data from your reactor without entering each reading by hand." },
   { id: "telegram", title: "Record work through Telegram.", text: "Log deliveries, production runs and readings from a chat." },
   { id: "connections", title: "Connect your other tools.", text: "Use an open API and MCP to work with noma’s records from other software and AI tools." },
-  { id: "checks", title: "Catch unusual readings earlier.", text: "Use AI checks to flag values that need a closer look before reporting." },
+  { id: "checks", title: "Catch unusual readings earlier.", text: "noma already flags readings that miss their estimate or a lab limit. AI checks will look across runs for values that need a closer look before reporting." },
 ].map((u) => ({ ...u, visualLabel: `${PREVIEW}: ${u.title.replace(/\.$/, "").toLowerCase()}` }));
 ---
 <GridFrame id="next" pad="none" flush aria-labelledby="next-title">

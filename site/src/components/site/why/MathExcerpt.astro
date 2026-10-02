@@ -1,45 +1,82 @@
 ---
 /**
- * MathExcerpt: proof for principle 3. The real dry-mass function from the app
- * (src/lib/calculations/mass-dry.ts, deriveMassDryKg), quoted verbatim, the arithmetic line highlighted,
- * linked to the file on GitHub. If that function changes or moves, update CODE and FIRST_LINE;
- * tests/site-math-excerpt.test.ts at the repo root fails until they match. No props.
+ * MathExcerpt: proof for principle 3. Real calculations from the app, quoted verbatim with their line
+ * numbers, one at a time behind previous / next arrows: dry mass, round trip, durable fraction, CO₂e stored.
+ * Each shows its file, the line that does the arithmetic highlighted, a worked example and a link to the
+ * file on GitHub. The quotes live in math-excerpts.json; tests/site-math-excerpt.test.ts at the repo root
+ * fails when one drifts from the source or an example stops matching. Without JS every excerpt shows,
+ * stacked. No props.
  */
 import { GITHUB_URL } from "../../../config.js";
 import TextLink from "../TextLink.astro";
+import EXCERPTS from "./math-excerpts.json";
 
-const FILE = "src/lib/calculations/mass-dry.ts";
-const FILE_URL = `${GITHUB_URL}/blob/staging/${FILE}`;
-const FIRST_LINE = 17;
-// Verbatim from the app. Tokens: [text, kind] where kind is k (keyword), f (function), n (number), s (string), or plain.
-const CODE = [
-  [["export function ", "k"], ["deriveMassDryKg", "f"], ["("]],
-  [["  deliveredWetMassKg: number,"]],
-  [["  moisturePercent: number"]],
-  [["): number {"]],
-  [["  if ", "k"], ["(deliveredWetMassKg < "], ["0", "n"], [") {"]],
-  [["    throw new ", "k"], ["RangeError", "f"], ["("], ["'deliveredWetMassKg must be >= 0'", "s"], [");"]],
-  [["  }"]],
-  [[""]],
-  [["  if ", "k"], ["(moisturePercent < "], ["0", "n"], [" || moisturePercent > "], ["100", "n"], [") {"]],
-  [["    throw new ", "k"], ["RangeError", "f"], ["("], ["'moisturePercent must be between 0 and 100'", "s"], [");"]],
-  [["  }"]],
-  [[""]],
-  [["  return ", "k"], ["roundKg", "f"], ["(deliveredWetMassKg * ("], ["1", "n"], [" - moisturePercent / "], ["100", "n"], ["));"]],
-  [["}"]],
-];
-const HIT = 12; // the line that does the arithmetic
+// Light syntax colouring: c (comment), s (string), k (keyword), n (number), f (called function).
+const TOKEN = /(\/\*.*?\*\/|\/\/.*$)|('[^']*'|"[^"]*")|\b(export|function|const|let|return|if|throw|new)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_$][\w$]*)(?=\()/g;
+const KINDS = ["c", "s", "k", "n", "f"];
+const tokens = (line) => {
+  const out = [];
+  let at = 0;
+  for (const m of line.matchAll(TOKEN)) {
+    if (m.index > at) out.push([line.slice(at, m.index)]);
+    out.push([m[0], KINDS[m.slice(1).findIndex(Boolean)]]);
+    at = m.index + m[0].length;
+  }
+  if (at < line.length || out.length === 0) out.push([line.slice(at)]);
+  return out;
+};
+const pad = (n) => String(n).padStart(2, "0");
 ---
-<figure class="mx">
-  <figcaption class="mx-head">
-    <span class="mx-file">{FILE}</span>
+<figure class="mx" data-mx aria-label="Calculations from noma’s code">
+  <div class="mx-bar">
+    <div class="mx-nav" data-mx-nav>
+      <button type="button" class="mx-arrow" data-mx-step="-1" aria-label="Previous calculation">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M10 3L5 8l5 5" /></svg>
+      </button>
+      <button type="button" class="mx-arrow" data-mx-step="1" aria-label="Next calculation">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3l5 5-5 5" /></svg>
+      </button>
+      <span class="mx-count" data-mx-count aria-live="polite">{pad(1)} of {pad(EXCERPTS.length)}</span>
+    </div>
     <span class="mx-lic">MIT</span>
-  </figcaption>
-  <pre tabindex="0" role="region" aria-label={`The deriveMassDryKg function from ${FILE}: it checks that wet mass is not negative and moisture is between 0 and 100 percent, then returns wet mass times one minus moisture over 100, rounded to the gram.`}><code>{CODE.map((line, i) => (
-<span class:list={["mx-line", i === HIT && "is-hit"]}><span class="mx-ln" aria-hidden="true">{FIRST_LINE + i}</span>{line.map(([t, k]) => k ? <span class={`mx-${k}`}>{t}</span> : t)}</span>
+  </div>
+  <div class="mx-panels">
+    {EXCERPTS.map((x, i) => (
+      <section class:list={["mx-panel", i === 0 && "is-on"]} data-mx-panel data-title={x.title} aria-label={x.title}>
+        <p class="mx-head">
+          <span class="mx-title">{x.title}</span>
+          <span class="mx-file">{x.file}</span>
+        </p>
+        <pre tabindex="0" aria-label={`${x.title}, lines ${x.firstLine} to ${x.firstLine + x.lines.length - 1} of ${x.file}`}><code>{x.lines.map((line, j) => (
+<span class:list={["mx-line", j === x.hit && "is-hit"]}><span class="mx-ln" aria-hidden="true">{x.firstLine + j}</span>{tokens(line).map(([t, k]) => k ? <span class={`mx-${k}`}>{t}</span> : t)}</span>
 ))}</code></pre>
-  <p class="mx-foot">
-    <span>1,000 kg wet at 15% moisture returns <b>850 kg dry</b>.</span>
-    <TextLink href={FILE_URL} external>Open the file</TextLink>
-  </p>
+        <p class="mx-foot">
+          <span>{x.example[0]}<b>{x.example[1]}</b>{x.example[2]}</span>
+          <TextLink href={`${GITHUB_URL}/blob/staging/${x.file}#L${x.firstLine}`} external>Open the file</TextLink>
+        </p>
+      </section>
+    ))}
+  </div>
 </figure>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-mx]").forEach((root) => {
+    const panels = [...root.querySelectorAll<HTMLElement>("[data-mx-panel]")];
+    const count = root.querySelector<HTMLElement>("[data-mx-count]");
+    const pad = (n: number) => String(n).padStart(2, "0");
+    let at = 0;
+    const show = (i: number) => {
+      at = (i + panels.length) % panels.length;
+      panels.forEach((p, k) => {
+        p.classList.toggle("is-on", k === at);
+        p.toggleAttribute("inert", k !== at);
+      });
+      if (count) count.textContent = `${pad(at + 1)} of ${pad(panels.length)}`;
+    };
+    root.querySelectorAll<HTMLButtonElement>("[data-mx-step]").forEach((b) =>
+      b.addEventListener("click", () => show(at + Number(b.dataset.mxStep))),
+    );
+    root.classList.add("has-js");
+    show(0);
+  });
+</script>

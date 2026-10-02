@@ -1,71 +1,74 @@
 /**
- * The marketing site's /why page quotes deriveMassDryKg verbatim, with line
- * numbers (site/src/components/site/why/MathExcerpt.astro). The site is a
- * separate package and cannot import the app, so this guard compares the
- * excerpt's tokens against the real source text and fails when they drift.
+ * The marketing site's /why page quotes app calculations verbatim, with line
+ * numbers and a worked example each (site/src/components/site/why/
+ * math-excerpts.json, shown by MathExcerpt.astro). The site is a separate
+ * package and cannot import the app, so this guard compares each excerpt
+ * against the real source text and recomputes its example.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  computeCo2eStoredTonnes,
+  computeFDurable200,
+} from "@/lib/calculations/biochar-removal";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { countedRoundTripKm } from "@/lib/calculations/round-trip";
 
 const ROOT = resolve(__dirname, "..");
-const SOURCE_PATH = resolve(ROOT, "src/lib/calculations/mass-dry.ts");
-const EXCERPT_PATH = resolve(
+const EXCERPTS_PATH = resolve(
   ROOT,
-  "site/src/components/site/why/MathExcerpt.astro",
+  "site/src/components/site/why/math-excerpts.json",
 );
-const FUNCTION_START = "export function deriveMassDryKg(";
-const FUNCTION_END = "}";
 
-type Token = [text: string, kind?: string];
-
-function readExcerpt() {
-  const astro = readFileSync(EXCERPT_PATH, "utf8");
-  const file = astro.match(/const FILE = "([^"]+)";/)?.[1];
-  const firstLine = astro.match(/const FIRST_LINE = (\d+);/)?.[1];
-  const hit = astro.match(/const HIT = (\d+);/)?.[1];
-  const code = astro.match(/const CODE = (\[[\s\S]*?\n\]);/)?.[1];
-  if (!file || !firstLine || !hit || !code) {
-    throw new Error(
-      "MathExcerpt.astro no longer declares FILE, FIRST_LINE, HIT and CODE; update this guard",
-    );
-  }
-  // CODE is a JSON-shaped literal apart from its trailing commas.
-  const tokens = JSON.parse(code.replace(/,(\s*\])/g, "$1")) as Token[][];
-  return {
-    file,
-    firstLine: Number(firstLine),
-    hit: Number(hit),
-    lines: tokens.map((line) => line.map(([text]) => text).join("")),
-  };
+interface Excerpt {
+  title: string;
+  file: string;
+  firstLine: number;
+  hit: number;
+  lines: string[];
+  example: [before: string, figure: string, after: string];
 }
 
-function readFunctionSource() {
-  const lines = readFileSync(SOURCE_PATH, "utf8").split("\n");
-  const start = lines.indexOf(FUNCTION_START);
-  if (start === -1) throw new Error(`${FUNCTION_START} not found`);
-  const end = lines.indexOf(FUNCTION_END, start);
-  if (end === -1) throw new Error("deriveMassDryKg has no closing brace");
-  return { firstLine: start + 1, lines: lines.slice(start, end + 1) };
-}
+const excerpts = JSON.parse(readFileSync(EXCERPTS_PATH, "utf8")) as Excerpt[];
+
+const durable = computeFDurable200({ soilTemperatureC: 20, hToCorgRatio: 0.3 });
+
+/** Each example's bold figure, recomputed with the quoted function. */
+const EXAMPLE_FIGURES: Record<string, string> = {
+  "Dry mass": `${deriveMassDryKg(1000, 15)} kg dry`,
+  "Round trip": `${countedRoundTripKm(30)} km`,
+  "Durable fraction": `an F_durable of ${durable.fDurable.toFixed(3)}`,
+  "CO₂e stored": `${computeCo2eStoredTonnes({
+    organicCarbonPercent: 50,
+    dryMassTonnes: 0.4,
+    fDurable: durable.fDurable,
+  }).toFixed(2)} t CO₂e`,
+};
 
 describe("site /why MathExcerpt", () => {
-  const excerpt = readExcerpt();
-  const source = readFunctionSource();
-
-  it("names the file the function lives in", () => {
-    expect(resolve(ROOT, excerpt.file)).toBe(SOURCE_PATH);
+  it("has an example check for every excerpt", () => {
+    expect(excerpts.map((x) => x.title).sort()).toEqual(
+      Object.keys(EXAMPLE_FIGURES).sort(),
+    );
   });
 
-  it("quotes deriveMassDryKg verbatim", () => {
-    expect(excerpt.lines).toEqual(source.lines);
-  });
+  describe.each(excerpts)("$title", (excerpt) => {
+    const source = readFileSync(resolve(ROOT, excerpt.file), "utf8").split("\n");
 
-  it("numbers the lines as they are in the file", () => {
-    expect(excerpt.firstLine).toBe(source.firstLine);
-  });
+    it("quotes the source verbatim at its line numbers", () => {
+      const start = excerpt.firstLine - 1;
+      expect(excerpt.lines).toEqual(
+        source.slice(start, start + excerpt.lines.length),
+      );
+    });
 
-  it("highlights the arithmetic line", () => {
-    expect(excerpt.lines[excerpt.hit]).toMatch(/^\s*return roundKg\(/);
+    it("highlights a line of the excerpt", () => {
+      expect(excerpt.lines[excerpt.hit]?.trim()).toBeTruthy();
+    });
+
+    it("states the figure the function returns", () => {
+      expect(excerpt.example[1]).toBe(EXAMPLE_FIGURES[excerpt.title]);
+    });
   });
 });

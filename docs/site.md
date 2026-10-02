@@ -75,7 +75,10 @@ owner; the repository only carries the app's `vercel.json`.
 
 ## Code Quoted on the Site
 
-`/why` quotes `deriveMassDryKg` from `src/lib/calculations/mass-dry.ts` with
-its line numbers (`site/src/components/site/why/MathExcerpt.astro`).
-`tests/site-math-excerpt.test.ts` fails when the function or its position
-changes; update `CODE` and `FIRST_LINE` in the excerpt to match.
+`/why` quotes four calculations verbatim with their line numbers and a worked
+example each: `deriveMassDryKg`, `countedRoundTripKm`, `computeFDurable200` and
+`computeCo2eStoredTonnes`. The quotes live in
+`site/src/components/site/why/math-excerpts.json` (shown by `MathExcerpt.astro`).
+`tests/site-math-excerpt.test.ts` fails when a quoted function or its position
+changes, or when an example's figure no longer matches what the function returns;
+update `lines` and `firstLine` (or the example) in the JSON to match.

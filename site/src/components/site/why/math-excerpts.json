@@ -1,0 +1,92 @@
+[
+  {
+    "title": "Dry mass",
+    "file": "src/lib/calculations/mass-dry.ts",
+    "firstLine": 17,
+    "hit": 12,
+    "lines": [
+      "export function deriveMassDryKg(",
+      "  deliveredWetMassKg: number,",
+      "  moisturePercent: number",
+      "): number {",
+      "  if (deliveredWetMassKg < 0) {",
+      "    throw new RangeError('deliveredWetMassKg must be >= 0');",
+      "  }",
+      "",
+      "  if (moisturePercent < 0 || moisturePercent > 100) {",
+      "    throw new RangeError('moisturePercent must be between 0 and 100');",
+      "  }",
+      "",
+      "  return roundKg(deliveredWetMassKg * (1 - moisturePercent / 100));",
+      "}"
+    ],
+    "example": [
+      "1,000 kg wet at 15% moisture returns ",
+      "850 kg dry",
+      "."
+    ]
+  },
+  {
+    "title": "Round trip",
+    "file": "src/lib/calculations/round-trip.ts",
+    "firstLine": 18,
+    "hit": 5,
+    "lines": [
+      "/** Multiplier on a leg's one-way distance: the vehicle returns empty. */",
+      "export const ROUND_TRIP_DISTANCE_FACTOR = 2;",
+      "",
+      "/** The distance a leg contributes to mass·distance: one way × round trip. */",
+      "export function countedRoundTripKm(oneWayKm: number): number {",
+      "  return oneWayKm * ROUND_TRIP_DISTANCE_FACTOR;",
+      "}"
+    ],
+    "example": [
+      "A 30 km delivery counts ",
+      "60 km",
+      "."
+    ]
+  },
+  {
+    "title": "Durable fraction",
+    "file": "src/lib/calculations/biochar-removal.ts",
+    "firstLine": 177,
+    "hit": 7,
+    "lines": [
+      "export function computeFDurable200(input: FDurable200Input): FDurable200Result {",
+      "  const { a, b, c } = F_DURABLE_200_COEFFICIENTS;",
+      "",
+      "  const rounded = roundSoilTemperatureC(input.soilTemperatureC);",
+      "  const temperatureFloored = input.soilTemperatureC < SOIL_TEMPERATURE_FLOOR_C;",
+      "  const effectiveSoilTemperatureC = temperatureFloored ? SOIL_TEMPERATURE_FLOOR_C : rounded;",
+      "",
+      "  const raw = 1 - (c + (a + b * Math.log(effectiveSoilTemperatureC)) * input.hToCorgRatio);",
+      "  const durabilityCapped = raw > F_DURABLE_MAX;",
+      "  const fDurable = Math.min(F_DURABLE_MAX, raw);",
+      "",
+      "  return { fDurable, effectiveSoilTemperatureC, temperatureFloored, durabilityCapped };",
+      "}"
+    ],
+    "example": [
+      "H/C_org of 0.3 in soil at 20 °C gives ",
+      "an F_durable of 0.848",
+      "."
+    ]
+  },
+  {
+    "title": "CO₂e stored",
+    "file": "src/lib/calculations/biochar-removal.ts",
+    "firstLine": 274,
+    "hit": 2,
+    "lines": [
+      "export function computeCo2eStoredTonnes(input: Co2eStoredInput): number {",
+      "  const carbonFraction = input.organicCarbonPercent / PERCENT_DENOMINATOR;",
+      "  return carbonFraction * input.dryMassTonnes * input.fDurable * CO2_C_MOLAR_RATIO;",
+      "}"
+    ],
+    "example": [
+      "400 kg dry at 50% organic carbon and an F_durable of 0.848 stores ",
+      "0.62 t CO₂e",
+      "."
+    ]
+  }
+]
