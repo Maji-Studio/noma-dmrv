@@ -64,6 +64,37 @@ and need no follow-up.
 - **Resolve via:** a selective pilot on read-heavy views (dashboard,
   chain-of-custody roll-ups) when perf data justifies it; not codebase-wide (M).
 
+### maplibre-gl v6 upgrade (`maps/maplibre-v6`, opened 2026-10-02)
+
+- Still open: `package.json` and `site/package.json` pin `maplibre-gl` ^5.24.0
+  (PR #870) because v6 derives its web-worker URL from `import.meta.url`, which
+  Turbopack rewrites to a `file://` URL, so the worker never starts and every
+  basemap renders blank (PR #752). The site build additionally breaks on v6's
+  missing default export (PR #897). `.github/dependabot.yml` ignores
+  `maplibre-gl` semver-major updates for this reason.
+- Accepted risk: GHSA-jrc7-96c5-q579 (attribution sanitizer XSS) is fixed only
+  in 6.4.1+. It needs untrusted attribution strings; ours are
+  `SAT_TILE_ATTRIBUTION` plus MapTiler's style attribution (see
+  `src/components/applications/geojson-preview-map.tsx`). The four Dependabot
+  alerts were dismissed as tolerable risk on that basis. Revisit if any map
+  ever takes an attribution from user or third-party input.
+- **Resolve via:** a v6 branch that calls `maplibregl.setWorkerUrl()` with a
+  correctly served worker file, kept green by the E2E map smoke test from PR #907, which
+  fails on the broken worker.
+  Then drop the Dependabot ignore (S).
+
+### CI installs with pnpm 9, local development uses pnpm 11 (`tooling/ci-pnpm-version`, opened 2026-10-02)
+
+- Still open: every `pnpm/action-setup` step in `.github/workflows/*.yml` pins
+  `version: 9`. pnpm 11 reads `overrides` only from `pnpm-workspace.yaml`,
+  pnpm 9 only from the `package.json` `pnpm` field, so no override can satisfy
+  both and `pnpm install --frozen-lockfile` fails in CI with
+  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Security floors for transitive
+  dependencies therefore cannot use overrides today (PR #906).
+- **Resolve via:** set `packageManager` in `package.json`, drop the pinned
+  `version` from the workflows, and confirm which pnpm the Vercel builds use
+  before relying on workspace-level settings in CI (S).
+
 ### Toolchain decisions requiring source review
 
 Lint tooling (Biome 2 / oxlint vs ESLint 9), OpenAPI contract testing for the
