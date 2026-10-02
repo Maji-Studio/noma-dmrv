@@ -15,11 +15,12 @@ Light editorial pages with one dark keynote stage per page. Brief: owner's 2026-
 ```text
  +---------------------------------------------+
  | map of one operation, full bleed            |
- |  +------------------+    [> Follow one      |
- |  | Trace your       |       delivery]       |
- |  | biochar, ...     |   entered: map pins,  |
- |  +------------------+   8 stop cards scroll |
- |                          and the camera dives|
+ |  +------------------+                       |
+ |  | Trace your       |                       |
+ |  | biochar, ...     |  "Follow one journey" |
+ |  | [Book] [> Follow]|  pins the map; 8 stop |
+ |  +------------------+  cards scroll and the |
+ |                        camera dives         |
  +---------------------------------------------+
  ███ STAGE: huge line, then a dot-and-dash timeline ███
  +--------------+------------------------------+

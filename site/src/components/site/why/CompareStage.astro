@@ -2,8 +2,9 @@
 /**
  * CompareStage: /why principle 1 ("Every figure has a source"), told as the page's one keynote stage. The
  * section id and title come from WHY_PRINCIPLES[0]; the numeral is drawn in compare-stage.css. Three columns in the grammar of the keynote's
- * static / partial / server slide: Spreadsheets (dim), noma (lit, centre), Paper records (dim), each with
- * a small outlined schematic and a ✓/⊗ pair underneath.
+ * static / partial / server slide: Spreadsheets and paper (dim), noma (lit, centre), Other biochar dMRVs
+ * (dim), each with a small outlined schematic and a ✓/⊗ pair underneath. The pairs carry the two
+ * differences: spreadsheets and paper are not traceable; other platforms trace but are not free to self-host.
  * Choreography (one playhead, see compare-stage.css): the outer columns tick their pairs and settle dim,
  * then the centre lights: its records light in order, the connectors draw, the field lights in the
  * accent and its pair ticks. At rest (no JS, reduced motion) the end state shows. No props.
@@ -17,16 +18,16 @@ import "./compare-stage.css";
 // Playhead (ms): the outer columns tick and settle dim, then at LIGHT the centre starts to light.
 const LIGHT = 1300;
 const COLUMNS = [
-  { kind: "sheet", name: "Spreadsheets", state: "dim", settle: 700, pair: [["check", "Familiar", 0], ["cross", "Traceable", 200]] },
-  { kind: "noma", name: "noma", state: "lit", pair: [["check", "Connected", 2500], ["check", "Traceable", 2700]] },
-  { kind: "paper", name: "Paper records", state: "dim", settle: 850, pair: [["check", "On site", 350], ["cross", "Searchable", 550]] },
+  { kind: "sheet", name: "Spreadsheets and paper", state: "dim", settle: 700, pair: [["check", "Familiar", 0], ["cross", "Traceable", 200]] },
+  { kind: "noma", name: "noma", state: "lit", pair: [["check", "Traceable", 2500], ["check", "Free to self-host", 2700]] },
+  { kind: "platform", name: "Other biochar dMRVs", state: "dim", settle: 850, pair: [["check", "Traceable", 350], ["cross", "Free to self-host", 550]] },
 ];
-const ALT = "Three ways to keep biochar records, side by side. Spreadsheets, dimmed: familiar, but not traceable, because each tab is kept apart. noma, highlighted in the centre: records are connected from two feedstock sources through a production run and a bin to a field, with evidence attached, so they are connected and traceable. Paper records, dimmed: they work on site, but they are not searchable.";
+const ALT = "Three ways to keep biochar records, side by side. Spreadsheets and paper, dimmed: familiar, but not traceable, because each sheet is kept apart. noma, highlighted in the centre: records are connected from two feedstock sources through a production run and a bin to a field, with evidence attached; traceable and free to self-host. Other biochar dMRV platforms, dimmed: traceable, but run by their vendor, so not free to self-host.";
 ---
 <Stage
   id={WHY_PRINCIPLES[0].id}
   title={`${WHY_PRINCIPLES[0].label}.`}
-  lead="In noma, any quantity can be followed back, record by record, to the feedstock it came from. Spreadsheets are familiar and paper works on site, but with either, that trace is done by hand."
+  lead="In noma, any quantity can be followed back, record by record, to the feedstock it came from. With spreadsheets and paper, that trace is done by hand. Other biochar dMRV platforms trace it too, but you rent them. noma is open source and free to run on your own servers."
   alt={ALT}
   revealMs={3400}
 >

@@ -177,7 +177,7 @@ const ariaOf = (it) => it.kind === "step" ? `${it.name}, ${it.record}: ${MINUS}$
 
   <div class="em-caps" aria-live="polite">
     <p class="em-cap em-cap--default is-on" data-em-cap="">
-      <span class="em-only-v">Read it left to right. The first column is the carbon the biochar stores. Each step down is one emission line, kept on the record where the work happened. The lit column is what is left.</span><span class="em-only-h">Read it top to bottom. The first bar is the carbon the biochar stores. Each step back is one emission line, kept on the record where the work happened. The lit bar is what is left.</span> <span class="em-hint">Hover or tap a <span class="em-only-v">column</span><span class="em-only-h">row</span> for its activity data.</span>
+      <span class="em-only-v">The first column is the carbon stored. Each step down is one emission. The lit column is the net removal.</span><span class="em-only-h">The first bar is the carbon stored. Each step back is one emission. The lit bar is the net removal.</span> <span class="em-hint">Hover or tap a <span class="em-only-v">column</span><span class="em-only-h">row</span> for details.</span>
     </p>
     <div class="em-cap" data-em-cap="stored">
       <span class="em-cap-rec">Application</span>
@@ -204,7 +204,7 @@ const ariaOf = (it) => it.kind === "step" ? `${it.name}, ${it.record}: ${MINUS}$
     </div>
   </div>
 
-  <p class="em-note">Illustrative figures. The registry’s emission factors turn litres, kWh and tonne-kilometres into CO₂e. Transport (dashed) counts the trip back. A routed distance or genset kWh worked out from litres is an estimate, labelled and editable until a bill of lading or meter reading replaces it. A credit batch’s production emissions go to one removal only.</p>
+  <p class="em-note">Illustrative figures. Transport (dashed) counts the trip back. Estimates stay labelled until a bill of lading or meter reading replaces them.</p>
 </div>
 </GridFrame>
 <script>import "./emissions.js";</script>
