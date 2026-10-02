@@ -483,25 +483,6 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   sticky behavior is exercised enough by existing route specs to leave
   unguarded (S).
 
-### Form cleanup leftovers (`forms/cleanup-leftovers`, opened 2026-10-01)
-
-- **Observed:** the [form cleanup plan](./archive/plans/2026-09-29-form-cleanup.md)
-  shipped and was archived with these still open:
-  - The final rescan (Instruments A to C) never ran. It needs dev servers
-    started outside the agent sandbox. The harness is
-    `tests/visual/form-capture.spec.ts`.
-  - #867: should the stock mode captions and hints say "draw" instead of
-    "removal"?
-  - Eight Phase 2 questions on the
-    [decisions page](https://claude.ai/artifact/GtrtrafKdcbmZVon646Sk9). The
-    proposal was to keep them as built, except #7.
-  - `.label-button` is still uppercase, for example "OPEN REMOVALS" on the
-    dashboard and the map record panel actions.
-  - The sidebar group labels (Production, Infrastructure, ...) are still mono
-    caps.
-- **Resolve via:** Kenji answers each item. Run the rescan once someone can
-  start the servers (M).
-
 ### Only the GHG statement report PDF renders deterministic bytes (`certification/ledger-pdf-determinism`, opened 2026-08-06)
 
 - **Observed:** @react-pdf/pdfkit writes each compressed object when its own
