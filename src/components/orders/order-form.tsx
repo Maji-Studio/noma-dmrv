@@ -292,8 +292,8 @@ export function OrderForm({
             />
           </FormField>
         </div>
-        {/* Right after the quantity, so the operator compares the request
-            with what the matching bins hold. */}
+        {/* Right after the wet mass and packaging row, so the operator
+            compares the request with what the matching bins hold. */}
         <MatchingOutputBins facilityId={watchedFacilityId || ""} formulationId={watchedFormulationId || ""} />
       </FormSection>
       </FormSpine>

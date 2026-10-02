@@ -47,12 +47,10 @@ describe.sequential("organization operating defaults", () => {
       defaultPackaging: "bagged" as const,
     };
 
-    const expected = { ...values, defaultCurrency: "TZS" };
-
     await expect(upsertOrganizationDefaults(ctx, values)).resolves.toEqual(
-      expected,
+      values,
     );
-    await expect(getOrganizationDefaults(ctx)).resolves.toEqual(expected);
+    await expect(getOrganizationDefaults(ctx)).resolves.toEqual(values);
   });
 
   it("updates the existing row rather than inserting a second one", async () => {
@@ -89,10 +87,11 @@ describe.sequential("organization operating defaults", () => {
       defaultPackaging: "bagged",
     });
 
-    await expect(getOrganizationDefaults(ctx)).resolves.toMatchObject({
-      defaultCurrency: "EUR",
-      defaultCountry: "Kenya",
-    });
+    const [row] = await db
+      .select({ defaultCurrency: organizationSettings.defaultCurrency })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, TEST_ORG_ID));
+    expect(row?.defaultCurrency).toBe("EUR");
   });
 
   it("keeps an unset country null rather than storing a placeholder", async () => {

@@ -394,6 +394,23 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   fall back to the order's only when it is null; otherwise drop the column.
 - **See also:** #892.
 
+### Orders carry no price or currency (`orders/pricing`, opened 2026-10-02)
+
+- **Current model:** the order form, order read view and Settings → Defaults
+  no longer show Value, Currency or a default currency (#910). The columns stay:
+  `orders.value` (null on new orders), `orders.currency` and
+  `organization_settings.default_currency` (column default `TZS`), and
+  `credit_batches.currency`. The order and defaults schemas strip both keys, so
+  an edit never changes a stored value; `OrganizationDefaults` no longer reads
+  the default currency.
+- **Question:** does noma need order pricing at all, and if so, is it a price
+  per order or per kg, in which currency, and set where?
+- **Why it matters:** a price without its unit is meaningless, so the two come
+  back together or not at all. The dormant columns invite a half-revival.
+- **To resolve:** either restore Value + Currency on the order form (seeded from
+  the organization default) and the default-currency field, or drop the order
+  and settings columns in one migration.
+
 ### Split `src/db/seed-data.ts` into domain seed modules (`db/seed-modularization`, opened 2026-06-11)
 
 - **Problem:** `seed-data.ts` is well over the repository's 1000-line cap and

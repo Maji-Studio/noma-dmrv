@@ -12,12 +12,10 @@
  * only deliberately.
  */
 import type { ApplicationEvidenceMethod } from "@/schemas/applications";
-import type { CurrencyCode } from "@/schemas/credit-batches";
 import type { Timezone } from "@/schemas/facilities";
 import type { PackagingType } from "@/schemas/orders";
 
 export interface OrganizationDefaults {
-  defaultCurrency: CurrencyCode;
   /** `null` = the organization has not named a country. */
   defaultCountry: string | null;
   /**
@@ -35,7 +33,6 @@ export interface OrganizationDefaults {
 export const DEFAULT_ORGANIZATION_TIMEZONE: Timezone = "UTC";
 
 export const DEFAULT_ORGANIZATION_SETTINGS: OrganizationDefaults = {
-  defaultCurrency: "TZS",
   defaultCountry: null,
   defaultTimezone: DEFAULT_ORGANIZATION_TIMEZONE,
   defaultEvidenceMethod: "location",

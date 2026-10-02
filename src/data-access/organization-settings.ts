@@ -26,7 +26,6 @@ export async function getOrganizationDefaults(
   requireOrgScope(ctx);
   const [row] = await db
     .select({
-      defaultCurrency: organizationSettings.defaultCurrency,
       defaultCountry: organizationSettings.defaultCountry,
       defaultTimezone: organizationSettings.defaultTimezone,
       defaultEvidenceMethod: organizationSettings.defaultEvidenceMethod,
@@ -39,10 +38,6 @@ export async function getOrganizationDefaults(
   if (!row) return { ...DEFAULT_ORGANIZATION_SETTINGS };
 
   return {
-    // The column is free text (ISO 4217) to match `orders.currency`, so it is
-    // narrowed here rather than by the database.
-    defaultCurrency:
-      row.defaultCurrency as OrganizationDefaults["defaultCurrency"],
     defaultCountry: row.defaultCountry,
     defaultTimezone: row.defaultTimezone,
     defaultEvidenceMethod: row.defaultEvidenceMethod,
@@ -52,8 +47,9 @@ export async function getOrganizationDefaults(
 
 export async function upsertOrganizationDefaults(
   ctx: OrgContext,
-  // No currency: it has no form field for now, so a save never overwrites it.
-  input: Omit<OrganizationDefaults, "defaultCurrency">,
+  // `default_currency` is not part of the defaults (see open-questions
+  // `orders/pricing`), so a save leaves the stored column alone.
+  input: OrganizationDefaults,
 ): Promise<OrganizationDefaults> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
@@ -66,7 +62,6 @@ export async function upsertOrganizationDefaults(
       set: { ...input, updatedAt: new Date() },
     })
     .returning({
-      defaultCurrency: organizationSettings.defaultCurrency,
       defaultCountry: organizationSettings.defaultCountry,
       defaultTimezone: organizationSettings.defaultTimezone,
       defaultEvidenceMethod: organizationSettings.defaultEvidenceMethod,
@@ -78,8 +73,6 @@ export async function upsertOrganizationDefaults(
   }
 
   return {
-    defaultCurrency:
-      row.defaultCurrency as OrganizationDefaults["defaultCurrency"],
     defaultCountry: row.defaultCountry,
     defaultTimezone: row.defaultTimezone,
     defaultEvidenceMethod: row.defaultEvidenceMethod,

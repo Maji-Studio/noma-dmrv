@@ -8,7 +8,6 @@ const queryState = vi.hoisted(() => ({
   isLoading: false,
   data: {
     defaults: {
-      defaultCurrency: "KES",
       defaultCountry: "Kenya",
       defaultTimezone: "Africa/Nairobi",
       defaultEvidenceMethod: "location" as const,
