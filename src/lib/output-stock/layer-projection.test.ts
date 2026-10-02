@@ -111,15 +111,20 @@ describe('balance at an instant', () => {
 
 describe('moisture bases', () => {
   const [layer] = projectBiocharLayers({ runs: [run], ...noRows });
-  const reading = (movementId: string, moisturePercent: number) => ({ layerId: run.id, movementId, moisturePercent, occurredAt: new Date('2026-09-02T12:00:00.000Z'), sequence: BigInt(1) });
+  const occurredAt = new Date('2026-09-02T12:00:00.000Z');
+  const reading = (movementId: string, moisturePercent: number) => ({ layerId: run.id, movementId, moisturePercent, solidsBasisKg: { numerator: '100', denominator: '1' }, occurredAt, sequence: BigInt(1) });
+  const removal = (movementId: string, wetMassKg: string | null, reversesAllocationId: string | null = null) => ({ layerId: run.id, movementId, wetMassKg, reversesAllocationId, occurredAt, sequence: BigInt(2) });
+  const none = { readings: [], removals: [], reversedMovementIds: new Set<string>() };
 
-  it('uses the recorded wet mass and drops readings a correction reversed', () => {
-    const [basis] = projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, '125.000']]), readings: [reading('kept', 10), reading('reversed', 30)], reversedMovementIds: new Set(['reversed']) });
+  it('uses the recorded wet mass and drops readings and removals a correction reversed', () => {
+    const [basis] = projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, '125.000']]), readings: [reading('kept', 10), reading('reversed', 30)],
+      removals: [removal('kept', '20.000'), removal('reversed', '30.000'), removal('reversal', '-30.000', 'allocation'), removal('count', null)], reversedMovementIds: new Set(['reversed']) });
     expect(basis.recorded).toEqual({ solidsKg: rational(BigInt(100)), wetKg: rational(BigInt(125)) });
-    expect(basis.readings.map(r => r.moisturePercent)).toEqual([10]);
+    expect(basis.readings.map(r => [r.moisturePercent, r.solidsKg])).toEqual([[10, rational(BigInt(100))]]);
+    expect(basis.removals.map(r => r.wetKg)).toEqual([rational(BigInt(20))]);
   });
 
   it.each([null, 'NaN', '-1'])('has no recorded basis for wet mass %s', wet => {
-    expect(projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, wet]]), readings: [], reversedMovementIds: new Set() })[0].recorded).toBeNull();
+    expect(projectMoistureBases([layer], { recordedWetKg: new Map([[run.id, wet]]), ...none })[0].recorded).toBeNull();
   });
 });

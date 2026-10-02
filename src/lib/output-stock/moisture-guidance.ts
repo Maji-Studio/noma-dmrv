@@ -19,7 +19,7 @@ export function moistureBasisText(basis: MoistureBasis | null, timeZone: string)
   if (!basis) return null;
   const at = formatFacilityDateTime(basis.at, timeZone);
   return basis.source === 'reading'
-    ? `From the reading on ${at}.`
+    ? `From the count on ${at}.`
     : `From the moisture recorded when the batch was added on ${at}.`;
 }
 

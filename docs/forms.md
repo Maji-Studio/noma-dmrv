@@ -509,14 +509,15 @@ check, never a value:
   failed save is not retried in the form; the mutation hooks invalidate
   `outputStockKeys.all`, which refreshes the previews.
 - For an output bin, `useOutputMoistureEstimate(bin, facility, occurredAt,
-  preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time
-  from each batch's latest reading, or the live preview's own (which leaves out
-  the entry a correction replaces). Ingredient bins keep wet stock, so their
+  preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time,
+  each batch at the moisture it was added with or last counted at, or the live
+  preview's own (which leaves out the entry a correction replaces). Ingredient bins keep wet stock, so their
   estimate is the weighted remaining intake basis.
-- A reading resets the estimate of the batch it was taken from. The movement
-  block shows that as `MoistureResetChange`: the remaining stock at its previous
-  estimate, an arrow, then at the reading, as two blocks rather than a sentence.
-  Stock history repeats it as its own "Moisture updated" row.
+- Only a count resets the estimate. The movement block shows that as
+  `MoistureResetChange`: the remaining stock at its previous estimate, an arrow,
+  then at the reading, as two blocks rather than a sentence. Stock history
+  repeats it as its own "Moisture updated" row. A delivery, loss or product draw
+  takes its wet mass from the wet stock and leaves the moisture unchanged.
 
 ### Stock change in bin selectors
 

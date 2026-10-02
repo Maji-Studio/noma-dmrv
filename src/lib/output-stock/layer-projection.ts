@@ -121,16 +121,21 @@ export function outputStockBalance(layers: readonly OutputStockLayer[], at: stri
   return { allLayersDryKg: sum(layers), availableDryKg: sum(layers.filter(layer => layer.placedAt <= at)), expectedSolidsKg };
 }
 
-/** A moisture reading on a layer, with the posting order of its movement. */
-export interface MoistureReadingRow { layerId: string; movementId: string; moisturePercent: number; occurredAt: Date; sequence: bigint }
+/** A count's moisture reading on a layer, with the solids it left and the posting order of its movement. */
+export interface MoistureReadingRow { layerId: string; movementId: string; moisturePercent: number; solidsBasisKg: unknown; occurredAt: Date; sequence: bigint }
+
+/** The wet mass one posted allocation took from a layer; null when it took none (a count). */
+export interface WetRemovalRow { layerId: string; movementId: string; wetMassKg: string | null; reversesAllocationId: string | null; occurredAt: Date; sequence: bigint }
 
 const WET_KG_PATTERN = /^\d+(\.\d+)?$/;
 
 /**
- * What each layer's moisture is known from: the wet mass it entered the bin
- * with, and every reading on it whose movement no correction reversed.
+ * What each layer's wet mass and moisture are known from: the wet mass it
+ * entered the bin with, every count reading on it, and the wet mass every
+ * removal took. A corrected movement and its reversal both drop out, so the
+ * replacement alone counts.
  */
-export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: { recordedWetKg: ReadonlyMap<string, string | null>; readings: readonly MoistureReadingRow[]; reversedMovementIds: ReadonlySet<string> }): LayerMoistureBasis[] {
+export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: { recordedWetKg: ReadonlyMap<string, string | null>; readings: readonly MoistureReadingRow[]; removals: readonly WetRemovalRow[]; reversedMovementIds: ReadonlySet<string> }): LayerMoistureBasis[] {
   return layers.map(layer => {
     const wet = rows.recordedWetKg.get(layer.id);
     const recordedWetKg: Rational | null = wet == null || !WET_KG_PATTERN.test(wet) ? null : decimal(wet as Decimal);
@@ -138,7 +143,9 @@ export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: 
       layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg!,
       recorded: recordedWetKg ? { solidsKg: rational(grams(layer.establishedDryBiocharKg) + grams(layer.ingredientDrySolidsKg), GRAMS_PER_KG), wetKg: recordedWetKg } : null,
       readings: rows.readings.filter(reading => reading.layerId === layer.id && !rows.reversedMovementIds.has(reading.movementId))
-        .map(reading => ({ moisturePercent: reading.moisturePercent, occurredAt: reading.occurredAt.toISOString(), sequence: reading.sequence })),
+        .map(reading => ({ moisturePercent: reading.moisturePercent, solidsKg: readRational(reading.solidsBasisKg), occurredAt: reading.occurredAt.toISOString(), sequence: reading.sequence })),
+      removals: rows.removals.filter(removal => removal.layerId === layer.id && removal.wetMassKg != null && !removal.reversesAllocationId && !rows.reversedMovementIds.has(removal.movementId))
+        .map(removal => ({ wetKg: decimal(removal.wetMassKg as Decimal), occurredAt: removal.occurredAt.toISOString(), sequence: removal.sequence })),
     };
   });
 }

@@ -5,7 +5,7 @@ import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, PRO_RATA_POLICY, type DrawPolicy, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
 import { mixPileName, outputStockEventLabel } from '@/lib/output-stock/labels';
 import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
-import { estimateStock, planReadings, withReadings, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
+import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
 import { formatFacilityDateTime } from '@/lib/format-utils';
 import { formatMoisturePercent, PERCENT_SCALE } from '@/lib/mass-moisture';
 import { STORED_PERCENT_INPUT_STEP } from '@/schemas/helpers';
@@ -85,18 +85,18 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const afterSolidsKg = beforeSolidsKg - rationalNumber(removedSolids);
   // A draw from several sub-bins has no single reading; its overall moisture is 1 − solids ÷ wet.
   const moisture = sources ? (plan ? (1 - rationalNumber(removedSolids) / input.wetMassKg) * PERCENT_SCALE : null) : input.moisturePercent ?? null;
-  // A reading resets the estimate of the sub-bin it was taken from; the wet
-  // estimates before and after come from each layer's latest reading.
+  // A removal takes its wet mass from the wet stock and leaves the bin's
+  // moisture as it was; only a count's reading sets wet stock and moisture again.
   const bases = await getLayerMoistureBases(ctx, bin, layers, reader, { ignoreMovementId: input.correctsMovementId });
-  // Every layer after the draw, not only the planning subset a reduced loss restores: a pile reading describes them all.
+  // Every layer after the draw, not only the planning subset a reduced loss restores: a count describes them all.
   const afterLayers = layers.map(l => plan?.remainingLayers.find(a => a.id === l.id) ?? l);
-  const readings = plan ? planReadings(request, { allocations: plan.allocations, remainingLayers: afterLayers }, input.occurredAt, policy) : [];
+  const readings = plan ? planReadings(request, { remainingLayers: afterLayers }, input.occurredAt) : [];
   const drawnBases = plan ? bases.map(basis => ({ ...basis, remainingSolidsKg: plan!.remainingLayers.find(l => l.id === basis.layerId)?.remainingSolidsKg ?? basis.remainingSolidsKg })) : bases;
   const nextSequence = (events.at(-1)?.sequence ?? BigInt(0)) + BigInt(1);
-  const afterBases = withReadings(drawnBases, readings, input.occurredAt, nextSequence);
+  const afterBases = withMovement(drawnBases, { readings, removals: plan ? planWetRemovals(plan) : [] }, input.occurredAt, nextSequence);
   const estimateBefore = estimateStock(bases, input.occurredAt);
   const estimateAfter = estimateStock(afterBases, input.occurredAt);
-  // A mix reading describes the whole pile, so the change names the pile, not each batch.
+  // A count of a mix bin describes the whole pile, so the change names the pile, not each batch.
   const moistureReset = resetChange(drawnBases, afterBases, readings, input.occurredAt, codeMap, stockMode === 'mix' ? mixPileName(bin.name) : null);
   const layerViews = (viewLayers: OutputStockLayer[], viewBases: LayerMoistureBasis[]) => viewLayers.filter(l => l.placedAt <= input.occurredAt).sort((a, b) => a.placedAt.localeCompare(b.placedAt) || (a.postingSequence < b.postingSequence ? -1 : 1)).map(l => ({
     layerId: l.id, code: codeMap.get(l.id) ?? l.id, dryMassKg: Number(l.remainingDryBiocharKg),
@@ -148,7 +148,7 @@ function laterMixRemovals(events: readonly { id: string; kind: string | null; oc
     .map(e => ({ id: e.id, label: CODED_REASON_KINDS.has(e.kind) && e.reason ? e.reason : outputStockEventLabel(e.kind), occurredAt: e.occurredAt }));
 }
 
-/** One layer's wet estimate at its latest moisture, or null when it has none. */
+/** One layer's wet stock, wet in minus wet out, or null when its wet mass is unknown. */
 function layerWetKg(bases: readonly LayerMoistureBasis[], layer: OutputStockLayer, at: string): number | null {
   const basis = bases.find(b => b.layerId === layer.id);
   return basis ? estimateStock([basis], at).wetKg : null;

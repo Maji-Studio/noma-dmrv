@@ -16,7 +16,7 @@ import { mixPileName } from "@/lib/output-stock/labels";
 import type { OutputSubBin } from "@/types/output-stock";
 import { formatWetEstimate } from "./stock-preview-shared";
 
-const PILE_WET_HINT = "Wet stock is an estimate from the pile's latest moisture reading. Every delivery, loss and count reading resets the whole pile, and each batch added brings its own wet mass.";
+const PILE_WET_HINT = "Wet stock is the wet mass added to the pile less the wet mass taken out. A delivery or loss keeps the pile's moisture; only a count sets it again. Dry biochar limits what can leave.";
 const SHARES_LABEL = "Dry biochar by batch";
 
 export function MixPileCard({ binName, wetKg, moisturePercent, dryKg, batches }: {
