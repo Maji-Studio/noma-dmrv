@@ -2,7 +2,7 @@
  * The pieces of one energy record row: the per-source bar, and the expanded
  * breakdown with what was recorded, its estimate and any missing readings.
  */
-import { formatCount } from "@/lib/copy-utils";
+import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import { recordDieselLitres, recordKg } from "@/lib/energy/selection";
 import {
   DIESEL_SOURCE_KEYS,
@@ -60,6 +60,12 @@ function gapText(gap: ReadingGap, leading: boolean): string {
   return leading ? `Not recorded on ${text}` : `not recorded on ${text}`;
 }
 
+/** Caption under a source with no reading at all; null when there was one record. */
+function wholeGapText(gap: ReadingGap): string | null {
+  const [singular, plural] = GAP_UNITS[gap.unit];
+  return gap.of > 1 ? `on all ${formatCount(gap.of, singular, plural)}` : null;
+}
+
 function recordNote(record: EnergyRecord): string | null {
   switch (record.scope) {
     case "batch":
@@ -83,6 +89,9 @@ export function EnergyRecordBreakdown({ record }: { record: EnergyRecord }) {
       <dl className="grid grid-cols-1 gap-x-32 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
         {ENERGY_SOURCES.filter((source) => sourcesFor(record).includes(source.key)).map((source) => {
           const gap = gaps[source.key];
+          // Absence is not a zero: with every reading missing, the readout is
+          // the token without a unit, never "0 kWh" or "est. 0 kg CO2e".
+          const wholeGap = gap != null && gap.missing === gap.of;
           return (
             <div key={source.key} className="flex items-start justify-between gap-12">
               <dt className="flex items-center gap-8 body-small">
@@ -95,12 +104,22 @@ export function EnergyRecordBreakdown({ record }: { record: EnergyRecord }) {
               </dt>
               <dd className="flex flex-col items-end text-right">
                 <span className="body-small tabular-nums">
-                  {kg ? formatEstimate(kg[source.key]) : formatActivity(activity[source.key], source.unit)}
+                  {wholeGap
+                    ? MISSING_VALUE.notRecorded
+                    : kg
+                      ? formatEstimate(kg[source.key])
+                      : formatActivity(activity[source.key], source.unit)}
                 </span>
                 <span className="body-caption text-[var(--color-text-secondary)]">
-                  {kg ? formatActivity(activity[source.key], source.unit) : null}
-                  {kg && gap ? ", " : null}
-                  {gap ? gapText(gap, !kg) : null}
+                  {wholeGap ? (
+                    wholeGapText(gap)
+                  ) : (
+                    <>
+                      {kg ? formatActivity(activity[source.key], source.unit) : null}
+                      {kg && gap ? ", " : null}
+                      {gap ? gapText(gap, !kg) : null}
+                    </>
+                  )}
                 </span>
               </dd>
             </div>

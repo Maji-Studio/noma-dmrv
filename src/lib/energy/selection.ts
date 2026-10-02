@@ -78,6 +78,8 @@ export interface SourceTotal {
   activity: number;
   /** Null when the facility has no factors. */
   kg: number | null;
+  /** False when no reading of this source was recorded in the selection. */
+  recorded: boolean;
   missingReadings: number;
 }
 
@@ -87,11 +89,15 @@ export function totalsBySource(
   hasFactors: boolean,
 ): Record<EnergySourceKey, SourceTotal> {
   const totals = Object.fromEntries(
-    ENERGY_SOURCE_KEYS.map((key) => [key, { activity: 0, kg: hasFactors ? 0 : null, missingReadings: 0 }]),
+    ENERGY_SOURCE_KEYS.map((key) => [
+      key,
+      { activity: 0, kg: hasFactors ? 0 : null, recorded: false, missingReadings: 0 },
+    ]),
   ) as Record<EnergySourceKey, SourceTotal>;
   for (const flow of flows) {
     const total = totals[flow.source];
     total.activity += flow.activity;
+    total.recorded = true;
     if (total.kg != null) total.kg += flow.kg ?? 0;
   }
   for (const gap of gaps) totals[gap.source].missingReadings += 1;

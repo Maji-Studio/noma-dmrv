@@ -2,7 +2,7 @@
  * EnergyActivityPanel: the selection's recorded activity per source, in the
  * units operators enter, with the estimate beside it when factors are set.
  */
-import { formatCount } from "@/lib/copy-utils";
+import { formatCount, MISSING_VALUE } from "@/lib/copy-utils";
 import type { SourceTotal } from "@/lib/energy/selection";
 import {
   ENERGY_SOURCE_BY_KEY,
@@ -32,6 +32,7 @@ export function EnergyActivityPanel({
   const values = Object.values(totals);
   const totalKg = values.reduce((sum, total) => sum + (total.kg ?? 0), 0);
   const missing = values.reduce((sum, total) => sum + total.missingReadings, 0);
+  const anyRecorded = values.some((total) => total.recorded);
 
   return (
     <aside
@@ -54,6 +55,9 @@ export function EnergyActivityPanel({
             {group.keys.map((key) => {
               const total = totals[key];
               const meta = ENERGY_SOURCE_BY_KEY[key];
+              // Absence is not a zero: a source with only missing readings
+              // shows the token and drops its unit and estimate.
+              const notRecorded = !total.recorded && total.missingReadings > 0;
               return (
                 <div
                   key={key}
@@ -69,9 +73,9 @@ export function EnergyActivityPanel({
                   </dt>
                   <dd className="flex flex-col items-end">
                     <span className="body-small font-medium tabular-nums">
-                      {formatActivity(total.activity, meta.unit)}
+                      {notRecorded ? MISSING_VALUE.notRecorded : formatActivity(total.activity, meta.unit)}
                     </span>
-                    {total.kg != null && (
+                    {total.kg != null && !notRecorded && (
                       <span className="body-caption text-[var(--color-text-secondary)] tabular-nums">
                         {formatEstimate(total.kg)}
                       </span>
@@ -86,7 +90,9 @@ export function EnergyActivityPanel({
       {hasFactors && (
         <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-primary)] pt-12">
           <span className="body-small font-medium">Total</span>
-          <span className="body-small font-medium tabular-nums">{formatEstimate(totalKg)}</span>
+          <span className="body-small font-medium tabular-nums">
+            {!anyRecorded && missing > 0 ? MISSING_VALUE.notRecorded : formatEstimate(totalKg)}
+          </span>
         </div>
       )}
       {missing > 0 && (
