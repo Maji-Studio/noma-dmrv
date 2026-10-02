@@ -179,6 +179,7 @@ export async function getEnergyInputs(
         feedstockId: transportLegs.entityId,
         distanceKm: transportLegs.distanceKm,
         loadMassKg: transportLegs.loadMassKg,
+        method: transportLegs.transportMethodType,
       })
       .from(transportLegs)
       .innerJoin(
@@ -283,7 +284,7 @@ export async function getEnergyInputs(
   const legsByFeedstock = new Map<string, EnergyFeedstockInput["legs"]>();
   for (const leg of legRows) {
     const legs = legsByFeedstock.get(leg.feedstockId) ?? [];
-    legs.push({ distanceKm: leg.distanceKm, loadMassKg: leg.loadMassKg });
+    legs.push({ distanceKm: leg.distanceKm, loadMassKg: leg.loadMassKg, method: leg.method });
     legsByFeedstock.set(leg.feedstockId, legs);
   }
 
