@@ -50,7 +50,7 @@ export function formatWetEstimate(kg: number): string {
 /**
  * The wet mass the split bar draws, or null when there is no split to draw.
  *
- * A removal carries the entered wet mass directly. A count does not: the planner
+ * A draw carries the entered wet mass directly. A count does not: the planner
  * nulls `removedWetKg` for it and the counted mass reaches the preview as the
  * after wet estimate, which is the counted figure at the entered moisture. That
  * substitution only holds while the count is accepted in full, so a count that

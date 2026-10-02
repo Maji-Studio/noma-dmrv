@@ -114,6 +114,13 @@ and reason. Bin stock is the consequence of its movements; nothing
 changes stock except a movement.
 _Avoid_: stock change, log entry, audit record.
 
+**Draw**:
+Biochar or feedstock taken out of a storage bin by a **bin movement**
+(a production run's feedstock withdrawal, a product's biochar draw, a
+delivery). Always a bin-stock term; a draw is not a **Removal**, which is
+the carbon-removal registry record.
+_Avoid_: removal (for bin stock), pull, take-out.
+
 **Biochar product**:
 The finished material offered, delivered, and applied after source biochar is
 optionally mixed with blend ingredients and water. Its wet mass and moisture
@@ -136,7 +143,7 @@ only a **split bin**'s sub-bins are physically separate.
 
 **Split bin**:
 An output bin whose layers sit physically apart as **sub-bins**. The operator
-records which sub-bins a removal came from and the order they were emptied;
+records which sub-bins a draw came from and the order they were emptied;
 oldest first is the default.
 
 **Sub-bin**:
@@ -144,7 +151,7 @@ One layer of a split bin in its own bay, bag or heap, with its own moisture.
 _Avoid_: using it for a layer in a mix bin.
 
 **Mix bin**:
-An output bin holding one well-mixed pile. Every removal takes each layer in
+An output bin holding one well-mixed pile. Every draw takes each layer in
 proportion to its remaining solids.
 
 **Departure moisture**:

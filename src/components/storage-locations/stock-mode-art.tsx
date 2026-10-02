@@ -27,7 +27,7 @@ const SPLIT_BIN_GAP = 8;
 const SPLIT_BIN_START = 4;
 const SPLIT_TONES = ["a", "b", "c"] as const;
 const SPLIT_COLUMNS = 6;
-/** The bin a split removal draws from (the middle one). */
+/** The bin a split draw takes from (the middle one). */
 const SPLIT_DRAWN_BIN = 1;
 const FILL_TOP = BIN_TOP + 2;
 const CHIP_WIDTH = 12;
@@ -116,7 +116,7 @@ function StockArt({ mode, children }: { mode: "split" | "mix"; children: ReactNo
   );
 }
 
-/** Three bins side by side, one batch each. A removal takes from the middle one only. */
+/** Three bins side by side, one batch each. A draw takes from the middle one only. */
 export function SplitPilesArt() {
   return (
     <StockArt mode="split">
@@ -137,7 +137,7 @@ export function SplitPilesArt() {
   );
 }
 
-/** One bin, the same three batches blended. A removal takes a slice holding all three. */
+/** One bin, the same three batches blended. A draw takes a slice holding all three. */
 export function MixPileArt() {
   const stripeWidth = CHIP_WIDTH / SPLIT_TONES.length;
   return (
@@ -166,7 +166,7 @@ const STOCK_MODE_CARD_ART: Record<OutputStockMode, { title: string; art: ReactNo
   mix: { title: "Mix", art: <MixPileArt /> },
 };
 
-/** Cards for the chosen bin type; the caption says what a removal takes from that kind of bin. */
+/** Cards for the chosen bin type; the caption says what a draw takes from that kind of bin. */
 export function stockModeOptions(type: OutputBinType) {
   return outputStockModes.map((mode) => ({
     value: mode,
