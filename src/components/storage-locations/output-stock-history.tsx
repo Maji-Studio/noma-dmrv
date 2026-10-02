@@ -27,9 +27,9 @@ import { Notice } from "@/components/ui/notice";
 
 const CORRECTABLE_KINDS = ["loss", "count", "delivery"];
 
-/** A mode change moves no stock; it changes how every later removal is drawn. */
+/** A mode change moves no stock; it changes how every later draw is taken. */
 const MODE_CHANGE_CAPTIONS: Record<string, string> = {
-  merge: "From this time on, every removal takes each batch in proportion to what it holds.",
+  merge: "From this time on, every draw takes each batch in proportion to what it holds.",
   split: "From this time on, each batch added is kept apart as its own sub-bin.",
 };
 
