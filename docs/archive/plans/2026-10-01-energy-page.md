@@ -124,14 +124,23 @@ does this:
   grid starts empty.
 - **All time** starts at the first recorded day (run, feedstock receipt,
   delivery or application).
+- **Credit batch select** lists the batches whose dates overlap the period,
+  plus the selected batch when it reached the period only through its energy.
+  A July batch's September delivery draws a July node on September's Flow, and
+  clicking it selects that batch, so the select must be able to show it.
+- **The read loads the facility's whole history**, not the period, and the
+  attribution filters its output to the period: a delivery in the period
+  carries biochar made by earlier runs, and a credit batch reaches back to its
+  first run. Its cost grows with facility history; narrowing it is a later
+  optimisation if the page gets slow.
 
 ## Layers
 
 - `src/lib/energy/`: pure attribution and Sankey layout (unit tested).
 - `src/data-access/energy.ts` + `facility-emission-factors.ts`: org-scoped
   reads (`requireOrgScope`, filter on `organizationId`); one read loads the
-  facility's runs, legs, deliveries, applications and allocations for the
-  period, the lib does the maths.
+  facility's runs, legs, deliveries, applications and allocations (whole
+  history, see "As implemented"), the lib does the maths for the period.
 - `src/fn/energy.ts`: `withAction`, Zod input `{ facilityId, from, to }`
   (facility-local `YYYY-MM-DD`), returns `ActionResult<EnergyBreakdown>`;
   factor save action guarded for owners and admins.
