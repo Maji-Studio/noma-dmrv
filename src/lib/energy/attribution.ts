@@ -400,6 +400,17 @@ function applicationRecords(model: Model, inputs: EnergyInputs): EnergyRecord[] 
       }
     }
     addCarriedProduction(tally, model, shares);
+    // Without saved shares or a dry mass to scale its delivery's run mix by,
+    // the application's production share is unknown: every source those runs
+    // would carry counts as a missing reading, never as zero.
+    const unscaledRuns =
+      !sharesByApplication.has(application.id) && delivery && transportScale == null
+        ? delivery.runShares
+        : [];
+    for (const share of unscaledRuns) {
+      const calc = model.runs.get(share.runId);
+      if (calc) addRun(tally, model, calc, null);
+    }
     return {
       id: application.id,
       scope: "application",
@@ -407,7 +418,7 @@ function applicationRecords(model: Model, inputs: EnergyInputs): EnergyRecord[] 
       context: application.fieldName ?? delivery?.delivery.customerName ?? null,
       day: application.day,
       endDay: null,
-      creditBatchIds: batchIdsOf(model, shares),
+      creditBatchIds: batchIdsOf(model, unscaledRuns.length > 0 ? unscaledRuns : shares),
       footprint: finish(tally, model.factors),
       runCount: tally.runIds.size,
       deliveryCount: tally.deliveryIds.size,

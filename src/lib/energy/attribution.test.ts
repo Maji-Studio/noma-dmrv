@@ -210,6 +210,29 @@ describe("buildEnergyBreakdown", () => {
     }
   });
 
+  it("counts production as missing for an application with no dry mass to scale by", () => {
+    const breakdown = buildEnergyBreakdown(
+      inputs({
+        creditBatches: [{ id: "b1", code: "CB-1", startDate: "2026-09-01", endDate: "2026-09-30", status: "pending" }],
+        runs: [run({ id: "a", creditBatchId: "b1", biocharDryMassKg: 900 })],
+        deliveries: [
+          { id: "d", code: "DL-1", day: "2026-09-20", customerName: "Farm", effectiveDistanceKm: 20, deliveredWetMassKg: 1000, massDryKg: 900 },
+        ],
+        deliveryRunShares: [{ ownerId: "d", runId: "a", dryMassKg: 900 }],
+        applications: [{ id: "p", code: "AP-1", day: "2026-09-25", deliveryId: "d", dryMassKg: null, fieldName: null }],
+      }),
+      FACTORS,
+      ALL_TIME,
+    );
+    const p = record(breakdown.records, "p");
+    for (const source of ["startup", "genset", "preprocessing", "grid", "biocharTransport"] as const) {
+      expect(p.footprint.activity[source]).toBe(0);
+      expect(p.footprint.gaps[source]).toMatchObject({ missing: 1, of: 1 });
+    }
+    expect(p.creditBatchIds).toEqual(["b1"]);
+    expect(p.runCount).toBe(1);
+  });
+
   it("returns activity without estimates when the facility has no factors", () => {
     const breakdown = buildEnergyBreakdown(inputs({ runs: [run({ id: "a" })] }), null, ALL_TIME);
     const a = record(breakdown.records, "a");
