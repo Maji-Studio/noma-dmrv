@@ -13,18 +13,15 @@ import {
   withAutoCode,
 } from "@/data-access/code-generator";
 
-import { requireOrgFacility } from "@/data-access/utils";
 import {
   createProductionRun,
   deleteProductionRun,
   getProductionRunById as getProductionRunByIdData,
-  getFacilityEnergyTotals as getFacilityEnergyTotalsData,
   getProductionRunReadings as getProductionRunReadingsData,
   updateProductionRun,
   ProductionRunOverlapError,
   ProductionRunDependencyError,
   type ProductionRunWithRelations,
-  type FacilityEnergyTotals,
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
 import {
@@ -72,24 +69,6 @@ export async function getProductionRunByIdFn(
     {
       fallbackMessage: "Failed to load production run",
       log: logFor("production-run:get"),
-    },
-  );
-}
-
-/**
- * Get facility-wide electricity + diesel totals (SQL aggregate)
- */
-export async function getFacilityEnergyTotalsFn(
-  facilityId: string
-): Promise<ActionResult<FacilityEnergyTotals>> {
-  return withAction(
-    async (ctx) => {
-      await requireOrgFacility(ctx, facilityId);
-      return getFacilityEnergyTotalsData(ctx, facilityId);
-    },
-    {
-      fallbackMessage: "Failed to load facility energy totals",
-      log: logFor("production-run:energy-totals"),
     },
   );
 }

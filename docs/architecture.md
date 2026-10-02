@@ -150,7 +150,10 @@ stale cached row as much as a second operator: two tabs, or an edit sheet
 opened off a cached list. The rule is blanket: every updater with an edit form
 must do the check, and every edit form must send `expectedUpdatedAt`.
 Implemented today for facility, feedstock, storage bin, customer (+ location),
-supplier (+ location), application and production run. The edit forms that do
+supplier (+ location), application, production run and facility emission
+factors. The factors save is an upsert: its form sends `null` when it loaded
+no row, so a row saved since (or a concurrent first save, serialized by the
+facility row lock) is refused as stale. The edit forms that do
 not check yet are listed in [open-questions.md](./open-questions.md) under
 `architecture/expected-version-gaps`.
 

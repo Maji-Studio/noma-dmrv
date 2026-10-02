@@ -17,6 +17,13 @@ Status: accepted (2026-07-02)
 > the component in `sourceByComponent`; everything else still fails closed
 > (`docs/isometric/changes.md`, 2026-07-29).
 
+> **Amended 2026-10-01**: noma now shows operator-facing CO₂e *estimates* on
+> the Energy page, computed from per-facility emission factors
+> (`facility_emission_factors`). They are display only and never submitted;
+> Isometric stays the system of record for project emissions and nothing
+> below changes for submission. See
+> [ADR 0031](./0031-operator-energy-estimates.md).
+
 ## Context
 
 ADR 0005 chose "Posture B": noma journals LCA-derived emission magnitudes per

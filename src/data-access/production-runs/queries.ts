@@ -48,7 +48,6 @@ import type {
   ProductionRunWithRelations,
   PaginatedProductionRuns,
   ProductionRunStats,
-  FacilityEnergyTotals,
   ProductionRunWithSamples,
 } from "./types";
 import {
@@ -559,49 +558,6 @@ export async function getProductionRunStats(
     runningCount: statusMap["running"] ?? 0,
     completedCount: statusMap["complete"] ?? 0,
     draftCount: statusMap["draft"] ?? 0,
-  };
-}
-
-/**
- * Sum electricity + diesel across every production run for a facility.
- * Aggregates in SQL so the totals are not capped by list pagination.
- */
-export async function getFacilityEnergyTotals(
-  ctx: OrgContext,
-  facilityId: string
-): Promise<FacilityEnergyTotals> {
-  requireOrgScope(ctx);
-
-  const [row] = await db
-    .select({
-      runCount: count(),
-      electricityKwh: sum(productionRuns.electricityKwh),
-      gensetLitres: sum(productionRuns.dieselGensetLiters),
-      operationLitres: sum(productionRuns.dieselOperationLiters),
-      preprocessingLitres: sum(productionRuns.preprocessingFuelLiters),
-    })
-    .from(productionRuns)
-    .where(and(
-      eq(productionRuns.facilityId, facilityId),
-      eq(productionRuns.organizationId, ctx.organizationId),
-      isNull(productionRuns.archivedAt),
-      ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
-    ));
-
-  return {
-    runCount: Number(row.runCount),
-    electricityKwh:
-      row.electricityKwh == null ? null : Number(row.electricityKwh),
-    // Genset ("summarized") = generator diesel + preprocessing fuel; startup =
-    // reactor-startup / plant diesel only. Mirrors the submission split in
-    // aggregation.ts (docs/isometric/changes.md).
-    gensetLitres:
-      row.gensetLitres == null && row.preprocessingLitres == null
-        ? null
-        : (Number(row.gensetLitres) || 0) +
-          (Number(row.preprocessingLitres) || 0),
-    startupLitres:
-      row.operationLitres == null ? null : Number(row.operationLitres),
   };
 }
 

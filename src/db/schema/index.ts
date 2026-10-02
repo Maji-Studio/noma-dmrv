@@ -13,6 +13,7 @@ export * from "./certifier-storage-locations";
 export * from "./common";
 export * from "./compliance";
 export * from "./credits";
+export * from "./emission-factors";
 export * from "./documentation";
 export * from "./facilities";
 export * from "./feedstock";

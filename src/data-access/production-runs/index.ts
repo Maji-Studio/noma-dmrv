@@ -13,7 +13,6 @@ export type {
   ProductionRunWithRelations,
   PaginatedProductionRuns,
   ProductionRunStats,
-  FacilityEnergyTotals,
   ProductionRunReadingRecord,
   ProductionRunWithSamples,
 } from "./types";
@@ -22,7 +21,6 @@ export {
   getProductionRuns,
   getProductionRunById,
   getProductionRunStats,
-  getFacilityEnergyTotals,
   getProductionRunsWithSamples,
 } from "./queries";
 

@@ -810,6 +810,9 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
       await tx
         .delete(schema.certifierProjects)
         .where(eq(schema.certifierProjects.facilityId, data.facility.id));
+      await tx
+        .delete(schema.facilityEmissionFactors)
+        .where(eq(schema.facilityEmissionFactors.facilityId, data.facility.id));
 
       // Facility (must be last — everything references it)
       await deleteOutputFacilityFixtures(tx, eq(schema.facilities.id, data.facility.id));

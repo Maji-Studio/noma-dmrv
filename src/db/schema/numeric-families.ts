@@ -40,3 +40,11 @@ export const percent = (name: string) =>
 /** Gram-resolution mass returned as text for BigInt accounting without float conversion. */
 export const exactMassKg = (name: string) =>
   numeric(name, { precision: 14, scale: 3 });
+
+/**
+ * Emission factors in kg CO2e per activity unit (litre, kWh, tonne-km) —
+ * micro-unit resolution, up to 999,999 kg per unit. Operator-facing estimates
+ * only (ADR 0031); registry submission binds its own factors.
+ */
+export const emissionFactor = (name: string) =>
+  numeric(name, { precision: 12, scale: 6, mode: 'number' });

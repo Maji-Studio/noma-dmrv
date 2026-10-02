@@ -26,7 +26,7 @@ Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not
 
 ## Numeric Column Families
 
-`src/db/schema/numeric-families.ts` (migration `0066`) exports `massKg`, `tonnes`, `ppm`, `fraction`, `percent` — all exact `numeric(p,s)`.
+`src/db/schema/numeric-families.ts` (migration `0066`) exports `massKg`, `tonnes`, `ppm`, `fraction`, `percent`, and `emissionFactor` (kg CO₂e per activity unit, migration `0120`), all exact `numeric(p,s)`.
 
 - **Credit-bearing values** — masses, CO2e, contaminant ppm, ratios, percents — MUST use these helpers. Never `real()`; float rounding drifts verifier-facing figures.
 - Telemetry, in-process QC, and lab characterization columns stay `real`.

@@ -22,7 +22,6 @@ import type {
 } from "@/data-access/production-runs";
 import {
   getProductionRunByIdFn,
-  getFacilityEnergyTotalsFn,
   getProductionRunReadingsFn,
   createProductionRunFn,
   updateProductionRunFn,
@@ -78,8 +77,6 @@ export const productionRunKeys = {
   // Prefix that matches every stats variant regardless of facilityId — use for
   // invalidation so a facility-scoped stats query is refetched.
   statsPrefix: () => [...productionRunKeys.all, "stats"] as const,
-  energyTotals: (facilityId: string) =>
-    [...productionRunKeys.all, "energyTotals", facilityId] as const,
   readings: (productionRunId: string) =>
     [...productionRunKeys.all, productionRunId, "readings"] as const,
   codeCheck: (code: string, excludeId?: string) =>
@@ -172,24 +169,6 @@ export function useProductionRunStats(facilityId?: string, enabled = true) {
       return result.data;
     },
     enabled,
-    staleTime: 30000,
-  });
-}
-
-/**
- * Hook to fetch facility-wide electricity + diesel totals
- */
-export function useFacilityEnergyTotals(facilityId: string, enabled = true) {
-  return useQuery({
-    queryKey: productionRunKeys.energyTotals(facilityId),
-    queryFn: async () => {
-      const result = await getFacilityEnergyTotalsFn(facilityId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: enabled && !!facilityId,
     staleTime: 30000,
   });
 }
