@@ -126,9 +126,12 @@ const transportFeedstock: Surface[] = [
     skip: needsLink,
     open: async (page, ctx) => {
       await gotoRoute(page, ctx, "feedstock-types");
-      const button = page.getByRole("button", { name: "Import from Isometric", exact: true });
-      if ((await button.count()) === 0) return "Import from Isometric is not offered to this viewer";
-      return openDialogFromButton(page, page, "Import from Isometric");
+      const trigger = page.getByRole("button", { name: "More ways to add a feedstock type", exact: true });
+      if ((await trigger.count()) === 0) return "Import from Isometric is not offered to this viewer";
+      await menuItem(page, "More ways to add a feedstock type", "Import from Isometric");
+      const dialog = lastDialog(page);
+      await expect(dialog).toBeVisible();
+      return dialog;
     },
   },
   {

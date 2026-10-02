@@ -208,7 +208,10 @@ test.describe(
           `/feedstock-types?facility=${seededData.facility.id}`,
         );
         await page
-          .getByRole("button", { name: "Import from Isometric" })
+          .getByRole("button", { name: "More ways to add a feedstock type" })
+          .click();
+        await page
+          .getByRole("menuitem", { name: "Import from Isometric" })
           .click();
 
         const dialog = page.getByRole("dialog", {
