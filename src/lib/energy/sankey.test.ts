@@ -65,4 +65,22 @@ describe("layoutSankey", () => {
     expect(leg("toBatch")).toBeCloseTo(60);
     expect(layout.nodes.filter((n) => n.column === "stage").map((n) => n.stage)).toEqual(["production", "transport"]);
   });
+
+  it("keeps bands proportional so they never outgrow the node they meet", () => {
+    const flows = [
+      flow("b0", 10_000),
+      ...Array.from({ length: 6 }, (_, i) => flow(`b${i}`, 0.01, "grid")),
+    ];
+    const batches = Array.from({ length: 6 }, (_, i) => batch(i));
+    const { nodes, flows: mapped } = groupSankeyBatches(flows, batches, null);
+    const keys = nodes.map((n) => n.key);
+    const scale = sankeyScale(mapped, keys);
+    const layout = layoutSankey(mapped, keys, scale);
+    for (const link of layout.links) expect(link.h).toBeCloseTo(link.kg * scale);
+    const grid = layout.nodes.find((n) => n.source === "grid");
+    const gridBands = layout.links
+      .filter((l) => l.source === "grid" && l.leg === "toStage")
+      .reduce((total, l) => total + l.h, 0);
+    expect(grid && gridBands <= grid.h).toBe(true);
+  });
 });

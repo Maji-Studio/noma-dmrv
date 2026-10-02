@@ -187,7 +187,10 @@ export function layoutSankey(
   batchKeys: string[],
   scale: number,
 ): SankeyLayout {
+  // Nodes keep a visible minimum; bands stay strictly proportional, so the
+  // bands meeting a node never add up to more than the node's own height.
   const height = (kg: number) => (kg > 0 ? Math.max(SANKEY_CHART.minBar, kg * scale) : 0);
+  const bandHeight = (kg: number) => kg * scale;
   const sourceItems = ENERGY_SOURCES.map((s) => ({ id: s.key, kg: sumKg(flows, (f) => f.source === s.key) }));
   const stageItems = ENERGY_STAGES.map((s) => ({ id: s.key, kg: sumKg(flows, (f) => stageOf(f.source) === s.key) }));
   const batchItems = batchKeys.map((key) => ({ id: key, kg: sumKg(flows, (f) => f.batchKey === key) }));
@@ -222,7 +225,7 @@ export function layoutSankey(
     for (const batchKey of batchKeys) {
       const kg = pairKg(source.key, batchKey);
       if (kg <= 0) continue;
-      const h = height(kg);
+      const h = bandHeight(kg);
       const y0 = sourceCursor.get(source.key) ?? 0;
       const y1 = stageIn.get(source.stage) ?? 0;
       sourceCursor.set(source.key, y0 + h);
@@ -248,7 +251,7 @@ export function layoutSankey(
       for (const source of ENERGY_SOURCES.filter((s) => s.stage === stage.key)) {
         const kg = pairKg(source.key, batchKey);
         if (kg <= 0) continue;
-        const h = height(kg);
+        const h = bandHeight(kg);
         const y0 = stageOut.get(stage.key) ?? 0;
         const y1 = batchIn.get(batchKey) ?? 0;
         stageOut.set(stage.key, y0 + h);
