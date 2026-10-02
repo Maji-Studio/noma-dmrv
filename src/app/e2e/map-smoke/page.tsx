@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { GeoJsonPreview } from "@/components/applications/geojson-preview";
-import { env } from "@/config/env";
+import { env, isHermeticCiBuild } from "@/config/env";
 import {
   MAP_SMOKE_BBOX,
   MAP_SMOKE_BOUNDARY,
@@ -19,11 +19,11 @@ export const metadata: Metadata = {
  * `page.route`. It proves the bundled MapLibre worker starts and loads vector
  * tiles, which no keyless CI page otherwise exercises.
  *
- * Never served by a real deployment: production accepts GEO_PROVIDER=stub
- * only on a hermetic CI build (see the fail-closed gate in src/config/env.ts).
+ * Never served by a real deployment: production builds 404 unless they are a
+ * hermetic CI build (see `isHermeticCiBuild` in src/config/env.ts).
  */
 export default function MapSmokePage() {
-  if (env.NODE_ENV === "production" && env.GEO_PROVIDER !== "stub") {
+  if (env.NODE_ENV === "production" && !isHermeticCiBuild) {
     notFound();
   }
 

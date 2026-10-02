@@ -81,8 +81,10 @@ test.describe("Map smoke", () => {
     const servedTiles = await serveFixtureBasemap(page);
     await page.goto(MAP_SMOKE_PATH);
 
-    // "ready" = first idle after load: every requested tile was fetched and
-    // parsed by the worker and painted, and the GeoJSON boundary rendered.
+    // "ready" = first idle after load with no map error since the style
+    // parsed: every requested tile was fetched, decoded by the worker and
+    // painted, and the GeoJSON boundary rendered. A tile the worker cannot
+    // decode settles as "error" instead.
     await expect(page.getByTestId("geojson-preview-map")).toHaveAttribute(
       "data-map-state",
       "ready",
