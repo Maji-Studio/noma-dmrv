@@ -1,0 +1,15 @@
+---
+/**
+ * StageDot: timeline dot. Lights up in sequence when its Stage plays (starts as a dim ring).
+ * Props:
+ *   state?: "dim" | "on" | "lit" | "ring"   on = white, lit = the one accent, ring = accent outline
+ *   size?: "sm" | "md"   default "md"
+ *   index?: number       stagger slot
+ *   delay?: string       extra CSS delay
+ *   class?: string
+ *   ...rest              passed through (e.g. style="left:40%" when placing on a track)
+ */
+const { state = "on", size = "md", index = 0, delay, class: className, style: extra, ...rest } = Astro.props;
+const style = [`--i:${index}`, delay && `--delay:${delay}`, extra].filter(Boolean).join(";");
+---
+<span class:list={["stg-dot", `stg-dot--${state}`, `stg-dot--${size}`, className]} style={style} aria-hidden="true" {...rest}></span>

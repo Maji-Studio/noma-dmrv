@@ -7,7 +7,6 @@
 
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
-import { formatRoundTripKm } from "@/lib/format-utils";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useEffect, useId, useState } from "react";
 
@@ -15,12 +14,14 @@ import { FormActions, FormEntitySelect, FormField, FormInput, FormSection, FormS
 import { EventTimeInput } from "@/components/forms/event-time-input";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
-import { OutputStockHistory } from "@/components/storage-locations/output-stock-history";
 import { OutputStockPreview } from "@/components/storage-locations/output-stock-preview";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import { TransportRoutePreview } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import { resolveDeliveryDistanceSourceChoice } from "./delivery-distance-source";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { useFacility } from "@/hooks/use-facilities";
 import { useFacilityClock, useFacilityContext } from "@/hooks/use-facility-context";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useMatchingOutputBins } from "@/hooks/use-output-stock";
@@ -47,6 +48,8 @@ const SET_VALUE_OPTS = {
   shouldTouch: true,
   shouldValidate: true,
 } as const;
+
+const ROUTE_EMPTY = "Select an order and enter the delivered wet mass to see the route.";
 
 const isDeliveryCertifyField = (field: string) =>
   isCertifyFormField("delivery", field);
@@ -82,6 +85,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const { facilityId: contextFacilityId } = useFacilityContext();
   const formFacilityId = delivery?.facilityId ?? contextFacilityId;
   const deliveryClock = useFacilityClock(formFacilityId);
+  const { data: formFacility } = useFacility(formFacilityId ?? "");
 
   // The order picker fetches its own options (FormEntitySelect); this query
   // only backs the stored-distance prefill for the selected order below.
@@ -206,12 +210,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     }
   };
 
-  const handleDistanceSourceChange = (source: DistanceSourceValue) => {
-    if (
-      source === "map_estimate" &&
-      storedDistanceSource === "map_estimate" &&
-      storedDistanceKm != null
-    ) {
+  const handleDistanceSourceChange = (raw: string) => {
+    const choice = resolveDeliveryDistanceSourceChoice(raw, {
+      storedDistanceKm,
+      storedDistanceSource,
+      hasOverride: distanceKmOverride != null,
+    });
+    if (choice.kind === "inherit-stored" && storedDistanceKm != null) {
       setDistanceDraft(formatDistance(storedDistanceKm));
       setSyncedDistanceKm(storedDistanceKm);
       setValue("distanceKmOverride", null, SET_VALUE_OPTS);
@@ -219,15 +224,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       setValue("distanceNote", "", SET_VALUE_OPTS);
       return;
     }
-
-    if (source === "manual" && distanceKmOverride == null) {
-      // A matching manual customer-location value remains inherited; only an
-      // edited distance becomes a delivery-specific manual override.
-      setValue("distanceSource", null, SET_VALUE_OPTS);
-      return;
-    }
-    setValue("distanceSource", source, SET_VALUE_OPTS);
+    setValue("distanceSource", choice.kind === "set" ? choice.source : null, SET_VALUE_OPTS);
   };
+
 
   // Switching orders invalidates a trip-specific override and its note.
   useClearOnDependencyChange(watchOrderId, () => {
@@ -278,15 +277,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     await onSubmit({ ...normalized, status: "delivered", idempotencyKey, basisFingerprint } as DeliveryFormData);
   });
 
-  // All three branches describe the same quantity — the one-way facility ›
-  // destination distance the field's own label names — so none of them
-  // re-qualifies it. Why the field is empty stays visible (a cue); with a
-  // distance the cue shows the round trip every leg counts.
+  // Why the field is empty stays visible (a cue). With a distance there is no
+  // cue: the route below shows the round trip it counts.
   const distanceCue = !watchOrderId
     ? "Select an order to load the destination's stored distance."
-    : effectiveDistanceKm != null && effectiveDistanceKm > 0
-      ? formatRoundTripKm(effectiveDistanceKm)
-      : undefined;
+    : undefined;
   const distanceHelperText = !watchOrderId
     ? undefined
     : storedDistanceKm == null
@@ -385,10 +380,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           <div className="md:col-span-2 space-y-16 [&:not(:has(>:not([hidden])))]:hidden">
             {draw.active && <SubBinDrawField draw={draw} timeZone={deliveryClock.timeZone} idPrefix="delivery" disabled={isSubmitting} showErrors={attempted} />}
             {draw.query.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{draw.query.error.message}</p>}
-            {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} facilityId={delivery.facilityId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
+            {delivery && <DeliveryStockDetails deliveryId={delivery.id} storageLocationId={delivery.storageLocationId} wetMassKg={delivery.deliveredWetMassKg} dryMassKg={delivery.massDryKg} />}
             {stockPreview.isFetching && <p role="status" className="body-caption text-[var(--color-text-tertiary)]">Refreshing stock preview...</p>}
             {stockPreview.error && <p role="alert" className="body-caption text-[var(--color-status-error)]">{stockPreview.error.message}</p>}
-            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} moreInfo={<OutputStockHistory compact triggerLabel="Stock history" storageLocationId={watchBinId} facilityId={formFacilityId ?? ""} />} />}
+            {stockPreview.data && <OutputStockPreview variant="movement" hideBlockingMessage={deliveredWetMassError === stockPreview.data.blockingMessage} preview={stockPreview.data} entry={{ kind: "delivery", wetMassKg: wetMass }} />}
           </div>
         </div>
       </FormSection>
@@ -443,12 +438,13 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               disabled={isSubmitting || effectiveDistanceKm == null}
               error={!!errors.distanceSource}
               {...register("distanceSource")}
+              // The select shows the effective source, which may be inherited
+              // from the customer location while the form value stays null.
+              // These overrides keep RHF's handlers from copying the displayed
+              // value into the form; blur still validates through trigger().
               value={effectiveDraftDistanceSource ?? ""}
-              onChange={(event) =>
-                handleDistanceSourceChange(
-                  event.target.value as DistanceSourceValue,
-                )
-              }
+              onChange={(event) => handleDistanceSourceChange(event.target.value)}
+              onBlur={() => void trigger("distanceSource")}
             />
           </FormField>
 
@@ -471,6 +467,18 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           </FormField>
         )}
         </ActionableFocusTarget>
+        <TransportRoutePreview
+          entityType="biochar"
+          originName={formFacility?.name}
+          destinationName={selectedOrder?.destinationName}
+          originPoint={{ lat: formFacility?.gpsLatitude ?? null, lng: formFacility?.gpsLongitude ?? null }}
+          destinationPoint={{ lat: selectedOrder?.destinationGpsLatitude ?? null, lng: selectedOrder?.destinationGpsLongitude ?? null }}
+          distanceKm={effectiveDistanceKm}
+          distanceSource={effectiveDraftDistanceSource}
+          loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
+          saved={isEditMode}
+          emptyMessage={ROUTE_EMPTY}
+        />
       </FormSection>
 
       </form>

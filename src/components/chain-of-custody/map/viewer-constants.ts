@@ -116,6 +116,8 @@ export const HIGHLIGHT_EASE_DURATION_MS = 650;
 export const HIGHLIGHT_HOLD_MS = 2600;
 
 export const POPUP_WIDTH_PX = 246;
+/** MapLibre's popup max-width: the card plus room for its 1.5px/3px borders. */
+export const POPUP_MAX_WIDTH_PX = POPUP_WIDTH_PX + 8;
 export const POPUP_OFFSET_PX = 20;
 
 // ---------------------------------------------------------------------------

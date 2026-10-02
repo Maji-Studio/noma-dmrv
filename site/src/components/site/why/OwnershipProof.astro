@@ -1,0 +1,30 @@
+---
+/**
+ * OwnershipProof: proof for principle 4. Two ways to run noma side by side, your servers or ours, each
+ * drawn as the same two layers (the MIT-licensed app over a PostgreSQL database holding your records), with
+ * "Same code" between them. Static. No props.
+ */
+const SIDES = [
+  { id: "self", name: "Your servers", who: "You run it" },
+  { id: "hosted", name: "Our hosting", who: "We run it for you" },
+];
+const ALT = "Illustration: two ways to run noma. On your servers, you run it. On our hosting, we run it for you. Both are the same MIT-licensed code over a PostgreSQL database that holds your records.";
+---
+<figure class="own" role="img" aria-label={ALT}>
+  {SIDES.map((s, i) => (
+    <>
+      {i > 0 && <p class="own-same" aria-hidden="true"><span>Same code</span></p>}
+      <div class:list={["own-side", `own-side--${s.id}`]} aria-hidden="true">
+        <p class="own-head"><span>{s.name}</span><span class="own-who">{s.who}</span></p>
+        <div class="own-layer own-layer--app">
+          <svg viewBox="0 0 16 16" focusable="false"><path d="M2 3h12v10H2z M2 6h12" /><circle cx="4" cy="4.5" r=".6" /><circle cx="5.8" cy="4.5" r=".6" /></svg>
+          <span>noma</span><span class="own-tag">MIT</span>
+        </div>
+        <div class="own-layer own-layer--data">
+          <svg viewBox="0 0 16 16" focusable="false"><ellipse cx="8" cy="3.5" rx="5.5" ry="2" /><path d="M2.5 3.5v9c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-9 M2.5 8c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2" /></svg>
+          <span>Your records</span><span class="own-tag">PostgreSQL</span>
+        </div>
+      </div>
+    </>
+  ))}
+</figure>

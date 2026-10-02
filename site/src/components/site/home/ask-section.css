@@ -1,0 +1,73 @@
+/* AskSection (AskSection.astro) and its answer drawings (AskAnswer.astro). Light editorial: hairline cells,
+   square corners, each answer on the hatch. Bin colours are the Product bin's layer tokens. */
+
+.ask-head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: end; padding: var(--section) var(--frame-pad) var(--space-8); }
+.ask-head .t-h2 { max-width: 13ch; }
+
+/* Three cells on shared rows: who, question, drawing, text, link. */
+.ask-cells { grid-template-rows: repeat(5, auto); border-top: var(--hairline) solid var(--rule); }
+.ask-cells > article { display: grid; grid-row: span 5; grid-template-rows: subgrid; gap: var(--space-4); padding-top: var(--space-7); }
+.ask-cells .t-h3 { margin: 0; }
+.ask-cells .t-body { font-size: var(--fs-ui); }
+.ask-who { margin: 0; font-size: var(--fs-ui); color: var(--accent); }
+.ask-art { display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; min-width: 0; min-height: 24rem; margin-block: var(--space-3); padding: var(--space-6) var(--space-5); background: var(--hatch); }
+.ask-note { padding: var(--space-4) var(--frame-pad); border-top: var(--hairline) solid var(--rule); }
+
+/* Answer drawings */
+.aa { display: grid; gap: var(--space-5); justify-items: center; width: 100%; color: var(--ink); }
+.aa-cap { margin: 0; font-size: var(--fs-caption); color: var(--ink-2); }
+.aa-big { margin: 0; font-size: var(--fs-h3); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1; }
+.aa-big span { font-size: 0.5em; letter-spacing: 0; color: var(--ink-2); }
+.aa-title { margin: 0; font-size: var(--fs-h3); font-weight: 300; letter-spacing: var(--track-h3); line-height: 1.1; }
+.aa-sub { margin: 0; font-size: var(--fs-small); color: var(--ink-2); }
+.aa-foot { margin: 0; padding-top: var(--space-3); font-size: var(--fs-caption); color: var(--ink-2); }
+.aa-foot--warn { color: var(--warn); }
+.aa-code { font-family: var(--f-mono); font-size: var(--fs-mono); letter-spacing: var(--track-mono); color: var(--accent); }
+.aa-card { display: grid; gap: var(--space-2); width: min(100%, 26rem); padding: var(--space-4); background: var(--paper); border: var(--hairline) solid var(--rule-strong); }
+
+/* bin */
+.aa-bin { width: min(100%, 220px); overflow: visible; }
+.aa-wall { fill: none; stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.aa-before { stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.aa-sq--l1 { fill: var(--l1); } .aa-sq--l2 { fill: var(--l2); } .aa-sq--l3 { fill: var(--l3); }
+.aa-sq--w { fill: var(--infra-bg); stroke: var(--infra); stroke-width: 1; stroke-dasharray: 2 2; }
+.aa-svg-cap { font-size: 12px; fill: var(--ink); }
+.aa-svg-note { font-size: 10px; fill: var(--accent); }
+.aa-rows { display: grid; margin: var(--space-3) 0 0; padding: 0; list-style: none; border-top: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.aa-rows li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--space-3); padding-block: var(--space-2); border-bottom: var(--hairline) solid var(--rule); }
+.aa-rows b { font-weight: 400; font-variant-numeric: tabular-nums; }
+.aa-sw { width: 12px; height: 12px; }
+.aa-sw--l1 { background: var(--l1); } .aa-sw--l2 { background: var(--l2); } .aa-sw--l3 { background: var(--l3); }
+.aa-sw--w { background: var(--infra-bg); outline: var(--hairline) dashed var(--infra); outline-offset: calc(var(--hairline) * -1); }
+
+/* missing */
+.aa-checks { display: grid; margin: var(--space-4) 0 0; padding: 0; list-style: none; border-top: var(--hairline) solid var(--rule); font-size: var(--fs-small); }
+.aa-checks li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding-block: var(--space-2); border-bottom: var(--hairline) solid var(--rule); }
+.aa-cell { display: grid; place-items: center; width: 20px; height: 20px; background: var(--ok-bg); border: var(--hairline) solid var(--ok); color: var(--ok); font-size: var(--fs-caption); font-weight: 700; }
+.aa-cell svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.aa-state { font-size: var(--fs-caption); }
+.aa-checks .is-open { color: var(--warn); }
+.aa-checks .is-open .aa-cell { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+
+/* number: the figure, then a rail back through the records; the last level forks into the two runs */
+.aa--number { justify-items: stretch; width: min(100%, 28rem); }
+.aa-num-top { display: grid; gap: var(--space-2); }
+.aa-chain { --dot: 9px; display: grid; margin: 0; padding: 0; list-style: none; font-size: var(--fs-small); }
+.aa-chain > li { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin-left: var(--space-1); padding: var(--space-3) 0 var(--space-3) var(--space-6); border-left: var(--hairline) solid var(--rule-strong); }
+.aa-chain > li::before { content: ""; position: absolute; left: calc(var(--dot) / -2 - var(--hairline) / 2); top: calc(var(--space-3) + 3px); width: var(--dot); height: var(--dot); background: var(--page); border: 1.5px solid var(--accent); }
+.aa-calc { grid-column: 1 / -1; color: var(--ink-2); }
+.aa-chain > .aa-split { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); padding-top: var(--space-5); border-left-color: transparent; }
+.aa-split::after { content: ""; position: absolute; left: 0; top: 0; height: var(--space-3); border-left: var(--hairline) solid var(--rule-strong); }
+.aa-split > div { display: grid; gap: var(--space-1); padding: var(--space-3); background: var(--paper); border: var(--hairline) solid var(--rule-strong); }
+.aa-split b { font-size: var(--fs-ui); font-weight: 400; }
+.aa-split .aa-calc { font-size: var(--fs-caption); }
+
+@media (max-width: 900px) {
+  .ask-head { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+  .gf-cells.ask-cells { --cols: 1 !important; }
+  .ask-art { min-height: 0; }
+}
+@media (max-width: 480px) {
+  .ask-art { padding-inline: var(--space-3); }
+  .aa-chain > li, .aa-chain > .aa-split { grid-template-columns: minmax(0, 1fr); padding-left: var(--space-4); }
+}

@@ -1,0 +1,88 @@
+/* Home stage: the trace as a horizontal rail of records (TraceStage.astro). Six evenly spaced dots, the
+   icon, label, code and quantity under each, and the record view below at full width. Rail segments
+   (.ts-seg) run from a step's dot to the next; during the dwell the active step's segment fills in the
+   accent toward the next step. The active step is the one lit element. Under 900px the rail becomes a
+   vertical list (the rail runs down through the dots) with the view below it. */
+.ts {
+  --ts-icon-w: 28px; --ts-dwell: 3000ms;
+  --ts-col-gap: var(--space-5); --ts-mark-w: var(--space-7); --ts-row-h: var(--space-8);
+  --ts-art-h: clamp(220px, 28vh, 280px);
+  font-family: var(--f-mono); font-weight: 500; font-size: var(--fs-stage-label); letter-spacing: var(--track-mono); text-transform: uppercase;
+}
+.ts-rows { position: relative; list-style: none; margin: 0; padding: 0; }
+.ts-row { position: relative; }
+
+/* Step button: icon, label, code, quantity. Rail layout below, list layout under 900px. */
+.ts-text { position: relative; padding: 0; background: transparent; border: 0; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-align: left; cursor: pointer; }
+.ts-text:focus-visible { outline: var(--stage-stroke) solid var(--stage-lit); outline-offset: var(--space-1); }
+.ts-icon { flex: none; width: var(--ts-icon-w); height: auto; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; color: var(--stage-ink-2); transition: color var(--dur-base) var(--ease-out); }
+.ts-icon-mask { fill: var(--stage); }
+.ts-label { color: var(--stage-ink); }
+.ts-meta { color: var(--stage-ink-3); }
+
+/* The active step is the one lit element: its dot, icon and label take the accent. */
+.ts-text .ts-label { transition: color var(--dur-base) var(--ease-out); }
+.ts-text[aria-current] :is(.ts-icon, .ts-label) { color: var(--stage-lit); }
+.stg:not([data-reveal="armed"]) .ts-row:has(> .ts-text[aria-current]) .stg-dot { background: var(--stage-lit); border-color: var(--stage-lit); box-shadow: 0 0 0 var(--stage-halo) var(--stage-lit-glow); }
+.stg[data-reveal="done"] .ts .stg-dot { transition: background-color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out); }
+.ts-mark { position: absolute; z-index: 1; display: flex; }
+
+/* Rail segment: from this step's dot to the next. The connector fills the box, so the layout only sets the
+   box; ::after is the dwell fill, grown from the dot toward the next step. */
+.ts-seg { position: absolute; pointer-events: none; --ts-fill-from: scaleX(0); --ts-fill-origin: left; }
+.ts-seg > .stg-conn { position: absolute; inset: 0; width: auto; height: auto; --c: var(--stage-line); }
+.ts-seg::after { content: ""; position: absolute; inset: 0; background: var(--stage-lit); transform: var(--ts-fill-from); transform-origin: var(--ts-fill-origin); opacity: 0; }
+.is-cycling .ts-row:has(> .ts-text[aria-current]) > .ts-seg::after { opacity: 1; animation: ts-grow var(--ts-dwell) linear both; }
+@keyframes ts-grow { from { transform: var(--ts-fill-from); } to { transform: none; } }
+/* The last step has no segment ahead of it, so its dwell fills a hairline under the label instead. */
+.ts-row:last-child > .ts-text::after { content: ""; position: absolute; left: 0; right: 0; bottom: calc(var(--space-2) * -1); height: var(--hairline); background: var(--stage-lit); transform: scaleX(0); transform-origin: left; opacity: 0; pointer-events: none; }
+.is-cycling .ts-row:last-child > .ts-text[aria-current]::after { opacity: 1; animation: ts-grow var(--ts-dwell) linear both; }
+
+/* Rail. */
+.ts .ts-stage { display: grid; gap: var(--space-6); }
+.ts .ts-rows { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: var(--ts-col-gap); }
+.ts .ts-row { padding-top: calc(var(--stage-dot-size) + var(--space-4)); }
+.ts .ts-mark { top: 0; left: 0; }
+.ts .ts-seg { top: calc((var(--stage-dot-size) - var(--stage-stroke)) / 2); left: calc(var(--stage-dot-size) / 2); width: calc(100% + var(--ts-col-gap)); height: var(--stage-stroke); }
+.ts .ts-text { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); width: 100%; }
+.ts .ts-icon { margin-bottom: var(--space-1); }
+
+/* Record view: one RecordCard per step (record-card.css lays it out and plots its drawing in). All cards
+   share one cell, so the view is always as tall as the longest record and switching never shifts layout.
+   (Not [hidden]: tokens.css forces display: none on it.) */
+.ts-view { display: grid; border: var(--hairline) solid var(--stage-grid); }
+.ts-card { grid-area: 1 / 1; --rc-art-h: var(--ts-art-h); }
+.ts-card:not(.is-active) { visibility: hidden; }
+
+[data-reveal="armed"] .ts-view { opacity: 0; }
+[data-reveal="play"] .ts-view { transition: opacity var(--dur-base) var(--ease-out); }
+
+.ts-note { margin: var(--space-6) 0 0; text-align: right; text-transform: none; font-family: var(--f-sans); font-weight: 300; letter-spacing: 0; font-size: var(--fs-caption); color: var(--stage-ink-3); }
+
+@media (max-width: 900px) {
+  /* List: rows are a subgrid so codes and quantities align; the rail runs down through the dots. */
+  .ts .ts-stage { gap: var(--space-7); }
+  .ts .ts-rows { grid-template-columns: var(--ts-mark-w) var(--ts-icon-w) minmax(0, 1fr) auto auto; column-gap: var(--space-4); border-bottom: var(--hairline) solid var(--stage-grid); }
+  .ts .ts-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; min-height: var(--ts-row-h); padding-top: 0; border-top: var(--hairline) solid var(--stage-grid); }
+  .ts .ts-mark { position: relative; top: auto; left: auto; grid-column: 1; justify-self: center; }
+  .ts .ts-seg { top: 50%; left: calc((var(--ts-mark-w) - var(--stage-stroke)) / 2); width: var(--stage-stroke); height: 100%; --ts-fill-from: scaleY(0); --ts-fill-origin: top; }
+  .ts .ts-text { display: grid; grid-column: 2 / -1; grid-template-columns: subgrid; align-items: center; align-self: stretch; row-gap: 0; column-gap: inherit; }
+  .ts .ts-icon { margin-bottom: 0; }
+  .ts .ts-row:last-child > .ts-text::after { bottom: 0; }
+
+  .ts-note { text-align: left; }
+}
+@media (max-width: 640px) {
+  /* Phone: label, code and quantity share a readable column instead of colliding. */
+  .ts { --ts-mark-w: var(--space-5); }
+  .ts .ts-rows { grid-template-columns: var(--ts-mark-w) var(--ts-icon-w) minmax(0, 1fr); column-gap: var(--space-3); }
+  .ts .ts-text { grid-template-rows: auto auto auto; padding-block: var(--space-3); row-gap: var(--space-1); }
+  .ts .ts-icon { grid-row: 1 / span 3; }
+  .ts .ts-label { grid-column: 2; grid-row: 1; }
+  .ts .ts-code { grid-column: 2; grid-row: 2; }
+  .ts .ts-qty { grid-column: 2; grid-row: 3; }
+}
+.ts-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-5); }
+.ts-controls .ts-note { margin: 0; }
+.ts-pause { min-height: var(--tap); padding: var(--space-2) var(--space-3); border: var(--hairline) solid var(--stage-line); background: transparent; color: var(--stage-ink); font-family: var(--f-sans); font-size: var(--fs-small); text-transform: none; letter-spacing: 0; cursor: pointer; }
+.site .ts-pause:focus-visible { outline-color: var(--stage-lit); }

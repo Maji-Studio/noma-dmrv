@@ -1,0 +1,110 @@
+---
+/**
+ * AskAnswer: the answer drawing for one AskSection question, built from illustrative records. Readable
+ * markup (no aria-hidden); AskSection wraps it in role="img" with a full text alternative.
+ * Props: kind: "bin" | "missing" | "number"
+ *   bin      bin A after its last draw: what is left, layer by layer, and the water in it. Same bin as
+ *            /product#bins: BIN_LAYERS, 400 kg dry drawn oldest layer first, 15% moisture.
+ *   missing  one removal and the records behind it, with the lab result for PR-002 missing
+ *   number   270 kg dry on the coffee field, followed back to each production run's share. Same records
+ *            as TraceStage: DL-001, BP-001 (540 kg dry from the mix bin), PR-001 and PR-002.
+ * Bin SVG geometry is in user units: a square is 16 with a 20 pitch, 10 kg each, ten to a row.
+ */
+import { BIN_LAYERS } from "../../../visuals/data.js";
+const { kind } = Astro.props;
+
+const M = 15; // % moisture, as in BinsSection
+const DRAW = 400; // kg dry drawn, as in BinsSection
+const KG_PER_SQ = 10;
+const P = 20, SQ = 16, IN = (P - SQ) / 2, COLS = 10, BX = 20, BY = 236, WALL_ROWS = 11;
+const waterOf = (dry) => (dry * M) / (100 - M);
+
+// Oldest layer first: the draw empties layer 1, then takes the rest from layer 2.
+let owed = DRAW;
+const left = BIN_LAYERS.map((l, k) => {
+  const take = Math.min(owed, l.dry);
+  owed -= take;
+  return { sw: `l${k + 1}`, date: l.date, dry: l.dry - take };
+}).filter((l) => l.dry > 0);
+const LEFT_DRY = left.reduce((s, l) => s + l.dry, 0);
+const LEFT_WATER = Math.round(waterOf(LEFT_DRY));
+// Each layer's water squares spread evenly through its biochar squares, as in BinsSection.
+const seq = left.flatMap((l) => {
+  const dry = Math.round(l.dry / KG_PER_SQ), wet = Math.round(waterOf(l.dry) / KG_PER_SQ), len = dry + wet;
+  const at = new Set(Array.from({ length: wet }, (_, w) => Math.floor(((w + 0.5) * len) / wet)));
+  return Array.from({ length: len }, (_, n) => (at.has(n) ? "w" : l.sw));
+});
+const squares = seq.map((sw, i) => ({ sw, x: BX + (i % COLS) * P + IN, y: BY - (Math.floor(i / COLS) + 1) * P + IN }));
+// The level before the draw: every layer and its water, rounded up to whole rows.
+const fullSquares = BIN_LAYERS.reduce((s, l) => s + Math.round((l.dry + waterOf(l.dry)) / KG_PER_SQ), 0);
+const BEFORE_Y = BY - Math.ceil(fullSquares / COLS) * P;
+
+const CHECKS = [
+  { label: "Traced to feedstock", ok: true },
+  { label: "Moisture at every draw", ok: true },
+  { label: "Transport, counted both ways", ok: true },
+  { label: "Field boundary and photos", ok: true },
+  { label: "Lab result for PR-002", ok: false },
+];
+---
+<div class:list={["aa", `aa--${kind}`]}>
+  {kind === "bin" && <>
+    <svg class="aa-bin" viewBox="0 0 240 262" aria-hidden="true" focusable="false">
+      <path class="aa-before" d={`M${BX - 8} ${BEFORE_Y}H${BX + COLS * P + 8}`} />
+      {squares.map((q) => <rect class={`aa-sq aa-sq--${q.sw}`} x={q.x} y={q.y} width={SQ} height={SQ} />)}
+      <path class="aa-wall" d={`M${BX - 2} ${BY - WALL_ROWS * P}V${BY}H${BX + COLS * P + 2}V${BY - WALL_ROWS * P}`} />
+      <text class="aa-svg-cap" x={BX + (COLS * P) / 2} y={BY + 22} text-anchor="middle">Bin A</text>
+      <text class="aa-svg-note" x={BX + COLS * P} y={BEFORE_Y - 8} text-anchor="end">Before the last draw</text>
+    </svg>
+    <div class="aa-card">
+      <p class="aa-cap">Bin A, now</p>
+      <p class="aa-big">{LEFT_DRY} kg <span>dry</span></p>
+      <ul class="aa-rows">
+        {left.map((l) => <li><i class={`aa-sw aa-sw--${l.sw}`}></i><span>Placed {l.date}</span><b>{l.dry} kg</b></li>)}
+        <li><i class="aa-sw aa-sw--w"></i><span>Water in it</span><b>{LEFT_WATER} kg</b></li>
+      </ul>
+      <p class="aa-foot">Last draw: {DRAW} kg dry, oldest layer first</p>
+    </div>
+  </>}
+
+  {kind === "missing" && (
+    <div class="aa-card">
+      <p class="aa-cap">Removal</p>
+      <p class="aa-title">Coffee field</p>
+      <p class="aa-sub">270 kg dry biochar applied</p>
+      <ul class="aa-checks">
+        {CHECKS.map((c) => (
+          <li class:list={[!c.ok && "is-open"]}>
+            <span class="aa-cell">{c.ok
+              ? <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 10.5l3.5 3.5 6.5-7.5" /></svg>
+              : "?"}</span>
+            <span>{c.label}</span>
+            {!c.ok && <span class="aa-state">Missing</span>}
+          </li>
+        ))}
+      </ul>
+      <p class="aa-foot aa-foot--warn">1 to add before you prepare the submission</p>
+    </div>
+  )}
+
+  {kind === "number" && <>
+    <div class="aa-num-top">
+      <p class="aa-cap">Applied on the coffee field</p>
+      <p class="aa-big">270 kg <span>dry</span></p>
+    </div>
+    <ol class="aa-chain">
+      <li>
+        <span class="aa-code">DL-001</span><span>Delivery</span>
+        <span class="aa-calc">318 kg net on the weighbridge, less {M}% moisture</span>
+      </li>
+      <li>
+        <span class="aa-code">BP-001</span><span>Biochar product</span>
+        <span class="aa-calc">270 of its 540 kg dry, drawn from the mix bin</span>
+      </li>
+      <li class="aa-split">
+        <div><span class="aa-code">PR-001</span><b>135 kg dry</b><span class="aa-calc">Half, from FD-001</span></div>
+        <div><span class="aa-code">PR-002</span><b>135 kg dry</b><span class="aa-calc">Half, from FD-002</span></div>
+      </li>
+    </ol>
+  </>}
+</div>

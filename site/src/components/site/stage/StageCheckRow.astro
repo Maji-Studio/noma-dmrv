@@ -1,0 +1,22 @@
+---
+/**
+ * StageCheckRow: keynote check row, an icon cell and a mono uppercase label (uppercase is CSS only).
+ * Props:
+ *   label: string          write it in sentence case; the stage renders it uppercase
+ *   mark?: "check" | "unknown" | "cross"   default "check"
+ *   state?: "default" | "dim" | "lit"      lit = the one accent element on the stage
+ *   dashed?: boolean       dashed outline (the pending or receiving side in the keynote refs)
+ *   meta?: string          secondary mono text at the right end
+ *   index?: number         stagger slot for the draw-in (row ticks at index * --stagger)
+ *   delay?: string         extra CSS delay, e.g. "400ms"
+ *   as?: "div" | "li"      default "div"
+ *   class?: string
+ */
+import StageMark from "./StageMark.astro";
+const { label, mark = "check", state = "default", dashed = false, meta, index = 0, delay, as: Tag = "div", class: className } = Astro.props;
+---
+<Tag class:list={["stg-row", `stg-row--${state}`, dashed && "stg-row--dashed", className]} style={`--i:${index};${delay ? `--delay:${delay};` : ""}`}>
+  <span class="stg-row-icon"><StageMark kind={mark} /></span>
+  <span class="stg-row-label">{label}</span>
+  {meta && <span class="stg-row-meta">{meta}</span>}
+</Tag>

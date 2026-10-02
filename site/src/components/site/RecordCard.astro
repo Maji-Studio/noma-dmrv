@@ -1,0 +1,31 @@
+---
+/**
+ * RecordCard: one record as its station's line drawing, then label and code, one line, and what the
+ * record holds. Lays itself out by its own width (record-card.css). The browser twin is recordCard() in
+ * record-card.js; keep the two in step.
+ * Props:
+ *   label: string, code: string   the head, e.g. "Production run" and "PR-001"
+ *   line?: string                 one sentence under the head
+ *   holds?: (string | [string, string])[]   what the record holds: an item, or a label and its value
+ *   station?: string              contour id (contours/<station>.svg); no drawing without it
+ *   scope?: string                id prefix for the drawing, unique per page use (default "rc")
+ *   tone?: "paper" | "stage"      stage for the dark band
+ *   float?: boolean               a surface of its own, with --rc-accent on the top edge
+ *   class?: string; any other attribute (id, data-*, inert) goes on the root
+ */
+import ContourArt from "./contours/ContourArt.astro";
+import "./record-card.css";
+
+interface Props { label: string; code: string; line?: string; holds?: (string | [string, string])[]; station?: string; scope?: string; tone?: "paper" | "stage"; float?: boolean; class?: string; [attr: string]: unknown }
+const { label, code, line, holds = [], station, scope = "rc", tone = "paper", float = false, class: className, ...attrs } = Astro.props;
+---
+<article class:list={["rc", tone === "stage" && "rc--stage", float && "rc--float", className]} {...attrs}>
+  <div class="rc-in">
+    {station && <ContourArt station={station} scope={scope} class="rc-art" />}
+    <div class="rc-text">
+      <p class="rc-head"><span class="rc-label">{label}</span><span class="rc-code">{code}</span></p>
+      {line && <p class="rc-line">{line}</p>}
+      {holds.length > 0 && <ul class="rc-holds">{holds.map((h) => Array.isArray(h) ? <li><span class="rc-key">{h[0]}</span><span>{h[1]}</span></li> : <li>{h}</li>)}</ul>}
+    </div>
+  </div>
+</article>

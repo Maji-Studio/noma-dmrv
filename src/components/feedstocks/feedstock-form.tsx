@@ -14,7 +14,7 @@ import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIco
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
-import { ONE_WAY_CUE, formatRoundTripKm } from "@/lib/format-utils";
+import { ONE_WAY_CUE } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
@@ -50,6 +50,8 @@ import { FeedstockAllocationSummary } from "./feedstock-allocation-summary";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import { TransportRoutePreview } from "@/components/transport-legs";
+import { useFacility } from "@/hooks/use-facilities";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import { matchesSupplierDefaultForDisplay } from "./feedstock-distance-source";
 
@@ -59,6 +61,8 @@ const DISTANCE_INPUT_STYLE = { paddingInlineEnd: unitEndPadding(DISTANCE_UNIT) }
 
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
+
+const ROUTE_EMPTY = "Select a supplier and enter the wet mass to see the route.";
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
@@ -193,8 +197,8 @@ export function FeedstockForm({
     control,
     name: "transportDistanceSource",
   }) as DistanceSourceValue | null | undefined;
-  // Every leg counts its round trip; show it beside the one-way entry.
-  const countedTransportDistanceKm =
+  // The one-way entry as a number; the route preview adds the round trip.
+  const oneWayTransportDistanceKm =
     typeof transportDistanceKm === "number" &&
     Number.isFinite(transportDistanceKm) &&
     transportDistanceKm >= 0
@@ -214,6 +218,13 @@ export function FeedstockForm({
   );
   const defaultSupplierLocation =
     supplierLocationList?.find((location) => location.isDefault) ?? null;
+  const { data: watchedFacility } = useFacility(watchedFacilityId ?? "");
+  // Same rule as the saved leg (syncFeedstockTransportLeg): the default
+  // location's coordinates when it has both, else the supplier's.
+  const supplierRoutePoint =
+    defaultSupplierLocation?.gpsLatitude != null && defaultSupplierLocation.gpsLongitude != null
+      ? { lat: defaultSupplierLocation.gpsLatitude, lng: defaultSupplierLocation.gpsLongitude }
+      : { lat: selectedSupplier?.gpsLatitude, lng: selectedSupplier?.gpsLongitude };
   const { data: existingLegs } = useTransportLegsForEntity("feedstock", feedstock?.id ?? "", {
     enabled: isEditMode,
   });
@@ -590,19 +601,27 @@ export function FeedstockForm({
                       </button>
                     )}
                   </div>
-                  <p
-                    className="body-caption text-[var(--color-text-tertiary)] mt-6"
-                    data-testid="transport-distance-total"
-                    aria-live="polite"
-                  >
-                    {countedTransportDistanceKm != null
-                      ? formatRoundTripKm(countedTransportDistanceKm)
-                      : ONE_WAY_CUE}
+                  {/* The route below shows the round trip this distance counts. */}
+                  <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
+                    {ONE_WAY_CUE}
                   </p>
                 </div>
               </FormField>
             </ActionableFocusTarget>
           </div>
+          {/* Origin mirrors the saved leg: the supplier's default location, else the supplier. */}
+          <TransportRoutePreview
+            entityType="feedstock"
+            originName={defaultSupplierLocation?.name ?? selectedSupplier?.name}
+            originPoint={supplierRoutePoint}
+            destinationPoint={{ lat: watchedFacility?.gpsLatitude ?? null, lng: watchedFacility?.gpsLongitude ?? null }}
+            destinationName={watchedFacility?.name}
+            distanceKm={oneWayTransportDistanceKm}
+            distanceSource={draftTransportDistanceSource}
+            loadMassKg={typeof watchWetMass === "number" ? watchWetMass : null}
+            saved={isEditMode}
+            emptyMessage={ROUTE_EMPTY}
+          />
         </FormSection>
 
         {/* Material Details */}
@@ -700,10 +719,15 @@ export function FeedstockForm({
                   binTypeFilter={FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER}
                   facilityId={watchedFacilityId || undefined}
                   feedstockTypeId={watchedFeedstockTypeId || undefined}
-                  onCreateNew={() => {
-                    setStorageLocationRowIndex(index);
-                    storageLocationDialog.open();
-                  }}
+                  // The quick-add dialog needs a facility to create the bin in.
+                  onCreateNew={
+                    watchedFacilityId
+                      ? () => {
+                          setStorageLocationRowIndex(index);
+                          storageLocationDialog.open();
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>

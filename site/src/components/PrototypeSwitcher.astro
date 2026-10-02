@@ -1,0 +1,19 @@
+---
+// PROTOTYPE ONLY. Floating bar that cycles ?variant= between the landing variants.
+// Rendered only in dev, or when PUBLIC_SHOW_VARIANTS=true for a shared preview.
+const { variants } = Astro.props; // [{ key, name }]
+const show = import.meta.env.DEV || import.meta.env.PUBLIC_SHOW_VARIANTS === "true";
+---
+{show && (
+  <div class="proto-bar" role="navigation" aria-label="Prototype variants" data-variants={JSON.stringify(variants)}>
+    <button type="button" data-step="-1" aria-label="Previous variant">←</button>
+    <span class="proto-label"></span>
+    <button type="button" data-step="1" aria-label="Next variant">→</button>
+  </div>
+)}
+<style>
+  .proto-bar { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 1000; display: flex; align-items: center; gap: 4px; background: #111; color: #fff; border-radius: 999px; padding: 6px; box-shadow: 0 8px 30px rgba(0,0,0,.35); font: 600 13px/1 ui-sans-serif, system-ui, sans-serif; }
+  .proto-bar button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 32px; height: 32px; cursor: pointer; font-size: 15px; }
+  .proto-bar button:hover { background: #555; }
+  .proto-label { padding: 0 12px; white-space: nowrap; }
+</style>

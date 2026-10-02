@@ -6,7 +6,7 @@ import { TransportLegsEditor } from "./transport-legs-editor";
 interface TransportLegsSummaryProps {
   entityType: TransportEntityTypeValue;
   entityId: string;
-  /** Override the section title. Defaults based on entityType. */
+  /** Override the route's accessible name. Defaults based on entityType. */
   title?: string;
   /** Override the no-legs message (e.g. for auto-derived categories). */
   emptyMessage?: string;
@@ -14,7 +14,7 @@ interface TransportLegsSummaryProps {
 
 /**
  * Read-only transport-leg list for the side-sheet view mode. Renders the same
- * journey timeline as the editor (via `readOnly`) so view and edit stay
+ * route rail as the editor (via `readOnly`) so view and edit stay
  * visually identical, minus the add/edit/delete controls.
  */
 export function TransportLegsSummary({

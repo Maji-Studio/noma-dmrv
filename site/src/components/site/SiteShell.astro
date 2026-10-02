@@ -1,0 +1,37 @@
+---
+/**
+ * SiteShell: the document for every marketing page (head, skip link, nav, main, footer, motion).
+ * Props:
+ *   title?: string        full <title>; defaults to the brand line
+ *   description?: string  meta description
+ *   current?: "home" | "product" | "why" | "get-started"   sets aria-current="page" in the nav
+ * Slots: default, rendered inside <main id="main">.
+ * Motion: any element with data-reveal inside the page is armed by motion.js (see that file).
+ */
+import "../../styles/tokens.css";
+import "./site.css";
+import SiteNav from "./SiteNav.astro";
+import SiteFooter from "./SiteFooter.astro";
+const {
+  title = "noma, biochar traceability by MAJI",
+  description = "Trace your biochar from feedstock to application. Open-source records and evidence for biochar producers.",
+  current,
+} = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body class="site">
+    <a class="skip" href="#main">Skip to content</a>
+    <SiteNav current={current} />
+    <main id="main" tabindex="-1"><slot /></main>
+    <SiteFooter />
+    <script>import { reveal } from "./motion.js"; reveal();</script>
+  </body>
+</html>
