@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, useWatch } from "react-hook-form";
+import { useController, useForm, useWatch } from "react-hook-form";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -24,6 +24,7 @@ import {
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { nextTransportDistanceSource } from "./distance-provenance";
 import { ONE_WAY_CUE, oneWayDistanceCue } from "@/lib/format-utils";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
@@ -102,10 +103,15 @@ export function TransportLegForm({
 
   // Provenance: hand-editing the distance reverts a CALC'd map estimate to
   // manual. A legacy document value stays available only while selected.
-  const distanceSource = useWatch({
+  const { field: distanceSourceField } = useController({
     control,
     name: "distanceSource",
-  }) as DistanceSourceValue;
+  });
+  const { field: distanceKmField } = useController({
+    control,
+    name: "distanceKm",
+  });
+  const distanceSource = distanceSourceField.value as DistanceSourceValue;
   const distanceSourceOptions = (
     distanceSource === "map_estimate"
       ? (["map_estimate", "manual"] as const)
@@ -119,7 +125,7 @@ export function TransportLegForm({
   const originLng = useWatch({ control, name: "originGpsLongitude" }) as number | null | undefined;
   const destinationLat = useWatch({ control, name: "destinationGpsLatitude" }) as number | null | undefined;
   const destinationLng = useWatch({ control, name: "destinationGpsLongitude" }) as number | null | undefined;
-  const distanceKm = useWatch({ control, name: "distanceKm" }) as number | null | undefined;
+  const distanceKm = distanceKmField.value as number | null | undefined;
   // A saved leg keeps its own method; new legs default to the one selectable method.
   const transportMethod =
     (useWatch({ control, name: "transportMethodType" }) as string | undefined) ??
@@ -234,15 +240,11 @@ export function TransportLegForm({
             distanceKm={distanceKm}
             distanceSource={distanceSource}
             onDistanceChange={(km, source) => {
-              setValue("distanceKm", km ?? undefined, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
+              distanceKmField.onChange(km);
               // CALC always claims map_estimate; a hand edit only degrades a
               // map estimate — an explicit manual or legacy document value survives.
-              if (source === "map_estimate" || distanceSource === "map_estimate") {
-                setValue("distanceSource", source ?? "manual", { shouldDirty: true });
-              }
+              const nextSource = nextTransportDistanceSource(source, distanceSource);
+              if (nextSource) distanceSourceField.onChange(nextSource);
             }}
             origin={originPoint}
             destination={destinationPoint}
@@ -260,7 +262,8 @@ export function TransportLegForm({
               id="distanceSource"
               options={distanceSourceOptions}
               error={!!errors.distanceSource}
-              {...register("distanceSource")}
+              {...distanceSourceField}
+              value={distanceSourceField.value ?? "manual"}
             />
           </FormField>
           {/* Road is the only method the registry accepts, so it is a fixed
