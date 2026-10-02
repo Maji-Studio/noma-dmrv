@@ -143,7 +143,7 @@ only a **split bin**'s sub-bins are physically separate.
 
 **Split bin**:
 An output bin whose layers sit physically apart as **sub-bins**. The operator
-records which sub-bins a removal came from and the order they were emptied;
+records which sub-bins a draw came from and the order they were emptied;
 oldest first is the default.
 
 **Sub-bin**:
@@ -151,7 +151,7 @@ One layer of a split bin in its own bay, bag or heap, with its own moisture.
 _Avoid_: using it for a layer in a mix bin.
 
 **Mix bin**:
-An output bin holding one well-mixed pile. Every removal takes each layer in
+An output bin holding one well-mixed pile. Every draw takes each layer in
 proportion to its remaining solids.
 
 **Departure moisture**:
