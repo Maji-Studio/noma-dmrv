@@ -372,6 +372,28 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   one-derived-per-entity index, and the batch readiness transport gate.
 - **See also:** #456, #420.
 
+### The delivery form ignores a delivery's own destination (`transport/delivery-own-destination`, opened 2026-10-02)
+
+- **Current model:** `deliveries.customer_location_id` exists, and every read
+  resolves the destination as the delivery's own location, else the order's
+  (`coalesce(deliveries.customer_location_id, orders.customer_location_id)` in
+  `getDeliveries`, `getDeliveryWithRelations` and the derived distribution leg in
+  `data-access/transport-legs.ts`). The delivery form reads only the order's
+  location: its route preview, map ends and inherited distance all come from
+  `getOrdersForSelect`.
+- **Question:** if a delivery can ever go somewhere other than its order's
+  location, where is that chosen, and should the form then resolve the same
+  coalesced location the reads do?
+- **Why it matters:** today nothing writes the column (no schema field, no
+  action), so form and read view always agree. The first code path that sets it
+  would make the edit form show one destination and distance while the read
+  view, the saved leg and the emissions use another. Three reviewers flagged
+  this on #892.
+- **To resolve:** when a per-delivery destination becomes editable, load the
+  delivery's resolved destination (name, GPS, stored distance) into the form and
+  fall back to the order's only when it is null; otherwise drop the column.
+- **See also:** #892.
+
 ### Split `src/db/seed-data.ts` into domain seed modules (`db/seed-modularization`, opened 2026-06-11)
 
 - **Problem:** `seed-data.ts` is well over the repository's 1000-line cap and
