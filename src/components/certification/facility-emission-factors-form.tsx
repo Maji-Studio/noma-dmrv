@@ -64,6 +64,18 @@ const FIELDS = [
   },
 ] as const;
 
+/**
+ * Form instance key per saved version. Milliseconds count: two saves within
+ * one second must still remount the form, or its inputs would keep the older
+ * values while the save sends the newer version as expected.
+ */
+export function factorsFormKey(
+  facilityId: string,
+  factors: Pick<FacilityEmissionFactors, "updatedAt"> | null,
+): string {
+  return `${facilityId}:${factors ? new Date(factors.updatedAt).getTime() : "new"}`;
+}
+
 function formatFactor(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
@@ -88,7 +100,7 @@ export function FacilityEmissionFactorsForm({ facilityId }: { facilityId: string
   // remount is how saved values reach the inputs.
   return (
     <FactorsForm
-      key={`${facilityId}:${factors?.updatedAt.toString() ?? "new"}`}
+      key={factorsFormKey(facilityId, factors)}
       facilityId={facilityId}
       factors={factors}
     />
