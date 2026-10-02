@@ -1,5 +1,41 @@
 # Isometric Docs Change Log
 
+## 2026-10-01: Storage components, diesel split and Source targets come from the catalog
+
+- The sampled 1,000-year durability inputs
+  (`biochar_sequestration_1000_year_f_durable_max`) are catalog entries with
+  strategy `measurement-sample` in
+  `src/lib/isometric/semantic-binding-catalog.ts`, each carrying its
+  measurement property, data shape, source contract and unit transform.
+  `SEQUESTRATION_COMPONENT_INPUT_BINDINGS`
+  (`src/lib/isometric/transformers/sequestration-binding.ts`) is a projection
+  of them, and `transformSequestrationSourceValue` applies the transform the
+  binding declares. The unit transforms are named in
+  `src/lib/isometric/source-transforms.ts`.
+- The storage blueprint keys, their durability tier and sampling, the
+  tier-to-blueprint selection (ADR 0021) and the 200-year transforms (H/C ×100,
+  carbon percent to fraction) moved from `measurement-sample.ts` to
+  `src/lib/isometric/storage-blueprints.ts`. The 200-year components stay
+  unbound and fail closed (ADR 0013). The unused
+  `SEQUESTRATION_1000_YEAR_COMPONENT_CONTRACTS` is gone.
+- The generator/startup diesel split and the Safety margin carve-out are named
+  disambiguation rules (`PYROLYSIS_DIESEL_SPLIT`, `SAFETY_MARGIN_CARVE_OUT`)
+  on their catalog roles, documented as exceptions for a provider key that is
+  not stable. An unrecognised pyrolysis diesel component fails with the same
+  message as before.
+- Each catalog role names the noma evidence roles whose Sources support it.
+  The Source binding rules, the durability ledger targets and the persisted
+  Source target schema (`src/fn/certification/removal-snapshot-readers.ts`)
+  are projections of them. Projections live in
+  `src/lib/isometric/semantic-binding-projections.ts`.
+- No binding or submitted value changed (#638 slice A, part of #291).
+  `MAPPING_REVISION` and `SOURCE_BINDING_MAPPING_REVISION` keep their values;
+  `tests/binding-catalog-exceptions.test.ts` pins the pre-#638 storage
+  classification, sequestration bindings, Source targets and the diesel
+  message. `tests/binding-tuple-literal-guard.test.ts` now also catches
+  backtick and object-key mirrors outside comments. Persisting component
+  assignments by template-component ID is #893; the binding editor is #894.
+
 ## 2026-10-01: Energy page drops the submission preview and shows estimates
 
 - `/energy` no longer previews the grid electricity and diesel values a

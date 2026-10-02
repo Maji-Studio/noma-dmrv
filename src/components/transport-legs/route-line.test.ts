@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RouteGeometry } from "@/lib/geo/types";
-import { resolveCustomerLocationRoutePreview } from "./customer-location-route-preview";
+import { resolveRouteLine } from "./route-line";
 
 const FACILITY = { lat: 47.3769, lng: 8.5417 };
 const DESTINATION = { lat: 46.948, lng: 7.4474 };
@@ -9,10 +9,10 @@ const ENDPOINT_COORDINATES: [number, number][] = [
   [DESTINATION.lng, DESTINATION.lat],
 ];
 
-describe("resolveCustomerLocationRoutePreview", () => {
+describe("resolveRouteLine", () => {
   it("uses the straight fallback while route geometry is loading", () => {
     expect(
-      resolveCustomerLocationRoutePreview(FACILITY, DESTINATION, undefined)
+      resolveRouteLine(FACILITY, DESTINATION, undefined)
     ).toEqual({
       coordinates: ENDPOINT_COORDINATES,
       boundsCoordinates: ENDPOINT_COORDINATES,
@@ -28,7 +28,7 @@ describe("resolveCustomerLocationRoutePreview", () => {
       { coordinates: [[8.2, 47.1]], distanceKm: 10 } satisfies RouteGeometry,
     ],
   ])("uses the straight fallback when geometry is %s", (_label, geometry) => {
-    const preview = resolveCustomerLocationRoutePreview(
+    const preview = resolveRouteLine(
       FACILITY,
       DESTINATION,
       geometry
@@ -46,7 +46,7 @@ describe("resolveCustomerLocationRoutePreview", () => {
       [7.5, 47],
     ];
 
-    const preview = resolveCustomerLocationRoutePreview(
+    const preview = resolveRouteLine(
       FACILITY,
       DESTINATION,
       { coordinates: routeCoordinates, distanceKm: 132 }

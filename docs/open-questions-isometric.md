@@ -89,19 +89,19 @@ retired questions do not belong in this file.
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
 
 - **Decision needed** — where should the "this template component carries this
-  dmrv aggregated source" mapping live? Today it's the code constant
-  `PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`
-  (`src/lib/isometric/semantic-binding-catalog.ts`), keyed by component **display
-  name** because Certify exposes no stable per-component key. Full rationale is
-  in the code comment above that constant — do not restate it here.
+  dmrv aggregated source" assignment live? Today it's the named disambiguation
+  rules `PYROLYSIS_DIESEL_SPLIT` and `SAFETY_MARGIN_CARVE_OUT`
+  (`src/lib/isometric/semantic-binding-catalog.ts`), keyed by component
+  **display name** because Certify exposes no stable per-component semantic
+  key. Full rationale is in the code comment on `ComponentDisambiguationRule`;
+  do not restate it here.
 - **Why it matters** — a display-name rename in the Isometric UI fails closed
   with a `SafeError` (can't mis-submit) but blocks the submit until code catches
   up, coupling the registry template to a deploy no operator can do.
-- **To resolve** — a facility-configurable component→source mapping (persisted
-  on the certifier mapping row) plus an assignment wizard in facility settings;
-  the constant becomes the seed/default. Scope it when a second multi-component
-  `(group, blueprint, input)` triple appears — today only the pyrolysis
-  generator/startup diesel split collides. Structural umbrella: **#291**.
+- **To resolve** — persist the template-component ID to catalog role
+  assignment at the project/template scope, seeded from today's names
+  (**#893**, storage owner per #657), then a binding editor in the Removal
+  template diagnostic (**#894**). Both are sub-issues of **#638**.
 
 ### Replacement 1,000-year component confirmation and template migration (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03; updated 2026-08-13)
 
@@ -168,8 +168,9 @@ the input binding and one unit transform remain unconfirmed.
 - **H/C unit transform — needs-registry-check.** The 200-year blueprint declares
   `h_c_molar_ratios` in `%` while samples store a dimensionless molar ratio
   (~0.5); `toHcMolarRatioPercent`
-  (`src/lib/isometric/transformers/measurement-sample.ts`) applies ×100 as the
-  most likely transform. The Certify measurement-samples reference lists H:C as
+  (`src/lib/isometric/transformers/measurement-sample.ts`) applies the ×100
+  `RATIO_TO_PERCENT` transform that the 200-year storage entry declares
+  (`src/lib/isometric/storage-blueprints.ts`) as the most likely transform. The Certify measurement-samples reference lists H:C as
   `DIMENSIONLESS_RATIO` / `HYDROGEN_TO_ORGANIC_CARBON_RATIO`, which may make the
   ×100 wrong. Verify the live template's blueprint input unit before adding the
   200-year explicit binding.

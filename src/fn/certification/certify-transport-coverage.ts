@@ -3,12 +3,12 @@ import {
   collectTransportEntityIds,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
+import { TRANSPORT_CATEGORIES } from "@/lib/isometric/semantic-binding-catalog";
 import {
   lookupBindingTriple,
   projectTransportCategories,
-  TRANSPORT_CATEGORIES,
   type TransportCategoryTable,
-} from "@/lib/isometric/semantic-binding-catalog";
+} from "@/lib/isometric/semantic-binding-projections";
 import type { TransportLegsByCategory } from "./shared";
 
 export interface TransportCoverageBucket {

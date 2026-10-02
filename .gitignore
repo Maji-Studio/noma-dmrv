@@ -65,6 +65,7 @@ test-results
 /.codex/scratch/
 /.pnpm-store/
 /output/
+/outputs/
 # QA run artifacts: only markdown reports are tracked; screenshots, videos,
 # raw driver output, and scripts stay local (docs/organization.md)
 docs/archive/qa/artifacts/**

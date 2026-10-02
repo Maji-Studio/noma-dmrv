@@ -50,14 +50,14 @@ async function createOrderViaUi(
     seededData.customerLocation.id
   );
 
-  // Selecting a location surfaces the read-only details panel with the stored
-  // facility distance and its provenance (issue #196). The mini map is not
-  // asserted — it needs a MapTiler key absent in hermetic CI.
+  // Selecting a location surfaces the read-only details panel with the
+  // delivery route at the stored facility distance (issue #196). The route
+  // map is not asserted: it needs a MapTiler key absent in hermetic CI.
   await expect(page.getByTestId("order-location-details")).toBeVisible({
     timeout: 8000,
   });
   await expect(page.getByTestId("order-location-distance")).toContainText(
-    "25 km from"
+    "25 km one way"
   );
 
   await page.selectOption('select[name="packaging"]', "loose");

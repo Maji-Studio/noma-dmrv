@@ -243,7 +243,8 @@ export async function getOrdersForSelect(
     formulationName: string | null;
     formulationId: string;
     quantityKg: number;
-    /** Destination (order's customer location) GPS. */
+    /** Destination (order's customer location) name and GPS. */
+    destinationName: string | null;
     destinationGpsLatitude: number | null;
     destinationGpsLongitude: number | null;
     /**
@@ -272,6 +273,7 @@ export async function getOrdersForSelect(
       formulationName: formulations.name,
       formulationId: orders.formulationId,
       quantityKg: orders.quantityKg,
+      destinationName: customerLocations.name,
       destinationGpsLatitude: customerLocations.gpsLatitude,
       destinationGpsLongitude: customerLocations.gpsLongitude,
       destinationDistanceKm: customerLocations.distanceFromFacilityKm,

@@ -123,6 +123,10 @@ vi.mock("@/hooks/use-suppliers", () => ({
 vi.mock("@/hooks/use-transport-legs", () => ({
   useTransportLegsForEntity: () => ({ data: undefined }),
 }));
+vi.mock("@/hooks/use-facilities", () => ({
+  useFacility: () => ({ data: undefined }),
+}));
+vi.mock("@/components/transport-legs", () => ({ TransportRoutePreview: () => null }));
 
 vi.mock("@/components/ui", () => ({ Button: () => null }));
 vi.mock("@/components/ui/actionable-focus-target", () => ({

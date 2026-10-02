@@ -3,4 +3,4 @@ dist/
 node_modules/
 
 # Mafinga photo stays local until DEC approves publishing it
-public/preview/mafinga-field-trial.jpg
+public/images/mafinga-field-trial.jpg
