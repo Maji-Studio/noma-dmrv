@@ -13,6 +13,7 @@ import { pluralize } from "@/lib/copy-utils";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { ORDER_FULFILLMENT_DISPLAY } from "@/lib/orders/fulfillment";
 import { MatchingOutputBins } from "./matching-output-bins";
+import { OrderLocationRead } from "./order-location-read";
 
 /** "1,200 of 2,000 kg wet": delivered wet mass against the requested wet mass. */
 function formatDeliveredMass(order: Pick<OrderWithRelations, "deliveredWetMassKg" | "quantityKg">): string {
@@ -40,6 +41,14 @@ export function orderSheetSections(order: OrderWithRelations): DetailPanelSectio
         { label: "Customer", value: order.customerName },
         { label: "Customer location", value: order.customerLocationName },
       ],
+      // Address, delivery route and map, where the form shows them.
+      content: order.customerLocationId ? (
+        <OrderLocationRead
+          customerId={order.customerId}
+          customerLocationId={order.customerLocationId}
+          facilityId={order.facilityId}
+        />
+      ) : undefined,
     },
     {
       title: "Product details",

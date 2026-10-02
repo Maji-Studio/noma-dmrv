@@ -1,14 +1,17 @@
 /** Delivery side-sheet view mode: the sections config for EntitySideSheet. */
-import { TransportEvidencePanel } from "@/components/transport-legs";
+import { TransportEvidencePanel, TransportRoutePreview } from "@/components/transport-legs";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { resolveFacilityTimezone } from "@/lib/date-utils";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatFacilityDateTime, formatLegDistanceKm, formatMassKg } from "@/lib/format-utils";
+import { hasAcceptedTransportEvidence } from "@/lib/certification/transport-evidence";
+import { formatFacilityDateTime, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL, qualifyMassLabel, WET_MASS_FIELD_LABEL } from "@/lib/mass-moisture";
-import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { DeliveryStockDetails } from "./delivery-stock-details";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
+
+const ROUTE_EMPTY =
+  "No route to draw yet. Record the delivered wet mass and a distance to the destination.";
 
 export function deliverySheetSections(delivery: DeliveryWithRelations, facilities: readonly { id: string; timezone: string }[]): DetailPanelSection[] {
   return [
@@ -46,17 +49,27 @@ export function deliverySheetSections(delivery: DeliveryWithRelations, facilitie
     {
       title: "Transport",
       fields: [
-        { label: "Distance", value: formatLegDistanceKm(delivery.effectiveDistanceKm) },
         ...(delivery.distanceKmOverride != null
           ? [{ label: "Distance note", value: delivery.distanceNote }]
           : []),
-        {
-          label: "Distance source",
-          value: delivery.effectiveDistanceSource
-            ? DISTANCE_SOURCE_LABELS[delivery.effectiveDistanceSource]
-            : null,
-        },
       ],
+      // The leg this delivery adds to its product's biochar distribution.
+      content: (
+        <TransportRoutePreview
+          entityType="biochar"
+          originName={delivery.facilityName}
+          destinationName={delivery.destinationName}
+          distanceKm={delivery.effectiveDistanceKm}
+          distanceSource={delivery.effectiveDistanceSource}
+          loadMassKg={delivery.deliveredWetMassKg}
+          saved
+          evidenceAttached={hasAcceptedTransportEvidence(delivery.transportEvidenceDocumentCount)}
+          emptyMessage={ROUTE_EMPTY}
+          certTag
+          originPoint={{ lat: delivery.facilityGpsLatitude, lng: delivery.facilityGpsLongitude }}
+          destinationPoint={{ lat: delivery.destinationGpsLatitude, lng: delivery.destinationGpsLongitude }}
+        />
+      ),
     },
     {
       title: "Delivery evidence",
