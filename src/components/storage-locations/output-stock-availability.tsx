@@ -10,7 +10,7 @@ import { batchSegments, formatDryKeyMass, formatWetEstimate } from "./stock-prev
 
 /** The one definition the availability block cannot show as a number. */
 const AVAILABILITY_HINT =
-  "Dry biochar is the tracked quantity. Wet availability depends on measured departure moisture. Stock stays available to every order until a delivery records the bin it left.";
+  "Dry biochar is the tracked quantity. Wet stock is the mass added less the mass taken out; only a count sets moisture again. Stock stays available to every order until a delivery records the bin it left.";
 
 /**
  * Which batches a draw touched, and which run produced each one.
