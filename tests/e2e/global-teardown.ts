@@ -25,12 +25,13 @@ export default async function globalTeardown() {
   const url = new URL(databaseUrl);
   const dbName = url.pathname.replace(/^\//, "");
   const hostname = url.hostname;
+  // Locally the sweep runs against the dev server's DB (prefix-scoped
+  // deletes), so the name is not checked; a remote host never is allowed.
   const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
-  const isTestDb = dbName.includes("_test") || dbName.includes("_e2e");
-  if (!isLocalHost && !isTestDb) {
+  if (!isLocalHost) {
     console.error(
-      `[global-teardown] ABORTED: database "${dbName}" on host "${hostname}" does not look like a test database. ` +
-      `Host must be localhost/127.0.0.1, or DB name must contain "_test" or "_e2e".`
+      `[global-teardown] ABORTED: database "${dbName}" is on host "${hostname}". ` +
+      `The E2E sweep only runs against localhost/127.0.0.1.`
     );
     process.exit(1);
   }

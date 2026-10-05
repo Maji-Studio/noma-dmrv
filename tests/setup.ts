@@ -3,9 +3,18 @@
  * Runs before all tests
  */
 import { config } from "dotenv";
+import {
+  assertThrowawayTestDatabase,
+  resolveTestDatabaseUrl,
+} from "./helpers/throwaway-database";
 
 // Load environment variables for testing
 config({ path: ".env.test" });
+
+// TEST_DATABASE_URL lets .env.test give Vitest its own database while
+// Playwright keeps DATABASE_URL (the dev server's) from the same file.
+const testDatabaseUrl = resolveTestDatabaseUrl(process.env);
+if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
 
 const testEnvDefaults: Record<string, string> = {
   NODE_ENV: "test",
@@ -32,3 +41,6 @@ for (const [key, value] of Object.entries(testEnvDefaults)) {
     process.env[key] = value;
   }
 }
+
+// Last, so it judges the URL every suite will actually connect to.
+assertThrowawayTestDatabase(process.env.DATABASE_URL!);

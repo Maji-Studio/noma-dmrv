@@ -57,6 +57,27 @@ defaults `DATABASE_URL`. Without `pnpm docker:up` database-backed specs fail
 with a raw connection error that looks nothing like "you forgot the database".
 CI prepares the schema before `vitest run` for exactly this reason.
 
+### Vitest only runs against a throwaway database
+
+Some root suites truncate organizations. `tests/setup.ts` therefore refuses to
+start unless the effective database is on localhost and its name has a `test`
+or `e2e` segment (`noma_dmrv_test`, `noma_dmrv_<worktree>_test`); the rule
+lives in `tests/helpers/throwaway-database.ts`. `noma_dmrv_dev` is always
+refused.
+
+Vitest reads `TEST_DATABASE_URL` before `DATABASE_URL`. Keep both in
+`.env.test`: Playwright reads only `DATABASE_URL`, which must stay the database
+of the dev server its fixtures seed. One-time local setup:
+
+```bash
+docker exec noma-dmrv-postgres psql -U postgres -c "CREATE DATABASE noma_dmrv_test"
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_test pnpm db:migrate
+echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_test" >> .env.test
+```
+
+Re-run the migrate line after pulling new migrations. A worktree made with
+`scripts/worktree.sh new` gets its own test database.
+
 ## E2E data naming is a hard contract
 
 `tests/e2e/global-teardown.ts` sweeps **by prefix only**. Anything a spec creates outside
@@ -78,9 +99,11 @@ spec that creates a table it doesn't yet sweep.
 
 - `playwright.config.ts` **throws** unless `NEXT_PUBLIC_APP_URL` resolves to
   localhost/127.0.0.1 — deliberate, so E2E can never point at staging or production.
-- `global-teardown.ts` aborts against a DB that is neither localhost nor named
-  `*_test`/`*_e2e`. It defaults `DATABASE_URL` to `…/app_template_test`, so a misconfigured
-  run tears down the *wrong DB name* rather than erroring — set `DATABASE_URL` explicitly.
+- `global-teardown.ts` aborts against any DB that is not on localhost/127.0.0.1. Locally
+  it sweeps the dev DB the server uses, by prefix only. It defaults `DATABASE_URL` to
+  `…/app_template_test`, so a misconfigured run tears down the *wrong DB name* rather than
+  erroring — set `DATABASE_URL` explicitly.
+- `tests/setup.ts` refuses any Vitest database that is not a local throwaway (above).
 
 ## Environment
 
@@ -135,7 +158,10 @@ retry**. Specs must not assume ordering across files, workers, or shards.
 - `playwright.config.ts` starts or reuses the app on :3100 — don't pre-launch a second one.
 - Local runs use dev mode, where first-hit Turbopack compilation is legitimately slow; the
   generous per-test timeout absorbs it. Don't shorten it to "catch hangs".
-- Duplicate-key errors → `pnpm db:reset`, then re-run (and check your naming, above).
+- Duplicate-key errors → check your naming (above) first. To reset, name the target:
+  `pnpm db:reset` wipes whatever `DATABASE_URL` in `.env.local` points at, which in the
+  main checkout is the live dev database. For a Vitest-only problem reset the test DB instead:
+  `DATABASE_URL=<TEST_DATABASE_URL> pnpm db:reset`.
 - A side sheet is `[role="dialog"]`; assert on the sheet **closing** as the success signal.
 - A DataTable `<tr>` becomes `role="button"` when `onRowClick` is set — select with
   `getByRole("button")`, not `getByRole("row")`.
