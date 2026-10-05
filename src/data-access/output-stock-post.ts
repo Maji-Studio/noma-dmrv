@@ -123,8 +123,8 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
         policy, order, readingPercent: a.readingPercent == null ? null : String(a.readingPercent) } }).returning();
     for (const run of a.runs) await tx.insert(outputStockRunAllocations).values({ organizationId: ctx.organizationId, allocationId: allocation.id, productionRunId: run.productionRunId, dryMassKg: run.dryKg });
   }
-  // Each reading resets the estimate of the sub-bin it was taken from; the
-  // saved preview keeps the before and after the operator saw.
+  // A count's reading sets the wet stock and moisture of every layer it
+  // weighed; the saved preview keeps the before and after the operator saw.
   for (const reading of prepared.readings) {
     await tx.insert(outputStockMoistureReadings).values({ organizationId: ctx.organizationId, storageLocationId: input.storageLocationId, movementId: movement.id,
       biocharProductId: prepared.lane === 'product' ? reading.layerId : null, productionRunId: prepared.lane === 'biochar' ? reading.layerId : null,

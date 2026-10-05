@@ -3,10 +3,11 @@ import { binMovements, biocharProducts, biocharProductSourceAllocations, outputS
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import type { OutputStockLayer } from '@/lib/output-stock';
-import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type MoistureReadingRow } from '@/lib/output-stock/layer-projection';
+import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, preLedgerWetRemovals, UnresolvedOutputStockError, type MoistureReadingRow, type WetRemovalRow } from '@/lib/output-stock/layer-projection';
 import { estimateStock, type LayerMoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { isCountMovementSql } from './output-stock-count';
 import { requireOrgScope } from './utils';
 
 export { UnresolvedOutputStockError };
@@ -174,7 +175,7 @@ export async function getOutputBinStocks(ctx: OrgContext, storageLocationIds: re
   }));
 }
 
-/** A bin's wet stock and moisture, estimated from each batch's latest reading. */
+/** A bin's wet stock (wet in minus wet out) and moisture (kept from intake or the latest count). */
 export async function getOutputBinStockView(ctx: OrgContext, storageLocationId: string, reader: Reader = db) {
   const stock = (await getOutputBinStocks(ctx, [storageLocationId], reader)).get(storageLocationId);
   if (!stock) throw new SafeError('Storage bin not found');
@@ -186,18 +187,30 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
   const biocharBinIds = bins.filter(bin => bin.type === 'biochar_bin').map(bin => bin.id);
   const productBinIds = bins.filter(bin => bin.type === 'product_bin').map(bin => bin.id);
   const binIds = bins.map(bin => bin.id);
-  const [runWet, productWet, readings, corrections] = await Promise.all([
+  const [runWet, productWet, readings, removals, sourceDraws, corrections] = await Promise.all([
     biocharBinIds.length ? reader.select({ id: productionRuns.id, wet: sql<string | null>`${productionRuns.biocharOutputKg}::text` }).from(productionRuns)
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds))) : [],
     productBinIds.length ? reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
       .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds))) : [],
+    // Only a count's reading sets a layer's moisture; readings older removals saved are history, not a basis.
     reader.select({ reading: outputStockMoistureReadings, sequence: binMovements.postingSequence }).from(outputStockMoistureReadings)
       .innerJoin(binMovements, and(eq(binMovements.id, outputStockMoistureReadings.movementId), eq(binMovements.organizationId, ctx.organizationId)))
-      .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), inArray(outputStockMoistureReadings.storageLocationId, binIds))),
+      .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), inArray(outputStockMoistureReadings.storageLocationId, binIds), isCountMovementSql())),
+    reader.select({ allocation: { biocharProductId: outputStockAllocations.biocharProductId, productionRunId: outputStockAllocations.productionRunId, storageLocationId: outputStockAllocations.sourceStorageLocationId,
+      movementId: outputStockAllocations.movementId, wetMassKg: outputStockAllocations.wetMassKg, reversesAllocationId: outputStockAllocations.reversesAllocationId,
+      targetBiocharProductId: outputStockAllocations.targetBiocharProductId },
+    sequence: binMovements.postingSequence }).from(outputStockAllocations)
+      .innerJoin(binMovements, and(eq(binMovements.id, outputStockAllocations.movementId), eq(binMovements.organizationId, ctx.organizationId)))
+      .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), inArray(outputStockAllocations.sourceStorageLocationId, binIds))),
+    // A product draw saved before the ledger: its source row is the only record of the wet mass it took.
+    biocharBinIds.length ? reader.select({ binId: biocharProductSourceAllocations.sourceStorageLocationId, productId: biocharProductSourceAllocations.biocharProductId,
+      runId: biocharProductSourceAllocations.productionRunId, wetMassKg: sql<string>`${biocharProductSourceAllocations.allocatedWetMassKg}::text` })
+      .from(biocharProductSourceAllocations)
+      .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.sourceStorageLocationId, biocharBinIds))) : [],
     reader.select({ binId: binMovements.storageLocationId, correctsMovementId: binMovements.correctsMovementId }).from(binMovements)
       .where(and(eq(binMovements.organizationId, ctx.organizationId), inArray(binMovements.storageLocationId, binIds), isNotNull(binMovements.correctsMovementId))),
   ]);
-  return { recordedWetKg: new Map([...runWet, ...productWet].map(row => [row.id, row.wet])), readings, corrections };
+  return { recordedWetKg: new Map([...runWet, ...productWet].map(row => [row.id, row.wet])), readings, removals, sourceDraws, corrections };
 }
 
 function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType<typeof readMoistureRows>>, ignoreMovementId?: string) {
@@ -205,15 +218,21 @@ function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType
   if (ignoreMovementId) reversedMovementIds.add(ignoreMovementId);
   const readings: MoistureReadingRow[] = rows.readings.flatMap(({ reading, sequence }) => {
     const layerId = reading.biocharProductId ?? reading.productionRunId;
-    return reading.storageLocationId === bin.id && layerId ? [{ layerId, movementId: reading.movementId, moisturePercent: reading.moisturePercent, occurredAt: reading.occurredAt, sequence }] : [];
+    return reading.storageLocationId === bin.id && layerId ? [{ layerId, movementId: reading.movementId, moisturePercent: reading.moisturePercent, solidsBasisKg: reading.solidsBasisKg, occurredAt: reading.occurredAt, sequence }] : [];
   });
-  return { recordedWetKg: rows.recordedWetKg, readings, reversedMovementIds };
+  const ledger = rows.removals.filter(({ allocation }) => allocation.storageLocationId === bin.id);
+  const removals: WetRemovalRow[] = ledger.flatMap(({ allocation, sequence }) => {
+    const layerId = allocation.biocharProductId ?? allocation.productionRunId;
+    return layerId ? [{ layerId, movementId: allocation.movementId, wetMassKg: allocation.wetMassKg, reversesAllocationId: allocation.reversesAllocationId, sequence }] : [];
+  });
+  removals.push(...preLedgerWetRemovals(rows.sourceDraws.filter(draw => draw.binId === bin.id), ledger.map(({ allocation }) => allocation)));
+  return { recordedWetKg: rows.recordedWetKg, readings, removals, reversedMovementIds };
 }
 
 /**
- * What each layer's moisture is known from: the wet mass and solids it was
- * recorded with when it entered the bin, and every reading taken on it that no
- * correction has reversed. `ignoreMovementId` drops the readings of the entry a
+ * What each layer's wet mass and moisture are known from: the wet mass and
+ * solids it was recorded with when it entered the bin, every count reading on
+ * it, and the wet mass every removal took, leaving out what a correction reversed. `ignoreMovementId` drops the readings of the entry a
  * correction is replacing, so its preview starts from the stock before it.
  */
 export async function getLayerMoistureBases(ctx: OrgContext, bin: { id: string; type: string }, layers: readonly OutputStockLayer[], reader: Reader = db, options: { ignoreMovementId?: string } = {}): Promise<LayerMoistureBasis[]> {

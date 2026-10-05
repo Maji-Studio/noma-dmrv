@@ -177,7 +177,7 @@ const SURFACE_CASES: { name: string; element: ReactElement; blankInSimple?: bool
   { name: "stock movement preview", element: <OutputStockPreview variant="movement" preview={acceptedPreview} /> },
   { name: "stock movement preview, blocked", element: <OutputStockPreview variant="movement" preview={preview} /> },
   { name: "stock load preview", element: <OutputStockPreview variant="load" preview={acceptedPreview} /> },
-  { name: "stock availability", element: <OutputStockAvailability binName="Product bin" dryKg={1500} wetEstimate={{ kg: 1800, basis: "At the latest moisture reading of each batch" }} allocations={[{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1500, runs: [] }] as never} /> },
+  { name: "stock availability", element: <OutputStockAvailability binName="Product bin" dryKg={1500} wetEstimate={{ kg: 1800, basis: "Wet mass added less wet mass taken out" }} allocations={[{ layerId: "a", code: "Batch A", wetMassKg: null, dryMassKg: 1500, runs: [] }] as never} /> },
   { name: "matching stock", element: <MatchingOutputBins facilityId="facility" formulationId="formulation" /> },
   { name: "delivery stock", element: <DeliveryStockDetails deliveryId="delivery" storageLocationId="bin" wetMassKg={100} dryMassKg={80} /> },
   { name: "mix pile", element: <MixPileCard binName="Product bin" wetKg={1800} moisturePercent={20} dryKg={1440} batches={[{ code: "B-001", dryMassKg: 800 }, { code: "B-002", dryMassKg: 640 }] as never} /> },

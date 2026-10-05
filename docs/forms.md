@@ -471,8 +471,9 @@ stock family presents wet first. Only presentation changes.
   loss, count, delivery load). Headline "Wet stock in bin, estimate" as
   "≈ 1,420 → 1,110 kg", with the entry as its caption ("310 kg wet removed at
   22.7% moisture", "Counted 2,650 kg wet at 27.4% moisture", "1,190 kg wet
-  loaded at 16% moisture"). Before is each batch at its latest reading; after
-  applies this entry's readings. The picture is the entered wet mass split into
+  loaded at 16% moisture"). Before is each batch's wet stock, wet mass added
+  less wet mass taken out from its last count; after takes this entry's wet
+  mass out, or for a count, sets each batch to the count. The picture is the entered wet mass split into
   solids and water, then any notice, then the moisture reset block. The dry biochar before and after pair is a
   Detailed `detail` row (the calculation); the entered figures and the FIFO
   batch draw sit behind Show calculation. Without a moisture there is no estimate, and the dry pair takes
@@ -480,8 +481,8 @@ stock family presents wet first. Only presentation changes.
   not labelled an estimate.
 - **Order availability** (`OutputStockAvailability` in `MatchingOutputBins`,
   right after the requested wet mass field). Headline "Available wet stock,
-  estimate" at each batch's latest moisture reading, since an order has no
-  departure moisture yet, with available dry stock as a secondary line under it at
+  estimate", each batch's wet mass added less wet mass taken out from its last
+  count, since an order has no departure moisture yet, with available dry stock as a secondary line under it at
   both levels; the batch bar and key as the picture. On the order form and
   read sheet the bins collapse into one tappable "Available stock" row
   (wet estimate first, dry secondary) that opens a "Matching stock" modal with
@@ -499,7 +500,7 @@ check, never a value:
 
 - Pass `estimate` and the watched `reading` to `MoistureField` (or the
   `moisture` props of `MassMoistureFields`). The field then shows "Estimated
-  moisture: 29.4%" under the input, the basis ("From the reading on …") behind
+  moisture: 29.4%" under the input, the basis ("From the count on …") behind
   the ⓘ, and an advisory warning when the reading differs by more than
   `MOISTURE_READING_WARNING_POINTS` (`@/config/output-stock`). It never blocks.
 - The product, delivery and stock forms (loss, count, correction) share `useOutputDrawDraft`
@@ -509,14 +510,15 @@ check, never a value:
   failed save is not retried in the form; the mutation hooks invalidate
   `outputStockKeys.all`, which refreshes the previews.
 - For an output bin, `useOutputMoistureEstimate(bin, facility, occurredAt,
-  preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time
-  from each batch's latest reading, or the live preview's own (which leaves out
-  the entry a correction replaces). Ingredient bins keep wet stock, so their
+  preview?.moistureEstimate)` supplies the estimate: the bin at the entry's time,
+  each batch at the moisture it was added with or last counted at, or the live
+  preview's own (which leaves out the entry a correction replaces). Ingredient bins keep wet stock, so their
   estimate is the weighted remaining intake basis.
-- A reading resets the estimate of the batch it was taken from. The movement
-  block shows that as `MoistureResetChange`: the remaining stock at its previous
-  estimate, an arrow, then at the reading, as two blocks rather than a sentence.
-  Stock history repeats it as its own "Moisture updated" row.
+- Only a count resets the estimate. The movement block shows that as
+  `MoistureResetChange`: the remaining stock at its previous estimate, an arrow,
+  then at the reading, as two blocks rather than a sentence. Stock history
+  repeats it as its own "Moisture updated" row. A delivery, loss or product draw
+  takes its wet mass from the wet stock and leaves the moisture unchanged.
 
 ### Stock change in bin selectors
 
