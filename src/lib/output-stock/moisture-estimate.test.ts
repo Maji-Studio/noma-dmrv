@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decimal } from './exact';
+import { BEFORE_LEDGER_SEQUENCE } from './layer-projection';
 import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis } from './moisture-estimate';
 import { planOutputStock, type OutputStockLayer } from './planner';
 
@@ -43,7 +44,7 @@ describe('estimateStock', () => {
     const primes: number[] = [];
     for (let n = 1009; primes.length < 120; n += 2) if (primes.every(p => n % p !== 0) && [3, 5, 7, 11, 13, 17, 19, 23, 29, 31].every(p => n % p !== 0)) primes.push(n);
     const layers = primes.map((p, i) => layer(`L${i}`, '1500', '997', T0, { remainingSolidsKg: { numerator: BigInt(p * 500 + 1), denominator: BigInt(p) },
-      removals: [{ wetKg: { numerator: BigInt(p * 750 - 1), denominator: BigInt(p) }, occurredAt: T1, sequence: BigInt(i + 1) }] }));
+      removals: [{ wetKg: { numerator: BigInt(p * 750 - 1), denominator: BigInt(p) }, sequence: BigInt(i + 1) }] }));
     const estimate = estimateStock(layers, NOW);
     expect(estimate.wetKg).toBeCloseTo(120 * 750, 0);
     expect(estimate.moisturePercent).toBeCloseTo((1 - 997 / 1500) * 100, 6);
@@ -101,9 +102,9 @@ describe('removals keep the bin moisture', () => {
     expect(estimate.moisturePercent).toBeCloseTo(40, 9);
   });
 
-  it('counts a removal only from its own time on', () => {
+  it('counts a posted removal whatever time is asked, since the remaining solids already reflect it', () => {
     const { bases } = after({ kind: 'wet', wetKg: 300, moisturePercent: 20 });
-    expect(estimateStock(bases, T0).wetKg).toBeCloseTo(500, 9);
+    expect(estimateStock(bases, T0).wetKg).toBeCloseTo(200, 9);
     expect(estimateStock(bases, T1).wetKg).toBeCloseTo(200, 9);
   });
 
@@ -155,5 +156,32 @@ describe('planReadings', () => {
     const estimate = estimateStock(withMovement(drawn, { readings: [], removals: planWetRemovals(plan) }, NOW, BigInt(3)), NOW);
     expect(estimate.wetKg).toBeCloseTo(300, 9);
     expect(estimate.moisturePercent).toBeCloseTo(25, 9);
+  });
+});
+
+describe('wet stock follows the draws the dry layers reflect', () => {
+  // 500 kg wet at 40%: 300 kg solids. A removal timed after T1, posted as sequence 2, took 100 kg wet and 60 kg solids.
+  const drawn = () => layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('240'), removals: [{ wetKg: decimal('100'), sequence: BigInt(2) }] });
+
+  it('a preview timed before a posted removal subtracts it, as the dry stock does', () => {
+    const estimate = estimateStock([drawn()], T1);
+    expect(estimate.wetKg).toBeCloseTo(400, 9);
+    expect(estimate.moisturePercent).toBeCloseTo(40, 9);
+  });
+
+  it('a count timed before a removal posted earlier does not subtract that removal again', () => {
+    // The count's solids, 240 kg, already reflect the removal posted before it.
+    const counted = { ...drawn(), readings: [{ moisturePercent: 40, solidsKg: decimal('240'), occurredAt: T1, sequence: BigInt(3) }] };
+    expect(estimateStock([counted], NOW).wetKg).toBeCloseTo(400, 9);
+    // A removal posted after the count subtracts, even when timed before it.
+    const later = { ...counted, remainingSolidsKg: decimal('180'), removals: [...counted.removals, { wetKg: decimal('100'), sequence: BigInt(4) }] };
+    expect(estimateStock([later], NOW).wetKg).toBeCloseTo(300, 9);
+  });
+
+  it('a product draw saved before the ledger counts from the recorded wet mass, never after a count', () => {
+    const legacy = layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('240'), removals: [{ wetKg: decimal('100'), sequence: BEFORE_LEDGER_SEQUENCE }] });
+    expect(estimateStock([legacy], NOW).wetKg).toBeCloseTo(400, 9);
+    const counted = { ...legacy, readings: [{ moisturePercent: 25, solidsKg: decimal('240'), occurredAt: T1, sequence: BigInt(1) }] };
+    expect(estimateStock([counted], NOW).wetKg).toBeCloseTo(320, 9);
   });
 });

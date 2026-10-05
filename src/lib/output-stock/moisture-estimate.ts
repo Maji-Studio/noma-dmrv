@@ -13,10 +13,14 @@ export interface MoistureReading {
   sequence: bigint;
 }
 
-/** Wet mass a removal took from one layer, at the time of the movement. */
+/** Wet mass a removal took from one layer. */
 export interface WetRemoval {
   wetKg: Rational;
-  occurredAt: string;
+  /**
+   * Posting order of the removal's movement. The dry layers reflect every
+   * posted draw whatever its time, so a removal counts by when it was posted,
+   * never by when it happened.
+   */
   sequence: bigint;
 }
 
@@ -71,24 +75,27 @@ function latestReading(readings: readonly MoistureReading[], at: string): Moistu
 /**
  * A layer's wet mass at `at` and the moisture it keeps. The wet mass starts
  * from the latest count, or else from what the layer entered the bin with,
- * and every later removal subtracts the wet mass it took. The moisture stays
+ * and every removal posted after that start subtracts the wet mass it took.
+ * Posting order, not time, decides: the remaining solids already reflect
+ * every posted draw, and a count's solids reflect every draw posted before
+ * it, even one timed after it. The moisture stays
  * at that starting point: a drier or wetter removal moves the dry biochar it
  * takes, not the moisture of what is left. Null when the layer's wet mass is unknown.
  */
 function layerWet(layer: LayerMoistureBasis, at: string): { wetKg: Rational; fraction: Rational; basis: MoistureBasis } | null {
   const reading = latestReading(layer.readings, at);
-  let start: { wetKg: Rational; fraction: Rational; basis: MoistureBasis; since: WetRemoval | null };
+  let start: { wetKg: Rational; fraction: Rational; basis: MoistureBasis; postedAfter: bigint | null };
   if (reading) {
     const fraction = readingFraction(reading.moisturePercent);
-    start = { wetKg: divide(reading.solidsKg, fraction), fraction, basis: { source: 'reading', at: reading.occurredAt }, since: { ...reading, wetKg: ZERO } };
+    start = { wetKg: divide(reading.solidsKg, fraction), fraction, basis: { source: 'reading', at: reading.occurredAt }, postedAfter: reading.sequence };
   } else {
     const { recorded } = layer;
     if (!recorded || recorded.wetKg.numerator <= BigInt(0)) return null;
-    start = { wetKg: recorded.wetKg, fraction: divide(recorded.solidsKg, recorded.wetKg), basis: { source: 'recorded', at: layer.placedAt }, since: null };
+    start = { wetKg: recorded.wetKg, fraction: divide(recorded.solidsKg, recorded.wetKg), basis: { source: 'recorded', at: layer.placedAt }, postedAfter: null };
   }
   let wetKg = start.wetKg;
   for (const removal of layer.removals) {
-    if (removal.occurredAt > at || (start.since && !isAfter(removal, start.since))) continue;
+    if (start.postedAfter != null && removal.sequence <= start.postedAfter) continue;
     wetKg = subtract(wetKg, removal.wetKg);
   }
   // Removals wetter than the layer can take its wet mass before its dry biochar; none is left to show.
@@ -149,7 +156,7 @@ export function planWetRemovals(plan: Pick<ReturnType<typeof planOutputStock>, '
 export function withMovement(layers: readonly LayerMoistureBasis[], movement: { readings: readonly PlannedReading[]; removals: readonly { layerId: string; wetKg: Rational }[] }, occurredAt: string, sequence: bigint): LayerMoistureBasis[] {
   return layers.map(layer => {
     const readings = movement.readings.filter(reading => reading.layerId === layer.layerId).map(reading => ({ moisturePercent: reading.moisturePercent, solidsKg: reading.solidsKg, occurredAt, sequence }));
-    const removals = movement.removals.filter(removal => removal.layerId === layer.layerId).map(removal => ({ wetKg: removal.wetKg, occurredAt, sequence }));
+    const removals = movement.removals.filter(removal => removal.layerId === layer.layerId).map(removal => ({ wetKg: removal.wetKg, sequence }));
     return readings.length || removals.length ? { ...layer, readings: [...layer.readings, ...readings], removals: [...layer.removals, ...removals] } : layer;
   });
 }

@@ -113,7 +113,7 @@ describe('moisture bases', () => {
   const [layer] = projectBiocharLayers({ runs: [run], ...noRows });
   const occurredAt = new Date('2026-09-02T12:00:00.000Z');
   const reading = (movementId: string, moisturePercent: number) => ({ layerId: run.id, movementId, moisturePercent, solidsBasisKg: { numerator: '100', denominator: '1' }, occurredAt, sequence: BigInt(1) });
-  const removal = (movementId: string, wetMassKg: string | null, reversesAllocationId: string | null = null) => ({ layerId: run.id, movementId, wetMassKg, reversesAllocationId, occurredAt, sequence: BigInt(2) });
+  const removal = (movementId: string, wetMassKg: string | null, reversesAllocationId: string | null = null) => ({ layerId: run.id, movementId, wetMassKg, reversesAllocationId, sequence: BigInt(2) });
   const none = { readings: [], removals: [], reversedMovementIds: new Set<string>() };
 
   it('uses the recorded wet mass and drops readings and removals a correction reversed', () => {

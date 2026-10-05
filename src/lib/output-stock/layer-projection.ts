@@ -124,8 +124,15 @@ export function outputStockBalance(layers: readonly OutputStockLayer[], at: stri
 /** A count's moisture reading on a layer, with the solids it left and the posting order of its movement. */
 export interface MoistureReadingRow { layerId: string; movementId: string; moisturePercent: number; solidsBasisKg: unknown; occurredAt: Date; sequence: bigint }
 
-/** The wet mass one posted allocation took from a layer; null when it took none (a count). */
-export interface WetRemovalRow { layerId: string; movementId: string; wetMassKg: string | null; reversesAllocationId: string | null; occurredAt: Date; sequence: bigint }
+/** The wet mass one posted allocation took from a layer, with its posting order; null when it took none (a count). */
+export interface WetRemovalRow { layerId: string; movementId: string; wetMassKg: string | null; reversesAllocationId: string | null; sequence: bigint }
+
+/**
+ * The posting order of a product draw saved before the ledger. Every count is
+ * a ledger movement posted after it, and `projectBiocharLayers` subtracts it
+ * from the run layer unconditionally, so it precedes every posted movement.
+ */
+export const BEFORE_LEDGER_SEQUENCE = BigInt(0);
 
 const WET_KG_PATTERN = /^\d+(\.\d+)?$/;
 
@@ -145,7 +152,7 @@ export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: 
       readings: rows.readings.filter(reading => reading.layerId === layer.id && !rows.reversedMovementIds.has(reading.movementId))
         .map(reading => ({ moisturePercent: reading.moisturePercent, solidsKg: readRational(reading.solidsBasisKg), occurredAt: reading.occurredAt.toISOString(), sequence: reading.sequence })),
       removals: rows.removals.filter(removal => removal.layerId === layer.id && removal.wetMassKg != null && !removal.reversesAllocationId && !rows.reversedMovementIds.has(removal.movementId))
-        .map(removal => ({ wetKg: decimal(removal.wetMassKg as Decimal), occurredAt: removal.occurredAt.toISOString(), sequence: removal.sequence })),
+        .map(removal => ({ wetKg: decimal(removal.wetMassKg as Decimal), sequence: removal.sequence })),
     };
   });
 }

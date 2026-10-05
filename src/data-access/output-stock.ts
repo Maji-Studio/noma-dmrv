@@ -3,7 +3,7 @@ import { binMovements, biocharProducts, biocharProductSourceAllocations, outputS
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import type { OutputStockLayer } from '@/lib/output-stock';
-import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type MoistureReadingRow, type WetRemovalRow } from '@/lib/output-stock/layer-projection';
+import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, BEFORE_LEDGER_SEQUENCE, UnresolvedOutputStockError, type MoistureReadingRow, type WetRemovalRow } from '@/lib/output-stock/layer-projection';
 import { estimateStock, type LayerMoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -199,15 +199,13 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
     reader.select({ allocation: { biocharProductId: outputStockAllocations.biocharProductId, productionRunId: outputStockAllocations.productionRunId, storageLocationId: outputStockAllocations.sourceStorageLocationId,
       movementId: outputStockAllocations.movementId, wetMassKg: outputStockAllocations.wetMassKg, reversesAllocationId: outputStockAllocations.reversesAllocationId,
       targetBiocharProductId: outputStockAllocations.targetBiocharProductId },
-    occurredAt: binMovements.occurredAt, sequence: binMovements.postingSequence }).from(outputStockAllocations)
+    sequence: binMovements.postingSequence }).from(outputStockAllocations)
       .innerJoin(binMovements, and(eq(binMovements.id, outputStockAllocations.movementId), eq(binMovements.organizationId, ctx.organizationId)))
       .where(and(eq(outputStockAllocations.organizationId, ctx.organizationId), inArray(outputStockAllocations.sourceStorageLocationId, binIds))),
     // A product draw saved before the ledger: its source row is the only record of the wet mass it took.
     biocharBinIds.length ? reader.select({ binId: biocharProductSourceAllocations.sourceStorageLocationId, productId: biocharProductSourceAllocations.biocharProductId,
-      runId: biocharProductSourceAllocations.productionRunId, wetMassKg: sql<string>`${biocharProductSourceAllocations.allocatedWetMassKg}::text`,
-      occurredAt: sql<Date>`coalesce(${biocharProducts.placedAt}, ${biocharProducts.createdAt})`.mapWith(value => new Date(value)), sequence: biocharProducts.stockPostingSequence })
+      runId: biocharProductSourceAllocations.productionRunId, wetMassKg: sql<string>`${biocharProductSourceAllocations.allocatedWetMassKg}::text` })
       .from(biocharProductSourceAllocations)
-      .innerJoin(biocharProducts, and(eq(biocharProducts.id, biocharProductSourceAllocations.biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)))
       .where(and(eq(biocharProductSourceAllocations.organizationId, ctx.organizationId), inArray(biocharProductSourceAllocations.sourceStorageLocationId, biocharBinIds))) : [],
     reader.select({ binId: binMovements.storageLocationId, correctsMovementId: binMovements.correctsMovementId }).from(binMovements)
       .where(and(eq(binMovements.organizationId, ctx.organizationId), inArray(binMovements.storageLocationId, binIds), isNotNull(binMovements.correctsMovementId))),
@@ -223,15 +221,16 @@ function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType
     return reading.storageLocationId === bin.id && layerId ? [{ layerId, movementId: reading.movementId, moisturePercent: reading.moisturePercent, solidsBasisKg: reading.solidsBasisKg, occurredAt: reading.occurredAt, sequence }] : [];
   });
   const ledger = rows.removals.filter(({ allocation }) => allocation.storageLocationId === bin.id);
-  const removals: WetRemovalRow[] = ledger.flatMap(({ allocation, occurredAt, sequence }) => {
+  const removals: WetRemovalRow[] = ledger.flatMap(({ allocation, sequence }) => {
     const layerId = allocation.biocharProductId ?? allocation.productionRunId;
-    return layerId && occurredAt ? [{ layerId, movementId: allocation.movementId, wetMassKg: allocation.wetMassKg, reversesAllocationId: allocation.reversesAllocationId, occurredAt, sequence }] : [];
+    return layerId ? [{ layerId, movementId: allocation.movementId, wetMassKg: allocation.wetMassKg, reversesAllocationId: allocation.reversesAllocationId, sequence }] : [];
   });
   // A product draw with ledger allocations is counted from the ledger, as the layer projection does.
+  // Product creation posts before it saves source rows, so a source row with no ledger draw predates the ledger.
   const postedProducts = new Set(ledger.flatMap(({ allocation }) => allocation.targetBiocharProductId ? [allocation.targetBiocharProductId] : []));
   for (const draw of rows.sourceDraws) {
     if (draw.binId !== bin.id || postedProducts.has(draw.productId)) continue;
-    removals.push({ layerId: draw.runId, movementId: `product:${draw.productId}`, wetMassKg: draw.wetMassKg, reversesAllocationId: null, occurredAt: draw.occurredAt, sequence: draw.sequence });
+    removals.push({ layerId: draw.runId, movementId: `product:${draw.productId}`, wetMassKg: draw.wetMassKg, reversesAllocationId: null, sequence: BEFORE_LEDGER_SEQUENCE });
   }
   return { recordedWetKg: rows.recordedWetKg, readings, removals, reversedMovementIds };
 }
