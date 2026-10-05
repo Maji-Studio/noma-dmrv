@@ -37,6 +37,9 @@ info() { echo "worktree: $*"; }
 
 psql_admin() { docker exec "$PG_CONTAINER" psql -U "$PG_USER" -v ON_ERROR_STOP=1 -tAc "$1"; }
 db_exists() { [ "$(psql_admin "SELECT 1 FROM pg_database WHERE datname = '$1'")" = "1" ]; }
+# The host port the container publishes 5432 on; every URL must use it, so `CREATE` (through
+# docker exec) and db:reset (through the URL) hit the same server.
+pg_host_port() { docker port "$PG_CONTAINER" 5432/tcp | head -1 | sed 's/.*://'; }
 port_listening() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 
 # Replace or append KEY=value in an env file.
@@ -57,8 +60,8 @@ db_url_for() {
   base="${base%%\?*}"
   url="${base%/*}/${db}"
   case "$url" in
-    *://*@localhost:*/"$db" | *://*@127.0.0.1:*/"$db") printf '%s' "$url" ;;
-    *) die "refusing database URL for $db: not a localhost URL ending in /$db" ;;
+    *://*@localhost:"$(pg_host_port)"/"$db" | *://*@127.0.0.1:"$(pg_host_port)"/"$db") printf '%s' "$url" ;;
+    *) die "refusing database URL for $db: not localhost:$(pg_host_port) (container $PG_CONTAINER) ending in /$db" ;;
   esac
 }
 
@@ -246,7 +249,7 @@ stop_processes_in() {
     [ "$alive" = 1 ] || return 0
     sleep "$STOP_TICK_SECONDS"; waited=$((waited + 1))
   done
-  info "processes still running after waiting $STOP_WAIT_TICKS x ${STOP_TICK_SECONDS}s:$pids"
+  die "processes still running after waiting $STOP_WAIT_TICKS x ${STOP_TICK_SECONDS}s:$pids; stop them and rerun (nothing was removed)"
 }
 
 cmd_teardown() {
@@ -269,8 +272,10 @@ cmd_teardown() {
     port_listening "$WT_PORT" && info "something else still listens on :$WT_PORT; left running"
     git -C "$MAIN" worktree remove "$WT_PATH"
     info "removed worktree $WT_PATH"
+  elif git -C "$MAIN" worktree list --porcelain | grep -qxF "worktree $WT_PATH"; then
+    # Directory gone but still registered: drop only this registration, never a repo-wide prune.
+    git -C "$MAIN" worktree remove --force "$WT_PATH"
   fi
-  git -C "$MAIN" worktree prune
 
   for db in ${WT_DBS_CREATED:-}; do
     psql_admin "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE)" >/dev/null

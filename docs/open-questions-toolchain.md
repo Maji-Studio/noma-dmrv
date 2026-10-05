@@ -92,6 +92,15 @@ and need no follow-up.
 - **Resolve via:** a Playwright run against `astro preview` in that workflow,
   using `@playwright/test` and `@axe-core/playwright` in `site/` (M).
 
+### Form-audit capture generator lost (`tooling/form-audit`, opened 2026-10-05)
+
+- The form-cleanup audit pages were built by scripts in `/tmp/form-cleanup-audits/`.
+  The scripts are gone; only captures and `review-page/meta.json` (last rebuilt
+  2026-10-02) survive, so the audit cannot be regenerated.
+- **Resolve via:** if another audit is needed, rebuild the generator under
+  `scripts/form-audit/` with a README and a `meta.json` that records the rebuild
+  date (M).
+
 ### Toolchain decisions requiring source review
 
 Lint tooling (Biome 2 / oxlint vs ESLint 9), OpenAPI contract testing for the

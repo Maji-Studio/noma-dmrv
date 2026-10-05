@@ -637,15 +637,21 @@ async function selfTest() {
   // git path rather than a stub.
   const repo = mkdtempSync(join(tmpdir(), "review-suite-selftest-"));
   const inRepo = (args) => git(args, { cwd: repo });
-  await inRepo(["init", "-q"]);
-  await inRepo(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "base"]);
-  mkdirSync(join(repo, "drizzle/meta"), { recursive: true });
-  writeFileSync(join(repo, "drizzle/meta/0999_snapshot.json"), `${"x".repeat(600_000)}\n`);
-  writeFileSync(join(repo, "drizzle/0999_example.sql"), "ALTER TABLE t ADD COLUMN c int;\n");
-  await inRepo(["add", "."]);
-  await inRepo(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "snapshot"]);
-  const bigDiff = await getDiffMetadata("HEAD~1", repo);
-  rmSync(repo, { recursive: true, force: true });
+  // Hermetic: no signing or hooks from the user's global git config.
+  const commit = ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "--no-verify"];
+  let bigDiff;
+  try {
+    await inRepo(["init", "-q"]);
+    await inRepo([...commit, "--allow-empty", "-m", "base"]);
+    mkdirSync(join(repo, "drizzle/meta"), { recursive: true });
+    writeFileSync(join(repo, "drizzle/meta/0999_snapshot.json"), `${"x".repeat(600_000)}\n`);
+    writeFileSync(join(repo, "drizzle/0999_example.sql"), "ALTER TABLE t ADD COLUMN c int;\n");
+    await inRepo(["add", "."]);
+    await inRepo([...commit, "-m", "snapshot"]);
+    bigDiff = await getDiffMetadata("HEAD~1", repo);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
   if (
     bigDiff.omittedFiles.join() !== "drizzle/meta/0999_snapshot.json" ||
     !bigDiff.patch.includes("0999_example.sql") ||
