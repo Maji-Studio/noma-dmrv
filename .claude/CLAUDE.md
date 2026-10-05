@@ -20,7 +20,7 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 
 Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Biochar Product → Order → Delivery → Application → Credit Batch → Sample.
 
-Domain language lives in **`CONTEXT.md`** (repo root) — a pure glossary (Removal, Credit batch, Roll-up, Evidence method, …). Its definitions **override casual usage**; consult it before naming things or writing requirements/docs.
+Domain language lives in **`GLOSSARY.md`** (repo root) — a pure glossary (Removal, Credit batch, Roll-up, Evidence method, …). Its definitions **override casual usage**; consult it before naming things or writing requirements/docs.
 
 ## Essential Commands
 
@@ -53,7 +53,7 @@ Never skip layers · `fn/` always has `"use server"` and validates input with Zo
 - **Confirm the target branch before every commit** (`git branch --show-current`) — misplaced commits are a recurring failure mode.
 - Run git/gh operations as **discrete steps**, not chained `&&` one-liners.
 - Default PR base is `staging`; `staging` → `main` promotions are their own explicit step.
-- **One writer per worktree.** Cut new work with `scripts/worktree.sh new <name> <branch>` (own DBs, port, env); never branch in the main checkout. See `docs/testing.md#worktrees`.
+- **One writer per worktree.** Cut new work with `scripts/worktree.sh new <name> <branch>` (own DBs, port, env) and remove it with `scripts/worktree.sh teardown <name>`; never branch in the main checkout. This includes worktrees that skills create for subagents (e.g. `implement-spec`). See `docs/testing.md#worktrees`.
 
 ## Review Remediation (CodeRabbit / Claude review / audits)
 
@@ -86,3 +86,4 @@ Shared across all projects in `~/.claude/model-selection.md` (imported by the gl
 - **Adding a feature (checklist + reference entity)** → `TEMPLATE_USAGE.md`.
 - **Why Greptile reviews what it does** (logic-only scope, rule set, CodeRabbit split) → `docs/greptile-review-strategy.md`; config lives in `.greptile/`.
 - **Deferred work / open decisions** → `docs/open-questions.md`; **architecture decisions** → `docs/adr/`.
+- **Skills that name `CODING_STANDARDS.md`** (e.g. `retro`): judgement rules go in `docs/code-style.md`, reviewer-enforced rules in `.greptile/rules.md`. This repo has no `CODING_STANDARDS.md`.

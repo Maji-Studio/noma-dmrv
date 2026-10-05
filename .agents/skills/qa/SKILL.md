@@ -35,7 +35,7 @@ These recur in this codebase; each is a bug when you see it, and the reasoning g
 Before touching the browser, launch three read-only subagents in one turn and wait for all:
 
 - **Route inventory** — enumerate every route under `src/app/(app)/` and `src/app/admin/`; return a checklist of pages to visit with their URLs.
-- **Chain cheat-sheet** — read `CONTEXT.md` for the canonical entity vocabulary and the current traceability chain (Facility → … → Credit Batch → Sample), then read the schemas / data-access / fn for each entity and return, per entity: required fields, validation rules, prerequisites. This is your "what correct looks like" reference and your attack list. Read the chain from `CONTEXT.md` rather than trusting this list — the chain is theirs to change, not this skill's.
+- **Chain cheat-sheet** — read `GLOSSARY.md` for the canonical entity vocabulary and the current traceability chain (Facility → … → Credit Batch → Sample), then read the schemas / data-access / fn for each entity and return, per entity: required fields, validation rules, prerequisites. This is your "what correct looks like" reference and your attack list. Read the chain from `GLOSSARY.md` rather than trusting this list — the chain is theirs to change, not this skill's.
 - **In-flight work** — list open GitHub issues and open PRs/branches (`gh`) so step 7 doesn't file duplicates and you know what's already being fixed.
 
 Done when all three artifacts are in hand.

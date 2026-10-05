@@ -7,7 +7,7 @@ import { hasPendingStatementTotal } from "@/lib/certification/pending-statement-
  * (`lib/isometric/*` runtime modules). The remote GHG union is a **type-only**
  * import from the generated OpenAPI types, which is erased at build time.
  *
- * Two artifacts, two lifecycles (see `CONTEXT.md`, ADR 0003/0004):
+ * Two artifacts, two lifecycles (see `GLOSSARY.md`, ADR 0003/0004):
  *
  *   - **Removal** → submitted to the **registry**. Single-phase `submitRemoval`.
  *     There is NO remote Removal status in this integration, so the lifecycle

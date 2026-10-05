@@ -158,7 +158,7 @@ export interface DatapointContract {
 
 /**
  * The per-source classification that maps an evidence document or generated
- * ledger to the registry inputs it supports (CONTEXT.md, "Noma evidence role").
+ * ledger to the registry inputs it supports (GLOSSARY.md, "Noma evidence role").
  */
 export type NomaEvidenceRole =
   | "inventory"

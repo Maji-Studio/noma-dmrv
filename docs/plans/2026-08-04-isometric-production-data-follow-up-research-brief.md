@@ -13,7 +13,7 @@ Read first:
 - [`docs/isometric/README.md`](../isometric/README.md) and its pinned
   [`versions.json`](../isometric/versions.json)
 - [`docs/archive/2026-08-04-facility-production-data-api.md`](../archive/2026-08-04-facility-production-data-api.md)
-- [`CONTEXT.md`](../../CONTEXT.md), especially Credit batch, Sample, Replicate,
+- [`GLOSSARY.md`](../../GLOSSARY.md), especially Credit batch, Sample, Replicate,
   Production process, and Method A / Method B
 - the current Certify integration seams named below
 

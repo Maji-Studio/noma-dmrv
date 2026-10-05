@@ -122,7 +122,7 @@ export const selectVerificationSchema = createSelectSchema(verifications);
  * Organizations table (Better Auth organization plugin)
  *
  * An Organization is a biochar operator company onboarded onto the platform
- * (CONTEXT.md). It owns its facilities, users, and — from PR 2 — all domain
+ * (GLOSSARY.md). It owns its facilities, users, and — from PR 2 — all domain
  * data. Column shapes match the plugin's default `organization` model; the
  * Drizzle table name is plural and mapped to the plugin model in
  * `better-auth.ts`.

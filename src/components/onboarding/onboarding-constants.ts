@@ -1,5 +1,5 @@
 /**
- * Onboarding constants — the Setup steps (CONTEXT.md: "Setup step"), their
+ * Onboarding constants — the Setup steps (GLOSSARY.md: "Setup step"), their
  * copy, and the deep-link targets that open each entity's create surface.
  *
  * Setup steps are NOT stored flags. Done-ness is computed from record

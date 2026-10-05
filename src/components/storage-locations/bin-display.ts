@@ -191,7 +191,7 @@ const PURE_BIOCHAR_PRODUCT = "Pure biochar";
 /**
  * The tile's headline: what the bin holds, not what it is called.
  *
- * Feedstock covers ingredient bins too — per CONTEXT.md an "ingredient bin" is
+ * Feedstock covers ingredient bins too — per GLOSSARY.md an "ingredient bin" is
  * a feedstock bin whose held type happens to have blend usage, not a distinct
  * kind, so one field names both. Biochar bins have no name in the data model
  * (they hold lots from production runs, not a named entity), so they say what
