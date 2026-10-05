@@ -65,9 +65,8 @@ jobs:
           DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -108,9 +107,8 @@ jobs:
           DATABASE_CA_CERT: op://Environment Variables/noma-dmrv env staging/DATABASE_CA_CERT
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -153,9 +151,8 @@ jobs:
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -210,9 +207,8 @@ jobs:
           ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -277,9 +273,8 @@ jobs:
           STORAGE_SECRET_ACCESS_KEY: op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -348,9 +343,8 @@ jobs:
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -405,9 +399,8 @@ jobs:
           ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

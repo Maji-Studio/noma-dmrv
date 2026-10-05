@@ -5,17 +5,14 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Enforce the 1000-line file-size cap (CLAUDE.md). Set to "warn" so it
-  // surfaces existing violations without blocking the build; flip to "error"
-  // once the current offenders are split (architecture audit, Phase 4).
-  // Generated Isometric types and the seed script are exempt — they are not
-  // hand-maintained code.
+  // Enforce the 1000-line file-size cap (CLAUDE.md). Generated Isometric
+  // types and the seed script are exempt — they are not hand-maintained code.
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/lib/isometric/generated/**", "src/db/seed-data.ts"],
     rules: {
       "max-lines": [
-        "warn",
+        "error",
         { max: 1000, skipBlankLines: false, skipComments: false },
       ],
     },

@@ -32,12 +32,41 @@ The Mafinga photo (`site/public/images/mafinga-field-trial.jpg`) is gitignored
 because the repo is public and Dark Earth Carbon has not approved publishing it.
 A build without the file shows a hatched placeholder; never commit it.
 
+## Page Roles
+
+Each topic has one home page. Before adding or moving a section, check this
+table: a section that restates another page's topic reads as doubling, and Home
+drifting into Product's detail is the usual way it happens.
+
+| Page | Owns | Dark stage |
+| --- | --- | --- |
+| Home (`index.astro`) | A short tour: one block per destination, each linking deeper by anchor (`site/src/config.js`). It shows, it doesn't explain. | `TraceStage` |
+| Product (`product.astro`) | What the software does: Trace, Bins and stock, Emissions, Evidence and reporting, What's next (`PRODUCT_SECTIONS`). | `EvidenceStage` |
+| Why noma (`why.astro`) | Why it is built this way: the five principles (`WHY_PRINCIPLES`), the comparison with spreadsheets and other dMRVs, open source, ownership, Mafinga. | `CompareStage` |
+| Get started (`get-started.astro`) | The two actions only: book a walkthrough, or self-host from GitHub. | none |
+
+The light pages with one dark keynote stage each are a settled decision, set out
+in `site/src/components/site/README.md` (Plan). Don't reopen it per section.
+When a Home block and its target section start to look alike, shorten the Home
+block and link; don't add a second visual for the same idea.
+
 ## Run It
 
 From the repo root: `pnpm site:dev` (port 3120) and `pnpm site:build`. Both
 call the site's own scripts (`pnpm --dir site dev|build`). Install once with
 `pnpm install` inside `site/`. In a worktree, run a fresh install there; never
 symlink `node_modules` to the main checkout.
+
+`.github/workflows/site.yml` runs on changes to `site/`, `src/styles/fonts/` or
+itself: frozen install, `pnpm check:assets` (every root-relative file referenced
+from `site/src` exists in `site/public`; the private photo below is the one
+exception), `pnpm check` (`astro check`, strict) and `pnpm build`. Run the same
+three from `site/` before pushing.
+
+For screenshots, use the opt-in capture spec `tests/visual/site-capture.spec.ts`
+(knobs at its top) instead of writing a one-off script. It runs from the repo
+root against the running site through `playwright.visual.config.ts`, and
+imports from `@playwright/test`, not the app's E2E fixtures.
 
 ## Why It Is a Standalone pnpm Package
 

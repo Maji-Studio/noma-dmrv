@@ -5,6 +5,10 @@ const usesTurbopackBuildCache =
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  // `next dev` otherwise writes a managed block into AGENTS.md and creates a
+  // root CLAUDE.md whenever it detects a coding agent. Agent instructions live
+  // in .claude/CLAUDE.md and the docs it indexes.
+  agentRules: false,
   // Next 16's Turbopack production cache is experimental, so enable it only
   // for PR builds that explicitly persist the compiler cache.
   experimental: {

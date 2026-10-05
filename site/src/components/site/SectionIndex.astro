@@ -23,8 +23,9 @@ const { items = [], label = "On this page" } = Astro.props;
   const EDGE = 2;
   document.querySelectorAll("[data-section-index]").forEach((nav) => {
     const list = nav.querySelector("ol");
+    if (!list) return;
     const links = [...nav.querySelectorAll("a")];
-    const targets = links.map((a) => document.getElementById(a.hash.slice(1))).filter(Boolean);
+    const targets = links.map((a) => document.getElementById(a.hash.slice(1))).filter((t): t is HTMLElement => !!t);
     const behavior = () => (reducedMotion() ? "auto" : "smooth");
 
     // Edge fades: flag each side that has more items hidden past it.
@@ -34,13 +35,13 @@ const { items = [], label = "On this page" } = Astro.props;
       nav.classList.toggle("sx--more-end", list.scrollLeft < max - EDGE);
     };
     // Bring the current item into the list's view without moving the page.
-    const reveal = (a) => {
+    const reveal = (a: HTMLElement) => {
       if (list.scrollWidth <= list.clientWidth) return;
       const off = a.getBoundingClientRect().left - list.getBoundingClientRect().left;
       list.scrollTo({ left: list.scrollLeft + off - (list.clientWidth - a.offsetWidth) / 2, behavior: behavior() });
     };
-    let current = null;
-    const mark = (id) => {
+    let current: string | null = null;
+    const mark = (id: string | null) => {
       if (id === current) return;
       current = id;
       links.forEach((a) => {
@@ -52,7 +53,7 @@ const { items = [], label = "On this page" } = Astro.props;
     list.addEventListener("scroll", edges, { passive: true });
     // Back above the first section (a jump to the top fires no band change): return the list to its start.
     addEventListener("scroll", () => {
-      if (!current && list.scrollLeft > 0 && targets[0]?.getBoundingClientRect().top > 0) list.scrollTo({ left: 0, behavior: behavior() });
+      if (!current && list.scrollLeft > 0 && (targets[0]?.getBoundingClientRect().top ?? 0) > 0) list.scrollTo({ left: 0, behavior: behavior() });
     }, { passive: true });
     new ResizeObserver(edges).observe(list);
     edges();
@@ -78,7 +79,7 @@ const { items = [], label = "On this page" } = Astro.props;
 </script>
 <nav class="sx" aria-label={label} data-section-index>
   <GridFrame as="div" pad="none">
-    <ol>{items.map((item) => <li><a href={`#${item.id}`}>{item.label}</a></li>)}</ol>
+    <ol>{items.map((item: { id: string; label: string }) => <li><a href={`#${item.id}`}>{item.label}</a></li>)}</ol>
   </GridFrame>
 </nav>
 <style is:global>

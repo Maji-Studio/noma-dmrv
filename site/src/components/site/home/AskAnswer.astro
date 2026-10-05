@@ -17,7 +17,7 @@ const M = 15; // % moisture, as in BinsSection
 const DRAW = 400; // kg dry drawn, as in BinsSection
 const KG_PER_SQ = 10;
 const P = 20, SQ = 16, IN = (P - SQ) / 2, COLS = 10, BX = 20, BY = 236, WALL_ROWS = 11;
-const waterOf = (dry) => (dry * M) / (100 - M);
+const waterOf = (dry: number) => (dry * M) / (100 - M);
 
 // Oldest layer first: the draw empties layer 1, then takes the rest from layer 2.
 let owed = DRAW;

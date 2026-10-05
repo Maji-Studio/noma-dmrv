@@ -15,9 +15,8 @@ conventions) · [testing.md](./testing.md) (E2E) · [../TEMPLATE_USAGE.md](../TE
 
 - All files **kebab-case** — `item-form.tsx`, `use-items.ts`.
 - Component exports are **PascalCase**; hook and plain-function exports are **camelCase**.
-- **1000-line cap** per file. It is an ESLint `max-lines` **warn**, not an error — it will
-  not fail a build, so splitting is a review expectation you must honour yourself. Exempt
-  and never to be "fixed" by splitting: `src/lib/isometric/generated/**` and
+- **1000-line cap** per file, enforced as an ESLint `max-lines` **error**, so an oversized
+  file fails `pnpm lint` and CI. Exempt and never to be "fixed" by splitting: `src/lib/isometric/generated/**` and
   `src/db/seed-data.ts` (see `eslint.config.mjs`).
 - Feature folders under `src/components/<feature>/` are **flat** with a barrel `index.ts`
   — no `components/` / `dialogs/` / `hooks/` subfolders, even for large features

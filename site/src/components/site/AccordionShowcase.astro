@@ -26,12 +26,12 @@
 import "./accordion-showcase.css";
 
 const { id, items = [], visualRole = "group", ratio = "3 / 4", titleTag: Title = "h3", class: className } = Astro.props;
-const rendered = await Promise.all(items.map(async (item) => ({
+const rendered = await Promise.all(items.map(async (item: { id: string }) => ({
   ...item,
   panel: await Astro.slots.render(`panel-${item.id}`),
   visual: await Astro.slots.render(`visual-${item.id}`),
 })));
-const ids = (item) => ({ btn: `${id}-btn-${item.id}`, panel: `${id}-panel-${item.id}`, visual: `${id}-visual-${item.id}` });
+const ids = (item: { id: string }) => ({ btn: `${id}-btn-${item.id}`, panel: `${id}-panel-${item.id}`, visual: `${id}-visual-${item.id}` });
 ---
 <div class:list={["acc", className]} data-accordion style={`--acc-n:${items.length};--acc-ratio:${ratio}`}>
   <div class="acc-head"><slot name="head" /></div>
