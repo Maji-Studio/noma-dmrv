@@ -132,7 +132,7 @@ export type OrgRole = "owner" | "admin" | "member";
 /**
  * The org-scoped request context threaded through org-aware server actions.
  * `orgRole` is null for a Platform Admin operating inside an org they are not a
- * member of (their authority comes from `isPlatformAdmin`, per CONTEXT.md).
+ * member of (their authority comes from `isPlatformAdmin`, per GLOSSARY.md).
  */
 export type OrgContext = {
   userId: string;

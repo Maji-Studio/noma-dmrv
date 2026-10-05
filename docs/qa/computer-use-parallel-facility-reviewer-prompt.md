@@ -63,7 +63,7 @@ This is a findings-only review:
 READ FIRST
 
 - .claude/CLAUDE.md
-- CONTEXT.md
+- GLOSSARY.md
 - docs/architecture.md
 - docs/security.md
 - docs/testing.md
@@ -106,7 +106,7 @@ have a safe, explicit synchronization channel.
 
 BASELINE: MAP SCOPE BEFORE TESTING
 
-From CONTEXT.md and current code, classify relevant records/settings as one of:
+From GLOSSARY.md and current code, classify relevant records/settings as one of:
 
 - organization-scoped;
 - facility-scoped;
@@ -146,7 +146,7 @@ Capture a screenshot showing the active Facility B identity and URL without secr
 
 PASS 2 — BUILD AN INDEPENDENT FACILITY B CHAIN
 
-Using only the UI, build the current chain from CONTEXT.md far enough to create a
+Using only the UI, build the current chain from GLOSSARY.md far enough to create a
 Credit Batch and its required Samples where the environment permits:
 
 Facility B → Reactor → supplier/location → feedstock type/feedstock/storage →

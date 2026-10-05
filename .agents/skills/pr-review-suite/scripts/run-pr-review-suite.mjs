@@ -220,7 +220,7 @@ async function selectContext(baseRef, changedFiles, cwd) {
   const selected = new Set([
     "AGENTS.md",
     ".claude/CLAUDE.md",
-    "CONTEXT.md",
+    "GLOSSARY.md",
     ".greptile/rules.md",
     ".greptile/config.json",
   ]);
@@ -579,7 +579,7 @@ function selfTest() {
     "utf8",
   );
   const contextFiles = [
-    { path: "CONTEXT.md", absolute: "/artifacts/base-context/CONTEXT.md" },
+    { path: "GLOSSARY.md", absolute: "/artifacts/base-context/GLOSSARY.md" },
   ];
   for (const practice of DEFAULT_PRACTICES) {
     const practiceDefinition = extractPracticeDefinition(reference, practice);

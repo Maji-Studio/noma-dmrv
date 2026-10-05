@@ -81,7 +81,7 @@ the sandbox project overview BEFORE creating anything, so later submissions can 
 against it.
 
 READ FIRST (repo — reference, not the system under test)
-- .claude/CLAUDE.md, CONTEXT.md (authoritative domain vocabulary)
+- .claude/CLAUDE.md, GLOSSARY.md (authoritative domain vocabulary)
 - docs/isometric/README.md + versions.json   ← authoritative for the integration
 - docs/architecture.md, docs/security.md, docs/forms.md, docs/storage.md
 - .agents/skills/qa/SKILL.md, .agents/skills/codex-computer-use/SKILL.md
@@ -100,7 +100,7 @@ Then gpt-6.1-sol drives the app using that sheet.
 
 STEP 2 — RECONNAISSANCE
 - From the running staging UI, inventory app routes; build a visit checklist.
-- Build the entity/prerequisite cheat sheet from CONTEXT.md + schemas + server functions
+- Build the entity/prerequisite cheat sheet from GLOSSARY.md + schemas + server functions
   + data-access code (current code wins over any old ledger).
 - From docs/isometric + the isometric MCP + the sandbox project, enumerate EVERY expected
   API interaction and what "correct" looks like for each (endpoint, direction, when it
@@ -109,7 +109,7 @@ STEP 2 — RECONNAISSANCE
 
 STEP 3 — BUILD THE CHAIN (golden path, UI only)
 Create one clearly-synthetic "QA-<date>" facility and continue only through the UI, using
-Quick Add where a real operator would. Build the current chain defined by CONTEXT.md:
+Quick Add where a real operator would. Build the current chain defined by GLOSSARY.md:
 Facility → Reactor → Supplier + location → Feedstock type → Feedstock intake/storage →
 Production process/run → Biochar product → Customer + location → Order → Delivery →
 Application → Credit Batch → required Samples → Removal → GHG Statement.

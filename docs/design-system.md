@@ -275,14 +275,14 @@ has to read as part of the same row.
 Four things keep their capitals: proper nouns and product/registry names
 (Isometric, Certify), acronyms (GPS, CSV, UTC, GHG, TGA), unit and element
 symbols (`mL`, `ha`, `kg/m³`, `H:C`, `R₀`), and any term whose canonical form in
-[CONTEXT.md](../CONTEXT.md) is capitalised — check the glossary before you
+[GLOSSARY.md](../GLOSSARY.md) is capitalised — check the glossary before you
 rename a domain term.
 
 Button text, submit labels, dialog and side-sheet titles, delete-confirm titles
 and `StatCard` titles follow the same rule ("Create storage bin", "Save changes",
 "Total customers"). Page titles (`PageHeader`) and sidebar navigation labels are
 **outside** it and keep their existing casing. Entity nouns are lowercase mid-label;
-glossary terms that are capitalised in CONTEXT.md (Sample, Removal, GHG Statement)
+glossary terms that are capitalised in GLOSSARY.md (Sample, Removal, GHG Statement)
 keep their capital ("Create Sample"). Where a dialog title or button **names an
 entity the operator just saw on a select**, the noun follows the select's label
 rather than the chrome's casing — "Feedstock type" on the select, "New feedstock type" as the quick-add

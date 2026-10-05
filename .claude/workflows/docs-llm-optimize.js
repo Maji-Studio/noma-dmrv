@@ -35,7 +35,7 @@ const DOCS = args?.docs ?? [
 const LEARNING_DOCS = new Set(['docs/troubleshooting.md', 'docs/open-questions.md'])
 
 const HOUSE_RULES = `
-House rules for this repo's docs (from .claude/CLAUDE.md and CONTEXT.md):
+House rules for this repo's docs (from .claude/CLAUDE.md and GLOSSARY.md):
 - The reader is an LLM doing on-demand lookup, not a human reading front-to-back.
   Optimise for: found fast, trusted completely, short enough to load cheaply.
 - CUT anything the code already states plainly. A doc should carry intent,
@@ -44,7 +44,7 @@ House rules for this repo's docs (from .claude/CLAUDE.md and CONTEXT.md):
 - Prefer a pointer over a paraphrase: \`src/data-access/utils.ts\` beats an inlined copy.
 - Prefer a link over a repeat: if another doc or an ADR (docs/adr/) already owns
   a topic, link to it and delete the local copy. ADRs are authoritative for "why".
-- Keep domain terms exactly as CONTEXT.md defines them.
+- Keep domain terms exactly as GLOSSARY.md defines them.
 - Every doc opens with a one-paragraph "what this covers / when to read it" so a
   lookup can bail out in one read.
 - No dated status, no changelog narration, no "we recently...", no TODOs
@@ -191,7 +191,7 @@ Structural proposals deliberately NOT applied (report these, do not act on them)
 ${JSON.stringify(proposals.map((p) => ({ doc: p.doc, verdict: p.proposal.verdict, mergeTarget: p.proposal.mergeTarget })), null, 2)}
 
 Do four things, editing files as needed:
-1. **Dangling links** — every relative markdown link in \`docs/*.md\`, \`CLAUDE.md\` and \`CONTEXT.md\` must resolve to a file that exists. Fix or remove the ones that don't.
+1. **Dangling links** — every relative markdown link in \`docs/*.md\`, \`CLAUDE.md\` and \`GLOSSARY.md\` must resolve to a file that exists. Fix or remove the ones that don't.
 2. **Cross-doc duplication** — where two docs now explain the same thing, keep the better one and replace the other with a link. Pick the owner by topic, not by length.
 3. **Docs index** — the "Docs Index" section of \`.claude/CLAUDE.md\` is the entry point for every lookup. Make each line's trigger condition accurate for what its doc now actually contains. Keep it the same terse format. Do not restructure the rest of CLAUDE.md.
 4. **Entry paragraphs** — confirm each doc opens with its one-paragraph "what this covers / when to read it". Add it where missing.

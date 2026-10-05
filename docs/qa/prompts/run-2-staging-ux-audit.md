@@ -56,7 +56,7 @@ Establish and confirm authenticated sessions in the staging app and the sandbox 
 before doing anything. If either fails, STOP and report an environment blocker.
 
 READ FIRST
-.claude/CLAUDE.md, CONTEXT.md, docs/design-system.md, docs/forms.md, docs/architecture.md,
+.claude/CLAUDE.md, GLOSSARY.md, docs/design-system.md, docs/forms.md, docs/architecture.md,
 docs/security.md, .agents/skills/qa/SKILL.md, .agents/skills/codex-computer-use/SKILL.md,
 existing docs/qa ledgers (spot regressions, avoid duplicates). Reproduce independently
 anything you cite from an old ledger.

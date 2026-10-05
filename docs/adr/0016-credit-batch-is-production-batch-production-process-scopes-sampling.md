@@ -171,7 +171,7 @@ Because DEC runs **Method A everywhere** with stable conditions, this branch shi
   gates move from run-grain to credit-batch-grain, grouped by process.
 - ≤1-month enforcement on credit batches at three layers (Zod + server + DB check) when the
   certifier is Isometric.
-- **Glossary (CONTEXT.md):** "Credit batch", "Sample", "Replicate", "Method A / Method B"
+- **Glossary (GLOSSARY.md):** "Credit batch", "Sample", "Replicate", "Method A / Method B"
   updated, and "Production process" added (done 2026-06-19).
 - No production data yet → **reseed, don't migrate** (project convention). The hand-written
   trigger migrations `0052` (Method-B baseline) / `0053` (200-yr completeness) re-point to the
