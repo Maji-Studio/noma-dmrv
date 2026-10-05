@@ -11,10 +11,17 @@ import {
 // Load environment variables for testing
 config({ path: ".env.test" });
 
+// E2E fixtures (tests/e2e/fixtures/seed-chain-data.ts and others) import this
+// file too, inside Playwright. They must keep the dev server's DATABASE_URL and
+// origin, so the Vitest-only rules below apply under Vitest alone.
+const underVitest = Boolean(process.env.VITEST);
+
 // TEST_DATABASE_URL lets .env.test give Vitest its own database while
 // Playwright keeps DATABASE_URL (the dev server's) from the same file.
-const testDatabaseUrl = resolveTestDatabaseUrl(process.env);
-if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+if (underVitest) {
+  const testDatabaseUrl = resolveTestDatabaseUrl(process.env);
+  if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+}
 
 const testEnvDefaults: Record<string, string> = {
   NODE_ENV: "test",
@@ -42,13 +49,11 @@ for (const [key, value] of Object.entries(testEnvDefaults)) {
   }
 }
 
-// Vitest never talks to a running server, and specs hard-code :3100 report URLs
-// that are checked against this origin. A worktree's .env.test moves it to the
-// worktree's dev port for Playwright, so pin it under Vitest only: E2E fixtures
-// import this file too and must keep the origin their server trusts.
-if (process.env.VITEST) {
+if (underVitest) {
+  // Vitest never talks to a running server, and specs hard-code :3100 report
+  // URLs checked against this origin; a worktree's .env.test moves it to the
+  // worktree's dev port for Playwright.
   process.env.NEXT_PUBLIC_APP_URL = testEnvDefaults.NEXT_PUBLIC_APP_URL;
+  // Last, so it judges the URL every suite will actually connect to.
+  assertThrowawayTestDatabase(process.env.DATABASE_URL!);
 }
-
-// Last, so it judges the URL every suite will actually connect to.
-assertThrowawayTestDatabase(process.env.DATABASE_URL!);
