@@ -10,6 +10,7 @@ import { add, grams, kilograms, readRational, type OutputStockLayer } from '@/li
 import type { OutputStockPreviewInput } from '@/types/output-stock';
 import { and, eq, gt } from 'drizzle-orm';
 import { getOutputStockAllocationProjection } from './output-stock';
+import { isCountMovement } from './output-stock-count';
 import { getOutputStockFacilityTimezone } from './output-stock-dates';
 import { requireOrgScope } from './utils';
 
@@ -50,7 +51,7 @@ export async function prepareOutputCorrection(ctx: OrgContext, input: OutputStoc
   };
   if (later) throw await blockedBy(later.movement, at => `Correction blocked by a later ${outputStockEventLabel(later.movement.outputKind!).toLowerCase()}: ${later.movement.reason} (${at}).`);
   const counts = await reader.select().from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, input.storageLocationId), gt(binMovements.postingSequence, original.postingSequence)));
-  const count = counts.find(m => (m.outputKind === 'count' || m.inputSnapshot?.kind === 'count') && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
+  const count = counts.find(m => isCountMovement(m) && layers.some(l => affected.has(l.id) && l.placedAt <= m.occurredAt!.toISOString()));
   if (count) throw await blockedBy({ ...count, reason: 'Count' }, () => 'Correction blocked by a later count.');
   // A bin switched back to split held nothing then; restoring stock across the switch would put a mixed pile back as sub-bins.
   const split = counts.find(m => m.outputKind === 'split');

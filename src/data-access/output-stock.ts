@@ -7,6 +7,7 @@ import { outputStockBalance, projectBiocharLayers, projectMoistureBases, project
 import { estimateStock, type LayerMoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { isCountMovementSql } from './output-stock-count';
 import { requireOrgScope } from './utils';
 
 export { UnresolvedOutputStockError };
@@ -191,10 +192,10 @@ async function readMoistureRows(ctx: OrgContext, bins: readonly Pick<OutputBinRe
       .where(and(eq(productionRuns.organizationId, ctx.organizationId), inArray(productionRuns.biocharStorageLocationId, biocharBinIds))) : [],
     productBinIds.length ? reader.select({ id: biocharProducts.id, wet: sql<string | null>`(${biocharProducts.massKg} + coalesce(${biocharProducts.waterAddedKg}, 0))::text` }).from(biocharProducts)
       .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.storageLocationId, productBinIds))) : [],
-    // Only a count saves readings (planReadings).
+    // Only a count's reading sets a layer's moisture; readings older removals saved are history, not a basis.
     reader.select({ reading: outputStockMoistureReadings, sequence: binMovements.postingSequence }).from(outputStockMoistureReadings)
       .innerJoin(binMovements, and(eq(binMovements.id, outputStockMoistureReadings.movementId), eq(binMovements.organizationId, ctx.organizationId)))
-      .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), inArray(outputStockMoistureReadings.storageLocationId, binIds))),
+      .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), inArray(outputStockMoistureReadings.storageLocationId, binIds), isCountMovementSql())),
     reader.select({ allocation: { biocharProductId: outputStockAllocations.biocharProductId, productionRunId: outputStockAllocations.productionRunId, storageLocationId: outputStockAllocations.sourceStorageLocationId,
       movementId: outputStockAllocations.movementId, wetMassKg: outputStockAllocations.wetMassKg, reversesAllocationId: outputStockAllocations.reversesAllocationId,
       targetBiocharProductId: outputStockAllocations.targetBiocharProductId },

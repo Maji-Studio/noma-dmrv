@@ -8,6 +8,7 @@ import { getOutputBinStockView } from "@/data-access/output-stock";
 import { getOutputStockHistory } from "@/data-access/output-stock-history";
 import { getOutputSubBins } from "@/data-access/output-sub-bins";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
+import { decimal, storeRational } from "@/lib/output-stock/exact";
 import { cleanupPostedStock, postedStockFixture, postMeasurement, postProduct, STOCK_TIME } from "./helpers/posted-output-stock-fixture";
 
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
@@ -56,6 +57,18 @@ describe("moisture readings in PostgreSQL", () => {
     expect(count.preview.afterEstimatedWetKg).toBeCloseTo(700, 9);
     expect((await readingsOf(f.bin.id)).map(r => [r.biocharProductId, r.moisturePercent]).sort()).toEqual([[f.p1.id, 10], [f.p2.id, 10]].sort());
     expect(await getOutputBinStockView(f.ctx, f.bin.id)).toMatchObject({ dryMassKg: 630, estimatedMoisturePercent: expect.closeTo(10, 9) });
+  });
+
+  it("ignores a reading an older removal saved and keeps a count's", async () => {
+    const f = await splitBin();
+    // 100 kg wet at 50% takes 50 kg solids off P1, leaving it 350 kg solids and 400 kg wet at 20%.
+    const loss = await postMeasurement(f, { kind: "loss", wetMassKg: 100, moisturePercent: 50 });
+    // Before removals stopped saving readings, this loss would have saved one: 350 kg solids at 60%, or 875 kg wet.
+    await db.insert(outputStockMoistureReadings).values({ organizationId: f.ctx.organizationId, storageLocationId: f.bin.id, movementId: loss.movementId,
+      biocharProductId: f.p1.id, moisturePercent: 60, solidsBasisKg: storeRational(decimal("350")), occurredAt: new Date(STOCK_TIME) });
+    expect(await getOutputBinStockView(f.ctx, f.bin.id)).toMatchObject({ estimatedWetMassKg: expect.closeTo(775, 9), estimatedMoisturePercent: expect.closeTo(20, 9) });
+    await postMeasurement(f, { kind: "count", wetMassKg: 700, moisturePercent: 10 });
+    expect(await getOutputBinStockView(f.ctx, f.bin.id)).toMatchObject({ estimatedWetMassKg: expect.closeTo(700, 9), estimatedMoisturePercent: expect.closeTo(10, 9) });
   });
 
   it("blocks a removal the dry biochar cannot cover while wet stock still shows", async () => {
