@@ -16,7 +16,7 @@ Copy its layer boundaries, not its registry-specific behavior.
 
 ## 1. Define the domain and persistence boundary
 
-Confirm the term and entity grain in `CONTEXT.md`. Read
+Confirm the term and entity grain in `GLOSSARY.md`. Read
 [`docs/organization.md`](docs/organization.md) before choosing paths and
 [`docs/database.md`](docs/database.md) plus
 [`docs/schema-overview.md`](docs/schema-overview.md) before changing schema.
@@ -164,7 +164,7 @@ Run `pnpm db:generate`/migration verification for schema work and
 
 Update only evergreen sources:
 
-- domain terms and entity grain → `CONTEXT.md`
+- domain terms and entity grain → `GLOSSARY.md`
 - layers, actions, query keys, routing → `docs/architecture.md`
 - guards and active organization → `docs/auth.md`
 - schema/query invariants → `docs/database.md` and

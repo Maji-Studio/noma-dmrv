@@ -6,7 +6,7 @@ linting, dependency advice, and routine style feedback.
 
 ## How to investigate a change
 
-1. Reconstruct the intended behavior from `CONTEXT.md`, the applicable evergreen
+1. Reconstruct the intended behavior from `GLOSSARY.md`, the applicable evergreen
    documentation, schema constraints, and existing production paths. Treat the
    code as evidence, not automatically as the specification.
 2. Trace every changed value through callers, validation, server actions,
@@ -23,7 +23,7 @@ linting, dependency advice, and routine style feedback.
 
 ## Domain-critical invariants
 
-- Domain terms in `CONTEXT.md` are exact. In particular, a production run is not
+- Domain terms in `GLOSSARY.md` are exact. In particular, a production run is not
   a Removal, a credit batch is a production cohort, and bin stock changes only
   through bin movements.
 - **Organization isolation is the primary security boundary.** Every normal

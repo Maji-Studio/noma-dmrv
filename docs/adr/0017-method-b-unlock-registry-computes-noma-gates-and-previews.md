@@ -138,7 +138,7 @@ would re-open 0013 and re-create the audit-defeating posture it exists to remove
   contract — enforcement pending per the 2026-07-12 amendment). Method-B unlock alone does not
   freeze ordinary corrections, although the ≥30 baseline-floor invariant remains; an unclaimed
   sample has no submission lock.
-- **Glossary:** `CONTEXT.md` distinguishes **Method-B baseline** (the ≥30-sample unlock
+- **Glossary:** `GLOSSARY.md` distinguishes **Method-B baseline** (the ≥30-sample unlock
   prerequisite), **Eligible sample** (the trailing-6-mo process pool), and **Method-B evidence
   snapshot** (the sample versions used by a submitted unsampled Removal).
 

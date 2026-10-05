@@ -17,7 +17,7 @@ formulation. Output bins (`biochar_bin`, `product_bin`) are unaffected — they 
 products, not feedstock types, and remain distinct.
 
 This keeps registry eligibility protected at the right place: pyrolysis-usage feedstock
-types are certifier-validated (CONTEXT.md → *Feedstock type*), so gating on the type's usage
+types are certifier-validated (GLOSSARY.md → *Feedstock type*), so gating on the type's usage
 is gating on eligibility itself, whereas the bin enum only ever gated on a label.
 
 ## Considered options

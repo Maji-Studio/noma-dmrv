@@ -447,7 +447,7 @@ Facility-scoped operations dashboard at `/dashboard`
   `dashboard-structural-gaps.ts`.
 - **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
-  underlying record is fixed (see `CONTEXT.md`).
+  underlying record is fixed (see `GLOSSARY.md`).
 - Dashboard queries follow the standard layer flow and are org- and
   facility-scoped at the data-access layer.
 

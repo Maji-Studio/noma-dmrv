@@ -36,7 +36,7 @@ gate.
 READ FIRST
 
 - .claude/CLAUDE.md (authoritative repository instructions)
-- CONTEXT.md (authoritative domain vocabulary)
+- GLOSSARY.md (authoritative domain vocabulary)
 - docs/design-system.md
 - docs/forms.md
 - docs/testing.md
@@ -122,7 +122,7 @@ Before the operator walk:
 
 - Inventory every route below src/app/(app)/ and src/app/admin/ and create a visit
   checklist.
-- Build the current entity/prerequisite cheat sheet from CONTEXT.md, schemas, server
+- Build the current entity/prerequisite cheat sheet from GLOSSARY.md, schemas, server
   functions, and data-access code. Do not trust an old QA ledger over current code.
 - Review open GitHub issues/PRs if gh access is available. Label duplicate/known
   findings rather than presenting them as new.
@@ -148,14 +148,14 @@ state for calibration.
 PASS 2 — COMPLETE OPERATOR WALK
 
 Create one synthetic facility and continue only through the UI. Build the complete
-current chain defined by CONTEXT.md, using Quick Add where a real operator would:
+current chain defined by GLOSSARY.md, using Quick Add where a real operator would:
 
 Facility → Reactor → Supplier and location → Feedstock type → Feedstock intake and
 storage → Production process/run → Biochar product → Customer and location → Order →
 Delivery → Application → Credit Batch → required Samples → Removal draft/readiness →
 GHG Statement draft/readiness.
 
-The exact chain may have changed; CONTEXT.md and the current UI win.
+The exact chain may have changed; GLOSSARY.md and the current UI win.
 
 At each stage:
 
