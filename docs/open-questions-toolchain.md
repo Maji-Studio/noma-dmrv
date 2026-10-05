@@ -97,9 +97,9 @@ and need no follow-up.
 - The form-cleanup audit pages were built by scripts in `/tmp/form-cleanup-audits/`.
   The scripts are gone; only captures and `review-page/meta.json` (last rebuilt
   2026-10-02) survive, so the audit cannot be regenerated.
-- **Resolve via:** if another audit is needed, rebuild the generator under
-  `scripts/form-audit/` with a README and a `meta.json` that records the rebuild
-  date (M).
+- **Resolve via:** if another audit is needed, rebuild the generator in the repo
+  (a `form-audit` folder under `scripts/`) with a README and a `meta.json` that
+  records the rebuild date (M).
 
 ### Toolchain decisions requiring source review
 
