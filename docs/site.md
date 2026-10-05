@@ -39,6 +39,12 @@ call the site's own scripts (`pnpm --dir site dev|build`). Install once with
 `pnpm install` inside `site/`. In a worktree, run a fresh install there; never
 symlink `node_modules` to the main checkout.
 
+`.github/workflows/site.yml` runs on changes to `site/`, `src/styles/fonts/` or
+itself: frozen install, `pnpm check:assets` (every root-relative file referenced
+from `site/src` exists in `site/public`; the private photo below is the one
+exception), `pnpm check` (`astro check`, strict) and `pnpm build`. Run the same
+three from `site/` before pushing.
+
 ## Why It Is a Standalone pnpm Package
 
 `site/` has its own `pnpm-workspace.yaml` and lockfile and is not listed in the

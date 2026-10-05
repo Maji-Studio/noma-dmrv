@@ -12,13 +12,13 @@ import Button from "../Button.astro";
 import "./get-started.css";
 const { idPrefix = "wf" } = Astro.props;
 const w = copy.walkthrough;
-const id = (name) => `${idPrefix}-${name}`;
-const ERRORS = {
+const id = (name: string) => `${idPrefix}-${name}`;
+const ERRORS: Record<string, string> = {
   name: "Enter your name.",
   email: "Enter your work email, like name@company.com.",
   company: "Enter your company name.",
 };
-const TEXT_FIELDS = [
+const TEXT_FIELDS: { name: string; label: string; autocomplete: string; type: "text" | "email" }[] = [
   { name: "name", label: w.fields.name, autocomplete: "name", type: "text" },
   { name: "email", label: w.fields.email, autocomplete: "email", type: "email" },
   { name: "company", label: w.fields.company, autocomplete: "organization", type: "text" },

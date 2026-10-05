@@ -6,10 +6,16 @@
   "scripts": {
     "dev": "astro dev --port 3120",
     "build": "astro build",
-    "preview": "astro preview --port 3120"
+    "preview": "astro preview --port 3120",
+    "check": "astro check",
+    "check:assets": "node scripts/check-public-assets.mjs"
   },
   "dependencies": {
     "astro": "7.3.5",
     "maplibre-gl": "^5.24.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^5.9.3"
   }
 }

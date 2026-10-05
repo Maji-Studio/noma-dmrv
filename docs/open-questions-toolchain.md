@@ -93,6 +93,15 @@ and need no follow-up.
 - **Resolve via:** read the pnpm version in a Vercel build log for each project;
   if it is not 11, set `ENABLE_EXPERIMENTAL_COREPACK=1` on the project (S).
 
+### Keyboard and accessibility checks for the site (`site/a11y-ci`, opened 2026-10-05)
+
+- `.github/workflows/site.yml:jobs.site` type-checks, builds and checks asset
+  references (`site/scripts/check-public-assets.mjs`), but nothing drives the
+  built pages. Keyboard paths through the walkthroughs, the section index and
+  the hero map, plus an axe pass per page, are unchecked.
+- **Resolve via:** a Playwright run against `astro preview` in that workflow,
+  using `@playwright/test` and `@axe-core/playwright` in `site/` (M).
+
 ### Toolchain decisions requiring source review
 
 Lint tooling (Biome 2 / oxlint vs ESLint 9), OpenAPI contract testing for the
