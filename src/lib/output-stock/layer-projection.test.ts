@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rational, storeRational } from './exact';
-import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
+import { BEFORE_LEDGER_SEQUENCE, outputStockBalance, preLedgerWetRemovals, projectBiocharLayers, projectMoistureBases, projectProductLayers, UnresolvedOutputStockError, type AllocationEffectRow, type CompletedRunRow } from './layer-projection';
 
 const run: CompletedRunRow = { id: 'run', dryKg: '100.000', endTime: new Date('2026-09-01T12:00:00.000Z'), postingSequence: BigInt(1) };
 const noRows = { sources: [], effects: [] };
@@ -31,6 +31,14 @@ describe('biochar layers', () => {
     });
     expect(layer).toMatchObject({ remainingDryBiocharKg: '60.000', establishedDryBiocharKg: '100.000' });
     expect(layer.remainingSolidsKg).toEqual(rational(BigInt(60)));
+  });
+
+  it('takes the wet mass of the same pre-ledger draws the dry layer subtracts, before every posted movement', () => {
+    const posted = effect('a1', { productionRunId: run.id }, '30.000', BigInt(30), { targetBiocharProductId: 'posted' });
+    const sources = [{ productId: 'posted', runId: run.id, wetMassKg: '40.000' }, { productId: 'legacy', runId: run.id, wetMassKg: '12.500' }];
+    expect(preLedgerWetRemovals(sources, [posted.allocation])).toEqual([
+      { layerId: run.id, movementId: 'product:legacy', wetMassKg: '12.500', reversesAllocationId: null, sequence: BEFORE_LEDGER_SEQUENCE },
+    ]);
   });
 
   describe('repair exclusion', () => {

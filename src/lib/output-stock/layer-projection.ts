@@ -42,6 +42,17 @@ function uniqueAllocations(effects: readonly AllocationEffectRow[]): AllocationE
   return [...new Map(effects.map(effect => [effect.allocation.id, effect.allocation])).values()];
 }
 
+/**
+ * Product draws saved before the ledger: source rows whose product has no
+ * ledger allocation. Product creation posts its ledger draw before it saves
+ * source rows, so any other source row predates the ledger and every count.
+ * Dry and wet stock both take these draws from here.
+ */
+export function preLedgerSourceDraws<T extends { productId: string }>(sources: readonly T[], allocations: readonly { targetBiocharProductId: string | null }[]): T[] {
+  const postedProducts = new Set(allocations.flatMap(a => a.targetBiocharProductId ? [a.targetBiocharProductId] : []));
+  return sources.filter(source => !postedProducts.has(source.productId));
+}
+
 function isResolvedDryKg(dryKg: string | null): dryKg is string {
   return dryKg != null && Number.isFinite(Number(dryKg)) && Number(dryKg) > 0;
 }
@@ -54,7 +65,7 @@ function isResolvedDryKg(dryKg: string | null): dryKg is string {
  */
 export function projectBiocharLayers(rows: { runs: readonly CompletedRunRow[]; sources: readonly SourceDrawRow[]; effects: readonly AllocationEffectRow[] }, options: { excludeUnresolvedRunId?: string } = {}): OutputStockLayer[] {
   const effects = uniqueAllocations(rows.effects);
-  const postedProducts = new Set(effects.flatMap(e => e.targetBiocharProductId ? [e.targetBiocharProductId] : []));
+  const preLedger = preLedgerSourceDraws(rows.sources, effects);
   return rows.runs.filter(run => {
     if (run.id !== options.excludeUnresolvedRunId) return true;
     if (run.endTime && isResolvedDryKg(run.dryKg)) throw new SafeError('Only unresolved production stock can be excluded for repair');
@@ -64,7 +75,7 @@ export function projectBiocharLayers(rows: { runs: readonly CompletedRunRow[]; s
     return false;
   }).map(run => {
     if (!run.endTime || !isResolvedDryKg(run.dryKg)) throw new UnresolvedOutputStockError('Production dry mass or completion date is unresolved. Complete the production run mass and date.');
-    const sourceDraw = rows.sources.filter(s => s.runId === run.id && !postedProducts.has(s.productId)).reduce((sum, s) => sum + grams(s.dryKg), BigInt(0));
+    const sourceDraw = preLedger.filter(s => s.runId === run.id).reduce((sum, s) => sum + grams(s.dryKg), BigInt(0));
     const runEffects = effects.filter(e => e.productionRunId === run.id);
     const ledgerDraw = runEffects.reduce((sum, e) => sum + gramsSigned(e.dryMassKg), BigInt(0));
     const consumedSolidsKg = runEffects.reduce((sum, effect) => add(sum, readRational(effect.basisSnapshot.solidsKg)), rational(sourceDraw, GRAMS_PER_KG));
@@ -133,6 +144,11 @@ export interface WetRemovalRow { layerId: string; movementId: string; wetMassKg:
  * from the run layer unconditionally, so it precedes every posted movement.
  */
 export const BEFORE_LEDGER_SEQUENCE = BigInt(0);
+
+/** The wet mass each pre-ledger product draw took from its run layer, posted before every ledger movement. */
+export function preLedgerWetRemovals(sources: readonly { productId: string; runId: string; wetMassKg: string }[], allocations: readonly { targetBiocharProductId: string | null }[]): WetRemovalRow[] {
+  return preLedgerSourceDraws(sources, allocations).map(draw => ({ layerId: draw.runId, movementId: `product:${draw.productId}`, wetMassKg: draw.wetMassKg, reversesAllocationId: null, sequence: BEFORE_LEDGER_SEQUENCE }));
+}
 
 const WET_KG_PATTERN = /^\d+(\.\d+)?$/;
 

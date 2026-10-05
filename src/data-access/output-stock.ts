@@ -3,7 +3,7 @@ import { binMovements, biocharProducts, biocharProductSourceAllocations, outputS
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import type { OutputStockLayer } from '@/lib/output-stock';
-import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, BEFORE_LEDGER_SEQUENCE, UnresolvedOutputStockError, type MoistureReadingRow, type WetRemovalRow } from '@/lib/output-stock/layer-projection';
+import { outputStockBalance, projectBiocharLayers, projectMoistureBases, projectProductLayers, preLedgerWetRemovals, UnresolvedOutputStockError, type MoistureReadingRow, type WetRemovalRow } from '@/lib/output-stock/layer-projection';
 import { estimateStock, type LayerMoistureBasis } from '@/lib/output-stock/moisture-estimate';
 import { COMPLETED_PRODUCTION_RUN_STATUS } from '@/lib/production-runs/lifecycle';
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -225,13 +225,7 @@ function moistureRowsFor(bin: Pick<OutputBinRef, 'id'>, rows: Awaited<ReturnType
     const layerId = allocation.biocharProductId ?? allocation.productionRunId;
     return layerId ? [{ layerId, movementId: allocation.movementId, wetMassKg: allocation.wetMassKg, reversesAllocationId: allocation.reversesAllocationId, sequence }] : [];
   });
-  // A product draw with ledger allocations is counted from the ledger, as the layer projection does.
-  // Product creation posts before it saves source rows, so a source row with no ledger draw predates the ledger.
-  const postedProducts = new Set(ledger.flatMap(({ allocation }) => allocation.targetBiocharProductId ? [allocation.targetBiocharProductId] : []));
-  for (const draw of rows.sourceDraws) {
-    if (draw.binId !== bin.id || postedProducts.has(draw.productId)) continue;
-    removals.push({ layerId: draw.runId, movementId: `product:${draw.productId}`, wetMassKg: draw.wetMassKg, reversesAllocationId: null, sequence: BEFORE_LEDGER_SEQUENCE });
-  }
+  removals.push(...preLedgerWetRemovals(rows.sourceDraws.filter(draw => draw.binId === bin.id), ledger.map(({ allocation }) => allocation)));
   return { recordedWetKg: rows.recordedWetKg, readings, removals, reversedMovementIds };
 }
 
