@@ -83,17 +83,15 @@ and need no follow-up.
   fails on the broken worker.
   Then drop the Dependabot ignore (S).
 
-### CI installs with pnpm 9, local development uses pnpm 11 (`tooling/ci-pnpm-version`, opened 2026-10-02)
+### Which pnpm Vercel builds with (`tooling/ci-pnpm-version`, opened 2026-10-02)
 
-- Still open: every `pnpm/action-setup` step in `.github/workflows/*.yml` pins
-  `version: 9`. pnpm 11 reads `overrides` only from `pnpm-workspace.yaml`,
-  pnpm 9 only from the `package.json` `pnpm` field, so no override can satisfy
-  both and `pnpm install --frozen-lockfile` fails in CI with
-  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`. Security floors for transitive
-  dependencies therefore cannot use overrides today (PR #906).
-- **Resolve via:** set `packageManager` in `package.json`, drop the pinned
-  `version` from the workflows, and confirm which pnpm the Vercel builds use
-  before relying on workspace-level settings in CI (S).
+- CI and local now share `packageManager: pnpm@11.13.0` (root and `site/`), and
+  every `pnpm/action-setup` step reads it. Still open: whether both Vercel
+  projects honour the field. Until a build log shows pnpm 11, keep dependency
+  overrides out of `pnpm-workspace.yaml`, because pnpm 9 and 11 read them
+  from different files (PR #906).
+- **Resolve via:** read the pnpm version in a Vercel build log for each project;
+  if it is not 11, set `ENABLE_EXPERIMENTAL_COREPACK=1` on the project (S).
 
 ### Toolchain decisions requiring source review
 

@@ -1,6 +1,7 @@
 {
   "name": "noma-site",
   "private": true,
+  "packageManager": "pnpm@11.13.0",
   "type": "module",
   "scripts": {
     "dev": "astro dev --port 3120",
