@@ -64,6 +64,11 @@ jobs:
       - name: Spacing-scale check
         run: pnpm check:spacing-scale
 
+      # The same silence for custom properties: a var(--x) that nothing
+      # defines leaves the property at its initial value with no error.
+      - name: CSS custom-property check
+        run: pnpm check:css-vars
+
       # docs/ux-writing.md bans en and em dashes in user-facing copy; this
       # parses string literals and JSX text (never comments) to enforce it.
       - name: UX-copy dash check
