@@ -42,6 +42,17 @@ function uniqueAllocations(effects: readonly AllocationEffectRow[]): AllocationE
   return [...new Map(effects.map(effect => [effect.allocation.id, effect.allocation])).values()];
 }
 
+/**
+ * Product draws saved before the ledger: source rows whose product has no
+ * ledger allocation. Product creation posts its ledger draw before it saves
+ * source rows, so any other source row predates the ledger and every count.
+ * Dry and wet stock both take these draws from here.
+ */
+export function preLedgerSourceDraws<T extends { productId: string }>(sources: readonly T[], allocations: readonly { targetBiocharProductId: string | null }[]): T[] {
+  const postedProducts = new Set(allocations.flatMap(a => a.targetBiocharProductId ? [a.targetBiocharProductId] : []));
+  return sources.filter(source => !postedProducts.has(source.productId));
+}
+
 function isResolvedDryKg(dryKg: string | null): dryKg is string {
   return dryKg != null && Number.isFinite(Number(dryKg)) && Number(dryKg) > 0;
 }
@@ -54,7 +65,7 @@ function isResolvedDryKg(dryKg: string | null): dryKg is string {
  */
 export function projectBiocharLayers(rows: { runs: readonly CompletedRunRow[]; sources: readonly SourceDrawRow[]; effects: readonly AllocationEffectRow[] }, options: { excludeUnresolvedRunId?: string } = {}): OutputStockLayer[] {
   const effects = uniqueAllocations(rows.effects);
-  const postedProducts = new Set(effects.flatMap(e => e.targetBiocharProductId ? [e.targetBiocharProductId] : []));
+  const preLedger = preLedgerSourceDraws(rows.sources, effects);
   return rows.runs.filter(run => {
     if (run.id !== options.excludeUnresolvedRunId) return true;
     if (run.endTime && isResolvedDryKg(run.dryKg)) throw new SafeError('Only unresolved production stock can be excluded for repair');
@@ -64,7 +75,7 @@ export function projectBiocharLayers(rows: { runs: readonly CompletedRunRow[]; s
     return false;
   }).map(run => {
     if (!run.endTime || !isResolvedDryKg(run.dryKg)) throw new UnresolvedOutputStockError('Production dry mass or completion date is unresolved. Complete the production run mass and date.');
-    const sourceDraw = rows.sources.filter(s => s.runId === run.id && !postedProducts.has(s.productId)).reduce((sum, s) => sum + grams(s.dryKg), BigInt(0));
+    const sourceDraw = preLedger.filter(s => s.runId === run.id).reduce((sum, s) => sum + grams(s.dryKg), BigInt(0));
     const runEffects = effects.filter(e => e.productionRunId === run.id);
     const ledgerDraw = runEffects.reduce((sum, e) => sum + gramsSigned(e.dryMassKg), BigInt(0));
     const consumedSolidsKg = runEffects.reduce((sum, effect) => add(sum, readRational(effect.basisSnapshot.solidsKg)), rational(sourceDraw, GRAMS_PER_KG));
@@ -121,16 +132,33 @@ export function outputStockBalance(layers: readonly OutputStockLayer[], at: stri
   return { allLayersDryKg: sum(layers), availableDryKg: sum(layers.filter(layer => layer.placedAt <= at)), expectedSolidsKg };
 }
 
-/** A moisture reading on a layer, with the posting order of its movement. */
-export interface MoistureReadingRow { layerId: string; movementId: string; moisturePercent: number; occurredAt: Date; sequence: bigint }
+/** A count's moisture reading on a layer, with the solids it left and the posting order of its movement. */
+export interface MoistureReadingRow { layerId: string; movementId: string; moisturePercent: number; solidsBasisKg: unknown; occurredAt: Date; sequence: bigint }
+
+/** The wet mass one posted allocation took from a layer, with its posting order; null when it took none (a count). */
+export interface WetRemovalRow { layerId: string; movementId: string; wetMassKg: string | null; reversesAllocationId: string | null; sequence: bigint }
+
+/**
+ * The posting order of a product draw saved before the ledger. Every count is
+ * a ledger movement posted after it, and `projectBiocharLayers` subtracts it
+ * from the run layer unconditionally, so it precedes every posted movement.
+ */
+export const BEFORE_LEDGER_SEQUENCE = BigInt(0);
+
+/** The wet mass each pre-ledger product draw took from its run layer, posted before every ledger movement. */
+export function preLedgerWetRemovals(sources: readonly { productId: string; runId: string; wetMassKg: string }[], allocations: readonly { targetBiocharProductId: string | null }[]): WetRemovalRow[] {
+  return preLedgerSourceDraws(sources, allocations).map(draw => ({ layerId: draw.runId, movementId: `product:${draw.productId}`, wetMassKg: draw.wetMassKg, reversesAllocationId: null, sequence: BEFORE_LEDGER_SEQUENCE }));
+}
 
 const WET_KG_PATTERN = /^\d+(\.\d+)?$/;
 
 /**
- * What each layer's moisture is known from: the wet mass it entered the bin
- * with, and every reading on it whose movement no correction reversed.
+ * What each layer's wet mass and moisture are known from: the wet mass it
+ * entered the bin with, every count reading on it, and the wet mass every
+ * removal took. A corrected movement and its reversal both drop out, so the
+ * replacement alone counts.
  */
-export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: { recordedWetKg: ReadonlyMap<string, string | null>; readings: readonly MoistureReadingRow[]; reversedMovementIds: ReadonlySet<string> }): LayerMoistureBasis[] {
+export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: { recordedWetKg: ReadonlyMap<string, string | null>; readings: readonly MoistureReadingRow[]; removals: readonly WetRemovalRow[]; reversedMovementIds: ReadonlySet<string> }): LayerMoistureBasis[] {
   return layers.map(layer => {
     const wet = rows.recordedWetKg.get(layer.id);
     const recordedWetKg: Rational | null = wet == null || !WET_KG_PATTERN.test(wet) ? null : decimal(wet as Decimal);
@@ -138,7 +166,9 @@ export function projectMoistureBases(layers: readonly OutputStockLayer[], rows: 
       layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg!,
       recorded: recordedWetKg ? { solidsKg: rational(grams(layer.establishedDryBiocharKg) + grams(layer.ingredientDrySolidsKg), GRAMS_PER_KG), wetKg: recordedWetKg } : null,
       readings: rows.readings.filter(reading => reading.layerId === layer.id && !rows.reversedMovementIds.has(reading.movementId))
-        .map(reading => ({ moisturePercent: reading.moisturePercent, occurredAt: reading.occurredAt.toISOString(), sequence: reading.sequence })),
+        .map(reading => ({ moisturePercent: reading.moisturePercent, solidsKg: readRational(reading.solidsBasisKg), occurredAt: reading.occurredAt.toISOString(), sequence: reading.sequence })),
+      removals: rows.removals.filter(removal => removal.layerId === layer.id && removal.wetMassKg != null && !removal.reversesAllocationId && !rows.reversedMovementIds.has(removal.movementId))
+        .map(removal => ({ wetKg: decimal(removal.wetMassKg as Decimal), sequence: removal.sequence })),
     };
   });
 }

@@ -1,17 +1,30 @@
-import { add, decimal, divide, rational, rationalToNumber, subtract, type Rational } from './exact';
-import { layerRemainingSolidsKg, type DrawPolicy, type OutputStockLayer, type OutputStockRequest, type planOutputStock } from './planner';
+import { add, compare, decimal, divide, rational, rationalToNumber, subtract, type Rational } from './exact';
+import { layerRemainingSolidsKg, type OutputStockRequest, type planOutputStock } from './planner';
 
 const PERCENT = 100;
 
-/** A measured moisture on one layer, at the time of the movement that took it. */
+/** A count's measured moisture on one layer, with the solids the layer held right after it. */
 export interface MoistureReading {
   moisturePercent: number;
+  /** Solids the layer held right after the count; the reading's wet mass is these at the reading. */
+  solidsKg: Rational;
   occurredAt: string;
-  /** Posting order of the measuring movement; breaks ties at one instant. */
+  /** Posting order of the measuring movement: the last posted count sets the layer's wet mass. */
   sequence: bigint;
 }
 
-/** What one layer holds and what its moisture is known from. */
+/** Wet mass a removal took from one layer. */
+export interface WetRemoval {
+  wetKg: Rational;
+  /**
+   * Posting order of the removal's movement. The dry layers reflect every
+   * posted draw whatever its time, so a removal counts by when it was posted,
+   * never by when it happened.
+   */
+  sequence: bigint;
+}
+
+/** What one layer holds and what its wet mass and moisture are known from. */
 export interface LayerMoistureBasis {
   layerId: string;
   /** Canonical ISO instant the layer entered the bin. */
@@ -19,7 +32,10 @@ export interface LayerMoistureBasis {
   remainingSolidsKg: Rational;
   /** Solids and wet mass recorded when the layer entered the bin; null when its wet mass is unknown. */
   recorded: { solidsKg: Rational; wetKg: Rational } | null;
+  /** Count readings: a count weighs the whole bin, so it sets the wet mass and moisture again. */
   readings: readonly MoistureReading[];
+  /** Wet mass every removal took. A removal's own moisture reading never changes the layer's moisture. */
+  removals: readonly WetRemoval[];
 }
 
 export interface MoistureBasis { source: 'reading' | 'recorded'; at: string }
@@ -34,48 +50,74 @@ export interface StockEstimate {
 }
 
 const toNumber = rationalToNumber;
+const ZERO = rational(BigInt(0));
 
 /** 1 − moisture, exact. Stored percents have at most six decimals, so the text form is exact. */
 function readingFraction(moisturePercent: number): Rational {
   return subtract(rational(BigInt(1)), divide(decimal(String(moisturePercent)), rational(BigInt(PERCENT))));
 }
 
-/** The newest reading at or before `at`: later instant first, then later posting. */
-function latestReading(readings: readonly MoistureReading[], at: string): MoistureReading | null {
+/** The last posted reading: the count whose solids reflect the most posted movements. */
+function latestPostedReading(readings: readonly MoistureReading[]): MoistureReading | null {
   let latest: MoistureReading | null = null;
-  for (const reading of readings) {
-    if (reading.occurredAt > at) continue;
-    if (!latest || reading.occurredAt > latest.occurredAt || (reading.occurredAt === latest.occurredAt && reading.sequence > latest.sequence)) latest = reading;
-  }
+  for (const reading of readings) if (!latest || reading.sequence > latest.sequence) latest = reading;
   return latest;
 }
 
-/** A layer's solids fraction (1 − moisture) at `at` and where it comes from, or null when unknown. */
-function layerSolidsFraction(layer: LayerMoistureBasis, at: string): { fraction: Rational; basis: MoistureBasis } | null {
-  const reading = latestReading(layer.readings, at);
-  if (reading) return { fraction: readingFraction(reading.moisturePercent), basis: { source: 'reading', at: reading.occurredAt } };
-  const { recorded } = layer;
-  if (!recorded || recorded.wetKg.numerator <= BigInt(0)) return null;
-  return { fraction: divide(recorded.solidsKg, recorded.wetKg), basis: { source: 'recorded', at: layer.placedAt } };
+/**
+ * A layer's wet mass and the moisture it keeps. The wet mass starts from the
+ * last posted count, or else from what the layer entered the bin with, and
+ * every removal posted after that start subtracts the wet mass it took.
+ * Posting order, not time, decides both, as it does for the dry layers: the
+ * remaining solids reflect every posted movement, and a count's solids
+ * reflect every movement posted before it, whenever each was timed. The
+ * moisture stays at that starting point: a drier or wetter removal moves the
+ * dry biochar it takes, not the moisture of what is left. Null when the
+ * layer's wet mass is unknown.
+ */
+function layerWet(layer: LayerMoistureBasis): { wetKg: Rational; fraction: Rational; basis: MoistureBasis } | null {
+  const reading = latestPostedReading(layer.readings);
+  let start: { wetKg: Rational; fraction: Rational; basis: MoistureBasis; postedAfter: bigint | null };
+  if (reading) {
+    const fraction = readingFraction(reading.moisturePercent);
+    start = { wetKg: divide(reading.solidsKg, fraction), fraction, basis: { source: 'reading', at: reading.occurredAt }, postedAfter: reading.sequence };
+  } else {
+    const { recorded } = layer;
+    if (!recorded || recorded.wetKg.numerator <= BigInt(0)) return null;
+    start = { wetKg: recorded.wetKg, fraction: divide(recorded.solidsKg, recorded.wetKg), basis: { source: 'recorded', at: layer.placedAt }, postedAfter: null };
+  }
+  let wetKg = start.wetKg;
+  for (const removal of layer.removals) {
+    if (start.postedAfter != null && removal.sequence <= start.postedAfter) continue;
+    wetKg = subtract(wetKg, removal.wetKg);
+  }
+  // Removals wetter than the layer can take its wet mass before its dry biochar; none is left to show.
+  return { wetKg: compare(wetKg, ZERO) > BigInt(0) ? wetKg : ZERO, fraction: start.fraction, basis: start.basis };
 }
 
 /**
- * The wet estimate of the layers present at `at`: each layer's remaining solids
- * at its own moisture, summed. Estimated moisture is 1 − solids ÷ wet.
+ * The stock of the layers placed by `at`. Wet mass is each layer's wet mass
+ * in minus wet mass out, so a removal of 300 kg from 500 kg leaves 200 kg
+ * whatever moisture it was measured at. Dry biochar alone limits a draw: when
+ * removals were drier than the bin, its dry biochar runs out while some wet
+ * mass still shows. Estimated moisture is each layer's kept moisture, weighted
+ * by its remaining solids, so a pro-rata mix removal leaves it unchanged.
  */
 export function estimateStock(layers: readonly LayerMoistureBasis[], at: string): StockEstimate {
-  let solids = rational(BigInt(0));
-  let wet: Rational | null = rational(BigInt(0));
+  let solids = ZERO;
+  let wet: Rational | null = ZERO;
+  let solidsAtMoisture: Rational | null = ZERO;
   let basis: MoistureBasis | null = null;
   for (const layer of layers) {
     if (layer.placedAt > at || layer.remainingSolidsKg.numerator <= BigInt(0)) continue;
     solids = add(solids, layer.remainingSolidsKg);
-    const known = layerSolidsFraction(layer, at);
-    if (!known) { wet = null; continue; }
-    if (wet) wet = add(wet, divide(layer.remainingSolidsKg, known.fraction));
+    const known = layerWet(layer);
+    if (!known) { wet = null; solidsAtMoisture = null; continue; }
+    if (wet) wet = add(wet, known.wetKg);
+    if (solidsAtMoisture) solidsAtMoisture = add(solidsAtMoisture, divide(layer.remainingSolidsKg, known.fraction));
     if (!basis || known.basis.at > basis.at) basis = known.basis;
   }
-  const moisture = wet && wet.numerator > BigInt(0) ? toNumber(subtract(rational(BigInt(1)), divide(solids, wet))) * PERCENT : null;
+  const moisture = solidsAtMoisture && solidsAtMoisture.numerator > BigInt(0) ? toNumber(subtract(rational(BigInt(1)), divide(solids, solidsAtMoisture))) * PERCENT : null;
   return { solidsKg: toNumber(solids), wetKg: wet ? toNumber(wet) : null, moisturePercent: moisture, basis };
 }
 
@@ -83,41 +125,31 @@ export function estimateStock(layers: readonly LayerMoistureBasis[], at: string)
 export interface PlannedReading { layerId: string; moisturePercent: number; solidsKg: Rational }
 
 /**
- * The readings a planned movement records. A reading resets what it was taken
- * from: in a split bin every drawn sub-bin at its own reading; in a mix bin,
- * and for any count, every layer present, since the reading describes the whole
- * pile. A layer the movement empties has no moisture left to reset, and a zero
- * count measured none.
+ * The readings a planned movement records. Only a count records any: it weighs
+ * the whole bin, so its reading sets every layer present, at the solids each
+ * holds after it. A removal's reading measures what left, not what stayed, so
+ * it records none. A layer the count empties has no moisture left to set, and
+ * a zero count measured none.
  */
-export function planReadings(request: OutputStockRequest, plan: Pick<ReturnType<typeof planOutputStock>, 'allocations' | 'remainingLayers'>, occurredAt: string, policy: DrawPolicy = 'fifo'): PlannedReading[] {
-  const remaining = new Map<string, OutputStockLayer>(plan.remainingLayers.map(layer => [layer.id, layer]));
-  const held = (layerId: string) => {
-    const layer = remaining.get(layerId);
-    const solidsKg = layer ? layerRemainingSolidsKg(layer) : null;
-    return solidsKg && solidsKg.numerator > BigInt(0) ? solidsKg : null;
-  };
-  const readings: PlannedReading[] = [];
-  const pileReading = request.kind === 'count' ? (Number(request.wetKg) > 0 ? request.moisturePercent : undefined)
-    : policy === 'pro_rata' && request.kind === 'wet' ? request.moisturePercent : undefined;
-  if (request.kind === 'count' || policy === 'pro_rata') {
-    if (pileReading == null) return readings;
-    for (const layer of plan.remainingLayers) {
-      const solidsKg = layer.placedAt <= occurredAt ? held(layer.id) : null;
-      if (solidsKg) readings.push({ layerId: layer.id, moisturePercent: Number(pileReading), solidsKg });
-    }
-    return readings;
-  }
-  for (const allocation of plan.allocations) {
-    const solidsKg = allocation.readingPercent == null ? null : held(allocation.layerId);
-    if (solidsKg) readings.push({ layerId: allocation.layerId, moisturePercent: Number(allocation.readingPercent), solidsKg });
-  }
-  return readings;
+export function planReadings(request: OutputStockRequest, plan: Pick<ReturnType<typeof planOutputStock>, 'remainingLayers'>, occurredAt: string): PlannedReading[] {
+  if (request.kind !== 'count' || request.moisturePercent == null || !(Number(request.wetKg) > 0)) return [];
+  const moisturePercent = Number(request.moisturePercent);
+  return plan.remainingLayers.flatMap(layer => {
+    const solidsKg = layer.placedAt <= occurredAt ? layerRemainingSolidsKg(layer) : null;
+    return solidsKg && solidsKg.numerator > BigInt(0) ? [{ layerId: layer.id, moisturePercent, solidsKg }] : [];
+  });
 }
 
-/** Layers with a movement's readings added, taken at `occurredAt` by the posting `sequence`. */
-export function withReadings(layers: readonly LayerMoistureBasis[], readings: readonly PlannedReading[], occurredAt: string, sequence: bigint): LayerMoistureBasis[] {
+/** The wet mass a planned removal takes from each layer; a count takes none. */
+export function planWetRemovals(plan: Pick<ReturnType<typeof planOutputStock>, 'allocations'>): { layerId: string; wetKg: Rational }[] {
+  return plan.allocations.flatMap(allocation => allocation.wetShareKg ? [{ layerId: allocation.layerId, wetKg: allocation.wetShareKg }] : []);
+}
+
+/** Layers with a movement's readings and wet removals added, taken at `occurredAt` by the posting `sequence`. */
+export function withMovement(layers: readonly LayerMoistureBasis[], movement: { readings: readonly PlannedReading[]; removals: readonly { layerId: string; wetKg: Rational }[] }, occurredAt: string, sequence: bigint): LayerMoistureBasis[] {
   return layers.map(layer => {
-    const added = readings.filter(reading => reading.layerId === layer.layerId).map(reading => ({ moisturePercent: reading.moisturePercent, occurredAt, sequence }));
-    return added.length ? { ...layer, readings: [...layer.readings, ...added] } : layer;
+    const readings = movement.readings.filter(reading => reading.layerId === layer.layerId).map(reading => ({ moisturePercent: reading.moisturePercent, solidsKg: reading.solidsKg, occurredAt, sequence }));
+    const removals = movement.removals.filter(removal => removal.layerId === layer.layerId).map(removal => ({ wetKg: removal.wetKg, sequence }));
+    return readings.length || removals.length ? { ...layer, readings: [...layer.readings, ...readings], removals: [...layer.removals, ...removals] } : layer;
   });
 }

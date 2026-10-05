@@ -35,7 +35,7 @@ const MODE_CHANGE_CAPTIONS: Record<string, string> = {
 
 /** The one fact the entries cannot show as a figure. */
 const HISTORY_HINT =
-  "Each entry is one measurement. Current wet stock stays an estimate at the latest moisture, so a later moisture never rewrites an earlier measurement.";
+  "Each entry is one measurement. Wet stock is the mass added less the mass taken out; only a count sets moisture again, and it never rewrites an earlier measurement.";
 
 interface EntryProps {
   entry: OutputStockHistoryEntry;

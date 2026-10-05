@@ -5,8 +5,8 @@ const ZONE = 'Africa/Dar_es_Salaam';
 
 describe('moistureReadingGuidance', () => {
   it('shows the estimate as one line and never proposes a value', () => {
-    expect(moistureReadingGuidance({ moisturePercent: 29.43, basisText: 'From the reading on Sep 15, 2026, 14:30.' }, null))
-      .toEqual({ cue: 'Estimated moisture: 29.4%', basisText: 'From the reading on Sep 15, 2026, 14:30.', warning: undefined });
+    expect(moistureReadingGuidance({ moisturePercent: 29.43, basisText: 'From the count on Sep 15, 2026, 14:30.' }, null))
+      .toEqual({ cue: 'Estimated moisture: 29.4%', basisText: 'From the count on Sep 15, 2026, 14:30.', warning: undefined });
   });
 
   it('warns, without blocking, when a reading is more than five points from the estimate', () => {
@@ -24,7 +24,7 @@ describe('moistureReadingGuidance', () => {
 
 describe('moistureBasisText', () => {
   it('names the reading or the recorded batch moisture, on the facility clock', () => {
-    expect(moistureBasisText({ source: 'reading', at: '2026-09-15T11:30:00.000Z' }, ZONE)).toBe('From the reading on Sep 15, 2026, 14:30.');
+    expect(moistureBasisText({ source: 'reading', at: '2026-09-15T11:30:00.000Z' }, ZONE)).toBe('From the count on Sep 15, 2026, 14:30.');
     expect(moistureBasisText({ source: 'recorded', at: '2026-09-15T11:30:00.000Z' }, ZONE)).toBe('From the moisture recorded when the batch was added on Sep 15, 2026, 14:30.');
     expect(moistureBasisText(null, ZONE)).toBeNull();
   });

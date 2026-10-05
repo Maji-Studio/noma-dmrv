@@ -12,7 +12,7 @@ vi.mock('@/db', () => {
   return { db: { ...tx, transaction: (run: (reader: unknown) => unknown) => run(tx) } };
 });
 vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, getProductOutputStockLayers: mocks.state, getOutputBinStocks: mocks.stocks, getLayerMoistureBases: async (_ctx: unknown, _bin: unknown, layers: { id: string; placedAt: string; remainingSolidsKg: unknown }[]) =>
-  layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [] })) }));
+  layers.map(layer => ({ layerId: layer.id, placedAt: layer.placedAt, remainingSolidsKg: layer.remainingSolidsKg, recorded: null, readings: [], removals: [] })) }));
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));

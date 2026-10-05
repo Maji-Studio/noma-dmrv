@@ -62,7 +62,7 @@ export async function prepareProductStock(ctx: OrgContext, input: ProductStockPr
     const destination = await prepareOutputStock(ctx, { ...base, storageLocationId: input.storageLocationId, kind: 'count', wetMassKg: 0, moisturePercent: 0 }, tx);
     if (destination.lane !== 'product' || destination.bin.formulationId && destination.bin.formulationId !== input.formulationId) throw new SafeError('Choose a product bin matching the formulation.');
     const before = destination.preview;
-    // The product bin's wet stock is its batches at their latest readings; the
+    // The product bin's wet stock is its batches' wet in less wet out; the
     // new batch adds its own recorded wet mass on top.
     const beforeWet = before.beforeEstimatedWetKg;
     const beforeAllocations = before.beforeAllocations;

@@ -93,7 +93,7 @@ describe("MatchingOutputBins", () => {
     const html = renderList();
     expect(html).toContain("Available wet stock, estimate");
     expect(html).toContain("118 kg wet");
-    expect(html).toContain("At the latest moisture reading of each batch");
+    expect(html).toContain("Wet mass added less wet mass taken out");
     expect(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).toContain("Available dry stock 100 kg");
   });
   it.each(["loading", "error"] as const)("keeps stock informational when details are %s", status => {

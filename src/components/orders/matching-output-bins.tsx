@@ -98,7 +98,7 @@ function MatchingOutputBinCard({ bin, facilityId }: {
     <OutputStockAvailability
       binName={preview?.binName ?? bin.name}
       dryKg={preview?.beforeDryKg ?? bin.dryMassKg}
-      wetEstimate={bin.estimatedWetMassKg == null ? null : { kg: bin.estimatedWetMassKg, basis: "At the latest moisture reading of each batch" }}
+      wetEstimate={bin.estimatedWetMassKg == null ? null : { kg: bin.estimatedWetMassKg, basis: "Wet mass added less wet mass taken out" }}
       allocations={preview?.beforeAllocations}
     />
     {stock.isLoading && <p role="status" className={STATUS_CLASS}>Loading stock details</p>}

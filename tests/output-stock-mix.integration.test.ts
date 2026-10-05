@@ -37,17 +37,21 @@ async function mixDelivery(f: Fixture, wetMassKg: number, moisturePercent: numbe
 }
 
 describe("mix bin draws in PostgreSQL", () => {
-  it("draws every batch pro-rata, saves the policy, and resets the whole pile's moisture", async () => {
+  it("draws every batch pro-rata, saves the policy, and keeps the pile's moisture", async () => {
     const f = await twoBatches();
     await setMode(f, "mix", new Date("2026-09-12T00:00:00.000Z"));
+    const pile = () => previewOutputStock(f.ctx, { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss", wetMassKg: 1, moisturePercent: 0 });
+    const before = (await pile()).moistureEstimate!;
     // 350 kg wet at 20% is 280 kg solids: 4/7 from P1 and 3/7 from P2.
     const delivery = await mixDelivery(f, 350, 20);
     expect(delivery.massDryKg).toBe(280);
     const rows = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
     expect(rows.map(r => [r.biocharProductId, r.dryMassKg, r.basisSnapshot.policy, r.basisSnapshot.readingPercent]).sort())
       .toEqual([[f.p1.id, "160.000", "pro_rata", "20"], [f.p2.id, "120.000", "pro_rata", "20"]].sort());
-    const readings = await db.select().from(outputStockMoistureReadings).where(eq(outputStockMoistureReadings.movementId, rows[0].movementId));
-    expect(readings.map(r => [r.biocharProductId, r.moisturePercent]).sort()).toEqual([[f.p1.id, 20], [f.p2.id, 20]].sort());
+    expect(await db.select().from(outputStockMoistureReadings).where(eq(outputStockMoistureReadings.movementId, rows[0].movementId))).toEqual([]);
+    const after = (await pile()).moistureEstimate!;
+    expect(after.wetKg).toBeCloseTo(before.wetKg! - 350, 6);
+    expect(after.moisturePercent).toBeCloseTo(before.moisturePercent!, 9);
   });
 
   it("plans an entry timed before the merge as split and one after it as pro-rata", async () => {

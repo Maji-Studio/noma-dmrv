@@ -13,6 +13,7 @@ import { SafeError } from '@/lib/errors';
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { formatFacilityDateTime } from "@/lib/format-utils";
 import { DEFAULT_FACILITY_TIMEZONE } from "@/lib/date-utils";
+import { isCountMovementSql } from "../output-stock-count";
 import { requireOrgScope } from "../utils";
 
 /**
@@ -37,7 +38,7 @@ export async function getProductionRunDependentProduct(
   };
   const [count] = await tx.select({ reason: binMovements.reason, at: binMovements.occurredAt }).from(binMovements)
     .innerJoin(productionRuns, and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.id, productionRunId), eq(productionRuns.biocharStorageLocationId, binMovements.storageLocationId)))
-    .where(and(eq(binMovements.organizationId, ctx.organizationId), sql`(${binMovements.outputKind} = 'count' or ${binMovements.inputSnapshot}->>'kind' = 'count')`,
+    .where(and(eq(binMovements.organizationId, ctx.organizationId), isCountMovementSql(),
       sql`(${productionRuns.endTime} is null or (${productionRuns.endTime} at time zone 'UTC') <= ${binMovements.occurredAt})`, sql`${productionRuns.createdAt} <= ${binMovements.createdAt}`)).limit(1);
   if (count) throw new SafeError(`Production stock is covered by count: ${count.reason} (${await at(count.at)}).`);
   const [effect] = await tx.select({ kind: binMovements.outputKind, reason: binMovements.reason, at: binMovements.occurredAt })

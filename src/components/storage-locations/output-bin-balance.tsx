@@ -7,7 +7,7 @@ import { formatWetEstimate } from "./stock-preview-shared";
 import { MixPileCard } from "./mix-pile-card";
 import { SubBinList } from "./sub-bin-card";
 
-const WET_ESTIMATE_HINT = "Wet stock is an estimate from the latest moisture reading of each sub-bin. Every delivery, loss and count reading updates the sub-bin it was taken from.";
+const WET_ESTIMATE_HINT = "Wet stock is the wet mass added to each sub-bin less the wet mass taken out. A delivery or loss keeps the sub-bin's moisture; only a count sets it again. Dry biochar limits what can leave.";
 
 /**
  * An output bin's stock on its detail sheet, wet first: the wet estimate

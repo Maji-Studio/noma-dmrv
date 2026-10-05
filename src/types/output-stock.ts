@@ -41,12 +41,12 @@ export interface OutputStockPreview {
   removedWetKg: number | null;
   /** The moisture this movement's wet figures are at: the reading, or a split draw's overall 1 − solids ÷ wet. */
   movementMoisturePercent: number | null;
-  /** Wet stock estimated from each batch's latest reading, before and after this movement's readings. */
+  /** Wet stock, wet in less wet out from each batch's last count, before and after this movement. */
   beforeEstimatedWetKg: number | null;
   afterEstimatedWetKg: number | null;
   /** The bin's estimate before this movement: the hint beside a moisture field. */
   moistureEstimate?: OutputMoistureEstimate | null;
-  /** What this movement's readings reset: the same remaining stock at its previous estimate, then at the reading. */
+  /** What a count's readings reset: the same remaining stock at its previous estimate, then at the count. Removals reset nothing. */
   moistureReset?: OutputMoistureReset | null;
   /** The bin's stock mode at this movement's time; a merged bin is split before its merge. */
   stockMode?: OutputStockMode;
@@ -67,7 +67,7 @@ export interface OutputStockPreview {
 export interface OutputMoistureEstimate {
   moisturePercent: number | null;
   wetKg: number | null;
-  /** Where the estimate comes from: the latest reading, or the moisture recorded when the batch was added. */
+  /** Where the estimate comes from: the last count, or the moisture recorded when the batch was added. */
   basis: MoistureBasis | null;
 }
 
@@ -103,7 +103,7 @@ export interface OutputStockHistoryEntry {
   allocations: OutputStockAllocationView[];
   /** Split draws: the sub-bins and readings the entry was posted with. */
   sources?: { layerId: string; moisturePercent: number }[];
-  /** "Moisture updated" entries: the movement whose readings reset the estimate, and the change. */
+  /** "Moisture updated" entries: the count whose readings reset the estimate, and the change. */
   measuredByMovementId?: string;
   moistureReset?: OutputMoistureReset;
 }
@@ -126,7 +126,7 @@ export interface OutputSubBin {
   placedAt: string;
   dryMassKg: number;
   solidsKg: number;
-  /** Wet stock at the sub-bin's latest moisture; null when nothing dates it. */
+  /** The sub-bin's wet stock, wet in less wet out from its last count; null when nothing dates it. */
   wetEstimateKg: number | null;
   moisturePercent: number | null;
   basis: MoistureBasis | null;
@@ -155,7 +155,7 @@ export interface MatchingOutputBin {
   name: string;
   /** Null when the bin's layers do not resolve. */
   dryMassKg: number | null;
-  /** Wet stock at each batch's latest reading; null when the bin's layers do not resolve. */
+  /** Wet stock, wet in less wet out from each batch's last count; null when the bin's layers do not resolve. */
   estimatedWetMassKg: number | null;
 }
 

@@ -79,10 +79,10 @@ describe('output FIFO transactions', () => {
     const f = await fixture();
     await createDelivery(f.ctx, f.deliveryInput);
     const base = { ...f.input, kind: 'count' as const, wetMassKg: 600 };
-    // A count is compared with the estimated wet stock: product 1 keeps the 420 kg
-    // of solids the delivery did not draw, at the delivery's 30% reading.
-    expect((await previewOutputStock(f.ctx, base)).beforeEstimatedWetKg).toBeCloseTo(420 / 0.7, 6);
-    expect((await previewOutputStock(f.ctx, { ...base, kind: 'loss', wetMassKg: 10 })).moistureEstimate).toMatchObject({ moisturePercent: 30, basis: { source: 'reading' } });
+    // A count is compared with the wet stock: the delivery emptied product 0 and took
+    // the rest of its 2,000 kg from product 1 (300 kg solids at 30%), which keeps its 28%.
+    expect((await previewOutputStock(f.ctx, base)).beforeEstimatedWetKg).toBeCloseTo(1000 - 300 / 0.7, 3);
+    expect((await previewOutputStock(f.ctx, { ...base, kind: 'loss', wetMassKg: 10 })).moistureEstimate).toMatchObject({ moisturePercent: expect.closeTo(28, 9), basis: { source: 'recorded' } });
     expect((await post(f, base)).preview.removedDryKg).toBe(0);
     expect((await post(f, { ...base, wetMassKg: 700 })).preview.removedDryKg).toBe(0);
     const loss = await post(f, { ...base, kind: 'loss', wetMassKg: 120 });
