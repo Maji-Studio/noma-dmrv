@@ -76,7 +76,38 @@ echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_
 ```
 
 Re-run the migrate line after pulling new migrations. A worktree made with
-`scripts/worktree.sh new` gets its own test database.
+`scripts/worktree.sh` gets its own test database.
+
+## Worktrees
+
+Parallel sessions each work in their own worktree, one writer per worktree.
+`scripts/worktree.sh` sets one up so it shares nothing with the main checkout:
+
+```bash
+scripts/worktree.sh new <name> <type/branch>   # .claude/worktrees/<name>, cut from origin/staging
+scripts/worktree.sh status                      # owners, ports, servers, PR state, unmanaged leftovers
+scripts/worktree.sh teardown <name>             # only what `new` recorded for <name>
+```
+
+`new` creates `noma_dmrv_<name>` (dev server and Playwright fixtures) and
+`noma_dmrv_<name>_test` (Vitest), claims a free port from 3101, writes both into
+copies of `.env.local` and `.env.test`, installs, resets the dev DB and migrates
+the test DB. It cuts the branch with `--no-track`, so a bare `git push` never
+targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
+
+- Start the dev server with the one-line command `new` prints, in your own
+  terminal: background commands from an agent stop after two hours. Don't use
+  `pnpm dev` in a worktree; it runs `docker compose up` and binds :3100. When
+  pasting into zsh, drop the `!` that the Claude Code prompt uses for shell
+  commands: a leading `!` in zsh is history expansion or negation.
+- Playwright reads the worktree's `NEXT_PUBLIC_APP_URL`, so it reuses or starts
+  the worktree's own server.
+- `teardown` refuses while the worktree has uncommitted changes, and refuses a
+  worktree another Claude session created unless you pass `--force` after
+  checking with it. It stops only processes running inside the worktree and
+  deletes the branch only if it is merged.
+- `status` lists worktrees and `noma_dmrv_*` databases the script did not
+  create. Another session may own them: ask before removing anything.
 
 ## E2E data naming is a hard contract
 
@@ -108,8 +139,8 @@ spec that creates a table it doesn't yet sweep.
 ## Environment
 
 `playwright.config.ts` loads **`.env.test` only, never `.env.local`** — Playwright-side
-vars belong in `.env.test`. `.env.test` is untracked; when running from a git worktree,
-copy both `.env.test` and `.env.local` in first.
+vars belong in `.env.test`. `.env.test` is untracked; a worktree made with
+`scripts/worktree.sh` gets both files (see [Worktrees](#worktrees)).
 
 - `DISABLE_RATE_LIMIT=true` is an **app-server** var (read by `src/lib/auth/better-auth.ts`),
   so locally it lives in `.env.local` where `pnpm dev:manual` sees it; CI sets it as a
@@ -155,7 +186,8 @@ retry**. Specs must not assume ordering across files, workers, or shards.
 
 ## Gotchas
 
-- `playwright.config.ts` starts or reuses the app on :3100 — don't pre-launch a second one.
+- `playwright.config.ts` starts or reuses the app on the port in `NEXT_PUBLIC_APP_URL`
+  (:3100 in the main checkout) — don't pre-launch a second one.
 - Local runs use dev mode, where first-hit Turbopack compilation is legitimately slow; the
   generous per-test timeout absorbs it. Don't shorten it to "catch hangs".
 - Duplicate-key errors → check your naming (above) first. To reset, name the target:
