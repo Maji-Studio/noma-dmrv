@@ -83,16 +83,6 @@ and need no follow-up.
   fails on the broken worker.
   Then drop the Dependabot ignore (S).
 
-### Which pnpm Vercel builds with (`tooling/ci-pnpm-version`, opened 2026-10-02)
-
-- CI and local now share `packageManager: pnpm@11.13.0` (root and `site/`), and
-  every `pnpm/action-setup` step reads it. Still open: whether both Vercel
-  projects honour the field. Until a build log shows pnpm 11, keep dependency
-  overrides out of `pnpm-workspace.yaml`, because pnpm 9 and 11 read them
-  from different files (PR #906).
-- **Resolve via:** read the pnpm version in a Vercel build log for each project;
-  if it is not 11, set `ENABLE_EXPERIMENTAL_COREPACK=1` on the project (S).
-
 ### Keyboard and accessibility checks for the site (`site/a11y-ci`, opened 2026-10-05)
 
 - `.github/workflows/site.yml:jobs.site` type-checks, builds and checks asset
