@@ -238,7 +238,7 @@ export async function getMatchingOutputBins(ctx: OrgContext, input: { facilityId
   if (!formulation) throw new SafeError('Formulation not found');
   const bins = await db.select().from(storageLocations).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.facilityId, input.facilityId), eq(storageLocations.type, 'product_bin'), eq(storageLocations.formulationId, input.formulationId), isNull(storageLocations.archivedAt))).orderBy(asc(storageLocations.code));
   // Orders carry no departure moisture, so wet availability is the bin's
-  // estimate at each batch's latest reading, as the bin selectors show it.
+  // wet stock, each batch's wet in less wet out, as the bin selectors show it.
   // A bin whose layers do not resolve reads null instead of failing the list.
   const stocks = await getOutputBinStocks(ctx, bins.map(bin => bin.id));
   return bins.map(bin => {
