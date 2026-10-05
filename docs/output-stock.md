@@ -3,12 +3,12 @@
 Biochar bins hold layers from completed production runs. Product bins hold layers
 from products placed in that bin. Stock accounting follows dry biochar and frozen
 source-run shares. Wet stock is wet mass added less wet mass taken out, per
-layer, from the latest count on (`estimateStock` in
+layer, from the last posted count on (`estimateStock` in
 `src/lib/output-stock/moisture-estimate.ts`). A removal's moisture fixes its dry
-draw only and never changes the bin's moisture; only a count does. Removals
-count in posting order, as dry stock does: a backdated entry still sees every
-posted draw, and a backdated count's solids already reflect the draws posted
-before it. A product draw saved before the ledger counts before every count.
+draw only and never changes the bin's moisture; only a count does. Counts and
+removals apply in posting order, as dry stock does: a backdated entry still
+sees every posted count and draw, and a backdated count's solids already
+reflect what was posted before it. A product draw saved before the ledger counts before every count.
 Dry biochar alone blocks a draw, so wet stock can still show once dried biochar
 has none left.
 

@@ -21,22 +21,21 @@ describe('estimateStock', () => {
     expect(estimate.basis).toEqual({ source: 'recorded', at: T0 });
   });
 
-  it('uses the latest count reading taken at or before the time, never a later one', () => {
+  it('uses the last posted count reading, whatever its time', () => {
     const T2 = '2026-09-15T08:00:00.000Z';
     const solidsKg = decimal('637');
     const readings = [
-      { moisturePercent: 30, solidsKg, occurredAt: T1, sequence: BigInt(4) },
-      { moisturePercent: 20, solidsKg, occurredAt: T2, sequence: BigInt(5) },
-      { moisturePercent: 25, solidsKg, occurredAt: T1, sequence: BigInt(3) },
+      { moisturePercent: 30, solidsKg, occurredAt: T2, sequence: BigInt(3) },
+      { moisturePercent: 20, solidsKg, occurredAt: T1, sequence: BigInt(5) },
+      { moisturePercent: 25, solidsKg, occurredAt: T2, sequence: BigInt(4) },
     ];
     const bay = layer('B-0419', '980', '637', T0, { readings });
-    expect(estimateStock([bay], T0).moisturePercent).toBeCloseTo(35, 9);
-    // Two readings at one instant: the later posting is the newer measurement.
-    const atT1 = estimateStock([bay], T1);
-    expect(atT1.moisturePercent).toBeCloseTo(30, 9);
-    expect(atT1.wetKg).toBeCloseTo(910, 9);
-    expect(atT1.basis).toEqual({ source: 'reading', at: T1 });
-    expect(estimateStock([bay], NOW).wetKg).toBeCloseTo(796.25, 9);
+    for (const at of [T0, T1, NOW]) {
+      const estimate = estimateStock([bay], at);
+      expect(estimate.moisturePercent).toBeCloseTo(20, 9);
+      expect(estimate.wetKg).toBeCloseTo(796.25, 9);
+      expect(estimate.basis).toEqual({ source: 'reading', at: T1 });
+    }
   });
 
   it('stays finite for a bin of many partly drawn batches with unrelated moisture bases', () => {
@@ -176,6 +175,22 @@ describe('wet stock follows the draws the dry layers reflect', () => {
     // A removal posted after the count subtracts, even when timed before it.
     const later = { ...counted, remainingSolidsKg: decimal('180'), removals: [...counted.removals, { wetKg: decimal('100'), sequence: BigInt(4) }] };
     expect(estimateStock([later], NOW).wetKg).toBeCloseTo(300, 9);
+  });
+
+  it('a preview timed before a later-timed count starts from that count', () => {
+    // A count at T2 read 400 kg at 40%: 240 kg solids, as the dry layer already shows.
+    const counted = layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('240'), readings: [{ moisturePercent: 40, solidsKg: decimal('240'), occurredAt: NOW, sequence: BigInt(2) }] });
+    expect(estimateStock([counted], T1).wetKg).toBeCloseTo(400, 9);
+  });
+
+  it('a backdated count posted last sets the wet mass, though an earlier-posted count is timed later', () => {
+    // Posted first: a count timed NOW read 400 kg at 40% (240 kg solids). Posted second: a count timed T1 read 200 kg at 40% (120 kg solids).
+    const readings = [
+      { moisturePercent: 40, solidsKg: decimal('240'), occurredAt: NOW, sequence: BigInt(2) },
+      { moisturePercent: 40, solidsKg: decimal('120'), occurredAt: T1, sequence: BigInt(3) },
+    ];
+    const counted = layer('B-0500', '500', '300', T0, { remainingSolidsKg: decimal('120'), readings });
+    expect(estimateStock([counted], NOW).wetKg).toBeCloseTo(200, 9);
   });
 
   it('a product draw saved before the ledger counts from the recorded wet mass, never after a count', () => {

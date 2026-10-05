@@ -9,7 +9,7 @@ export interface MoistureReading {
   /** Solids the layer held right after the count; the reading's wet mass is these at the reading. */
   solidsKg: Rational;
   occurredAt: string;
-  /** Posting order of the measuring movement; breaks ties at one instant. */
+  /** Posting order of the measuring movement: the last posted count sets the layer's wet mass. */
   sequence: bigint;
 }
 
@@ -57,33 +57,26 @@ function readingFraction(moisturePercent: number): Rational {
   return subtract(rational(BigInt(1)), divide(decimal(String(moisturePercent)), rational(BigInt(PERCENT))));
 }
 
-/** True when `a` happened after `b`: a later instant, or the same instant posted later. */
-function isAfter(a: { occurredAt: string; sequence: bigint }, b: { occurredAt: string; sequence: bigint }): boolean {
-  return a.occurredAt > b.occurredAt || (a.occurredAt === b.occurredAt && a.sequence > b.sequence);
-}
-
-/** The newest reading at or before `at`: later instant first, then later posting. */
-function latestReading(readings: readonly MoistureReading[], at: string): MoistureReading | null {
+/** The last posted reading: the count whose solids reflect the most posted movements. */
+function latestPostedReading(readings: readonly MoistureReading[]): MoistureReading | null {
   let latest: MoistureReading | null = null;
-  for (const reading of readings) {
-    if (reading.occurredAt > at) continue;
-    if (!latest || isAfter(reading, latest)) latest = reading;
-  }
+  for (const reading of readings) if (!latest || reading.sequence > latest.sequence) latest = reading;
   return latest;
 }
 
 /**
- * A layer's wet mass at `at` and the moisture it keeps. The wet mass starts
- * from the latest count, or else from what the layer entered the bin with,
- * and every removal posted after that start subtracts the wet mass it took.
- * Posting order, not time, decides: the remaining solids already reflect
- * every posted draw, and a count's solids reflect every draw posted before
- * it, even one timed after it. The moisture stays
- * at that starting point: a drier or wetter removal moves the dry biochar it
- * takes, not the moisture of what is left. Null when the layer's wet mass is unknown.
+ * A layer's wet mass and the moisture it keeps. The wet mass starts from the
+ * last posted count, or else from what the layer entered the bin with, and
+ * every removal posted after that start subtracts the wet mass it took.
+ * Posting order, not time, decides both, as it does for the dry layers: the
+ * remaining solids reflect every posted movement, and a count's solids
+ * reflect every movement posted before it, whenever each was timed. The
+ * moisture stays at that starting point: a drier or wetter removal moves the
+ * dry biochar it takes, not the moisture of what is left. Null when the
+ * layer's wet mass is unknown.
  */
-function layerWet(layer: LayerMoistureBasis, at: string): { wetKg: Rational; fraction: Rational; basis: MoistureBasis } | null {
-  const reading = latestReading(layer.readings, at);
+function layerWet(layer: LayerMoistureBasis): { wetKg: Rational; fraction: Rational; basis: MoistureBasis } | null {
+  const reading = latestPostedReading(layer.readings);
   let start: { wetKg: Rational; fraction: Rational; basis: MoistureBasis; postedAfter: bigint | null };
   if (reading) {
     const fraction = readingFraction(reading.moisturePercent);
@@ -103,7 +96,7 @@ function layerWet(layer: LayerMoistureBasis, at: string): { wetKg: Rational; fra
 }
 
 /**
- * The stock of the layers present at `at`. Wet mass is each layer's wet mass
+ * The stock of the layers placed by `at`. Wet mass is each layer's wet mass
  * in minus wet mass out, so a removal of 300 kg from 500 kg leaves 200 kg
  * whatever moisture it was measured at. Dry biochar alone limits a draw: when
  * removals were drier than the bin, its dry biochar runs out while some wet
@@ -118,7 +111,7 @@ export function estimateStock(layers: readonly LayerMoistureBasis[], at: string)
   for (const layer of layers) {
     if (layer.placedAt > at || layer.remainingSolidsKg.numerator <= BigInt(0)) continue;
     solids = add(solids, layer.remainingSolidsKg);
-    const known = layerWet(layer, at);
+    const known = layerWet(layer);
     if (!known) { wet = null; solidsAtMoisture = null; continue; }
     if (wet) wet = add(wet, known.wetKg);
     if (solidsAtMoisture) solidsAtMoisture = add(solidsAtMoisture, divide(layer.remainingSolidsKg, known.fraction));
