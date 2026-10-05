@@ -33,11 +33,11 @@ const MAX_DIFF_CHARS = 500_000;
 // Generated payloads the models read nothing useful from: one drizzle snapshot
 // alone (~390k chars) used to push a routine schema PR past MAX_DIFF_CHARS.
 // They stay in the changed-file list, and the report names what was left out.
-// SQL migrations and lockfiles are not generated payloads; they stay in.
+// SQL migrations, lockfiles and the generated Certify types (the registry
+// contract) stay in.
 const GENERATED_PAYLOAD_GLOBS = [
   "drizzle/meta/*_snapshot.json",
   "site/src/components/site/contours/*.svg",
-  "src/lib/isometric/generated/**",
 ];
 const MAX_COMMENT_CHARS = 60_000;
 const INTERRUPT_EXIT_CODE = 130;

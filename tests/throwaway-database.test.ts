@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertThrowawayTestDatabase,
+  isLocalDatabaseHost,
   resolveTestDatabaseUrl,
 } from "./helpers/throwaway-database";
 
@@ -34,6 +35,17 @@ describe("assertThrowawayTestDatabase", () => {
     ).toThrow(/throwaway/);
   });
 
+  it.each(["database=noma_dmrv_dev", "dbname=noma_dmrv_dev", "host=db.example.com", "hostaddr=10.0.0.1"])(
+    "rejects a query parameter that moves the connection target (%s)",
+    (param) => {
+      expect(() => assertThrowawayTestDatabase(`${local("noma_dmrv_test")}?${param}`)).toThrow(/throwaway/);
+    },
+  );
+
+  it("accepts harmless query parameters", () => {
+    expect(() => assertThrowawayTestDatabase(`${local("noma_dmrv_test")}?sslmode=disable`)).not.toThrow();
+  });
+
   it("rejects an unparseable URL", () => {
     expect(() => assertThrowawayTestDatabase("not a url")).toThrow(/throwaway/);
   });
@@ -63,5 +75,15 @@ describe("resolveTestDatabaseUrl", () => {
 
   it("returns undefined when neither is set", () => {
     expect(resolveTestDatabaseUrl({})).toBeUndefined();
+  });
+});
+
+describe("isLocalDatabaseHost", () => {
+  it.each(["localhost", "127.0.0.1", "[::1]"])("treats %s as local", (host) => {
+    expect(isLocalDatabaseHost(host)).toBe(true);
+  });
+
+  it("treats anything else as remote", () => {
+    expect(isLocalDatabaseHost("db.example.com")).toBe(false);
   });
 });

@@ -25,6 +25,11 @@ describe("extractDefinitions", () => {
     expect(extractDefinitions(`el.style.setProperty("--hero-y", y)`)).toEqual(new Set(["--hero-y"]));
   });
 
+  it("does not count a property read or removal as a definition", () => {
+    const js = `getComputedStyle(el).getPropertyValue("--ts-dwell"); el.style.removeProperty('--gone');`;
+    expect(extractDefinitions(js)).toEqual(new Set());
+  });
+
   it("does not count a var() reference as a definition", () => {
     expect(extractDefinitions(`.a { color: var(--ink); }`)).toEqual(new Set());
   });

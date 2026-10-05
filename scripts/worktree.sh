@@ -7,10 +7,11 @@
 #   scripts/worktree.sh teardown <name> [--force]
 #
 # `new` claims the name and a port atomically (mkdir), copies .env.local and .env.test by name,
-# creates noma_dmrv_<name> (dev server, Playwright) and noma_dmrv_<name>_test (Vitest), installs,
-# resets and migrates both, and records everything in .claude/worktrees/.owners/<name>/owner.
-# `teardown` removes only what that record lists, and refuses while the worktree has uncommitted
-# changes or (without --force) when another Claude session owns it. See docs/testing.md#worktrees.
+# creates noma_dmrv_wt_<name>_dev (dev server, Playwright) and noma_dmrv_wt_<name>_test (Vitest),
+# installs, resets and migrates both, and records them in .claude/worktrees/.owners/<name>/owner.
+# `teardown` removes only what that record lists as created, refuses from inside the worktree or
+# while it has uncommitted changes, and needs --force for another session's worktree.
+# See docs/testing.md#worktrees.
 set -euo pipefail
 
 PG_CONTAINER="noma-dmrv-postgres"
@@ -20,6 +21,10 @@ PORT_FIRST=3101
 PORT_LAST=3199
 RESERVED_PORTS=" 3120 " # marketing site dev server
 NAME_PATTERN='^[a-z0-9][a-z0-9-]{0,30}$'
+# A test/e2e segment would put the dev DB inside Vitest's throwaway rule (tests/helpers/throwaway-database.ts).
+RESERVED_NAME_SEGMENT='(^|-)(test|e2e|dev)(-|$)'
+STOP_WAIT_TICKS=20
+STOP_TICK_SECONDS=0.5
 
 MAIN="$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)"
 WORKTREES="$MAIN/.claude/worktrees"
@@ -67,11 +72,18 @@ read_owner() {
 cmd_new() {
   local name="${1:-}" branch="${2:-}"
   [[ "$name" =~ $NAME_PATTERN ]] || die "usage: new <name> <branch>; name must match $NAME_PATTERN"
+  [[ ! "$name" =~ $RESERVED_NAME_SEGMENT ]] || die "name '$name' has a test/e2e/dev segment; pick another"
   [ -n "$branch" ] || die "usage: new <name> <branch>  (branch like chore/kebab-desc)"
-  local path="$WORKTREES/$name" slug="noma_dmrv_${name//-/_}"
-  local dev_db="$slug" test_db="${slug}_test"
+  # Distinct suffixes and hyphen-only names keep every name's two databases disjoint from
+  # every other name's.
+  local path="$WORKTREES/$name" slug="noma_dmrv_wt_${name//-/_}"
+  local dev_db="${slug}_dev" test_db="${slug}_test"
   docker exec "$PG_CONTAINER" true 2>/dev/null || die "container $PG_CONTAINER is not running (docker start $PG_CONTAINER)"
   [ ! -e "$path" ] || die "$path already exists"
+  # Before any claim, so a failure here leaves nothing behind.
+  local dev_url test_url
+  dev_url="$(db_url_for "$dev_db")"
+  test_url="$(db_url_for "$test_db")"
 
   mkdir -p "$PORT_CLAIMS"
   mkdir "$OWNERS/$name" 2>/dev/null || die "name '$name' is already claimed ($OWNERS/$name)"
@@ -90,14 +102,11 @@ cmd_new() {
       die "database $db already exists and is not ours; pick another name"
     fi
   done
-  local dev_url test_url
-  dev_url="$(db_url_for "$dev_db")"
-  test_url="$(db_url_for "$test_db")"
-
   local branch_created=1
   git -C "$MAIN" show-ref --verify --quiet "refs/heads/$branch" && branch_created=0
 
-  # Record first, so a failure below leaves something teardown can clean up.
+  # Record first, so a failure below leaves something teardown can clean up. Databases are
+  # added to the record only once CREATE succeeds, so teardown never drops one it did not make.
   {
     printf 'OWNER_SESSION=%q\n' "$SESSION"
     printf 'CREATED_AT=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -107,6 +116,7 @@ cmd_new() {
     printf 'WT_PORT=%q\n' "$port"
     printf 'WT_DEV_DB=%q\n' "$dev_db"
     printf 'WT_TEST_DB=%q\n' "$test_db"
+    printf 'WT_DBS_CREATED=%q\n' ""
   } > "$OWNERS/$name/owner"
   trap 'echo "worktree: new failed part-way; clean up with: scripts/worktree.sh teardown $name" >&2' ERR
 
@@ -127,8 +137,11 @@ cmd_new() {
   set_env "$path/.env.test" TEST_DATABASE_URL "$test_url"
   set_env "$path/.env.test" NEXT_PUBLIC_APP_URL "http://localhost:$port"
 
-  psql_admin "CREATE DATABASE \"$dev_db\"" >/dev/null
-  psql_admin "CREATE DATABASE \"$test_db\"" >/dev/null
+  for db in "$dev_db" "$test_db"; do
+    psql_admin "CREATE DATABASE \"$db\"" >/dev/null
+    WT_DBS_CREATED="${WT_DBS_CREATED:-} $db"
+    printf 'WT_DBS_CREATED=%q\n' "$WT_DBS_CREATED" >> "$OWNERS/$name/owner"
+  done
 
   info "installing dependencies"
   (cd "$path" && pnpm install --frozen-lockfile --silent)
@@ -173,7 +186,7 @@ cmd_status() {
       local server="down" missing=""
       port_listening "$WT_PORT" && server="up"
       [ -d "$WT_PATH" ] || missing="$missing worktree"
-      for db in "$WT_DEV_DB" "$WT_TEST_DB"; do
+      for db in ${WT_DBS_CREATED:-}; do
         printf '%s\n' "$dbs" | grep -qx "$db" || missing="$missing $db"
       done
       printf '%-22s %-6s %-9s %-14s %-40s %s\n' "$name" "$WT_PORT" "$server" "$(pr_state "$WT_BRANCH")" "$WT_BRANCH" "$OWNER_SESSION"
@@ -207,33 +220,45 @@ cmd_status() {
 # pnpm wrapper that launched it) and wait for them to exit, or they write into .next while
 # git removes the directory. Processes running elsewhere are never touched.
 stop_processes_in() {
-  local dir="$1" pids="" pid cwd waited=0
+  local dir="$1" pids="" pid cwd waited=0 ancestors=" " ancestor=$$
+  # Never this script or whatever launched it.
+  while [ -n "$ancestor" ] && [ "$ancestor" -gt 1 ]; do
+    ancestors="$ancestors$ancestor "
+    ancestor="$(ps -o ppid= -p "$ancestor" 2>/dev/null | tr -d ' ')"
+  done
   while IFS= read -r line; do
     case "$line" in
       p*) pid="${line#p}" ;;
-      n*) cwd="${line#n}"; case "$cwd" in "$dir" | "$dir"/*) pids="$pids $pid" ;; esac ;;
+      n*)
+        cwd="${line#n}"
+        case "$ancestors" in *" $pid "*) continue ;; esac
+        case "$cwd" in "$dir" | "$dir"/*) pids="$pids $pid" ;; esac
+        ;;
     esac
   done < <(lsof -nP -d cwd -Fpn 2>/dev/null)
   [ -n "$pids" ] || return 0
   # shellcheck disable=SC2086
   kill $pids 2>/dev/null || true
   info "stopped processes running in the worktree:$pids"
-  while [ "$waited" -lt 20 ]; do
+  while [ "$waited" -lt "$STOP_WAIT_TICKS" ]; do
     local alive=0
     for pid in $pids; do kill -0 "$pid" 2>/dev/null && alive=1; done
     [ "$alive" = 1 ] || return 0
-    sleep 0.5; waited=$((waited + 1))
+    sleep "$STOP_TICK_SECONDS"; waited=$((waited + 1))
   done
-  info "processes still running after 10s:$pids"
+  info "processes still running after waiting $STOP_WAIT_TICKS x ${STOP_TICK_SECONDS}s:$pids"
 }
 
 cmd_teardown() {
   local name="${1:-}" force="${2:-}"
   [ -n "$name" ] || die "usage: teardown <name> [--force]"
   read_owner "$name"
-  if [ "$OWNER_SESSION" != "$SESSION" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ] && [ "$force" != "--force" ]; then
+  if [ "$OWNER_SESSION" != "$SESSION" ] && [ "$force" != "--force" ]; then
     die "'$name' belongs to session $OWNER_SESSION; check with that session, then rerun with --force"
   fi
+  case "$PWD/" in
+    "$WT_PATH"/*) die "run teardown from outside $WT_PATH (e.g. cd \"$MAIN\")" ;;
+  esac
 
   if [ -d "$WT_PATH" ]; then
     git -C "$MAIN" worktree list --porcelain | grep -qxF "worktree $WT_PATH" ||
@@ -247,7 +272,7 @@ cmd_teardown() {
   fi
   git -C "$MAIN" worktree prune
 
-  for db in "$WT_DEV_DB" "$WT_TEST_DB"; do
+  for db in ${WT_DBS_CREATED:-}; do
     psql_admin "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE)" >/dev/null
     info "dropped $db"
   done
@@ -269,5 +294,5 @@ case "${1:-}" in
   new) shift; cmd_new "$@" ;;
   status) cmd_status ;;
   teardown) shift; cmd_teardown "$@" ;;
-  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,/^set -euo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

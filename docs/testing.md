@@ -61,8 +61,8 @@ CI prepares the schema before `vitest run` for exactly this reason.
 ### Vitest only runs against a throwaway database
 
 Some root suites truncate organizations. `tests/setup.ts` therefore refuses to
-start unless the effective database is on localhost and its name has a `test`
-or `e2e` segment (`noma_dmrv_test`, `noma_dmrv_<worktree>_test`); the rule
+start unless the effective database is on localhost, its name has a `test`
+or `e2e` segment, and no `host`/`database` query parameter overrides the URL (`noma_dmrv_test`, `noma_dmrv_wt_<worktree>_test`); the rule
 lives in `tests/helpers/throwaway-database.ts`. `noma_dmrv_dev` is always
 refused.
 
@@ -90,8 +90,9 @@ scripts/worktree.sh status                      # owners, ports, servers, PR sta
 scripts/worktree.sh teardown <name>             # only what `new` recorded for <name>
 ```
 
-`new` creates `noma_dmrv_<name>` (dev server and Playwright fixtures) and
-`noma_dmrv_<name>_test` (Vitest), claims a free port from 3101, writes both into
+`new` creates `noma_dmrv_wt_<name>_dev` (dev server and Playwright fixtures) and
+`noma_dmrv_wt_<name>_test` (Vitest), refuses names with a `test`, `e2e` or `dev`
+segment, claims a free port from 3101, writes both into
 copies of `.env.local` and `.env.test`, installs, resets the dev DB and migrates
 the test DB. It cuts the branch with `--no-track`, so a bare `git push` never
 targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
@@ -103,9 +104,10 @@ targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
   commands: a leading `!` in zsh is history expansion or negation.
 - Playwright reads the worktree's `NEXT_PUBLIC_APP_URL`, so it reuses or starts
   the worktree's own server.
-- `teardown` refuses while the worktree has uncommitted changes, and refuses a
-  worktree another Claude session created unless you pass `--force` after
-  checking with it. It stops only processes running inside the worktree and
+- `teardown` runs from outside the worktree and refuses while it has uncommitted
+  changes. A worktree another session (or you, from a terminal) created needs
+  `--force`, after checking with its owner. It stops only processes running
+  inside the worktree, drops only databases `new` recorded as created, and
   deletes the branch only if it is merged.
 - `status` lists worktrees and `noma_dmrv_*` databases the script did not
   create. Another session may own them: ask before removing anything.
@@ -131,7 +133,8 @@ spec that creates a table it doesn't yet sweep.
 
 - `playwright.config.ts` **throws** unless `NEXT_PUBLIC_APP_URL` resolves to
   localhost/127.0.0.1 — deliberate, so E2E can never point at staging or production.
-- `global-teardown.ts` aborts against any DB that is not on localhost/127.0.0.1. Locally
+- `global-teardown.ts` aborts against any DB that is not on a local host (the shared
+  `isLocalDatabaseHost` in `tests/helpers/throwaway-database.ts`). Locally
   it sweeps the dev DB the server uses, by prefix only. It defaults `DATABASE_URL` to
   `…/app_template_test`, so a misconfigured run tears down the *wrong DB name* rather than
   erroring — set `DATABASE_URL` explicitly.

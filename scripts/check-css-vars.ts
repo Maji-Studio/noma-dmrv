@@ -47,8 +47,10 @@ const LIBRARY_PREFIXES = ["--tw-"];
 const NAME = "--[A-Za-z0-9_-]+";
 /** `--x:` not preceded by a name character, so `var(--x)` never matches. */
 const CSS_DECLARATION = new RegExp(`(?<![\\w-])(${NAME})\\s*:`, "g");
-/** A string literal holding only the name: style-object keys and setProperty. */
-const QUOTED_NAME = new RegExp(`["'\`](${NAME})["'\`]`, "g");
+/** A quoted style-object key: `"--x": v` or `["--x" as string]: v`. */
+const STYLE_KEY = new RegExp(`["'\`](${NAME})["'\`]\\s*(?:as\\s+\\w+\\s*)?\\]?\\s*:`, "g");
+/** A runtime write. Reads (`getPropertyValue`, `removeProperty`) define nothing. */
+const SET_PROPERTY = new RegExp(`setProperty\\(\\s*["'\`](${NAME})["'\`]`, "g");
 /** `var(--x` with what follows it: `,` (fallback), `$` (interpolation) or `)`. */
 const VAR_USE = new RegExp(`var\\(\\s*(${NAME})\\s*([,)$]?)`, "g");
 /** Tailwind v4 shorthand: `p-(--x)` reads `var(--x)`. */
@@ -64,7 +66,8 @@ export interface CssVarUse {
 export function extractDefinitions(text: string): Set<string> {
   const names = new Set<string>();
   for (const match of text.matchAll(CSS_DECLARATION)) names.add(match[1]);
-  for (const match of text.matchAll(QUOTED_NAME)) names.add(match[1]);
+  for (const match of text.matchAll(STYLE_KEY)) names.add(match[1]);
+  for (const match of text.matchAll(SET_PROPERTY)) names.add(match[1]);
   return names;
 }
 
