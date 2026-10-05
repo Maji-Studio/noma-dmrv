@@ -40,9 +40,9 @@ two oversized data-access files. Still open:
   narrowed React Query invalidation, and `revalidatePath` on key mutations.
 - **Phase 4 (remainder) — file size.** `src/db/seed-data.ts` remains well over
   the 1000-line cap while the previously flagged oversized forms have been
-  split. Flipping `max-lines` from `warn` to `error` requires finishing
-  `db/seed-modularization` above — **and removing `src/db/seed-data.ts` from the
-  eslint `ignores` array**, which is why the lint does not flag it today.
+  split. `max-lines` is now an error; what remains is finishing
+  `db/seed-modularization` above and then removing `src/db/seed-data.ts` from the
+  eslint `ignores` array.
 ### Structural / cross-cutting
 
 - **Duplicate-hooks factory** (`code/hooks-factory`). The

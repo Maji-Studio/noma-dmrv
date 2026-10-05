@@ -45,7 +45,8 @@ inside them, is **silently never run**. Put it in the right directory.
   row that sign-out deletes, and writes no entity rows. The other
   `FORM_CAPTURE_*` knobs (label, output dir, family, surfaces, viewports,
   facility) and the output are documented at the top of
-  `tests/visual/form-capture.spec.ts`.
+  `tests/visual/form-capture.spec.ts`. `tests/visual/site-capture.spec.ts`
+  (`SITE_CAPTURE=1`) does the same for the marketing site's pages, with no sign-in.
 
 ## vitest specs are not all unit tests
 
@@ -56,6 +57,60 @@ imports. `tests/setup.ts` applies to every Vitest spec, loads `.env.test`, and
 defaults `DATABASE_URL`. Without `pnpm docker:up` database-backed specs fail
 with a raw connection error that looks nothing like "you forgot the database".
 CI prepares the schema before `vitest run` for exactly this reason.
+
+### Vitest only runs against a throwaway database
+
+Some root suites truncate organizations. `tests/setup.ts` therefore refuses to
+start unless the effective database is on localhost, its name has a `test`
+or `e2e` segment, and no `host`/`database` query parameter overrides the URL (`noma_dmrv_test`, `noma_dmrv_wt_<worktree>_test`); the rule
+lives in `tests/helpers/throwaway-database.ts`. `noma_dmrv_dev` is always
+refused.
+
+Vitest reads `TEST_DATABASE_URL` before `DATABASE_URL`. Keep both in
+`.env.test`: Playwright reads only `DATABASE_URL`, which must stay the database
+of the dev server its fixtures seed. One-time local setup:
+
+```bash
+docker exec noma-dmrv-postgres psql -U postgres -c "CREATE DATABASE noma_dmrv_test"
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_test pnpm db:migrate
+echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_test" >> .env.test
+```
+
+Re-run the migrate line after pulling new migrations. A worktree made with
+`scripts/worktree.sh` gets its own test database.
+
+## Worktrees
+
+Parallel sessions each work in their own worktree, one writer per worktree.
+`scripts/worktree.sh` sets one up so it shares nothing with the main checkout:
+
+```bash
+scripts/worktree.sh new <name> <type/branch>   # .claude/worktrees/<name>, cut from origin/staging
+scripts/worktree.sh status                      # owners, ports, servers, PR state, unmanaged leftovers
+scripts/worktree.sh teardown <name>             # only what `new` recorded for <name>
+```
+
+`new` creates `noma_dmrv_wt_<name>_dev` (dev server and Playwright fixtures) and
+`noma_dmrv_wt_<name>_test` (Vitest), refuses names with a `test`, `e2e` or `dev`
+segment, claims a free port from 3101, writes both into
+copies of `.env.local` and `.env.test`, installs, resets the dev DB and migrates
+the test DB. It cuts the branch with `--no-track`, so a bare `git push` never
+targets `staging`. It does not seed; run `pnpm db:seed` there if you need data.
+
+- Start the dev server with the one-line command `new` prints, in your own
+  terminal: background commands from an agent stop after two hours. Don't use
+  `pnpm dev` in a worktree; it runs `docker compose up` and binds :3100. When
+  pasting into zsh, drop the `!` that the Claude Code prompt uses for shell
+  commands: a leading `!` in zsh is history expansion or negation.
+- Playwright reads the worktree's `NEXT_PUBLIC_APP_URL`, so it reuses or starts
+  the worktree's own server.
+- `teardown` runs from outside the worktree and refuses while it has uncommitted
+  changes. A worktree another session (or you, from a terminal) created needs
+  `--force`, after checking with its owner. It stops only processes running
+  inside the worktree, drops only databases `new` recorded as created, and
+  deletes the branch only if it is merged.
+- `status` lists worktrees and `noma_dmrv_*` databases the script did not
+  create. Another session may own them: ask before removing anything.
 
 ## E2E data naming is a hard contract
 
@@ -78,15 +133,18 @@ spec that creates a table it doesn't yet sweep.
 
 - `playwright.config.ts` **throws** unless `NEXT_PUBLIC_APP_URL` resolves to
   localhost/127.0.0.1 — deliberate, so E2E can never point at staging or production.
-- `global-teardown.ts` aborts against a DB that is neither localhost nor named
-  `*_test`/`*_e2e`. It defaults `DATABASE_URL` to `…/app_template_test`, so a misconfigured
-  run tears down the *wrong DB name* rather than erroring — set `DATABASE_URL` explicitly.
+- `global-teardown.ts` aborts against any DB that is not on a local host (the shared
+  `isLocalDatabaseHost` in `tests/helpers/throwaway-database.ts`). Locally
+  it sweeps the dev DB the server uses, by prefix only. It defaults `DATABASE_URL` to
+  `…/app_template_test`, so a misconfigured run tears down the *wrong DB name* rather than
+  erroring — set `DATABASE_URL` explicitly.
+- `tests/setup.ts` refuses any Vitest database that is not a local throwaway (above).
 
 ## Environment
 
 `playwright.config.ts` loads **`.env.test` only, never `.env.local`** — Playwright-side
-vars belong in `.env.test`. `.env.test` is untracked; when running from a git worktree,
-copy both `.env.test` and `.env.local` in first.
+vars belong in `.env.test`. `.env.test` is untracked; a worktree made with
+`scripts/worktree.sh` gets both files (see [Worktrees](#worktrees)).
 
 - `DISABLE_RATE_LIMIT=true` is an **app-server** var (read by `src/lib/auth/better-auth.ts`),
   so locally it lives in `.env.local` where `pnpm dev:manual` sees it; CI sets it as a
@@ -132,10 +190,14 @@ retry**. Specs must not assume ordering across files, workers, or shards.
 
 ## Gotchas
 
-- `playwright.config.ts` starts or reuses the app on :3100 — don't pre-launch a second one.
+- `playwright.config.ts` starts or reuses the app on the port in `NEXT_PUBLIC_APP_URL`
+  (:3100 in the main checkout) — don't pre-launch a second one.
 - Local runs use dev mode, where first-hit Turbopack compilation is legitimately slow; the
   generous per-test timeout absorbs it. Don't shorten it to "catch hangs".
-- Duplicate-key errors → `pnpm db:reset`, then re-run (and check your naming, above).
+- Duplicate-key errors → check your naming (above) first. To reset, name the target:
+  `pnpm db:reset` wipes whatever `DATABASE_URL` in `.env.local` points at, which in the
+  main checkout is the live dev database. For a Vitest-only problem reset the test DB instead:
+  `DATABASE_URL=<TEST_DATABASE_URL> pnpm db:reset`.
 - A side sheet is `[role="dialog"]`; assert on the sheet **closing** as the success signal.
 - A DataTable `<tr>` becomes `role="button"` when `onRowClick` is set — select with
   `getByRole("button")`, not `getByRole("row")`.

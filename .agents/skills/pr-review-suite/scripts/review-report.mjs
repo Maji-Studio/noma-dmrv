@@ -30,7 +30,7 @@ export function worstSeverity(reports) {
     )[0];
 }
 
-export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractices }) {
+export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractices, omittedFiles = [] }) {
   const sections = [
     COMMENT_MARKER,
     "# Codex + Opus PR review suite",
@@ -41,6 +41,14 @@ export function aggregateReport({ pr, baseSha, headSha, reports, skippedPractice
     "",
     "> Advisory model output. Verify every finding against the code before changing it.",
   ];
+  if (omittedFiles.length > 0) {
+    sections.push(
+      "",
+      `Generated files left out of the reviewed diff (${omittedFiles.length}): ${omittedFiles
+        .map((path) => `\`${path}\``)
+        .join(", ")}`,
+    );
+  }
 
   for (const practice of DEFAULT_PRACTICES) {
     if (skippedPractices.has(practice)) {

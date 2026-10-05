@@ -8,7 +8,7 @@
  * noma's connectors and nodes carry --at (ms into the stage's playhead) so they draw and light in order.
  */
 const { kind, light: LIGHT = 1300 } = Astro.props;
-const at = (ms) => `--at:${ms}ms`;
+const at = (ms: number) => `--at:${ms}ms`;
 ---
 <svg class={`wc-svg wc-svg--${kind}`} viewBox="0 0 240 168" aria-hidden="true" focusable="false">
   {kind === "sheet" && <>

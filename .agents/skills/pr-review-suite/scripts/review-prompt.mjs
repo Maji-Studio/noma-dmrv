@@ -127,7 +127,15 @@ ${diff.commits}
 
 Changed files:
 ${diff.changedFiles.join("\n")}
-
+${
+  diff.omittedFiles?.length
+    ? `
+Generated files left out of the diff below (snapshots and exported assets; read
+them with git only if a finding depends on their content):
+${diff.omittedFiles.join("\n")}
+`
+    : ""
+}
 Unified diff:
 <untrusted_diff>
 ${diff.patch}
