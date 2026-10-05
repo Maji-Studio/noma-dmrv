@@ -12,7 +12,7 @@
  */
 const OPERATOR_MESSAGES: Record<string, string> = {
   "Insufficient exact dry solids":
-    "Not enough dry biochar in the selected bin for this wet mass at this moisture. The bin's wet stock reads high when its biochar has dried. Reduce the wet mass or choose another bin.",
+    "Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.",
   "Draw must be positive":
     "Enter a wet mass above zero.",
   "Draw is below one gram of dry biochar; increase the measured mass":

@@ -4,7 +4,7 @@ import { calculatedWithoutNotice, operatorStockMessage } from './messages';
 describe('operator stock messages', () => {
   it('replaces the ledger vocabulary with the field the operator must change', () => {
     expect(operatorStockMessage('Insufficient exact dry solids')).toBe(
-      "Not enough dry biochar in the selected bin for this wet mass at this moisture. The bin's wet stock reads high when its biochar has dried. Reduce the wet mass or choose another bin.",
+      "Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.",
     );
   });
 
