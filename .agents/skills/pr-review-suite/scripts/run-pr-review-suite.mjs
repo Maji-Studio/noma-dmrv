@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
@@ -30,6 +30,15 @@ import {
 } from "./review-runtime.mjs";
 
 const MAX_DIFF_CHARS = 500_000;
+// Generated payloads the models read nothing useful from: one drizzle snapshot
+// alone (~390k chars) used to push a routine schema PR past MAX_DIFF_CHARS.
+// They stay in the changed-file list, and the report names what was left out.
+// SQL migrations and lockfiles are not generated payloads; they stay in.
+const GENERATED_PAYLOAD_GLOBS = [
+  "drizzle/meta/*_snapshot.json",
+  "site/src/components/site/contours/*.svg",
+  "src/lib/isometric/generated/**",
+];
 const MAX_COMMENT_CHARS = 60_000;
 const INTERRUPT_EXIT_CODE = 130;
 const SKILL_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -107,18 +116,22 @@ async function getDiffMetadata(baseRef, cwd) {
   const commits = (
     await git(["log", `${baseRef}..HEAD`, "--oneline"], { cwd })
   ).stdout.trim();
+  const omittedFiles = changedFiles.filter((path) =>
+    GENERATED_PAYLOAD_GLOBS.some((glob) => matchesScope(path, glob)),
+  );
+  const excludes = GENERATED_PAYLOAD_GLOBS.map((glob) => `:(exclude,glob)${glob}`);
   const patch = (
     await git(
-      ["diff", "--no-ext-diff", "--unified=5", diffRange],
+      ["diff", "--no-ext-diff", "--unified=5", diffRange, "--", ".", ...excludes],
       { cwd },
     )
   ).stdout;
   if (patch.length > MAX_DIFF_CHARS) {
     throw new Error(
-      `Diff is ${patch.length} characters; limit is ${MAX_DIFF_CHARS}. Split the PR or run a targeted manual review.`,
+      `Diff is ${patch.length} characters without ${omittedFiles.length} generated file(s); limit is ${MAX_DIFF_CHARS}. Split the PR or run a targeted manual review.`,
     );
   }
-  return { diffRange, changedFiles, commits, patch };
+  return { diffRange, changedFiles, omittedFiles, commits, patch };
 }
 
 function safeRead(path) {
@@ -523,7 +536,7 @@ async function removeReviewWorktree(cwd, worktree) {
   }
 }
 
-function selfTest() {
+async function selfTest() {
   const sample = {
     practice: "standards",
     findings: [
@@ -610,6 +623,47 @@ function selfTest() {
       throw new Error(`prompt self-test failed for ${practice}`);
     }
   }
+  const generated = (path) => GENERATED_PAYLOAD_GLOBS.some((glob) => matchesScope(path, glob));
+  if (
+    !generated("drizzle/meta/0121_snapshot.json") ||
+    !generated("site/src/components/site/contours/sample.svg") ||
+    generated("drizzle/0121_add_bins.sql") ||
+    generated("drizzle/meta/_journal.json") ||
+    generated("pnpm-lock.yaml")
+  ) {
+    throw new Error("generated-payload self-test failed");
+  }
+  // A 600k-char diff whose bulk is a snapshot must still fit, through the real
+  // git path rather than a stub.
+  const repo = mkdtempSync(join(tmpdir(), "review-suite-selftest-"));
+  const inRepo = (args) => git(args, { cwd: repo });
+  await inRepo(["init", "-q"]);
+  await inRepo(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "base"]);
+  mkdirSync(join(repo, "drizzle/meta"), { recursive: true });
+  writeFileSync(join(repo, "drizzle/meta/0999_snapshot.json"), `${"x".repeat(600_000)}\n`);
+  writeFileSync(join(repo, "drizzle/0999_example.sql"), "ALTER TABLE t ADD COLUMN c int;\n");
+  await inRepo(["add", "."]);
+  await inRepo(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "snapshot"]);
+  const bigDiff = await getDiffMetadata("HEAD~1", repo);
+  rmSync(repo, { recursive: true, force: true });
+  if (
+    bigDiff.omittedFiles.join() !== "drizzle/meta/0999_snapshot.json" ||
+    !bigDiff.patch.includes("0999_example.sql") ||
+    bigDiff.patch.length > MAX_DIFF_CHARS
+  ) {
+    throw new Error("generated-payload diff self-test failed");
+  }
+  const omittedReport = aggregateReport({
+    pr: { number: 1, url: "https://github.com/example/repo/pull/1", baseRefName: "staging" },
+    baseSha: "a".repeat(40),
+    headSha: "b".repeat(40),
+    reports: [],
+    skippedPractices: new Set(),
+    omittedFiles: ["drizzle/meta/0121_snapshot.json"],
+  });
+  if (!omittedReport.includes("drizzle/meta/0121_snapshot.json")) {
+    throw new Error("omitted-files report self-test failed");
+  }
   if (truncateForComment("x".repeat(200), 100, "/artifacts").length > 100) {
     throw new Error("comment truncation self-test failed");
   }
@@ -631,7 +685,7 @@ async function main() {
     return;
   }
   if (options.mode === "self-test") {
-    selfTest();
+    await selfTest();
     return;
   }
 
@@ -709,6 +763,7 @@ async function main() {
       diffRange: diff.diffRange,
       changedFiles: diff.changedFiles,
       commits: diff.commits,
+      omittedFiles: diff.omittedFiles,
       patchChars: diff.patch.length,
     },
     spec,
@@ -814,6 +869,7 @@ async function main() {
       headSha,
       reports,
       skippedPractices,
+      omittedFiles: diff.omittedFiles,
     }),
   );
   const failures = reports.filter((report) => report.error);
