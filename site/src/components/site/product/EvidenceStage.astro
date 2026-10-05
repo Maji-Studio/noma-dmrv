@@ -26,9 +26,9 @@ const PAIRS = [
   { record: { label: "Lab result", meta: "Attached", from: "Missing" }, registry: { label: "Carbon content", meta: "48%" }, draw: 3000 },
   { record: { label: "Weighbridge ticket", meta: "2,400 kg" }, registry: { label: "Feedstock mass", meta: "2,400 kg" }, draw: 1600 },
 ];
-const fill = (p) => p.draw + T.wireDur;
+const fill = (p: { draw: number }) => p.draw + T.wireDur;
 const FIELD_Y = [44, 76, 108];
-const ms = (n) => `${n}ms`;
+const ms = (n: number) => `${n}ms`;
 const ALT = "Animated diagram with illustrative records. On the left, feedstock delivery FD-2026-014, a truck on the weighbridge, and its evidence: a moisture reading of 12%, a lab result that starts out missing and then arrives, and a weighbridge ticket for 2,400 kg. On the right, the certifier's review window with a certification seal. Each record maps across to the certifier's own field: moisture reading to moisture content, 12%; lab result to carbon content, 48%; weighbridge ticket to feedstock mass, 2,400 kg. Once all three are filled, the seal closes and the submission is approved.";
 ---
 <Stage

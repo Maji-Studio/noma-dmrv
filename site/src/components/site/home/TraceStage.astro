@@ -35,7 +35,7 @@ const STEPS = [
 const REST = "application"; // open at rest (no JS, reduced motion)
 // The playhead crosses one leg of the rail per step, in percent of --dur-stage.
 const LEG = 100 / (STEPS.length - 1);
-const when = (p) => `calc(var(--dur-stage) * ${p} / 100)`;
+const when = (p: number) => `calc(var(--dur-stage) * ${p} / 100)`;
 const ALT = "Timeline of illustrative records for one application: feedstock delivery FD-001, 1,000 kg wet; production run PR-001, 270 kg of dry biochar; mix bin holding 540 kg dry from two runs; biochar product BP-001, 540 kg dry; delivery DL-001, 270 kg dry; application on the coffee field, 270 kg dry. Each step opens a line drawing of its station and what its record holds.";
 ---
 <Stage
@@ -60,7 +60,7 @@ const ALT = "Timeline of illustrative records for one application: feedstock del
             )}
             <span class="ts-mark" aria-hidden="true"><StageDot state="on" delay={when(i * LEG)} /></span>
             <button type="button" class="ts-text stg-fade" style={`--delay:${when(i * LEG)}`} aria-controls={`ts-view-${s.id}`} aria-current={s.id === REST ? "step" : undefined}>
-              <svg class="ts-icon" viewBox={ICON_VIEWBOX} aria-hidden="true" set:html={TRACE_ICONS[s.id]} />
+              <svg class="ts-icon" viewBox={ICON_VIEWBOX} aria-hidden="true" set:html={TRACE_ICONS[s.id as keyof typeof TRACE_ICONS]} />
               <span class="ts-label">{s.label}</span>
               <span class="ts-meta ts-code">{s.code}</span>
               <span class="ts-meta ts-qty">{s.qty}</span>
@@ -71,7 +71,7 @@ const ALT = "Timeline of illustrative records for one application: feedstock del
       <div class="ts-view" aria-live="polite">
         {STEPS.map((s) => (
           <RecordCard class={s.id === REST ? "ts-card is-active" : "ts-card"} id={`ts-view-${s.id}`} data-step={s.id} inert={s.id !== REST}
-            tone="stage" station={s.id} scope="ts" label={s.label} code={s.code} line={STATION_LINES[s.id]} holds={s.holds} />
+            tone="stage" station={s.id} scope="ts" label={s.label} code={s.code} line={STATION_LINES[s.id as keyof typeof STATION_LINES]} holds={s.holds} />
         ))}
       </div>
     </div>

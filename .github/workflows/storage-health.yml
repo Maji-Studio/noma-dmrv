@@ -75,9 +75,8 @@ jobs:
 
       - name: Setup pnpm
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         if: ${{ env.LOAD_OP_SECRETS == 'true' }}

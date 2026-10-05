@@ -23,7 +23,7 @@ const [l1, l2, l3] = BIN_LAYERS;
 const KG_PER_SQ = 10;
 const M = 15; // % moisture, the same in every layer and at departure
 const DRAW = 400; // kg dry biochar drawn
-const waterOf = (dry) => (dry * M) / (100 - M);
+const waterOf = (dry: number) => (dry * M) / (100 - M);
 const TOTAL = l1.dry + l2.dry + l3.dry; // 810
 const WATER_IN = Math.round(waterOf(TOTAL)); // 143
 const FROM_L1 = Math.min(DRAW, l1.dry); // 270
@@ -32,7 +32,7 @@ const WATER = Math.round(waterOf(DRAW)); // 71
 const WET = DRAW + WATER; // 471
 const FIELD_HA = 0.2; // illustrative field size
 const RATE = DRAW / (FIELD_HA * 1000); // t dry biochar per hectare: 2
-const kg = (n) => `${n}\u00a0kg`; // no-break space: a figure never splits from its unit
+const kg = (n: number) => `${n}\u00a0kg`; // no-break space: a figure never splits from its unit
 
 const SQ = 16, P = 20, INSET = (P - SQ) / 2;
 const BX = 28, BY = 240, BIN_COLS = 10;
@@ -42,15 +42,15 @@ const GY = 176; // field ground; the sown squares sit in the topsoil between GY 
 const SPEED = 200; // tractor speed, units per second
 const T0 = -140; // hopper x when the tractor sets off, the whole tractor still left of the picture
 const DRIVE = 840; // distance the tractor drives, until it has left on the right
-const passMs = (x) => Math.round(((x - T0) / SPEED) * 1000); // when the hopper is over x
+const passMs = (x: number) => Math.round(((x - T0) / SPEED) * 1000); // when the hopper is over x
 // Field in the topsoil: rows run down from just under the ground.
-const sown = (n) => ({ x: FX + (n % FIELD_COLS) * P + INSET, y: GY + 10 + Math.floor(n / FIELD_COLS) * P + INSET });
+const sown = (n: number) => ({ x: FX + (n % FIELD_COLS) * P + INSET, y: GY + 10 + Math.floor(n / FIELD_COLS) * P + INSET });
 const DROP = 120; // how far above the bin the squares start before the fill; the picture clips, so the top rows fall in from its edge
-const at = (x0, cols, n) => ({ x: x0 + (n % cols) * P + INSET, y: BY - (Math.floor(n / cols) + 1) * P + INSET });
+const at = (x0: number, cols: number, n: number) => ({ x: x0 + (n % cols) * P + INSET, y: BY - (Math.floor(n / cols) + 1) * P + INSET });
 
 // Bottom-up, oldest layer first. Each layer is its biochar squares with its water squares spread evenly
 // through them; index i is the square's place in the full bin.
-const layerSquares = (l, k) => {
+const layerSquares = (l: { dry: number }, k: number) => {
   const dry = Math.round(l.dry / KG_PER_SQ);
   const wet = Math.round(waterOf(l.dry) / KG_PER_SQ);
   const len = dry + wet;

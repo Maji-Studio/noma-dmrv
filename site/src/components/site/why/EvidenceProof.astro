@@ -12,7 +12,7 @@ const FILES = [
   { kind: "photo", name: "Photos of the load", meta: "2" },
 ];
 const CHECKS = [["Traced to feedstock", true], ["Moisture at every draw", true], ["Transport, counted both ways", true], ["Field boundary and photos", true], ["Lab result for PR-002", false]];
-const ICONS = {
+const ICONS: Record<string, string> = {
   doc: `<path d="M1 1h7l3 3v9H1z M8 1v3h3" />`,
   reading: `<rect x="1" y="1" width="12" height="12" /><path d="M4 9l2-3 2 2 2-4" />`,
   photo: `<path d="M1 3h3l1-2h4l1 2h3v9H1z" /><circle cx="7" cy="7.5" r="2.2" />`,

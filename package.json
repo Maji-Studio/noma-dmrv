@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Maji dMRV - Biochar carbon credit MRV system",
   "private": true,
+  "packageManager": "pnpm@11.28.2",
   "scripts": {
     "dev": "pnpm dev:docker",
     "dev:docker": "pnpm docker:up && pnpm db:wait && pnpm db:assert-local && pnpm db:migrate && pnpm db:verify-schema && next dev -p 3100",
@@ -34,6 +35,7 @@
     "check:org-scoping": "tsx scripts/check-org-scoping.ts",
     "check:server-action-exports": "tsx scripts/check-server-action-exports.ts",
     "check:spacing-scale": "tsx scripts/check-spacing-scale.ts",
+    "check:css-vars": "tsx scripts/check-css-vars.ts",
     "check:ux-copy": "tsx scripts/check-ux-copy.ts",
     "docs:check": "node scripts/check-doc-references.mjs",
     "test": "vitest",

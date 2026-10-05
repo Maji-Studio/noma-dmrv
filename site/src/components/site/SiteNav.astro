@@ -11,7 +11,7 @@ import Logo from "./Logo.astro";
 import Button from "./Button.astro";
 import TextLink from "./TextLink.astro";
 const { current } = Astro.props;
-const here = (key) => (key === current ? "page" : undefined);
+const here = (key: string) => (key === current ? "page" : undefined);
 ---
 <header class="site-header">
   <GridFrame as="div" rule={false} cross={false} pad="none">

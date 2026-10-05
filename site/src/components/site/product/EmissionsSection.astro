@@ -59,27 +59,28 @@ const ICONS = {
 // drop one per STEP; after a short pause the net column grows and lights.
 const T = { stored: 0, step0: 1000, step: 340, netPause: 260 };
 
-const STEPS = [];
+type Item = { key: string; kind: string; icon: string; name: string; group: number; top: number; bottom: number; at: number; label?: string; record?: string; kg?: number; activity?: string; basis?: string; from?: string; transport?: boolean };
+const STEPS: (Item & { kg: number })[] = [];
 let level = STORED;
 GROUPS.forEach((g, gi) => g.lines.forEach((l) => {
   STEPS.push({ ...l, kind: "step", record: g.record, group: gi + 1, top: level, bottom: level - l.kg, at: T.step0 + STEPS.length * T.step });
   level -= l.kg;
 }));
 const NET_AT = T.step0 + STEPS.length * T.step + T.netPause;
-const ITEMS = [
+const ITEMS: Item[] = [
   { key: "stored", kind: "stored", icon: "soil", name: "Carbon stored", group: 0, top: STORED, bottom: 0, at: T.stored, label: String(STORED) },
   ...STEPS.map((s) => ({ ...s, label: `${MINUS}${s.kg}` })),
   { key: "net", kind: "net", icon: "sprout", name: "Net removal", group: GROUPS.length + 1, top: NET, bottom: 0, at: NET_AT, label: String(NET) },
 ];
 // Level carried from each item to the next one: the stored top, each step's bottom (the net top is the last).
-const levelAfter = (it) => (it.kind === "step" ? it.bottom : it.top);
+const levelAfter = (it: Item) => (it.kind === "step" ? it.bottom : it.top);
 
 // Vertical chart
 const CW = 56, P = 100, G = 40, X0 = 56, IC = 26;
 const BASE = 380, S = (BASE - 44) / STORED;
 const VW = 990, VH = 480;
-const y = (v) => BASE - v * S;
-const colX = (i, it) => X0 + i * P + it.group * G;
+const y = (v: number) => BASE - v * S;
+const colX = (i: number, it: Item) => X0 + i * P + it.group * G;
 const V = ITEMS.map((it, i) => ({ ...it, x: colX(i, it), cx: colX(i, it) + CW / 2 }));
 const TICKS = [0, 200, 400, 600];
 const BRACKETS = GROUPS.map((g, k) => {
@@ -89,7 +90,7 @@ const BRACKETS = GROUPS.map((g, k) => {
 });
 
 // Phone rows use HTML so labels and touch targets do not shrink with an SVG viewBox.
-const MOBILE_ROWS = [];
+const MOBILE_ROWS: (Item & { header?: undefined } | { header: true; group: number; label: string })[] = [];
 ITEMS.forEach((it) => {
   if (it.kind === "step" && !MOBILE_ROWS.some((r) => r.group === it.group)) {
     MOBILE_ROWS.push({ header: true, group: it.group, label: GROUPS[it.group - 1].record });
@@ -97,9 +98,9 @@ ITEMS.forEach((it) => {
   MOBILE_ROWS.push(it);
 });
 
-const ms = (n) => `${n}ms`;
-const kgFull = (n) => `${n.toLocaleString("en-GB")} kg CO₂e`;
-const ariaOf = (it) => it.kind === "step" ? `${it.name}, ${it.record}: ${MINUS}${it.kg} kg CO₂e` : `${it.name}: ${kgFull(it.top)}`;
+const ms = (n: number) => `${n}ms`;
+const kgFull = (n: number) => `${n.toLocaleString("en-GB")} kg CO₂e`;
+const ariaOf = (it: Item) => it.kind === "step" ? `${it.name}, ${it.record}: ${MINUS}${it.kg} kg CO₂e` : `${it.name}: ${kgFull(it.top)}`;
 ---
 <GridFrame id="emissions" pad="none" flush aria-labelledby="emissions-title">
 <svg class="em-sprite" aria-hidden="true" focusable="false">

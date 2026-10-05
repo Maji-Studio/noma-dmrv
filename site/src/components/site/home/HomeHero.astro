@@ -16,7 +16,7 @@ import ContourArt from "../contours/ContourArt.astro";
 import { STOPS } from "./hero-map/data.js";
 import "./home.css";
 import "./hero-map/hero-map.css";
-const pad = (n) => String(n).padStart(2, "0");
+const pad = (n: number) => String(n).padStart(2, "0");
 ---
 <section class="home-hero is-resting" aria-labelledby="home-title" data-home-hero>
   <div class="home-hero-steps gf">

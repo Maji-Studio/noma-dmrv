@@ -294,6 +294,12 @@ omit registry credentials.
   cooldown; never lower the global setting.
 - **Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the
   only packages permitted to run install scripts.
+- **One pnpm version** — `packageManager` in `package.json` and `site/package.json`
+  pins pnpm for local installs, every `pnpm/action-setup` step and both Vercel
+  projects (their build logs show "Detected … from package.json#packageManager").
+  Bump both files together, and to a release pnpm will install: Vercel's
+  install refused 11.13.0 as "a broken release". Overrides belong in
+  `pnpm-workspace.yaml`, the only place pnpm 11 reads them.
 - **Dependabot (security-only)** — `.github/dependabot.yml` sets
   `open-pull-requests-limit: 0` for the app (`/`) and the marketing site
   (`/site`), disabling routine version bumps; only security-fix PRs open.

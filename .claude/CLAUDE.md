@@ -53,6 +53,7 @@ Never skip layers · `fn/` always has `"use server"` and validates input with Zo
 - **Confirm the target branch before every commit** (`git branch --show-current`) — misplaced commits are a recurring failure mode.
 - Run git/gh operations as **discrete steps**, not chained `&&` one-liners.
 - Default PR base is `staging`; `staging` → `main` promotions are their own explicit step.
+- **One writer per worktree.** Cut new work with `scripts/worktree.sh new <name> <branch>` (own DBs, port, env); never branch in the main checkout. See `docs/testing.md#worktrees`.
 
 ## Review Remediation (CodeRabbit / Claude review / audits)
 

@@ -28,9 +28,8 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -64,6 +63,11 @@ jobs:
       # runtime rather than at build time. Nothing else catches it.
       - name: Spacing-scale check
         run: pnpm check:spacing-scale
+
+      # The same silence for custom properties: a var(--x) that nothing
+      # defines leaves the property at its initial value with no error.
+      - name: CSS custom-property check
+        run: pnpm check:css-vars
 
       # docs/ux-writing.md bans en and em dashes in user-facing copy; this
       # parses string literals and JSX text (never comments) to enforce it.
@@ -107,9 +111,8 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -155,9 +158,8 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm
+        # Version comes from packageManager in package.json.
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
