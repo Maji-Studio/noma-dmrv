@@ -245,9 +245,10 @@ export async function runOperation<Input extends z.ZodType, Output>(
     inFlightKeys.add(flightKey);
   }
 
+  const hooks: Array<() => Promise<void> | void> = [];
+  let committed: OperationResult<Output> | undefined;
   try {
     const client = await acquireBeforeDeadline(options.pool ?? db.$client, deadlineAt);
-    const hooks: Array<() => Promise<void> | void> = [];
     // Mutated inside the transaction callback; an object so the catch below
     // reads the live value rather than a narrowed literal.
     const state: { callback: "pending" | "returned" | "threw"; thrown?: unknown } = {
@@ -297,8 +298,7 @@ export async function runOperation<Input extends z.ZodType, Output>(
         }
       });
 
-      await runAfterCommitHooks(operation.id, hooks);
-      return { data, dryRun: false, replayed: false };
+      committed = { data, dryRun: false, replayed: false };
     } catch (error) {
       const cleanRollback = state.callback === "threw" && error === state.thrown;
       if (!cleanRollback) {
@@ -331,4 +331,11 @@ export async function runOperation<Input extends z.ZodType, Output>(
   } finally {
     if (flightKey) inFlightKeys.delete(flightKey);
   }
+
+  if (!committed) throw new Error("operation finished without a result");
+  // Hooks run once the connection is back in the pool and the key is free: at
+  // pool size 1 a hook reading through `db` would otherwise wait on this
+  // request's own connection.
+  await runAfterCommitHooks(operation.id, hooks);
+  return committed;
 }

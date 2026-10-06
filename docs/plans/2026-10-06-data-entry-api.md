@@ -392,4 +392,6 @@ Branch `feat/data-entry-api-spike`. Every exit criterion in section 10 is met; t
 - Session emulation refuses organization keys anyway; authenticate with `verifyApiKey` in `resolveApiContext`.
 - The plugin's default rate limit (10 requests per 24 h per key) must be replaced by the section 4 limiter.
 
+**Review.** gpt-6-astra reviewed the branch and raised two P2s, both fixed with regression tests: after-commit hooks now run after the connection is released (a hook reading through `db` at pool size 1 waited on the runner's own connection), and deleting an expired idempotency record runs under the claim budget, so a concurrent reclaim answers `idempotency_in_progress` instead of a raw lock timeout.
+
 **Phase 1 starts from:** moving the feedstock actions onto `runOperation` (and updating `docs/architecture.md`, which still names `fn/**/*-core.ts`), the registry, `DomainError` codes and `issues` in `ActionResult`, the `version` column, and CI on the migration chain.

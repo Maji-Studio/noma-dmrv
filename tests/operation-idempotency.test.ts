@@ -189,6 +189,40 @@ describe("idempotency claim protocol", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(reclaimed.kind).toBe("owner");
     await second.rollback();
   });
+
+  it("answers a concurrent reclaim of the same expired key as still running", async () => {
+    const key = crypto.randomUUID();
+    const first = await openTransaction();
+    const owner = await claimIdempotencyKey(fixture.ctx, first.tx, claimFor(key));
+    if (owner.kind !== "owner") throw new Error("expected to own the key");
+    await recordIdempotencyOutcome(fixture.ctx, first.tx, owner.recordId, { ok: true });
+    await first.commit();
+
+    // Another reclaimer has read the expired record and is deleting it: it
+    // holds the row, as its DELETE would, but has not inserted a new one yet.
+    const reclaimer = await openTransaction();
+    await reclaimer.tx
+      .select({ id: apiIdempotencyRecords.id })
+      .from(apiIdempotencyRecords)
+      .where(
+        and(
+          eq(apiIdempotencyRecords.organizationId, fixture.ctx.organizationId),
+          eq(apiIdempotencyRecords.idempotencyKey, key),
+        ),
+      )
+      .for("update");
+
+    const later = new Date(Date.now() + (IDEMPOTENCY_RETENTION_DAYS + 1) * DAY_MS);
+    const rival = await openTransaction();
+    const started = Date.now();
+    await expectDomainError(
+      claimIdempotencyKey(fixture.ctx, rival.tx, claimFor(key, "fp-c"), later),
+      "idempotency_in_progress",
+    );
+    expect(Date.now() - started).toBeLessThan(IDEMPOTENCY_CLAIM_LOCK_TIMEOUT_MS + CLAIM_ANSWER_SLACK_MS);
+    await rival.rollback();
+    await reclaimer.rollback();
+  });
 });
 
 describe("runner idempotency", { timeout: SUITE_TIMEOUT_MS }, () => {

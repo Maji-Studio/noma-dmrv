@@ -224,6 +224,26 @@ describe("operation runner at pool size 1", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(await supplierNamed(name)).toBeDefined();
   });
 
+  it("runs after-commit hooks once the connection is free, so a hook can read through db", async () => {
+    const name = `Hook reads ${crypto.randomUUID()}`;
+    let seen = -1;
+    const operation: Operation<z.ZodObject, null> = {
+      ...supplierThen(name, async () => undefined),
+      execute: async (scope, input) => {
+        scope.afterCommit(async () => {
+          seen = (await db.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.name, name))).length;
+        });
+        return supplierThen(name, async () => undefined).execute(scope, input);
+      },
+    };
+    const started = Date.now();
+
+    await runOperation(operation, fixture.ctx, {});
+
+    expect(seen).toBe(1);
+    expect(Date.now() - started).toBeLessThan(NO_SELF_WAIT_MS);
+  });
+
   it("answers a duplicate idempotency key at once while the first request waits for the connection", async () => {
     const before = await feedstockCount(fixture);
     const idempotency = { credentialId: "cred_runner", key: crypto.randomUUID() };

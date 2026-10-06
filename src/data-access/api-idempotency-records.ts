@@ -87,16 +87,34 @@ async function findRecord(
   return record;
 }
 
+/**
+ * Run one claim statement under the short claim budget. A wait on another
+ * transaction's row becomes "still running"; afterwards the connection's
+ * lock budget is restored, so a later domain-lock timeout is never reported
+ * as "still running". The reset is skipped by PostgreSQL when the statement
+ * aborted the transaction, which the caller rolls back anyway.
+ */
+async function withClaimLockTimeout<T>(tx: DbTransaction, statement: () => Promise<T>): Promise<T> {
+  await tx.execute(
+    sql.raw(`set local lock_timeout = ${IDEMPOTENCY_CLAIM_LOCK_TIMEOUT_MS}`),
+  );
+  try {
+    return await statement();
+  } catch (error) {
+    if (pgErrorCode(error) === PG_LOCK_NOT_AVAILABLE) throw stillRunning(error);
+    throw error;
+  } finally {
+    await tx.execute(sql`reset lock_timeout`).catch(() => undefined);
+  }
+}
+
 async function insertClaim(
   ctx: OrgContext,
   tx: DbTransaction,
   claim: IdempotencyClaim,
   now: Date,
 ): Promise<string | undefined> {
-  await tx.execute(
-    sql.raw(`set local lock_timeout = ${IDEMPOTENCY_CLAIM_LOCK_TIMEOUT_MS}`),
-  );
-  try {
+  return withClaimLockTimeout(tx, async () => {
     const [inserted] = await tx
       .insert(apiIdempotencyRecords)
       .values({
@@ -117,15 +135,7 @@ async function insertClaim(
       })
       .returning({ id: apiIdempotencyRecords.id });
     return inserted?.id;
-  } catch (error) {
-    if (pgErrorCode(error) === PG_LOCK_NOT_AVAILABLE) throw stillRunning(error);
-    throw error;
-  } finally {
-    // Back to the connection's lock budget, so a later domain-lock timeout is
-    // never reported as "still running". Skipped by PostgreSQL if the claim
-    // aborted the transaction, which the caller rolls back anyway.
-    await tx.execute(sql`reset lock_timeout`).catch(() => undefined);
-  }
+  });
 }
 
 /**
@@ -153,15 +163,18 @@ export async function claimIdempotencyKey(
   }
 
   if (record.expiresAt.getTime() <= now.getTime()) {
-    // Past retention the key may be reused as a new request.
-    await tx
-      .delete(apiIdempotencyRecords)
-      .where(
-        and(
-          eq(apiIdempotencyRecords.id, record.id),
-          eq(apiIdempotencyRecords.organizationId, ctx.organizationId),
+    // Past retention the key may be reused as a new request. Another request
+    // reclaiming the same expired key holds this row until it commits.
+    await withClaimLockTimeout(tx, () =>
+      tx
+        .delete(apiIdempotencyRecords)
+        .where(
+          and(
+            eq(apiIdempotencyRecords.id, record.id),
+            eq(apiIdempotencyRecords.organizationId, ctx.organizationId),
+          ),
         ),
-      );
+    );
     const reclaimedId = await insertClaim(ctx, tx, claim, now);
     if (reclaimedId) return { kind: "owner", recordId: reclaimedId };
     throw stillRunning();
