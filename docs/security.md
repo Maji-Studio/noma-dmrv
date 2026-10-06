@@ -247,8 +247,10 @@ values are present, and `isometric-health.yml` uses its dedicated pair through
 
 ### Database dispatch actions (`migrate.yml`)
 
-Pushes to `main` run `migrate-production`, which loads only `DATABASE_URL` — a
-renamed 1Password field cannot block schema migrations. Everything destructive is
+Pushes to `main` run `migrate-production`, which loads `DATABASE_URL` and
+`DATABASE_CA_CERT` from the production 1Password item. The CA PEM is required
+for verified TLS to managed Postgres and must exist in that item before the
+production migration, bootstrap, or reset jobs run. Everything destructive is
 a manual `workflow_dispatch` with a typed confirmation phrase:
 
 | action | confirmation |
