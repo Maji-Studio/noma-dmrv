@@ -44,11 +44,11 @@ describe("calendarDateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("names the field in the issue path", () => {
+  it("names the field and says what to fix", () => {
     const result = createFeedstockSchema.safeParse({ deliveryDate: "2026-02-31" });
     expect(result.success).toBe(false);
-    const paths = result.error?.issues.map((issue) => issue.path.join("."));
-    expect(paths).toContain("deliveryDate");
+    const issue = result.error?.issues.find((candidate) => candidate.path.join(".") === "deliveryDate");
+    expect(issue?.message).toBe("Enter a valid date.");
   });
 });
 

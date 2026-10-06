@@ -74,7 +74,10 @@ describe("savepointed auto-codes", { timeout: SUITE_TIMEOUT_MS }, () => {
       try {
         for (let poll = 0; poll < LOCK_WAIT_MAX_POLLS && !waitingQuery; poll++) {
           const { rows } = await observer.query<{ query: string }>(
-            "select query from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
+            // Other suites share the database, so look for this insert only.
+            `select query from pg_stat_activity
+              where datname = current_database() and wait_event_type = 'Lock'
+                and query like 'insert into "feedstocks"%'`,
           );
           waitingQuery = rows[0]?.query;
           if (!waitingQuery) await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_POLL_MS));
@@ -83,7 +86,7 @@ describe("savepointed auto-codes", { timeout: SUITE_TIMEOUT_MS }, () => {
         observer.release();
       }
       // It waits on the code's unique index, not on a row lock taken earlier.
-      expect(waitingQuery).toMatch(/^insert into "feedstocks"/);
+      expect(waitingQuery).toBeDefined();
       await competitor.query("commit");
 
       const result = await running;

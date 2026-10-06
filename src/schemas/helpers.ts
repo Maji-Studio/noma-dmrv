@@ -429,7 +429,7 @@ export function calendarDateSchema(message = INVALID_CALENDAR_DATE_MESSAGE) {
       }
       return date;
     }),
-  ]);
+  ], { error: message });
   publishedJsonSchemas.add(schema, {
     jsonSchema: { type: "string", format: "date" },
   });
