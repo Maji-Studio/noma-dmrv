@@ -78,18 +78,18 @@ export function toOperationJsonSchema(
     unrepresentable: "any",
     override: ({ zodSchema, jsonSchema }) => {
       const target = jsonSchema as JsonSchema;
-      const published = publishedJsonSchemas.get(zodSchema as z.ZodType);
+      const published = publishedJsonSchemas.get(zodSchema);
       if (published) {
         replaceInPlace(target, published.jsonSchema);
         return;
       }
-      const def = (zodSchema as z.ZodType).def;
+      const def = zodSchema._zod.def;
       if (def.type === "date") {
         replaceInPlace(target, INSTANT_JSON_SCHEMA);
         return;
       }
       if (io === "input" && def.type === "object") {
-        const shape = (zodSchema as z.ZodObject).shape;
+        const shape = (zodSchema as unknown as z.ZodObject).shape;
         const required = Object.keys(shape).filter(
           (key) => !acceptsOmission(shape[key] as z.ZodType),
         );
