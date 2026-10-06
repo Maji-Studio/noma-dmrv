@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { MASS_KG_STORAGE_INCREMENT } from "@/config/numeric-storage";
+import { numberBoundsOf, publishedJsonSchemas } from "./published-json-schema";
 
 /**
  * Zod literal that matches "" and transforms it to null.
@@ -144,6 +145,22 @@ export function requiredNumber(
   );
 }
 
+/**
+ * Pipe a form preprocess into the canonical number it must satisfy, and
+ * advertise that number's bounds. JSON Schema generation reads only a pipe's
+ * input side, which for a form preprocess is a bare number, so without the
+ * metadata a published contract would lose the minimum, maximum and step
+ * (`requiredPositiveMassKgSchema` generated only `{"type":"number"}`). The
+ * bounds are read from `canonical` itself, so each rule value stays defined
+ * once. Runtime parsing is unchanged.
+ */
+export function pipeToCanonicalNumber<
+  In extends z.ZodType,
+  Out extends z.ZodType<unknown, z.output<In>>,
+>(input: In, canonical: Out) {
+  return input.pipe(canonical).meta(numberBoundsOf(canonical));
+}
+
 // ============================================
 // Clearable (patch) numeric fields
 // ============================================
@@ -218,7 +235,8 @@ export function storedPercentSchema() {
 }
 
 /** Optional 0–100 percent input backed by the exact `numeric(9,6)` family. */
-export const optionalStoredPercent = optionalPercent.pipe(
+export const optionalStoredPercent = pipeToCanonicalNumber(
+  optionalPercent,
   storedPercentSchema().nullable().optional(),
 );
 
@@ -271,7 +289,7 @@ export function positiveMassKgSchema(message = "Must be greater than 0") {
 }
 
 export function requiredMassKgSchema(message = "Must be 0 or greater") {
-  return requiredNumber().pipe(massKgSchema(message));
+  return pipeToCanonicalNumber(requiredNumber(), massKgSchema(message));
 }
 
 /**
@@ -281,7 +299,7 @@ export function requiredMassKgSchema(message = "Must be 0 or greater") {
 export function requiredCanonicalizableMassKgSchema(
   message = "Must be 0 or greater",
 ) {
-  return requiredNumber().pipe(massKgRangeSchema(message));
+  return pipeToCanonicalNumber(requiredNumber(), massKgRangeSchema(message));
 }
 
 export function requiredPositiveMassKgSchema(
@@ -289,7 +307,8 @@ export function requiredPositiveMassKgSchema(
   invalidMessage = "Mass must be a number",
   positiveMessage = "Mass must be greater than 0",
 ) {
-  return requiredNumber(requiredMessage, invalidMessage).pipe(
+  return pipeToCanonicalNumber(
+    requiredNumber(requiredMessage, invalidMessage),
     positiveMassKgSchema(positiveMessage),
   );
 }
@@ -339,7 +358,8 @@ const SOIL_TEMPERATURE_RANGE_MESSAGE = `Soil temperature must be between ${SOIL_
  * and facility-emission-config forms so empty/whitespace inputs normalize
  * identically (to null) on both surfaces.
  */
-export const defaultSoilTemperatureSchema = optionalNumber.pipe(
+export const defaultSoilTemperatureSchema = pipeToCanonicalNumber(
+  optionalNumber,
   z
     .number()
     .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
@@ -349,7 +369,8 @@ export const defaultSoilTemperatureSchema = optionalNumber.pipe(
 );
 
 /** The same field on an update schema, where omitted must stay omitted. */
-export const clearableDefaultSoilTemperature = clearableNumber.pipe(
+export const clearableDefaultSoilTemperature = pipeToCanonicalNumber(
+  clearableNumber,
   z
     .number()
     .min(SOIL_TEMPERATURE_MIN_C, SOIL_TEMPERATURE_RANGE_MESSAGE)
@@ -361,6 +382,59 @@ export const clearableDefaultSoilTemperature = clearableNumber.pipe(
 // ============================================
 // Date-Only Input Helpers
 // ============================================
+
+const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const INVALID_CALENDAR_DATE_MESSAGE = "Enter a valid date.";
+
+/**
+ * Decode a business date ("YYYY-MM-DD") to UTC midnight, the canonical
+ * calendar for persisted date-only values (`toDateInputValue`, #46). Returns
+ * null for anything else: a day the calendar does not have (`2026-02-31`
+ * would otherwise roll into March) or a timestamp (`new Date` would turn
+ * `2026-10-06T23:00:00-07:00` into 7 October).
+ */
+export function parseCalendarDate(value: string): Date | null {
+  const match = CALENDAR_DATE_PATTERN.exec(value);
+  if (!match) return null;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function isUtcMidnight(date: Date): boolean {
+  return !isNaN(date.getTime()) && date.getTime() % 86_400_000 === 0;
+}
+
+/**
+ * Required business date: "YYYY-MM-DD" only, decoded to UTC midnight and
+ * advertised as `format: date`. A `Date` passes only at UTC midnight, which is
+ * what this decoder produces, so a server action can re-validate the form's
+ * decoded value without accepting an arbitrary instant.
+ */
+export function calendarDateSchema(message = INVALID_CALENDAR_DATE_MESSAGE) {
+  const schema = z.union([
+    z.date({ error: message }).refine(isUtcMidnight, message),
+    z.string({ error: message }).transform((value, ctx): Date => {
+      const date = parseCalendarDate(value);
+      if (!date) {
+        ctx.addIssue({ code: "custom", message });
+        return z.NEVER;
+      }
+      return date;
+    }),
+  ]);
+  publishedJsonSchemas.add(schema, {
+    jsonSchema: { type: "string", format: "date" },
+  });
+  return schema;
+}
 
 /**
  * Required date field fed by `<input type="date">` ("YYYY-MM-DD").
