@@ -64,7 +64,7 @@ const test = base.extend<{ orgB: OrgBFixture }>({
         await tx.insert(schema.accounts).values({
           id: ids.account,
           userId: ids.user,
-          accountId: `org-b-${tag}`,
+          accountId: ids.user,
           providerId: "credential",
           password: passwordHash,
         });

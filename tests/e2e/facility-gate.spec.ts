@@ -63,7 +63,7 @@ const test = base.extend<{ facilityLessPage: Page }>({
         await tx.insert(schema.accounts).values({
           id: ids.account,
           userId: ids.user,
-          accountId: `no-fac-${tag}`,
+          accountId: ids.user,
           providerId: "credential",
           password: passwordHash,
         });
