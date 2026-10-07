@@ -250,6 +250,18 @@ export const auth = betterAuth({
   baseURL: env.NEXT_PUBLIC_APP_URL,
   trustedOrigins: buildTrustedOrigins(),
   databaseHooks: {
+    account: {
+      create: {
+        // Better Auth 1.7 looks up credentials by both userId and accountId.
+        // Invitation bootstrap creates user + account atomically through
+        // createOAuthUser; this hook receives the newly generated user ID.
+        before: async (account) => ({
+          data: account.providerId === "credential"
+            ? { ...account, accountId: account.userId }
+            : account,
+        }),
+      },
+    },
     session: {
       create: {
         // On sign-in, restore a still-accessible preference or choose the

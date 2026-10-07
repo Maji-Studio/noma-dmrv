@@ -123,7 +123,7 @@ export async function ensureOrgFoundation(
       await tx.insert(schema.accounts).values({
         id: `teammate-account-${Date.now()}`,
         userId: teammateId,
-        accountId: `teammate-${teammateId}`,
+        accountId: teammateId,
         providerId: CREDENTIAL_PROVIDER,
         password: passwordHash,
       });
@@ -263,13 +263,13 @@ async function ensureAdminCredential(
     if (account) {
       await db
         .update(schema.accounts)
-        .set({ password: passwordHash })
+        .set({ password: passwordHash, accountId: existing.id })
         .where(eq(schema.accounts.id, account.id));
     } else {
       await db.insert(schema.accounts).values({
         id: `admin-account-${Date.now()}`,
         userId: existing.id,
-        accountId: `admin-${existing.id}`,
+        accountId: existing.id,
         providerId: CREDENTIAL_PROVIDER,
         password: passwordHash,
       });
@@ -291,7 +291,7 @@ async function ensureAdminCredential(
     await tx.insert(schema.accounts).values({
       id: `admin-account-${Date.now()}`,
       userId: adminUserId,
-      accountId: `admin-${adminUserId}`,
+      accountId: adminUserId,
       providerId: CREDENTIAL_PROVIDER,
       password: passwordHash,
     });
