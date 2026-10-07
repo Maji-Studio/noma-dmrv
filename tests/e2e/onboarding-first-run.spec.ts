@@ -55,7 +55,7 @@ test.describe("First-run onboarding", () => {
       await tx.insert(schema.accounts).values({
         id: `e2e-onboarding-account-${RUN_TAG}`,
         userId: USER_ID,
-        accountId: `e2e-onboarding-account-${RUN_TAG}`,
+        accountId: USER_ID,
         providerId: "credential",
         password: await hashPassword(OWNER.password),
       });
