@@ -23,6 +23,7 @@ import {
   deleteFormulationFn,
 } from "@/fn/formulations";
 
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 
 // ============================================
@@ -209,6 +210,7 @@ export function useUpdateFormulation(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(formulationKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<FormulationWithIngredients>(queryClient, formulationKeys.lists(), data);
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });

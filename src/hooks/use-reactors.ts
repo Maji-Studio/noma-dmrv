@@ -17,6 +17,7 @@ import {
 } from "@/fn/reactors";
 import { facilityKeys } from "@/hooks/use-facilities";
 
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 
@@ -201,6 +202,7 @@ export function useUpdateReactor(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(reactorKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<ReactorWithRelations>(queryClient, reactorKeys.lists(), data);
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });

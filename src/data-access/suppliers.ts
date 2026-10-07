@@ -634,6 +634,14 @@ export async function createSupplierLocation(
   await ensureSupplierExists(ctx, data.supplierId);
 
   return db.transaction(async (tx) => {
+    // Serialize location writers with parent deletion before locking children.
+    // A lock alone does not change the supplier's version.
+    const [parent] = await tx.select({ id: suppliers.id })
+      .from(suppliers)
+      .where(and(eq(suppliers.id, data.supplierId), eq(suppliers.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!parent) throw new SafeError("Supplier not found");
+
     // The supplier's first location is always its default.
     const [{ value: existingCount }] = await tx
       .select({ value: count() })
@@ -705,6 +713,14 @@ export async function updateSupplierLocation(
   const { expectedVersion, ...locationData } = data;
 
   return db.transaction(async (tx) => {
+    // Serialize location writers with parent deletion before locking children.
+    // A lock alone does not change the supplier's version.
+    const [parent] = await tx.select({ id: suppliers.id })
+      .from(suppliers)
+      .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!parent) throw new SafeError("Supplier not found");
+
     const [locked] = await tx
       .select({ version: supplierLocations.version })
       .from(supplierLocations)

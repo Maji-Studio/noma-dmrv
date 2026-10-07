@@ -332,7 +332,9 @@ export function useArchiveStorageLocation(
       return result.data;
     },
     onSuccess: async (data, variables) => {
-            await Promise.all([
+      queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<StorageLocationWithFacility>(queryClient, storageLocationKeys.lists(), data);
+      await Promise.all([
         queryClient.invalidateQueries({
           queryKey: storageLocationKeys.all,
         }),
@@ -369,7 +371,9 @@ export function useRestoreStorageLocation(
       return result.data;
     },
     onSuccess: async (data, variables) => {
-            await Promise.all([
+      queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<StorageLocationWithFacility>(queryClient, storageLocationKeys.lists(), data);
+      await Promise.all([
         queryClient.invalidateQueries({
           queryKey: storageLocationKeys.all,
         }),

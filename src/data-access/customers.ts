@@ -532,6 +532,19 @@ export async function updateCustomerLocation(
       await lockBiocharTransportRouteTopology(ctx, tx);
     }
 
+    // Discover the immutable parent ID without locking a child first.
+    const [location] = await tx.select({ customerId: customerLocations.customerId })
+      .from(customerLocations)
+      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
+    if (!location) throw new SafeError("Customer location not found");
+
+    // Keep topology -> parent -> child order. Locking does not bump the parent version.
+    const [parent] = await tx.select({ id: customers.id })
+      .from(customers)
+      .where(and(eq(customers.id, location.customerId), eq(customers.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!parent) throw new SafeError("Customer not found");
+
     // Locked read after the topology lock, so the version check and the write
     // it guards see the same row.
     const [existing] = await tx

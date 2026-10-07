@@ -3,6 +3,8 @@
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { patchArrayListCacheWithSavedRow } from "./list-cache-utils";
+import type { FeedstockType } from "@/db/schema";
 import { entityKeys } from "./entity-query-keys";
 import {
   archiveFeedstockTypeFn,
@@ -61,6 +63,7 @@ export function useCreateFeedstockType() {
 }
 
 export function useUpdateFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
     mutationFn: async (input: UpdateFeedstockTypeData) => {
@@ -68,11 +71,15 @@ export function useUpdateFeedstockType() {
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onSuccess: (data) => {
+      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
   });
 }
 
 export function useArchiveFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
     mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
@@ -80,12 +87,16 @@ export function useArchiveFeedstockType() {
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onSuccess: (data) => {
+      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
     onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }
 
 export function useUnarchiveFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
     mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
@@ -93,7 +104,10 @@ export function useUnarchiveFeedstockType() {
       if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onSuccess: (data) => {
+      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
     onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }

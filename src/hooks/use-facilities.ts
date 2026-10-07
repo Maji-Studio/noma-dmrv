@@ -358,6 +358,8 @@ export function useArchiveFacility(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      queryClient.setQueryData(facilityKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<FacilityWithRelations>(queryClient, facilityKeys.lists(), data);
       // The cascade touches nearly every entity type — invalidate everything
       queryClient.invalidateQueries();
 
@@ -393,6 +395,8 @@ export function useRestoreFacility(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      queryClient.setQueryData(facilityKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<FacilityWithRelations>(queryClient, facilityKeys.lists(), data);
       // Restored children reappear across every entity type — invalidate everything
       queryClient.invalidateQueries();
 

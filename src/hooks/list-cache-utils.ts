@@ -33,3 +33,14 @@ export function patchListCachesWithSavedRow<TItem extends { id: string }>(
         : old,
   );
 }
+
+/** Merge a saved row into unpaginated lists without discarding enriched fields. */
+export function patchArrayListCacheWithSavedRow<TItem extends { id: string }>(
+  queryClient: QueryClient,
+  listKey: QueryKey,
+  saved: Partial<TItem> & { id: string },
+): void {
+  queryClient.setQueryData<TItem[]>(listKey, (old) =>
+    old?.map((item) => item.id === saved.id ? { ...item, ...saved } : item),
+  );
+}
