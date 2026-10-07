@@ -208,7 +208,7 @@ Client-editable metadata never carries authority. API-key session emulation stay
 
 **Every request re-checks the principal.** For API keys: the key is valid, unexpired and unrevoked, and its owner is still a member with a sufficient role. For OAuth: the persisted grant binds user, organization, client, resource (audience) and scopes; each request checks the grant is active and membership is current, so a locally verified JWT alone is not enough. Refresh keeps the binding and never reads the session's active organization. REST and MCP are separate audiences; a token for one is refused by the other. A key owned by someone who left returns 401 with `credential_owner_removed`, and expiry/owner-removal notices go to organization admins.
 
-**Better Auth upgrade.** `@better-auth/api-key` has a 1.6.23 release, so Phase 2 does not need the upgrade. Upgrade 1.6.23 to 1.7.x as the first PR of the OAuth track, where OAuth needs it, as its own PR with the full auth E2E. Pull it into Phase 1 only if the Phase 0 spike finds the 1.6 API-key plugin unusable (the upgrade's blast radius touches the session cookie cache, organization hooks and `nextCookies`). Phase 0 corrected the earlier reading of the 1.7 docs: the 1.7.7 package ships neither `plugins/mcp` nor `plugins/oidc-provider`; the OAuth authorization server is the separate `@better-auth/oauth-provider` package, which uses `jwt()` unless disabled (section 15). Re-check against the 1.7 docs when the OAuth track starts.
+**Better Auth upgrade (decided 2026-10-07, section 13).** Upgrade `better-auth` 1.6.23 to 1.7.7 **before Phase 2**, as its own PR with the full auth E2E, so API keys are built once on the final version. 1.7.7 changes nothing for API keys (`@better-auth/api-key` 1.7.7 is functionally the same as 1.6.x) but ships what the OAuth track needs: `@better-auth/oauth-provider` (authorization code + S256 PKCE, an org-picker step whose choice is stored on the consent, RFC 8707 resources bound to the grant, refresh rotation, introspection, revocation; uses `jwt()`), `@better-auth/cimd` (Client ID Metadata Documents) and `@better-auth/mcp` (`requireMcpAuth`, protected-resource handler; the old `mcp()` plugin moved here and needs an explicit `resource`). Core and every `@better-auth/*` package move together. The upgrade brings the accounts `issuer` column and a regenerated Drizzle auth schema with relations, free under the pre-production policy. API-key gaps open in every version, closed by our wrapper: client `update` can clear expiry (block client updates; create and update through our own server actions calling `auth.api`), no scope-versus-role hook, rate limit defaults to 10 per 24 h, and member removal does not touch keys.
 
 **Resolver and proxy.** `resolveApiContext(request)` in `src/lib/auth/api-context.ts` accepts exactly one credential type, rejects ambiguity, never falls back from a bad bearer token to cookies, and enforces verified email itself. The proxy returns early for `/api/v1/*`, `/api/mcp`, the public OpenAPI document and the OAuth discovery documents (`/.well-known/oauth-protected-resource`, authorization-server metadata and the path aliases Better Auth 1.7 documents), **before** the session lookup (`src/lib/auth/middleware.ts:51`), so neither the session branch nor the unverified-email branch fires (`:82`, `:95`). Every other route is unchanged. Tests cover cookie-free and unverified-cookie requests and exact route boundaries (`/api/v1x` is not carved out). The OpenAPI document is exempt from `resolveApiContext`. Cookie sessions are not accepted on `/api/v1` in v1 (no CSRF surface).
 
@@ -218,7 +218,7 @@ Client-editable metadata never carries authority. API-key session emulation stay
 
 Domain guards still apply on top: a key with delete permission still cannot delete a posted product, a delivery, or anything locked by certification. Copy follows `docs/ux-writing.md`.
 
-**Simplest principal model (v1).** The Owner or Admin who creates a key owns it; the key acts with that person's membership, capped by the permissions ticked. If the owner leaves the organization or loses the role, the key stops working. Upgrade path: service accounts later, with the same key format, permissions and API contract, so clients do not change.
+**Simplest principal model (v1).** The Owner or Admin who creates a key owns it; the key acts with that person's membership, capped by the permissions ticked. If the owner leaves the organization or loses the role, the key stops working: `resolveApiContext` checks live membership and role on every request (401 `credential_owner_removed`), and the organization plugin's remove-member and role-change hooks disable the owner's keys so the admin list shows them as revoked (decided 2026-10-07). A disabled key is kept, not deleted, so it can be reassigned. Upgrade path: service accounts later, with the same key format, permissions and API contract, so clients do not change.
 
 **Service accounts** (keys not owned by a person) come once the workflows are on the API (after Phase 7). They need an `OrgContext` without a human `userId`.
 
@@ -284,14 +284,15 @@ Use the existing Vitest layout and throwaway test DB (`docs/testing.md`; Vitest 
 | Phase | Scope | Exit criteria |
 |---|---|---|
 | 0. Spike | (a) Generate schemas for feedstock intake, production run and the intake lookups; constraint metadata on piped helpers; strict calendar-date decoder; `z.date()` and optional-preprocess overrides. (b) Run feedstock intake create (feedstock + bin allocation + transport) through a runner-owned transaction with savepointed `withAutoCode`, pool size 1. (c) Prototype the idempotency claim protocol under concurrency, with the transport-neutral outcome and dry-run rules. (e) Runner deadline and cancellation tests at pool size 1. (d) `mcp-handler` 2.x hello-world against Claude Code. | Generated pilot schemas pass semantic assertions incl. `multipleOf` and calendar dates; timed-out request never writes; no self-deadlock at pool 1; duplicate claim answers 409 within the application deadline (pool wait included); libraries pinned; decisions written into this plan |
-| 1. Foundations | `runOperation` + registry with after-commit hooks, schema generation overrides, `DomainError` + `issues` in `ActionResult`, `version` column pattern, CI runs the migration chain (today it runs `drizzle-kit push --force`, `.github/workflows/ci.yml:127`). Feedstock actions move onto operations. UI sends `expectedVersion` on feedstock writes (mandatory). | Feedstock UI behaviour unchanged (existing tests green); runner and error-mapping unit tests |
+| 1. Foundations | `runOperation` + registry with after-commit hooks, schema generation overrides, `DomainError` + `issues` in `ActionResult`, CI runs the migration chain (today it runs `drizzle-kit push --force`, `.github/workflows/ci.yml:127`). Feedstock actions move onto operations. Integer `version` on **every entity with an edit form**, UI sends `expectedVersion` (mandatory) and `expectedUpdatedAt` is retired. Strict calendar dates for samples, production incidents and production runs. `transaction_timeout` for the whole-transaction deadline once staging's Postgres version is confirmed (17+). The operations layer gets its place in `docs/architecture.md`. | UI behaviour unchanged apart from the stricter dates (existing tests green); runner and error-mapping unit tests |
+| 1.5 Better Auth 1.7.7 | Upgrade core and plugins together as its own PR; accounts `issuer` migration; regenerated auth schema; full auth E2E | Auth E2E green; no session or organization regressions |
 | 2. REST pilot: feedstock intake | `/api/v1/feedstocks` CRUD with dry run and stock preview; **read-only** lookups intake needs (facilities, suppliers + locations, feedstock types, storage locations, vehicles, drivers); API keys with the permission grid; `/me`; problem+json; ETag/If-Match; idempotency records + audit; rate limits; public OpenAPI | Outcome, action-vs-REST parity, BOLA, idempotency, stock-race and version-cascade suites green |
 | 3. MCP on API keys | `/api/mcp` with `whoami`, `find_*` and the `feedstock-intake` toolset | Three-way parity; agent eval for "log 4.2 t wet wood chips from supplier X into bin B2" passes |
 | 4. Production | Production runs (feedstock draws, output stock), then biochar products (stock posting, corrections) | Stock invariants and races per operation; agent eval "start a run on R1 with that feedstock"; Schemathesis on |
 | 5. Lab and logistics | Lab samples (+ lab result batch endpoint), orders, deliveries | Per-operation outcome, parity, authorization and stock tests |
 | 6. Field application | Applications with evidence documents (upload request, presigned PUT, confirm) | Same, plus document upload tests |
 | 7. Master data writes | Suppliers, customers, formulations (reads already exist from Phase 2) | Same |
-| OAuth track (parallel after Phase 3) | Better Auth 1.7 upgrade as its own PR (full auth E2E); `mcp()`-provided OAuth, consent with organization choice, grant checks, discovery documents; mobile public client; claude.ai and ChatGPT connectors | OAuth test list green; named connectors work |
+| OAuth track (parallel after Phase 3) | `@better-auth/oauth-provider` + `@better-auth/cimd` + `@better-auth/mcp` on 1.7.7 (already upgraded in 1.5): consent with organization choice, grant checks, discovery documents; mobile public client; claude.ai and ChatGPT connectors | OAuth test list green; named connectors work |
 | 8. Offline mobile | Change feed, client ids, reference sync, outbox, longer idempotency retention | Separate plan |
 
 Order follows the operator workflow (Kenji, 2026-10-06). Starting with feedstock intake means the pilot is also the hardest case (compound create, bin stock, transport). That is deliberate, and it is why Phase 0 proves the transaction and lock design on exactly that write. Credit batches stay UI-only until a client needs them; lab samples reference them through read-only lookups.
@@ -325,7 +326,20 @@ Generic table CRUD, arbitrary bulk endpoints, `include`, multiple sort orders, w
 5. **Idempotency retention:** 7 days as a config constant; raised for offline mobile.
 6. **Input leniency:** keep the lenient input that shared schemas give for free; publish canonical types.
 
-Still open: credential expiry default (proposed 90 days, maximum 1 year) and rate-limit budgets; both settle in Phase 2.
+Decided 2026-10-07 (Kenji, via the open-questions round):
+
+7. **DST fall-back times:** rejected, as `combineDateAndTime` does for the UI; clients send an RFC 3339 instant with an offset for the repeated hour.
+8. **Credential expiry:** 90 days default, 1 year maximum; admins notified 14 days before expiry.
+9. **Rate limits (starting values in `@/config`):** reads 600/min per credential and 1,200/min per organization; writes (dry runs included) 120/min per credential and 240/min per organization; pre-auth 300/min per IP. Revisited after the first agent evaluations.
+10. **Strict calendar dates** for samples, production incidents and production runs land in Phase 1, not per entity.
+11. **Integer `version`** on every entity with an edit form in Phase 1; `expectedUpdatedAt` retired at once.
+12. **The MCP spike route** merges with #919 and stays until Phase 3 replaces it.
+13. **Idempotency purge:** a daily Vercel Cron route (the repo's first; needs `CRON_SECRET` in all three 1Password items).
+14. **#919 and Phase 1:** review-suite cutoff applies; Phase 1 is implemented by Codex (gpt-6-astra for migrations, runner wiring and auth; gpt-6.1-sol for UI forms and tests), scoped and inspected by Claude.
+15. **Better Auth:** upgrade to 1.7.7 before Phase 2 (section 6); changed from the recommendation to stay on 1.6 until the OAuth track.
+16. **Key owner leaves or loses the role:** per-request membership check plus disabling the keys in the organization hooks (section 6).
+
+Still open (round 2): when the 1.7.7 upgrade runs relative to Phase 1, whether Phase 3 ships OAuth alongside API keys, and whether Phase 1 ships as one PR or two.
 
 ## 14. What review changed
 
@@ -351,7 +365,7 @@ Still open: credential expiry default (proposed 90 days, maximum 1 year) and rat
 
 ## 15. Phase 0 results (2026-10-06)
 
-Branch `feat/data-entry-api-spike`. Every exit criterion in section 10 is met; the tests named below are the evidence.
+Branch `feat/data-entry-api-spike` (PR #919). The exit criteria in section 10 are met except two parts noted below: the intake-lookup schemas (deferred to Phase 2, where the lookup endpoints are defined) and the full transport-neutral outcome (partial). The tests named below are the evidence.
 
 **(a) Schemas.** `toOperationJsonSchema` (`src/lib/operations/json-schema.ts`) is the one generator for OpenAPI and MCP. Decisions:
 - Constraint metadata is derived, not hand-written: `pipeToCanonicalNumber(input, canonical)` in `src/schemas/helpers.ts` reads the bounds from the canonical schema's own JSON Schema, so the rule values stay in the Zod chain. Applied to the mass, stored-percent and soil-temperature helpers and the feedstock moisture field.
@@ -362,7 +376,7 @@ Branch `feat/data-entry-api-spike`. Every exit criterion in section 10 is met; t
 - The production-run form schema generates correct numbers, enums and required fields, but its timing fields are form-shaped (`date-time | string`) and it still advertises the refused legacy `feedstockWetMassKg`. Phase 4 gives production runs an API input schema (instant or facility-local `{ date, time }`, no legacy fields) rather than publishing the form schema.
 - **DST policy changed from the draft:** a fall-back (ambiguous) wall clock is rejected, not resolved to the earlier instant, because `combineDateAndTime` already rejects it for the UI with a documented reason (silently choosing one shifts a run window by an hour). Section 3.2 is updated. Kenji to confirm.
 
-**(b) Runner-owned transaction.** `runOperation` (`src/lib/operations/runner.ts`) and `log_feedstock_delivery` (`src/lib/operations/feedstocks.ts`).
+**(b) Runner-owned transaction.** `runOperation` (`src/lib/operations/runner.ts`), `log_feedstock_delivery` (`src/lib/operations/feedstocks.ts`), and the connection and transaction mechanics in `src/data-access/owned-transaction.ts` (moved out of the operations layer after review).
 - The runner checks out its own connection instead of `db.transaction`: Drizzle 0.45 releases a client to the pool even when ROLLBACK failed. A client whose BEGIN, ROLLBACK or COMMIT failed is destroyed.
 - `createFeedstockInTransaction` reads and writes only through `tx`; the UI's `createFeedstock` wraps the same body in its own transaction until Phase 1 moves the action onto the operation.
 - `withAutoCodes` (`src/data-access/code-generator.ts`) runs each generated-code attempt in a savepoint and re-reads the maximum on retry. Feedstock intake previously generated codes before its transaction with no retry, so a concurrent intake failed on the unique index; it now recovers.
@@ -371,7 +385,7 @@ Branch `feat/data-entry-api-spike`. Every exit criterion in section 10 is met; t
 **(c) Idempotency.** Table `api_idempotency_records` (migration 0121), claim in `src/data-access/api-idempotency-records.ts`.
 - Claim budget 500 ms (`IDEMPOTENCY_CLAIM_LOCK_TIMEOUT_MS`); `RESET lock_timeout` after the claim so a later domain-lock timeout is never "still running".
 - An expired record is deleted and reclaimed inside the claiming transaction. The purge job is not built (Phase 2).
-- The stored outcome is the JSON representation, and the first response is round-tripped through JSON too, so the original and the replay are identical. Phase 2 output schemas make that representation explicit.
+- The stored outcome is a success envelope `{ kind: "success", data }`, so a write that returns nothing still replays; `outcome IS NULL` only ever means an uncommitted claim. `runOperation` returns the JSON representation on every path (typed `Jsonified<Output>`), so a first response and its replay are identical. Still missing from the plan's transport-neutral outcome: the outcome code and entity ids; Phase 2 output schemas add them with a schema-version bump.
 - At pool size 1 a duplicate cannot reach PostgreSQL before its deadline (it waits for the first request's connection), so the runner keeps an **in-process set of in-flight keys** and answers a same-instance duplicate with 409 at once. Cross-instance duplicates are answered by the PostgreSQL claim. The set is an early answer, never the guarantee.
 - Evidence: `tests/operation-idempotency.test.ts` (duplicate answered before the first commits, hand-over on rollback, reuse with a different payload, expiry, credential namespaces, dry-run rules, failure leaves no record, lost COMMIT acknowledgement reported as `outcome_unknown` and recovered by replay).
 
@@ -393,5 +407,7 @@ Branch `feat/data-entry-api-spike`. Every exit criterion in section 10 is met; t
 - The plugin's default rate limit (10 requests per 24 h per key) must be replaced by the section 4 limiter.
 
 **Review.** gpt-6-astra reviewed the branch and raised two P2s, both fixed with regression tests: after-commit hooks now run after the connection is released (a hook reading through `db` at pool size 1 waited on the runner's own connection), and deleting an expired idempotency record runs under the claim budget, so a concurrent reclaim answers `idempotency_in_progress` instead of a raw lock timeout.
+
+**Review suite (round 1, head `98cea6b8`).** No P1s. Fixed: null results not replayable, keyed and unkeyed result shapes differing, data-access importing the error type from the operations layer (now `src/lib/domain-errors.ts`), transaction mechanics outside data-access, raw errors in the hook-failure log, the hard-coded Retry-After, the duplicated auto-code retry loop, a non-UTC calendar-date test, and `docs/forms.md` gained `calendarDateSchema`. Deferred to Phase 1: per-statement enforcement of the deadline (a run of short statements can overrun until the pre-commit check rolls it back), via `transaction_timeout` once staging's Postgres version is confirmed. Deferred to Phase 2: rejecting unknown keys on API mutations (the runner still strips them, as the forms do), and the intake-lookup schemas.
 
 **Phase 1 starts from:** moving the feedstock actions onto `runOperation` (and updating `docs/architecture.md`, which still names `fn/**/*-core.ts`), the registry, `DomainError` codes and `issues` in `ActionResult`, the `version` column, and CI on the migration chain.
