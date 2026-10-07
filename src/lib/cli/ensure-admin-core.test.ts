@@ -53,11 +53,11 @@ describe("bootstrap credential identity", () => {
     });
   });
 
-  it("keeps development password updates usable with the credential lookup", async () => {
+  it("updates the existing development credential password", async () => {
     const { db, writes } = mockDatabase([[{ id: EXISTING_USER_ID }], [{ id: "account-id" }]]);
     await ensureAdminUser(db, "admin@example.invalid", TEST_PASSWORD, "development");
     expect(writes.find((write) => write.table === accounts)?.data).toEqual({
-      accountId: EXISTING_USER_ID, password: TEST_HASH,
+      password: TEST_HASH,
     });
   });
 

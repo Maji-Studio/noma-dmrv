@@ -277,7 +277,7 @@ async function ensureAdminCredential(
     if (account) {
       await db
         .update(schema.accounts)
-        .set({ password: passwordHash, accountId: existing.id })
+        .set({ password: passwordHash })
         .where(eq(schema.accounts.id, account.id));
     } else {
       await db.insert(schema.accounts).values({

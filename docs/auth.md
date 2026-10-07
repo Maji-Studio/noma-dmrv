@@ -111,9 +111,13 @@ The account token fields are `accessTokenExpiresAt`, `refreshTokenExpiresAt`
 and `scope`; 1.7.7 neither requires nor writes an account `issuer` column.
 Drizzle relations describe the auth tables, but native joins remain disabled.
 
-Credential accounts must use `accountId === userId`. The account-create hook
-normalizes credentials created through Better Auth, including the atomic
-invitation bootstrap, once the generated user ID is available. The admin CLI
-and direct test fixtures use the same identity. Existing development accounts
-created with email or prefixed account IDs must be recreated before auth E2E;
-there is no production-data backfill.
+Better Auth 1.7 signs in only with a credential account whose `account_id`
+equals the user id (`accountId === userId`). Every credential creation path
+writes this identity: the account-create hook sets it for Better Auth,
+including the atomic invitation bootstrap, once the generated user ID is
+available; the admin CLI, seeds and direct test fixtures write it directly.
+
+Databases created before this change must be reset and reseeded. Locally, run
+`pnpm db:reset` then `pnpm db:seed`. After merge, use the manual
+`reset-seed-staging` workflow for staging. Migration 0122 changes the schema
+without backfilling existing credential account IDs.
