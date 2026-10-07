@@ -24,7 +24,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { toSaveErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, toSaveErrorMessage } from "@/lib/stale-version";
 import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { FeedstockForm } from "./feedstock-form";
@@ -373,7 +373,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       setDeleting(null);
       toast.success("Feedstock deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Feedstock was not deleted. Try again.");
+      if (error instanceof StaleVersionError) {
+        setDeleting(null);
+        setDeleteError(`Feedstock ${deleting.code} changed since the list loaded. Review it before deleting.`);
+      } else {
+        setDeleteError(error instanceof Error ? error.message : "Feedstock was not deleted. Try again.");
+      }
     }
   };
 

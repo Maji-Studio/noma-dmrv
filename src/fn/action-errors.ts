@@ -24,8 +24,6 @@ interface ActionFailureOptions {
   zodErrorPrefix?: string;
 }
 
-
-
 /**
  * A body result whose work has a committed part and a non-fatal follow-up:
  * a preference that was not stored, an enrichment read that failed.

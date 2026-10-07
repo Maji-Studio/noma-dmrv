@@ -99,10 +99,11 @@ geocode/route are the current users.
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
 "server action failed" log line, so an entity module keeps its own message and
-`op` context. `mapError(error)` runs after the Zod and conflict branches and
-before the logged fallback: return a failure result for a domain error the
-action answers itself (a field error, a conflict of its own; the returned
-shape is preserved in the action's result type), or `undefined` to fall
+`op` context. `mapError(error)` runs after the Zod, `DomainError` and conflict
+branches and before the logged fallback. A `DomainError` is always formatted
+by `toActionFailure`; `mapError` never sees it. Return a failure result for
+another safe error the action answers itself (a field error, a conflict of its
+own; the returned shape is preserved in the action's result type), or `undefined` to fall
 through. A mapped result bypasses `toActionError` and is not logged, so map
 only error classes that extend `SafeError`, whose messages are written for
 the operator; anything else must fall through to the logged fallback.
@@ -161,15 +162,15 @@ and include `nextVersion` in every writer's `.set()` so the version increments
 in the same statement as the change. Sibling and cascade writes bump every
 affected row too, including facility archive and restore. Ordinary UI updates
 and deletes must send the `expectedVersion` loaded when the operator opened
-the record. Feedstocks use this pattern first; Phase 1b extends it to other
-entities with edit forms.
+the record. Feedstocks use integer row versions; the remaining edit forms
+still use the timestamp check below.
 
 A mismatch throws `DomainError` with `code: "stale_version"` and a conflict
 reference to the edited record using the `stale-version` sentinel. The hook
 re-throws it as `StaleVersionError` through `src/lib/stale-version.ts`. The
 form shows `STALE_VERSION_MESSAGE` while keeping the operator's draft.
 
-Until Phase 1b, the existing timestamp checks use `assertExpectedVersion`
+The existing timestamp checks use `assertExpectedVersion`
 in `src/data-access/expected-version.ts`: edit forms send `updatedAt` as
 `expectedUpdatedAt`, and the updater compares it after locking the row.
 Those legacy fields remain optional. They cover facility, storage bin,

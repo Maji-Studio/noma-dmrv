@@ -181,8 +181,20 @@ export async function runOperationInProcess<Input extends z.ZodType, Output>(
   if (options.idempotency !== undefined || options.dryRun !== undefined) {
     throw new DomainError("validation_failed", "In-process operations do not accept idempotency or dry run.");
   }
-  const result = await runOperationCore(operation, ctx, input, options, (data) => data);
-  return result.data;
+  try {
+    const result = await runOperationCore(operation, ctx, input, options, (data) => data);
+    return result.data;
+  } catch (error) {
+    if (error instanceof DomainError && error.code === "outcome_unknown") {
+      // In-process callers have no idempotency key that makes a retry safe.
+      throw new DomainError(
+        "outcome_unknown",
+        "It is not known whether this change was saved. Check the list before trying again.",
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }
 
 async function runOperationCore<Input extends z.ZodType, Output, Result>(

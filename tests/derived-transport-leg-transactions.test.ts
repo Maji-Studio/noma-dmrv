@@ -276,7 +276,10 @@ describe("derived transport-leg transaction boundaries", () => {
     expect(result.feedstocks[0].status).toBe("complete");
     const feedstockId = result.feedstocks[0].id;
 
-    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, { expectedVersion: 1, notes: "Partial update" }));
+    const partialUpdate = await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {
+      expectedVersion: result.feedstocks[0].version,
+      notes: "Partial update",
+    }));
 
     const [derived] = await db
       .select({
@@ -296,7 +299,8 @@ describe("derived transport-leg transaction boundaries", () => {
 
     // With no explicit transport fields, a route-anchor change discards the
     // stale saved override and recomputes from the new supplier's default.
-    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, { expectedVersion: 2,
+    const routeUpdate = await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {
+      expectedVersion: partialUpdate.version,
       supplierId: newRouteSupplier.id,
     }));
 
@@ -320,7 +324,8 @@ describe("derived transport-leg transaction boundaries", () => {
 
     // An explicit override submitted with a reroute is authoritative. It must
     // not be discarded merely because the supplier anchor also changed.
-    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, { expectedVersion: 3,
+    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, {
+      expectedVersion: routeUpdate.version,
       supplierId: supplier.id,
       transportDistanceKm: 30,
       transportDistanceSource: "document",

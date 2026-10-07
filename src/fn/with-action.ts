@@ -30,10 +30,11 @@ interface WithActionOptions<E extends MappedFailure> {
    */
   log?: { message: string; context?: Record<string, unknown> };
   /**
-   * Consulted after the Zod and conflict branches and before the generic
-   * fallback. Return a failure result to answer the caller with it (domain
-   * errors that carry a `field` or a `conflict` of their own; the returned
-   * type is preserved in the action's result); return `undefined` to fall
+   * Consulted after the Zod, DomainError and conflict branches and before the
+   * generic fallback. DomainError is always formatted by `toActionFailure`;
+   * `mapError` never sees it. Return a failure result to answer the caller
+   * with it (other safe errors that carry a `field` or a `conflict`; the
+   * returned type is preserved in the action's result); return `undefined` to fall
    * through to logging and the fallback message. A mapped result bypasses
    * `toActionError` and is not logged, so only map error classes that extend
    * `SafeError`: their messages are written for the operator.
@@ -77,8 +78,8 @@ export async function withAction<T, E extends MappedFailure = never>(
     const data = await fn(ctx);
     return { success: true, data };
   } catch (error) {
-    // The Zod, domain and conflict branches stay ahead of `mapError`; everything else
-    // is formatted by the helper the read transport shares.
+    // The Zod, DomainError and conflict branches stay ahead of `mapError`;
+    // everything else is formatted by the helper the read transport shares.
     const claimed =
       error instanceof z.ZodError || error instanceof ActionConflictError || error instanceof DomainError
         ? undefined

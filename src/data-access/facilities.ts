@@ -1,4 +1,3 @@
-import { nextVersion } from "./row-version";
 /**
  * Facilities Data Access Layer
  * CRUD operations for facilities with auth guards, pagination, and filtering
@@ -30,6 +29,7 @@ import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 import { deriveLaneStock } from "./lane-stock-derivation";
+import { nextVersion } from "./row-version";
 
 // Individual entity archives originate from JavaScript Date values and are
 // stored at whole-millisecond precision. Facility cascades use a database

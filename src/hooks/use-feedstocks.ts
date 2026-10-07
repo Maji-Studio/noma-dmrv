@@ -23,7 +23,7 @@ import {
   updateFeedstockFn,
   deleteFeedstockFn,
 } from "@/fn/feedstocks";
-import { throwActionError } from "@/lib/stale-version";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -186,6 +186,12 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFee
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
-    onError: callbacks?.onError,
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: feedstockKeys.detail(variables.feedstockId) });
+      }
+      return callbacks?.onError?.(error, variables);
+    },
   });
 }
