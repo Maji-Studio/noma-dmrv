@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import type { Pool, PoolClient } from "pg";
 import { db, type DbTransaction } from "@/db";
 import * as schema from "@/db/schema";
-import { pgErrorCode } from "@/db/errors";
+import { pgErrorCode, PG_TRANSACTION_TIMEOUT } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError, deadlineExceeded } from "@/lib/domain-errors";
 import { requireOrgScope } from "./utils";
@@ -77,14 +77,25 @@ export async function runOwnedTransaction<T>(
     callback: "pending",
   };
   let discardClient: Error | undefined;
+  let connectionError: Error | undefined;
+  // A timeout while the callback is between queries arrives as an error event.
+  // Keep it handled while checked out and preserve its SQLSTATE for classification.
+  const onClientError = (error: Error) => { connectionError ??= error; };
+  client.on("error", onClientError);
   try {
     const connection = drizzle(client, { schema });
     const data = await connection.transaction(async (tx) => {
       try {
+        if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before it started");
+        // PG only arms an inactive transaction timer when SET changes it. Reset
+        // any inherited timer first, then arm from SET with the remaining budget.
+        await tx.execute(sql`set local transaction_timeout = 0`);
         const budget = Math.floor(remainingMs(deadlineAt));
         if (budget <= 0) throw deadlineExceeded("before it started");
+        await tx.execute(sql.raw(`set local transaction_timeout = ${budget}`));
         await tx.execute(sql.raw(`set local statement_timeout = ${budget}`));
         const result = await callback(tx);
+        if (connectionError) throw connectionError;
         if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
         state.callback = "returned";
         return result;
@@ -96,18 +107,32 @@ export async function runOwnedTransaction<T>(
     });
     return { kind: "committed", data };
   } catch (error) {
+    const transactionTimeout = [error, state.thrown, connectionError].find(
+      (failure) => pgErrorCode(failure) === PG_TRANSACTION_TIMEOUT,
+    );
     const cleanRollback = state.callback === "threw" && error === state.thrown;
+    if (transactionTimeout || connectionError) {
+      discardClient = connectionError ?? new Error("Transaction connection terminated");
+    }
     if (!cleanRollback) {
       // BEGIN, ROLLBACK or COMMIT failed; never return an uncertain client.
       discardClient = error instanceof Error ? error : new Error(String(error));
     }
+    if (transactionTimeout) throw deadlineExceeded("while saving", transactionTimeout);
     if (state.callback === "returned") {
       throw isDefiniteRollback(error) ? error : outcomeUnknown(error);
+    }
+    // A savepoint rollback can mask 25P04 with a generic disconnect. Before
+    // the callback returns, Drizzle cannot have sent COMMIT. Only infer a
+    // deadline failure after a disconnect or failed rollback; preserve clean failures.
+    if ((connectionError || !cleanRollback) && remainingMs(deadlineAt) <= 0) {
+      throw deadlineExceeded("while saving", state.callback === "threw" ? state.thrown : error);
     }
     if (state.callback === "pending") throw error;
     // A failed rollback destroys the connection, aborting its open transaction.
     return { kind: "callback_threw", error: state.thrown };
   } finally {
     client.release(discardClient);
+    client.removeListener("error", onClientError);
   }
 }

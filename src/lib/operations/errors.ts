@@ -7,6 +7,7 @@
  * extends `SafeError`, so `withAction` already shows its message verbatim.
  */
 
+import { formatValidationIssues } from "@/lib/validation-message";
 import { z } from "zod";
 import { DomainError, type DomainIssue } from "@/lib/domain-errors";
 export { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
@@ -34,7 +35,7 @@ export function validationFailed(error: z.ZodError): DomainError {
   }));
   return new DomainError(
     "validation_failed",
-    issues[0]?.message ?? "The request is not valid.",
+    formatValidationIssues(issues),
     { issues },
   );
 }

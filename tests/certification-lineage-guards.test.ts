@@ -20,7 +20,7 @@ import {
   updateCreditBatch,
 } from "@/data-access/credit-batches";
 import { updateDelivery } from "@/data-access/deliveries";
-import { updateFeedstock } from "@/data-access/feedstocks";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateOrder } from "@/data-access/orders";
 import {
   deleteProductionRun,
@@ -801,9 +801,9 @@ describe("certification lineage guards", () => {
   it("rejects feedstock edits once consumed by a submitted removal lineage", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateFeedstock(makeTestOrgContext(TEST_USER_ID), fixture.feedstockId, {
+        db.transaction((tx) => updateFeedstockInTransaction(makeTestOrgContext(TEST_USER_ID), tx, fixture.feedstockId, { expectedVersion: 1,
           massDryKg: 901,
-        }),
+        })),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });

@@ -263,15 +263,29 @@ Pure starter residue; org scoping came later via ADR 0010.
   carry a client-supplied operation id the server records and a retry can look
   up, or whether the retry-and-duplicate risk stays with the operator.
 
+### An operation that awaits non-database work keeps its request past the deadline (`architecture/operation-callback-deadline`, opened 2026-10-07)
+
+- `runOwnedTransaction` (`src/data-access/owned-transaction.ts`) arms
+  `transaction_timeout`, but PostgreSQL ends only the session, not the
+  JavaScript callback. If an operation's `execute` awaited a slow external call
+  after its last query, the request and its checked-out client would wait for
+  that call, past the deadline. Today no operation does: external effects run
+  in after-commit hooks or are enqueued in the transaction (plan section 4).
+  **To resolve:** if an operation ever needs external work inside its
+  transaction, race the callback against the deadline and keep the client out
+  of the pool until the callback settles; until then keep `execute` database-only.
+
 ### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
 
-- **Rule:** every updater behind an edit form checks `expectedUpdatedAt`
-  (`src/data-access/expected-version.ts:assertExpectedVersion`) and every edit
-  form sends it, so a save built on a stale cached row is refused
+- **Rule:** every updater behind an edit form checks the version its form
+  loaded, so a save built on a stale cached row is refused
   ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
-- **Observed:** the check is implemented for facility, feedstock, storage
-  location, customer (+ location), supplier (+ location), application and
-  production run. These edit-form updaters do not accept or check the field
+- **Observed:** feedstock updates and deletes require integer `expectedVersion`
+  and use `src/data-access/row-version.ts`. Facility, storage location,
+  customer (+ location), supplier (+ location), application and production
+  run still use `expectedUpdatedAt` through
+  `src/data-access/expected-version.ts:assertExpectedVersion` until Phase 1b.
+  These edit-form updaters do not accept or check a version
   (some lock their row, some do not):
   `src/data-access/reactors.ts:updateReactor`,
   `src/data-access/formulations.ts:updateFormulation`,
@@ -289,12 +303,13 @@ Pure starter residue; org scoping came later via ADR 0010.
   `src/components/production-runs/production-incident-table.tsx`,
   `src/components/production-runs/production-sample-table.tsx`) call the
   matching `useUpdate*` hook without a version.
-- **Resolve via:** add `expectedUpdatedAt` to each updater's schema and input,
-  lock the row and call `assertExpectedVersion` after the locked read, send
-  `updatedAt` from the edit sheet, re-throw through `throwActionError`
-  (`src/lib/stale-version.ts`), and add each updater to the parametrised
-  expected-version spec in `tests/`. One PR per entity family is fine; delete
-  this entry when that spec covers all of them.
+- **Resolve via:** follow the feedstock row-version pattern in Phase 1b.
+  Add an integer `version`, bump it in every writer with `nextVersion`, call
+  `assertRowVersion` after the locked read, and require `expectedVersion` on
+  UI updates and deletes. Re-throw through `throwActionError`
+  (`src/lib/stale-version.ts`) and add focused expected-version tests in
+  `tests/`. One PR per entity family is fine; delete this entry when the tests
+  cover all of them.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 

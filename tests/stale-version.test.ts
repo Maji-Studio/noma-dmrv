@@ -40,6 +40,7 @@ describe("stale-version transport", () => {
     expect(failure).toEqual({
       success: false,
       error: STALE_VERSION_MESSAGE,
+      code: "stale_version",
       conflict: staleConflict,
     });
     expect(isStaleVersionFailure(failure)).toBe(true);

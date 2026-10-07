@@ -29,6 +29,7 @@ import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 import { deriveLaneStock } from "./lane-stock-derivation";
+import { nextVersion } from "./row-version";
 
 // Individual entity archives originate from JavaScript Date values and are
 // stored at whole-millisecond precision. Facility cascades use a database
@@ -586,7 +587,7 @@ export async function archiveFacility(
     await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
     await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)));
     await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), isNull(feedstockDeliveries.archivedAt)));
-    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
+    await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
     await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
     await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)));
     await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), isNull(orders.archivedAt)));
@@ -655,7 +656,7 @@ export async function restoreFacility(
     await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
     await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.archivedAt, cascadeArchiveStamp)));
     await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), eq(feedstockDeliveries.archivedAt, cascadeArchiveStamp)));
-    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.archivedAt, cascadeArchiveStamp)));
+    await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.archivedAt, cascadeArchiveStamp)));
     await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.archivedAt, cascadeArchiveStamp)));
     await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)));
     await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), eq(orders.archivedAt, cascadeArchiveStamp)));

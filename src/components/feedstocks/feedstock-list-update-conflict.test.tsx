@@ -9,6 +9,7 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { ConflictError, conflictCode } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
+import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { FeedstockFormData } from "@/schemas/feedstocks";
 
@@ -16,6 +17,7 @@ const FEEDSTOCK_ID = "33333333-3333-4333-8333-333333333333";
 
 const feedstock = {
   id: FEEDSTOCK_ID,
+  version: 1,
   code: "FS-001",
   facilityId: "facility-1",
   deliveryDate: "2026-09-01",
@@ -85,6 +87,7 @@ const mocks = vi.hoisted(() => ({
       }
     | undefined,
   updateRejection: undefined as unknown,
+  deleteMutation: vi.fn(),
 }));
 
 vi.mock("nuqs", () => ({
@@ -113,7 +116,7 @@ vi.mock("@/hooks/use-feedstocks", () => ({
     mutateAsync: vi.fn().mockRejectedValue(mocks.updateRejection),
     isPending: false,
   }),
-  useDeleteFeedstock: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useDeleteFeedstock: () => ({ mutateAsync: mocks.deleteMutation, isPending: false }),
 }));
 vi.mock("@/hooks/use-create-with-evidence", () => ({
   useCreateWithEvidence: () => ({
@@ -160,10 +163,14 @@ vi.mock("@/components/ui", () => ({
   Button: ({ children }: { children?: ReactNode }) => <button>{children}</button>,
   EmptyState: () => null,
   PageHeader: () => null,
-  RowActionsMenu: () => null,
+  RowActionsMenu: ({ actions }: { actions: Array<{ label: string; onSelect: () => void }> }) => (
+    <div>{actions.map((action) => <button key={action.label} onClick={action.onSelect}>{action.label}</button>)}</div>
+  ),
 }));
 vi.mock("@/components/ui/data-table", () => ({
-  DataTable: Object.assign(() => null, {
+  DataTable: Object.assign(({ columns }: {
+    columns: Array<{ id?: string; cell?: (context: { row: { original: FeedstockWithRelations } }) => ReactNode }>;
+  }) => <div>{columns.find((column) => column.id === "actions")?.cell?.({ row: { original: feedstock } })}</div>, {
     Toolbar: () => null,
     Search: () => null,
     ColumnVisibility: () => null,
@@ -173,7 +180,8 @@ vi.mock("@/components/ui/data-table", () => ({
 vi.mock("@/components/ui/status-badge", () => ({ StatusBadge: () => null }));
 vi.mock("@/components/ui/moisture-split", () => ({ MoistureSplit: () => null }));
 vi.mock("@/components/ui/delete-confirm-dialog", () => ({
-  DeleteConfirmDialog: () => null,
+  DeleteConfirmDialog: ({ isOpen, onConfirm }: { isOpen: boolean; onConfirm: () => Promise<void> }) =>
+    isOpen ? <button data-testid="delete-confirm" onClick={onConfirm}>Confirm delete</button> : null,
 }));
 // Renders its children only while open, so a still-mounted form proves the
 // sheet survived the refusal.
@@ -181,7 +189,9 @@ vi.mock("@/components/ui/entity-side-sheet", () => ({
   EntitySideSheet: ({ open, children }: { open: boolean; children?: ReactNode }) =>
     open ? <div>{children}</div> : null,
 }));
-vi.mock("@/components/forms", () => ({ ServerError: () => null }));
+vi.mock("@/components/forms", () => ({
+  ServerError: ({ message }: { message: string }) => <span data-testid="delete-error">{message}</span>,
+}));
 vi.mock("@/components/navigation", () => ({ SelectFacilityEmptyState: () => null }));
 vi.mock("@/components/transport-legs", () => ({
   TransportEvidencePanel: () => null,
@@ -256,5 +266,32 @@ describe("FeedstockList update conflict", () => {
     expect(JSON.stringify(renderer.toJSON())).not.toContain(
       "Drawing on this bin:",
     );
+  });
+});
+
+describe("FeedstockList stale delete", () => {
+  it("closes the confirmation and asks the operator to review the changed feedstock", async () => {
+    mocks.deleteMutation.mockRejectedValueOnce(new StaleVersionError(STALE_VERSION_MESSAGE, {
+      entity: "feedstock",
+      id: FEEDSTOCK_ID,
+      code: STALE_VERSION_CONFLICT_CODE,
+    }));
+    const renderer = renderList();
+    act(() => {
+      renderer.root.findAllByType("button").find((button) => button.children.includes("Delete"))?.props.onClick();
+    });
+    const confirm = renderer.root.findByProps({ "data-testid": "delete-confirm" });
+    await act(async () => {
+      await confirm.props.onClick();
+    });
+    expect(mocks.deleteMutation).toHaveBeenCalledWith({
+      feedstockId: FEEDSTOCK_ID,
+      expectedVersion: feedstock.version,
+    });
+    expect(renderer.root.findAllByProps({ "data-testid": "delete-confirm" })).toHaveLength(0);
+    expect(textOf(renderer, "delete-error")).toBe(
+      "Feedstock FS-001 was not deleted. It changed since the list loaded. Review it before deleting.",
+    );
+    act(() => renderer.unmount());
   });
 });

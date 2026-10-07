@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
+import { check, integer, doublePrecision, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
 import { feedstockEligibilityStatus, feedstockStatus, feedstockTypeUsage } from './common';
 import { massKg, percent, tonnes } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
@@ -116,6 +116,7 @@ export const feedstocks = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
+    version: integer('version').notNull().default(1),
     code: text('code').notNull(), // e.g., "FI-2025-001"
     facilityId: uuid('facility_id')
       .notNull(),

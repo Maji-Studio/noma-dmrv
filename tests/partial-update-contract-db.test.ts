@@ -27,7 +27,7 @@ import {
   transportLegs,
   users,
 } from "@/db/schema";
-import { updateFeedstock } from "@/data-access/feedstocks";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFeedstockType } from "@/data-access/feedstock-types";
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import { updateFeedstockSchema } from "@/schemas/feedstocks";
@@ -191,17 +191,18 @@ async function applyFeedstockPatch(
     ...updateData
   } = updateFeedstockSchema.parse({
     feedstockId: fixture.feedstockId,
+    expectedVersion: (await db.select({ version: feedstocks.version }).from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId)))[0].version,
     ...input,
   });
 
-  return updateFeedstock(fixture.ctx, feedstockId, {
+  return db.transaction((tx) => updateFeedstockInTransaction(fixture.ctx, tx, feedstockId, {
     ...updateData,
     transportDistanceKm,
     transportDistanceSource: resolveDistanceSource(
       transportDistanceKm,
       transportDistanceSource,
     ),
-  });
+  }));
 }
 
 async function readFeedstockMasses(fixture: Fixture) {

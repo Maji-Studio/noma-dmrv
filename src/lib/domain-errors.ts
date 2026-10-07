@@ -1,3 +1,4 @@
+import type { ConflictRef } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
 import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 
@@ -28,6 +29,8 @@ export interface DomainIssue {
 }
 
 interface DomainErrorOptions {
+  conflict?: ConflictRef;
+  blockers?: ConflictRef[];
   issues?: DomainIssue[];
   retryable?: boolean;
   /** Seconds a client should wait before retrying. */
@@ -36,6 +39,8 @@ interface DomainErrorOptions {
 }
 
 export class DomainError extends SafeError {
+  readonly conflict?: ConflictRef;
+  readonly blockers?: ConflictRef[];
   readonly code: DomainErrorCode;
   readonly issues: DomainIssue[];
   readonly retryable: boolean;
@@ -45,6 +50,8 @@ export class DomainError extends SafeError {
     super(message);
     this.name = "DomainError";
     this.code = code;
+    this.conflict = options.conflict;
+    this.blockers = options.blockers;
     this.issues = options.issues ?? [];
     this.retryable = options.retryable ?? false;
     this.retryAfterSeconds = options.retryAfterSeconds;
@@ -61,10 +68,10 @@ export function idempotencyInProgress(cause?: unknown): DomainError {
 }
 
 /** The budget ran out before the write could commit; nothing was saved. */
-export function deadlineExceeded(detail: string): DomainError {
+export function deadlineExceeded(detail: string, cause?: unknown): DomainError {
   return new DomainError(
     "deadline_exceeded",
     `The request ran out of time ${detail}. Nothing was saved; retry it.`,
-    { retryable: true },
+    { retryable: true, cause },
   );
 }

@@ -112,12 +112,12 @@ describe("toOperationJsonSchema: feedstock intake", () => {
     });
   });
 
-  it("publishes the update contract with only the id required", () => {
+  it("publishes the update contract with the id and version required", () => {
     expect(contract(updateFeedstockSchema)).toEqual({
       type: "object",
       properties: {
         feedstockId: UUID,
-        expectedUpdatedAt: { type: "string", format: "date-time" },
+        expectedVersion: { type: "integer", exclusiveMinimum: 0, maximum: Number.MAX_SAFE_INTEGER },
         facilityId: UUID,
         deliveryDate: { type: "string", format: "date" },
         supplierId: UUID,
@@ -137,7 +137,7 @@ describe("toOperationJsonSchema: feedstock intake", () => {
         overrideJustification: { anyOf: [TEXT_2000, { type: "null" }] },
         notes: { anyOf: [TEXT_2000, { type: "null" }] },
       },
-      required: ["feedstockId"],
+      required: ["feedstockId", "expectedVersion"],
     });
   });
 });

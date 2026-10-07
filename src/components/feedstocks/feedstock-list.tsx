@@ -24,7 +24,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { MISSING_VALUE } from "@/lib/copy-utils";
 import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
-import { toSaveErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, staleDeleteMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { getConflict, type ConflictRef } from "@/lib/conflict-ref";
 import { STOCK_CONFLICT_ENTITY } from "@/lib/stock-conflict-entities";
 import { FeedstockForm } from "./feedstock-form";
@@ -65,7 +65,7 @@ import { ILLUSTRATION_SIZE, FeedstockArt } from "@/components/ui/illustrations";
 
 function createColumns(
   onEdit: (feedstock: FeedstockWithRelations) => void,
-  onDelete: (id: string) => void,
+  onDelete: (feedstock: FeedstockWithRelations) => void,
 ): ColumnDef<FeedstockWithRelations>[] {
   return [
     {
@@ -179,7 +179,7 @@ function createColumns(
             label={`Actions for ${row.original.code}`}
             actions={[
               { label: "Edit", onSelect: () => onEdit(row.original) },
-              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
+              { label: "Delete", destructive: true, onSelect: () => onDelete(row.original) },
             ]}
           />
         </div>
@@ -242,7 +242,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     entity: FeedstockWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<FeedstockWithRelations | null>(null);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -328,7 +328,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         feedstockId: editing.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: editing.updatedAt,
+        expectedVersion: editing.version,
         facilityId: data.facilityId,
         deliveryDate: data.deliveryDate,
         supplierId: data.supplierId,
@@ -363,17 +363,22 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     }
   };
 
-  const handleDelete = (id: string) => setDeletingId(id);
+  const handleDelete = (feedstock: FeedstockWithRelations) => setDeleting(feedstock);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteFeedstock.mutateAsync(deletingId);
-      setDeletingId(null);
+      await deleteFeedstock.mutateAsync({ feedstockId: deleting.id, expectedVersion: deleting.version });
+      setDeleting(null);
       toast.success("Feedstock deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Feedstock was not deleted. Try again.");
+      if (error instanceof StaleVersionError) {
+        setDeleting(null);
+        setDeleteError(staleDeleteMessage(`Feedstock ${deleting.code}`));
+      } else {
+        setDeleteError(error instanceof Error ? error.message : "Feedstock was not deleted. Try again.");
+      }
     }
   };
 
@@ -624,11 +629,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Delete Confirmation */}
       <DeleteConfirmDialog
-        isOpen={!!deletingId}
+        isOpen={!!deleting}
         title="Delete feedstock"
         message="Are you sure you want to delete this feedstock? This action cannot be undone. Note: Feedstocks used in production runs cannot be deleted."
         onConfirm={handleDeleteConfirm}
-        onCancel={() => { setDeletingId(null); setDeleteError(null); }}
+        onCancel={() => { setDeleting(null); setDeleteError(null); }}
         isPending={deleteFeedstock.isPending}
       />
 

@@ -31,6 +31,11 @@ export const STALE_VERSION_CONFLICT_CODE = conflictCode("stale-version");
 export const STALE_VERSION_MESSAGE =
   "This record changed since you opened it. Your changes were not saved. Review the latest values before saving again.";
 
+/** State the refused deletion and the next action using the record's code. */
+export function staleDeleteMessage(recordLabel: string): string {
+  return `${recordLabel} was not deleted. It changed since the list loaded. Review it before deleting.`;
+}
+
 /** Structured reference to the record whose version moved on. */
 export type StaleVersionConflict = ConflictRef;
 
