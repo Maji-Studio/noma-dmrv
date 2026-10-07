@@ -122,6 +122,12 @@ export async function runOwnedTransaction<T>(
     if (state.callback === "returned") {
       throw isDefiniteRollback(error) ? error : outcomeUnknown(error);
     }
+    // A savepoint rollback can mask 25P04 with a generic disconnect. Before
+    // the callback returns, Drizzle cannot have sent COMMIT. Only infer a
+    // deadline failure after a disconnect or failed rollback; preserve clean failures.
+    if ((connectionError || !cleanRollback) && remainingMs(deadlineAt) <= 0) {
+      throw deadlineExceeded("while saving", state.callback === "threw" ? state.thrown : error);
+    }
     if (state.callback === "pending") throw error;
     // A failed rollback destroys the connection, aborting its open transaction.
     return { kind: "callback_threw", error: state.thrown };

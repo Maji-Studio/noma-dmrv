@@ -33,6 +33,7 @@ const QUEUED_ANSWER_SLACK_MS = 300;
 const SETTLE_MS = 150;
 const SHORT_STATEMENT_SECONDS = 0.05;
 const SHORT_STATEMENT_COUNT = 20;
+const SAVEPOINT_SLEEP_SECONDS = 2;
 const FEEDSTOCK_CODE = /^FS-\d{2}-\d{3,}$/;
 
 let fixture: IntakeFixture;
@@ -185,6 +186,28 @@ describe("operation runner at pool size 1", { timeout: SUITE_TIMEOUT_MS }, () =>
       "deadline_exceeded",
     );
     expect(await supplierNamed(name)).toBeUndefined();
+  });
+
+  it("classifies a timeout inside a savepoint and leaves the pool usable", async () => {
+    const name = `Savepoint overrun ${crypto.randomUUID()}`;
+    await expectDomainError(
+      runOperation(
+        supplierThen(name, async (tx) => {
+          await tx.transaction(async (sp) => {
+            await sp.execute(sql`select pg_sleep(${SAVEPOINT_SLEEP_SECONDS})`);
+          });
+        }),
+        fixture.ctx,
+        {},
+        { deadlineMs: SHORT_DEADLINE_MS },
+      ),
+      "deadline_exceeded",
+    );
+    expect(await supplierNamed(name)).toBeUndefined();
+
+    const nextName = `After savepoint timeout ${crypto.randomUUID()}`;
+    await runOperation(supplierThen(nextName, async () => undefined), fixture.ctx, {});
+    expect(await supplierNamed(nextName)).toBeDefined();
   });
 
   it("server terminates short statements that together exceed the transaction budget", async () => {

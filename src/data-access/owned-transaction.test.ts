@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { Pool } from "pg";
 import { PG_TRANSACTION_TIMEOUT } from "@/db/errors";
+import { DomainError } from "@/lib/domain-errors";
 import { runOwnedTransaction } from "./owned-transaction";
 
 const { transaction, execute, guard } = vi.hoisted(() => ({ transaction: vi.fn(), execute: vi.fn(), guard: vi.fn() }));
@@ -55,6 +56,60 @@ describe("owned transaction timeout handling without a database", () => {
       return "unsaved";
     }, pool)).rejects.toMatchObject({ code: "deadline_exceeded", cause: { code: PG_TRANSACTION_TIMEOUT } });
     expect(client.release).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it.each([false, true])("classifies a masked savepoint failure only after the deadline (expired: %s)", async (expired) => {
+    const { client, pool } = connection();
+    const deadlineAt = Date.now() + BUDGET_MS;
+    const savepointError = new Error("connection closed during savepoint rollback");
+    transaction.mockImplementation(async (callback) => {
+      try { return await callback({ execute }); }
+      catch { throw new Error("connection closed during outer rollback"); }
+    });
+    const result = runOwnedTransaction(ctx, deadlineAt, async () => {
+      if (expired) vi.spyOn(Date, "now").mockReturnValue(deadlineAt);
+      client.emit("error", new Error("connection terminated unexpectedly"));
+      throw savepointError;
+    }, pool);
+    if (expired) {
+      await expect(result).rejects.toMatchObject({ code: "deadline_exceeded", cause: savepointError });
+    } else {
+      await expect(result).resolves.toEqual({ kind: "callback_threw", error: savepointError });
+    }
+    expect(client.release).toHaveBeenCalledWith(expect.any(Error));
+    expect(client.listenerCount("error")).toBe(0);
+  });
+
+  it("preserves a domain error with a clean rollback after the deadline", async () => {
+    const { client, pool } = connection();
+    const deadlineAt = Date.now() + BUDGET_MS;
+    const error = new DomainError("stale_version", "The record has changed.");
+    const result = await runOwnedTransaction(ctx, deadlineAt, async () => {
+      vi.spyOn(Date, "now").mockReturnValue(deadlineAt + 1);
+      throw error;
+    }, pool);
+    expect(result).toEqual({ kind: "callback_threw", error });
+    if (result.kind === "callback_threw") expect(result.error).toBe(error);
+    expect(client.release).toHaveBeenCalledWith(undefined);
+    expect(client.listenerCount("error")).toBe(0);
+  });
+
+  it.each(["08006", "23505", "40001"])("preserves post-COMMIT classification after the deadline (%s)", async (sqlstate) => {
+    const { client, pool } = connection();
+    const deadlineAt = Date.now() + BUDGET_MS;
+    const error = Object.assign(new Error("commit failed"), { code: sqlstate });
+    transaction.mockImplementation(async (callback) => {
+      await callback({ execute });
+      vi.spyOn(Date, "now").mockReturnValue(deadlineAt);
+      throw error;
+    });
+    const result = runOwnedTransaction(ctx, deadlineAt, async () => "result", pool);
+    if (sqlstate === "08006") {
+      await expect(result).rejects.toMatchObject({ code: "outcome_unknown", cause: error });
+    } else {
+      await expect(result).rejects.toBe(error);
+    }
+    expect(client.release).toHaveBeenCalledWith(error);
   });
 
   it("distinguishes a server timeout at COMMIT from a lost acknowledgement", async () => {
