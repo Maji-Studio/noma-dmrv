@@ -42,7 +42,6 @@ describe("derived transport-leg transaction boundaries", () => {
     supplierIds: [] as string[],
     supplierLocationIds: [] as string[],
     feedstockTypeIds: [] as string[],
-    feedstockCodes: [] as string[],
     storageLocationIds: [] as string[],
     customerIds: [] as string[],
     customerLocationIds: [] as string[],
@@ -54,13 +53,14 @@ describe("derived transport-leg transaction boundaries", () => {
   beforeAll(async () => { await ensureTestOrg(); await ensureOutputFixtureActor(ctx); });
 
   afterEach(async () => {
-    const trackedFeedstocks = created.feedstockCodes.length > 0
+    // Feedstock codes are generated, so feedstocks are tracked by facility.
+    const trackedFeedstocks = created.facilityIds.length > 0
       ? await db
           .select({ id: feedstocks.id })
           .from(feedstocks)
           .where(and(
             eq(feedstocks.organizationId, TEST_ORG_ID),
-            inArray(feedstocks.code, created.feedstockCodes),
+            inArray(feedstocks.facilityId, created.facilityIds),
           ))
       : [];
     const entityIds = [
@@ -162,8 +162,6 @@ describe("derived transport-leg transaction boundaries", () => {
       .returning({ id: storageLocations.id });
     created.storageLocationIds.push(bin.id);
 
-    const feedstockCode = `FS-TL-${tag}`;
-    created.feedstockCodes.push(feedstockCode);
     await expect(
       createFeedstock(
         ctx,
@@ -179,7 +177,6 @@ describe("derived transport-leg transaction boundaries", () => {
           // Exercise a database rejection specifically in derived persistence.
           transportDistanceSource: "invalid_source" as never,
         },
-        async () => [feedstockCode],
       ),
     ).rejects.toThrow();
 
@@ -188,7 +185,7 @@ describe("derived transport-leg transaction boundaries", () => {
       .from(feedstocks)
       .where(and(
         eq(feedstocks.organizationId, TEST_ORG_ID),
-        eq(feedstocks.code, feedstockCode),
+        eq(feedstocks.facilityId, facility.id),
       ));
     const [persistedBin] = await db
       .select({ feedstockTypeId: storageLocations.feedstockTypeId })
@@ -268,8 +265,6 @@ describe("derived transport-leg transaction boundaries", () => {
       .returning({ id: storageLocations.id });
     created.storageLocationIds.push(bin.id);
 
-    const feedstockCode = `FS-OVR-${tag}`;
-    created.feedstockCodes.push(feedstockCode);
     const result = await createFeedstock(
       ctx,
       {
@@ -283,7 +278,6 @@ describe("derived transport-leg transaction boundaries", () => {
         transportDistanceKm: 25,
         transportDistanceSource: "document",
       },
-      async () => [feedstockCode],
     );
     expect(result.feedstocks[0].status).toBe("complete");
     const feedstockId = result.feedstocks[0].id;

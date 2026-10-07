@@ -44,6 +44,7 @@ import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import { assertFeedstockBinLanesNotNegative } from "./feedstock-bin-stock-integrity";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
+import { withAutoCodes } from "./code-generator";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 /** Entity key on a feedstock's expected-version conflict. */
@@ -438,17 +439,28 @@ export async function getFeedstockStats(
 export async function createFeedstock(
   ctx: OrgContext,
   data: CreateFeedstockInput,
-  codesFn: (count: number) => Promise<string[]>
+): Promise<CreateFeedstockResult> {
+  return db.transaction((tx) => createFeedstockInTransaction(ctx, tx, data));
+}
+
+/**
+ * Record a feedstock delivery and its bin allocations inside a caller-owned
+ * transaction (the operation runner's, or `createFeedstock`'s own). Every
+ * read and write goes through `tx`: at pool size 1 a read through the global
+ * `db` would wait on this transaction's own connection.
+ */
+export async function createFeedstockInTransaction(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  data: CreateFeedstockInput,
 ): Promise<CreateFeedstockResult> {
   requireOrgScope(ctx);
-  await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
-  await assertSameOrg(ctx, suppliers, data.supplierId);
-  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
-  await Promise.all(
-    data.allocations.map((allocation) =>
-      assertSameOrg(ctx, storageLocations, allocation.storageLocationId),
-    ),
-  );
+  await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx);
+  await assertSameOrg(ctx, suppliers, data.supplierId, tx);
+  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId, tx);
+  for (const allocation of data.allocations) {
+    await assertSameOrg(ctx, storageLocations, allocation.storageLocationId, tx);
+  }
 
   const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
   const allocationsExceedDelivery = exceedsMassWithTolerance(
@@ -461,7 +473,7 @@ export async function createFeedstock(
   const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
 
   // Confirm the feedstock type exists before locking compatible bins to it.
-  const [feedstockType] = await db
+  const [feedstockType] = await tx
     .select({ id: feedstockTypes.id })
     .from(feedstockTypes)
     .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
@@ -471,81 +483,88 @@ export async function createFeedstock(
   }
 
   const binIds = data.allocations.map((a) => a.storageLocationId);
-  const codes = await codesFn(data.allocations.length);
+  await lockActiveFacilityReference(ctx, tx, data.facilityId);
+  await lockBinStocks(ctx, tx, binIds);
+  await validateFeedstockStorageLocations(
+    ctx,
+    tx,
+    binIds,
+    data.facilityId,
+    data.feedstockTypeId,
+  );
 
-  const items = await db.transaction(async (tx) => {
-    await lockActiveFacilityReference(ctx, tx, data.facilityId);
-    await lockBinStocks(ctx, tx, binIds);
-    await validateFeedstockStorageLocations(
-      ctx,
-      tx,
-      binIds,
-      data.facilityId,
-      data.feedstockTypeId,
-    );
-    const results: string[] = [];
+  const items = await withAutoCodes(
+    ctx,
+    tx,
+    "FS",
+    feedstocks,
+    feedstocks.code,
+    data.allocations.length,
+    async (codes, savepoint) => {
+      const results: string[] = [];
 
-    for (let i = 0; i < data.allocations.length; i++) {
-      const allocation = data.allocations[i];
-      const allocatedDryMassKg = deriveMassDryKg(allocation.allocatedWetMassKg, data.moisturePercent);
+      for (let i = 0; i < data.allocations.length; i++) {
+        const allocation = data.allocations[i];
+        const allocatedDryMassKg = deriveMassDryKg(allocation.allocatedWetMassKg, data.moisturePercent);
 
-      const status = determineFeedstockStatus({
-        feedstockTypeId: data.feedstockTypeId,
-        massDryKg: allocatedDryMassKg,
-        massWetKg: allocation.allocatedWetMassKg,
-      });
-
-      const [feedstock] = await tx
-        .insert(feedstocks)
-        .values({
-          organizationId: ctx.organizationId,
-          code: codes[i],
-          facilityId: data.facilityId,
-          status,
-          // Delivery fields
-          deliveryDate: data.deliveryDate,
-          supplierId: data.supplierId,
-          vehicleId: data.vehicleId ?? null,
-          gpsLatitude: data.gpsLatitude ?? null,
-          gpsLongitude: data.gpsLongitude ?? null,
-          deliveryGroupId,
-          overrideJustification: data.overrideJustification || null,
-          // Material fields
+        const status = determineFeedstockStatus({
           feedstockTypeId: data.feedstockTypeId,
           massDryKg: allocatedDryMassKg,
           massWetKg: allocation.allocatedWetMassKg,
-          moistureContentPercent: data.moisturePercent,
-          storageLocationId: allocation.storageLocationId,
-          notes: data.notes || null,
-        })
-        .returning({ id: feedstocks.id });
+        });
 
-      results.push(feedstock.id);
+        const [feedstock] = await savepoint
+          .insert(feedstocks)
+          .values({
+            organizationId: ctx.organizationId,
+            code: codes[i],
+            facilityId: data.facilityId,
+            status,
+            // Delivery fields
+            deliveryDate: data.deliveryDate,
+            supplierId: data.supplierId,
+            vehicleId: data.vehicleId ?? null,
+            gpsLatitude: data.gpsLatitude ?? null,
+            gpsLongitude: data.gpsLongitude ?? null,
+            deliveryGroupId,
+            overrideJustification: data.overrideJustification || null,
+            // Material fields
+            feedstockTypeId: data.feedstockTypeId,
+            massDryKg: allocatedDryMassKg,
+            massWetKg: allocation.allocatedWetMassKg,
+            moistureContentPercent: data.moisturePercent,
+            storageLocationId: allocation.storageLocationId,
+            notes: data.notes || null,
+          })
+          .returning({ id: feedstocks.id });
 
-      await syncFeedstockTransportLeg(ctx, tx, feedstock.id, {
-        distanceKm: data.transportDistanceKm,
-        distanceSource: data.transportDistanceSource,
-      });
+        results.push(feedstock.id);
 
-      // Lock feedstock type on bin (first-use lock)
-      await tx
-        .update(storageLocations)
-        .set({ feedstockTypeId: data.feedstockTypeId })
-        .where(
-          and(
-            eq(storageLocations.id, allocation.storageLocationId),
-            eq(storageLocations.organizationId, ctx.organizationId),
-            sql`${storageLocations.feedstockTypeId} is null`
-          )
-        );
-    }
+        await syncFeedstockTransportLeg(ctx, savepoint, feedstock.id, {
+          distanceKm: data.transportDistanceKm,
+          distanceSource: data.transportDistanceSource,
+        });
 
-    // Read the created records back inside the transaction. A read after the
-    // commit can fail on its own, and an empty result then looks identical to
-    // "nothing was created" (issue #769).
-    return feedstockBaseQuery(ctx, tx)
-      .where(and(inArray(feedstocks.id, results), eq(feedstocks.organizationId, ctx.organizationId)));
-  });
+        // Lock feedstock type on bin (first-use lock)
+        await savepoint
+          .update(storageLocations)
+          .set({ feedstockTypeId: data.feedstockTypeId })
+          .where(
+            and(
+              eq(storageLocations.id, allocation.storageLocationId),
+              eq(storageLocations.organizationId, ctx.organizationId),
+              sql`${storageLocations.feedstockTypeId} is null`
+            )
+          );
+      }
+
+      // Read the created records back inside the transaction. A read after the
+      // commit can fail on its own, and an empty result then looks identical to
+      // "nothing was created" (issue #769).
+      return feedstockBaseQuery(ctx, savepoint)
+        .where(and(inArray(feedstocks.id, results), eq(feedstocks.organizationId, ctx.organizationId)));
+    },
+  );
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;

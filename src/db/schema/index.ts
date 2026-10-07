@@ -3,6 +3,7 @@
  * Aggregates all schema definitions for drizzle
  */
 
+export * from "./api";
 export * from "./application";
 export * from "./auth";
 export * from "./bin-movements";

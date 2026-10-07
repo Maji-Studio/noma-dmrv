@@ -470,7 +470,6 @@ describe(
   () => {
     it("locks and revalidates zero-mass feedstock allocations", async () => {
       const fixture = await createFixture();
-      const feedstockCode = `FS-SRA-ZERO-${fixture.tag}`;
 
       const outcome = await archiveBeforeReferenceWrite(
         fixture.untypedFeedstockBinId,
@@ -489,7 +488,6 @@ describe(
                 allocatedWetMassKg: 0,
               }],
             },
-            async () => [feedstockCode],
           ),
       );
 
@@ -596,7 +594,6 @@ describe(
                 allocatedWetMassKg: 0,
               }],
             },
-            async () => [`FS-SRA-FACILITY-${fixture.tag}`],
           ),
       );
 

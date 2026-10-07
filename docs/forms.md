@@ -163,12 +163,18 @@ Prefer the `PositionPicker` component (map preview + address search + manual lat
 
 ## Dates
 
-For a new or changed `<input type="date">` whose value is parsed into a `Date`,
-use `requiredDateOnly` / `optionalDateOnly` from `@/schemas/helpers`. They parse
-`"YYYY-MM-DD"` at **local** midnight, because `new Date("YYYY-MM-DD")` parses as
-**UTC** midnight, which can render as the adjacent day and walk a stored date on
-an edit/save round-trip. `z.iso.date()` validates a string but does not produce
-a `Date`.
+Use `calendarDateSchema` from `@/schemas/helpers` for business dates persisted
+as **UTC-midnight date-only values**, such as the feedstock delivery date. It
+accepts strict `YYYY-MM-DD` strings and real calendar days only, decodes them to
+a UTC-midnight `Date`, and publishes as `format: date`. Server re-validation
+accepts a `Date` only at UTC midnight. Use `toDateInputValue` for defaults of
+these persisted UTC date-only values.
+
+Use `requiredDateOnly` / `optionalDateOnly` where a date is combined with a
+facility time, as in production runs. They parse `"YYYY-MM-DD"` at **local**
+midnight, because `new Date("YYYY-MM-DD")` parses as **UTC** midnight, which can
+render as the adjacent day and walk a stored date on an edit/save round-trip.
+`z.iso.date()` validates a string but does not produce a `Date`.
 
 Several established application/order/delivery/credit-batch schemas still use
 `z.coerce.date()` while their components protect the default side with
@@ -178,7 +184,7 @@ and database column and migrate the round trip deliberately. The
 production-run schemas are the current reference for the local date-only
 helpers.
 
-Defaults have the mirror-image hazard. **Never `toISOString()`** for a form default — use `@/lib/date-utils`:
+For local date and time defaults, **never use `toISOString()`**. Use `@/lib/date-utils`:
 
 ```typescript
 date: formatLocalDate(new Date()),          // "2026-03-03"  → <input type="date">

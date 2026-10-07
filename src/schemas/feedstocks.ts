@@ -7,11 +7,13 @@ import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import {
+  calendarDateSchema,
   clearablePositiveNumber,
   emptyToNull,
   expectedUpdatedAtSchema,
   massKgSchema,
   optionalPositiveNumber,
+  pipeToCanonicalNumber,
   positiveMassKgSchema,
   requiredNumber,
   requiredPositiveMassKgSchema,
@@ -43,23 +45,16 @@ const requiredPositiveMass = requiredPositiveMassKgSchema(
   "Must be greater than 0",
 );
 
-const requiredMoisturePercent = requiredNumber().pipe(
+const requiredMoisturePercent = pipeToCanonicalNumber(
+  requiredNumber(),
   storedPercentSchema()
     .min(MOISTURE_MIN, "Moisture must be between 0 and 100")
-    .max(MOISTURE_MAX, "Moisture must be between 0 and 100")
+    .max(MOISTURE_MAX, "Moisture must be between 0 and 100"),
 );
 
-const deliveryDateSchema = z.union([
-  z.date(),
-  z.string().transform((val, ctx) => {
-    const date = new Date(val);
-    if (isNaN(date.getTime())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-      return z.NEVER;
-    }
-    return date;
-  }),
-]);
+// A business date: the day the truck arrived, never an instant (section 3.2
+// of the data-entry API plan). Strict so `2026-02-31` cannot roll into March.
+const deliveryDateSchema = calendarDateSchema();
 
 // ============================================
 // Bin Allocation Schema
@@ -158,17 +153,7 @@ export const updateFeedstockSchema = z.object({
   feedstockId: z.string().uuid("Choose a valid feedstock."),
   expectedUpdatedAt: expectedUpdatedAtSchema,
   facilityId: z.string().uuid().optional(),
-  deliveryDate: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid date." });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]).optional(),
+  deliveryDate: calendarDateSchema().optional(),
   supplierId: z.string().uuid().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   // Clearable, not optional-null: `syncFeedstockTransportLeg` preserves the

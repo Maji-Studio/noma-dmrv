@@ -6,8 +6,6 @@
  */
 
 import { z } from "zod";
-import { feedstocks as feedstocksTable } from "@/db/schema";
-import { generateNextCodes } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   createFeedstock,
@@ -165,21 +163,13 @@ export async function createFeedstockFn(
 
     const data = createFeedstockSchema.parse(input);
 
-    // Generate sequential codes for each allocation in one batch
-    const codesFn = (count: number) =>
-      generateNextCodes(ctx, "FS", feedstocksTable, feedstocksTable.code, count);
-
-    const result = await createFeedstock(
-      ctx,
-      {
-        ...data,
-        transportDistanceSource: resolveDistanceSource(
-          data.transportDistanceKm,
-          data.transportDistanceSource,
-        ),
-      },
-      codesFn,
-    );
+    const result = await createFeedstock(ctx, {
+      ...data,
+      transportDistanceSource: resolveDistanceSource(
+        data.transportDistanceKm,
+        data.transportDistanceSource,
+      ),
+    });
 
     return { success: true, data: result };
   } catch (error) {

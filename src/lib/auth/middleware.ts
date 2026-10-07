@@ -25,6 +25,15 @@ const PUBLIC_ROUTES = [
 const AUTH_ROUTES = ["/login", "/forgot-password"];
 
 /**
+ * Machine-client routes that authenticate their own bearer credential and
+ * never accept a session cookie (data-entry API plan, section 6). They return
+ * before the session lookup, so neither the login redirect nor the
+ * unverified-email refusal applies. Exact paths only: `/api/mcpx` and
+ * `/api/mcp/anything` stay behind the session.
+ */
+const MACHINE_CLIENT_ROUTES = new Set(["/api/mcp"]);
+
+/**
  * Check if path matches any of the given routes
  */
 function matchesRoute(pathname: string, routes: string[]): boolean {
@@ -45,6 +54,10 @@ export async function updateSession(request: NextRequest) {
 
   // Allow API auth routes to pass through
   if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
+
+  if (MACHINE_CLIENT_ROUTES.has(pathname)) {
     return NextResponse.next();
   }
 
