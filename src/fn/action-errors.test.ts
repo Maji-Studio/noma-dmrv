@@ -8,14 +8,20 @@ import { STALE_VERSION_CONFLICT_CODE, StaleVersionError, throwActionError } from
 import { assertRowVersion } from "@/data-access/row-version";
 import { formatZodActionError, toActionFailure } from "./action-errors";
 
-const { logError } = vi.hoisted(() => ({ logError: vi.fn() }));
-vi.mock("@/lib/log", () => ({ logger: { error: logError }, sanitizeErrorMessage: () => "sanitized" }));
+const { logError, sanitizeErrorMessage } = vi.hoisted(() => ({
+  logError: vi.fn(),
+  sanitizeErrorMessage: vi.fn(() => "sanitized"),
+}));
+vi.mock("@/lib/log", () => ({ logger: { error: logError }, sanitizeErrorMessage }));
 const options = {
   fallbackMessage: "Failed to update feedstock",
   log: { message: "feedstock action failed", context: { op: "feedstock:update" } },
 };
 const conflict = { entity: "feedstock", id: "record-id", code: conflictCode("FS-26-001") };
-beforeEach(() => logError.mockClear());
+beforeEach(() => {
+  logError.mockClear();
+  sanitizeErrorMessage.mockClear();
+});
 
 describe("toActionFailure", () => {
   it("preserves domain code, issue paths and business conflict references", () => {
@@ -30,6 +36,23 @@ describe("toActionFailure", () => {
     expect(toActionFailure(new DomainError("not_found", "Missing."), options)).toEqual({
       success: false, error: "Missing.", code: "not_found",
     });
+  });
+
+  it("logs an unknown commit once with its deepest sanitized cause but skips a plain stale refusal", () => {
+    toActionFailure(new DomainError("stale_version", "The record changed."), options);
+    expect(logError).not.toHaveBeenCalled();
+    const cause = Object.assign(new Error("connection terminated"), { name: "DatabaseError", code: "08006" });
+    const error = new DomainError("outcome_unknown", "The save outcome is unknown.", {
+      cause: new DomainError("outcome_unknown", "The save outcome is unknown.", { cause }),
+    });
+
+    expect(toActionFailure(error, options)).toEqual({
+      success: false, error: error.message, code: "outcome_unknown",
+    });
+    expect(logError).toHaveBeenCalledExactlyOnceWith({
+      op: "feedstock:update", code: "outcome_unknown", errorName: "DatabaseError", errorMessage: "sanitized",
+    }, "feedstock action failed");
+    expect(sanitizeErrorMessage).toHaveBeenCalledExactlyOnceWith(cause);
   });
 
   it("keeps all Zod prose and paths on direct and runner decode paths without rejected values", () => {

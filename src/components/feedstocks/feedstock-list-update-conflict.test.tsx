@@ -290,7 +290,7 @@ describe("FeedstockList stale delete", () => {
     });
     expect(renderer.root.findAllByProps({ "data-testid": "delete-confirm" })).toHaveLength(0);
     expect(textOf(renderer, "delete-error")).toBe(
-      "Feedstock FS-001 changed since the list loaded. Review it before deleting.",
+      "Feedstock FS-001 was not deleted. It changed since the list loaded. Review it before deleting.",
     );
     act(() => renderer.unmount());
   });

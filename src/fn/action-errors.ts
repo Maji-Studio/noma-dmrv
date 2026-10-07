@@ -86,6 +86,29 @@ export function toActionFailure(
   { fallbackMessage, log, zodErrorPrefix }: ActionFailureOptions,
 ): ActionFailure {
   if (error instanceof DomainError) {
+    let rootCause: unknown = error;
+    let hasUnexpectedCause = false;
+    const seen = new Set<unknown>();
+    while (
+      typeof rootCause === "object" && rootCause !== null &&
+      "cause" in rootCause && rootCause.cause !== undefined &&
+      !seen.has(rootCause)
+    ) {
+      seen.add(rootCause);
+      rootCause = rootCause.cause;
+      if (!(rootCause instanceof SafeError)) hasUnexpectedCause = true;
+    }
+    if (error.code === "outcome_unknown" || error.code === "deadline_exceeded" || hasUnexpectedCause) {
+      logger.error(
+        {
+          ...log.context,
+          code: error.code,
+          errorName: rootCause instanceof Error ? rootCause.name : typeof rootCause,
+          errorMessage: sanitizeErrorMessage(rootCause),
+        },
+        log.message,
+      );
+    }
     return {
       success: false,
       error: error.message,

@@ -263,6 +263,18 @@ Pure starter residue; org scoping came later via ADR 0010.
   carry a client-supplied operation id the server records and a retry can look
   up, or whether the retry-and-duplicate risk stays with the operator.
 
+### An operation that awaits non-database work keeps its request past the deadline (`architecture/operation-callback-deadline`, opened 2026-10-07)
+
+- `runOwnedTransaction` (`src/data-access/owned-transaction.ts`) arms
+  `transaction_timeout`, but PostgreSQL ends only the session, not the
+  JavaScript callback. If an operation's `execute` awaited a slow external call
+  after its last query, the request and its checked-out client would wait for
+  that call, past the deadline. Today no operation does: external effects run
+  in after-commit hooks or are enqueued in the transaction (plan section 4).
+  **To resolve:** if an operation ever needs external work inside its
+  transaction, race the callback against the deadline and keep the client out
+  of the pool until the callback settles; until then keep `execute` database-only.
+
 ### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
 
 - **Rule:** every updater behind an edit form checks the version its form

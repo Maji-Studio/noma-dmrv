@@ -517,6 +517,13 @@ export function stockEventInstantSchema(message = "Enter the date and time.") {
  */
 export const expectedUpdatedAtSchema = z.coerce.date().optional();
 
+const EXPECTED_VERSION_MESSAGE = "Reload this record before saving.";
+
+/** Required integer row version loaded with the record, without coercion. */
+export const expectedVersionSchema = z.number({ error: EXPECTED_VERSION_MESSAGE })
+  .int({ error: EXPECTED_VERSION_MESSAGE })
+  .positive({ error: EXPECTED_VERSION_MESSAGE });
+
 /** Preprocess form string values to int | null. Empty/whitespace strings become null. Rejects partial parses like "12abc". */
 export const toIntOrNull = (v: unknown): unknown => {
   if (v === null || v === undefined) return null;

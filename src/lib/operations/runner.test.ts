@@ -8,7 +8,7 @@ import { runOperation, runOperationInProcess, type Operation, type OperationScop
 const { owned, record, claim, warn } = vi.hoisted(() => ({ owned: vi.fn(), record: vi.fn(), claim: vi.fn(), warn: vi.fn() }));
 vi.mock("@/data-access/owned-transaction", () => ({ runOwnedTransaction: owned }));
 vi.mock("@/data-access/api-idempotency-records", () => ({ recordIdempotencyOutcome: record, claimIdempotencyKey: claim, assertIdempotencyKeyUnused: vi.fn() }));
-vi.mock("@/lib/log", () => ({ logger: { warn }, sanitizeErrorMessage: () => "sanitized" }));
+vi.mock("@/lib/log", () => ({ logger: { warn, error: vi.fn() }, sanitizeErrorMessage: () => "sanitized" }));
 const ctx = { userId: "user-id", organizationId: "org-id", orgRole: "admin", isPlatformAdmin: false } satisfies OrgContext;
 const tx = {} as OperationScope["tx"];
 const saved = new Date("2026-10-06T00:00:00Z");
