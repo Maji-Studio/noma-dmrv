@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * DB-backed tests for the conflict a refused feedstock-type delete names.
  *
@@ -45,7 +46,7 @@ async function insertFeedstockType(tag: string): Promise<string> {
 }
 
 async function refusal(feedstockTypeId: string): Promise<ActionConflictError> {
-  const error = await deleteFeedstockType(ctx, feedstockTypeId).then(
+  const error = await deleteFeedstockType(ctx, feedstockTypeId, await masterDataVersion(ctx, "feedstockTypes", feedstockTypeId)).then(
     () => null,
     (caught: unknown) => caught,
   );

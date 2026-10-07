@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for `claimSubmissionDraft` (the submission-ledger claim
@@ -470,7 +471,7 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
       const tierEditPromise = updateFacility(
         makeTestOrgContext(USER_ID),
         fixture.facilityId,
-        { durabilityOption: "1000_year" },
+        { expectedVersion: await masterDataVersion(makeTestOrgContext(USER_ID), "facilities", fixture.facilityId), durabilityOption: "1000_year" },
       );
       tierEditPromise.then(
         () => {

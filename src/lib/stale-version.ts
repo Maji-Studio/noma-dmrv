@@ -2,13 +2,10 @@
  * Expected-version (optimistic concurrency) vocabulary, shared by the server
  * updaters, the React Query hooks and the edit forms (issue #768).
  *
- * A consequential edit form sends the `updatedAt` it loaded as
- * `expectedUpdatedAt`. The updater compares it against the row it locked and,
- * when they differ, throws an `ActionConflictError` carrying
- * `code: STALE_VERSION_CONFLICT_CODE`. `withAction` turns that into
- * `{ success: false, error, conflict }`, the mutation hook re-throws it as
- * `StaleVersionError`, and the form shows the message next to its submit while
- * keeping every value the operator typed.
+ * Edit forms send the integer `expectedVersion` they loaded. Applications and
+ * production runs still use legacy `expectedUpdatedAt`. A mismatch carries the
+ * stale-version conflict through ActionResult; hooks rethrow StaleVersionError
+ * so the open form keeps the operator's draft.
  *
  * Kept free of server-only imports so client components can use it.
  */

@@ -77,6 +77,7 @@ export function FacilityList() {
     mode: SideSheetMode;
   } | null>(null);
   const [archivingFacility, setArchivingFacility] = useState<{
+    version: number;
     id: string;
     code: string;
     name: string;
@@ -159,7 +160,7 @@ export function FacilityList() {
         facilityId: sideSheet.entity.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        expectedVersion: sideSheet.entity.version,
         ...data,
       });
       setSideSheet(null);
@@ -176,7 +177,7 @@ export function FacilityList() {
   const handleArchive = (facilityId: string) => {
     const target = facilities.find((f) => f.id === facilityId);
     setArchivingFacility(
-      target ? { id: target.id, code: target.code, name: target.name } : null,
+      target ? { id: target.id, code: target.code, name: target.name, version: target.version } : null,
     );
   };
 
@@ -184,7 +185,7 @@ export function FacilityList() {
     if (!archivingFacility) return;
     setArchiveError(null);
     try {
-      await archiveFacility.mutateAsync(archivingFacility.id);
+      await archiveFacility.mutateAsync({ facilityId: archivingFacility.id, expectedVersion: archivingFacility.version });
       setArchivingFacility(null);
       toast.success("Facility archived. Restore it from the archived view.");
     } catch (error) {
@@ -193,9 +194,11 @@ export function FacilityList() {
   };
 
   const handleRestore = async (facilityId: string) => {
+    const facility = facilitiesData?.items.find((row) => row.id === facilityId);
+    if (!facility) return;
     setArchiveError(null);
     try {
-      await restoreFacility.mutateAsync(facilityId);
+      await restoreFacility.mutateAsync({ facilityId, expectedVersion: facility.version });
       toast.success("Facility restored");
     } catch (error) {
       setArchiveError(error instanceof Error ? error.message : "The facility was not restored. Try again.");

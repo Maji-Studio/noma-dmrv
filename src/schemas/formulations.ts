@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Formulation Validation Schemas
  * Zod schemas for formulation forms, server actions, and filtering
@@ -179,6 +180,7 @@ export const createFormulationSchema = formulationFormSchema;
 
 export const updateFormulationSchema = z
   .object({
+  expectedVersion: expectedVersionSchema,
     formulationId: z.string().uuid("Choose a valid formulation."),
     code: z
       .string()
@@ -195,6 +197,7 @@ export const updateFormulationSchema = z
   .superRefine(duplicateBlendMaterialRefinement);
 
 export const deleteFormulationSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   formulationId: z.string().uuid("Choose a valid formulation."),
 });
 

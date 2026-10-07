@@ -4,6 +4,8 @@
  * Used in both create and edit views for customers
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { useToast } from "@/components/ui/toast";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -364,6 +366,7 @@ function CreateModeLocationsSection({
 // ============================================
 
 function LocationsSection({ customerId }: { customerId: string }) {
+  const toast = useToast();
   // `editingLocation` is deliberately not cleared on close: the modal keeps its
   // subtree mounted for the exit transition, so clearing it there would flip the
   // dialog title and submit label to the "Add" wording mid-fade. Opening the add
@@ -371,7 +374,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] =
     useState<EditableCustomerLocation | null>(null);
-  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
+  const [deletingLocationId, setDeletingLocationId] = useState<EditableCustomerLocation | null>(null);
 
   const { data: locations, isLoading, isError } = useCustomerLocations(customerId);
   const deleteLocation = useDeleteCustomerLocation(customerId);
@@ -379,9 +382,10 @@ function LocationsSection({ customerId }: { customerId: string }) {
   const handleDeleteConfirm = async () => {
     if (!deletingLocationId) return;
     try {
-      await deleteLocation.mutateAsync(deletingLocationId);
+      await deleteLocation.mutateAsync({ locationId: deletingLocationId.id, expectedVersion: deletingLocationId.version });
       setDeletingLocationId(null);
-    } catch {
+    } catch (error) {
+      toast.error(error instanceof StaleVersionError ? staleDeleteMessage("Location") : error instanceof Error ? error.message : "Location was not deleted. Try again.");
       setDeletingLocationId(null);
     }
   };
@@ -445,7 +449,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
                 <Button
                   variant="destructive"
                   size="icon"
-                  onClick={() => setDeletingLocationId(loc.id)}
+                  onClick={() => setDeletingLocationId(loc)}
                   aria-label={`Delete ${loc.name || loc.country}`}
                 >
                   <TrashIcon size={16} />

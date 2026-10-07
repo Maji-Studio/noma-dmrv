@@ -20,6 +20,7 @@ export interface CustomerDetail extends Customer {
     defaultSoilTemperatureC: number | null;
     isDefault: boolean;
     createdAt: Date;
+    version: number;
     updatedAt: Date;
   }>;
 }
@@ -64,6 +65,7 @@ export async function findCustomerWithRelations(
       defaultSoilTemperatureC: customerLocations.defaultSoilTemperatureC,
       isDefault: customerLocations.isDefault,
       createdAt: customerLocations.createdAt,
+      version: customerLocations.version,
       updatedAt: customerLocations.updatedAt,
     })
     .from(customerLocations)

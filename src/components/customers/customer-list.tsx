@@ -35,7 +35,7 @@ import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { toSaveErrorMessage } from "@/lib/stale-version";
+import { toSaveErrorMessage, StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
@@ -121,7 +121,7 @@ export function CustomerList() {
     entity: CustomerWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
+  const [deletingCustomerId, setDeletingCustomerId] = useState<CustomerWithRelations | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -257,7 +257,7 @@ export function CustomerList() {
         customerId: displaySideSheet.entity.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: displaySideSheet.entity.updatedAt,
+        expectedVersion: displaySideSheet.entity.version,
         ...data,
       });
       closeSideSheet();
@@ -269,17 +269,18 @@ export function CustomerList() {
     }
   };
 
-  const handleDelete = (customerId: string) => setDeletingCustomerId(customerId);
+  const handleDelete = (customerId: string) => setDeletingCustomerId((customersData?.items ?? []).find((row) => row.id === customerId) ?? null);
 
   const handleDeleteConfirm = async () => {
     if (!deletingCustomerId) return;
     setDeleteError(null);
     try {
-      await deleteCustomer.mutateAsync(deletingCustomerId);
+      await deleteCustomer.mutateAsync({ customerId: deletingCustomerId.id, expectedVersion: deletingCustomerId.version });
       setDeletingCustomerId(null);
       toast.success("Customer deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Customer was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeletingCustomerId(null);
+      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage(`Customer ${deletingCustomerId.code}`) : error instanceof Error ? error.message : "Customer was not deleted. Try again.");
     }
   };
 

@@ -149,7 +149,7 @@ describe("updateApplicationSchema soil temperature", () => {
 
 describe("customer and supplier location patches", () => {
   it("leaves an omitted distance and soil temperature untouched", () => {
-    const result = parsed(updateCustomerLocationSchema, {
+    const result = parsed(updateCustomerLocationSchema, { expectedVersion: 1,
       locationId: LOCATION_ID,
       isDefault: true,
     });
@@ -162,7 +162,7 @@ describe("customer and supplier location patches", () => {
 
   it("clears a customer-location distance on empty input and keeps zero", () => {
     expect(
-      parsed(updateCustomerLocationSchema, {
+      parsed(updateCustomerLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
         distanceFromFacilityKm: "",
         defaultSoilTemperatureC: "",
@@ -172,7 +172,7 @@ describe("customer and supplier location patches", () => {
       defaultSoilTemperatureC: null,
     });
     expect(
-      parsed(updateCustomerLocationSchema, {
+      parsed(updateCustomerLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
         distanceFromFacilityKm: 0,
         defaultSoilTemperatureC: 0,
@@ -185,21 +185,21 @@ describe("customer and supplier location patches", () => {
 
   it("applies the same contract to supplier distances", () => {
     expect(
-      parsed(updateSupplierSchema, { supplierId: SUPPLIER_ID })
+      parsed(updateSupplierSchema, { expectedVersion: 1, supplierId: SUPPLIER_ID })
         .distanceToFacilityKm,
     ).toBeUndefined();
     expect(
-      parsed(updateSupplierSchema, {
+      parsed(updateSupplierSchema, { expectedVersion: 1,
         supplierId: SUPPLIER_ID,
         distanceToFacilityKm: null,
       }).distanceToFacilityKm,
     ).toBeNull();
     expect(
-      parsed(updateSupplierLocationSchema, { locationId: LOCATION_ID })
+      parsed(updateSupplierLocationSchema, { expectedVersion: 1, locationId: LOCATION_ID })
         .distanceFromFacilityKm,
     ).toBeUndefined();
     expect(
-      parsed(updateSupplierLocationSchema, {
+      parsed(updateSupplierLocationSchema, { expectedVersion: 1,
         locationId: LOCATION_ID,
         distanceFromFacilityKm: "",
       }).distanceFromFacilityKm,

@@ -41,28 +41,10 @@ import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import {
-  type ActionFailure,
   formatZodActionError,
-  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
 import { withAction } from "./with-action";
-
-/**
- * Failure shape for the write paths. Unlike the read helper below it keeps an
- * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
- * refusal from an ordinary save failure and hold on to the operator's draft.
- */
-function customerActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "customer action failed", context: { op } },
-  });
-}
 
 function customerActionError(
   error: unknown,
@@ -156,6 +138,7 @@ export async function getCustomerLocationsFn(
       defaultSoilTemperatureC: number | null;
       isDefault: boolean;
       createdAt: Date;
+      version: number;
       updatedAt: Date;
     }>
   >
@@ -299,13 +282,12 @@ export async function createCustomerWithLocationsFn(
 export async function updateCustomerFn(
   data: z.infer<typeof updateCustomerSchema>
 ): Promise<ActionResult<Customer>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateCustomerSchema.parse(data);
 
     const customer = await updateCustomer(ctx, validated.customerId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
       cropType: validated.cropType,
@@ -314,10 +296,8 @@ export async function updateCustomerFn(
       contactPhone: validated.contactPhone,
     });
 
-    return { success: true, data: customer };
-  } catch (error) {
-    return customerActionFailure(error, "Failed to update customer", "customer:update");
-  }
+    return customer;
+  }, { fallbackMessage: "Failed to update customer", log: { message: "customer action failed", context: { op: "customer:update" } } });
 }
 
 // ============================================
@@ -330,29 +310,13 @@ export async function updateCustomerFn(
 export async function deleteCustomerFn(
   data: z.infer<typeof deleteCustomerSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteCustomerSchema.parse(data);
-    await deleteCustomer(ctx, validated.customerId);
+    await deleteCustomer(ctx, validated.customerId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to delete customer",
-        "customer:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete customer", log: { message: "customer action failed", context: { op: "customer:delete" } } });
 }
 
 // ============================================
@@ -414,13 +378,12 @@ export async function createCustomerLocationFn(
 export async function updateCustomerLocationFn(
   data: z.infer<typeof updateCustomerLocationSchema>
 ): Promise<ActionResult<CustomerLocation>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateCustomerLocationSchema.parse(data);
 
     const location = await updateCustomerLocation(ctx, validated.locationId, {
-      expectedUpdatedAt: validated.expectedUpdatedAt,
+      expectedVersion: validated.expectedVersion,
       name: validated.name,
       country: validated.country,
       // `undefined` leaves the column untouched (partial update); "" clears it.
@@ -442,10 +405,8 @@ export async function updateCustomerLocationFn(
       isDefault: validated.isDefault,
     });
 
-    return { success: true, data: location };
-  } catch (error) {
-    return customerActionFailure(error, "Failed to update customer location", "customer-location:update");
-  }
+    return location;
+  }, { fallbackMessage: "Failed to update customer location", log: { message: "customer-location action failed", context: { op: "customer-location:update" } } });
 }
 
 /**
@@ -454,27 +415,11 @@ export async function updateCustomerLocationFn(
 export async function deleteCustomerLocationFn(
   data: z.infer<typeof deleteCustomerLocationSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteCustomerLocationSchema.parse(data);
-    await deleteCustomerLocation(ctx, validated.locationId);
+    await deleteCustomerLocation(ctx, validated.locationId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: customerActionError(
-        error,
-        "Failed to delete customer location",
-        "customer-location:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete customer location", log: { message: "customer-location action failed", context: { op: "customer-location:delete" } } });
 }

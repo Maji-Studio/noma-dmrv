@@ -141,6 +141,7 @@ const customerLocation: EditableCustomerLocation = {
   distanceSource: "manual",
   defaultSoilTemperatureC: 25,
   isDefault: true,
+  version: 1,
   updatedAt: CUSTOMER_LOCATION_UPDATED_AT,
 };
 
@@ -159,6 +160,7 @@ const supplierLocation: SupplierLocation = {
   distanceSource: "manual",
   isDefault: true,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
@@ -194,7 +196,7 @@ describe("CustomerLocationDialog submission", () => {
     expect(harness.customerUpdate).toHaveBeenCalledTimes(1);
     expect(harness.customerUpdate).toHaveBeenCalledWith({
       locationId: CUSTOMER_LOCATION_ID,
-      expectedUpdatedAt: CUSTOMER_LOCATION_UPDATED_AT,
+      expectedVersion: 1,
       name: "Updated field",
       country: "Tanzania",
       stateRegion: null,
@@ -257,7 +259,7 @@ describe("SupplierLocationDialog submission", () => {
     expect(harness.supplierUpdate).toHaveBeenCalledTimes(1);
     expect(harness.supplierUpdate).toHaveBeenCalledWith({
       locationId: SUPPLIER_LOCATION_ID,
-      expectedUpdatedAt: supplierLocation.updatedAt,
+      expectedVersion: 1,
       ...supplierFormData,
     });
     expect(harness.supplierUpdate.mock.calls[0]?.[0]).toMatchObject({

@@ -38,6 +38,7 @@ export type EditableCustomerLocation = Pick<
   | "isDefault"
   // The version the dialog opened on, echoed back on save (issue #768).
   | "updatedAt"
+  | "version"
 >;
 
 interface CustomerLocationFormProps {

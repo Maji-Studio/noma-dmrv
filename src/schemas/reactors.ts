@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 import { z } from "zod";
 
 // ============================================
@@ -65,6 +66,7 @@ export const createReactorSchema = z.object({
  * All fields optional except reactorId
  */
 export const updateReactorSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   reactorId: z.string().uuid("Choose a valid reactor."),
   code: z
     .string()
@@ -83,6 +85,7 @@ export const updateReactorSchema = z.object({
  * Schema for deleting a reactor
  */
 export const deleteReactorSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   reactorId: z.string().uuid("Choose a valid reactor."),
 });
 

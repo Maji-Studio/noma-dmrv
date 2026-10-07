@@ -162,8 +162,9 @@ and include `nextVersion` in every writer's `.set()` so the version increments
 in the same statement as the change. Sibling and cascade writes bump every
 affected row too, including facility archive and restore. Ordinary UI updates
 and deletes must send the `expectedVersion` loaded when the operator opened
-the record. Feedstocks use integer row versions; the remaining edit forms
-still use the timestamp check below.
+the record. Feedstocks, facilities, reactors, storage bins, suppliers and their
+locations, customers and their locations, formulations, feedstock types, and
+facility emission factors use integer row versions. Inserts start at version 1.
 
 A mismatch throws `DomainError` with `code: "stale_version"` and a conflict
 reference to the edited record using the `stale-version` sentinel. The hook
@@ -173,11 +174,11 @@ form shows `STALE_VERSION_MESSAGE` while keeping the operator's draft.
 The existing timestamp checks use `assertExpectedVersion`
 in `src/data-access/expected-version.ts`: edit forms send `updatedAt` as
 `expectedUpdatedAt`, and the updater compares it after locking the row.
-Those legacy fields remain optional. They cover facility, storage bin,
-customer (+ location), supplier (+ location), application, production run and
-facility emission factors. The factors save is an upsert: its form sends
-`null` when it loaded no row, so a row saved since (or a concurrent first
-save, serialized by the facility row lock) is refused as stale. Remaining
+Those legacy fields remain optional for applications and production runs.
+The emission-factors upsert instead requires `expectedVersion: number | null`.
+Its form sends `null` when it loaded no row, so a row saved since (or a
+concurrent first save, serialized by the facility row lock) is refused as stale.
+A numeric version must match the locked factors row. Remaining
 gaps are listed in [open-questions.md](./open-questions.md) under
 `architecture/expected-version-gaps`.
 

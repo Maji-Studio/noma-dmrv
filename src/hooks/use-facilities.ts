@@ -18,7 +18,7 @@ import {
 } from "@/fn/facilities";
 import { getFacilitiesRead, getFacilityRead } from "@/lib/read-api/client";
 import { missingRecordMessage } from "@/lib/errors";
-import { throwActionError } from "@/lib/stale-version";
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { patchListCachesWithSavedRow } from "./list-cache-utils";
@@ -74,7 +74,7 @@ export function useFacilities(
     queryFn: async ({ signal }) => {
       const result = await getFacilitiesRead(filters, { signal });
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -99,7 +99,7 @@ export function useFacility(
     queryFn: async ({ signal }) => {
       const result = await getFacilityRead(facilityId, { signal });
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -124,7 +124,7 @@ export function useFacilityCountries(archived = false) {
     queryFn: async () => {
       const result = await getFacilityCountriesFn(archived);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -149,7 +149,7 @@ export function useCreateFacility(
     mutationFn: async (data: CreateFacilityData) => {
       const result = await createFacilityFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -327,7 +327,7 @@ export function useFacilityArchiveImpact(facilityId: string | null) {
     queryFn: async () => {
       const result = await getFacilityArchiveImpactFn(facilityId!);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -342,32 +342,33 @@ export function useFacilityArchiveImpact(facilityId: string | null) {
  * so on success the entire query cache is invalidated.
  */
 export function useArchiveFacility(
-  callbacks?: MutationCallbacks<Facility, string>
+  callbacks?: MutationCallbacks<Facility, { facilityId: string; expectedVersion: number }>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (facilityId: string) => {
-      const result = await archiveFacilityFn({ facilityId });
+    mutationFn: async (variables: { facilityId: string; expectedVersion: number }) => {
+      const result = await archiveFacilityFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
-    onMutate: async (facilityId) => {
-      await callbacks?.onMutate?.(facilityId);
+    onMutate: async (variables) => {
+      await callbacks?.onMutate?.(variables);
     },
-    onSuccess: async (data, facilityId) => {
+    onSuccess: async (data, variables) => {
       // The cascade touches nearly every entity type — invalidate everything
       queryClient.invalidateQueries();
 
-      await callbacks?.onSuccess?.(data, facilityId);
+      await callbacks?.onSuccess?.(data, variables);
     },
-    onError: async (error, facilityId) => {
-      await callbacks?.onError?.(error, facilityId);
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: facilityKeys.all });
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, facilityId) => {
-      await callbacks?.onSettled?.(data, error, facilityId);
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }
@@ -376,32 +377,33 @@ export function useArchiveFacility(
  * Hook to restore an archived facility and its archived child data
  */
 export function useRestoreFacility(
-  callbacks?: MutationCallbacks<Facility, string>
+  callbacks?: MutationCallbacks<Facility, { facilityId: string; expectedVersion: number }>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (facilityId: string) => {
-      const result = await restoreFacilityFn({ facilityId });
+    mutationFn: async (variables: { facilityId: string; expectedVersion: number }) => {
+      const result = await restoreFacilityFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
-    onMutate: async (facilityId) => {
-      await callbacks?.onMutate?.(facilityId);
+    onMutate: async (variables) => {
+      await callbacks?.onMutate?.(variables);
     },
-    onSuccess: async (data, facilityId) => {
+    onSuccess: async (data, variables) => {
       // Restored children reappear across every entity type — invalidate everything
       queryClient.invalidateQueries();
 
-      await callbacks?.onSuccess?.(data, facilityId);
+      await callbacks?.onSuccess?.(data, variables);
     },
-    onError: async (error, facilityId) => {
-      await callbacks?.onError?.(error, facilityId);
+    onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: facilityKeys.all });
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, facilityId) => {
-      await callbacks?.onSettled?.(data, error, facilityId);
+    onSettled: async (data, error, variables) => {
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

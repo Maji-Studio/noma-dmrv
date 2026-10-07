@@ -11,6 +11,8 @@
  * longer carries a single GPS position.
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { useToast } from "@/components/ui/toast";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -433,6 +435,7 @@ function CreateModeLocationsSection({
 // ============================================
 
 function LocationsSection({ supplierId }: { supplierId: string }) {
+  const toast = useToast();
   // `editingLocation` is deliberately not cleared on close: the modal keeps its
   // subtree mounted for the exit transition, so clearing it there would flip the
   // dialog title and submit label to the "Add" wording mid-fade. Opening the add
@@ -440,7 +443,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] =
     useState<SupplierLocation | null>(null);
-  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
+  const [deletingLocationId, setDeletingLocationId] = useState<SupplierLocation | null>(null);
 
   const { data: locations, isLoading, isError } = useSupplierLocationsBySupplier(supplierId);
   const deleteLocation = useDeleteSupplierLocation(supplierId);
@@ -448,9 +451,10 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
   const handleDeleteConfirm = async () => {
     if (!deletingLocationId) return;
     try {
-      await deleteLocation.mutateAsync(deletingLocationId);
+      await deleteLocation.mutateAsync({ locationId: deletingLocationId.id, expectedVersion: deletingLocationId.version });
       setDeletingLocationId(null);
-    } catch {
+    } catch (error) {
+      toast.error(error instanceof StaleVersionError ? staleDeleteMessage("Location") : error instanceof Error ? error.message : "Location was not deleted. Try again.");
       setDeletingLocationId(null);
     }
   };
@@ -522,7 +526,7 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
                 <Button
                   variant="destructive"
                   size="icon"
-                  onClick={() => setDeletingLocationId(loc.id)}
+                  onClick={() => setDeletingLocationId(loc)}
                   aria-label={`Delete ${loc.name || loc.country}`}
                 >
                   <TrashIcon size={16} />

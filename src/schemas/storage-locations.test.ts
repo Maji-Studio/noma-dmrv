@@ -51,7 +51,7 @@ describe("storage-bin validation copy", () => {
 
 describe("updateStorageLocationSchema", () => {
   it("drops a facility, because a bin never changes facility through the update action", () => {
-    const parsed = updateStorageLocationSchema.parse({
+    const parsed = updateStorageLocationSchema.parse({ expectedVersion: 1,
       storageLocationId: RELATED_ID,
       facilityId: FACILITY_ID,
     });
@@ -70,7 +70,7 @@ describe("stock mode", () => {
   });
 
   it("does not flag an update that leaves the type out", () => {
-    expect(updateStorageLocationSchema.safeParse({ storageLocationId: FACILITY_ID, stockMode: "mix" }).success).toBe(true);
-    expect(updateStorageLocationSchema.safeParse({ storageLocationId: FACILITY_ID, type: "feedstock_bin", stockMode: "mix" }).success).toBe(false);
+    expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, stockMode: "mix" }).success).toBe(true);
+    expect(updateStorageLocationSchema.safeParse({ expectedVersion: 1, storageLocationId: FACILITY_ID, type: "feedstock_bin", stockMode: "mix" }).success).toBe(false);
   });
 });

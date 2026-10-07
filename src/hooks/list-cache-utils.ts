@@ -1,9 +1,9 @@
 /**
  * Shared React Query cache helpers for the paginated entity list caches.
  *
- * The update hooks save with `expectedUpdatedAt` (issue #768), so any row a
+ * Updates save with integer `expectedVersion` (or legacy `expectedUpdatedAt`), so any row a
  * cache hands to an edit sheet has to carry a version the server really
- * wrote. An optimistic row therefore keeps the `updatedAt` it was read on, and
+ * wrote. An optimistic row therefore keeps the version it was read on, and
  * this helper installs the saved row once the server answers.
  */
 import type { QueryClient, QueryKey } from "@tanstack/react-query";

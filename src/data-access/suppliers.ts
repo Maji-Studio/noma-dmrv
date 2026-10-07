@@ -3,7 +3,7 @@
  * CRUD operations for suppliers with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
+import { ne, and, asc, desc, eq, ilike, inArray, or, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgForeignKeyViolation } from "@/db/errors";
 import type { OrgContext } from "@/lib/auth/server";
@@ -18,7 +18,7 @@ import {
 import type { SupplierFilterData } from "@/schemas/suppliers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { formatSupplierLocationDisplay } from "@/lib/supplier-location-display";
-import { assertExpectedVersion } from "./expected-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 import {
   findSupplierLocations,
   findSupplierRow,
@@ -231,6 +231,7 @@ export async function getSuppliers(
       distanceToFacilityKm: suppliers.distanceToFacilityKm,
       distanceSource: suppliers.distanceSource,
       createdAt: suppliers.createdAt,
+      version: suppliers.version,
       updatedAt: suppliers.updatedAt,
     })
     .from(suppliers)
@@ -294,6 +295,7 @@ export async function getSupplierById(
   ctx: OrgContext,
   supplierId: string
 ): Promise<Supplier> {
+  requireOrgScope(ctx);
   await ensureSupplierExists(ctx, supplierId);
 
   const supplier = await findSupplierRow(ctx, supplierId);
@@ -444,12 +446,13 @@ export async function updateSupplier(
     sourceRegion?: string | null;
     distanceToFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
-    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-    expectedUpdatedAt?: Date;
+    /** `version` the edit form loaded; refuses a save built on a stale read. */
+    expectedVersion: number;
   }
 ): Promise<Supplier> {
+  requireOrgScope(ctx);
   await ensureSupplierExists(ctx, supplierId);
-  const { expectedUpdatedAt, ...supplierData } = data;
+  const { expectedVersion, ...supplierData } = data;
 
   // One transaction so the row lock below spans the version check, the code
   // duplicate probe and the write they guard.
@@ -468,11 +471,11 @@ export async function updateSupplier(
     if (!existing) {
       throw new SafeError("Supplier not found");
     }
-    assertExpectedVersion({
+    assertRowVersion({
       entity: SUPPLIER_CONFLICT_ENTITY,
       id: supplierId,
-      expectedUpdatedAt,
-      actualUpdatedAt: existing.updatedAt,
+      expectedVersion,
+      actualVersion: existing.version,
     });
 
     // If code is being changed, check for duplicates
@@ -500,6 +503,7 @@ export async function updateSupplier(
           .update(suppliers)
           .set({
             ...supplierData,
+            version: nextVersion(suppliers.version),
             updatedAt: new Date(),
           })
           .where(
@@ -529,11 +533,19 @@ export async function updateSupplier(
  */
 export async function deleteSupplier(
   ctx: OrgContext,
-  supplierId: string
+  supplierId: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
   try {
     await db.transaction(async (tx) => {
+    const [versioned] = await tx.select({ version: suppliers.version })
+      .from(suppliers)
+      .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!versioned) throw new SafeError("Supplier not found");
+    assertRowVersion({ entity: "supplier", id: supplierId, expectedVersion, actualVersion: versioned.version });
+
       const [existing] = await tx
         .select({ id: suppliers.id })
         .from(suppliers)
@@ -638,7 +650,7 @@ export async function createSupplierLocation(
     if (makeDefault) {
       await tx
         .update(supplierLocations)
-        .set({ isDefault: false, updatedAt: new Date() })
+        .set({ version: nextVersion(supplierLocations.version), isDefault: false, updatedAt: new Date() })
         .where(
           and(
             eq(supplierLocations.supplierId, data.supplierId),
@@ -684,17 +696,17 @@ export async function updateSupplierLocation(
     distanceFromFacilityKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     isDefault?: boolean;
-    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-    expectedUpdatedAt?: Date;
+    /** `version` the edit form loaded; refuses a save built on a stale read. */
+    expectedVersion: number;
   }
 ): Promise<SupplierLocation> {
   requireOrgScope(ctx);
   const { supplierId } = await ensureSupplierLocationExists(ctx, locationId);
-  const { expectedUpdatedAt, ...locationData } = data;
+  const { expectedVersion, ...locationData } = data;
 
   return db.transaction(async (tx) => {
     const [locked] = await tx
-      .select({ updatedAt: supplierLocations.updatedAt })
+      .select({ version: supplierLocations.version })
       .from(supplierLocations)
       .where(
         and(
@@ -707,23 +719,24 @@ export async function updateSupplierLocation(
     if (!locked) {
       throw new SafeError("Supplier location not found");
     }
-    assertExpectedVersion({
+    assertRowVersion({
       entity: SUPPLIER_LOCATION_CONFLICT_ENTITY,
       id: locationId,
-      expectedUpdatedAt,
-      actualUpdatedAt: locked.updatedAt,
+      expectedVersion,
+      actualVersion: locked.version,
     });
 
     // Promoting this location to default demotes the supplier's current default.
     if (data.isDefault === true) {
       await tx
         .update(supplierLocations)
-        .set({ isDefault: false, updatedAt: new Date() })
+        .set({ version: nextVersion(supplierLocations.version), isDefault: false, updatedAt: new Date() })
         .where(
           and(
             eq(supplierLocations.supplierId, supplierId),
             eq(supplierLocations.organizationId, ctx.organizationId),
-            eq(supplierLocations.isDefault, true)
+            eq(supplierLocations.isDefault, true),
+            ne(supplierLocations.id, locationId)
           )
         );
     }
@@ -732,6 +745,7 @@ export async function updateSupplierLocation(
       .update(supplierLocations)
       .set({
         ...locationData,
+        version: nextVersion(supplierLocations.version),
         updatedAt: new Date(),
       })
       .where(
@@ -752,22 +766,31 @@ export async function updateSupplierLocation(
 
 export async function deleteSupplierLocation(
   ctx: OrgContext,
-  locationId: string
+  locationId: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
-  await ensureSupplierLocationExists(ctx, locationId);
+  return db.transaction(async (tx) => {
+    const [versioned] = await tx.select({ version: supplierLocations.version })
+      .from(supplierLocations)
+      .where(and(eq(supplierLocations.id, locationId), eq(supplierLocations.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!versioned) throw new SafeError("Supplier location not found");
+    assertRowVersion({ entity: SUPPLIER_LOCATION_CONFLICT_ENTITY, id: locationId, expectedVersion, actualVersion: versioned.version });
 
-  const deleted = await db
-    .delete(supplierLocations)
-    .where(
-      and(
-        eq(supplierLocations.id, locationId),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ),
-    )
-    .returning({ id: supplierLocations.id });
+    const deleted = await tx
+      .delete(supplierLocations)
+      .where(
+        and(
+          eq(supplierLocations.id, locationId),
+          eq(supplierLocations.organizationId, ctx.organizationId),
+        ),
+      )
+      .returning({ id: supplierLocations.id });
 
-  if (deleted.length === 0) {
-    throw new SafeError("Supplier location not found");
-  }
+    if (deleted.length === 0) {
+      throw new SafeError("Supplier location not found");
+    }
+
+  });
 }

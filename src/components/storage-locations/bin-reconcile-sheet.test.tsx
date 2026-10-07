@@ -57,6 +57,7 @@ const storageLocation: StorageLocationWithFacility = {
   facilityId: "00000000-0000-4000-8000-000000000003",
   archivedAt: null,
   createdAt: new Date("2026-01-01"),
+  version: 1,
   updatedAt: new Date("2026-01-01"),
   facilityCode: "FAC-1",
   facilityName: "Moshi",

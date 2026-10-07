@@ -1,3 +1,4 @@
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 /**
  * Reactors React Query Hooks
  * Client-side state management for reactor operations
@@ -53,7 +54,7 @@ export function useReactors(
     queryFn: async () => {
       const result = await getReactorsFn(filters);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -79,7 +80,7 @@ export function useCreateReactor(
     mutationFn: async (data: CreateReactorData) => {
       const result = await createReactorFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -136,7 +137,7 @@ export function useUpdateReactor(
     mutationFn: async (data: UpdateReactorData) => {
       const result = await updateReactorFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -254,23 +255,24 @@ export function useUpdateReactor(
  * @param options - Options including optimistic update toggle (default: true)
  */
 export function useDeleteReactor(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, { reactorId: string; expectedVersion: number }>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (reactorId: string) => {
-      const result = await deleteReactorFn({ reactorId });
+    mutationFn: async (variables: { reactorId: string; expectedVersion: number }) => {
+      const result = await deleteReactorFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (reactorId) => {
+    onMutate: async (variables) => {
+      const reactorId = variables.reactorId;
       if (!optimistic) {
-        await callbacks?.onMutate?.(reactorId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -302,12 +304,13 @@ export function useDeleteReactor(
       // Capture facilityId before optimistic removal clears the cache
       const facilityId = previousReactor?.facilityId;
 
-      await callbacks?.onMutate?.(reactorId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousReactor, previousLists, facilityId };
     },
-    onSuccess: async (_, reactorId, context) => {
+    onSuccess: async (_, variables, context) => {
+      const reactorId = variables.reactorId;
       const facilityId = (context as { facilityId?: string })?.facilityId;
 
       // Remove specific reactor from cache
@@ -328,9 +331,11 @@ export function useDeleteReactor(
         });
       }
 
-      await callbacks?.onSuccess?.(undefined, reactorId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, reactorId, context) => {
+    onError: async (error, variables, context) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: reactorKeys.all });
+      const reactorId = variables.reactorId;
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousReactor, previousLists } = context as {
@@ -352,13 +357,13 @@ export function useDeleteReactor(
         });
       }
 
-      await callbacks?.onError?.(error, reactorId);
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, reactorId) => {
-      // Refetch lists to ensure consistency
+    onSettled: async (data, error, variables) => {
+            // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: reactorKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, reactorId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

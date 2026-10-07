@@ -4,6 +4,8 @@
  * Includes stat cards and unified EntitySideSheet
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -115,7 +117,7 @@ export function ReactorList() {
     entity: ReactorWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingReactorId, setDeletingReactorId] = useState<string | null>(null);
+  const [deletingReactorId, setDeletingReactorId] = useState<ReactorWithRelations | null>(null);
 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
@@ -183,7 +185,7 @@ export function ReactorList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, ...data });
+      await updateReactor.mutateAsync({ reactorId: sideSheet.entity.id, expectedVersion: sideSheet.entity.version, ...data });
       setSideSheet(null);
       toast.success("Reactor updated.");
     } catch (error) {
@@ -192,18 +194,19 @@ export function ReactorList() {
   };
 
   const handleDelete = (reactorId: string) => {
-    setDeletingReactorId(reactorId);
+    setDeletingReactorId((reactorsData?.items ?? []).find((row) => row.id === reactorId) ?? null);
   };
 
   const handleDeleteConfirm = async () => {
     if (!deletingReactorId) return;
     setDeleteError(null);
     try {
-      await deleteReactor.mutateAsync(deletingReactorId);
+      await deleteReactor.mutateAsync({ reactorId: deletingReactorId.id, expectedVersion: deletingReactorId.version });
       setDeletingReactorId(null);
       toast.success("Reactor deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Reactor was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeletingReactorId(null);
+      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage(`Reactor ${deletingReactorId.code}`) : error instanceof Error ? error.message : "Reactor was not deleted. Try again.");
     }
   };
 

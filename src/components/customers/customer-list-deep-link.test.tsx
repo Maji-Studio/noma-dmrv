@@ -100,6 +100,7 @@ const CUSTOMER = {
   id: CUSTOMER_ID,
   code: "CUS-26-001",
   name: "Customer",
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   locations: [],
 };

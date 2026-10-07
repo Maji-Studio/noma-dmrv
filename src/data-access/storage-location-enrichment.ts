@@ -98,6 +98,7 @@ export interface PaginatedStorageLocations {
 }
 
 export type BaseStorageLocationRow = {
+  version: number;
   id: string;
   organizationId: string;
   code: string;

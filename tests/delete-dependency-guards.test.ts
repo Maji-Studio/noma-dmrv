@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures } from "./helpers/output-contract-fixtures";
@@ -73,10 +74,10 @@ describe("delete dependency guards", () => {
 
     try {
       await expect(
-        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId),
+        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrowError(SafeError);
       await expect(
-        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId),
+        deleteStorageLocation(makeTestOrgContext(TEST_USER_ID), fixture.storageLocationId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrow(/feedstock batches/);
     } finally {
       await db.transaction(async (tx) => {
@@ -130,7 +131,7 @@ describe("delete dependency guards", () => {
     });
 
     try {
-      await expect(deleteCustomer(makeTestOrgContext(TEST_USER_ID), fixture.customerId)).rejects.toThrow(
+      await expect(deleteCustomer(makeTestOrgContext(TEST_USER_ID), fixture.customerId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "customers", fixture.customerId))).rejects.toThrow(
         /orders/,
       );
     } finally {

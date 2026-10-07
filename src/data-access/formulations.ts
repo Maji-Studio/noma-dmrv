@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Formulations Data Access Layer
  * CRUD operations for formulations with auth guards, pagination, and filtering
@@ -294,6 +295,7 @@ export async function updateFormulation(
   ctx: OrgContext,
   formulationId: string,
   data: {
+    expectedVersion: number;
     code?: string;
     name?: string;
     biocharRatio?: number | null;
@@ -334,7 +336,7 @@ export async function updateFormulation(
   await assertBlendFeedstockTypes(ctx, data.ingredients);
 
   // Separate ingredients from formulation fields
-  const { ingredients: ingredientData, ...formulationFields } = data;
+  const { ingredients: ingredientData, expectedVersion, ...formulationFields } = data;
 
   return db.transaction(async (tx) => {
     // Lock the parent row so concurrent updates serialize and the ratio guard
@@ -353,6 +355,7 @@ export async function updateFormulation(
     if (!locked) {
       throw new SafeError("Formulation not found");
     }
+    assertRowVersion({ entity: "formulation", id: formulationId, expectedVersion, actualVersion: locked.version });
 
     // Guard the effective post-update blend: a partial payload may change only
     // the biochar ratio or only the ingredients, so reconcile each side against
@@ -375,6 +378,7 @@ export async function updateFormulation(
       .update(formulations)
       .set({
         ...formulationFields,
+        version: nextVersion(formulations.version),
         updatedAt: new Date(),
       })
       .where(and(
@@ -494,46 +498,56 @@ export async function updateFormulation(
  */
 export async function deleteFormulation(
   ctx: OrgContext,
-  formulationId: string
+  formulationId: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
-
-  const [existingResult, productCountResult, binCountResult] = await Promise.all([
-    db
-      .select({ id: formulations.id })
+  return db.transaction(async (tx) => {
+    const [versioned] = await tx.select({ version: formulations.version })
       .from(formulations)
-      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId))),
-    db
-      .select({ count: count() })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.formulationId, formulationId), eq(biocharProducts.organizationId, ctx.organizationId))),
-    db
-      .select({ count: count() })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.formulationId, formulationId), eq(storageLocations.organizationId, ctx.organizationId))),
-  ]);
+      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!versioned) throw new SafeError("Formulation not found");
+    assertRowVersion({ entity: "formulation", id: formulationId, expectedVersion, actualVersion: versioned.version });
 
-  if (existingResult.length === 0) {
-    throw new SafeError("Formulation not found");
-  }
+    const [existingResult, productCountResult, binCountResult] = await Promise.all([
+      tx
+        .select({ id: formulations.id })
+        .from(formulations)
+        .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId))),
+      tx
+        .select({ count: count() })
+        .from(biocharProducts)
+        .where(and(eq(biocharProducts.formulationId, formulationId), eq(biocharProducts.organizationId, ctx.organizationId))),
+      tx
+        .select({ count: count() })
+        .from(storageLocations)
+        .where(and(eq(storageLocations.formulationId, formulationId), eq(storageLocations.organizationId, ctx.organizationId))),
+    ]);
 
-  if (Number(productCountResult[0].count) > 0) {
-    throw new SafeError(
-      "Cannot delete formulation with associated biochar products. Remove products first."
-    );
-  }
+    if (existingResult.length === 0) {
+      throw new SafeError("Formulation not found");
+    }
 
-  if (Number(binCountResult[0].count) > 0) {
-    throw new SafeError(
-      "Cannot delete formulation used by product bins. Clear those bins first."
-    );
-  }
+    if (Number(productCountResult[0].count) > 0) {
+      throw new SafeError(
+        "Cannot delete formulation with associated biochar products. Remove products first."
+      );
+    }
 
-  // Ingredients cascade-delete via FK onDelete: 'cascade'
-  await db.delete(formulations).where(and(
-    eq(formulations.id, formulationId),
-    eq(formulations.organizationId, ctx.organizationId),
-  ));
+    if (Number(binCountResult[0].count) > 0) {
+      throw new SafeError(
+        "Cannot delete formulation used by product bins. Clear those bins first."
+      );
+    }
+
+    // Ingredients cascade-delete via FK onDelete: 'cascade'
+    await tx.delete(formulations).where(and(
+      eq(formulations.id, formulationId),
+      eq(formulations.organizationId, ctx.organizationId),
+    ));
+
+  });
 }
 
 // ============================================

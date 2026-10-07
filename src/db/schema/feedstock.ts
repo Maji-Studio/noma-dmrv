@@ -75,6 +75,7 @@ export const feedstockTypes = pgTable(
   'feedstock_types',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),

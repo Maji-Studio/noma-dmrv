@@ -3,6 +3,8 @@
  * Main formulation listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -132,7 +134,7 @@ type SideSheetState =
 
 export function FormulationList() {
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
-  const [deletingFormulationId, setDeletingFormulationId] = useState<string | null>(null);
+  const [deletingFormulationId, setDeletingFormulationId] = useState<FormulationWithIngredients | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -182,6 +184,7 @@ export function FormulationList() {
     try {
       await updateFormulation.mutateAsync({
         formulationId: sideSheet.entity.id,
+        expectedVersion: sideSheet.entity.version,
         ...data,
       });
       setSideSheet(null);
@@ -191,17 +194,18 @@ export function FormulationList() {
     }
   };
 
-  const handleDelete = (formulationId: string) => setDeletingFormulationId(formulationId);
+  const handleDelete = (formulationId: string) => setDeletingFormulationId((formulationsData?.items ?? []).find((row) => row.id === formulationId) ?? null);
 
   const handleDeleteConfirm = async () => {
     if (!deletingFormulationId) return;
     setDeleteError(null);
     try {
-      await deleteFormulation.mutateAsync(deletingFormulationId);
+      await deleteFormulation.mutateAsync({ formulationId: deletingFormulationId.id, expectedVersion: deletingFormulationId.version });
       setDeletingFormulationId(null);
       toast.success("Formulation deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Formulation was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeletingFormulationId(null);
+      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage(`Formulation ${deletingFormulationId.code}`) : error instanceof Error ? error.message : "Formulation was not deleted. Try again.");
     }
   };
 

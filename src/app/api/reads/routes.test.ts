@@ -75,6 +75,7 @@ const ORG_CONTEXT = {
   isPlatformAdmin: false,
 };
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
+const FACILITY_VERSION = 3;
 const FOREIGN_FACILITY_ID = "22222222-2222-4222-8222-222222222222";
 const MALFORMED_ID = "not-a-facility";
 const TOO_LONG_SEARCH = "x".repeat(256);
@@ -125,7 +126,7 @@ interface ReadEndpoint {
 const endpoints: Record<string, ReadEndpoint> = {
   "facility detail": {
     ok: () => facilityRoute(post("/api/reads/facilities"), facilityParams(FACILITY_ID)),
-    data: { id: FACILITY_ID },
+    data: { id: FACILITY_ID, version: FACILITY_VERSION },
     badInput: () => facilityRoute(post("/api/reads/facilities"), facilityParams(MALFORMED_ID)),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
     badInputIssues: [INVALID_FACILITY_ISSUE],
@@ -249,7 +250,7 @@ describe.each(Object.entries(endpoints))(
       mocks.resolveOrgContext.mockResolvedValue({ ok: true, ctx: ORG_CONTEXT });
       mocks.requireOrgFacility.mockResolvedValue(undefined);
       mocks.getFacilities.mockResolvedValue(EMPTY_PAGE);
-      mocks.getFacilityById.mockResolvedValue({ id: FACILITY_ID });
+      mocks.getFacilityById.mockResolvedValue({ id: FACILITY_ID, version: FACILITY_VERSION });
       mocks.getActiveOrganization.mockResolvedValue({ id: ORG_CONTEXT.organizationId });
       mocks.getOnboardingStatus.mockResolvedValue({ facilityCount: 1 });
       mocks.getDashboardOverview.mockResolvedValue({ generatedAt: "2026-09-15T10:00:00.000Z" });

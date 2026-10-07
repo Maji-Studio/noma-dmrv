@@ -17,6 +17,7 @@ const importedFeedstockType: FeedstockType = {
   isometricFeedstockTypeId: IMPORTED_ID,
   archivedAt: null,
   createdAt: new Date("2026-07-23T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-07-23T00:00:00Z"),
 };
 

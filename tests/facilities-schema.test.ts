@@ -56,7 +56,7 @@ describe("facility schemas", () => {
       name: "updateFacilitySchema",
       schema: updateFacilitySchema,
       withCountry: (country: string) => ({
-        facilityId: "55555555-5555-4555-8555-555555555555",
+        facilityId: "55555555-5555-4555-8555-555555555555", expectedVersion: 1,
         country,
       }),
     },
@@ -117,7 +117,7 @@ describe("facility schemas", () => {
   });
 
   it("allows clearing both GPS coordinates through the update action", () => {
-    const result = updateFacilitySchema.safeParse({
+    const result = updateFacilitySchema.safeParse({ expectedVersion: 1,
       facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       gpsLatitude: null,
       gpsLongitude: null,
@@ -127,7 +127,7 @@ describe("facility schemas", () => {
   });
 
   it("rejects clearing only one GPS coordinate through the update action", () => {
-    const result = updateFacilitySchema.safeParse({
+    const result = updateFacilitySchema.safeParse({ expectedVersion: 1,
       facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       gpsLatitude: null,
       gpsLongitude: 37.3404,
@@ -147,7 +147,7 @@ describe("facility schemas", () => {
   });
 
   it("does not allow clearing timezone through the update action", () => {
-    const result = updateFacilitySchema.safeParse({
+    const result = updateFacilitySchema.safeParse({ expectedVersion: 1,
       facilityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       timezone: null,
     });

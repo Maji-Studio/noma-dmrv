@@ -17,7 +17,7 @@ vi.mock("@/db", () => {
   const tableRows = (table: Table) => {
     switch (getTableName(table)) {
       case "customers":
-        return [{ id: "customer-1" }];
+        return [{ id: "customer-1", version: 1 }];
       case "customer_locations":
         return [{ value: state.locationCount }];
       case "orders":
@@ -26,11 +26,10 @@ vi.mock("@/db", () => {
         throw new Error(`Unexpected table read: ${getTableName(table)}`);
     }
   };
-  return {
-    db: {
+  const executor = {
       select: () => ({
         from: (table: Table) => ({
-          where: () => Promise.resolve(tableRows(table)),
+          where: () => Object.assign(Promise.resolve(tableRows(table)), { for: () => Promise.resolve(tableRows(table)) }),
         }),
       }),
       delete: () => ({
@@ -39,8 +38,8 @@ vi.mock("@/db", () => {
           return Promise.resolve();
         },
       }),
-    },
   };
+  return { db: { ...executor, transaction: (callback: (tx: typeof executor) => unknown) => callback(executor) } };
 });
 
 const { deleteCustomer } = await import("./customers");
@@ -57,7 +56,7 @@ describe("deleteCustomer", () => {
   it("names only actions that exist when orders still reference the customer", async () => {
     state.orderCount = 2;
 
-    await expect(deleteCustomer(ctx, "customer-1")).rejects.toThrow(
+    await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toThrow(
       "Customer was not deleted because orders still use it. Open Orders and review them. Reassign them where appropriate, or keep this customer.",
     );
     expect(state.deleted).toBe(false);
@@ -66,14 +65,14 @@ describe("deleteCustomer", () => {
   it("points at the customer's own locations when locations block the delete", async () => {
     state.locationCount = 1;
 
-    await expect(deleteCustomer(ctx, "customer-1")).rejects.toThrow(
+    await expect(deleteCustomer(ctx, "customer-1", 1)).rejects.toThrow(
       "Customer was not deleted because it still has locations. Edit the customer and remove its locations first.",
     );
     expect(state.deleted).toBe(false);
   });
 
   it("deletes when nothing references the customer", async () => {
-    await expect(deleteCustomer(ctx, "customer-1")).resolves.toBeUndefined();
+    await expect(deleteCustomer(ctx, "customer-1", 1)).resolves.toBeUndefined();
     expect(state.deleted).toBe(true);
   });
 });

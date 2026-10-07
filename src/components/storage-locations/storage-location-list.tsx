@@ -7,6 +7,8 @@
  * already facility-scoped, so the facility is not repeated per bin.
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -57,7 +59,7 @@ export function StorageLocationList() {
   const [reconcileKind, setReconcileKind] = useState<"loss" | "count">("count");
   const [reconcilingBin, setReconcilingBin] =
     useState<StorageLocationWithFacility | null>(null);
-  const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<string | null>(null);
+  const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<StorageLocationWithFacility | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const sort = parseBinSortValue(sortValue);
@@ -95,16 +97,19 @@ export function StorageLocationList() {
     setCurrentPage,
   });
 
-  const handleDelete = (id: string) => setDeletingStorageLocationId(id);
+  const handleDelete = (id: string) => setDeletingStorageLocationId((storageLocationsData?.items ?? []).find((row) => row.id === id) ?? null);
 
   const handleArchive = async (storageLocationId: string) => {
+    const bin = storageLocations.find((row) => row.id === storageLocationId);
+    if (!bin) return;
     setDeleteError(null);
     try {
-      await archiveStorageLocation.mutateAsync(storageLocationId);
+      await archiveStorageLocation.mutateAsync({ storageLocationId, expectedVersion: bin.version });
       toast.success(
         "Storage bin archived. Restore it from the archived view.",
       );
     } catch (error) {
+      if (error instanceof StaleVersionError) setDeletingStorageLocationId(null);
       setDeleteError(
         error instanceof Error
           ? error.message
@@ -114,11 +119,14 @@ export function StorageLocationList() {
   };
 
   const handleRestore = async (storageLocationId: string) => {
+    const bin = storageLocations.find((row) => row.id === storageLocationId);
+    if (!bin) return;
     setDeleteError(null);
     try {
-      await restoreStorageLocation.mutateAsync(storageLocationId);
+      await restoreStorageLocation.mutateAsync({ storageLocationId, expectedVersion: bin.version });
       toast.success("Storage bin restored");
     } catch (error) {
+      if (error instanceof StaleVersionError) setDeletingStorageLocationId(null);
       setDeleteError(
         error instanceof Error
           ? error.message
@@ -131,11 +139,12 @@ export function StorageLocationList() {
     if (!deletingStorageLocationId) return;
     setDeleteError(null);
     try {
-      await deleteStorageLocation.mutateAsync(deletingStorageLocationId);
+      await deleteStorageLocation.mutateAsync({ storageLocationId: deletingStorageLocationId.id, expectedVersion: deletingStorageLocationId.version });
       setDeletingStorageLocationId(null);
       toast.success("Storage bin deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Storage bin was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeletingStorageLocationId(null);
+      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage(`Storage bin ${deletingStorageLocationId.code}`) : error instanceof Error ? error.message : "Storage bin was not deleted. Try again.");
     }
   };
 

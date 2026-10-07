@@ -64,7 +64,7 @@ describe("updateCustomerLocationFn", () => {
   });
 
   it("leaves every omitted field untouched when only the default flag changes", async () => {
-    const result = await updateCustomerLocationFn({
+    const result = await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: LOCATION_ID,
       isDefault: true,
     });
@@ -89,7 +89,7 @@ describe("updateCustomerLocationFn", () => {
   });
 
   it("clears a field the operator actually emptied", async () => {
-    await updateCustomerLocationFn({
+    await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: LOCATION_ID,
       stateRegion: "",
       city: "",
@@ -109,7 +109,7 @@ describe("updateCustomerLocationFn", () => {
   });
 
   it("keeps populated values, including zero", async () => {
-    await updateCustomerLocationFn({
+    await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: LOCATION_ID,
       stateRegion: "Iringa",
       city: "Mafinga",

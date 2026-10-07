@@ -11,15 +11,18 @@ import { db } from "@/db";
 import { facilities, facilityEmissionFactors } from "@/db/schema";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import type { EnergyFactors } from "@/lib/energy/types";
+import { DomainError } from "@/lib/domain-errors";
+import { STALE_VERSION_MESSAGE, STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { SafeError } from "@/lib/errors";
 import type { SaveFacilityEmissionFactorsData } from "@/schemas/emission-factors";
-import { assertExpectedVersion, staleVersionConflict } from "./expected-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
 const EMISSION_FACTORS_CONFLICT_ENTITY = "facilityEmissionFactors";
 
 export interface FacilityEmissionFactors extends EnergyFactors {
   sourceNote: string | null;
+  version: number;
   updatedAt: Date;
 }
 
@@ -28,6 +31,7 @@ const factorColumns = {
   gridKgCo2ePerKwh: facilityEmissionFactors.gridKgCo2ePerKwh,
   roadFreightKgCo2ePerTonneKm: facilityEmissionFactors.roadFreightKgCo2ePerTonneKm,
   sourceNote: facilityEmissionFactors.sourceNote,
+  version: facilityEmissionFactors.version,
   updatedAt: facilityEmissionFactors.updatedAt,
 };
 
@@ -55,7 +59,7 @@ export async function upsertFacilityEmissionFactors(
 ): Promise<FacilityEmissionFactors> {
   requireOrgScope(ctx);
   requireOrgRole(ctx, "admin");
-  const { facilityId, expectedUpdatedAt } = input;
+  const { facilityId, expectedVersion } = input;
 
   const values = {
     dieselKgCo2ePerLitre: input.dieselKgCo2ePerLitre,
@@ -82,7 +86,7 @@ export async function upsertFacilityEmissionFactors(
     if (!facility) throw new SafeError("Facility not found or archived");
 
     const [existing] = await tx
-      .select({ updatedAt: facilityEmissionFactors.updatedAt })
+      .select({ version: facilityEmissionFactors.version })
       .from(facilityEmissionFactors)
       .where(
         and(
@@ -93,18 +97,18 @@ export async function upsertFacilityEmissionFactors(
       .for("update");
 
     if (existing) {
-      if (expectedUpdatedAt === null) {
-        throw staleVersionConflict(EMISSION_FACTORS_CONFLICT_ENTITY, facilityId);
+      if (expectedVersion === null) {
+        throw new DomainError("stale_version", STALE_VERSION_MESSAGE, { conflict: { entity: EMISSION_FACTORS_CONFLICT_ENTITY, id: facilityId, code: STALE_VERSION_CONFLICT_CODE } });
       }
-      assertExpectedVersion({
+      assertRowVersion({
         entity: EMISSION_FACTORS_CONFLICT_ENTITY,
         id: facilityId,
-        expectedUpdatedAt,
-        actualUpdatedAt: existing.updatedAt,
+        expectedVersion,
+        actualVersion: existing.version,
       });
       const [row] = await tx
         .update(facilityEmissionFactors)
-        .set({ ...values, updatedAt: new Date() })
+        .set({ ...values, version: nextVersion(facilityEmissionFactors.version), updatedAt: new Date() })
         .where(
           and(
             eq(facilityEmissionFactors.facilityId, facilityId),
@@ -116,8 +120,8 @@ export async function upsertFacilityEmissionFactors(
       return row;
     }
 
-    if (expectedUpdatedAt) {
-      throw staleVersionConflict(EMISSION_FACTORS_CONFLICT_ENTITY, facilityId);
+    if (expectedVersion !== null) {
+      throw new DomainError("stale_version", STALE_VERSION_MESSAGE, { conflict: { entity: EMISSION_FACTORS_CONFLICT_ENTITY, id: facilityId, code: STALE_VERSION_CONFLICT_CODE } });
     }
     const [row] = await tx
       .insert(facilityEmissionFactors)

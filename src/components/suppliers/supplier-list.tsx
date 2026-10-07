@@ -3,6 +3,7 @@
  * Main supplier listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
 import { useEffect, useRef, useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -130,7 +131,7 @@ export function SupplierList() {
     entity: SupplierWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingSupplierId, setDeletingSupplierId] = useState<string | null>(null);
+  const [deletingSupplierId, setDeletingSupplierId] = useState<SupplierWithRelations | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -151,7 +152,7 @@ export function SupplierList() {
   const deepLinkedSupplier = useSupplier(focusedSupplierId ?? "", !!focusedSupplierId);
   // A deep-linked sheet opens on a copy of the supplier taken once, as openEdit
   // does: a later refetch (a location save, a refused stale save) must not move
-  // expectedUpdatedAt forward under the operator's old draft (#768).
+  // expectedVersion forward under the operator's old draft (#768).
   const [deepLinkSnapshotId, setDeepLinkSnapshotId] = useState<string | null>(null);
   if (!focusedSupplierId && deepLinkSnapshotId) setDeepLinkSnapshotId(null);
   if (focusedSupplierId && deepLinkedSupplier.data && !sideSheetState && deepLinkSnapshotId !== focusedSupplierId) {
@@ -244,7 +245,7 @@ export function SupplierList() {
         supplierId: sideSheet.entity.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: sideSheet.entity.updatedAt,
+        expectedVersion: sideSheet.entity.version,
         ...data,
       });
       closeSideSheet();
@@ -257,19 +258,20 @@ export function SupplierList() {
   };
 
   const handleDelete = (supplierId: string) => {
-    setDeletingSupplierId(supplierId);
+    setDeletingSupplierId((suppliersData?.items ?? []).find((row) => row.id === supplierId) ?? null);
   };
 
   const handleDeleteConfirm = async () => {
     if (!deletingSupplierId) return;
     setDeleteError(null);
     try {
-      await deleteSupplier.mutateAsync(deletingSupplierId);
+      await deleteSupplier.mutateAsync({ supplierId: deletingSupplierId.id, expectedVersion: deletingSupplierId.version });
       setDeletingSupplierId(null);
       toast.success("Supplier deleted.");
     } catch (error) {
+      if (error instanceof StaleVersionError) setDeletingSupplierId(null);
       setDeleteError(
-        error instanceof Error ? error.message : "Supplier was not deleted. Try again."
+        error instanceof StaleVersionError ? staleDeleteMessage(`Supplier ${deletingSupplierId.code}`) : error instanceof Error ? error.message : "Supplier was not deleted. Try again."
       );
     }
   };

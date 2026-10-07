@@ -542,7 +542,7 @@ export async function createFeedstockInTransaction(
         // Lock feedstock type on bin (first-use lock)
         await savepoint
           .update(storageLocations)
-          .set({ feedstockTypeId: data.feedstockTypeId })
+          .set({ version: nextVersion(storageLocations.version), feedstockTypeId: data.feedstockTypeId })
           .where(
             and(
               eq(storageLocations.id, allocation.storageLocationId),
