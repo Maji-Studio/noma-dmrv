@@ -35,7 +35,7 @@ for (const action of [
   it("preserves typed stale-bin conflicts", async () => {
     const conflict = { entity: "storageLocation", id, code: conflictCode("BIN-001") };
     mocks.create.mockRejectedValue(new ActionConflictError("Stock changed. Review the refreshed preview.", conflict));
-    expect(await action.call()).toEqual({ success: false, error: "Stock changed. Review the refreshed preview.", conflict });
+    expect(await action.call()).toEqual({ success: false, error: "Stock changed. Review the refreshed preview.", code: "conflict", conflict });
     expect(mocks.log).not.toHaveBeenCalled();
   });
   it("preserves success, authenticated context and auto-code delegation", async () => {

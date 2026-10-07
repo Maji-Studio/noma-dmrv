@@ -54,8 +54,9 @@ action the browser can call with any arguments, so it must never accept an
 `isPlatformAdmin`), a raw `organizationId`/`orgId`, a `db`/`tx` handle, or a
 `...args: Parameters<…>` passthrough, and it must not apply `requireOrgRole` /
 `requireOrgScope` to anything but the `withAction` callback's context. Put
-trusted-context code in a directive-free module (conventionally
-`src/fn/**/*-core.ts`). `pnpm check:server-action-exports` enforces this with
+trusted-context code in a directive-free module: `src/lib/operations/` for
+migrated writes, `src/lib/read-models/` for reads, or a legacy core under
+src/fn/**/*-core.ts. `pnpm check:server-action-exports` enforces this with
 the TypeScript type checker and has **no** waiver: fix the export instead.
 
 ## Style
