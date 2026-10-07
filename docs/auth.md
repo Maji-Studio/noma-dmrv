@@ -104,20 +104,19 @@ Organization Admins and Owners invite from organization settings; Better Auth en
 
 ## Better Auth schema and credential identity
 
-Better Auth is pinned to 1.7.7. The Drizzle adapter validates the configured
-schema at startup and before requests; keep that validation enabled. Auth table
-names and application-specific constraints live in `src/db/schema/auth.ts`.
+The Drizzle adapter validates the configured schema at startup and before
+requests; keep that validation enabled. Auth table names and
+application-specific constraints live in `src/db/schema/auth.ts`.
 The account token fields are `accessTokenExpiresAt`, `refreshTokenExpiresAt`
-and `scope`; 1.7.7 neither requires nor writes an account `issuer` column.
+and `scope`.
 Drizzle relations describe the auth tables, but native joins remain disabled.
 
-Better Auth 1.7 signs in only with a credential account whose `account_id`
+Better Auth signs in only with a credential account whose `account_id`
 equals the user id (`accountId === userId`). Every credential creation path
 writes this identity: the account-create hook sets it for Better Auth,
 including the atomic invitation bootstrap, once the generated user ID is
 available; the admin CLI, seeds and direct test fixtures write it directly.
 
-Databases created before this change must be reset and reseeded. Locally, run
-`pnpm db:reset` then `pnpm db:seed`. After merge, use the manual
-`reset-seed-staging` workflow for staging. Migration 0122 changes the schema
-without backfilling existing credential account IDs.
+A database whose credential accounts predate this rule must be reset and
+reseeded: `pnpm db:reset` then `pnpm db:seed` locally, the
+`reset-seed-staging` workflow for staging.
