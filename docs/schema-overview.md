@@ -74,6 +74,20 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 - **Soft delete** via nullable `archived_at` on `facilities` and its operational descendants — see [`database.md`](./database.md) → "Soft Delete — Facility Archive".
 - **All domain enums** are in `src/db/schema/common.ts` — read the file, not a sample.
 
+## Auth account columns
+
+Better Auth maps its account model to `account` in
+`src/db/schema/auth.ts`. It stores required text `id`, `user_id`, `account_id`
+and `provider_id`; nullable text `access_token`, `refresh_token`, `id_token`,
+`scope` and `password`; nullable timestamps `access_token_expires_at` and
+`refresh_token_expires_at`; and required timestamps `created_at` and
+`updated_at`. See [auth.md](./auth.md) for the Better Auth version and credential
+identity rule. Credential `account_id` equals `user_id`. Indexes cover account
+and session `user_id` and verification `identifier`, alongside the membership
+and invitation indexes.
+Application table names, extra columns, membership uniqueness and the partial
+pending-invitation uniqueness constraint are preserved.
+
 ## Related references
 
 - Chain-of-custody traversal: [`traceability.md`](./traceability.md) · [ADR 0011](./adr/0011-credit-batch-anchored-chain-of-custody.md)

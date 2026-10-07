@@ -1,6 +1,6 @@
 # Authentication
 
-Better Auth (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars and signup policy: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
+Better Auth 1.7.7 (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars and signup policy: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
 
 Guards live in `src/lib/auth/server.ts`; the client hook `useAuth` is exported from `src/lib/auth/client.ts` (**not** from `providers/better-auth-client.ts`, which exports only `authClient`, types, and raw helpers).
 
@@ -101,3 +101,22 @@ Two distinct limiters — a real trip hazard:
 ## Invitations
 
 Organization Admins and Owners invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to `/settings/organization`.
+
+## Better Auth schema and credential identity
+
+The Drizzle adapter validates the configured schema at startup and before
+requests; keep that validation enabled. Auth table names and
+application-specific constraints live in `src/db/schema/auth.ts`.
+The account token fields are `accessTokenExpiresAt`, `refreshTokenExpiresAt`
+and `scope`.
+Drizzle relations describe the auth tables, but native joins remain disabled.
+
+Better Auth signs in only with a credential account whose `account_id`
+equals the user id (`accountId === userId`). Every credential creation path
+writes this identity: the account-create hook sets it for Better Auth,
+including the atomic invitation bootstrap, once the generated user ID is
+available; the admin CLI, seeds and direct test fixtures write it directly.
+
+A database whose credential accounts predate this rule must be reset and
+reseeded: `pnpm db:reset` then `pnpm db:seed` locally, the
+`reset-seed-staging` workflow for staging.

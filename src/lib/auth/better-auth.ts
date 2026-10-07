@@ -8,6 +8,7 @@ import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
 import { Resend } from "resend";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
@@ -170,8 +171,8 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: !env.ALLOW_SELF_SIGNUP,
     requireEmailVerification: true,
-    minPasswordLength: 8,
-    maxPasswordLength: 72,
+    minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
+    maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
     sendResetPassword: async ({ user, url }) => {
       try {
         await sendAuthEmail({
@@ -250,6 +251,18 @@ export const auth = betterAuth({
   baseURL: env.NEXT_PUBLIC_APP_URL,
   trustedOrigins: buildTrustedOrigins(),
   databaseHooks: {
+    account: {
+      create: {
+        // Better Auth 1.7 looks up credentials by both userId and accountId.
+        // Invitation bootstrap creates user + account atomically through
+        // createOAuthUser; this hook receives the newly generated user ID.
+        before: async (account) => ({
+          data: account.providerId === "credential"
+            ? { ...account, accountId: account.userId }
+            : account,
+        }),
+      },
+    },
     session: {
       create: {
         // On sign-in, restore a still-accessible preference or choose the
