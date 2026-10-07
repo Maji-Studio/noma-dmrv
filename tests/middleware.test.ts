@@ -36,4 +36,28 @@ describe("Auth middleware", () => {
 
     expect(response.status).toBe(200);
   });
+
+  it("lets the MCP route authenticate its own requests, without a session lookup", async () => {
+    getSessionMock.mockClear();
+
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(
+      new NextRequest("http://localhost:3100/api/mcp", { method: "POST" }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["/api/mcpx", "/api/mcp/tools"])(
+    "keeps %s behind the session",
+    async (path) => {
+      getSessionMock.mockResolvedValueOnce(null);
+
+      const { updateSession } = await import("@/lib/auth/middleware");
+      const response = await updateSession(new NextRequest(`http://localhost:3100${path}`));
+
+      expect(response.status).toBe(401);
+    },
+  );
 });

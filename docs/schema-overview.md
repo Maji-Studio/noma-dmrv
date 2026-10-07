@@ -12,6 +12,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Area | File |
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
+| Per-credential idempotency claims for operation runs (`api_idempotency_records`) | `src/db/schema/api.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
 | Feedstock deliveries, types, feedstocks | `src/db/schema/feedstock.ts` |
