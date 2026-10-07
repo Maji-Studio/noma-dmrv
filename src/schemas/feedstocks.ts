@@ -10,7 +10,6 @@ import {
   calendarDateSchema,
   clearablePositiveNumber,
   emptyToNull,
-  expectedUpdatedAtSchema,
   massKgSchema,
   optionalPositiveNumber,
   pipeToCanonicalNumber,
@@ -151,7 +150,7 @@ export const createFeedstockSchema = feedstockFormSchema.safeExtend({
 
 export const updateFeedstockSchema = z.object({
   feedstockId: z.string().uuid("Choose a valid feedstock."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: z.number().int().positive(),
   facilityId: z.string().uuid().optional(),
   deliveryDate: calendarDateSchema().optional(),
   supplierId: z.string().uuid().optional(),
@@ -173,6 +172,7 @@ export const updateFeedstockSchema = z.object({
 });
 
 export const deleteFeedstockSchema = z.object({
+  expectedVersion: z.number().int().positive(),
   feedstockId: z.string().uuid("Choose a valid feedstock."),
 });
 
@@ -221,3 +221,5 @@ export type FeedstockFilterData = z.infer<typeof feedstockFilterSchema>;
 export type FeedstockStatsFilterData = z.infer<
   typeof feedstockStatsFilterSchema
 >;
+
+export type DeleteFeedstockData = z.infer<typeof deleteFeedstockSchema>;

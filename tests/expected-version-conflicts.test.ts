@@ -24,7 +24,7 @@ import {
   users,
 } from "@/db/schema";
 import { updateFacility } from "@/data-access/facility-mutations";
-import { updateFeedstock } from "@/data-access/feedstocks";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import {
   STALE_VERSION_CONFLICT_CODE,
   STALE_VERSION_MESSAGE,
@@ -170,7 +170,7 @@ async function readFeedstock(fixture: Fixture) {
       massWetKg: feedstocks.massWetKg,
       massDryKg: feedstocks.massDryKg,
       notes: feedstocks.notes,
-      updatedAt: feedstocks.updatedAt,
+      version: feedstocks.version,
     })
     .from(feedstocks)
     .where(eq(feedstocks.id, fixture.feedstockId));
@@ -255,22 +255,24 @@ describe("facility saves carry an expected version", () => {
 describe("feedstock saves carry an expected version", () => {
   it("refuses the second of two snapshots taken from the same read", async () => {
     const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
+    const opened = (await readFeedstock(f))!.version;
 
-    await updateFeedstock(f.ctx, f.feedstockId, {
+    await db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, {
       massWetKg: FIRST_EDIT_WET_KG,
       massDryKg: FIRST_EDIT_WET_KG * DRY_RATIO,
-      expectedUpdatedAt: opened,
-    });
+      expectedVersion: opened,
+    }));
 
     await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
+      db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, {
         massWetKg: SECOND_EDIT_WET_KG,
         massDryKg: SECOND_EDIT_WET_KG * DRY_RATIO,
-        expectedUpdatedAt: opened,
-      }),
+        expectedVersion: opened,
+      })),
     ).rejects.toMatchObject({
       ...STALE_CONFLICT,
+      name: "DomainError",
+      code: "stale_version",
       conflict: {
         ...STALE_CONFLICT.conflict,
         entity: "feedstock",
@@ -283,19 +285,19 @@ describe("feedstock saves carry an expected version", () => {
 
   it("refuses an unrelated-metadata edit built on a stale read", async () => {
     const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
+    const opened = (await readFeedstock(f))!.version;
 
-    await updateFeedstock(f.ctx, f.feedstockId, {
+    await db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
       massWetKg: FIRST_EDIT_WET_KG,
       massDryKg: FIRST_EDIT_WET_KG * DRY_RATIO,
-    });
+    }));
 
     await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
+      db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, {
         notes: "Stale writer's note",
-        expectedUpdatedAt: opened,
-      }),
-    ).rejects.toMatchObject(STALE_CONFLICT);
+        expectedVersion: opened,
+      })),
+    ).rejects.toMatchObject({ ...STALE_CONFLICT, name: "DomainError", code: "stale_version" });
 
     const after = (await readFeedstock(f))!;
     expect(after.notes).toBeNull();
@@ -304,17 +306,17 @@ describe("feedstock saves carry an expected version", () => {
 
   it("refuses a mass edit built on a stale read", async () => {
     const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
+    const opened = (await readFeedstock(f))!.version;
 
-    await updateFeedstock(f.ctx, f.feedstockId, { notes: "First writer's note" });
+    await db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1, notes: "First writer's note" }));
 
     await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
+      db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, {
         massWetKg: SECOND_EDIT_WET_KG,
         massDryKg: SECOND_EDIT_WET_KG * DRY_RATIO,
-        expectedUpdatedAt: opened,
-      }),
-    ).rejects.toMatchObject(STALE_CONFLICT);
+        expectedVersion: opened,
+      })),
+    ).rejects.toMatchObject({ ...STALE_CONFLICT, name: "DomainError", code: "stale_version" });
 
     const after = (await readFeedstock(f))!;
     expect(after.massWetKg).toBe(INTAKE_WET_KG);
@@ -323,26 +325,16 @@ describe("feedstock saves carry an expected version", () => {
 
   it("saves when the expected version matches the stored row", async () => {
     const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
+    const opened = (await readFeedstock(f))!.version;
 
-    await updateFeedstock(f.ctx, f.feedstockId, {
+    await db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, {
       massWetKg: FIRST_EDIT_WET_KG,
       massDryKg: FIRST_EDIT_WET_KG * DRY_RATIO,
-      expectedUpdatedAt: opened,
-    });
+      expectedVersion: opened,
+    }));
 
     expect((await readFeedstock(f))!.massWetKg).toBe(FIRST_EDIT_WET_KG);
   });
 
-  it("still saves when the payload carries no expected version", async () => {
-    const f = await fixture();
-    await updateFeedstock(f.ctx, f.feedstockId, { notes: "First writer's note" });
-
-    await updateFeedstock(f.ctx, f.feedstockId, {
-      massWetKg: SECOND_EDIT_WET_KG,
-      massDryKg: SECOND_EDIT_WET_KG * DRY_RATIO,
-    });
-
-    expect((await readFeedstock(f))!.massWetKg).toBe(SECOND_EDIT_WET_KG);
-  });
+  // Versionless writes are rejected by the operation schema; covered without a DB.
 });

@@ -1,3 +1,4 @@
+import type { DomainErrorCode, DomainIssue } from "@/lib/domain-errors";
 import type { ConflictRef } from "@/lib/conflict-ref";
 
 /**
@@ -20,6 +21,9 @@ export type ActionResult<T> =
   | {
       success: false;
       error: string;
+      /** Optional during migration: hand-built prose-only failures remain valid. */
+      code?: DomainErrorCode;
+      issues?: DomainIssue[];
       /**
        * Optional structured reference to a conflicting entity, so a form can
        * link the operator straight to it (e.g. the production run whose time

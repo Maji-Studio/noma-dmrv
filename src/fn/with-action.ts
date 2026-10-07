@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { OrgContext } from "@/lib/auth/server";
+import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
@@ -76,10 +77,10 @@ export async function withAction<T, E extends MappedFailure = never>(
     const data = await fn(ctx);
     return { success: true, data };
   } catch (error) {
-    // The Zod and conflict branches stay ahead of `mapError`; everything else
+    // The Zod, domain and conflict branches stay ahead of `mapError`; everything else
     // is formatted by the helper the read transport shares.
     const claimed =
-      error instanceof z.ZodError || error instanceof ActionConflictError
+      error instanceof z.ZodError || error instanceof ActionConflictError || error instanceof DomainError
         ? undefined
         : mapError?.(error);
     if (claimed) return claimed;

@@ -9,6 +9,7 @@ import type {
   FeedstockStatsFilterData,
   CreateFeedstockData,
   UpdateFeedstockData,
+  DeleteFeedstockData,
 } from "@/schemas/feedstocks";
 import type {
   FeedstockWithRelations,
@@ -163,13 +164,13 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
   });
 }
 
-export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, DeleteFeedstockData>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (feedstockId: string) => {
-      const result = await deleteFeedstockFn({ feedstockId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (data: DeleteFeedstockData) => {
+      const result = await deleteFeedstockFn(data);
+      if (!result.success) throwActionError(result);
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: feedstockKeys.lists() });

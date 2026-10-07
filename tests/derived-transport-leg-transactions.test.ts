@@ -25,8 +25,8 @@ import {
   updateDelivery,
 } from "@/data-access/deliveries";
 import {
-  createFeedstock,
-  updateFeedstock,
+  createFeedstockInTransaction,
+  updateFeedstockInTransaction,
 } from "@/data-access/feedstocks";
 import {
   ensureTestOrg,
@@ -163,9 +163,7 @@ describe("derived transport-leg transaction boundaries", () => {
     created.storageLocationIds.push(bin.id);
 
     await expect(
-      createFeedstock(
-        ctx,
-        {
+      db.transaction((tx) => createFeedstockInTransaction(ctx, tx, {
           facilityId: facility.id,
           deliveryDate: new Date("2026-07-19T00:00:00Z"),
           supplierId: supplier.id,
@@ -176,8 +174,7 @@ describe("derived transport-leg transaction boundaries", () => {
           transportDistanceKm: 25,
           // Exercise a database rejection specifically in derived persistence.
           transportDistanceSource: "invalid_source" as never,
-        },
-      ),
+        })),
     ).rejects.toThrow();
 
     const [persistedFeedstock] = await db
@@ -265,9 +262,7 @@ describe("derived transport-leg transaction boundaries", () => {
       .returning({ id: storageLocations.id });
     created.storageLocationIds.push(bin.id);
 
-    const result = await createFeedstock(
-      ctx,
-      {
+    const result = await db.transaction((tx) => createFeedstockInTransaction(ctx, tx, {
         facilityId: facility.id,
         deliveryDate: new Date("2026-07-19T00:00:00Z"),
         supplierId: supplier.id,
@@ -277,12 +272,11 @@ describe("derived transport-leg transaction boundaries", () => {
         allocations: [{ storageLocationId: bin.id, allocatedWetMassKg: 100 }],
         transportDistanceKm: 25,
         transportDistanceSource: "document",
-      },
-    );
+      }));
     expect(result.feedstocks[0].status).toBe("complete");
     const feedstockId = result.feedstocks[0].id;
 
-    await updateFeedstock(ctx, feedstockId, { notes: "Partial update" });
+    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, { expectedVersion: 1, notes: "Partial update" }));
 
     const [derived] = await db
       .select({
@@ -302,9 +296,9 @@ describe("derived transport-leg transaction boundaries", () => {
 
     // With no explicit transport fields, a route-anchor change discards the
     // stale saved override and recomputes from the new supplier's default.
-    await updateFeedstock(ctx, feedstockId, {
+    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, { expectedVersion: 2,
       supplierId: newRouteSupplier.id,
-    });
+    }));
 
     const [rerouted] = await db
       .select({
@@ -326,11 +320,11 @@ describe("derived transport-leg transaction boundaries", () => {
 
     // An explicit override submitted with a reroute is authoritative. It must
     // not be discarded merely because the supplier anchor also changed.
-    await updateFeedstock(ctx, feedstockId, {
+    await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, feedstockId, { expectedVersion: 3,
       supplierId: supplier.id,
       transportDistanceKm: 30,
       transportDistanceSource: "document",
-    });
+    }));
 
     const [explicitReroute] = await db
       .select({

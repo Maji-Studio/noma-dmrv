@@ -13,7 +13,6 @@ import {
   updateCustomerSchema,
 } from "@/schemas/customers";
 import { updateFacilitySchema } from "@/schemas/facilities";
-import { updateFeedstockSchema } from "@/schemas/feedstocks";
 import { updateProductionRunSchema } from "@/schemas/production-runs";
 import { updateStorageLocationSchema } from "@/schemas/storage-locations";
 import {
@@ -28,7 +27,6 @@ const UPDATED_AT = new Date("2026-01-01T12:34:56.789Z");
 /** Every update schema that gained the field, with a minimal valid payload. */
 const schemas = [
   ["facility", updateFacilitySchema, { facilityId: ID }],
-  ["feedstock", updateFeedstockSchema, { feedstockId: ID }],
   ["storage bin", updateStorageLocationSchema, { storageLocationId: ID }],
   ["customer", updateCustomerSchema, { customerId: ID }],
   ["customer location", updateCustomerLocationSchema, { locationId: ID }],

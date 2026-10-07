@@ -22,7 +22,8 @@ import {
   storageObjectDeletions,
   transportLegs,
 } from "@/db/schema";
-import { deleteFeedstock } from "@/data-access/feedstocks";
+import { deleteFeedstock } from "@/lib/operations/feedstocks";
+import { runOperationInProcess } from "@/lib/operations/runner";
 import { deleteDelivery } from "@/data-access/deliveries";
 import { deleteProductionIncident } from "@/data-access/production-incidents";
 import { deleteProductionRun } from "@/data-access/production-runs";
@@ -866,7 +867,7 @@ describe("parent document retirement", () => {
         insertManagedDocument(provider, "production_incident", incident.id, `production_incident/${incident.id}/pdf/${tag}.pdf`),
       ]);
 
-      await deleteFeedstock(makeTestOrgContext(TEST_USER_ID), feedstock.id);
+      await runOperationInProcess(deleteFeedstock, makeTestOrgContext(TEST_USER_ID), { feedstockId: feedstock.id, expectedVersion: 1 });
       await deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id);
 
       expect(

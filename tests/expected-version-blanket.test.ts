@@ -44,7 +44,6 @@ import {
   updateCustomerLocation,
 } from "@/data-access/customers";
 import { updateFacility } from "@/data-access/facility-mutations";
-import { updateFeedstock } from "@/data-access/feedstocks";
 import { updateProductionRun } from "@/data-access/production-runs";
 import { updateStorageLocation } from "@/data-access/storage-locations";
 import {
@@ -138,12 +137,6 @@ const UPDATERS: UpdaterCase[] = [
     readUpdatedAt: versionOf(facilities),
     save: (f, id, label, expectedUpdatedAt) =>
       updateFacility(f.ctx, id, { location: label, expectedUpdatedAt }),
-  },
-  {
-    entity: "feedstock",
-    readUpdatedAt: versionOf(feedstocks),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateFeedstock(f.ctx, id, { notes: label, expectedUpdatedAt }),
   },
   {
     entity: "storageLocation",

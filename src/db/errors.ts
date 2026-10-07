@@ -154,6 +154,8 @@ export function isPgForeignKeyViolation(err: unknown, constraint: string): boole
 
 // SQLSTATE for lock_not_available, raised when `lock_timeout` expires.
 export const PG_LOCK_NOT_AVAILABLE = "55P03";
+// SQLSTATE for transaction_timeout, which terminates the session (Postgres 17+).
+export const PG_TRANSACTION_TIMEOUT = "25P04";
 // SQLSTATE for query_canceled, raised when `statement_timeout` expires.
 export const PG_QUERY_CANCELED = "57014";
 

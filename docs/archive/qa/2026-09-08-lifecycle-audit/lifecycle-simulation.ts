@@ -8,7 +8,7 @@ import { getStorageLocationLaneSummary } from "@/data-access/storage-location-la
 import { createFeedstockType as quickCreateFeedstockType } from "@/data-access/quick-add";
 import { createFeedstockType as canonicalCreateFeedstockType, updateFeedstockType } from "@/data-access/feedstock-types";
 import { deleteSupplier } from "@/data-access/suppliers";
-import { updateFeedstock } from "@/data-access/feedstocks";
+import { updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { updateFacility } from "@/data-access/facility-mutations";
 import { updateFeedstockTypeSchema } from "@/schemas/feedstock-types";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "../../../../tests/helpers/test-org";
@@ -128,7 +128,7 @@ describe("feedstock baseline observations", () => {
         massDeltaKg: -80, reason: "Disposable audit withdrawal fixture" });
       const before = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(before.feedstock_bin.onHandKg).toBe(20);
-      await updateFeedstock(context, f.intake.id, { massWetKg: 50, massDryKg: 45 });
+      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, massWetKg: 50, massDryKg: 45 }));
       const after = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(after.feedstock_bin.onHandKg).toBe(-30);
       console.log("F06: 100 kg intake - 80 kg loss = 20 kg; edit intake to 50 kg succeeds; final stock=-30 kg");
@@ -140,7 +140,7 @@ describe("feedstock baseline observations", () => {
   it("F07: moisture-only update leaves stored dry mass inconsistent", async () => {
     const f = await intakeFixture();
     try {
-      await updateFeedstock(context, f.intake.id, { moistureContentPercent: 50 });
+      await db.transaction((tx) => updateFeedstockInTransaction(context, tx, f.intake.id, { expectedVersion: f.intake.version, moistureContentPercent: 50 }));
       const [saved] = await db.select().from(feedstocks).where(eq(feedstocks.id, f.intake.id));
       expect(saved.massWetKg).toBe(100);
       expect(saved.moistureContentPercent).toBe(50);

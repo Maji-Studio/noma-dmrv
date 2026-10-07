@@ -1,3 +1,7 @@
+import { DomainError } from "@/lib/domain-errors";
+import { validationFailed } from "@/lib/operations/errors";
+import { formatValidationIssues } from "@/lib/validation-message";
+import { STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { ActionConflictError, SafeError, toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import type { ActionResult } from "@/types/actions";
@@ -20,7 +24,7 @@ interface ActionFailureOptions {
   zodErrorPrefix?: string;
 }
 
-const DEFAULT_ZOD_ACTION_ERROR = "Check the highlighted fields.";
+
 
 /**
  * A body result whose work has a committed part and a non-fatal follow-up:
@@ -42,25 +46,8 @@ export function toWarnableSuccess<T>({
   return warning ? { success: true, data, warning } : { success: true, data };
 }
 
-function asSentence(message: string): string {
-  return /[.!?]$/.test(message) ? message : `${message}.`;
-}
-
-export function formatZodActionError(
-  error: ZodError,
-  context?: string,
-): string {
-  const messages = [
-    ...new Set(
-      error.issues
-        .map((issue) => issue.message.trim())
-        .filter((message) => message.length > 0),
-    ),
-  ].map(asSentence);
-  const issueText = messages.join(" ") || DEFAULT_ZOD_ACTION_ERROR;
-
-  if (!context) return issueText;
-  return `${context.trim().replace(/[:.\s]+$/, "")}: ${issueText}`;
+export function formatZodActionError(error: ZodError, context?: string): string {
+  return formatValidationIssues(error.issues, context);
 }
 
 export function logActionError(
@@ -100,16 +87,29 @@ export function toActionFailure(
   error: unknown,
   { fallbackMessage, log, zodErrorPrefix }: ActionFailureOptions,
 ): ActionFailure {
+  if (error instanceof DomainError) {
+    return {
+      success: false,
+      error: error.message,
+      code: error.code,
+      ...(error.issues.length ? { issues: error.issues } : {}),
+      ...(error.conflict ? { conflict: error.conflict } : {}),
+      ...(error.blockers ? { blockers: error.blockers } : {}),
+    };
+  }
   if (error instanceof ZodError) {
     return {
       success: false,
       error: formatZodActionError(error, zodErrorPrefix),
+      code: "validation_failed",
+      issues: validationFailed(error).issues,
     };
   }
   if (error instanceof ActionConflictError) {
     return {
       success: false,
       error: error.message,
+      code: error.conflict.code === STALE_VERSION_CONFLICT_CODE ? "stale_version" : "conflict",
       conflict: error.conflict,
       ...(error.blockers ? { blockers: error.blockers } : {}),
     };

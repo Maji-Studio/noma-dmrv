@@ -10,8 +10,8 @@
  * 1. The budget covers pool acquisition. A request whose deadline passes while
  *    it waits for a connection answers `deadline_exceeded` and never starts:
  *    if the connection arrives later it is handed straight back.
- * 2. Once the transaction starts, `statement_timeout` is the remaining budget,
- *    so PostgreSQL cancels a statement that would overrun it.
+ * 2. Statement and transaction timeouts use the remaining budget, so the
+ *    server also terminates a run of short statements that would overrun it.
  * 3. The budget is checked again before COMMIT; an overrun rolls back.
  * 4. A failure after COMMIT was sent is `outcome_unknown`: the client retries
  *    with the same idempotency key, which replays the stored result or runs
@@ -165,6 +165,33 @@ export async function runOperation<Input extends z.ZodType, Output>(
   input: unknown,
   options: RunOptions = {},
 ): Promise<OperationResult<Output>> {
+  return runOperationCore(operation, ctx, input, options, toJson<Output>);
+}
+
+/** Native results for server actions; replay and previews are JSON-only contracts. */
+export async function runOperationInProcess<Input extends z.ZodType, Output>(
+  operation: Operation<Input, Output>,
+  ctx: OrgContext,
+  input: unknown,
+  options: Pick<RunOptions, "deadlineMs" | "pool"> & {
+    idempotency?: never;
+    dryRun?: never;
+  } = {},
+): Promise<Output> {
+  if (options.idempotency !== undefined || options.dryRun !== undefined) {
+    throw new DomainError("validation_failed", "In-process operations do not accept idempotency or dry run.");
+  }
+  const result = await runOperationCore(operation, ctx, input, options, (data) => data);
+  return result.data;
+}
+
+async function runOperationCore<Input extends z.ZodType, Output, Result>(
+  operation: Operation<Input, Output>,
+  ctx: OrgContext,
+  input: unknown,
+  options: RunOptions,
+  represent: (data: Output) => Result,
+): Promise<{ data: Result; dryRun: boolean; replayed: boolean }> {
   const deadlineAt = Date.now() + (options.deadlineMs ?? OPERATION_DEADLINE_MS);
   const dryRun = options.dryRun ?? false;
   const { idempotency } = options;
@@ -186,7 +213,7 @@ export async function runOperation<Input extends z.ZodType, Output>(
   }
 
   const hooks: Array<() => Promise<void> | void> = [];
-  let committed: OperationResult<Output> | undefined;
+  let committed: { data: Result; dryRun: boolean; replayed: boolean } | undefined;
   try {
     const outcome = await runOwnedTransaction(ctx, deadlineAt, async (tx) => {
       let recordId: string | undefined;
@@ -203,7 +230,7 @@ export async function runOperation<Input extends z.ZodType, Output>(
         recordId = claim.recordId;
       }
 
-      const result = toJson<Output>(
+      const result = represent(
         await operation.execute({ ctx, tx, afterCommit: (hook) => hooks.push(hook) }, decoded),
       );
       if (recordId) {
@@ -220,10 +247,10 @@ export async function runOperation<Input extends z.ZodType, Output>(
     } else {
       const failure = outcome.error;
       if (failure instanceof DryRunRollback) {
-        return { data: failure.data as Jsonified<Output>, dryRun: true, replayed: false };
+        return { data: failure.data as Result, dryRun: true, replayed: false };
       }
       if (failure instanceof ReplayRollback) {
-        return { data: failure.outcome as Jsonified<Output>, dryRun: false, replayed: true };
+        return { data: failure.outcome as Result, dryRun: false, replayed: true };
       }
       const code = pgErrorCode(failure);
       if ((code === PG_QUERY_CANCELED || code === PG_LOCK_NOT_AVAILABLE) && remainingMs(deadlineAt) <= 0) {
