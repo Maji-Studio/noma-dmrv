@@ -383,6 +383,7 @@ export const clearableDefaultSoilTemperature = pipeToCanonicalNumber(
 // Date-Only Input Helpers
 // ============================================
 
+const DAY_MS = 86_400_000;
 const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const INVALID_CALENDAR_DATE_MESSAGE = "Enter a valid date.";
 
@@ -409,7 +410,7 @@ export function parseCalendarDate(value: string): Date | null {
 }
 
 function isUtcMidnight(date: Date): boolean {
-  return !isNaN(date.getTime()) && date.getTime() % 86_400_000 === 0;
+  return !isNaN(date.getTime()) && date.getTime() % DAY_MS === 0;
 }
 
 /**

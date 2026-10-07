@@ -3,9 +3,8 @@
  *
  * Every exposed write runs through `runOperation`, whichever adapter called
  * it: decode, then one transaction the runner owns, then a typed outcome. The
- * runner checks out its own connection instead of `db.transaction`, because
- * Drizzle returns a client to the pool even when ROLLBACK failed; here a
- * client in an unknown state is destroyed.
+ * data-access transaction helper owns the connection and destroys clients
+ * whose transaction state is unknown.
  *
  * Deadline sequence (the timer alone never stops a transaction):
  * 1. The budget covers pool acquisition. A request whose deadline passes while
@@ -20,12 +19,9 @@
  */
 
 import { createHash } from "node:crypto";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Pool, PoolClient } from "pg";
-import { db, type DbTransaction } from "@/db";
-import * as schema from "@/db/schema";
+import type { Pool } from "pg";
+import type { DbTransaction } from "@/db";
 import { pgErrorCode, PG_LOCK_NOT_AVAILABLE, PG_QUERY_CANCELED } from "@/db/errors";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import {
@@ -34,11 +30,12 @@ import {
   recordIdempotencyOutcome,
 } from "@/data-access/api-idempotency-records";
 import type { OrgContext } from "@/lib/auth/server";
-import { logger } from "@/lib/log";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { DomainError, validationFailed } from "./errors";
+import { runOwnedTransaction } from "@/data-access/owned-transaction";
+import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
+import type { Jsonified } from "./jsonified";
 
-/** SQLSTATE classes whose COMMIT failure proves the transaction rolled back. */
-const DEFINITE_ROLLBACK_SQLSTATE_CLASSES = ["23", "40"];
 /** Version of the request contract folded into idempotency fingerprints. */
 const API_CONTRACT_VERSION = "v1";
 
@@ -77,7 +74,7 @@ export interface RunOptions {
 }
 
 export interface OperationResult<Output> {
-  data: Output;
+  data: Jsonified<Output>;
   dryRun: boolean;
   replayed: boolean;
 }
@@ -88,22 +85,6 @@ class DryRunRollback<Output> {
 
 class ReplayRollback {
   constructor(readonly outcome: unknown) {}
-}
-
-function deadlineExceeded(detail: string): DomainError {
-  return new DomainError(
-    "deadline_exceeded",
-    `The request ran out of time ${detail}. Nothing was saved; retry it.`,
-    { retryable: true },
-  );
-}
-
-function outcomeUnknown(cause: unknown): DomainError {
-  return new DomainError(
-    "outcome_unknown",
-    "The connection failed while saving, so it is not known whether the change was saved. Retry with the same idempotency key.",
-    { retryable: true, cause },
-  );
 }
 
 function stableJson(value: unknown): string {
@@ -140,44 +121,12 @@ export function requestFingerprint(
 }
 
 /** The JSON representation a first response and its replay share. */
-function toStoredOutcome<Output>(data: Output): Output {
-  return JSON.parse(JSON.stringify(data ?? null)) as Output;
+function toJson<Output>(data: Output): Jsonified<Output> {
+  return JSON.parse(JSON.stringify(data) ?? "null") as Jsonified<Output>;
 }
 
 function remainingMs(deadlineAt: number): number {
   return deadlineAt - Date.now();
-}
-
-/**
- * Check out a connection before the deadline, or answer without starting. A
- * connection that arrives after the answer is released untouched.
- */
-async function acquireBeforeDeadline(pool: Pool, deadlineAt: number): Promise<PoolClient> {
-  let abandoned = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const connecting = pool.connect().then((client) => {
-    if (abandoned) {
-      client.release();
-      return undefined;
-    }
-    return client;
-  });
-  const timedOut = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), Math.max(0, remainingMs(deadlineAt)));
-  });
-  try {
-    const winner = await Promise.race([connecting, timedOut]);
-    if (winner === "timeout" || winner === undefined) {
-      abandoned = true;
-      // A late connection is released by the handler above; a late failure
-      // has nobody left to report to.
-      connecting.catch(() => undefined);
-      throw deadlineExceeded("while waiting for a database connection");
-    }
-    return winner;
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 const inFlightKeys = new Set<string>();
@@ -192,11 +141,6 @@ function decode<Input extends z.ZodType>(schema: Input, input: unknown): z.outpu
   return parsed.data;
 }
 
-function isDefiniteRollback(error: unknown): boolean {
-  const code = pgErrorCode(error);
-  return code !== undefined && DEFINITE_ROLLBACK_SQLSTATE_CLASSES.includes(code.slice(0, 2));
-}
-
 async function runAfterCommitHooks(
   operationId: string,
   hooks: Array<() => Promise<void> | void>,
@@ -206,7 +150,7 @@ async function runAfterCommitHooks(
       await hook();
     } catch (error) {
       // The write is committed; a hook failure must never look like a rollback.
-      logger.warn({ err: error, operationId }, "operation after-commit hook failed");
+      logger.warn({ errorMessage: sanitizeErrorMessage(error), operationId }, "operation after-commit hook failed");
     }
   }
 }
@@ -236,11 +180,7 @@ export async function runOperation<Input extends z.ZodType, Output>(
   const flightKey = idempotency && !dryRun ? inFlightKey(ctx, idempotency) : undefined;
   if (flightKey) {
     if (inFlightKeys.has(flightKey)) {
-      throw new DomainError(
-        "idempotency_in_progress",
-        "A request with this idempotency key is still running. Retry shortly.",
-        { retryable: true, retryAfterSeconds: 1 },
-      );
+      throw idempotencyInProgress();
     }
     inFlightKeys.add(flightKey);
   }
@@ -248,85 +188,48 @@ export async function runOperation<Input extends z.ZodType, Output>(
   const hooks: Array<() => Promise<void> | void> = [];
   let committed: OperationResult<Output> | undefined;
   try {
-    const client = await acquireBeforeDeadline(options.pool ?? db.$client, deadlineAt);
-    // Mutated inside the transaction callback; an object so the catch below
-    // reads the live value rather than a narrowed literal.
-    const state: { callback: "pending" | "returned" | "threw"; thrown?: unknown } = {
-      callback: "pending",
-    };
-    let discardClient: Error | undefined;
-
-    try {
-      const connection = drizzle(client, { schema });
-      const data = await connection.transaction(async (tx) => {
-        try {
-          const budget = Math.floor(remainingMs(deadlineAt));
-          if (budget <= 0) throw deadlineExceeded("before it started");
-          await tx.execute(sql.raw(`set local statement_timeout = ${budget}`));
-
-          let recordId: string | undefined;
-          if (idempotency && dryRun) {
-            await assertIdempotencyKeyUnused(ctx, tx, idempotency.credentialId, idempotency.key);
-          } else if (idempotency) {
-            const claim = await claimIdempotencyKey(ctx, tx, {
-              credentialId: idempotency.credentialId,
-              key: idempotency.key,
-              operationId: operation.id,
-              fingerprint: requestFingerprint(operation.id, decoded, idempotency),
-            });
-            if (claim.kind === "replay") throw new ReplayRollback(claim.outcome);
-            recordId = claim.recordId;
-          }
-
-          let result = await operation.execute(
-            { ctx, tx, afterCommit: (hook) => hooks.push(hook) },
-            decoded,
-          );
-          if (recordId) {
-            result = toStoredOutcome(result);
-            await recordIdempotencyOutcome(ctx, tx, recordId, result);
-          }
-
-          if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
-          if (dryRun) throw new DryRunRollback(result);
-          state.callback = "returned";
-          return result;
-        } catch (error) {
-          state.callback = "threw";
-          state.thrown = error;
-          throw error;
-        }
-      });
-
-      committed = { data, dryRun: false, replayed: false };
-    } catch (error) {
-      const cleanRollback = state.callback === "threw" && error === state.thrown;
-      if (!cleanRollback) {
-        // BEGIN, ROLLBACK or COMMIT itself failed: the connection's state is
-        // unknown, so it is destroyed instead of returned to the pool.
-        discardClient = error instanceof Error ? error : new Error(String(error));
+    const outcome = await runOwnedTransaction(ctx, deadlineAt, async (tx) => {
+      let recordId: string | undefined;
+      if (idempotency && dryRun) {
+        await assertIdempotencyKeyUnused(ctx, tx, idempotency.credentialId, idempotency.key);
+      } else if (idempotency) {
+        const claim = await claimIdempotencyKey(ctx, tx, {
+          credentialId: idempotency.credentialId,
+          key: idempotency.key,
+          operationId: operation.id,
+          fingerprint: requestFingerprint(operation.id, decoded, idempotency),
+        });
+        if (claim.kind === "replay") throw new ReplayRollback(claim.outcome);
+        recordId = claim.recordId;
       }
-      if (state.callback === "returned") {
-        throw isDefiniteRollback(error) ? error : outcomeUnknown(error);
-      }
-      if (state.callback === "pending") throw error;
 
-      // The callback threw. Even when ROLLBACK then failed, nothing committed:
-      // PostgreSQL aborts an open transaction when its connection dies.
-      const failure = state.thrown;
+      const result = toJson<Output>(
+        await operation.execute({ ctx, tx, afterCommit: (hook) => hooks.push(hook) }, decoded),
+      );
+      if (recordId) {
+        await recordIdempotencyOutcome(ctx, tx, recordId, result);
+      }
+
+      if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
+      if (dryRun) throw new DryRunRollback(result);
+      return result;
+    }, options.pool);
+
+    if (outcome.kind === "committed") {
+      committed = { data: outcome.data, dryRun: false, replayed: false };
+    } else {
+      const failure = outcome.error;
       if (failure instanceof DryRunRollback) {
-        return { data: failure.data as Output, dryRun: true, replayed: false };
+        return { data: failure.data as Jsonified<Output>, dryRun: true, replayed: false };
       }
       if (failure instanceof ReplayRollback) {
-        return { data: failure.outcome as Output, dryRun: false, replayed: true };
+        return { data: failure.outcome as Jsonified<Output>, dryRun: false, replayed: true };
       }
       const code = pgErrorCode(failure);
       if ((code === PG_QUERY_CANCELED || code === PG_LOCK_NOT_AVAILABLE) && remainingMs(deadlineAt) <= 0) {
         throw deadlineExceeded("while saving");
       }
       throw failure;
-    } finally {
-      client.release(discardClient);
     }
   } finally {
     if (flightKey) inFlightKeys.delete(flightKey);

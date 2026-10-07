@@ -8,58 +8,8 @@
  */
 
 import { z } from "zod";
-import { SafeError } from "@/lib/errors";
-
-export type DomainErrorCode =
-  | "validation_failed"
-  | "not_found"
-  | "stale_version"
-  | "conflict"
-  | "certification_locked"
-  | "insufficient_stock"
-  | "forbidden"
-  | "reference_not_found"
-  | "reference_ambiguous"
-  // Runner outcomes.
-  | "deadline_exceeded"
-  | "outcome_unknown"
-  | "idempotency_in_progress"
-  | "idempotency_key_reused"
-  | "key_already_used"
-  | "replay_unavailable";
-
-export interface DomainIssue {
-  path: (string | number)[];
-  code: string;
-  message: string;
-  /** Non-sensitive limits (`max`, `unit`, allowed values); never the rejected value. */
-  meta?: Record<string, unknown>;
-}
-
-interface DomainErrorOptions {
-  issues?: DomainIssue[];
-  retryable?: boolean;
-  /** Seconds a client should wait before retrying. */
-  retryAfterSeconds?: number;
-  cause?: unknown;
-}
-
-export class DomainError extends SafeError {
-  readonly code: DomainErrorCode;
-  readonly issues: DomainIssue[];
-  readonly retryable: boolean;
-  readonly retryAfterSeconds?: number;
-
-  constructor(code: DomainErrorCode, message: string, options: DomainErrorOptions = {}) {
-    super(message);
-    this.name = "DomainError";
-    this.code = code;
-    this.issues = options.issues ?? [];
-    this.retryable = options.retryable ?? false;
-    this.retryAfterSeconds = options.retryAfterSeconds;
-    if (options.cause !== undefined) this.cause = options.cause;
-  }
-}
+import { DomainError, type DomainIssue } from "@/lib/domain-errors";
+export { DomainError, type DomainErrorCode, type DomainIssue } from "@/lib/domain-errors";
 
 const ISSUE_META_KEYS = ["minimum", "maximum", "inclusive", "divisor", "values", "format"] as const;
 

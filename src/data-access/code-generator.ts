@@ -218,28 +218,11 @@ export async function withAutoCode<T>(
     }
   }
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const code = await generateNextCode(ctx, prefix, table, codeColumn);
-    try {
-      return await insertFn(code);
-    } catch (error) {
-      if (isCodeUniqueViolation(error, table, codeColumn)) {
-        if (attempt < MAX_RETRIES - 1) {
-          // Brief pause before retry to let the other transaction commit
-          await new Promise((resolve) =>
-            setTimeout(resolve, RETRY_BACKOFF_BASE_MS * (attempt + 1)),
-          );
-          continue;
-        }
-        throw duplicateCodeError(code, duplicateMessage);
-      }
-      throw error;
-    }
-  }
-
-  // Should never reach here, but TypeScript needs it
-  throw new SafeError(
-    `A unique code could not be generated after ${MAX_RETRIES} attempts. Enter a code manually.`,
+  return retryGeneratedCodes(
+    table, codeColumn,
+    async () => [await generateNextCode(ctx, prefix, table, codeColumn)],
+    (codes) => insertFn(codes[0]),
+    duplicateMessage,
   );
 }
 
@@ -262,10 +245,26 @@ export async function withAutoCodes<T>(
   duplicateMessage?: string,
 ): Promise<T> {
   requireOrgScope(ctx);
+  return retryGeneratedCodes(
+    table, codeColumn,
+    () => generateNextCodes(ctx, prefix, table, codeColumn, count, tx),
+    (codes) => tx.transaction((savepoint) => insertFn(codes, savepoint)),
+    duplicateMessage,
+  );
+}
+
+/** Retry only this code constraint; generation failures and other constraints propagate. */
+async function retryGeneratedCodes<T>(
+  table: OrgScopedCodeTable,
+  codeColumn: PgColumn,
+  generate: () => Promise<string[]>,
+  insert: (codes: string[]) => Promise<T>,
+  duplicateMessage?: string,
+): Promise<T> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const codes = await generateNextCodes(ctx, prefix, table, codeColumn, count, tx);
+    const codes = await generate();
     try {
-      return await tx.transaction((savepoint) => insertFn(codes, savepoint));
+      return await insert(codes);
     } catch (error) {
       if (!isCodeUniqueViolation(error, table, codeColumn)) throw error;
       if (attempt === MAX_RETRIES - 1) throw duplicateCodeError(codes[0], duplicateMessage);

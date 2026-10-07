@@ -27,10 +27,9 @@ import {
   IDEMPOTENCY_CLAIM_LOCK_TIMEOUT_MS,
   IDEMPOTENCY_OUTCOME_SCHEMA_VERSION,
   IDEMPOTENCY_RETENTION_DAYS,
-  IDEMPOTENCY_RETRY_AFTER_SECONDS,
 } from "@/config/operations";
 import type { OrgContext } from "@/lib/auth/server";
-import { DomainError } from "@/lib/operations/errors";
+import { DomainError, idempotencyInProgress } from "@/lib/domain-errors";
 import { requireOrgScope, type Executor } from "./utils";
 
 const DAY_MS = 86_400_000;
@@ -52,14 +51,6 @@ interface CommittedRecord {
   outcome: unknown;
   outcomeSchemaVersion: number;
   expiresAt: Date;
-}
-
-function stillRunning(cause?: unknown): DomainError {
-  return new DomainError(
-    "idempotency_in_progress",
-    "A request with this idempotency key is still running. Retry shortly.",
-    { retryable: true, retryAfterSeconds: IDEMPOTENCY_RETRY_AFTER_SECONDS, cause },
-  );
 }
 
 async function findRecord(
@@ -101,7 +92,7 @@ async function withClaimLockTimeout<T>(tx: DbTransaction, statement: () => Promi
   try {
     return await statement();
   } catch (error) {
-    if (pgErrorCode(error) === PG_LOCK_NOT_AVAILABLE) throw stillRunning(error);
+    if (pgErrorCode(error) === PG_LOCK_NOT_AVAILABLE) throw idempotencyInProgress(error);
     throw error;
   } finally {
     await tx.execute(sql`reset lock_timeout`).catch(() => undefined);
@@ -159,7 +150,7 @@ export async function claimIdempotencyKey(
     // The holder rolled back between our INSERT and SELECT; claim again.
     const retriedId = await insertClaim(ctx, tx, claim, now);
     if (retriedId) return { kind: "owner", recordId: retriedId };
-    throw stillRunning();
+    throw idempotencyInProgress();
   }
 
   if (record.expiresAt.getTime() <= now.getTime()) {
@@ -177,7 +168,7 @@ export async function claimIdempotencyKey(
     );
     const reclaimedId = await insertClaim(ctx, tx, claim, now);
     if (reclaimedId) return { kind: "owner", recordId: reclaimedId };
-    throw stillRunning();
+    throw idempotencyInProgress();
   }
 
   if (record.fingerprint !== claim.fingerprint) {
@@ -186,13 +177,19 @@ export async function claimIdempotencyKey(
       "This idempotency key was already used for a different request. Use a new key.",
     );
   }
-  if (record.outcome == null || record.outcomeSchemaVersion !== IDEMPOTENCY_OUTCOME_SCHEMA_VERSION) {
+  if (record.outcome == null) throw idempotencyInProgress();
+  if (
+    record.outcomeSchemaVersion !== IDEMPOTENCY_OUTCOME_SCHEMA_VERSION ||
+    typeof record.outcome !== "object" ||
+    !("kind" in record.outcome) || record.outcome.kind !== "success" ||
+    !("data" in record.outcome)
+  ) {
     throw new DomainError(
       "replay_unavailable",
       "The stored result for this idempotency key can no longer be replayed. Use a new key.",
     );
   }
-  return { kind: "replay", outcome: record.outcome };
+  return { kind: "replay", outcome: record.outcome.data };
 }
 
 /**
@@ -226,7 +223,7 @@ export async function recordIdempotencyOutcome(
   requireOrgScope(ctx);
   await tx
     .update(apiIdempotencyRecords)
-    .set({ outcome })
+    .set({ outcome: { kind: "success", data: outcome ?? null } })
     .where(
       and(
         eq(apiIdempotencyRecords.id, recordId),

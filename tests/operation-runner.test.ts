@@ -102,7 +102,7 @@ describe("operation runner at pool size 1", { timeout: SUITE_TIMEOUT_MS }, () =>
     expect(created.code).toMatch(FEEDSTOCK_CODE);
     expect(created.massWetKg).toBe(4200);
     expect(created.massDryKg).toBeCloseTo(2835, 3);
-    expect(created.deliveryDate?.toISOString()).toBe("2026-10-06T00:00:00.000Z");
+    expect(created.deliveryDate).toBe("2026-10-06T00:00:00.000Z");
     expect(created.transportDistanceKm).toBe(18);
     expect(await feedstockCount(fixture)).toBe(before + 1);
   });
@@ -116,6 +116,7 @@ describe("operation runner at pool size 1", { timeout: SUITE_TIMEOUT_MS }, () =>
 
       expect(result.dryRun).toBe(true);
       expect(result.data.feedstocks[0].code).toMatch(FEEDSTOCK_CODE);
+      expect(result.data.feedstocks[0].deliveryDate).toBe("2026-10-06T00:00:00.000Z");
       expect(await feedstockCount(dryFixture)).toBe(0);
       const [bin] = await db
         .select({ feedstockTypeId: storageLocations.feedstockTypeId })

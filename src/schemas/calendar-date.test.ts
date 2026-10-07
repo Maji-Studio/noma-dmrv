@@ -39,6 +39,21 @@ describe("calendarDateSchema", () => {
     expect(schema.parse(decoded).getTime()).toBe(decoded.getTime());
   });
 
+  it("decodes and re-validates the same UTC calendar day across time zones", () => {
+    const originalTimezone = process.env.TZ;
+    try {
+      for (const timezone of ["America/Los_Angeles", "Asia/Tokyo"]) {
+        process.env.TZ = timezone;
+        const decoded = calendarDateSchema().parse("2026-10-06");
+        expect(decoded.toISOString()).toBe("2026-10-06T00:00:00.000Z");
+        expect(calendarDateSchema().parse(decoded).toISOString()).toBe("2026-10-06T00:00:00.000Z");
+      }
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTimezone;
+    }
+  });
+
   it("refuses an instant that is not UTC midnight", () => {
     const result = schema.safeParse(new Date("2026-10-06T23:00:00-07:00"));
     expect(result.success).toBe(false);

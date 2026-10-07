@@ -228,6 +228,24 @@ describe("idempotency claim protocol", { timeout: SUITE_TIMEOUT_MS }, () => {
 describe("runner idempotency", { timeout: SUITE_TIMEOUT_MS }, () => {
   const idempotencyFor = (key: string) => ({ credentialId: "cred_runner_idem", key });
 
+  it.each([null, undefined])("replays a %s result without writing twice", async (result) => {
+    const before = await feedstockCount(fixture);
+    const idempotency = idempotencyFor(crypto.randomUUID());
+    const operation: Operation<typeof logFeedstockDelivery.input, null | undefined> = {
+      ...logFeedstockDelivery,
+      execute: async (scope, input) => {
+        await logFeedstockDelivery.execute(scope, input);
+        return result;
+      },
+    };
+    const first = await runOperation(operation, fixture.ctx, fixture.input(), { idempotency, pool });
+    expect(first).toEqual({ data: null, dryRun: false, replayed: false });
+    expect((await recordFor(idempotency.key)).outcome).toEqual({ kind: "success", data: null });
+    const replay = await runOperation(operation, fixture.ctx, fixture.input(), { idempotency, pool });
+    expect(replay).toEqual({ data: null, dryRun: false, replayed: true });
+    expect(await feedstockCount(fixture)).toBe(before + 1);
+  });
+
   it("writes once for parallel duplicates and replays the same body afterwards", async () => {
     const before = await feedstockCount(fixture);
     const idempotency = idempotencyFor(crypto.randomUUID());
