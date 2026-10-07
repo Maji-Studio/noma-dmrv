@@ -18,6 +18,7 @@ import {
   originValidationResponse,
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { env } from "@/config/env";
 import { createFeedstockSchema } from "@/schemas/feedstocks";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 
@@ -26,7 +27,7 @@ export const runtime = "nodejs";
 const SERVER_INFO = { name: "noma-dmrv", version: "0.0.0-spike" };
 
 function allowedOriginHostnames(): string[] {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const appUrl = env.NEXT_PUBLIC_APP_URL;
   const hostnames = localhostAllowedOrigins();
   if (appUrl) hostnames.push(new URL(appUrl).hostname);
   return hostnames;
@@ -75,7 +76,7 @@ const mcpHandler = createMcpHandler(
 );
 
 async function handler(request: Request): Promise<Response> {
-  if (process.env.NODE_ENV === "production") {
+  if (env.NODE_ENV === "production") {
     return new Response(null, { status: 404 });
   }
   const rejected = originValidationResponse(request, allowedOriginHostnames());

@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
+
+vi.mock("@/config/env", () => ({
+  env: { NODE_ENV: "test", NEXT_PUBLIC_APP_URL: "http://localhost:3100" },
+}));
 
 const ENDPOINT = "http://localhost:3100/api/mcp";
 const LEGACY_PROTOCOL_VERSION = "2025-06-18";

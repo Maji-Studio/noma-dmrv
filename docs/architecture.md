@@ -213,12 +213,17 @@ runtime.
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is
   explicitly allowed through.
+- The proxy lets exactly `/api/mcp` through before session lookup. This
+  development-only MCP spike checks no credential and returns 404 in production
+  builds. `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by
+  `tests/middleware.test.ts`.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Six API route families: `/api/auth/[...all]`,
+- Seven API route families: `/api/auth/[...all]`,
   `/api/storage-local/[...key]`, `/api/documents/[id]`,
-  `/api/ghg-statement-reports/[reportId]`, and
-  `/api/certification/submissions`, plus private `/api/reads/*`. Documents are
+  `/api/ghg-statement-reports/[reportId]`,
+  `/api/certification/submissions`, private `/api/reads/*`, and the
+  development-only `/api/mcp` spike. Documents are
   normally resolved through `getOrgContext()`. The report route is the one
   deliberate public bearer-capability seam: middleware lets it through, then
   the route verifies a per-report token against the stored digest and redirects

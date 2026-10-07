@@ -50,6 +50,9 @@ describe("savepointed auto-codes", { timeout: SUITE_TIMEOUT_MS }, () => {
     let competitorCode: string;
     try {
       await competitor.query("begin");
+      const { rows: [{ pid: competitorPid }] } = await competitor.query<{ pid: number }>(
+        "select pg_backend_pid() as pid",
+      );
       [competitorCode] = await generateNextCodes(
         fixture.ctx,
         "FS",
@@ -74,10 +77,12 @@ describe("savepointed auto-codes", { timeout: SUITE_TIMEOUT_MS }, () => {
       try {
         for (let poll = 0; poll < LOCK_WAIT_MAX_POLLS && !waitingQuery; poll++) {
           const { rows } = await observer.query<{ query: string }>(
-            // Other suites share the database, so look for this insert only.
+            // Other suites share the database, so require this competitor to block the insert.
             `select query from pg_stat_activity
               where datname = current_database() and wait_event_type = 'Lock'
-                and query like 'insert into "feedstocks"%'`,
+                and query like 'insert into "feedstocks"%'
+                and $1 = any(pg_blocking_pids(pid))`,
+            [competitorPid],
           );
           waitingQuery = rows[0]?.query;
           if (!waitingQuery) await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_POLL_MS));
