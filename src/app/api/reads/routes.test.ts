@@ -54,6 +54,7 @@ vi.mock("@/lib/log", () => ({
     error instanceof Error ? error.message : String(error),
 }));
 
+import type { DomainIssue } from "@/lib/domain-errors";
 import { SafeError } from "@/lib/errors";
 import { POST as creditBatchesRoute } from "./credit-batches/route";
 import { POST as certifierSummaryRoute } from "./facilities/[facilityId]/certifier-summary/route";
@@ -77,6 +78,13 @@ const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
 const FOREIGN_FACILITY_ID = "22222222-2222-4222-8222-222222222222";
 const MALFORMED_ID = "not-a-facility";
 const TOO_LONG_SEARCH = "x".repeat(256);
+
+const INVALID_FACILITY_ISSUE: DomainIssue = {
+  path: [],
+  code: "invalid_format",
+  message: "Choose a valid facility.",
+  meta: { format: "uuid" },
+};
 
 const EMPTY_PAGE = {
   items: [],
@@ -107,6 +115,7 @@ interface ReadEndpoint {
   /** A request whose input cannot be validated; absent when the read takes none. */
   badInput?: () => Promise<Response>;
   badInputError?: string;
+  badInputIssues?: DomainIssue[];
   /** A request naming a facility outside the active organization. */
   foreignFacility?: () => Promise<Response>;
   /** The data-access call a foreign facility must never reach. */
@@ -119,6 +128,7 @@ const endpoints: Record<string, ReadEndpoint> = {
     data: { id: FACILITY_ID },
     badInput: () => facilityRoute(post("/api/reads/facilities"), facilityParams(MALFORMED_ID)),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
   },
   "active organization": {
     ok: () => activeOrganizationRoute(),
@@ -129,12 +139,14 @@ const endpoints: Record<string, ReadEndpoint> = {
     data: { facilityCount: 1 },
     badInput: () => onboardingRoute(post("/api/reads/onboarding/status", { facilityId: MALFORMED_ID })),
     badInputError: "Invalid onboarding filters: Choose a valid facility.",
+    badInputIssues: [{ ...INVALID_FACILITY_ISSUE, path: ["facilityId"] }],
   },
   "dashboard overview": {
     ok: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FACILITY_ID })),
     data: { generatedAt: "2026-09-15T10:00:00.000Z" },
     badInput: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: MALFORMED_ID })),
     badInputError: "Invalid dashboard filters: Choose a valid facility.",
+    badInputIssues: [{ ...INVALID_FACILITY_ISSUE, path: ["facilityId"] }],
     foreignFacility: () => dashboardRoute(post("/api/reads/dashboard/overview", { facilityId: FOREIGN_FACILITY_ID })),
     guardedRead: () => mocks.getDashboardOverview,
   },
@@ -147,6 +159,12 @@ const endpoints: Record<string, ReadEndpoint> = {
       ),
     badInputError:
       "Invalid facility filters: Search query must be less than 255 characters.",
+    badInputIssues: [{
+      path: ["search"],
+      code: "too_big",
+      message: "Search query must be less than 255 characters",
+      meta: { maximum: TOO_LONG_SEARCH.length - 1, inclusive: true },
+    }],
   },
   "production runs": {
     ok: () =>
@@ -159,6 +177,7 @@ const endpoints: Record<string, ReadEndpoint> = {
         post("/api/reads/production-runs", { startDate: null }),
       ),
     badInputError: "Invalid production run filters: Enter a valid date.",
+    badInputIssues: [{ path: ["startDate"], code: "invalid_union", message: "Enter a valid date." }],
     foreignFacility: () =>
       productionRunsRoute(
         post("/api/reads/production-runs", { facilityId: FOREIGN_FACILITY_ID }),
@@ -176,6 +195,7 @@ const endpoints: Record<string, ReadEndpoint> = {
         post("/api/reads/production-runs/stats", MALFORMED_ID),
       ),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
     foreignFacility: () =>
       productionRunStatsRoute(
         post("/api/reads/production-runs/stats", FOREIGN_FACILITY_ID),
@@ -188,6 +208,7 @@ const endpoints: Record<string, ReadEndpoint> = {
     badInput: () =>
       creditBatchesRoute(post("/api/reads/credit-batches", MALFORMED_ID)),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
     foreignFacility: () =>
       creditBatchesRoute(post("/api/reads/credit-batches", FOREIGN_FACILITY_ID)),
     guardedRead: () => mocks.getCreditBatches,
@@ -210,6 +231,7 @@ const endpoints: Record<string, ReadEndpoint> = {
         facilityParams(MALFORMED_ID),
       ),
     badInputError: "Invalid facility identifier: Choose a valid facility.",
+    badInputIssues: [INVALID_FACILITY_ISSUE],
     foreignFacility: () =>
       certifierSummaryRoute(
         post(`/api/reads/facilities/${FOREIGN_FACILITY_ID}/certifier-summary`),
@@ -289,6 +311,8 @@ describe.each(Object.entries(endpoints))(
       await expect(response.json()).resolves.toEqual({
         success: false,
         error: endpoint.badInputError,
+        code: "validation_failed",
+        issues: endpoint.badInputIssues,
       });
       expect(mocks.logger.error).not.toHaveBeenCalled();
     });

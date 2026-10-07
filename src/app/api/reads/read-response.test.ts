@@ -136,6 +136,13 @@ describe("authenticated read response", () => {
     await expect(response.json()).resolves.toEqual({
       success: false,
       error: "Invalid read parameters: Choose a valid record.",
+      code: "validation_failed",
+      issues: [{
+        path: [],
+        code: "invalid_format",
+        message: "Choose a valid record.",
+        meta: { format: "uuid" },
+      }],
     });
   });
 
@@ -170,6 +177,7 @@ describe("authenticated read response", () => {
     await expect(response.json()).resolves.toEqual({
       success: false,
       error: "Overlaps PR-001.",
+      code: "conflict",
       conflict,
     });
   });

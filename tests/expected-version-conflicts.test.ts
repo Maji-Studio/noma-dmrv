@@ -1,8 +1,9 @@
 /**
  * Expected-version conflict check (issue #768, F03).
  *
- * A consequential edit form echoes back the `updatedAt` it loaded. The updater
- * compares it against the row it locked and refuses the save when they differ,
+ * An edit form echoes back the version it loaded: an integer for feedstocks,
+ * `updatedAt` for the remaining timestamp-based writers. The updater compares
+ * it against the row it locked and refuses the save when they differ,
  * so two operators who opened the same record cannot silently overwrite each
  * other. These run against the real database because the guard lives inside the
  * updater's transaction, next to the locked read it depends on.
@@ -24,7 +25,11 @@ import {
   users,
 } from "@/db/schema";
 import { updateFacility } from "@/data-access/facility-mutations";
-import { updateFeedstock } from "@/data-access/feedstocks";
+import { archiveFacility, restoreFacility } from "@/data-access/facilities";
+import { DomainError } from "@/lib/domain-errors";
+import { updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
+import { runOperationInProcess } from "@/lib/operations/runner";
+import { createTestPool } from "./helpers/operation-fixture";
 import {
   STALE_VERSION_CONFLICT_CODE,
   STALE_VERSION_MESSAGE,
@@ -38,6 +43,12 @@ const MOISTURE_PERCENT = 20;
 const FIRST_EDIT_WET_KG = 90;
 const SECOND_EDIT_WET_KG = 70;
 const DRY_RATIO = INTAKE_DRY_KG / INTAKE_WET_KG;
+const TAG_LENGTH = 8;
+const BIN_CAPACITY_KG = 10_000;
+const VERSION_INCREMENT = 1;
+const CONCURRENT_WRITERS = 2;
+const CASCADE_TRANSITIONS = 2;
+const EXPECTED_COMMITS = 1;
 
 const STALE_CONFLICT = {
   name: "ActionConflictError",
@@ -53,7 +64,7 @@ interface Fixture {
 }
 
 async function seedFixture(): Promise<Fixture> {
-  const tag = randomUUID().slice(0, 8).toUpperCase();
+  const tag = randomUUID().slice(0, TAG_LENGTH).toUpperCase();
   const organizationId = `${ORG_PREFIX}${tag}`;
   const userId = `e2e-expected-version-user-${tag}`;
 
@@ -106,7 +117,7 @@ async function seedFixture(): Promise<Fixture> {
       name: `E2E Expected version bin ${tag}`,
       type: "feedstock_bin",
       feedstockTypeId: feedstockType.id,
-      capacityKg: 10_000,
+      capacityKg: BIN_CAPACITY_KG,
     })
     .returning({ id: storageLocations.id });
 
@@ -166,15 +177,30 @@ async function readFacility(fixture: Fixture) {
 
 async function readFeedstock(fixture: Fixture) {
   const [row] = await db
-    .select({
-      massWetKg: feedstocks.massWetKg,
-      massDryKg: feedstocks.massDryKg,
-      notes: feedstocks.notes,
-      updatedAt: feedstocks.updatedAt,
-    })
+    .select()
     .from(feedstocks)
     .where(eq(feedstocks.id, fixture.feedstockId));
   return row;
+}
+
+function expectStaleFeedstock(error: unknown, fixture: Fixture): void {
+  expect(error).toBeInstanceOf(DomainError);
+  if (!(error instanceof DomainError)) throw error;
+  expect(error.code).toBe("stale_version");
+  expect(error.message).toBe(STALE_VERSION_MESSAGE);
+  expect(error.conflict).toEqual({
+    entity: "feedstock",
+    id: fixture.feedstockId,
+    code: STALE_VERSION_CONFLICT_CODE,
+  });
+}
+
+async function expectStaleRefusal(promise: Promise<unknown>, fixture: Fixture) {
+  const error = await promise.then(
+    () => { throw new Error("Expected a stale feedstock refusal"); },
+    (failure: unknown) => failure,
+  );
+  expectStaleFeedstock(error, fixture);
 }
 
 const fixtures: Fixture[] = [];
@@ -252,97 +278,119 @@ describe("facility saves carry an expected version", () => {
   });
 });
 
-describe("feedstock saves carry an expected version", () => {
-  it("refuses the second of two snapshots taken from the same read", async () => {
+describe("feedstock row versions", () => {
+  it("updates with the current version and returns the next version", async () => {
     const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
+    const opened = (await readFeedstock(f))!;
 
-    await updateFeedstock(f.ctx, f.feedstockId, {
+    const saved = await runOperationInProcess(updateFeedstock, f.ctx, {
+      feedstockId: f.feedstockId,
       massWetKg: FIRST_EDIT_WET_KG,
       massDryKg: FIRST_EDIT_WET_KG * DRY_RATIO,
-      expectedUpdatedAt: opened,
+      expectedVersion: opened.version,
     });
 
-    await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
-        massWetKg: SECOND_EDIT_WET_KG,
-        massDryKg: SECOND_EDIT_WET_KG * DRY_RATIO,
-        expectedUpdatedAt: opened,
-      }),
-    ).rejects.toMatchObject({
-      ...STALE_CONFLICT,
-      conflict: {
-        ...STALE_CONFLICT.conflict,
-        entity: "feedstock",
-        id: f.feedstockId,
-      },
+    expect(saved.version).toBe(opened.version + VERSION_INCREMENT);
+    const stored = (await readFeedstock(f))!;
+    expect(stored.version).toBe(saved.version);
+    expect(stored.massWetKg).toBe(FIRST_EDIT_WET_KG);
+    expect(stored.massDryKg).toBe(FIRST_EDIT_WET_KG * DRY_RATIO);
+  });
+
+  it("refuses a stale update with its conflict ref and leaves the row unchanged", async () => {
+    const f = await fixture();
+    const opened = (await readFeedstock(f))!;
+    await runOperationInProcess(updateFeedstock, f.ctx, {
+      feedstockId: f.feedstockId,
+      notes: "First writer's note",
+      expectedVersion: opened.version,
     });
+    const beforeRefusal = (await readFeedstock(f))!;
 
-    expect((await readFeedstock(f))!.massWetKg).toBe(FIRST_EDIT_WET_KG);
-  });
-
-  it("refuses an unrelated-metadata edit built on a stale read", async () => {
-    const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
-
-    await updateFeedstock(f.ctx, f.feedstockId, {
-      massWetKg: FIRST_EDIT_WET_KG,
-      massDryKg: FIRST_EDIT_WET_KG * DRY_RATIO,
-    });
-
-    await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
-        notes: "Stale writer's note",
-        expectedUpdatedAt: opened,
-      }),
-    ).rejects.toMatchObject(STALE_CONFLICT);
-
-    const after = (await readFeedstock(f))!;
-    expect(after.notes).toBeNull();
-    expect(after.massWetKg).toBe(FIRST_EDIT_WET_KG);
-  });
-
-  it("refuses a mass edit built on a stale read", async () => {
-    const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
-
-    await updateFeedstock(f.ctx, f.feedstockId, { notes: "First writer's note" });
-
-    await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
-        massWetKg: SECOND_EDIT_WET_KG,
-        massDryKg: SECOND_EDIT_WET_KG * DRY_RATIO,
-        expectedUpdatedAt: opened,
-      }),
-    ).rejects.toMatchObject(STALE_CONFLICT);
-
-    const after = (await readFeedstock(f))!;
-    expect(after.massWetKg).toBe(INTAKE_WET_KG);
-    expect(after.notes).toBe("First writer's note");
-  });
-
-  it("saves when the expected version matches the stored row", async () => {
-    const f = await fixture();
-    const opened = (await readFeedstock(f))!.updatedAt;
-
-    await updateFeedstock(f.ctx, f.feedstockId, {
-      massWetKg: FIRST_EDIT_WET_KG,
-      massDryKg: FIRST_EDIT_WET_KG * DRY_RATIO,
-      expectedUpdatedAt: opened,
-    });
-
-    expect((await readFeedstock(f))!.massWetKg).toBe(FIRST_EDIT_WET_KG);
-  });
-
-  it("still saves when the payload carries no expected version", async () => {
-    const f = await fixture();
-    await updateFeedstock(f.ctx, f.feedstockId, { notes: "First writer's note" });
-
-    await updateFeedstock(f.ctx, f.feedstockId, {
+    await expectStaleRefusal(runOperationInProcess(updateFeedstock, f.ctx, {
+      feedstockId: f.feedstockId,
       massWetKg: SECOND_EDIT_WET_KG,
       massDryKg: SECOND_EDIT_WET_KG * DRY_RATIO,
-    });
+      notes: "Stale writer's note",
+      expectedVersion: opened.version,
+    }), f);
 
-    expect((await readFeedstock(f))!.massWetKg).toBe(SECOND_EDIT_WET_KG);
+    expect(await readFeedstock(f)).toEqual(beforeRefusal);
+  });
+
+  it("refuses a stale delete and keeps the row present", async () => {
+    const f = await fixture();
+    const opened = (await readFeedstock(f))!;
+    await runOperationInProcess(updateFeedstock, f.ctx, {
+      feedstockId: f.feedstockId,
+      notes: "Newer edit",
+      expectedVersion: opened.version,
+    });
+    const beforeRefusal = (await readFeedstock(f))!;
+
+    await expectStaleRefusal(runOperationInProcess(deleteFeedstock, f.ctx, {
+      feedstockId: f.feedstockId,
+      expectedVersion: opened.version,
+    }), f);
+
+    expect(await readFeedstock(f)).toEqual(beforeRefusal);
+  });
+
+  it("bumps every feedstock version on facility archive and again on restore", async () => {
+    const f = await fixture();
+    const opened = (await readFeedstock(f))!;
+    const [sibling] = await db.insert(feedstocks).values({
+      ...opened,
+      id: randomUUID(),
+      code: `E2E-EXPV-SIBLING-${f.tag}`,
+      version: opened.version + VERSION_INCREMENT,
+    }).returning();
+    const affected = [opened, sibling];
+
+    await archiveFacility(f.ctx, f.facilityId);
+    for (const row of affected) {
+      const archived = (await readFeedstock({ ...f, feedstockId: row.id }))!;
+      expect(archived.archivedAt).toBeInstanceOf(Date);
+      expect(archived.version).toBe(row.version + VERSION_INCREMENT);
+    }
+
+    await restoreFacility(f.ctx, f.facilityId);
+    for (const row of affected) {
+      const restored = (await readFeedstock({ ...f, feedstockId: row.id }))!;
+      expect(restored.archivedAt).toBeNull();
+      expect(restored.version).toBe(row.version + VERSION_INCREMENT * CASCADE_TRANSITIONS);
+    }
+  });
+
+  it("commits exactly one concurrent update from the same loaded version", async () => {
+    const f = await fixture();
+    const opened = (await readFeedstock(f))!;
+    const pool = createTestPool(CONCURRENT_WRITERS);
+    const edits = ["Concurrent first note", "Concurrent second note"];
+    try {
+      // A dedicated pool gives each runner its own transaction connection.
+      const outcomes = await Promise.allSettled(edits.map((notes) =>
+        runOperationInProcess(updateFeedstock, f.ctx, {
+          feedstockId: f.feedstockId,
+          notes,
+          expectedVersion: opened.version,
+        }, { pool }),
+      ));
+      const committed = outcomes.filter((outcome) => outcome.status === "fulfilled");
+      const refused = outcomes.filter((outcome) => outcome.status === "rejected");
+      expect(committed).toHaveLength(EXPECTED_COMMITS);
+      expect(refused).toHaveLength(CONCURRENT_WRITERS - EXPECTED_COMMITS);
+      expectStaleFeedstock(refused[0].reason, f);
+      expect(committed[0].value.version).toBe(opened.version + VERSION_INCREMENT);
+
+      const stored = (await readFeedstock(f))!;
+      expect(stored.version).toBe(opened.version + VERSION_INCREMENT);
+      expect(stored.notes).toBe(committed[0].value.notes);
+      expect(edits).toContain(stored.notes);
+      expect(stored.massWetKg).toBe(opened.massWetKg);
+      expect(stored.massDryKg).toBe(opened.massDryKg);
+    } finally {
+      await pool.end();
+    }
   });
 });

@@ -32,7 +32,7 @@ import {
 import { formatDateTime } from "@/lib/format-utils";
 import { negativeLaneMessage } from "@/data-access/feedstock-bin-stock-integrity";
 import { deleteOutputProductFixtures, outputProductFixtureValues } from "./helpers/output-contract-fixtures";
-import { deleteFeedstock, updateFeedstock } from "@/data-access/feedstocks";
+import { deleteFeedstockInTransaction, updateFeedstockInTransaction } from "@/data-access/feedstocks";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { updateStorageLocation } from "@/data-access/storage-locations";
 import { cleanupPostedStock, postedStockFixture } from "./helpers/posted-output-stock-fixture";
@@ -284,10 +284,10 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
     await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
+      db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
         massWetKg: REDUCED_BELOW_LOSS_WET_KG,
         massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
-      }),
+      })),
     ).rejects.toMatchObject({
       name: "ActionConflictError",
       message: `Feedstock was not saved. Bin ${binCodeOf(f)} would go ${SHORTFALL_AFTER_REDUCTION_KG} kg below zero. Review bin ${binCodeOf(f)} intake and withdrawal history, including recorded losses.`,
@@ -329,10 +329,10 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     const f = await fixture();
     await recordLoss(f, LOSS_WET_KG);
 
-    const saved = await updateFeedstock(f.ctx, f.feedstockId, {
+    const saved = await db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
       massWetKg: REDUCED_TO_ZERO_WET_KG,
       massDryKg: REDUCED_TO_ZERO_WET_KG * DRY_RATIO,
-    });
+    }));
 
     expect(saved.massWetKg).toBe(REDUCED_TO_ZERO_WET_KG);
     expect(await deriveFeedstockWetStockKg(f.ctx, db, f.binId)).toBe(0);
@@ -342,7 +342,7 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     const f = await fixture();
     const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
-    await expect(deleteFeedstock(f.ctx, f.feedstockId)).rejects.toMatchObject({
+    await expect(db.transaction((tx) => deleteFeedstockInTransaction(f.ctx, tx, f.feedstockId, 1))).rejects.toMatchObject({
       name: "ActionConflictError",
       message: negativeStockDeleteMessage(f),
       blockers: [lossBlocker],
@@ -386,10 +386,10 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     });
 
     await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
+      db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
         massWetKg: REDUCED_BELOW_LOSS_WET_KG,
         massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
-      }),
+      })),
     ).rejects.toMatchObject({
       name: "ActionConflictError",
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
@@ -431,10 +431,10 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
     await expect(
-      updateFeedstock(f.ctx, f.feedstockId, {
+      db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
         massWetKg: REDUCED_BELOW_LOSS_WET_KG,
         massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
-      }),
+      })),
     ).rejects.toMatchObject({
       name: "ActionConflictError",
       blockers: [{ entity: "biocharProduct", code: drawingCode }, lossBlocker],
@@ -468,10 +468,10 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     });
 
     await lockAcquired;
-    const reduction = updateFeedstock(f.ctx, f.feedstockId, {
+    const reduction = db.transaction((tx) => updateFeedstockInTransaction(f.ctx, tx, f.feedstockId, { expectedVersion: 1,
       massWetKg: REDUCED_BELOW_LOSS_WET_KG,
       massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
-    });
+    }));
 
     // The reduction cannot read the lane until the withdrawal commits.
     expect(await stillPending(reduction, LOCK_HOLD_PROBE_MS)).toBe(true);

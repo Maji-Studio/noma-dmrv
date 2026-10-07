@@ -36,6 +36,12 @@ export const createItemSchema = itemFormSchema.extend({ projectId: z.uuid() });
 
 When form and update variants share a repeated object shape (ingredient bins, allocations), extract a base schema and `.extend()` per variant — the form variant adds the preprocessors, the server variant does not.
 
+For integer row-version preconditions, use `expectedVersionSchema` from
+`@/schemas/helpers` on update and delete schemas. It requires the positive
+integer loaded with the record and tells the operator to reload when it is
+missing or invalid. `expectedUpdatedAtSchema` is the optional timestamp helper
+for legacy edit forms. See [architecture.md](./architecture.md#expected-version-checks-on-edit-forms).
+
 ### Zod 4 string formats
 
 Format checks are **top-level**, not chained. The chained forms still compile but emit a deprecation diagnostic.

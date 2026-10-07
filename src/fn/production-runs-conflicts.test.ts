@@ -99,6 +99,7 @@ describe("updateProductionRunFn", () => {
     expect(result).toEqual({
       success: false,
       error: STALE_VERSION_MESSAGE,
+      code: "stale_version",
       conflict: {
         entity: "productionRun",
         id: RUN_ID,
@@ -149,6 +150,13 @@ describe("updateProductionRunFn", () => {
     expect(result).toEqual({
       success: false,
       error: "Choose a valid production run.",
+      code: "validation_failed",
+      issues: [{
+        path: ["productionRunId"],
+        code: "invalid_format",
+        message: "Choose a valid production run.",
+        meta: { format: "uuid" },
+      }],
     });
     expect(mocks.updateProductionRun).not.toHaveBeenCalled();
     expect(mocks.loggerError).not.toHaveBeenCalled();

@@ -13,7 +13,7 @@ in [forms.md](./forms.md); naming and React rules in
 components (UI)
   -> hooks (React Query)
   -> /api/reads Route Handlers (migrated reads) / fn (everything else)
-  -> lib/read-models (transport-neutral read orchestration)
+  -> lib/read-models (reads) / lib/operations (migrated writes)
   -> data-access (org scope + queries)
   -> db (Drizzle schema + connection)
 ```
@@ -21,11 +21,22 @@ components (UI)
 - UI never talks directly to `db`; no layer skipping.
 - `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
 - Trusted-context implementations (anything taking an already resolved
-  `OrgContext`) live in directive-free modules, conventionally
-  `fn/**/*-core.ts` (`source-candidates.ts` and `submit-removal.ts` are
-  directive-free too). A `"use server"` file exports only actions that
-  resolve their own context from the session (`withAction`); CI enforces this
-  with `pnpm check:server-action-exports`.
+  `OrgContext`) live in directive-free modules. Migrated writes use
+  `src/lib/operations/`; legacy cores remain under fn/**/*-core.ts.
+  A `"use server"` file exports only actions that resolve their own context
+  from the session (`withAction`); CI enforces this with
+  `pnpm check:server-action-exports`.
+- `src/lib/operations/` defines each operation as an `id`, an `input` Zod
+  schema and an `execute` function. `runOperation` serves transports with
+  JSON-normalized results, idempotency and dry run. `runOperationInProcess`
+  serves Server Actions with native types, including `Date` and `undefined`.
+  The action shape is `withAction((ctx) => runOperationInProcess(op, ctx, input))`.
+  `src/lib/operations/registry.ts` is the explicit allowlist of exposed
+  operations; its keys match operation ids.
+- The runner owns the transaction. Data-access ...InTransaction(ctx, tx, ...)
+  functions and the helpers they call read and write only through `tx`,
+  including reference checks and result enrichment. After-commit hooks run
+  after a real commit; dry runs roll back and skip them.
 - `src/lib/read-models/` holds server-only read cores that take an already
   resolved `OrgContext` and return domain data. They are not Server Actions and
   are not exported from a `"use server"` file; the caller authenticates first.
@@ -88,10 +99,11 @@ geocode/route are the current users.
 Two more options exist for migrating the legacy wrappers without changing what
 they log or return. `log: { message, context }` replaces the generic
 "server action failed" log line, so an entity module keeps its own message and
-`op` context. `mapError(error)` runs after the Zod and conflict branches and
-before the logged fallback: return a failure result for a domain error the
-action answers itself (a field error, a conflict of its own; the returned
-shape is preserved in the action's result type), or `undefined` to fall
+`op` context. `mapError(error)` runs after the Zod, `DomainError` and conflict
+branches and before the logged fallback. A `DomainError` is always formatted
+by `toActionFailure`; `mapError` never sees it. Return a failure result for
+another safe error the action answers itself (a field error, a conflict of its
+own; the returned shape is preserved in the action's result type), or `undefined` to fall
 through. A mapped result bypasses `toActionError` and is not logged, so map
 only error classes that extend `SafeError`, whose messages are written for
 the operator; anything else must fall through to the logged fallback.
@@ -106,9 +118,15 @@ disclosure bug.
 
 ### `ActionResult` — every server function returns this
 
-`src/types/actions.ts`. The failure branch may carry
-`conflict?: ConflictRef` so a form can deep-link the operator to the blocking
-record instead of only showing text, and `blockers?: ConflictRef[]` next to it
+`src/types/actions.ts`. The failure branch keeps readable `error` text and
+adds an optional stable `code` plus `issues` with field paths, issue codes,
+messages and safe constraint metadata. Domain errors keep their domain code;
+Zod failures use `validation_failed`. A stale conflict uses `stale_version`,
+and other typed conflicts use `conflict`. Legacy safe errors and unexpected
+failures can still omit `code` and `issues`.
+
+The failure branch may carry `conflict?: ConflictRef` so a form can deep-link
+the operator to the blocking record instead of only showing text, and `blockers?: ConflictRef[]` next to it
 for the further records that also stand in the way, in the order the operator
 should clear them. `ConflictRef` (`src/lib/conflict-ref.ts`) is
 `{ entity, id, code }`. `code` is what the operator reads for that record,
@@ -138,23 +156,29 @@ transaction. Never use it to describe a rollback. Copy vocabulary:
 
 ### Expected-version checks on edit forms
 
-`src/lib/stale-version.ts` (client-safe vocabulary) + `assertExpectedVersion`
-in `src/data-access/expected-version.ts`. An edit form sends the `updatedAt` it
-loaded as `expectedUpdatedAt`; the updater compares it against the row it read
-under `FOR UPDATE` and throws `ActionConflictError` with
-`code: "stale-version"` when they differ. The hook re-throws that as
-`StaleVersionError`, and the form shows `STALE_VERSION_MESSAGE` in its error
-banner while keeping the operator's draft. The field is always optional, so a
-payload that never loaded a version still saves. The check guards against a
-stale cached row as much as a second operator: two tabs, or an edit sheet
-opened off a cached list. The rule is blanket: every updater with an edit form
-must do the check, and every edit form must send `expectedUpdatedAt`.
-Implemented today for facility, feedstock, storage bin, customer (+ location),
-supplier (+ location), application, production run and facility emission
-factors. The factors save is an upsert: its form sends `null` when it loaded
-no row, so a row saved since (or a concurrent first save, serialized by the
-facility row lock) is refused as stale. The edit forms that do
-not check yet are listed in [open-questions.md](./open-questions.md) under
+`src/data-access/row-version.ts` owns the integer row-version pattern.
+Call `assertRowVersion` immediately after the org-scoped `FOR UPDATE` read,
+and include `nextVersion` in every writer's `.set()` so the version increments
+in the same statement as the change. Sibling and cascade writes bump every
+affected row too, including facility archive and restore. Ordinary UI updates
+and deletes must send the `expectedVersion` loaded when the operator opened
+the record. Feedstocks use integer row versions; the remaining edit forms
+still use the timestamp check below.
+
+A mismatch throws `DomainError` with `code: "stale_version"` and a conflict
+reference to the edited record using the `stale-version` sentinel. The hook
+re-throws it as `StaleVersionError` through `src/lib/stale-version.ts`. The
+form shows `STALE_VERSION_MESSAGE` while keeping the operator's draft.
+
+The existing timestamp checks use `assertExpectedVersion`
+in `src/data-access/expected-version.ts`: edit forms send `updatedAt` as
+`expectedUpdatedAt`, and the updater compares it after locking the row.
+Those legacy fields remain optional. They cover facility, storage bin,
+customer (+ location), supplier (+ location), application, production run and
+facility emission factors. The factors save is an upsert: its form sends
+`null` when it loaded no row, so a row saved since (or a concurrent first
+save, serialized by the facility row lock) is refused as stale. Remaining
+gaps are listed in [open-questions.md](./open-questions.md) under
 `architecture/expected-version-gaps`.
 
 ### Facility context

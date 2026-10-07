@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { feedstockFormSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 
+const INITIAL_VERSION = 1;
+
 const validFeedstockInput = {
   facilityId: "11111111-1111-4111-8111-111111111111",
   deliveryDate: "2026-01-18",
@@ -90,6 +92,7 @@ describe("feedstockFormSchema", () => {
     const feedstockId = "55555555-5555-4555-8555-555555555555";
     const result = updateFeedstockSchema.safeParse({
       feedstockId,
+      expectedVersion: INITIAL_VERSION,
       massWetKg: 0,
       massDryKg: 0,
     });
@@ -108,12 +111,16 @@ describe("feedstockFormSchema", () => {
     }
 
     expect(
-      updateFeedstockSchema.safeParse({ feedstockId, notes: "Scale recheck" })
-        .success,
+      updateFeedstockSchema.safeParse({
+        feedstockId,
+        expectedVersion: INITIAL_VERSION,
+        notes: "Scale recheck",
+      }).success,
     ).toBe(true);
     expect(
       updateFeedstockSchema.safeParse({
         feedstockId,
+        expectedVersion: INITIAL_VERSION,
         massWetKg: 1500,
         massDryKg: 0,
       }).success,

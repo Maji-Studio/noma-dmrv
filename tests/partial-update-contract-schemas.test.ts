@@ -65,6 +65,7 @@ describe("updateFeedstockSchema transport distance", () => {
   it("leaves an omitted distance undefined so the derived leg keeps its value", () => {
     const result = parsed(updateFeedstockSchema, {
       feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
       notes: "Unrelated edit",
     });
 
@@ -76,12 +77,14 @@ describe("updateFeedstockSchema transport distance", () => {
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
         transportDistanceKm: "",
       }).transportDistanceKm,
     ).toBeNull();
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
         transportDistanceKm: null,
       }).transportDistanceKm,
     ).toBeNull();
@@ -91,12 +94,14 @@ describe("updateFeedstockSchema transport distance", () => {
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
         transportDistanceKm: "85.5",
       }).transportDistanceKm,
     ).toBe(85.5);
     expect(
       parsed(updateFeedstockSchema, {
         feedstockId: FEEDSTOCK_ID,
+      expectedVersion: 1,
         transportDistanceKm: 0,
       }).transportDistanceKm,
     ).toBe(0);

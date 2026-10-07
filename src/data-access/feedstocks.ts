@@ -37,9 +37,8 @@ import {
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
-import { processPendingStorageObjectDeletions } from "./storage-object-deletions";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { assertExpectedVersion } from "./expected-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import { assertFeedstockBinLanesNotNegative } from "./feedstock-bin-stock-integrity";
@@ -112,6 +111,7 @@ async function validateFeedstockStorageLocations(
 // ============================================
 
 export interface FeedstockWithRelations {
+  version: number;
   id: string;
   code: string;
   facilityId: string;
@@ -201,8 +201,8 @@ export interface UpdateFeedstockInput {
   notes?: string | null;
   transportDistanceKm?: number | null;
   transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
-  /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-  expectedUpdatedAt?: Date;
+  /** Mandatory version the edit form loaded. */
+  expectedVersion: number;
 }
 
 export interface CreateFeedstockResult {
@@ -215,6 +215,7 @@ export interface CreateFeedstockResult {
 // ============================================
 
 const feedstockSelectFields = {
+  version: feedstocks.version,
   id: feedstocks.id,
   code: feedstocks.code,
   facilityId: feedstocks.facilityId,
@@ -436,16 +437,9 @@ export async function getFeedstockStats(
 // Create Operations
 // ============================================
 
-export async function createFeedstock(
-  ctx: OrgContext,
-  data: CreateFeedstockInput,
-): Promise<CreateFeedstockResult> {
-  return db.transaction((tx) => createFeedstockInTransaction(ctx, tx, data));
-}
-
 /**
  * Record a feedstock delivery and its bin allocations inside a caller-owned
- * transaction (the operation runner's, or `createFeedstock`'s own). Every
+ * transaction owned by the operation runner. Every
  * read and write goes through `tx`: at pool size 1 a read through the global
  * `db` would wait on this transaction's own connection.
  */
@@ -579,8 +573,9 @@ export async function createFeedstockInTransaction(
 // Update Operations
 // ============================================
 
-export async function updateFeedstock(
+export async function updateFeedstockInTransaction(
   ctx: OrgContext,
+  tx: DbTransaction,
   feedstockId: string,
   data: UpdateFeedstockInput,
 ): Promise<FeedstockWithRelations> {
@@ -588,240 +583,221 @@ export async function updateFeedstock(
   const {
     transportDistanceKm,
     transportDistanceSource,
-    expectedUpdatedAt,
+    expectedVersion,
     ...feedstockData
   } = data;
-  if (feedstockData.supplierId) await assertSameOrg(ctx, suppliers, feedstockData.supplierId);
-  if (feedstockData.vehicleId) await assertSameOrg(ctx, vehicles, feedstockData.vehicleId);
-  if (feedstockData.feedstockTypeId) await assertSameOrg(ctx, feedstockTypes, feedstockData.feedstockTypeId);
-  if (feedstockData.storageLocationId) await assertSameOrg(ctx, storageLocations, feedstockData.storageLocationId);
+  if (feedstockData.supplierId) await assertSameOrg(ctx, suppliers, feedstockData.supplierId, tx);
+  if (feedstockData.vehicleId) await assertSameOrg(ctx, vehicles, feedstockData.vehicleId, tx);
+  if (feedstockData.feedstockTypeId) await assertSameOrg(ctx, feedstockTypes, feedstockData.feedstockTypeId, tx);
+  if (feedstockData.storageLocationId) await assertSameOrg(ctx, storageLocations, feedstockData.storageLocationId, tx);
 
-  const [existing] = await db
-    .select()
-    .from(feedstocks)
-    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Feedstock not found");
+  if (feedstockData.facilityId !== undefined) {
+    await lockActiveFacilityReference(ctx, tx, feedstockData.facilityId);
   }
 
-  const updated = await db.transaction(async (tx) => {
-    if (feedstockData.facilityId !== undefined) {
-      await lockActiveFacilityReference(ctx, tx, feedstockData.facilityId);
-    }
+  const [locked] = await tx
+    .select()
+    .from(feedstocks)
+    .where(and(
+      eq(feedstocks.id, feedstockId),
+      eq(feedstocks.organizationId, ctx.organizationId),
+      isNull(feedstocks.archivedAt),
+    ))
+    .for("update");
 
-    const [locked] = await tx
-      .select()
-      .from(feedstocks)
-      .where(and(
-        eq(feedstocks.id, feedstockId),
-        eq(feedstocks.organizationId, ctx.organizationId),
-        isNull(feedstocks.archivedAt),
-      ))
-      .for("update");
+  if (!locked) {
+    throw new SafeError("Feedstock not found");
+  }
+  assertRowVersion({
+    entity: FEEDSTOCK_CONFLICT_ENTITY,
+    id: feedstockId,
+    expectedVersion,
+    actualVersion: locked.version,
+  });
 
-    if (!locked) {
-      throw new SafeError("Feedstock not found");
-    }
-    assertExpectedVersion({
-      entity: FEEDSTOCK_CONFLICT_ENTITY,
-      id: feedstockId,
-      expectedUpdatedAt,
-      actualUpdatedAt: locked.updatedAt,
-    });
+  await assertCanMutateCertifiedLineage(
+    ctx,
+    tx,
+    { entityType: "feedstock", entityId: feedstockId },
+    "update",
+  );
 
-    await assertCanMutateCertifiedLineage(
+  // Derive before anything reads the new masses: the status, the stock-lane
+  // check, and the write below must all see the same dry figure.
+  const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
+  const effectiveChanges =
+    derivedMassDryKg === undefined
+      ? feedstockData
+      : { ...feedstockData, massDryKg: derivedMassDryKg };
+
+  const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
+  const routeAnchorChanged =
+    (feedstockData.supplierId !== undefined &&
+      feedstockData.supplierId !== locked.supplierId) ||
+    (feedstockData.facilityId !== undefined &&
+      feedstockData.facilityId !== locked.facilityId);
+  const explicitDistanceSupplied = transportDistanceKm !== undefined;
+  const explicitDistanceSourceSupplied =
+    transportDistanceSource !== undefined;
+  const effectiveStorageLocationId =
+    feedstockData.storageLocationId !== undefined
+      ? feedstockData.storageLocationId
+      : locked.storageLocationId;
+  const effectiveFeedstockTypeId =
+    feedstockData.feedstockTypeId ?? locked.feedstockTypeId;
+  const effectiveFacilityId =
+    feedstockData.facilityId ?? locked.facilityId;
+  const storageReferenceNeedsValidation =
+    feedstockData.storageLocationId !== undefined ||
+    feedstockData.feedstockTypeId !== undefined ||
+    feedstockData.facilityId !== undefined;
+  const stockDerivationChanged =
+    status !== locked.status ||
+    (effectiveChanges.massDryKg !== undefined &&
+      effectiveChanges.massDryKg !== locked.massDryKg) ||
+    (feedstockData.massWetKg !== undefined &&
+      feedstockData.massWetKg !== locked.massWetKg) ||
+    (feedstockData.storageLocationId !== undefined &&
+      feedstockData.storageLocationId !== locked.storageLocationId);
+
+  if (stockDerivationChanged || storageReferenceNeedsValidation) {
+    await lockBinStocks(ctx, tx, [
+      locked.storageLocationId,
+      effectiveStorageLocationId,
+    ]);
+  }
+  if (storageReferenceNeedsValidation && effectiveStorageLocationId) {
+    await validateFeedstockStorageLocations(
       ctx,
       tx,
-      { entityType: "feedstock", entityId: feedstockId },
-      "update",
+      [effectiveStorageLocationId],
+      effectiveFacilityId,
+      effectiveFeedstockTypeId,
     );
+  }
 
-    // Derive before anything reads the new masses: the status, the stock-lane
-    // check, and the write below must all see the same dry figure.
-    const derivedMassDryKg = resolveFeedstockDryMass(locked, feedstockData);
-    const effectiveChanges =
-      derivedMassDryKg === undefined
-        ? feedstockData
-        : { ...feedstockData, massDryKg: derivedMassDryKg };
+  await tx
+    .update(feedstocks)
+    .set({
+      ...effectiveChanges,
+      status,
+      version: nextVersion(feedstocks.version),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
-    const status = determineFeedstockStatus({ ...locked, ...effectiveChanges });
-    const routeAnchorChanged =
-      (feedstockData.supplierId !== undefined &&
-        feedstockData.supplierId !== locked.supplierId) ||
-      (feedstockData.facilityId !== undefined &&
-        feedstockData.facilityId !== locked.facilityId);
-    const explicitDistanceSupplied = transportDistanceKm !== undefined;
-    const explicitDistanceSourceSupplied =
-      transportDistanceSource !== undefined;
-    const effectiveStorageLocationId =
-      feedstockData.storageLocationId !== undefined
-        ? feedstockData.storageLocationId
-        : locked.storageLocationId;
-    const effectiveFeedstockTypeId =
-      feedstockData.feedstockTypeId ?? locked.feedstockTypeId;
-    const effectiveFacilityId =
-      feedstockData.facilityId ?? locked.facilityId;
-    const storageReferenceNeedsValidation =
-      feedstockData.storageLocationId !== undefined ||
-      feedstockData.feedstockTypeId !== undefined ||
-      feedstockData.facilityId !== undefined;
-    const stockDerivationChanged =
-      status !== locked.status ||
-      (effectiveChanges.massDryKg !== undefined &&
-        effectiveChanges.massDryKg !== locked.massDryKg) ||
-      (feedstockData.massWetKg !== undefined &&
-        feedstockData.massWetKg !== locked.massWetKg) ||
-      (feedstockData.storageLocationId !== undefined &&
-        feedstockData.storageLocationId !== locked.storageLocationId);
+  // Re-derive the affected lanes now that the new row is visible, while the
+  // bin locks above are still held. Validating the bin reference only proves
+  // the bin is usable, never that the edited mass still covers withdrawals.
+  if (stockDerivationChanged) {
+    await assertFeedstockBinLanesNotNegative(
+      ctx,
+      tx,
+      [locked.storageLocationId, effectiveStorageLocationId],
+      "save",
+    );
+  }
 
-    if (stockDerivationChanged || storageReferenceNeedsValidation) {
-      await lockBinStocks(ctx, tx, [
-        locked.storageLocationId,
-        effectiveStorageLocationId,
-      ]);
-    }
-    if (storageReferenceNeedsValidation && effectiveStorageLocationId) {
-      await validateFeedstockStorageLocations(
-        ctx,
-        tx,
-        [effectiveStorageLocationId],
-        effectiveFacilityId,
-        effectiveFeedstockTypeId,
-      );
-    }
-
-    await tx
-      .update(feedstocks)
-      .set({
-        ...effectiveChanges,
-        status,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
-
-    // Re-derive the affected lanes now that the new row is visible, while the
-    // bin locks above are still held. Validating the bin reference only proves
-    // the bin is usable, never that the edited mass still covers withdrawals.
-    if (stockDerivationChanged) {
-      await assertFeedstockBinLanesNotNegative(
-        ctx,
-        tx,
-        [locked.storageLocationId, effectiveStorageLocationId],
-        "save",
-      );
-    }
-
-    await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
-      distanceKm: transportDistanceKm,
-      distanceSource: transportDistanceSource,
-      resetDistanceToRoute:
-        routeAnchorChanged &&
-        !explicitDistanceSupplied &&
-        !explicitDistanceSourceSupplied,
-    });
-
-    // Read the updated record back inside the transaction, so a failed read
-    // rolls the update back instead of reporting a saved feedstock as
-    // "Feedstock not found" (issue #769).
-    return getFeedstockById(ctx, feedstockId, tx);
+  await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
+    distanceKm: transportDistanceKm,
+    distanceSource: transportDistanceSource,
+    resetDistanceToRoute:
+      routeAnchorChanged &&
+      !explicitDistanceSupplied &&
+      !explicitDistanceSourceSupplied,
   });
-  await processPendingStorageObjectDeletions(ctx);
 
-  return updated;
+  // Read the updated record back inside the transaction, so a failed read
+  // rolls the update back instead of reporting a saved feedstock as
+  // "Feedstock not found" (issue #769).
+  return getFeedstockById(ctx, feedstockId, tx);
 }
 
 // ============================================
 // Delete Operations
 // ============================================
 
-export async function deleteFeedstock(
+export async function deleteFeedstockInTransaction(
   ctx: OrgContext,
-  feedstockId: string
+  tx: DbTransaction,
+  feedstockId: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  const [existing] = await db
+  const [locked] = await tx
     .select({
       id: feedstocks.id,
+      version: feedstocks.version,
       status: feedstocks.status,
       storageLocationId: feedstocks.storageLocationId,
     })
     .from(feedstocks)
-    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+    .where(and(
+      eq(feedstocks.id, feedstockId),
+      eq(feedstocks.organizationId, ctx.organizationId),
+    ))
+    .for("update");
 
-  if (!existing) {
+  if (!locked) {
     throw new SafeError("Feedstock not found");
   }
 
-  await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({
-        id: feedstocks.id,
-        status: feedstocks.status,
-        storageLocationId: feedstocks.storageLocationId,
-      })
-      .from(feedstocks)
-      .where(and(
-        eq(feedstocks.id, feedstockId),
-        eq(feedstocks.organizationId, ctx.organizationId),
-      ))
-      .for("update");
+  assertRowVersion({
+    entity: FEEDSTOCK_CONFLICT_ENTITY,
+    id: feedstockId,
+    expectedVersion,
+    actualVersion: locked.version,
+  });
 
-    if (!locked) {
-      throw new SafeError("Feedstock not found");
-    }
+  await assertCanMutateCertifiedLineage(
+    ctx,
+    tx,
+    { entityType: "feedstock", entityId: feedstockId },
+    "delete",
+  );
 
-    await assertCanMutateCertifiedLineage(
+  // Block deletion if used in production runs
+  const [usageCount] = await tx
+    .select({ count: count() })
+    .from(productionRunFeedstocks)
+    .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+
+  if (Number(usageCount.count) > 0) {
+    throw new SafeError(
+      "Cannot delete feedstock that is used in production runs. Remove production run associations first."
+    );
+  }
+
+  if (locked.status === "complete") {
+    await lockBinStocks(ctx, tx, [locked.storageLocationId]);
+  }
+
+  const transportLegDocuments = await deleteTransportLegsForEntity(
+    ctx,
+    tx,
+    "feedstock",
+    feedstockId,
+  );
+  const result = await tx
+    .delete(feedstocks)
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+  if (result.rowCount === 0) {
+    throw new SafeError("Feedstock not found");
+  }
+  // Removing a complete intake shrinks the lane the same way an edit does.
+  if (locked.status === "complete") {
+    await assertFeedstockBinLanesNotNegative(
       ctx,
       tx,
-      { entityType: "feedstock", entityId: feedstockId },
+      [locked.storageLocationId],
       "delete",
     );
-
-    // Block deletion if used in production runs
-    const [usageCount] = await tx
-      .select({ count: count() })
-      .from(productionRunFeedstocks)
-      .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
-
-    if (Number(usageCount.count) > 0) {
-      throw new SafeError(
-        "Cannot delete feedstock that is used in production runs. Remove production run associations first."
-      );
-    }
-
-    if (locked.status === "complete") {
-      await lockBinStocks(ctx, tx, [locked.storageLocationId]);
-    }
-
-    const transportLegDocuments = await deleteTransportLegsForEntity(
-      ctx,
-      tx,
-      "feedstock",
-      feedstockId,
-    );
-    const result = await tx
-      .delete(feedstocks)
-      .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
-    if (result.rowCount === 0) {
-      throw new SafeError("Feedstock not found");
-    }
-    // Removing a complete intake shrinks the lane the same way an edit does.
-    if (locked.status === "complete") {
-      await assertFeedstockBinLanesNotNegative(
-        ctx,
-        tx,
-        [locked.storageLocationId],
-        "delete",
-      );
-    }
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "feedstock", entityId: feedstockId },
-      ...transportLegDocuments,
-    ]);
-  });
-  await processPendingStorageObjectDeletions(ctx);
+  }
+  await retireDocumentsForEntities(ctx, tx, [
+    { entityType: "feedstock", entityId: feedstockId },
+    ...transportLegDocuments,
+  ]);
 }
 
 // ============================================
