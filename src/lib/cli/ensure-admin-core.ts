@@ -10,6 +10,7 @@ import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
 import { hashPassword } from 'better-auth/crypto';
 import { encryptSecret } from '../crypto/secrets';
 import { getPgPoolConfig } from '../pg-pool-config';
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from '../../config/auth';
 import {
   DEV_BOOTSTRAP_OVERRIDE,
   PRODUCTION_NODE_ENV,
@@ -227,12 +228,25 @@ export async function ensureIsometricCredentials(
   console.log('Isometric bootstrap credentials ensured=true');
 }
 
+function validatePassword(name: string, password: string): void {
+  if (
+    password.length < AUTH_PASSWORD_MIN_LENGTH ||
+    password.length > AUTH_PASSWORD_MAX_LENGTH
+  ) {
+    throw new Error(
+      `${name} must be between ${AUTH_PASSWORD_MIN_LENGTH} and ${AUTH_PASSWORD_MAX_LENGTH} characters`,
+    );
+  }
+}
+
 async function ensureAdminCredential(
   db: EnsureAdminDb,
   adminEmail: string,
   adminPassword: string,
   bootstrapMode: BootstrapMode,
 ): Promise<AdminCredentialResult> {
+  // The dev teammate reuses this hash, so validate before either credential is written.
+  validatePassword('ADMIN_PASSWORD', adminPassword);
   const isProduction = bootstrapMode === 'production';
   const [existing] = await db
     .select({ id: schema.users.id })
@@ -328,6 +342,7 @@ function requireEnvironmentVariable(name: string): string {
 export async function runEnsureAdmin(): Promise<void> {
   const adminEmail = requireEnvironmentVariable('ADMIN_EMAIL');
   const adminPassword = requireEnvironmentVariable('ADMIN_PASSWORD');
+  validatePassword('ADMIN_PASSWORD', adminPassword);
   const databaseUrl = requireEnvironmentVariable('DATABASE_URL');
   const bootstrapMode = resolveBootstrapMode({
     NODE_ENV: process.env.NODE_ENV,

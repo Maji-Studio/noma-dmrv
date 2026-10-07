@@ -8,6 +8,7 @@ import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { asc, eq } from "drizzle-orm";
 import { Resend } from "resend";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
@@ -170,8 +171,8 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: !env.ALLOW_SELF_SIGNUP,
     requireEmailVerification: true,
-    minPasswordLength: 8,
-    maxPasswordLength: 72,
+    minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
+    maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
     sendResetPassword: async ({ user, url }) => {
       try {
         await sendAuthEmail({

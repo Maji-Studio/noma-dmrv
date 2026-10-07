@@ -5,9 +5,7 @@
  * server trust boundary can't drift.
  */
 import { z } from "zod";
-
-export const INVITATION_PASSWORD_MIN_LENGTH = 8;
-export const INVITATION_PASSWORD_MAX_LENGTH = 72;
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
 
 export const orgRoleSchema = z.enum(["owner", "admin", "member"]);
 export type OrgRoleValue = z.infer<typeof orgRoleSchema>;
@@ -142,12 +140,12 @@ export const invitationBootstrapSchema = invitationIdSchema.extend({
   password: z
     .string()
     .min(
-      INVITATION_PASSWORD_MIN_LENGTH,
-      `Password must be at least ${INVITATION_PASSWORD_MIN_LENGTH} characters.`
+      AUTH_PASSWORD_MIN_LENGTH,
+      `Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters.`
     )
     .max(
-      INVITATION_PASSWORD_MAX_LENGTH,
-      `Password must be at most ${INVITATION_PASSWORD_MAX_LENGTH} characters.`
+      AUTH_PASSWORD_MAX_LENGTH,
+      `Password must be at most ${AUTH_PASSWORD_MAX_LENGTH} characters.`
     ),
 });
 export type InvitationBootstrapInput = z.infer<

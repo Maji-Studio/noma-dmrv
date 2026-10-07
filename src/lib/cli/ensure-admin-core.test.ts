@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { accounts, users } from "@/db/schema";
+import { AUTH_PASSWORD_MIN_LENGTH, AUTH_PASSWORD_MAX_LENGTH } from "@/config/auth";
+import { hashPassword } from "better-auth/crypto";
 import { ensureAdminUser, ensureOrgFoundation, type EnsureAdminDb } from "./ensure-admin-core";
 
 vi.mock("better-auth/crypto", () => ({ hashPassword: vi.fn(async () => "test-hash") }));
@@ -67,5 +69,18 @@ describe("bootstrap credential identity", () => {
     expect(writes.find((write) => write.table === accounts)?.data).toMatchObject({
       accountId: userId, userId, providerId: "credential",
     });
+  });
+
+  it("rejects an over-limit admin password before hashing or updating credentials", async () => {
+    const { db, writes } = mockDatabase([[{ id: EXISTING_USER_ID }], [{ id: "account-id" }]]);
+    vi.mocked(hashPassword).mockClear();
+
+    await expect(ensureAdminUser(
+      db, "admin@example.invalid", "x".repeat(AUTH_PASSWORD_MAX_LENGTH + 1), "development",
+    )).rejects.toThrow(
+      `ADMIN_PASSWORD must be between ${AUTH_PASSWORD_MIN_LENGTH} and ${AUTH_PASSWORD_MAX_LENGTH} characters`,
+    );
+    expect(hashPassword).not.toHaveBeenCalled();
+    expect(writes).toEqual([]);
   });
 });
