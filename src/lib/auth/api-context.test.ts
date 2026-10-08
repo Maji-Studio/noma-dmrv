@@ -4,11 +4,15 @@ const mocks = vi.hoisted(() => ({
   find: vi.fn(),
   member: vi.fn(),
   verify: vi.fn(),
+  access: vi.fn(),
 }));
 vi.mock("@/data-access/api-credential-auth", () => ({
   findApiCredential: mocks.find,
   findApiCredentialMember: mocks.member,
 }));
+vi.mock("@/data-access/organization-api-access", () => ({ getOrganizationApiAccess: mocks.access }));
+vi.mock("@/lib/api/guards", () => ({ preAuthGuard: async () => null, postAuthGuard: async () => ({ ok: true, headers: new Headers() }) }));
+vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() } }));
 vi.mock("./better-auth", () => ({ auth: { api: { verifyApiKey: mocks.verify } } }));
 vi.mock("@/lib/read-models/api-me", () => ({ readApiMe: vi.fn() }));
 import { GET } from "@/app/api/v1/me/route";
@@ -36,6 +40,7 @@ const stored = () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.access.mockResolvedValue(true);
   mocks.find.mockImplementation(stored);
   mocks.member.mockResolvedValue({
     id: "member",
@@ -155,4 +160,11 @@ it("does not resurrect credentials on owner re-admission", async () => {
     denial: "credential_owner_removed",
   });
   expect(mocks.verify).not.toHaveBeenCalled();
+});
+
+it("refuses organization access disabled during verification", async () => {
+  mocks.access.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  const response = await GET(request());
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({ code: "api_access_disabled" });
 });

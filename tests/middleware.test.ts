@@ -85,3 +85,20 @@ describe("REST proxy carve-out", () => {
     expect(getSessionMock).toHaveBeenCalledOnce();
   });
 });
+
+describe("cron proxy boundary", () => {
+  it("passes the exact purge route before looking up a session", async () => {
+    getSessionMock.mockReset();
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest("http://localhost/api/cron/purge-api-records"));
+    expect(response.status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it.each(["/api/cron", "/api/cron/purge-api-recordsx", "/api/cron/purge-api-records/", "/api/cron/purge-api-records/child"])("protects %s", async (path) => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue(null);
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost${path}`))).status).toBe(401);
+    expect(getSessionMock).toHaveBeenCalledOnce();
+  });
+});

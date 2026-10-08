@@ -9,6 +9,7 @@ import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_MAX_EXPIRY_SECONDS, MILLISECOND
 import { auth } from "@/lib/auth/better-auth";
 import { resolveApiContext } from "@/lib/auth/api-context";
 import { createApiKey, listApiKeys, revokeApiKey, updateApiKey } from "@/data-access/api-keys";
+import { getOrganizationApiAccess, setOrganizationApiAccess } from "@/data-access/organization-api-access";
 import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
 import { removeMemberAsPlatformAdmin, updateMemberRoleAsPlatformAdmin } from "@/data-access/organizations";
 import { GET } from "@/app/api/v1/me/route";
@@ -540,4 +541,19 @@ it.each(["remove", "demote"])("Platform Admin %s override disables credentials i
     ok: false,
     denial: "credential_owner_removed",
   });
+});
+
+it("defaults to enabled and only lets Platform Admins disable and restore organization API access", async () => {
+  const created = await createApiKey(ctx, input());
+  expect(await getOrganizationApiAccess(ctx.organizationId)).toBe(true);
+  await expect(setOrganizationApiAccess({ ...ctx, orgRole: "owner", isPlatformAdmin: false }, ctx.organizationId, false))
+    .rejects.toMatchObject({ code: "forbidden" });
+  const platform = { ...ctx, userId: actorId, isPlatformAdmin: true };
+  await setOrganizationApiAccess(platform, ctx.organizationId, false);
+  const response = await GET(request(created.key));
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({ code: "api_access_disabled" });
+  expect(await getOrganizationApiAccess(otherOrg)).toBe(true);
+  await setOrganizationApiAccess(platform, ctx.organizationId, true);
+  expect((await GET(request(created.key))).status).toBe(200);
 });
