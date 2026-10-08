@@ -45,7 +45,7 @@ export async function createFeedstockResponse(request: Request, { ctx, headers, 
   if (result.replayed) headers.set("Idempotent-Replayed", "true");
   if (dryRun) headers.set("Dry-Run", "true");
   else headers.set("Location", `/api/v1/feedstocks/${data[0].id}`);
-  headers.set("ETag", feedstockEtag(data[0]));
+  if (!dryRun) headers.set("ETag", feedstockEtag(data[0]));
   return Response.json({
     data, ...(result.data.warning ? { warnings: [result.data.warning] } : {}),
     ...(dryRun ? { preview: feedstockStockPreview(data) } : {}),
@@ -87,7 +87,7 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
       };
       const result = await runOperation(operation, ctx, input, { ...options, deadlineMs: remainingDeadlineMs(deadlineAt) });
       const data = representFeedstock(result.data);
-      headers.set("ETag", feedstockEtag(data));
+      if (!dryRun) headers.set("ETag", feedstockEtag(data));
       if (result.replayed) headers.set("Idempotent-Replayed", "true");
       if (dryRun) headers.set("Dry-Run", "true");
       return Response.json({ data }, { headers });

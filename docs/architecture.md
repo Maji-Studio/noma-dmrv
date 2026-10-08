@@ -174,6 +174,8 @@ consumes current stock under bin locks and bumps its affected products as an
 internal side effect. Facility archive and restore bump descendant runs and
 products without child preconditions.
 
+Vehicles and drivers start at version 1; any future writer must bump `version` with `nextVersion` when changing a surviving row.
+
 Successful saves and corrections merge returned versions into every list cache
 that supplies edit sheets before invalidation. Stale deletes refresh the list
 and explain that the record was not deleted.
@@ -681,11 +683,10 @@ have a facility filter. Each lookup table reserves codes per organization, so
 facility-level code ambiguity is not possible with the current constraints.
 
 Lists exclude archived rows where supported; detail reads return them with
-`archivedAt`. Facilities, suppliers, feedstock types and storage locations
-return row versions and strong version/revision ETags on detail reads. Vehicles
-and drivers have no version or archive column; their representations omit
-`version` and return `archivedAt: null`, with no ETag. Output projections exclude
-contact fields and driver license numbers. Facilities expose `timeZone`, storage
+`archivedAt`. Facilities, suppliers, feedstock types, storage locations, vehicles
+and drivers return row versions and strong version/revision ETags on detail reads.
+Vehicles and drivers have no archive column and return `archivedAt: null`.
+Output projections exclude contact fields and driver license numbers. Facilities expose `timeZone`, storage
 locations expose the material lane, capacity in kilograms and feedstock-type
 restriction, and vehicles expose their stored identifier/plate and vehicle type.
 

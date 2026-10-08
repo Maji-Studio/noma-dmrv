@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { apiAuditEvents, organizationApiAccess, apiIdempotencyRecords, feedstocks, members, storageLocations, users } from "@/db/schema";
+import { apiAuditEvents, organizationApiAccess, apiIdempotencyRecords, facilities, feedstocks, members, storageLocations, users } from "@/db/schema";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS } from "@/config/api-rest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
 import { createApiKey, revokeApiKey } from "@/data-access/api-keys";
+import { archiveFacility } from "@/data-access/facilities";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { GET as LIST, POST } from "@/app/api/v1/feedstocks/route";
 import { GET, PATCH, DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
@@ -104,6 +105,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
       expect(response.status).toBe(200);
       expect(response.headers.get("dry-run")).toBe("true");
       expect(response.headers.has("location")).toBe(false);
+      expect(response.headers.has("etag")).toBe(false);
       const body = await response.json();
       expect(body.preview).toEqual([{ feedstockId: body.data[0].id, storageLocationId: a.binId,
         allocatedWetMassKg: 4200, allocatedDryMassKg: 2835, stockDeltaWetKg: 4200 }]);
@@ -236,14 +238,33 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(await stock()).toBe(8400);
   });
 
+  it("refuses PATCH and DELETE under an archived facility without deleting the intake or changing stock", async () => {
+    const saved = await create();
+    const [facility] = await db.select().from(facilities).where(eq(facilities.id, a.facilityId));
+    await archiveFacility(a.ctx, a.facilityId, facility.version);
+    const current = await GET(request("GET", `/${saved.row.id}`), params(saved.row.id));
+    expect(current.status).toBe(200);
+    const tag = current.headers.get("etag")!;
+    const beforeStock = await stock();
+    const beforeRows = await db.select().from(feedstocks).where(eq(feedstocks.id, saved.row.id));
+    expect(beforeRows[0].archivedAt).not.toBeNull();
+    await problem(await patch(saved.row.id, { notes: "Refused" }, tag), 404, "not_found");
+    await problem(await DELETE(request("DELETE", `/${saved.row.id}`, undefined, { "if-match": tag }), params(saved.row.id)), 404, "not_found");
+    expect(await db.select().from(feedstocks).where(eq(feedstocks.id, saved.row.id))).toEqual(beforeRows);
+    expect(await feedstockCount(a)).toBe(1);
+    expect(await stock()).toBe(beforeStock);
+  });
+
   it("rolls back PATCH and DELETE dry runs, then deletes and replays a real delete", async () => {
     const saved = await create();
     const dryPatch = await PATCH(request("PATCH", `/${saved.row.id}?dryRun=true`, { notes: "Preview" }, { "if-match": saved.etag }), params(saved.row.id));
     expect(dryPatch.status).toBe(200);
+    expect(dryPatch.headers.has("etag")).toBe(false);
     expect(dryPatch.headers.get("dry-run")).toBe("true");
     expect((await dryPatch.json()).data).toMatchObject({ version: 2, notes: "Preview" });
     const dryDelete = await DELETE(request("DELETE", `/${saved.row.id}?dryRun=true`, undefined, { "if-match": saved.etag }), params(saved.row.id));
     expect(dryDelete.status).toBe(200);
+    expect(dryDelete.headers.has("etag")).toBe(false);
     expect(dryDelete.headers.get("dry-run")).toBe("true");
     expect((await dryDelete.json()).data).toEqual(saved.row);
     expect(await stock()).toBe(4200);
@@ -397,8 +418,10 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
     const path = `/${created.row.id}`;
     const dryPatch = await PATCH(request("PATCH", path + "?dryRun=true", { notes: "Preview" }, { "if-match": created.etag }), params(created.row.id));
     expect(dryPatch.status).toBe(200);
+    expect(dryPatch.headers.has("etag")).toBe(false);
     const dryDelete = await DELETE(request("DELETE", path + "?dryRun=true", undefined, { "if-match": created.etag }), params(created.row.id));
     expect(dryDelete.status).toBe(200);
+    expect(dryDelete.headers.has("etag")).toBe(false);
     const beforeReplay = await auditRows();
     expect(beforeReplay).toHaveLength(1);
     const replayCreate = await POST(request("POST", "", created.body, { "idempotency-key": created.key }));

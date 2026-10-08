@@ -66,13 +66,28 @@ it("records the absolute deadline before authentication", async () => {
     return { response: null, result: null };
   });
   mocks.resolve.mockImplementation(async () => {
-    vi.setSystemTime(start + OPERATION_DEADLINE_MS);
+    vi.setSystemTime(start + OPERATION_DEADLINE_MS - 1);
     return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } };
   });
   const handler = vi.fn(async () => new Response(null, { status: 204 }));
   await apiRoute("test", "feedstocks:write", handler)(request());
   expect(handler.mock.calls[0]).toBeDefined();
   expect(handler).toHaveBeenCalledWith(expect.any(Request), expect.objectContaining({ deadlineAt: start + OPERATION_DEADLINE_MS }), {});
+});
+it.each(["GET", "HEAD", "POST", "PATCH", "DELETE"])("refuses %s before its handler when authentication exhausts the budget", async (method) => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const start = Date.UTC(2026, 9, 8);
+  vi.setSystemTime(start);
+  mocks.resolve.mockImplementation(async () => {
+    vi.setSystemTime(start + OPERATION_DEADLINE_MS);
+    return { ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } };
+  });
+  const handler = vi.fn(async () => new Response(null, { status: 204 }));
+  const response = await apiRoute("test", "feedstocks:write", handler)(new Request(request(), { method }));
+  expect(response.status).toBe(500);
+  expect(await response.json()).toMatchObject({ code: "deadline_exceeded", retryable: true });
+  expect(handler).not.toHaveBeenCalled();
+  for (const [name, value] of Object.entries(rateHeaders)) expect(response.headers.get(name)).toBe(value);
 });
 afterEach(() => vi.useRealTimers());
 

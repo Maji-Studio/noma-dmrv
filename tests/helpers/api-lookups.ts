@@ -55,7 +55,7 @@ export async function lookupProblem(response: Response, status: number, code: st
   return body;
 }
 
-interface LookupRow { id: string; code: string; name: string; version?: number; archivedAt?: Date | null }
+interface LookupRow { id: string; code: string; name: string; version: number; archivedAt?: Date | null }
 interface LookupContract {
   resource: string;
   list: (request: Request) => Promise<Response>;
@@ -84,7 +84,10 @@ export function lookupContract({ resource, list, get, seed }: LookupContract) {
       for (const q of ["lookup-", "lookup name"]) {
         const response = await list(request(`?q=${encodeURIComponent(q)}`));
         expect(response.status).toBe(200);
-        expect((await response.json()).data.map((row: LookupRow) => row.id).sort()).toEqual(rows.active.map((row) => row.id).sort());
+        const { data } = await response.json();
+        expect(data.map((row: LookupRow) => ({ id: row.id, version: row.version })).sort((a: LookupRow, b: LookupRow) => a.id.localeCompare(b.id))).toEqual(
+          rows.active.map((row) => ({ id: row.id, version: row.version })).sort((a, b) => a.id.localeCompare(b.id)),
+        );
       }
       const row = rows.active[0];
       for (const filter of [`code=${encodeURIComponent(row.code)}`, `q=${encodeURIComponent(row.code.toLowerCase())}`]) {
@@ -98,16 +101,16 @@ export function lookupContract({ resource, list, get, seed }: LookupContract) {
       expect((await (await list(request("?code=missing"))).json()).data).toEqual([]);
     });
 
-    it("gets by id and code, returning archive timestamps and ETags only when versioned", async () => {
+    it("gets by id and code, returning archive timestamps, versions and strong ETags", async () => {
       for (const row of [...rows.active, ...(rows.archived ? [rows.archived] : [])]) {
         for (const identifier of [row.id, row.code]) {
           const response = await get(request(`/${encodeURIComponent(identifier)}`), lookupParams(identifier));
           expect(response.status).toBe(200);
           expect(response.headers.get("cache-control")).toBe("private, no-store");
           expect(response.headers.get("x-request-id")).toBeTruthy();
-          expect(response.headers.get("etag")).toBe(row.version === undefined ? null : `"${row.version}.1"`);
+          expect(response.headers.get("etag")).toBe(`"${row.version}.1"`);
           const { data } = await response.json();
-          expect(data).toMatchObject({ id: row.id, code: row.code, name: row.name, archivedAt: row.archivedAt?.toISOString() ?? null });
+          expect(data).toMatchObject({ id: row.id, code: row.code, name: row.name, version: row.version, archivedAt: row.archivedAt?.toISOString() ?? null });
           for (const field of ["organizationId", "contactName", "contactEmail", "contactPhone", "licenseNumber"]) expect(data).not.toHaveProperty(field);
         }
       }

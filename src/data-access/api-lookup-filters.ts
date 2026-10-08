@@ -1,10 +1,9 @@
-import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { ilike, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import { db } from "@/db";
-import { facilities } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
-import { requireOrgScope } from "./utils";
+import { SafeError } from "@/lib/errors";
+import { requireOrgFacility, requireOrgScope } from "./utils";
 
 export interface ApiLookupFilters { q?: string; code?: string }
 export interface ApiFacilityLookupFilters extends ApiLookupFilters { facilityId?: string }
@@ -14,12 +13,14 @@ export interface ApiLookupPosition { createdAt: string; id: string }
 export async function requireApiLookupFacility(ctx: OrgContext, facilityId?: string) {
   requireOrgScope(ctx);
   if (facilityId === undefined) return;
-  const [facility] = await db.select({ id: facilities.id }).from(facilities).where(and(
-    eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, facilityId),
-  )).limit(1);
-  if (!facility) throw new DomainError("not_found", "Facility was not found.", {
-    issues: [{ path: ["facilityId"], code: "not_found", message: "Facility was not found." }],
-  });
+  try {
+    await requireOrgFacility(ctx, facilityId);
+  } catch (error) {
+    if (!(error instanceof SafeError)) throw error;
+    throw new DomainError("not_found", "Facility was not found.", {
+      issues: [{ path: ["facilityId"], code: "not_found", message: "Facility was not found." }],
+    });
+  }
 }
 
 export function lookupSearch(columns: { code?: AnyPgColumn; name: AnyPgColumn }, q?: string) {

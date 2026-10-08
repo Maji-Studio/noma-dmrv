@@ -34,6 +34,7 @@ import { biocharStorageInventory } from './storage-inventory';
 // ============================================
 
 export const vehicles = pgTable('vehicles', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()
