@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import { actionFailureResponse, apiDenialResponse, problemResponse } from "./problem";
 import type { DomainErrorCode } from "@/lib/domain-errors";
+import { problemSchema } from "./problem-schema";
+import { conflictCode } from "@/lib/conflict-ref";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
 
 // Independent expectations from the REST plan, section 4 (Errors).
@@ -119,4 +121,18 @@ it.each([["supplierId"], ["allocations", 0, "storageLocationId"]])("preserves no
   expect((await response.json()).errors).toEqual([{
     pointer: `/${path.join("/")}`, code: "not_found", detail: "Reference not found",
   }]);
+});
+
+
+it("keeps the documented problem shape aligned with optional domain extensions", async () => {
+  const ref = { entity: "feedstock", id: "resource-id", code: conflictCode("FS-26-0231") };
+  const response = problemResponse({
+    status: 412, code: "stale_version", detail: "Read the current feedstock.",
+    instance: "/api/v1/feedstocks/resource-id", requestId: "request-id",
+    errors: [{ pointer: "/massWetKg", code: "too_big", detail: "Reduce wet mass.", meta: { maximum: 4200, unit: "kg" } }],
+    conflict: ref, blockers: [ref], current: { id: "resource-id", version: 2 },
+  });
+  const body = await response.json();
+  expect(problemSchema.strict().parse(body)).toEqual(body);
+  expect(body).toMatchObject({ conflict: ref, blockers: [ref], current: { version: 2 } });
 });

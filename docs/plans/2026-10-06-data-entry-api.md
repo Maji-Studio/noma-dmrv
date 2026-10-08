@@ -430,3 +430,17 @@ Branch `feat/data-entry-api-spike` (PR #919). The exit criteria in section 10 ar
 **Review suite (round 2, head `d223450e`).** No P1s; last round under the cutoff. Fixed: the auto-code test's lock-wait observer now matches only a backend blocked by the competitor's pid (it could match another suite's insert and pass without a collision), the MCP route reads `env` instead of `process.env`, and `docs/auth.md`, `docs/architecture.md` and `docs/schema-overview.md` gained the `/api/mcp` carve-out and `api.ts`. Not changed: the runner's pre-commit deadline check looks duplicated by the owned transaction's, but it also covers dry runs, which roll back before the owned check runs; Phase 1a adds the whole-transaction server deadline described above. Deferred to Phase 2: a date-only field such as `deliveryDate` replays as a full ISO instant (`2026-10-06T00:00:00.000Z`) because `toJson` serializes the `Date`; Phase 2 output schemas serialize business dates as `YYYY-MM-DD`, and the first and replayed responses already match.
 
 **Phase 1a starts from:** moving the feedstock actions onto `runOperation` (and updating `docs/architecture.md`, which still names `fn/**/*-core.ts`), the registry, `DomainError` codes and `issues` in `ActionResult`, the `version` column, and CI on the migration chain.
+
+## 16. Phase 2 results (2026-10-08)
+
+Four PRs: 2a #925 (API keys, `/api/v1/me`, the credential resolver), 2b-1 #929 (audit log, Postgres rate limits, kill switches, purge cron), 2b-2 #930 (feedstock REST and intake lookups), 2b-3 #932 (OpenAPI document, `llms.txt`, `oasdiff` and client check in CI; replaced #931). The section 10 exit suites are green: outcome (`tests/api-feedstocks.test.ts`), action-vs-REST parity (`tests/api-feedstocks-parity.test.ts`), BOLA (foreign ids in path, body, filters and cursors), idempotency and stock races (`tests/api-feedstocks-concurrency.test.ts`) and version cascade (`tests/api-feedstocks-version-cascade.test.ts`).
+
+**What review changed** (Codex cross-checks and review-suite rounds on #930 and #931/#932):
+- Foreign references answer 404 with a JSON Pointer instead of 422; data-access throws `DomainError("not_found")` with `issues` (#930).
+- The request deadline starts before authentication and is checked again before every handler (#930).
+- DELETE refuses feedstocks archived with their facility, like PATCH. It reads an optional body that must be an empty JSON object, and the contract publishes that body with 413/415 (#930, #932).
+- Vehicles and drivers gained `version` (migration `0129`), so every lookup detail read returns a strong ETag. Dry runs return no ETag (#930).
+- Routes and the OpenAPI generator share one `resourceQueries` map, so published query parameters cannot drift from runtime parsing. operationIds follow the section 5 MCP names, and published limits, prefixes and body sizes come from `@/config` (#932).
+- Not changed: `null` clears for `massWetKg`/`moistureContentPercent` (the shared update schema forbids them, for UI parity), rate limits on the static public documents, and the rendered HTML reference (in `docs/open-questions.md`). Stock preview on PATCH/DELETE dry runs moves to Phase 4.
+
+**Phase 3 starts from:** where transport-neutral representations live (read models import `src/lib/api/representations` today), whether MCP results reuse the REST representations, the `requestKey` contract, which lookups ship as tools first, and the agent-eval harness. The Phase 0 spike route (`src/app/api/mcp/route.ts`) is replaced. Tool names reuse the operationIds above.

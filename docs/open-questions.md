@@ -160,6 +160,15 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ## Architecture
 
+### Rendered API reference (`api/rendered-reference`, opened 2026-10-08)
+
+- **Anchor:** `src/lib/api/openapi/document.ts:buildOpenApiDocument` and
+  `src/app/api/v1/openapi.json/route.ts:GET` publish the machine-readable contract.
+- **Deferred:** Plan section 4 also calls for an adjacent rendered HTML reference.
+  Choose the renderer and hosting path, then render this same document without
+  maintaining a second contract.
+- **Resolve via:** A documentation-surface follow-up after the public v1 contract.
+
 ### Auto-fill sample chemistry from an uploaded lab report (`samples/coa-autofill`, opened 2026-07-02)
 
 - Parse an uploaded COA/lab-report PDF to pre-fill the sample form's ~30

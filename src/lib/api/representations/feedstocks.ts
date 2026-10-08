@@ -1,19 +1,28 @@
 import { z } from "zod";
+import type { feedstockPreviewSchema } from "./envelopes";
 import { FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { representationEtag } from "../etag";
 
 const nullableId = z.uuid().nullable();
 export const feedstockRepresentationSchema = z.object({
-  id: z.uuid(), code: z.string(), version: z.number().int().positive(), facilityId: z.uuid(),
-  status: z.enum(["missing_data", "complete"]),
+  id: z.uuid().describe("Feedstock identifier, UUID."),
+  code: z.string().describe("Human-readable feedstock code, plain text."),
+  version: z.number().int().positive().describe("Positive integer row version for concurrency checks."),
+  facilityId: z.uuid().describe("Receiving facility identifier, UUID."),
+  status: z.enum(["missing_data", "complete"]).describe("Intake completeness: missing_data lacks required measurements; complete contributes to bin stock."),
   deliveryDate: z.iso.date().nullable().describe("Facility-local delivery business date, YYYY-MM-DD."),
-  supplierId: nullableId, vehicleId: nullableId, feedstockTypeId: z.uuid(), storageLocationId: nullableId,
-  deliveryGroupId: nullableId,
+  supplierId: nullableId.describe("Supplier identifier, UUID, or null when unspecified."),
+  vehicleId: nullableId.describe("Vehicle identifier, UUID, or null when unspecified."),
+  feedstockTypeId: z.uuid().describe("Feedstock type identifier, UUID."),
+  storageLocationId: nullableId.describe("Receiving bin identifier, UUID, or null when unspecified."),
+  deliveryGroupId: nullableId.describe("Shared intake group identifier, UUID, or null for an ungrouped delivery."),
   massWetKg: z.number().nullable().describe("Allocated wet/as-received mass in kilograms."),
   massDryKg: z.number().describe("Derived dry mass in kilograms."),
   moistureContentPercent: z.number().nullable().describe("Water as percent of wet mass, 0 to 100, not a fraction."),
-  gpsLatitude: z.number().nullable(), gpsLongitude: z.number().nullable(),
-  overrideJustification: z.string().nullable(), notes: z.string().nullable(),
+  gpsLatitude: z.number().nullable().describe("WGS 84 latitude in decimal degrees, or null when unspecified."),
+  gpsLongitude: z.number().nullable().describe("WGS 84 longitude in decimal degrees, or null when unspecified."),
+  overrideJustification: z.string().nullable().describe("Override justification, plain text, or null when absent."),
+  notes: z.string().nullable().describe("Operator notes, untrusted plain text, or null when absent."),
   createdAt: z.iso.datetime().describe("Creation event instant in UTC (RFC 3339)."),
   updatedAt: z.iso.datetime().describe("Last update event instant in UTC (RFC 3339)."),
 });
@@ -42,5 +51,5 @@ export function feedstockStockPreview(rows: FeedstockRepresentation[]) {
     feedstockId: row.id, storageLocationId: row.storageLocationId,
     allocatedWetMassKg: row.massWetKg, allocatedDryMassKg: row.massDryKg,
     stockDeltaWetKg: row.status === "complete" ? row.massWetKg : 0,
-  }));
+  } satisfies z.infer<typeof feedstockPreviewSchema>));
 }

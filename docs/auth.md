@@ -27,7 +27,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 - `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/admin/*` is gated by the admin layout's `requireAdmin()`.
-- The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before session lookup. The development-only MCP spike checks no credential and returns 404 in production builds. REST routes resolve bearer credentials with `resolveApiContext`. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`.
+- The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before session lookup. The development-only MCP spike checks no credential and returns 404 in production builds. Private REST routes resolve bearer credentials with `resolveApiContext`. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`.
 
 ### Public verifier report capability
 
@@ -208,6 +208,10 @@ including requests carrying unverified cookies. `/api/v1x` stays protected.
 The existing exact `/api/mcp` exception is unchanged. Every private REST route
 must call the API resolver itself; no cookie-based route guard applies there.
 
+`GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public discovery routes.
+They do not call `resolveApiContext` or the rate-limit guards and cache publicly
+for 300 seconds. The proxy passes both exact paths before session lookup.
+
 `GET /api/v1/me` accepts any authenticated key, including an empty scope set.
 It returns organization, active facilities with `timeZone` and facility-local
 `today` (`YYYY-MM-DD`), role, scopes, and credential id/name/expiry. A read model
@@ -234,7 +238,7 @@ return `credential_expired`. Owner demotion uses `credential_owner_removed`
 as required by the credential lifecycle contract, rather than the operation's
 403 `insufficient_role` refusal.
 
-Organization API access is checked by `resolveApiContext` on every API request.
+Organization API access is checked by `resolveApiContext` on every private API request.
 Disabled access returns 403 `api_access_disabled`; a missing
 `organization_api_access` row means enabled. Only Platform Admins can view the
 cross-organization state and toggle it at `/admin/organizations`, through
