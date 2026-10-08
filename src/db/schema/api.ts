@@ -8,7 +8,7 @@
  * is inserted at the start of the write's transaction, which is the claim: a
  * concurrent duplicate waits on the uncommitted row and cannot see it.
  */
-import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
 
 export const apiIdempotencyRecords = pgTable(
@@ -39,3 +39,33 @@ export const apiIdempotencyRecords = pgTable(
     index("api_idempotency_records_expires_at_idx").on(table.expiresAt),
   ],
 );
+
+export const apiAuditEvents = pgTable("api_audit_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  credentialId: text("credential_id").notNull(),
+  oauthClientId: text("oauth_client_id"),
+  operationId: text("operation_id").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityIds: text("entity_ids").array().notNull(),
+  changedFields: text("changed_fields").array().notNull(),
+  versionBefore: integer("version_before"),
+  versionAfter: integer("version_after"),
+  requestId: text("request_id").notNull(),
+  outcomeCode: text("outcome_code").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("api_audit_events_org_created_idx").on(table.organizationId, table.createdAt)]);
+
+export const apiRateLimitBuckets = pgTable("api_rate_limit_buckets", {
+  bucketKey: text("bucket_key").primaryKey(),
+  tokens: doublePrecision("tokens").notNull(),
+  refilledAt: timestamp("refilled_at", { withTimezone: true }).notNull(),
+}, (table) => [index("api_rate_limit_buckets_refilled_at_idx").on(table.refilledAt)]);
+
+export const organizationApiAccess = pgTable("organization_api_access", {
+  organizationId: text("organization_id").primaryKey().references(() => organizations.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull(),
+  changedByUserId: text("changed_by_user_id").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+});

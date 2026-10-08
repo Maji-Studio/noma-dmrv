@@ -46,6 +46,7 @@ const expectedDenialStatuses = {
   credential_revoked: 401,
   credential_owner_removed: 401,
   credential_owner_unverified: 401,
+  api_access_disabled: 403,
   missing_scope: 403,
   insufficient_role: 403,
 } satisfies Record<ApiContextDenial, number>;
@@ -102,4 +103,9 @@ it("maps an unexpected action failure without a code to 500", () => {
     error: "Unexpected failure",
   }, "/api/v1/me", "request-id");
   expect(response.status).toBe(500);
+});
+
+it.each([[429, "Too many requests"], [503, "Service unavailable"]] as const)("titles status %s", async (status, title) => {
+  const response = problemResponse({ status, code: "test", detail: "", instance: "/api/v1/me", requestId: "id", retryable: true });
+  expect(await response.json()).toMatchObject({ title, status, retryable: true });
 });

@@ -13,7 +13,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
 | API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
-| Per-credential idempotency claims for operation runs (`api_idempotency_records`) | `src/db/schema/api.ts` |
+| API bookkeeping (`api_idempotency_records`, `api_audit_events`, `api_rate_limit_buckets`, `organization_api_access`) | `src/db/schema/api.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
 | Feedstock deliveries, types, feedstocks | `src/db/schema/feedstock.ts` |
@@ -40,6 +40,17 @@ Production runs, incident reports, in-process production samples, and biochar
 products each carry a required integer `version`, initially 1. Every row update
 increments it atomically, including archive cascades and product stock effects.
 Edit and delete commands must send the loaded version.
+
+## API bookkeeping
+
+All four tables live in `src/db/schema/api.ts`:
+
+| Table | Grain and scope |
+|---|---|
+| `api_idempotency_records` | Unique organization/credential/key claim with fingerprint, expiry and stored outcome v2. Normal claims are org-scoped; expiry purge is a system seam. |
+| `api_audit_events` | One committed API write effect with organization, actor, credential, optional OAuth client, operation, entity ids, field names, versions, request id and outcome code. No field values; inserts are org-scoped in the write transaction. |
+| `api_rate_limit_buckets` | Token balance and refill time per bucket key. Organization-neutral system seam for hashed-IP, credential and organization budgets; no org column. |
+| `organization_api_access` | Organization primary key, enabled flag, changing user id and time. Missing row means on. Credential lookup and Platform Admin directory/toggle are privileged seams; non-Platform-Admins cannot administer it. |
 
 ## Invariants and traps
 

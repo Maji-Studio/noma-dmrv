@@ -22,6 +22,25 @@ are not examples for new domain tables. Domain tenancy is enforced in
 - `userId` columns are attribution, not a boundary. Do not access the DB from UI or hooks — go through `fn/` then `data-access/`.
 - Related helpers in `utils.ts`: `assertSameOrg`, `requireOrgFacility`.
 
+## API infrastructure tables
+
+`src/db/schema/api.ts` also defines:
+
+- `api_audit_events`: organization-scoped, value-free API write effects and
+  actor/credential/request ids. Inserts use the operation's transaction.
+- `api_rate_limit_buckets`: system seam keyed by IP hash, credential or
+  organization and access type. It intentionally has no `organization_id`;
+  request guards debit it outside business transactions.
+- `organization_api_access`: one Platform Admin policy row per organization,
+  with enabled state and change attribution. A missing row means enabled.
+  Credential resolution and cross-organization administration are explicit
+  privileged seams, marked `// org-scope-ok:` in data-access. Owners/Admins
+  without Platform Admin access cannot administer this policy.
+
+The purge helpers are system seams that delete expired idempotency records and
+idle buckets across organizations. These waivers do not relax ordinary
+org-scoped reads or audit inserts.
+
 ## Row-Level Guards
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.

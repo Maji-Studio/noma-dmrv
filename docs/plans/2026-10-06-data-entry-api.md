@@ -346,6 +346,18 @@ Decided 2026-10-07 (Kenji, round 2):
 18. **Phase 3 ships API keys only;** the OAuth track (claude.ai and ChatGPT connectors, mobile app) starts as soon as Phase 3 lands.
 19. **Phase 1 ships as two PRs.** 1a: runner wiring, `DomainError` codes and issue paths in `ActionResult`, the registry, CI on the migration chain, `version` on feedstocks. 1b: `version` on every other edit form and the remaining strict calendar dates, following 1a's version pattern.
 
+Decided 2026-10-08 (Kenji, round 3, Phase 2b):
+
+20. **Phase 2b ships as three PRs.** 2b-1: idempotency purge cron, audit log, rate limiter, kill switches. 2b-2: feedstock endpoints, read-only lookups, ETag/`If-Match`, unknown-key rejection, parity and BOLA suites. 2b-3: OpenAPI document, `oasdiff` in CI, docs and `llms.txt`.
+21. **2b-1 and 2b-2 run in parallel;** 2b-1 merges first (it alone adds a migration) and 2b-2 rebases onto it to wire in the audit and the guards.
+22. **Staging keeps the `noma_live_` prefix.** No deployment-stage variable; the prefix follows `NODE_ENV` only.
+23. **`CRON_SECRET`** is added by Kenji with a wizard script covering the three 1Password items and Vercel. The cron route fails closed without it.
+24. **Global write kill switch** is the env var `API_WRITES_DISABLED` (503 on API writes, reads unaffected); flipping it needs a redeploy.
+25. **Per-organization API access** is on by default; only Platform Admins turn it off (403 `api_access_disabled`).
+26. **The pre-auth per-IP limit** uses the same Postgres token bucket as the credential and organization limits.
+27. **The audit log covers API writes only;** UI writes keep their existing history.
+28. **`oasdiff` fails CI on a breaking change;** a deliberate break updates the committed baseline in the same PR.
+
 ## 14. What review changed
 
 | Change | Raised by |

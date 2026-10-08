@@ -10,107 +10,28 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { useOrgCertifierCredentialsStatus } from "@/hooks/use-certifier-credentials";
+import { Notice } from "@/components/ui/notice";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { FormActions, FormField, FormInput } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
   useAllOrganizations,
+  useAllOrganizationApiAccess,
   useCreateOrganization,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
 import { createOrganizationSchema } from "@/schemas/organizations";
-import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
-import {
-  OrganizationRosterList,
-  OrganizationRosterRow,
-} from "./organization-roster-list";
+import { OrganizationAdminRow } from "./organization-admin-row";
+import { OrganizationRosterList } from "./organization-roster-list";
 
 type CreateForm = z.infer<typeof createOrganizationSchema>;
-
-interface OrganizationAdminRowProps {
-  org: { id: string; name: string; slug: string; memberCount: number };
-  entering: boolean;
-  onEnter: () => void;
-}
-
-/**
- * One organization: name and counts, a keys status pill, and the write-only
- * keys form in a modal so the directory stays a list, not a stack of forms.
- */
-function OrganizationAdminRow({ org, entering, onEnter }: OrganizationAdminRowProps) {
-  const [keysOpen, setKeysOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const status = useOrgCertifierCredentialsStatus(org.id);
-  const titleId = `org-keys-title-${org.id}`;
-
-  return (
-    <>
-      <OrganizationRosterRow
-        primary={org.name}
-        secondary={
-          <>
-            {org.slug} · {org.memberCount} member
-            {org.memberCount === 1 ? "" : "s"}
-          </>
-        }
-        actions={
-          <>
-            {status.data && (
-              <StatusBadge
-                status={status.data.configured ? "ready" : "draft"}
-                label={status.data.configured ? "Keys saved" : "No keys"}
-              />
-            )}
-            <Button
-              type="button"
-              variant="weak"
-              size="small"
-              onClick={() => setKeysOpen(true)}
-            >
-              Isometric keys
-            </Button>
-            <Button
-              type="button"
-              variant="weak"
-              size="small"
-              onClick={onEnter}
-              busy={entering}
-            >
-              Enter
-            </Button>
-          </>
-        }
-      />
-      <Modal
-        isOpen={keysOpen}
-        onClose={() => setKeysOpen(false)}
-        dismissible={!saving}
-        dismissOnClickOutside={!saving}
-        ariaLabelledBy={titleId}
-        width="md"
-      >
-        <div className="flex flex-col gap-16">
-          <h2 id={titleId} className="title-heading-3">
-            Isometric keys for {org.name}
-          </h2>
-          <OrganizationCertifierCredentials
-            organizationId={org.id}
-            organizationName={org.name}
-            onSavingChange={setSaving}
-          />
-        </div>
-      </Modal>
-    </>
-  );
-}
 
 export function OrganizationsAdmin() {
   const toast = useToast();
   const { data: organizations, isLoading } = useAllOrganizations();
+  const apiAccess = useAllOrganizationApiAccess();
+  const apiAccessByOrg = new Map((apiAccess.isError ? undefined : apiAccess.data)?.map((row) => [row.organizationId, row.enabled]));
   const createOrg = useCreateOrganization();
   const enterOrganization = useEnterOrganization();
   const [enteringId, setEnteringId] = useState<string | null>(null);
@@ -152,7 +73,16 @@ export function OrganizationsAdmin() {
     <div className="flex flex-col gap-32">
       <section className="flex flex-col gap-16">
         <h2 className="title-heading-3">Organizations</h2>
-        {isLoading ? (
+        {apiAccess.isError && (
+          <Notice tone="error" action={
+            <Button type="button" variant="weak" size="small" busy={apiAccess.isFetching} onClick={() => apiAccess.refetch()}>
+              Retry
+            </Button>
+          }>
+            API access could not be loaded. Retry to view or change it.
+          </Notice>
+        )}
+        {isLoading || apiAccess.isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : !organizations || organizations.length === 0 ? (
           <EmptyState
@@ -167,6 +97,7 @@ export function OrganizationsAdmin() {
               <OrganizationAdminRow
                 key={org.id}
                 org={org}
+                apiAccessEnabled={apiAccessByOrg.get(org.id)}
                 entering={enteringId === org.id}
                 onEnter={() => enterOrg(org.id)}
               />

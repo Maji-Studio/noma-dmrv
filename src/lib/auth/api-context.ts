@@ -1,3 +1,4 @@
+import { getOrganizationApiAccess } from "@/data-access/organization-api-access";
 import { defaultKeyHasher } from "@better-auth/api-key";
 import { findApiCredential, findApiCredentialMember } from "@/data-access/api-credential-auth";
 import { auth } from "./better-auth";
@@ -80,6 +81,9 @@ async function resolveStoredCredential(keyHash: string): Promise<ApiContextResol
       ok: false,
       denial: "credential_expired",
     };
+  }
+  if (!(await getOrganizationApiAccess(owner.organizationId))) {
+    return { ok: false, denial: "api_access_disabled" };
   }
   return {
     ok: true,

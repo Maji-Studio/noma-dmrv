@@ -226,10 +226,20 @@ and `Cache-Control: private, no-store`.
 | `credential_header_unsupported`, `cookie_session_unsupported` | 401 |
 | `credential_invalid`, `credential_expired`, `credential_disabled`, `credential_revoked` | 401 |
 | `credential_owner_removed`, `credential_owner_unverified` | 401 |
-| `missing_scope`, `insufficient_role` | 403 |
+| `missing_scope`, `insufficient_role`, `api_access_disabled` | 403 |
 
 Every 401 includes `WWW-Authenticate: Bearer`. Unknown or purged credentials
 return `credential_invalid`; expired credentials still present in storage
 return `credential_expired`. Owner demotion uses `credential_owner_removed`
 as required by the credential lifecycle contract, rather than the operation's
 403 `insufficient_role` refusal.
+
+Organization API access is checked by `resolveApiContext` on every API request.
+Disabled access returns 403 `api_access_disabled`; a missing
+`organization_api_access` row means enabled. Only Platform Admins can view the
+cross-organization state and toggle it at `/admin/organizations`, through
+`src/fn/organization-api-access.ts:setOrganizationApiAccessFn` and its guarded
+data-access seam. Turning it off requires confirmation: every API key in that
+organization stops working until access is restored, without revoking the
+keys. Organization Owners/Admins without Platform Admin access cannot toggle
+it. Restoring access still requires each credential to pass its normal checks.

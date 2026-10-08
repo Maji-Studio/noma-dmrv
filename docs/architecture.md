@@ -258,11 +258,12 @@ runtime.
   `tests/middleware.test.ts`.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Eight API route families: `/api/auth/[...all]`,
+- Nine API route families: `/api/auth/[...all]`,
   `/api/storage-local/[...key]`, `/api/documents/[id]`,
   `/api/ghg-statement-reports/[reportId]`,
-  `/api/certification/submissions`, private `/api/reads/*`, bearer-authenticated `/api/v1/*`, and the
-  development-only `/api/mcp` spike. Documents are
+  `/api/certification/submissions`, private `/api/reads/*`, bearer-authenticated `/api/v1/*`,
+  the development-only `/api/mcp` spike, and secret-authenticated
+  `/api/cron/purge-api-records`. Documents are
   normally resolved through `getOrgContext()`. The report route is the one
   deliberate public bearer-capability seam: middleware lets it through, then
   the route verifies a per-report token against the stored digest and redirects
@@ -577,3 +578,38 @@ hashing and verification responsibility.
 route handlers do not import the database. The shared REST problem builder
 lives at `lib/api/problem.ts`. See [auth.md](./auth.md#api-credentials) for
 credential and denial contracts.
+
+### Operation effects and API bookkeeping
+
+`src/lib/operations/runner.ts:Operation` optionally supplies `describe(input,
+output)`, which returns `src/lib/operation-effect.ts:OperationEffect`: outcome
+code (`created`, `updated`, `deleted`), entity type and ids, versions before and
+after, and changed field names. It contains no field values. The runner returns
+this transport-neutral effect alongside data.
+
+The `audit` run option supplies request id, credential id and optional OAuth
+client id for API writes only. Audited operations must implement `describe`.
+`src/data-access/api-audit-events.ts:writeApiAuditEvent` records the effect and
+resolved organization/user inside the operation's transaction. UI writes do
+not pass `audit`; dry runs and idempotent replays add no audit row.
+
+Stored outcome v2 is `{ kind: "success", data, effect? }` in
+`api_idempotency_records`, with schema version 2. Effects retain outcome code,
+entity ids and versions for adapters; data is JSON-normalized and a void result
+is stored as `null`. Only committed successes are retained. Older schema
+versions answer `replay_unavailable`. The claim path deletes expired records
+lazily before reclaiming their keys.
+
+`src/lib/api/guards.ts:preAuthGuard` charges the pre-authentication IP limit
+first. Routes then resolve the credential with `resolveApiContext` (including
+organization API access), and call `src/lib/api/guards.ts:postAuthGuard`: the
+write kill switch precedes credential and organization limits, charged in that
+order with separate read/write budgets. Dry runs count as writes. PostgreSQL
+token buckets are debited outside the operation transaction; rollback never
+refunds them. Limits come from `src/config/api-rate-limits.ts:API_RATE_LIMITS`.
+
+`GET /api/cron/purge-api-records` verifies a bearer `CRON_SECRET`, then purges
+expired idempotency records and idle rate-limit buckets in bounded batches.
+`vercel.json` schedules it daily at 03:00 UTC on Production deployments only.
+Staging is Preview and relies on lazy claim expiry; see
+[security.md](./security.md#environment-variables).

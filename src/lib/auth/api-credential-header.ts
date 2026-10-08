@@ -3,7 +3,7 @@ export type ApiContextDenial =
   | "credential_header_unsupported" | "cookie_session_unsupported"
   | "credential_invalid" | "credential_expired" | "credential_disabled"
   | "credential_revoked" | "credential_owner_removed" | "credential_owner_unverified"
-  | "missing_scope" | "insufficient_role";
+  | "api_access_disabled" | "missing_scope" | "insufficient_role";
 
 export type CredentialHeader =
   | { ok: true; key: string }

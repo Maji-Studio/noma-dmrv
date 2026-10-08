@@ -35,6 +35,10 @@ import { DomainError, validationFailed } from "./errors";
 import { runOwnedTransaction } from "@/data-access/owned-transaction";
 import { deadlineExceeded, idempotencyInProgress } from "@/lib/domain-errors";
 import type { Jsonified } from "./jsonified";
+import { writeApiAuditEvent } from "@/data-access/api-audit-events";
+import type { OperationEffect } from "@/lib/operation-effect";
+
+export type { OperationEffect } from "@/lib/operation-effect";
 
 /** Version of the request contract folded into idempotency fingerprints. */
 const API_CONTRACT_VERSION = "v1";
@@ -52,6 +56,7 @@ export interface Operation<Input extends z.ZodType, Output> {
   input: Input;
   /** False for operations with irreversible external effects. */
   supportsDryRun: boolean;
+  describe?: (input: z.output<Input>, output: Output) => OperationEffect;
   execute: (scope: OperationScope, input: z.output<Input>) => Promise<Output>;
 }
 
@@ -65,6 +70,7 @@ export interface IdempotencyOptions {
 }
 
 export interface RunOptions {
+  audit?: { requestId: string; credentialId: string; oauthClientId?: string | null };
   dryRun?: boolean;
   idempotency?: IdempotencyOptions;
   /** Whole-operation budget in ms; defaults to `OPERATION_DEADLINE_MS`. */
@@ -75,16 +81,17 @@ export interface RunOptions {
 
 export interface OperationResult<Output> {
   data: Jsonified<Output>;
+  effect?: OperationEffect;
   dryRun: boolean;
   replayed: boolean;
 }
 
 class DryRunRollback<Output> {
-  constructor(readonly data: Output) {}
+  constructor(readonly data: Output, readonly effect?: OperationEffect) {}
 }
 
 class ReplayRollback {
-  constructor(readonly outcome: unknown) {}
+  constructor(readonly outcome: unknown, readonly effect?: OperationEffect) {}
 }
 
 function stableJson(value: unknown): string {
@@ -203,7 +210,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
   input: unknown,
   options: RunOptions,
   represent: (data: Output) => Result,
-): Promise<{ data: Result; dryRun: boolean; replayed: boolean }> {
+): Promise<{ data: Result; effect?: OperationEffect; dryRun: boolean; replayed: boolean }> {
   const deadlineAt = Date.now() + (options.deadlineMs ?? OPERATION_DEADLINE_MS);
   const dryRun = options.dryRun ?? false;
   const { idempotency } = options;
@@ -211,6 +218,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
     throw new DomainError("validation_failed", "This operation does not offer a dry run.");
   }
 
+  if (options.audit && !operation.describe) throw new Error("Audited operations must describe their effect.");
   const decoded = decode(operation.input, input);
 
   // Same-instance duplicates answer at once: at pool size 1 the second request
@@ -225,7 +233,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
   }
 
   const hooks: Array<() => Promise<void> | void> = [];
-  let committed: { data: Result; dryRun: boolean; replayed: boolean } | undefined;
+  let committed: { data: Result; effect?: OperationEffect; dryRun: boolean; replayed: boolean } | undefined;
   try {
     const outcome = await runOwnedTransaction(ctx, deadlineAt, async (tx) => {
       let recordId: string | undefined;
@@ -238,31 +246,34 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
           operationId: operation.id,
           fingerprint: requestFingerprint(operation.id, decoded, idempotency),
         });
-        if (claim.kind === "replay") throw new ReplayRollback(claim.outcome);
+        if (claim.kind === "replay") throw new ReplayRollback(claim.outcome, claim.effect);
         recordId = claim.recordId;
       }
 
-      const result = represent(
-        await operation.execute({ ctx, tx, afterCommit: (hook) => hooks.push(hook) }, decoded),
-      );
+      const output = await operation.execute({ ctx, tx, afterCommit: (hook) => hooks.push(hook) }, decoded);
+      const effect = operation.describe?.(decoded, output);
+      const result = represent(output);
+      if (options.audit && !dryRun && effect) {
+        await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
+      }
       if (recordId) {
-        await recordIdempotencyOutcome(ctx, tx, recordId, result);
+        await recordIdempotencyOutcome(ctx, tx, recordId, result, effect);
       }
 
       if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
-      if (dryRun) throw new DryRunRollback(result);
-      return result;
+      if (dryRun) throw new DryRunRollback(result, effect);
+      return { data: result, ...(effect ? { effect } : {}) };
     }, options.pool);
 
     if (outcome.kind === "committed") {
-      committed = { data: outcome.data, dryRun: false, replayed: false };
+      committed = { ...outcome.data, dryRun: false, replayed: false };
     } else {
       const failure = outcome.error;
       if (failure instanceof DryRunRollback) {
-        return { data: failure.data as Result, dryRun: true, replayed: false };
+        return { data: failure.data as Result, ...(failure.effect ? { effect: failure.effect } : {}), dryRun: true, replayed: false };
       }
       if (failure instanceof ReplayRollback) {
-        return { data: failure.outcome as Result, dryRun: false, replayed: true };
+        return { data: failure.outcome as Result, ...(failure.effect ? { effect: failure.effect } : {}), dryRun: false, replayed: true };
       }
       const code = pgErrorCode(failure);
       if ((code === PG_QUERY_CANCELED || code === PG_LOCK_NOT_AVAILABLE) && remainingMs(deadlineAt) <= 0) {
