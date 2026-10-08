@@ -20,10 +20,12 @@
  */
 
 import { and, eq, sql } from "drizzle-orm";
-import type { DbTransaction } from "@/db";
+import { db, type DbTransaction } from "@/db";
+import type { OperationEffect } from "@/lib/operation-effect";
 import { pgErrorCode, PG_LOCK_NOT_AVAILABLE } from "@/db/errors";
 import { apiIdempotencyRecords } from "@/db/schema";
 import {
+  API_RECORD_PURGE_BATCH_SIZE,
   IDEMPOTENCY_CLAIM_LOCK_TIMEOUT_MS,
   IDEMPOTENCY_OUTCOME_SCHEMA_VERSION,
   IDEMPOTENCY_RETENTION_DAYS,
@@ -43,7 +45,7 @@ export interface IdempotencyClaim {
 
 export type ClaimResult =
   | { kind: "owner"; recordId: string }
-  | { kind: "replay"; outcome: unknown };
+  | { kind: "replay"; outcome: unknown; effect?: OperationEffect };
 
 interface CommittedRecord {
   id: string;
@@ -189,7 +191,11 @@ export async function claimIdempotencyKey(
       "The stored result for this idempotency key can no longer be replayed. Use a new key.",
     );
   }
-  return { kind: "replay", outcome: record.outcome.data };
+  return {
+    kind: "replay",
+    outcome: record.outcome.data,
+    ...("effect" in record.outcome ? { effect: record.outcome.effect as OperationEffect } : {}),
+  };
 }
 
 /**
@@ -219,15 +225,34 @@ export async function recordIdempotencyOutcome(
   tx: DbTransaction,
   recordId: string,
   outcome: unknown,
+  effect?: OperationEffect,
 ): Promise<void> {
   requireOrgScope(ctx);
   await tx
     .update(apiIdempotencyRecords)
-    .set({ outcome: { kind: "success", data: outcome ?? null } })
+    .set({ outcome: { kind: "success", data: outcome ?? null, ...(effect ? { effect } : {}) } })
     .where(
       and(
         eq(apiIdempotencyRecords.id, recordId),
         eq(apiIdempotencyRecords.organizationId, ctx.organizationId),
       ),
     );
+}
+
+/** System retention job; each statement locks and deletes a bounded batch. */
+// `expires_at` has no zone and Drizzle stores UTC wall time; a raw Date parameter
+// would be sent with the local offset, which a cast to `timestamp` drops.
+// org-scope-ok: authenticated cron purges expired bookkeeping across organizations.
+export async function purgeExpiredIdempotencyRecords(now: Date): Promise<number> {
+  let count = 0;
+  for (;;) {
+    const result = await db.execute(sql`
+      delete from api_idempotency_records where id in (
+        select id from api_idempotency_records where expires_at <= ${now.toISOString()}::timestamp
+        order by expires_at limit ${API_RECORD_PURGE_BATCH_SIZE} for update skip locked
+      ) returning id
+    `);
+    count += result.rows.length;
+    if (result.rows.length < API_RECORD_PURGE_BATCH_SIZE) return count;
+  }
 }

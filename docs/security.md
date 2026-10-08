@@ -95,6 +95,24 @@ sync). The app refuses to boot on an invalid or missing required var.
 
 Non-obvious semantics only:
 
+- **`CRON_SECRET`** — at least 32 characters; required for `NODE_ENV=production`
+  builds and runtimes, including staging, except hermetic CI. Optional in
+  development/test. The daily 03:00 UTC Vercel cron
+  calls exactly `/api/cron/purge-api-records` with a bearer secret, compared in
+  constant time. An unconfigured route returns 503; invalid credentials return
+  an empty 401. It purges expired idempotency records and buckets idle for a day
+  in bounded batches and logs counts only. It lives in all three
+  1Password items (local, staging, production); `pnpm env:vercel` syncs the
+  staging and production values to Vercel Preview and Production.
+  [Vercel invokes cron jobs only on Production deployments](https://vercel.com/docs/cron-jobs/quickstart),
+  so staging (Preview) never purges on schedule. Its idempotency claim path
+  deletes expired records lazily when their keys are reused; idle rate-limit
+  buckets have no scheduled staging cleanup.
+- **`API_WRITES_DISABLED`** — `true` or `false`, defaults to `false`. API write
+  guards return retryable 503 while enabled, including for dry runs; reads keep
+  working. Organization API access defaults to enabled and only Platform Admins
+  can toggle it at `/admin/organizations`; disabled organizations receive
+  403 `api_access_disabled` on API requests. This does not revoke their keys.
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
@@ -145,13 +163,18 @@ Read directly from `process.env`, **not** validated by `env.ts`:
   literal string `"true"` permits a remote reset; the manually confirmed staging
   and production reset jobs load it from their matching 1Password item.
 - `VERCEL` and `VERCEL_REGION` — platform-injected, read by `src/db/index.ts`
-  only to register the pool with Fluid Compute lifecycle hooks and to tag pool
-  telemetry with the compute region. Absent locally; never set by hand.
+  to register the pool with Fluid Compute lifecycle hooks and to tag pool
+  telemetry with the compute region. `VERCEL` also controls whether
+  `src/lib/api/client-ip.ts:clientIpBucketKey` trusts forwarded IP headers.
+  Absent locally; never set by hand.
 - `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
   `process.env.DISABLE_RATE_LIMIT !== "true"` read
   (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
   the literal string `"true"` disables them; E2E fixtures depend on that exact
-  literal ([testing.md](./testing.md)).
+  literal ([testing.md](./testing.md)). API guards reuse this flag but ignore it
+  in production. Their PostgreSQL token buckets charge pre-auth IPs (hashed,
+  never stored raw), credentials and organizations before business transactions,
+  including failures and dry runs. Forwarded IP headers are trusted only on Vercel.
 - `ISOMETRIC_DEMO_PROJECT_ID` — CI/staging smoke-test target.
 
 Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
@@ -161,7 +184,7 @@ must be set directly on the staging/production items.
 ### Hermetic-CI exception on the production fail-closed gates
 
 The production gates — `GEO_PROVIDER=stub`, unset `ISOMETRIC_ENVIRONMENT`,
-missing `CREDENTIALS_ENCRYPTION_KEY`, and non-`s3-compatible` storage — are
+missing `CREDENTIALS_ENCRYPTION_KEY` or `CRON_SECRET`, and non-`s3-compatible` storage — are
 skipped only for a **hermetic CI build**: `NOMA_HERMETIC_CI=true`, `CI` truthy,
 and an HTTP(S) loopback `NEXT_PUBLIC_APP_URL` (ci.yml and e2e.yml compile
 production bundles against localhost with placeholder config on purpose).
@@ -309,3 +332,12 @@ omit registry credentials.
   [`maps/maplibre-v6`](./open-questions-toolchain.md#maplibre-gl-v6-upgrade-mapsmaplibre-v6-opened-2026-10-02).
   A security fix that exists only in a new major is never merged on green CI
   alone: read the changelog and check the Vercel preview first.
+
+
+## API write audit
+
+API writes with runner audit context record operation and principal IDs, entity
+IDs, outcome, versions, and decoded input field names only. Audit inserts share
+the business transaction. Failed writes, dry runs, replays, and UI server actions
+do not add events. Stored idempotency outcome schema v2 includes effect metadata;
+older outcomes answer `replay_unavailable` without a compatibility mapper.

@@ -15,7 +15,7 @@ const TITLES: Record<number, string> = {
   400: "Bad request", 401: "Unauthorized", 403: "Forbidden", 404: "Not found",
   409: "Conflict", 412: "Precondition failed", 413: "Payload too large",
   415: "Unsupported media type", 422: "Validation failed", 428: "Precondition required",
-  429: "Too many requests", 500: "Internal server error",
+  429: "Too many requests", 500: "Internal server error", 503: "Service unavailable",
 };
 export function apiResponseHeaders(requestId: string): Headers {
   return new Headers({ "Cache-Control": "private, no-store", "X-Request-Id": requestId });
@@ -46,7 +46,7 @@ export function problemResponse(options: ProblemOptions): Response {
 }
 
 export function apiDenialResponse(denial: ApiContextDenial, instance: string, requestId: string) {
-  const status = denial === "missing_scope" || denial === "insufficient_role" ? 403 : 401;
+  const status = denial === "api_access_disabled" || denial === "missing_scope" || denial === "insufficient_role" ? 403 : 401;
   return problemResponse({ status, code: denial, detail: "The credential cannot authorize this request.", instance, requestId });
 }
 

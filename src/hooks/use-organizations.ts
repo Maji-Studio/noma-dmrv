@@ -14,6 +14,7 @@ import {
   revokeInvitationAction,
   setActiveOrganizationAction,
 } from "@/fn/organizations";
+import { listOrganizationApiAccessFn, setOrganizationApiAccessFn } from "@/fn/organization-api-access";
 import { getActiveOrganizationRead } from "@/lib/read-api/client";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import { unwrap } from "@/hooks/types";
@@ -29,6 +30,7 @@ const organizationKeys = {
   all: ["organizations"] as const,
   members: () => [...organizationKeys.all, "members"] as const,
   invitations: () => [...organizationKeys.all, "invitations"] as const,
+  apiAccess: () => [...organizationKeys.all, "api-access"] as const,
   directory: () => [...organizationKeys.all, "directory"] as const,
   activeProfile: () => [...organizationKeys.all, "active-profile"] as const,
 };
@@ -117,6 +119,23 @@ export function useAllOrganizations(enabled = true) {
   });
 }
 
+export function useAllOrganizationApiAccess(enabled = true) {
+  return useQuery({
+    queryKey: organizationKeys.apiAccess(),
+    queryFn: async () => unwrap(await listOrganizationApiAccessFn()),
+    enabled,
+  });
+}
+
+export function useSetOrganizationApiAccess() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; enabled: boolean }) =>
+      unwrap(await setOrganizationApiAccessFn(input)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() }),
+  });
+}
+
 export function useInviteMember() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -175,6 +194,7 @@ export function useCreateOrganization() {
     }) => unwrap(await createOrganizationAction(input)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.directory() });
+      queryClient.invalidateQueries({ queryKey: organizationKeys.apiAccess() });
     },
   });
 }

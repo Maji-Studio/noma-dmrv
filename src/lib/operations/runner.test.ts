@@ -6,6 +6,7 @@ import { toActionFailure } from "@/fn/action-errors";
 import { runOperation, runOperationInProcess, type Operation, type OperationScope, type RunOptions } from "./runner";
 
 const { owned, record, claim, warn } = vi.hoisted(() => ({ owned: vi.fn(), record: vi.fn(), claim: vi.fn(), warn: vi.fn() }));
+vi.mock("@/data-access/api-audit-events", () => ({ writeApiAuditEvent: vi.fn() }));
 vi.mock("@/data-access/owned-transaction", () => ({ runOwnedTransaction: owned }));
 vi.mock("@/data-access/api-idempotency-records", () => ({ recordIdempotencyOutcome: record, claimIdempotencyKey: claim, assertIdempotencyKeyUnused: vi.fn() }));
 vi.mock("@/lib/log", () => ({ logger: { warn, error: vi.fn() }, sanitizeErrorMessage: () => "sanitized" }));
@@ -61,7 +62,7 @@ describe("shared operation runner", () => {
     const options = { idempotency: { credentialId: "credential-id", key: "key" } };
     const first = await runOperation(operation, ctx, { amount: 1 }, options);
     expect(first.data.date).toBe(saved.toISOString());
-    expect(record).toHaveBeenCalledWith(ctx, tx, "record-id", first.data);
+    expect(record).toHaveBeenCalledWith(ctx, tx, "record-id", first.data, undefined);
     claim.mockResolvedValueOnce({ kind: "replay", outcome: first.data });
     expect((await runOperation(operation, ctx, { amount: 1 }, options)).data).toEqual(first.data);
   });
@@ -82,7 +83,7 @@ describe("shared operation runner", () => {
       scope.afterCommit(() => { events.push("hook"); });
       return saved;
     });
-    const op = { ...operation, execute };
+    const op = { ...operation, describe: undefined, execute };
     const deadlineMs = 1000;
     const started = Date.now();
     await runOperationInProcess(op, ctx, { amount: 1 }, { deadlineMs });
@@ -95,6 +96,6 @@ describe("shared operation runner", () => {
   });
 
   it("keeps undefined native for void actions", async () => {
-    expect(await runOperationInProcess({ ...operation, execute: async () => undefined }, ctx, { amount: 1 })).toBeUndefined();
+    expect(await runOperationInProcess({ ...operation, describe: undefined, execute: async () => undefined }, ctx, { amount: 1 })).toBeUndefined();
   });
 });
