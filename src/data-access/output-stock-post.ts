@@ -1,5 +1,6 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
-import { binMovements, deliveries, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations } from '@/db/schema';
+import { biocharProducts, binMovements, deliveries, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { conflictCode } from '@/lib/conflict-ref';
 import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
@@ -7,7 +8,7 @@ import { ActionConflictError, SafeError } from '@/lib/errors';
 import { add, decimal, grams, GRAMS_PER_KG, kilograms, multiply, rational, readRational, round, storeRational } from '@/lib/output-stock';
 import { outputStockPostSchema } from '@/schemas/output-stock';
 import type { OutputStockPostInput } from '@/types/output-stock';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { findMovementRequest, lockMovementRequest } from './bin-movement-requests';
 import { assertCanMutateCertifiedLineage } from './certification-lineage-guards';
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
@@ -18,12 +19,15 @@ import { requireOrgScope } from './utils';
 
 const OUTPUT_REQUEST_CONFLICT_MESSAGE = 'This request key was already used with different values.';
 
+/** Domain creates use current stock; direct commands require preview versions. */
+type StockPostingInput = Omit<OutputStockPostInput, "expectedProductVersions"> & { expectedProductVersions?: Record<string, number> };
+
 type PostedOutputRequest = NonNullable<Awaited<ReturnType<typeof findMovementRequest>>>;
 type PersistOptions = { deliveryId?: string; targetBiocharProductId?: string; payload?: unknown };
 type PostedOutputStock = Awaited<ReturnType<typeof persistOutputStock>>;
 
 export interface OutputStockPosting<T> {
-  input: OutputStockPostInput;
+  input: StockPostingInput;
   /** Operator facts a replayed key must match. Defaults to the posting input. */
   payload?: unknown;
   /** Bins the action reads or writes besides the source bin. */
@@ -57,7 +61,7 @@ export async function withOutputStockPosting<T>(ctx: OrgContext, posting: Output
 }
 
 /** Requires the request and bin locks held by withOutputStockPosting. */
-async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: OutputStockPostInput, options: PersistOptions = {}) {
+async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: StockPostingInput, options: PersistOptions = {}) {
   requireOrgScope(ctx);
   // Applications serialize on the delivery row. Acquire that same lock before
   // discovering dependencies so an application cannot appear after the check.
@@ -77,6 +81,24 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
     if (prepared.lane === 'product') productIds.add(layer.id);
   }
   if (correction?.deliveryId) await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'delivery', entityId: correction.deliveryId }, 'update');
+  // Bin locks precede product rows everywhere. Lock parents before inserting
+  // ledger children (their foreign keys acquire parent key-share locks).
+  for (const reading of prepared.readings) if (prepared.lane === 'product') productIds.add(reading.layerId);
+  // Reversal removes the original readings even when a backdated replacement
+  // predates a product's placement and generates no new reading for it.
+  if (correction && prepared.lane === 'product') {
+    const originalReadings = await tx.select({ productId: outputStockMoistureReadings.biocharProductId }).from(outputStockMoistureReadings)
+      .where(and(eq(outputStockMoistureReadings.organizationId, ctx.organizationId), eq(outputStockMoistureReadings.movementId, correction.original.id)));
+    for (const reading of originalReadings) if (reading.productId) productIds.add(reading.productId);
+  }
+  const savedProducts = [];
+  for (const productId of [...productIds].sort()) {
+    const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for('update');
+    if (!product) throw new SafeError('Biochar product not found');
+    // Direct loss/count/correction forms check their preview. Delivery creates
+    // deliberately consume current stock under the bin lock and bump below.
+    if (input.expectedProductVersions) assertRowVersion({ entity: 'biocharProduct', id: product.id, expectedVersion: input.expectedProductVersions[product.id], actualVersion: product.version });
+  }
   const payloadHash = stockFingerprint(options.payload ?? input);
   if (correction) {
     const restoreGrams = correction.allocations.reduce((sum, a) => sum + grams(a.dryMassKg), BigInt(0));
@@ -137,7 +159,10 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Out
     await tx.update(deliveries).set({ deliveredWetMassKg: input.wetMassKg, moistureContentPercent: postedMoisturePercent(prepared), massDryKg: Number(plan.drawnDryKg), deliveryDate: new Date(input.occurredAt), updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id)));
     await syncBiocharProductTransportLegs(ctx, tx, [...productIds]);
   }
-  return { movement, preview, moisturePercent: postedMoisturePercent(prepared) };
+  if (productIds.size) savedProducts.push(...await tx.update(biocharProducts)
+    .set({ version: nextVersion(biocharProducts.version), updatedAt: new Date() })
+    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.id, [...productIds]))).returning());
+  return { movement, preview, savedProducts, moisturePercent: postedMoisturePercent(prepared) };
 }
 export async function postOutputStock(ctx: OrgContext, raw: OutputStockPostInput) {
   requireOrgScope(ctx);
@@ -146,10 +171,11 @@ export async function postOutputStock(ctx: OrgContext, raw: OutputStockPostInput
   return withOutputStockPosting(ctx, {
     input,
     locksTransportRoutes: true,
-    replay: async (_tx, existing) => ({ movementId: existing.id, preview: existing.inputSnapshot!.preview as unknown as PostedOutputStock['preview'] }),
+    replay: async (tx, existing) => ({ movementId: existing.id, preview: existing.inputSnapshot!.preview as unknown as PostedOutputStock['preview'],
+      savedProducts: await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, input.storageLocationId))) }),
     write: async (_tx, post) => {
       const result = await post();
-      return { movementId: result.movement.id, preview: result.preview };
+      return { movementId: result.movement.id, preview: result.preview, savedProducts: result.savedProducts };
     },
   });
 }

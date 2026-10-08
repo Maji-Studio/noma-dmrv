@@ -4,6 +4,7 @@
  * production run detail.
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -58,7 +59,9 @@ export function ProductionSampleTable({
     | { open: false }
     | { open: true; sample?: ProductionSampleWithRelations }
   >({ open: false });
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ProductionSampleWithRelations | null>(null);
+  const deletingId = deleting?.id;
+  const setDeletingId = (id: string | null) => setDeleting(samples?.find(row => row.id === id) ?? null);
   const [formError, setFormError] = useState<string | null>(null);
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_sample",
@@ -135,6 +138,7 @@ export function ProductionSampleTable({
       if (createWithEvidence.guardUpdate()) return;
       await updateSample.mutateAsync({
         productionSampleId: formDialog.sample.id,
+          expectedVersion: formDialog.sample.version,
         ...data,
       });
       toast.success("In-process measurement updated.");
@@ -147,11 +151,11 @@ export function ProductionSampleTable({
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
     try {
-      await deleteSample.mutateAsync(deletingId);
+      await deleteSample.mutateAsync({ productionSampleId: deletingId, expectedVersion: deleting!.version });
       setDeletingId(null);
       toast.success("In-process measurement deleted.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "In-process measurement was not deleted. Try again.");
+      toast.error(err instanceof StaleVersionError ? staleDeleteMessage("In-process measurement") : err instanceof Error ? err.message : "In-process measurement was not deleted. Try again.");
       setDeletingId(null);
     }
   };

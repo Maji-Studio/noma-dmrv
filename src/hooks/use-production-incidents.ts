@@ -1,3 +1,4 @@
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 /**
  * Production Incidents React Query Hooks
  * Client-side state management for production incident CRUD
@@ -7,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateProductionIncidentData,
   UpdateProductionIncidentData,
+  DeleteProductionIncidentData,
 } from "@/schemas/production-incidents";
 import type { ProductionIncidentWithRelations } from "@/data-access/production-incidents";
 import {
@@ -78,10 +80,12 @@ export function useUpdateProductionIncident(
   return useMutation({
     mutationFn: async (data: UpdateProductionIncidentData) => {
       const result = await updateProductionIncidentFn(data);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {
+      queryClient.setQueriesData<ProductionIncidentWithRelations[]>({ queryKey: productionIncidentKeys.lists() },
+        old => old?.map(row => row.id === data.id ? { ...row, ...data } : row));
       queryClient.invalidateQueries({
         queryKey: productionIncidentKeys.list(variables.productionRunId),
       });
@@ -97,14 +101,14 @@ export function useUpdateProductionIncident(
 
 export function useDeleteProductionIncident(
   productionRunId: string | undefined,
-  callbacks?: MutationCallbacks<void, string>
+  callbacks?: MutationCallbacks<void, DeleteProductionIncidentData>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (productionIncidentId: string) => {
-      const result = await deleteProductionIncidentFn({ productionIncidentId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (data: DeleteProductionIncidentData) => {
+      const result = await deleteProductionIncidentFn(data);
+      if (!result.success) throwActionError(result);
     },
     onSuccess: (_data, variables) => {
       if (productionRunId) {
@@ -117,7 +121,10 @@ export function useDeleteProductionIncident(
       });
       callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: callbacks?.onError,
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) queryClient.invalidateQueries({ queryKey: productionIncidentKeys.lists() });
+      callbacks?.onError?.(error, variables);
+    },
     onSettled: callbacks?.onSettled,
   });
 }

@@ -39,7 +39,6 @@ import {
   createApplication,
   updateApplication,
 } from "@/data-access/applications";
-import { updateProductionRun } from "@/data-access/production-runs";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   STALE_VERSION_CONFLICT_CODE,
@@ -72,8 +71,6 @@ const BIN_CAPACITY_KG = 10_000;
 const INTAKE_WET_KG = 100;
 const INTAKE_DRY_KG = 80;
 const INTAKE_MOISTURE_PERCENT = 20;
-const FIRST_FEEDING_RATE = 50;
-const SECOND_FEEDING_RATE = 60;
 const GPS = { lat: -3.3, lng: 37.3 } as const;
 
 interface Fixture {
@@ -122,16 +119,6 @@ const versionOf = (table: VersionedTable) => async (id: string): Promise<Date> =
 };
 
 const UPDATERS: UpdaterCase[] = [
-  {
-    entity: "productionRun",
-    readUpdatedAt: versionOf(productionRuns),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateProductionRun(f.ctx, id, {
-        feedingRateKgHr:
-          label.endsWith("first") ? FIRST_FEEDING_RATE : SECOND_FEEDING_RATE,
-        expectedUpdatedAt,
-      }),
-  },
   {
     entity: "application",
     readUpdatedAt: versionOf(applications),

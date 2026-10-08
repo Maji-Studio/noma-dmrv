@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { massKgSchema, stockEventInstantSchema, storedPercentSchema } from './helpers';
+import { expectedVersionSchema, massKgSchema, stockEventInstantSchema, storedPercentSchema } from './helpers';
 
 const WET_MASS_REQUIRED = 'Enter the wet mass.';
 const MOISTURE_REQUIRED = 'Enter the measured moisture.';
@@ -49,6 +49,7 @@ export const outputStockPreviewSchema = z.object({
     ctx.addIssue({ code: 'custom', path: ['moisturePercent'], message: MOISTURE_REQUIRED });
 });
 export const outputStockPostSchema = outputStockPreviewSchema.safeExtend({
+  expectedProductVersions: z.record(z.uuid(), expectedVersionSchema),
   basisFingerprint: z.string().min(1),
   idempotencyKey: z.string().trim().min(1).max(200),
   reason: reasonSchema(2000),

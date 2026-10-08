@@ -43,7 +43,7 @@ beforeEach(() => {
  */
 describe("updateBiocharProductFn composition handling", () => {
   it("omitting ingredientBins preserves existing composition (no composition key in payload)", async () => {
-    await updateBiocharProductFn({
+    await updateBiocharProductFn({ expectedVersion: 1,
       productId: PRODUCT_ID,
       massKg: 100,
     });
@@ -65,7 +65,7 @@ describe("updateBiocharProductFn composition handling", () => {
       },
     ];
 
-    await updateBiocharProductFn({
+    await updateBiocharProductFn({ expectedVersion: 1,
       productId: PRODUCT_ID,
       ingredientBins: bins,
     });
@@ -76,7 +76,7 @@ describe("updateBiocharProductFn composition handling", () => {
   });
 
   it("explicit empty ingredientBins array clears composition", async () => {
-    await updateBiocharProductFn({
+    await updateBiocharProductFn({ expectedVersion: 1,
       productId: PRODUCT_ID,
       ingredientBins: [],
     });

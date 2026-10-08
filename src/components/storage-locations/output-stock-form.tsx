@@ -41,7 +41,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     mode: "onTouched",
     defaultValues: {
       storageLocationId, facilityId, kind, correctsMovementId: original?.id,
-      basisFingerprint: "pending-preview", idempotencyKey,
+      expectedProductVersions: {}, basisFingerprint: "pending-preview", idempotencyKey,
       occurredAt: original?.occurredAt ?? new Date().toISOString(),
       wetMassKg: original?.wetMassKg ?? undefined,
       // A correction starts from the saved reading. A split draw replays its
@@ -82,7 +82,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     if (!input || !canSave || !basisFingerprint) return;
     setServerError(undefined);
     try {
-      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), basisFingerprint, idempotencyKey });
+      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), expectedProductVersions: preview.data?.expectedProductVersions ?? {}, basisFingerprint, idempotencyKey });
       setIdempotencyKey(crypto.randomUUID());
       onRecorded();
     } catch (error) {

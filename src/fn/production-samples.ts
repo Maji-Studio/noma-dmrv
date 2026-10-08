@@ -1,4 +1,5 @@
 "use server";
+import { withAction } from "./with-action";
 
 /**
  * Production Samples Server Actions
@@ -16,7 +17,6 @@ import {
   type ProductionSampleWithRelations,
 } from "@/data-access/production-samples";
 import { requireOrgContext } from "@/lib/auth/server";
-import { toActionError } from "@/lib/errors";
 import {
   createProductionSampleSchema,
   updateProductionSampleSchema,
@@ -128,15 +128,14 @@ export async function createProductionSampleFn(
 export async function updateProductionSampleFn(
   data: z.infer<typeof updateProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = updateProductionSampleSchema.parse(data);
 
     const sample = await updateProductionSample(
       ctx,
       validated.productionSampleId,
       {
+        expectedVersion: validated.expectedVersion,
         timestamp: new Date(validated.timestamp),
         weightGrams: validated.weightGrams,
         volumeMl: validated.volumeMl,
@@ -151,20 +150,8 @@ export async function updateProductionSampleFn(
       }
     );
 
-    return { success: true, data: sample };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("updateProductionSampleFn failed", error);
-    return {
-      success: false,
-      error: "In-process measurement was not saved. Try again.",
-    };
-  }
+    return sample;
+  }, { fallbackMessage: "In-process measurement was not saved. Try again." });
 }
 
 // ============================================
@@ -177,27 +164,10 @@ export async function updateProductionSampleFn(
 export async function deleteProductionSampleFn(
   data: z.infer<typeof deleteProductionSampleSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = deleteProductionSampleSchema.parse(data);
-    await deleteProductionSample(ctx, validated.productionSampleId);
+    await deleteProductionSample(ctx, validated.productionSampleId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("deleteProductionSampleFn failed", error);
-    return {
-      success: false,
-      error: toActionError(
-        error,
-        "In-process measurement was not deleted. Try again.",
-      ),
-    };
-  }
+    return;
+  }, { fallbackMessage: "In-process measurement was not deleted. Try again." });
 }

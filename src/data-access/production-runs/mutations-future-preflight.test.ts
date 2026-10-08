@@ -56,7 +56,7 @@ describe("production-run mutation future-time ordering", () => {
       updateProductionRun(
         ctx,
         "run-test",
-        { endTime: FUTURE },
+        { expectedVersion: 1, endTime: FUTURE },
         { now: NOW },
       ),
     ).rejects.toThrow(

@@ -20,7 +20,7 @@ const ctx: OrgContext = {
   isPlatformAdmin: false,
 };
 
-const SAMPLE_ROW = { id: "sample", operatorName: "Operator" };
+const SAMPLE_ROW = { version: 1, id: "sample", operatorName: "Operator" };
 const READ_FAILURE = new Error("connection terminated unexpectedly");
 
 /**
@@ -31,6 +31,7 @@ function makeTx(read: { rows: unknown[] } | { error: Error }) {
   const select = vi.fn(() => {
     const query = {
       from: () => query,
+      for: () => query,
       leftJoin: () => query,
       where: () => query,
       orderBy: () => query,
@@ -104,7 +105,7 @@ describe("updateProductionSample", () => {
     const globalRead = runInTransaction(tx);
 
     await expect(
-      updateProductionSample(ctx, "sample", { notes: "checked" }),
+      updateProductionSample(ctx, "sample", { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual(SAMPLE_ROW);
     expect(tx.update).toHaveBeenCalled();
     expect(globalRead).not.toHaveBeenCalled();
@@ -115,7 +116,7 @@ describe("updateProductionSample", () => {
     runInTransaction(tx);
 
     await expect(
-      updateProductionSample(ctx, "sample", { notes: "checked" }),
+      updateProductionSample(ctx, "sample", { expectedVersion: 1, notes: "checked" }),
     ).rejects.toThrow(READ_FAILURE);
   });
 });

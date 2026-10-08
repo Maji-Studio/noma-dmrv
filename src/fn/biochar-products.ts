@@ -172,14 +172,13 @@ export async function createBiocharProductFn(
 export async function updateBiocharProductFn(
   data: z.infer<typeof updateBiocharProductSchema>
 ): Promise<ActionResult<BiocharProduct>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = updateBiocharProductSchema.parse(data);
 
     const composition = toCompositionJsonb(validated.ingredientBins, { mode: "update" });
 
     const product = await updateBiocharProduct(ctx, validated.productId, {
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       facilityId: validated.facilityId,
       formulationId: validated.formulationId,
@@ -193,23 +192,8 @@ export async function updateBiocharProductFn(
       ...(composition !== undefined && { composition }),
     });
 
-    return { success: true, data: product };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to update biochar product",
-        "biochar-product:update",
-      ),
-    };
-  }
+    return product;
+  }, { fallbackMessage: "Failed to update biochar product" });
 }
 
 // ============================================
@@ -222,27 +206,10 @@ export async function updateBiocharProductFn(
 export async function deleteBiocharProductFn(
   data: z.infer<typeof deleteBiocharProductSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = deleteBiocharProductSchema.parse(data);
-    await deleteBiocharProduct(ctx, validated.productId);
+    await deleteBiocharProduct(ctx, validated.productId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: biocharProductActionError(
-        error,
-        "Failed to delete biochar product",
-        "biochar-product:delete",
-      ),
-    };
-  }
+    return;
+  }, { fallbackMessage: "Failed to delete biochar product" });
 }

@@ -46,7 +46,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
-import { toSaveErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, staleDeleteMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { productionRunSheetSections, RunStatusBadge } from "./production-run-read-sections";
@@ -218,7 +218,8 @@ export function ProductionRunList() {
     entity: ProductionRunWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ProductionRunWithRelations | null>(null);
+  const deletingRunId = deleting?.id;
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -251,6 +252,7 @@ export function ProductionRunList() {
   const toast = useToast();
 
   const runs = runsData?.items ?? [];
+  const setDeletingRunId = (id: string | null) => setDeleting(runs.find(row => row.id === id) ?? null);
   const totalPages = runsData?.totalPages ?? 0;
   useReconcileListPage({
     currentPage,
@@ -299,6 +301,7 @@ export function ProductionRunList() {
         // are stripped by the update schema.
         ...data,
         productionRunId: sideSheet.entity.id,
+        expectedVersion: sideSheet.entity.version,
         startTime: startTime instanceof Date ? startTime : new Date(startTime),
         endTime:
           endTime === null
@@ -325,14 +328,14 @@ export function ProductionRunList() {
     if (!deletingRunId) return;
     setDeleteError(null);
     try {
-      await deleteRun.mutateAsync(deletingRunId);
+      await deleteRun.mutateAsync({ productionRunId: deletingRunId, expectedVersion: deleting!.version });
       if (focusedRunId === deletingRunId) {
         setFocusedRunId(null);
       }
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Production run was not deleted. Try again.");
+      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage(`Production run ${deleting!.code}`) : error instanceof Error ? error.message : "Production run was not deleted. Try again.");
     }
   };
 

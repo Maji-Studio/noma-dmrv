@@ -6,14 +6,9 @@
 import { db, type DbTransaction } from "@/db";
 import { isPgCheckViolation } from "@/db/errors";
 import {
-  creditBatches,
   creditBatchProductionRuns,
   facilities,
-  incidentReports,
   operators,
-  productionRunFeedstockDraws,
-  productionRunFeedstocks,
-  productionRunReadings,
   productionRuns,
   reactors,
   storageLocations,
@@ -23,7 +18,6 @@ import {
   computeClampedDryMass,
   deriveMassDryKg,
 } from "@/lib/calculations/mass-dry";
-import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
 import { SafeError } from "@/lib/errors";
 import {
   assertProductionRunOutcome,
@@ -33,13 +27,12 @@ import {
 } from "@/lib/production-runs/lifecycle";
 import { and, eq, isNull } from "drizzle-orm";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
-import { assertExpectedVersion } from "../expected-version";
+import { assertRowVersion, nextVersion } from "../row-version";
 import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
 } from "../code-generator";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
-import { retireDocumentsForEntities } from "../documents";
 import { lockActiveFacilityReference } from "../facility-reference-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
@@ -49,7 +42,6 @@ import {
   lockProductionRunUpdateStock,
 } from "../production-run-stock-locks";
 import { assertRunAdditionAfterSplit } from "../output-bin-stock-mode";
-import { processPendingStorageObjectDeletions } from "../storage-object-deletions";
 import { assertSameOrg, requireOrgScope } from "../utils";
 import {
   getProductionRunFeedstockDrawStorageIds,
@@ -80,16 +72,6 @@ const PREFLIGHT_OUTCOME_VIOLATIONS = [
   "end-not-after-start",
   "dry-mass-balance-exceeded",
 ] as const;
-
-export class ProductionRunDependencyError extends SafeError {
-  readonly conflict: ConflictRef;
-
-  constructor(message: string, conflict: ConflictRef) {
-    super(message);
-    this.name = "ProductionRunDependencyError";
-    this.conflict = conflict;
-  }
-}
 
 /**
  * Validate that an output storage location exists, belongs to the facility, and is a biochar bin.
@@ -341,7 +323,7 @@ export async function updateProductionRun(
     facilityId?: string;
     reactorId?: string;
     status?: ProductionRunStatus;
-    expectedUpdatedAt?: Date;
+    expectedVersion: number;
     cancellationReason?: string | null;
     startTime?: Date;
     endTime?: Date | null;
@@ -588,14 +570,14 @@ export async function updateProductionRun(
     if (!locked) {
       throw new SafeError("Production run not found");
     }
-    const lockedFeedstockStorageLocationIds =
-      await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
-    assertExpectedVersion({
+    assertRowVersion({
       entity: PRODUCTION_RUN_CONFLICT_ENTITY,
       id: productionRunId,
-      expectedUpdatedAt: data.expectedUpdatedAt,
-      actualUpdatedAt: locked.updatedAt,
+      expectedVersion: data.expectedVersion,
+      actualVersion: locked.version,
     });
+    const lockedFeedstockStorageLocationIds =
+      await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
     assertProductionRunStockSnapshot(
       {
         feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
@@ -773,7 +755,7 @@ export async function updateProductionRun(
 
     await tx
       .update(productionRuns)
-      .set(transactionUpdateData)
+      .set({ ...transactionUpdateData, version: nextVersion(productionRuns.version) })
       .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
     await assertProductionRunBiocharStockNotOverdrawn(
@@ -847,154 +829,4 @@ export async function updateProductionRun(
   return getProductionRunById(ctx, productionRunId);
 }
 
-/**
- * Delete a production run
- * Will fail if the run has dependent biochar products or credit batches.
- */
-export async function deleteProductionRun(
-  ctx: OrgContext,
-  productionRunId: string
-): Promise<void> {
-  requireOrgScope(ctx);
-
-  // Verify run exists
-  const [existing] = await db
-    .select({
-      id: productionRuns.id,
-      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-    })
-    .from(productionRuns)
-    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Production run not found");
-  }
-  const existingFeedstockStorageLocationIds =
-    await getProductionRunFeedstockDrawStorageIds(ctx, db, productionRunId);
-
-  // Run all four deletes in one transaction so the child-row deletes roll back
-  // if the final productionRuns delete fails. Foreign-key constraints remain
-  // the race-safe backstop for dependent records; without the transaction the
-  // removable children would already be gone, leaving a half-deleted run.
-  await db.transaction(async (tx) => {
-    await lockBinStocks(ctx, tx, [
-      ...existingFeedstockStorageLocationIds,
-      existing.biocharStorageLocationId,
-    ]);
-
-    const [locked] = await tx
-      .select({
-        id: productionRuns.id,
-        biocharOutputKg: productionRuns.biocharOutputKg,
-        biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-      })
-      .from(productionRuns)
-      .where(and(
-        eq(productionRuns.id, productionRunId),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Production run not found");
-    }
-    const lockedFeedstockStorageLocationIds =
-      await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
-    assertProductionRunStockSnapshot(
-      {
-        feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
-        biocharStorageLocationId: existing.biocharStorageLocationId,
-      },
-      {
-        feedstockStorageLocationIds: lockedFeedstockStorageLocationIds,
-        biocharStorageLocationId: locked.biocharStorageLocationId,
-      },
-      {
-        feedstockDraws: existingFeedstockStorageLocationIds.map(
-          (storageLocationId) => ({ storageLocationId }),
-        ),
-        biocharOutputKg: locked.biocharOutputKg,
-      },
-    );
-
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "productionRun", entityId: productionRunId },
-      "delete",
-    );
-
-    const dependentProduct = await getProductionRunDependentProduct(
-      ctx,
-      tx,
-      productionRunId,
-    );
-    const [dependentCreditBatch] = await tx
-      .select({ id: creditBatches.id, code: creditBatches.code })
-      .from(creditBatchProductionRuns)
-      .innerJoin(
-        creditBatches,
-        and(
-          eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
-          eq(creditBatches.organizationId, ctx.organizationId),
-        ),
-      )
-      .where(and(
-        eq(creditBatchProductionRuns.productionRunId, productionRunId),
-        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
-      ))
-      .limit(1);
-
-    if (dependentProduct || dependentCreditBatch) {
-      const dependentKinds = [
-        dependentProduct ? "biochar products" : null,
-        dependentCreditBatch ? "credit batches" : null,
-      ].filter((kind): kind is string => kind != null);
-      const dependent = dependentProduct
-        ? { entity: "biocharProduct", ...dependentProduct }
-        : { entity: "creditBatch", ...dependentCreditBatch! };
-      const conflict = { ...dependent, code: conflictCode(dependent.code) };
-      throw new ProductionRunDependencyError(
-        `This production run cannot be deleted because dependent ${dependentKinds.join(" and ")} exist. Remove those records first.`,
-        conflict,
-      );
-    }
-
-    const productionIncidents = await tx
-      .select({ id: incidentReports.id })
-      .from(incidentReports)
-      .where(
-        and(
-          eq(incidentReports.productionRunId, productionRunId),
-          eq(incidentReports.organizationId, ctx.organizationId),
-        ),
-      );
-    await tx
-      .delete(productionRunFeedstocks)
-      .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(productionRunFeedstockDraws)
-      .where(and(eq(productionRunFeedstockDraws.productionRunId, productionRunId), eq(productionRunFeedstockDraws.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(productionRunReadings)
-      .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(incidentReports)
-      .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)));
-
-    await tx
-      .delete(productionRuns)
-      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "production_run", entityId: productionRunId },
-      ...productionIncidents.map((incident) => ({
-        entityType: "production_incident" as const,
-        entityId: incident.id,
-      })),
-    ]);
-  });
-  await processPendingStorageObjectDeletions(ctx);
-}
+export { deleteProductionRun, ProductionRunDependencyError } from "./delete";

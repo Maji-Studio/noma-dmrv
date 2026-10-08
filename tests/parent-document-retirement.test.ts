@@ -1,4 +1,5 @@
 import { masterDataVersion } from "./helpers/master-data-version";
+import { productionVersion } from "./helpers/production-version";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -348,7 +349,7 @@ describe("parent document retirement", () => {
 
       try {
         await expect(
-          deleteEntity(makeTestOrgContext(TEST_USER_ID), entityId),
+          deleteEntity(makeTestOrgContext(TEST_USER_ID), entityId, 1),
         ).rejects.toThrow(/not found/i);
         expect(provider.deleteCalls).toEqual([]);
         expect(provider.objects.has(key)).toBe(true);
@@ -391,7 +392,7 @@ describe("parent document retirement", () => {
 
     try {
       await expect(
-        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id),
+        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id, await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", run.id)),
       ).rejects.toThrow();
 
       expect(provider.deleteCalls).toEqual([]);
@@ -869,7 +870,7 @@ describe("parent document retirement", () => {
       ]);
 
       await runOperationInProcess(deleteFeedstock, makeTestOrgContext(TEST_USER_ID), { feedstockId: feedstock.id, expectedVersion: 1 });
-      await deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id);
+      await deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id, await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", run.id));
 
       expect(
         await db.select().from(documents).where(inArray(documents.entityId, entityIds)),

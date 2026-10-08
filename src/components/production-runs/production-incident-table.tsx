@@ -4,6 +4,7 @@
  * production run.
  */
 "use client";
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -53,7 +54,9 @@ export function ProductionIncidentTable({
     | { open: false }
     | { open: true; incident?: ProductionIncidentWithRelations }
   >({ open: false });
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ProductionIncidentWithRelations | null>(null);
+  const deletingId = deleting?.id;
+  const setDeletingId = (id: string | null) => setDeleting(incidents?.find(row => row.id === id) ?? null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const openCreate = () => {
@@ -75,6 +78,7 @@ export function ProductionIncidentTable({
       if (formDialog.open && formDialog.incident) {
         await updateIncident.mutateAsync({
           productionIncidentId: formDialog.incident.id,
+          expectedVersion: formDialog.incident.version,
           ...data,
         });
         toast.success("Incident updated");
@@ -91,11 +95,11 @@ export function ProductionIncidentTable({
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
     try {
-      await deleteIncident.mutateAsync(deletingId);
+      await deleteIncident.mutateAsync({ productionIncidentId: deletingId, expectedVersion: deleting!.version });
       setDeletingId(null);
       toast.success("Incident deleted");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Incident was not deleted. Try again.");
+      toast.error(err instanceof StaleVersionError ? staleDeleteMessage("Incident") : err instanceof Error ? err.message : "Incident was not deleted. Try again.");
       setDeletingId(null);
     }
   };

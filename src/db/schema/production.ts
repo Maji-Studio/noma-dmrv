@@ -30,6 +30,7 @@ export const productionRuns = pgTable(
   'production_runs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
     organizationId: text('organization_id')
       .notNull()
       .references(() => organizations.id),
@@ -320,6 +321,7 @@ export const samples = pgTable('samples', {
 
 export const incidentReports = pgTable('incident_reports', {
   id: uuid('id').primaryKey().defaultRandom(),
+  version: integer('version').notNull().default(1),
   organizationId: text('organization_id')
     .notNull()
     .references(() => organizations.id),
@@ -421,6 +423,7 @@ export const productionRunFeedstockDraws = pgTable(
 
 export const productionSamples = pgTable('production_samples', {
   id: uuid('id').primaryKey().defaultRandom(),
+  version: integer('version').notNull().default(1),
   organizationId: text('organization_id')
     .notNull()
     .references(() => organizations.id),

@@ -25,6 +25,7 @@ export interface OutputStockPreviewInput {
 }
 
 export interface OutputStockPreview {
+  expectedProductVersions?: Record<string, number>;
   basisFingerprint: string;
   storageLocationId: string;
   binName: string;
@@ -79,6 +80,7 @@ export interface OutputMoistureReset {
 }
 
 export interface OutputStockPostInput extends OutputStockPreviewInput {
+  expectedProductVersions: Record<string, number>;
   basisFingerprint: string;
   idempotencyKey: string;
   reason: string;
