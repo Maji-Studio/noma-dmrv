@@ -88,7 +88,7 @@ export function buildOpenApiDocument() {
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
         "201": jsonResponse("Intake committed, or replayed.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...locationHeader, ...writeHeaders }),
         "200": jsonResponse("Dry-run intake preview.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...writeHeaders }) },
-      [...queryParameters(mutationQuerySchema), idempotencyParameter(true)]),
+      [...queryParameters(mutationQuerySchema), idempotencyParameter(false)]),
     requestBody: requestBody(createInput, {
       facilityId: "df2795a4-886b-4a89-bbdd-532c6b1b8e45", deliveryDate: "2026-10-08",
       supplierId: "ea31ace1-5b30-4443-adb4-26b43bfa5599", feedstockTypeId: "b54b7b81-9b54-4757-ae1b-99fb28ea1c7f",

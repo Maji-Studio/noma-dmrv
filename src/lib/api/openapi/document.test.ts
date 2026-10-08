@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { API_CURSOR_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
@@ -79,14 +80,34 @@ it("publishes business dates as date, and preserves operation input types and co
   expect(toOperationJsonSchema(createFeedstockSchema).properties).toMatchObject({ deliveryDate: { format: "date" } });
 });
 
-it("requires write headers and publishes only possible response statuses and headers", () => {
+it("publishes pagination and search bounds on every list route", () => {
+  const lists = Object.values(document.paths).map((methods) => methods.get)
+    .filter((operation) => operation?.operationId.startsWith("list_"));
+  expect(lists).toHaveLength(8);
+  for (const operation of lists) {
+    const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
+    const query = Object.fromEntries(parameters.filter((parameter) => parameter.in === "query").map((parameter) => [parameter.name, parameter]));
+    expect(query.limit).toMatchObject({ required: false, schema: { type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT } });
+    expect(query.limit.schema).not.toHaveProperty("pattern");
+    expect(query.cursor).toMatchObject({ required: false, schema: { type: "string", maxLength: API_CURSOR_MAX_LENGTH } });
+    expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
+    if (operation.operationId !== "list_supplier_locations") {
+      expect(query.code).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
+    }
+  }
+});
+
+it("requires preconditions and documents conditional create idempotency with possible response statuses and headers", () => {
   for (const method of ["patch", "delete"]) {
     const op = document.paths["/feedstocks/{idOrCode}"][method];
     expect(op.parameters).toContainEqual(expect.objectContaining({ name: "If-Match", in: "header", required: true }));
     expect(op.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: false }));
     expect(op.parameters).toContainEqual(expect.objectContaining({ name: "dryRun", in: "query" }));
   }
-  expect(document.paths["/feedstocks"].post.parameters).toContainEqual(expect.objectContaining({ name: "Idempotency-Key", required: true }));
+  expect(document.paths["/feedstocks"].post.parameters).toContainEqual(expect.objectContaining({
+    name: "Idempotency-Key", in: "header", required: false,
+    description: expect.stringContaining("Required for creates unless dryRun=true"),
+  }));
   expect(Object.keys(document.paths["/feedstocks/{idOrCode}"].delete.responses).sort()).toEqual(["200", "204", "400", "401", "403", "404", "409", "412", "422", "428", "429", "500", "503"]);
   expect(Object.keys(document.paths["/me"].get.responses).sort()).toEqual(["200", "401", "403", "404", "429", "500"]);
   expect(Object.keys(document.paths["/facilities"].get.responses).sort()).toEqual(["200", "400", "401", "403", "429", "500"]);

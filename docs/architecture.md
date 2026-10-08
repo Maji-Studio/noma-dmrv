@@ -708,13 +708,21 @@ The generator imports no runtime credentials, environment or database modules.
 `GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public, bypass credential
 resolution and rate-limit guards, and cache publicly for 300 seconds. The short
 agent guide covers discovery, units, local business dates and safe retry behavior.
-The rendered reference and CI-generated TypeScript client remain deferred in
+The rendered reference remains deferred in
 [open-questions.md](./open-questions.md).
 
 Run `pnpm openapi:generate` after a contract change and include `openapi/v1.json`
 in its PR. The colocated generator test compares the exact stable, pretty-printed
 snapshot with code (compact leaf schemas keep the generated file below the line cap),
 checks route coverage and validates the OpenAPI structure.
+
+`pnpm openapi:client-check` generates TypeScript API types from `openapi/v1.json`
+with `openapi-typescript` into a temporary directory outside the repository,
+then checks that file with the repository's TypeScript compiler using
+`tsc --noEmit --strict`. The temporary directory is removed on success or failure;
+the generated client is not committed. CI runs this check in `quality-static`
+on every PR and push, including the first release without a base snapshot.
+
 The CI `openapi-breaking` job compares the PR base SHA snapshot with the head
 using checksum-verified oasdiff v1.32.1 and `breaking --fail-on ERR`. A base without
 the snapshot is the first release and passes with an explicit notice.

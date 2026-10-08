@@ -261,8 +261,8 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: drivers:read.",
         "operationId": "list_drivers",
         "parameters": [
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
         ],
@@ -307,8 +307,8 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: facilities:read.",
         "operationId": "list_facilities",
         "parameters": [
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
         ],
@@ -353,8 +353,8 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: feedstock-types:read.",
         "operationId": "list_feedstock_types",
         "parameters": [
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
         ],
@@ -399,11 +399,11 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: feedstocks:read.",
         "operationId": "list_feedstocks",
         "parameters": [
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
           {"description": "Case-insensitive literal prefix search on feedstock code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on feedstock code.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}}
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -425,7 +425,7 @@
         "operationId": "log_feedstock_delivery",
         "parameters": [
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
-          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for committed creates; may be omitted for dry runs, which never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
         "requestBody": {
           "content": {
@@ -568,7 +568,7 @@
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
           {"description": "One strong ETag from the resource read, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"[1-9][0-9]*\\.[1-9][0-9]*\"$", "type": "string"}},
-          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for committed creates; may be omitted for dry runs, which never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -620,7 +620,7 @@
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
           {"description": "One strong ETag from the resource read, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"[1-9][0-9]*\\.[1-9][0-9]*\"$", "type": "string"}},
-          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for committed creates; may be omitted for dry runs, which never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
         "requestBody": {
           "content": {
@@ -700,8 +700,8 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: storage-locations:read.",
         "operationId": "list_storage_locations",
         "parameters": [
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}},
           {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}
@@ -751,8 +751,8 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: suppliers:read.",
         "operationId": "list_suppliers",
         "parameters": [
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
         ],
@@ -798,8 +798,8 @@
         "operationId": "list_supplier_locations",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on source location name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on source location name.", "maxLength": 255, "type": "string"}}
         ],
         "responses": {
@@ -823,8 +823,8 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: vehicles:read.",
         "operationId": "list_vehicles",
         "parameters": [
-          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "pattern": "^[1-9]\\d*$", "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "type": "string"}},
+          {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
         ],

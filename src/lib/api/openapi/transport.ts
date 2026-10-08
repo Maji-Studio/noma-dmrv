@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { API_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/config/api-rest";
+import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import type { JsonSchema } from "@/lib/operations/json-schema";
 
 export function outputSchema(schema: z.ZodType, representations: Record<string, z.ZodType> = {}): JsonSchema {
@@ -31,9 +31,12 @@ export function queryParameters(schema: z.ZodType) {
   const generated = z.toJSONSchema(schema, { io: "input" });
   return Object.entries(generated.properties ?? {}).map(([name, field]) => {
     if (typeof field === "boolean") throw new Error("Query parameters must have concrete schemas.");
-    const wire = { ...field };
-    // The route decodes a decimal string to a number before applying its default.
-    if (wire.type === "string" && typeof wire.default === "number") wire.default = String(wire.default);
+    // Input conversion loses post-transform bounds; publish the canonical page size.
+    const wire: JsonSchema = name === "limit"
+      ? { description: field.description, type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT }
+      : { ...field };
+    // Cursor length is enforced by decodeCursor rather than the query schema.
+    if (name === "cursor") wire.maxLength = API_CURSOR_MAX_LENGTH;
     return { name, in: "query", required: generated.required?.includes(name) ?? false, description: wire.description, schema: wire };
   });
 }
@@ -45,7 +48,7 @@ export const targetParameter = (uuidOnly = false) => ({
 });
 export const idempotencyParameter = (required: boolean) => ({
   name: "Idempotency-Key", in: "header", required,
-  description: "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for committed creates; may be omitted for dry runs, which never consume or replay keys.",
+  description: "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.",
   schema: { type: "string", minLength: 1, maxLength: API_IDEMPOTENCY_KEY_MAX_LENGTH, pattern: "^[\\x21-\\x7e]+$" },
 });
 export const ifMatchParameter = {
