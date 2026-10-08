@@ -43,6 +43,9 @@ const statusBadgeVariants = cva(
 
 // Status display labels (maps status value to human-readable text)
 const statusLabels = {
+  active: "Active",
+  disabled: "Disabled",
+  expired: "Expired",
   draft: "Draft",
   superseded: "Superseded",
   running: "Running",

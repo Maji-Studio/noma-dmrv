@@ -61,3 +61,27 @@ describe("Auth middleware", () => {
     },
   );
 });
+
+describe("REST proxy carve-out", () => {
+  it.each(["/api/v1", "/api/v1/", "/api/v1/me"])("passes %s without session lookup", async (path) => {
+    getSessionMock.mockClear();
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost:3100${path}`))).status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it("ignores an unverified cookie before lookup", async () => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue({ user: { emailVerified: false } });
+    const { updateSession } = await import("@/lib/auth/middleware");
+    const response = await updateSession(new NextRequest("http://localhost:3100/api/v1/me", { headers: { cookie: "better-auth.session_token=unverified" } }));
+    expect(response.status).toBe(200);
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
+  it.each(["/api/v1x", "/api/v10/me"])("does not carve out %s", async (path) => {
+    getSessionMock.mockReset();
+    getSessionMock.mockResolvedValue(null);
+    const { updateSession } = await import("@/lib/auth/middleware");
+    expect((await updateSession(new NextRequest(`http://localhost:3100${path}`))).status).toBe(401);
+    expect(getSessionMock).toHaveBeenCalledOnce();
+  });
+});

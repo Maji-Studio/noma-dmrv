@@ -57,7 +57,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (MACHINE_CLIENT_ROUTES.has(pathname)) {
+  if (MACHINE_CLIENT_ROUTES.has(pathname) || pathname === "/api/v1" || pathname.startsWith("/api/v1/")) {
     return NextResponse.next();
   }
 

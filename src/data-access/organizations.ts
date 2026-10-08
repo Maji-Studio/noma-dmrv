@@ -5,6 +5,8 @@
  * another's membership. Cross-org directory and lifecycle helpers enforce the
  * Platform-Admin gate in this layer as well as in their `fn/` callers.
  */
+import { disableOwnerApiKeys } from "./api-credential-auth";
+import { canOwnApiKey } from "@/lib/auth/api-scopes";
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -200,7 +202,7 @@ export async function updateMemberRoleAsPlatformAdmin(
       .where(eq(organizations.id, ctx.organizationId))
       .for("update");
     const [member] = await tx
-      .select({ id: members.id, role: members.role })
+      .select({ id: members.id, role: members.role, userId: members.userId })
       .from(members)
       .where(
         and(
@@ -239,6 +241,9 @@ export async function updateMemberRoleAsPlatformAdmin(
     if (updated.length === 0) {
       throw new SafeError("Member not found.");
     }
+    if (!canOwnApiKey(role)) {
+      await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
+    }
   });
 }
 
@@ -255,7 +260,7 @@ export async function removeMemberAsPlatformAdmin(
       .where(eq(organizations.id, ctx.organizationId))
       .for("update");
     const [member] = await tx
-      .select({ id: members.id, role: members.role })
+      .select({ id: members.id, role: members.role, userId: members.userId })
       .from(members)
       .where(
         and(
@@ -293,6 +298,7 @@ export async function removeMemberAsPlatformAdmin(
     if (removed.length === 0) {
       throw new SafeError("Member not found.");
     }
+    await disableOwnerApiKeys(ctx.organizationId, member.userId, tx);
   });
 }
 

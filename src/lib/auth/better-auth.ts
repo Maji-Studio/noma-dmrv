@@ -2,6 +2,13 @@
  * Better Auth configuration
  * Sets up authentication with email/password and admin invite
  */
+import { apiKey } from "@better-auth/api-key";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { createAccessControl } from "better-auth/plugins/access";
+import { defaultStatements, ownerAc, adminAc, memberAc } from "better-auth/plugins/organization/access";
+import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_MAX_EXPIRY_DAYS } from "@/config/api-keys";
+import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
+import { canOwnApiKey } from "./api-scopes";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
@@ -137,7 +144,19 @@ function buildTrustedOrigins(): string[] {
   return [...new Set(origins)];
 }
 
+const apiKeyActions = ["create", "read", "update", "delete"] as const;
+const organizationAccess = createAccessControl({ ...defaultStatements, apiKey: apiKeyActions });
+
 export const auth = betterAuth({
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // HTTP callers cannot bypass the guarded application actions. Block reads
+      // too, so plugin responses cannot expose credential hashes or metadata.
+      if (ctx.path?.startsWith("/api-key/") && (ctx.request || ctx.headers)) {
+        throw new APIError("FORBIDDEN", { message: "Use organization credential actions." });
+      }
+    }),
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     // Better Auth composes several writes (for example user + credential
@@ -145,6 +164,7 @@ export const auth = betterAuth({
     // default, so opt in explicitly or those writes can commit independently.
     transaction: true,
     schema: {
+      apikey: schema.apiKeys,
       user: schema.users,
       session: schema.sessions,
       account: schema.accounts,
@@ -334,12 +354,39 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    apiKey({
+      references: "organization",
+      defaultPrefix: env.NODE_ENV === "production" ? "noma_live_" : "noma_test_",
+      keyExpiration: {
+        // The implementation uses seconds despite the defaultExpiresIn type comment.
+        defaultExpiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
+        minExpiresIn: 0,
+        maxExpiresIn: API_KEY_MAX_EXPIRY_DAYS,
+      },
+      enableSessionForAPIKeys: false,
+      rateLimit: { enabled: false },
+      startingCharactersConfig: { shouldStore: false },
+    }),
     organization({
+      ac: organizationAccess,
+      roles: {
+        owner: organizationAccess.newRole({ ...ownerAc.statements, apiKey: apiKeyActions }),
+        admin: organizationAccess.newRole({ ...adminAc.statements, apiKey: apiKeyActions }),
+        member: organizationAccess.newRole(memberAc.statements),
+      },
       // Organization creation is reserved for app-level Platform Admins. The
       // guarded server action uses the server-only userId path so the selected
       // user, rather than the acting Platform Admin, becomes the Owner.
       allowUserToCreateOrganization: false,
       organizationHooks: {
+        afterRemoveMember: async ({ member }) => {
+          await disableOwnerApiKeys(member.organizationId, member.userId);
+        },
+        afterUpdateMemberRole: async ({ member }) => {
+          if (!canOwnApiKey(member.role)) {
+            await disableOwnerApiKeys(member.organizationId, member.userId);
+          }
+        },
         afterCreateOrganization: async ({ organization }) => {
           try {
             await seedOrgDefaults(db, organization.id);

@@ -7,7 +7,9 @@ PostgreSQL + Drizzle ORM for the multi-tenant, facility-scoped MRV domain. Cover
 The app **is multi-tenant** ([ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)):
 every MRV/domain table carries `organizationId NOT NULL`. Better Auth
 infrastructure (`users`, sessions, accounts, verifications, organizations,
-members, invitations) follows its own identity/membership relationships, and
+members, invitations) follows its own identity/membership relationships.
+`api_keys.reference_id` is the plugin's organization id; its management table
+`api_key_owners` carries `organization_id` and an independent integer `version`.
 `geo_route_cache` is the explicit organization-neutral cache. These exceptions
 are not examples for new domain tables. Domain tenancy is enforced in
 `src/data-access/`, not by the route layer.

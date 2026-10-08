@@ -224,9 +224,11 @@ runtime.
   `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
 - `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
 - **Three configuration surfaces, deliberately not one.** `/settings`
-  (`Members` · `Defaults`) is org configuration. Every member can view the
+  (`Members` · `Defaults` · `API keys`) is org configuration. Every member can view the
   Members roster; only Owners/Admins (and Platform Admins) can mutate membership
-  or open Defaults. `/certification/settings` is registry configuration and
+  or open Defaults. API keys require a verified Owner/Admin membership; a
+  Platform Admin without that membership cannot manage keys.
+  `/certification/settings` is registry configuration and
   stays there by ADR
   [0007](./adr/0007-certification-workspace-consolidation.md). `/admin` is
   cross-tenant platform administration (`users.role === "admin"`) and is now
@@ -238,16 +240,17 @@ runtime.
   runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
   everything except static assets — **including `/api`**; `/api/auth/*` is
   explicitly allowed through.
-- The proxy lets exactly `/api/mcp` through before session lookup. This
-  development-only MCP spike checks no credential and returns 404 in production
-  builds. `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by
+- The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before
+  session lookup. The development-only MCP spike checks no credential and returns 404 in production
+  builds. REST routes resolve bearer credentials with `resolveApiContext`;
+  `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by
   `tests/middleware.test.ts`.
 - Data-access org checks remain the source of truth for authorization; the proxy
   is routing, not authz. See [auth.md](./auth.md).
-- Seven API route families: `/api/auth/[...all]`,
+- Eight API route families: `/api/auth/[...all]`,
   `/api/storage-local/[...key]`, `/api/documents/[id]`,
   `/api/ghg-statement-reports/[reportId]`,
-  `/api/certification/submissions`, private `/api/reads/*`, and the
+  `/api/certification/submissions`, private `/api/reads/*`, bearer-authenticated `/api/v1/*`, and the
   development-only `/api/mcp` spike. Documents are
   normally resolved through `getOrgContext()`. The report route is the one
   deliberate public bearer-capability seam: middleware lets it through, then
@@ -547,3 +550,19 @@ plain Actions secret. See [security.md](./security.md) → Secrets Management.
 
 See [Output stock and completed deliveries](output-stock.md) for physical FIFO,
 conserved dry stock, immutable corrections, and saved downstream provenance.
+
+## REST credential boundary
+
+`/api/v1` bypasses session middleware and authenticates at each route through
+`resolveApiContext`. This privileged authentication seam reads the key's hash,
+owner and live membership through `data-access/api-credential-auth.ts` before
+constructing an `OrgContext`; its cross-organization lookup is explicitly
+waived. Membership hooks use the same module to disable affected credentials.
+Ordinary credential management keeps the action → data-access → database
+flow and never trusts input organization or owner IDs. The plugin retains
+hashing and verification responsibility.
+
+`GET /api/v1/me` uses `lib/read-models/api-me.ts` → `data-access/api-me.ts`;
+route handlers do not import the database. The shared REST problem builder
+lives at `lib/api/problem.ts`. See [auth.md](./auth.md#api-credentials) for
+credential and denial contracts.
