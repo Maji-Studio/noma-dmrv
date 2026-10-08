@@ -4,6 +4,7 @@
  */
 
 export * from "./api";
+export * from "./api-keys";
 export * from "./application";
 export * from "./auth";
 export * from "./bin-movements";

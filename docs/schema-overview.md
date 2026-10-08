@@ -12,6 +12,7 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Area | File |
 |---|---|
 | Auth, orgs, members, invitations | `src/db/schema/auth.ts` |
+| API credentials (`api_keys`) and management records (`api_key_owners`) | `src/db/schema/api-keys.ts` |
 | Per-credential idempotency claims for operation runs (`api_idempotency_records`) | `src/db/schema/api.ts` |
 | Facilities, reactors, storage locations | `src/db/schema/facilities.ts` |
 | Suppliers, customers, their locations, drivers, operators | `src/db/schema/parties.ts` |
@@ -42,7 +43,9 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
   paths are **composite** on `(id, organization_id)` (e.g.
   `credit_batch_production_runs` → `credit_batches(id, organization_id)`).
   Better Auth infrastructure in `auth.ts` uses its own user/session/account/org
-  relationships, and `geo_route_cache` is intentionally organization-neutral.
+  relationships. `api_keys.reference_id` is the Better Auth plugin's organization
+  id; `api_key_owners` carries `organization_id` and a management `version`
+  independent of plugin last-used bookkeeping. `geo_route_cache` is intentionally organization-neutral.
   Those are explicit infrastructure exceptions; a new domain table or join
   that omits organization scope is wrong. See [ADR
   0010](./adr/0010-shared-schema-org-column-tenancy.md) and

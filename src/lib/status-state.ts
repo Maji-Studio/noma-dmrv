@@ -21,6 +21,8 @@ export const DEFAULT_STATUS_STATE: StatusStateClass = "neutral";
 export const ENTITY_STATUS_STATES = {
   // Neutral / inactive
   draft: "neutral",
+  disabled: "neutral",
+  expired: "neutral",
   superseded: "neutral",
   cancelled: "neutral",
   archived: "neutral",
@@ -37,6 +39,7 @@ export const ENTITY_STATUS_STATES = {
   method_b: "in-progress",
 
   // Successful / complete
+  active: "success",
   complete: "success",
   delivered: "success",
   applied: "success",

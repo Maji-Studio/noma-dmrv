@@ -34,6 +34,8 @@ describe("semantic entity status states", () => {
   it("keeps the shared mapping exhaustive for known semantic statuses", () => {
     expect(ENTITY_STATUS_STATES).toEqual({
       draft: "neutral",
+      disabled: "neutral",
+      expired: "neutral",
       superseded: "neutral",
       cancelled: "neutral",
       archived: "neutral",
@@ -46,6 +48,7 @@ describe("semantic entity status states", () => {
       partial: "in-progress",
       submitted: "in-progress",
       method_b: "in-progress",
+      active: "success",
       complete: "success",
       delivered: "success",
       applied: "success",
