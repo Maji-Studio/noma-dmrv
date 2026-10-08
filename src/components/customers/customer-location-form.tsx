@@ -36,8 +36,9 @@ export type EditableCustomerLocation = Pick<
   | "distanceSource"
   | "defaultSoilTemperatureC"
   | "isDefault"
-  // The version the dialog opened on, echoed back on save (issue #768).
   | "updatedAt"
+  // The integer version the dialog opened on, echoed back on save (issue #768).
+  | "version"
 >;
 
 interface CustomerLocationFormProps {

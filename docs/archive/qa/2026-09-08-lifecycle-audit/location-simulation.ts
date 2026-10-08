@@ -24,7 +24,7 @@ describe("audit: partial customer-location updates", () => {
     audit.updateLocation.mockResolvedValue({
       id: "00000000-0000-4000-8000-000000000002",
     });
-    const result = await updateCustomerLocationFn({
+    const result = await updateCustomerLocationFn({ expectedVersion: 1,
       locationId: "00000000-0000-4000-8000-000000000002",
       isDefault: true,
     });

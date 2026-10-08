@@ -1,6 +1,10 @@
 "use client";
 
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { patchArrayListCacheWithSavedRow } from "./list-cache-utils";
+import type { FeedstockType } from "@/db/schema";
 import { entityKeys } from "./entity-query-keys";
 import {
   archiveFeedstockTypeFn,
@@ -28,7 +32,7 @@ export function useFeedstockTypeList(enabled = true) {
     queryKey: feedstockTypeKeys.list(),
     queryFn: async () => {
       const result = await listFeedstockTypesFn();
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     enabled,
@@ -51,7 +55,7 @@ export function useCreateFeedstockType() {
   return useMutation({
     mutationFn: async (input: CreateFeedstockTypeData) => {
       const result = await createFeedstockTypeFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: invalidate,
@@ -59,50 +63,66 @@ export function useCreateFeedstockType() {
 }
 
 export function useUpdateFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
     mutationFn: async (input: UpdateFeedstockTypeData) => {
       const result = await updateFeedstockTypeFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
+    onSuccess: (data) => {
+      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
   });
 }
 
 export function useArchiveFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
-    mutationFn: async (feedstockTypeId: string) => {
-      const result = await archiveFeedstockTypeFn({ feedstockTypeId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
+      const result = await archiveFeedstockTypeFn(variables);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onSuccess: (data) => {
+      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }
 
 export function useUnarchiveFeedstockType() {
+  const queryClient = useQueryClient();
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
-    mutationFn: async (feedstockTypeId: string) => {
-      const result = await unarchiveFeedstockTypeFn({ feedstockTypeId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
+      const result = await unarchiveFeedstockTypeFn(variables);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: invalidate,
+    onSuccess: (data) => {
+      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      invalidate();
+    },
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }
 
 export function useDeleteFeedstockType() {
   const invalidate = useInvalidateFeedstockTypes();
   return useMutation({
-    mutationFn: async (feedstockTypeId: string) => {
-      const result = await deleteFeedstockTypeFn({ feedstockTypeId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { feedstockTypeId: string; expectedVersion: number }) => {
+      const result = await deleteFeedstockTypeFn(variables);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: invalidate,
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
   });
 }
 
@@ -111,7 +131,7 @@ export function useImportIsometricFeedstockType() {
   return useMutation({
     mutationFn: async (input: ImportIsometricFeedstockTypeData) => {
       const result = await importIsometricFeedstockTypeFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: invalidate,

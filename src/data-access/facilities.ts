@@ -3,6 +3,7 @@
  * CRUD operations for facilities with auth guards, pagination, and filtering
  */
 
+import { FACILITY_CONFLICT_ENTITY } from "./facility-mutations";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
@@ -29,7 +30,7 @@ import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { sourceBiocharMassKgSql } from "./biochar-product-source-mass";
 import { deriveLaneStock } from "./lane-stock-derivation";
-import { nextVersion } from "./row-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 
 // Individual entity archives originate from JavaScript Date values and are
 // stored at whole-millisecond precision. Facility cascades use a database
@@ -166,6 +167,7 @@ export async function getFacilities(
       durabilityOption: facilities.durabilityOption,
       archivedAt: facilities.archivedAt,
       createdAt: facilities.createdAt,
+      version: facilities.version,
       updatedAt: facilities.updatedAt,
     })
     .from(facilities)
@@ -535,13 +537,15 @@ export async function getFacilityArchiveImpact(
  */
 export async function archiveFacility(
   ctx: OrgContext,
-  facilityId: string
+  facilityId: string,
+  expectedVersion: number
 ): Promise<Facility> {
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
+
     const [existing] = await tx
-      .select({ id: facilities.id, archivedAt: facilities.archivedAt })
+      .select({ version: facilities.version, id: facilities.id, archivedAt: facilities.archivedAt })
       .from(facilities)
       .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
       .for("update");
@@ -549,6 +553,7 @@ export async function archiveFacility(
     if (!existing) {
       throw new SafeError("Facility not found");
     }
+    assertRowVersion({ entity: FACILITY_CONFLICT_ENTITY, id: facilityId, expectedVersion, actualVersion: existing.version });
     if (existing.archivedAt) {
       throw new SafeError("Facility is already archived");
     }
@@ -567,7 +572,7 @@ export async function archiveFacility(
 
     const [archived] = await tx
       .update(facilities)
-      .set({ archivedAt, updatedAt: archivedAt })
+      .set({ version: nextVersion(facilities.version), archivedAt, updatedAt: archivedAt })
       .where(
         and(
           eq(facilities.id, facilityId),
@@ -584,8 +589,8 @@ export async function archiveFacility(
     // Cascade: only rows not already archived get this stamp, so a future
     // per-entity archive cannot be clobbered (restore clears indiscriminately
     // today because facility cascade is the only writer of archived_at).
-    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
-    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)));
+    await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
+    await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)));
     await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), isNull(feedstockDeliveries.archivedAt)));
     await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
     await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
@@ -605,13 +610,16 @@ export async function archiveFacility(
  */
 export async function restoreFacility(
   ctx: OrgContext,
-  facilityId: string
+  facilityId: string,
+  expectedVersion: number
 ): Promise<Facility> {
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
+
     const [existing] = await tx
       .select({
+        version: facilities.version,
         id: facilities.id,
         archivedAt: facilities.archivedAt,
         archiveStamp: sql<string | null>`${facilities.archivedAt}::text`,
@@ -623,6 +631,7 @@ export async function restoreFacility(
     if (!existing) {
       throw new SafeError("Facility not found");
     }
+    assertRowVersion({ entity: FACILITY_CONFLICT_ENTITY, id: facilityId, expectedVersion, actualVersion: existing.version });
     if (!existing.archivedAt) {
       throw new SafeError("Facility is not archived");
     }
@@ -637,7 +646,7 @@ export async function restoreFacility(
 
     const [restored] = await tx
       .update(facilities)
-      .set({ archivedAt, updatedAt: new Date() })
+      .set({ version: nextVersion(facilities.version), archivedAt, updatedAt: new Date() })
       .where(
         and(
           eq(facilities.id, facilityId),
@@ -653,8 +662,8 @@ export async function restoreFacility(
 
     // Restore only children stamped by this facility archive. Rows archived
     // individually keep their earlier stamp and remain archived.
-    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
-    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.archivedAt, cascadeArchiveStamp)));
+    await tx.update(reactors).set({ version: nextVersion(reactors.version), archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
+    await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.archivedAt, cascadeArchiveStamp)));
     await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), eq(feedstockDeliveries.archivedAt, cascadeArchiveStamp)));
     await tx.update(feedstocks).set({ archivedAt, version: nextVersion(feedstocks.version) }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.archivedAt, cascadeArchiveStamp)));
     await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.archivedAt, cascadeArchiveStamp)));

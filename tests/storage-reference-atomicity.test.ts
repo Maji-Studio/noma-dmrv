@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -702,8 +703,8 @@ describe(
 
       const outcome = await archiveFacilityBeforeReferenceWrite(
         fixture,
-        () =>
-          updateReactor(ctx, fixture.targetReactorId, {
+        async () =>
+          updateReactor(ctx, fixture.targetReactorId, { expectedVersion: await masterDataVersion(ctx, "reactors", fixture.targetReactorId),
             facilityId: fixture.facilityId,
           }),
       );
@@ -744,8 +745,8 @@ describe(
 
       const outcome = await archiveFacilityBeforeReferenceWrite(
         fixture,
-        () =>
-          updateReactor(ctx, fixture.reactorId, {
+        async () =>
+          updateReactor(ctx, fixture.reactorId, { expectedVersion: await masterDataVersion(ctx, "reactors", fixture.reactorId),
             facilityId: fixture.targetFacilityId,
           }),
         { cascadeReactors: true },
@@ -767,7 +768,7 @@ describe(
       const fixture = await createFixture();
 
       await expect(
-        updateReactor(ctx, fixture.reactorId, {
+        updateReactor(ctx, fixture.reactorId, { expectedVersion: await masterDataVersion(ctx, "reactors", fixture.reactorId),
           code: `R-SRA-TARGET-${fixture.tag}`,
         }),
       ).rejects.toThrow("A reactor with this code already exists");
@@ -783,7 +784,7 @@ describe(
         facilityId: fixture.targetFacilityId,
         reactorId: fixture.targetReactorId,
       });
-      await archiveFacility(ctx, fixture.facilityId);
+      await archiveFacility(ctx, fixture.facilityId, await masterDataVersion(ctx, "facilities", fixture.facilityId));
 
       const [storedFeedstock] = await db
         .select({

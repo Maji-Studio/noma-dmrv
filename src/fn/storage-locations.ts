@@ -35,28 +35,10 @@ import {
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
 import {
-  type ActionFailure,
   formatZodActionError,
-  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
 import { withAction } from "./with-action";
-
-/**
- * Failure shape for the write paths. Unlike the read helper below it keeps an
- * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
- * refusal from an ordinary save failure and hold on to the operator's draft.
- */
-function storageLocationActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "storage bin action failed", context: { op } },
-  });
-}
 
 function storageLocationActionError(
   error: unknown,
@@ -194,8 +176,7 @@ export async function createStorageLocationFn(
 export async function updateStorageLocationFn(
   data: z.infer<typeof updateStorageLocationSchema>
 ): Promise<ActionResult<StorageLocation>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateStorageLocationSchema.parse(data);
 
@@ -203,7 +184,7 @@ export async function updateStorageLocationFn(
       ctx,
       validated.storageLocationId,
       {
-        expectedUpdatedAt: validated.expectedUpdatedAt,
+        expectedVersion: validated.expectedVersion,
         code: validated.code,
         name: validated.name,
         type: validated.type,
@@ -218,10 +199,8 @@ export async function updateStorageLocationFn(
       }
     );
 
-    return { success: true, data: storageLocation };
-  } catch (error) {
-    return storageLocationActionFailure(error, "Failed to update storage bin", "storage-location:update");
-  }
+    return storageLocation;
+  }, { fallbackMessage: "Failed to update storage bin", log: { message: "storage bin action failed", context: { op: "storage-location:update" } } });
 }
 
 // ============================================
@@ -237,7 +216,7 @@ export async function archiveStorageLocationFn(
   return withAction(
     async (ctx) => {
       const validated = archiveStorageLocationSchema.parse(data);
-      return archiveStorageLocation(ctx, validated.storageLocationId);
+      return archiveStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
     },
     { fallbackMessage: "Failed to archive storage bin" },
   );
@@ -252,7 +231,7 @@ export async function restoreStorageLocationFn(
   return withAction(
     async (ctx) => {
       const validated = restoreStorageLocationSchema.parse(data);
-      return restoreStorageLocation(ctx, validated.storageLocationId);
+      return restoreStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
     },
     { fallbackMessage: "Failed to restore storage bin" },
   );
@@ -268,27 +247,11 @@ export async function restoreStorageLocationFn(
 export async function deleteStorageLocationFn(
   data: z.infer<typeof deleteStorageLocationSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteStorageLocationSchema.parse(data);
-    await deleteStorageLocation(ctx, validated.storageLocationId);
+    await deleteStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: storageLocationActionError(
-        error,
-        "Failed to delete storage bin",
-        "storage-location:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete storage bin", log: { message: "storage bin action failed", context: { op: "storage-location:delete" } } });
 }

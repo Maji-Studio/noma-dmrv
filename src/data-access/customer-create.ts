@@ -1,3 +1,4 @@
+import { nextVersion } from "./row-version";
 /**
  * Customer create writers.
  *
@@ -116,7 +117,9 @@ export async function createCustomerLocationInTransaction(
         eq(customers.id, customerId),
         eq(customers.organizationId, ctx.organizationId),
       ),
-    );
+    )
+    // Match deletion and location updates: parent before children.
+    .for("no key update");
 
   if (!customer) {
     throw new SafeError("Customer not found");
@@ -138,7 +141,7 @@ export async function createCustomerLocationInTransaction(
   if (makeDefault) {
     await tx
       .update(customerLocations)
-      .set({ isDefault: false, updatedAt: new Date() })
+      .set({ version: nextVersion(customerLocations.version), isDefault: false, updatedAt: new Date() })
       .where(
         and(
           eq(customerLocations.customerId, customerId),

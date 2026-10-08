@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
@@ -112,7 +113,7 @@ describe('output stock event times in PostgreSQL', () => {
   it('refuses actual archive for future production and product stock while retaining date-filtered previews', async () => {
     const future = '2099-09-16T12:00:00.000Z';
     const f = await fixture(new Date('2099-09-16T00:00:00Z'));
-    await expect(archiveStorageLocation(f.ctx, f.source.id)).rejects.toThrow('Cannot archive');
+    await expect(archiveStorageLocation(f.ctx, f.source.id, await masterDataVersion(f.ctx, "storageLocations", f.source.id))).rejects.toThrow('Cannot archive');
     const input: ProductStockPreviewInput = { facilityId: f.facility.id, formulationId: f.recipe.id, placedAt: future,
       sourceBiocharStorageLocationId: f.source.id, storageLocationId: f.bin.id, massKg: 100, moistureContentPercent: 0, waterAddedKg: 0,
       ingredientBins: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, feedstockTypeName: f.ingredientType.name,
@@ -123,7 +124,7 @@ describe('output stock event times in PostgreSQL', () => {
       composition: { ingredients: input.ingredientBins },
       idempotencyKey: randomUUID(), basisFingerprint: preview.basisFingerprint });
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(100);
-    await expect(archiveStorageLocation(f.ctx, f.bin.id)).rejects.toThrow('Cannot archive');
+    await expect(archiveStorageLocation(f.ctx, f.bin.id, await masterDataVersion(f.ctx, "storageLocations", f.bin.id))).rejects.toThrow('Cannot archive');
     for (const id of [f.source.id, f.bin.id]) {
       const [bin] = await db.select().from(storageLocations).where(and(eq(storageLocations.id, id), eq(storageLocations.organizationId, f.ctx.organizationId)));
       expect(bin.archivedAt).toBeNull();

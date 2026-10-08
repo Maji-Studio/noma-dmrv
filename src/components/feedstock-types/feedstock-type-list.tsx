@@ -1,5 +1,7 @@
 "use client";
 
+import { toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
+
 import { useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -259,16 +261,17 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const deepLinkedFeedstockType = focusedFeedstockTypeId
     ? feedstockTypes.find((type) => type.id === focusedFeedstockTypeId) ?? null
     : null;
-  const deepLinkedSideSheet = deepLinkedFeedstockType
-    ? {
-        entity: deepLinkedFeedstockType,
-        mode:
-          deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE && canManage
-            ? ("edit" as const)
-            : ("view" as const),
-      }
-    : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  // Keep the loaded row with the draft, even if the list refetches.
+  const [deepLinkSnapshotId, setDeepLinkSnapshotId] = useState<string | null>(null);
+  if (!focusedFeedstockTypeId && deepLinkSnapshotId) setDeepLinkSnapshotId(null);
+  if (focusedFeedstockTypeId && deepLinkedFeedstockType && !sideSheet && deepLinkSnapshotId !== focusedFeedstockTypeId) {
+    setDeepLinkSnapshotId(focusedFeedstockTypeId);
+    setSideSheet({
+      entity: deepLinkedFeedstockType,
+      mode: deepLinkMode === ENTITY_DEEP_LINK_EDIT_MODE && canManage ? "edit" : "view",
+    });
+  }
+  const displaySideSheet = sideSheet;
   const filteredFeedstockTypes = feedstockTypes.filter((feedstockType) => {
     if (archiveFilter === "active" && feedstockType.archivedAt) return false;
     if (archiveFilter === "archived" && !feedstockType.archivedAt) return false;
@@ -330,6 +333,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
     try {
       await updateFeedstockType.mutateAsync({
         feedstockTypeId: editing.id,
+        expectedVersion: editing.version,
         ...data,
       });
       setSideSheet(null);
@@ -343,30 +347,30 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
 
   const handleArchive = async (entity: FeedstockType) => {
     try {
-      await archiveFeedstockType.mutateAsync(entity.id);
+      await archiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
       setDeleteConflict(null);
       toast.success("Feedstock type archived");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The feedstock type was not archived. Try again.");
+      toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "archive", "The feedstock type was not archived. Try again."));
     }
   };
 
   const handleUnarchive = async (entity: FeedstockType) => {
     try {
-      await unarchiveFeedstockType.mutateAsync(entity.id);
+      await unarchiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
       toast.success("Feedstock type unarchived");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The feedstock type was not restored. Try again.");
+      toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "restore", "The feedstock type was not restored. Try again."));
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (!deletingType) return;
     try {
-      await deleteFeedstockType.mutateAsync(deletingType.id);
+      await deleteFeedstockType.mutateAsync({ feedstockTypeId: deletingType.id, expectedVersion: deletingType.version });
       toast.success("Feedstock type deleted.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Feedstock type was not deleted. Try again.";
+      const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
       if (message.toLowerCase().includes("archive it instead")) {
         setDeleteConflict(deletingType);
       } else {

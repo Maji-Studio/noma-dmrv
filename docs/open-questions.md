@@ -275,25 +275,23 @@ Pure starter residue; org scoping came later via ADR 0010.
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
 
-### Eleven edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
+### Eight edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
 
 - **Rule:** every updater behind an edit form checks the version its form
   loaded, so a save built on a stale cached row is refused
   ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
 - **Observed:** feedstock updates and deletes require integer `expectedVersion`
-  and use `src/data-access/row-version.ts`. Facility, storage location,
-  customer (+ location), supplier (+ location), application and production
-  run still use `expectedUpdatedAt` through
-  `src/data-access/expected-version.ts:assertExpectedVersion` until Phase 1b.
+  and use `src/data-access/row-version.ts`, as do facilities, reactors, storage
+  bins, customers and suppliers with their locations, formulations, feedstock
+  types, and facility emission factors. Applications and production runs still
+  use `expectedUpdatedAt` through
+  `src/data-access/expected-version.ts:assertExpectedVersion`.
   These edit-form updaters do not accept or check a version
   (some lock their row, some do not):
-  `src/data-access/reactors.ts:updateReactor`,
-  `src/data-access/formulations.ts:updateFormulation`,
   `src/data-access/credit-batches.ts:updateCreditBatch`,
   `src/data-access/biochar-products.ts:updateBiocharProduct`,
   `src/data-access/samples.ts:updateSample`,
   `src/data-access/orders.ts:updateOrder`,
-  `src/data-access/feedstock-types.ts:updateFeedstockType`,
   `src/data-access/delivery-output-writes.ts:updateDelivery`,
   `src/data-access/transport-legs.ts:updateTransportLeg`,
   `src/data-access/production-incidents.ts:updateProductionIncident`,

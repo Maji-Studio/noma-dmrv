@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -122,7 +123,7 @@ describe("parent document retirement", () => {
 
       await deleteReactor(
         makeTestOrgContext(TEST_USER_ID),
-        fixture.reactorId,
+        fixture.reactorId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "reactors", fixture.reactorId),
       );
 
       expect(provider.deleteCalls).toEqual([managedKey]);
@@ -184,7 +185,7 @@ describe("parent document retirement", () => {
       });
 
       await expect(
-        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
+        deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId, await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "reactors", fixture.reactorId)),
       ).rejects.toThrow(/certification provider/);
 
       expect(provider.deleteCalls).toEqual([]);
@@ -494,7 +495,7 @@ describe("parent document retirement", () => {
       );
       provider.failKey = keys[1];
 
-      await deleteReactor(ctx, fixture.reactorId);
+      await deleteReactor(ctx, fixture.reactorId, await masterDataVersion(ctx, "reactors", fixture.reactorId));
 
       expect(
         await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),

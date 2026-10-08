@@ -57,7 +57,7 @@ describe("baseline defect observations (passing means reproduced)", () => {
     try {
       const before = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(before.feedstock_bin.onHandKg).toBe(BIN_STOCK_KG);
-      await updateStorageLocation(context, f.bin.id, { type: "biochar_bin" });
+      await updateStorageLocation(context, f.bin.id, { expectedVersion: f.bin.version, type: "biochar_bin" });
       const after = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(after.feedstock_bin.onHandKg).toBe(0);
       expect(after.biochar_bin.onHandKg).toBe(0);
@@ -74,7 +74,7 @@ describe("baseline defect observations (passing means reproduced)", () => {
       category: "mineral", usage: "blend",
     }).returning();
     try {
-      const updated = await updateStorageLocation(context, f.bin.id, { feedstockTypeId: other.id });
+      const updated = await updateStorageLocation(context, f.bin.id, { expectedVersion: f.bin.version, feedstockTypeId: other.id });
       expect(updated.feedstockTypeId).toBe(other.id);
       const summary = await getStorageLocationLaneSummary(context, { facilityId: f.facility.id, archived: false });
       expect(summary.feedstock_bin.onHandKg).toBe(BIN_STOCK_KG);
@@ -88,11 +88,11 @@ describe("baseline defect observations (passing means reproduced)", () => {
   it("F02: partial feedstock-type update persists an invalid category/usage pair", async () => {
     const f = await fixture();
     try {
-      const input = updateFeedstockTypeSchema.parse({ feedstockTypeId: f.type.id, usage: "blend" });
+      const input = updateFeedstockTypeSchema.parse({ feedstockTypeId: f.type.id, expectedVersion: f.type.version, usage: "blend" });
       const updated = await updateFeedstockType(context, input);
       expect(updated.usage).toBe("blend");
       expect(updated.category).toBe("forestry");
-      expect(updateFeedstockTypeSchema.safeParse({ feedstockTypeId: f.type.id, usage: "blend", category: "forestry" }).success).toBe(false);
+      expect(updateFeedstockTypeSchema.safeParse({ feedstockTypeId: f.type.id, expectedVersion: f.type.version, usage: "blend", category: "forestry" }).success).toBe(false);
       console.log("F02: partial payload saved forestry/blend; equivalent complete payload rejected");
     } finally { await cleanup(f); }
   });
@@ -100,8 +100,8 @@ describe("baseline defect observations (passing means reproduced)", () => {
   it("F03: a stale facility form silently overwrites a newer country change", async () => {
     const f = await fixture();
     try {
-      await updateFacility(context, f.facility.id, { country: "USA" });
-      const saved = await updateFacility(context, f.facility.id, { name: `${f.facility.name} edited`, country: f.facility.country });
+      const firstEdit = await updateFacility(context, f.facility.id, { expectedVersion: f.facility.version, country: "USA" });
+      const saved = await updateFacility(context, f.facility.id, { expectedVersion: firstEdit.version, name: `${f.facility.name} edited`, country: f.facility.country });
       expect(saved.country).toBe("CHE");
       console.log("F03: operator A saved USA; stale operator B echoed CHE; final country=CHE, no conflict");
     } finally { await cleanup(f); }
@@ -164,7 +164,7 @@ describe("supplier deletion baseline observation", () => {
       code: `AUD-${crypto.randomUUID()}`, facilityId: f.facility.id, supplierId: supplier.id,
       deliveryDate: new Date("2026-09-01T12:00:00Z") }).returning();
     try {
-      await expect(deleteSupplier(context, supplier.id)).rejects.toThrow();
+      await expect(deleteSupplier(context, supplier.id, supplier.version)).rejects.toThrow();
       expect(await db.select().from(suppliers).where(eq(suppliers.id, supplier.id))).toHaveLength(1);
       expect(await db.select().from(supplierLocations).where(eq(supplierLocations.supplierId, supplier.id))).toHaveLength(0);
       console.log("F08: delete rejected by feedstock_deliveries FK; supplier remains; locations were deleted");

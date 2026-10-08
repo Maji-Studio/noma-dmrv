@@ -8,17 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { updateApplicationSchema } from "@/schemas/applications";
-import {
-  updateCustomerLocationSchema,
-  updateCustomerSchema,
-} from "@/schemas/customers";
-import { updateFacilitySchema } from "@/schemas/facilities";
 import { updateProductionRunSchema } from "@/schemas/production-runs";
-import { updateStorageLocationSchema } from "@/schemas/storage-locations";
-import {
-  updateSupplierLocationSchema,
-  updateSupplierSchema,
-} from "@/schemas/suppliers";
 
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const DELIVERY_ID = "11111111-2222-4333-8444-555555555555";
@@ -26,12 +16,6 @@ const UPDATED_AT = new Date("2026-01-01T12:34:56.789Z");
 
 /** Every update schema that gained the field, with a minimal valid payload. */
 const schemas = [
-  ["facility", updateFacilitySchema, { facilityId: ID }],
-  ["storage bin", updateStorageLocationSchema, { storageLocationId: ID }],
-  ["customer", updateCustomerSchema, { customerId: ID }],
-  ["customer location", updateCustomerLocationSchema, { locationId: ID }],
-  ["supplier", updateSupplierSchema, { supplierId: ID }],
-  ["supplier location", updateSupplierLocationSchema, { locationId: ID }],
   [
     "application",
     updateApplicationSchema,

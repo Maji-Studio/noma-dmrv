@@ -1,5 +1,7 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Formulations Server Actions
  * Server-side functions for formulation CRUD operations
@@ -168,12 +170,12 @@ export async function createFormulationFn(
 export async function updateFormulationFn(
   data: z.infer<typeof updateFormulationSchema>
 ): Promise<ActionResult<FormulationWithIngredients>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateFormulationSchema.parse(data);
 
     const formulation = await updateFormulation(ctx, validated.formulationId, {
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       name: validated.name,
       biocharRatio: validated.biocharRatio,
@@ -184,23 +186,8 @@ export async function updateFormulationFn(
       })),
     });
 
-    return { success: true, data: formulation };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to update formulation",
-        "formulation:update",
-      ),
-    };
-  }
+    return formulation;
+  }, { fallbackMessage: "Failed to update formulation", log: { message: "formulation action failed", context: { op: "formulation:update" } } });
 }
 
 // ============================================
@@ -213,27 +200,11 @@ export async function updateFormulationFn(
 export async function deleteFormulationFn(
   data: z.infer<typeof deleteFormulationSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteFormulationSchema.parse(data);
-    await deleteFormulation(ctx, validated.formulationId);
+    await deleteFormulation(ctx, validated.formulationId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: formulationActionError(
-        error,
-        "Failed to delete formulation",
-        "formulation:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete formulation", log: { message: "formulation action failed", context: { op: "formulation:delete" } } });
 }

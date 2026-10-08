@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -10,6 +11,7 @@ import { getStorageLocationWithFacility } from "@/data-access/storage-locations"
 import { getOutputBinAllLayersDryKg } from "@/data-access/output-stock";
 import { cleanupPostedStock, postedStockFixture, postProduct, productInput } from "./helpers/posted-output-stock-fixture";
 
+const VERSION_STEP = 1;
 const fixtures: Awaited<ReturnType<typeof postedStockFixture>>[] = [];
 async function fixture() {
   const f = await postedStockFixture({ stockKg: 0 }); fixtures.push(f);
@@ -49,7 +51,7 @@ describe("posted product bin and formulation contract", () => {
   it("claims an unassigned output bin for the selected formulation", async () => {
     const f = await fixture(); await db.update(storageLocations).set({ formulationId: null }).where(eq(storageLocations.id, f.bin.id));
     const product = await blend(f);
-    expect((await db.select().from(storageLocations).where(eq(storageLocations.id, f.bin.id)))[0].formulationId).toBe(f.recipe.id);
+    expect((await db.select().from(storageLocations).where(eq(storageLocations.id, f.bin.id)))[0]).toMatchObject({ formulationId: f.recipe.id, version: f.bin.version + VERSION_STEP });
     expect(product.biocharRatio).toBe(0.8);
   });
   it("rejects a different formulation in an assigned bin before posting", async () => {
@@ -71,7 +73,7 @@ describe("posted product bin and formulation contract", () => {
     const f = await fixture(); await db.update(storageLocations).set({ formulationId: null }).where(eq(storageLocations.id, f.bin.id));
     const product = await postProduct(f);
     expect(product.formulationId).toBe(f.pure.id); expect(product.biocharRatio).toBe(1);
-    expect((await db.select().from(storageLocations).where(eq(storageLocations.id, f.bin.id)))[0].formulationId).toBe(f.pure.id);
+    expect((await db.select().from(storageLocations).where(eq(storageLocations.id, f.bin.id)))[0]).toMatchObject({ formulationId: f.pure.id, version: f.bin.version + VERSION_STEP });
   });
   it("rejects pyrolysis-only feedstock bins as blend ingredient sources", async () => {
     const f = await fixture(); const [type] = await db.insert(feedstockTypes).values({ organizationId: f.ctx.organizationId, code: `E2E-PYRO-${f.tag}`, name: `E2E Pyro ${f.tag}`, category: "forestry", usage: "pyrolysis" }).returning();
@@ -138,7 +140,7 @@ describe("posted product bin and formulation contract", () => {
     const shares = await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id));
     expect(shares.reduce((sum, row) => sum + row.allocatedDryMassKg, 0)).toBe(1500);
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.source.id)).toBe(0);
-    await updateFormulation(f.ctx, f.recipe.id, { biocharRatio: 0.7 });
+    await updateFormulation(f.ctx, f.recipe.id, { expectedVersion: await masterDataVersion(f.ctx, "formulations", f.recipe.id), biocharRatio: 0.7 });
     await expect(updateBiocharProduct(f.ctx, product.id, { composition: composition(f, 105, null, { moistureContentPercent: 0 }) })).rejects.toThrow("immutable");
     expect(await db.select().from(biocharProductSourceAllocations).where(eq(biocharProductSourceAllocations.biocharProductId, product.id))).toEqual(shares);
     await expect(blend(f, { massKg: 1 })).rejects.toThrow(/Not enough dry biochar/);
@@ -153,7 +155,7 @@ describe("posted product bin and formulation contract", () => {
     await expect(updateBiocharProduct(f.ctx, product.id, { massKg: 110 })).rejects.toThrow("immutable");
   });
   it("retains its ratio snapshot when the live formulation and metadata change", async () => {
-    const f = await fixture(); const product = await blend(f); await updateFormulation(f.ctx, f.recipe.id, { biocharRatio: 0.7 });
+    const f = await fixture(); const product = await blend(f); await updateFormulation(f.ctx, f.recipe.id, { expectedVersion: await masterDataVersion(f.ctx, "formulations", f.recipe.id), biocharRatio: 0.7 });
     const updated = await updateBiocharProduct(f.ctx, product.id, { code: `E2E-RATIO-${f.tag}` }); expect(updated.biocharRatio).toBe(0.8);
   });
   it("prevents a posted product from being reassigned to another formulation", async () => {

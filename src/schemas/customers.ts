@@ -9,7 +9,7 @@ import {
   clearableDefaultSoilTemperature,
   clearablePositiveNumber,
   defaultSoilTemperatureSchema,
-  expectedUpdatedAtSchema,
+  expectedVersionSchema,
   optionalPositiveNumber,
   requiredLatitudeSchema as requiredLat,
   requiredLongitudeSchema as requiredLng,
@@ -130,7 +130,7 @@ export const createCustomerSchema = customerFormSchema;
  */
 export const updateCustomerSchema = z.object({
   customerId: z.string().uuid("Choose a valid customer."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   code: z
     .string()
     .min(1)
@@ -148,6 +148,7 @@ export const updateCustomerSchema = z.object({
  * Schema for deleting a customer
  */
 export const deleteCustomerSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   customerId: z.string().uuid("Choose a valid customer."),
 });
 
@@ -211,7 +212,7 @@ export const createCustomerWithLocationsSchema = z.object({
  */
 export const updateCustomerLocationSchema = z.object({
   locationId: z.string().uuid("Choose a valid location."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   name: z.string().trim().min(1).max(255).optional(),
   country: z.string().min(1).max(LOCATION_PART_MAX).optional(),
   stateRegion: locationPartSchema,
@@ -229,6 +230,7 @@ export const updateCustomerLocationSchema = z.object({
  * Schema for deleting a customer location
  */
 export const deleteCustomerLocationSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   locationId: z.string().uuid("Choose a valid location."),
 });
 

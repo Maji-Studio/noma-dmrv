@@ -59,7 +59,7 @@ export function SupplierLocationDialog({
           locationId: location.id,
           // The version the dialog opened on, so a concurrent edit is refused
           // instead of silently overwritten (#768).
-          expectedUpdatedAt: location.updatedAt,
+          expectedVersion: location.version,
           ...data,
         });
       } else {

@@ -78,6 +78,7 @@ const customerLocation: EditableCustomerLocation = {
   distanceSource: "manual",
   defaultSoilTemperatureC: 25,
   isDefault: true,
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 };
 
@@ -96,6 +97,7 @@ const supplierLocation: SupplierLocation = {
   distanceSource: "manual",
   isDefault: true,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 

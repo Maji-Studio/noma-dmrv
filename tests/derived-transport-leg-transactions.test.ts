@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues } from "./helpers/output-contract-fixtures";
@@ -483,7 +484,7 @@ describe("derived transport-leg transaction boundaries", () => {
     ]));
     expect(legsAfterReassignment).toHaveLength(3);
 
-    await updateCustomerLocation(ctx, secondLocation.id, {
+    await updateCustomerLocation(ctx, secondLocation.id, { expectedVersion: await masterDataVersion(ctx, "customerLocations", secondLocation.id),
       distanceFromFacilityKm: 80,
       distanceSource: "map_estimate",
     });
@@ -497,7 +498,7 @@ describe("derived transport-leg transaction boundaries", () => {
       ));
     expect(updatedDerived.distanceKm).toBe(80);
 
-    await updateCustomerLocation(ctx, firstLocation.id, {
+    await updateCustomerLocation(ctx, firstLocation.id, { expectedVersion: await masterDataVersion(ctx, "customerLocations", firstLocation.id),
       distanceFromFacilityKm: 40,
       distanceSource: "map_estimate",
     });
