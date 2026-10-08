@@ -304,6 +304,9 @@ export function useUpdateFacility(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: facilityKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {

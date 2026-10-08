@@ -15,7 +15,7 @@ import { requireOrgScope } from "./utils";
 
 const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
 /** Entity key on a facility's expected-version conflict. */
-const FACILITY_CONFLICT_ENTITY = "facility";
+export const FACILITY_CONFLICT_ENTITY = "facility";
 
 interface FacilityUpdateData {
   code?: string;

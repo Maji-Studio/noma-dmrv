@@ -3,6 +3,7 @@
  * CRUD operations for facilities with auth guards, pagination, and filtering
  */
 
+import { FACILITY_CONFLICT_ENTITY } from "./facility-mutations";
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
@@ -552,7 +553,7 @@ export async function archiveFacility(
     if (!existing) {
       throw new SafeError("Facility not found");
     }
-    assertRowVersion({ entity: "facility", id: facilityId, expectedVersion, actualVersion: existing.version });
+    assertRowVersion({ entity: FACILITY_CONFLICT_ENTITY, id: facilityId, expectedVersion, actualVersion: existing.version });
     if (existing.archivedAt) {
       throw new SafeError("Facility is already archived");
     }
@@ -630,7 +631,7 @@ export async function restoreFacility(
     if (!existing) {
       throw new SafeError("Facility not found");
     }
-    assertRowVersion({ entity: "facility", id: facilityId, expectedVersion, actualVersion: existing.version });
+    assertRowVersion({ entity: FACILITY_CONFLICT_ENTITY, id: facilityId, expectedVersion, actualVersion: existing.version });
     if (!existing.archivedAt) {
       throw new SafeError("Facility is not archived");
     }

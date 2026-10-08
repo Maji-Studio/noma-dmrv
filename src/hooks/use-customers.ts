@@ -352,6 +352,9 @@ export function useUpdateCustomer(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -566,6 +569,10 @@ export function useUpdateCustomerLocation(
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: async (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: customerKeys.all });
+        void queryClient.invalidateQueries({ queryKey: customerLocationKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {

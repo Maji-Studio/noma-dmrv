@@ -15,6 +15,8 @@ import {
 } from "@/db/schema";
 import type { ReactorFilterData } from "@/schemas/reactors";
 
+const REACTOR_CONFLICT_ENTITY = "reactor";
+
 // ============================================
 // Types
 // ============================================
@@ -318,7 +320,7 @@ export async function updateReactor(
     if (!existing) {
       throw new SafeError("Reactor not found");
     }
-    assertRowVersion({ entity: "reactor", id: reactorId, expectedVersion, actualVersion: existing.version });
+    assertRowVersion({ entity: REACTOR_CONFLICT_ENTITY, id: reactorId, expectedVersion, actualVersion: existing.version });
 
     // A rename OR a facility move can collide with the per-facility identifier
     // index, and a code change with the org-scoped code index, so the update
@@ -380,7 +382,7 @@ export async function deleteReactor(
       .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
       .for("update");
     if (!versioned) throw new SafeError("Reactor not found");
-    assertRowVersion({ entity: "reactor", id: reactorId, expectedVersion, actualVersion: versioned.version });
+    assertRowVersion({ entity: REACTOR_CONFLICT_ENTITY, id: reactorId, expectedVersion, actualVersion: versioned.version });
 
     const [{ value: productionRunCount }] = await tx
       .select({ value: count() })

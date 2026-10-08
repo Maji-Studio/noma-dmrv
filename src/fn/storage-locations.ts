@@ -200,7 +200,7 @@ export async function updateStorageLocationFn(
     );
 
     return storageLocation;
-  }, { fallbackMessage: "Failed to update storage location", log: { message: "storage-location action failed", context: { op: "storage-location:update" } } });
+  }, { fallbackMessage: "Failed to update storage bin", log: { message: "storage bin action failed", context: { op: "storage-location:update" } } });
 }
 
 // ============================================
@@ -253,5 +253,5 @@ export async function deleteStorageLocationFn(
     await deleteStorageLocation(ctx, validated.storageLocationId, validated.expectedVersion);
 
     return undefined;
-  }, { fallbackMessage: "Failed to delete storage location", log: { message: "storage-location action failed", context: { op: "storage-location:delete" } } });
+  }, { fallbackMessage: "Failed to delete storage bin", log: { message: "storage bin action failed", context: { op: "storage-location:delete" } } });
 }

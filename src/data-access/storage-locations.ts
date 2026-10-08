@@ -835,16 +835,6 @@ export async function deleteStorageLocation(
     if (!versioned) throw new SafeError("Storage bin not found");
     assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: versioned.version });
 
-    // Verify storage bin exists
-    const [existing] = await tx
-      .select({ id: storageLocations.id })
-      .from(storageLocations)
-      .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
-
-    if (!existing) {
-      throw new SafeError("Storage bin not found");
-    }
-
     const blockers = storageLocationBlockers(
       await countStorageLocationReferences(ctx, tx, storageLocationId),
     );

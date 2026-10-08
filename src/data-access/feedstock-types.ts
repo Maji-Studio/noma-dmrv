@@ -37,6 +37,8 @@ const ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT =
 const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
   "feedstock_types_organization_id_name_usage_unique";
 
+const FEEDSTOCK_TYPE_CONFLICT_ENTITY = "feedstockType";
+
 export async function listFeedstockTypes(
   ctx: OrgContext,
 ): Promise<FeedstockType[]> {
@@ -94,7 +96,7 @@ export async function updateFeedstockType(
       .for("update");
 
     if (!locked) throw new SafeError("Feedstock type not found.");
-    assertRowVersion({ entity: "feedstock-type", id: feedstockTypeId, expectedVersion, actualVersion: locked.version });
+    assertRowVersion({ entity: FEEDSTOCK_TYPE_CONFLICT_ENTITY, id: feedstockTypeId, expectedVersion, actualVersion: locked.version });
 
     // The form refine only fires when a payload carries both halves of the
     // pair. A patch naming one of them has to be judged against the stored
@@ -145,7 +147,7 @@ export async function archiveFeedstockType(
       .where(and(eq(feedstockTypes.id, feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)))
       .for("update");
     if (!versioned) throw new SafeError("Feedstock type not found");
-    assertRowVersion({ entity: "feedstock-type", id: feedstockTypeId, expectedVersion, actualVersion: versioned.version });
+    assertRowVersion({ entity: FEEDSTOCK_TYPE_CONFLICT_ENTITY, id: feedstockTypeId, expectedVersion, actualVersion: versioned.version });
 
 
     const [archived] = await tx
@@ -176,7 +178,7 @@ export async function unarchiveFeedstockType(
       .where(and(eq(feedstockTypes.id, feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)))
       .for("update");
     if (!versioned) throw new SafeError("Feedstock type not found");
-    assertRowVersion({ entity: "feedstock-type", id: feedstockTypeId, expectedVersion, actualVersion: versioned.version });
+    assertRowVersion({ entity: FEEDSTOCK_TYPE_CONFLICT_ENTITY, id: feedstockTypeId, expectedVersion, actualVersion: versioned.version });
 
 
     const [restored] = await tx
@@ -254,7 +256,7 @@ export async function deleteFeedstockType(
       .where(and(eq(feedstockTypes.id, feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)))
       .for("update");
     if (!versioned) throw new SafeError("Feedstock type not found");
-    assertRowVersion({ entity: "feedstock-type", id: feedstockTypeId, expectedVersion, actualVersion: versioned.version });
+    assertRowVersion({ entity: FEEDSTOCK_TYPE_CONFLICT_ENTITY, id: feedstockTypeId, expectedVersion, actualVersion: versioned.version });
 
 
     const conflict = await findDeleteConflict(ctx, tx, feedstockTypeId);

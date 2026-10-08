@@ -100,3 +100,9 @@ export function toSaveErrorMessage(error: unknown, fallback: string): string {
   if (getStaleVersionConflict(error)) return STALE_VERSION_MESSAGE;
   return error instanceof Error ? error.message : fallback;
 }
+
+/** Message for a refused delete, preserving other server errors and fallbacks. */
+export function toDeleteErrorMessage(error: unknown, recordLabel: string, fallback: string): string {
+  if (getStaleVersionConflict(error)) return staleDeleteMessage(recordLabel);
+  return error instanceof Error ? error.message : fallback;
+}

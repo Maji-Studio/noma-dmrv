@@ -11,7 +11,12 @@ export function assertRowVersion({ entity, id, expectedVersion, actualVersion }:
   actualVersion: number;
 }): void {
   if (expectedVersion === actualVersion) return;
-  throw new DomainError("stale_version", STALE_VERSION_MESSAGE, {
+  throw staleRowVersion(entity, id);
+}
+
+/** Construct the shared refusal, including when a versioned row is absent. */
+export function staleRowVersion(entity: string, id: string): DomainError {
+  return new DomainError("stale_version", STALE_VERSION_MESSAGE, {
     conflict: { entity, id, code: STALE_VERSION_CONFLICT_CODE },
   });
 }

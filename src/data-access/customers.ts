@@ -406,17 +406,7 @@ export async function deleteCustomer(
       .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
       .for("update");
     if (!versioned) throw new SafeError("Customer not found");
-    assertRowVersion({ entity: "customer", id: customerId, expectedVersion, actualVersion: versioned.version });
-
-    // Verify customer exists
-    const [existing] = await tx
-      .select({ id: customers.id })
-      .from(customers)
-      .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
-
-    if (!existing) {
-      throw new SafeError("Customer not found");
-    }
+    assertRowVersion({ entity: CUSTOMER_CONFLICT_ENTITY, id: customerId, expectedVersion, actualVersion: versioned.version });
 
     const [[{ value: locationCount }], [{ value: orderCount }]] =
       await Promise.all([
@@ -542,7 +532,7 @@ export async function updateCustomerLocation(
     const [parent] = await tx.select({ id: customers.id })
       .from(customers)
       .where(and(eq(customers.id, location.customerId), eq(customers.organizationId, ctx.organizationId)))
-      .for("update");
+      .for("no key update");
     if (!parent) throw new SafeError("Customer not found");
 
     // Locked read after the topology lock, so the version check and the write
@@ -612,16 +602,6 @@ export async function deleteCustomerLocation(
       .for("update");
     if (!versioned) throw new SafeError("Customer location not found");
     assertRowVersion({ entity: CUSTOMER_LOCATION_CONFLICT_ENTITY, id: locationId, expectedVersion, actualVersion: versioned.version });
-
-    // Verify location exists
-    const [existing] = await tx
-      .select({ id: customerLocations.id })
-      .from(customerLocations)
-      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
-
-    if (!existing) {
-      throw new SafeError("Customer location not found");
-    }
 
     await tx.delete(customerLocations).where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
 

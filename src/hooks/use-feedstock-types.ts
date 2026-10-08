@@ -71,6 +71,7 @@ export function useUpdateFeedstockType() {
       if (!result.success) throwActionError(result);
       return result.data;
     },
+    onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
     onSuccess: (data) => {
       patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
       invalidate();

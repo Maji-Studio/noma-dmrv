@@ -16,6 +16,7 @@ import {
   StaleVersionError,
   throwActionError,
   toSaveErrorMessage,
+  toDeleteErrorMessage,
 } from "@/lib/stale-version";
 import { toActionFailure } from "@/fn/action-errors";
 import { ConflictError, conflictCode } from "@/lib/conflict-ref";
@@ -79,5 +80,19 @@ describe("stale-version transport", () => {
       "Bin is archived.",
     );
     expect(toSaveErrorMessage("not an error", FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+
+describe("delete error copy", () => {
+  const label = "Customer CUS-1";
+  const fallback = "Customer was not deleted. Try again.";
+  it("names the stale record and offers the delete recovery action", () => {
+    expect(toDeleteErrorMessage(new StaleVersionError(STALE_VERSION_MESSAGE, staleConflict), label, fallback))
+      .toBe("Customer CUS-1 was not deleted. It changed since the list loaded. Review it before deleting.");
+  });
+  it("preserves ordinary errors and falls back for unknown failures", () => {
+    expect(toDeleteErrorMessage(new Error("Still has locations"), label, fallback)).toBe("Still has locations");
+    expect(toDeleteErrorMessage(null, label, fallback)).toBe(fallback);
   });
 });

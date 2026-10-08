@@ -1,6 +1,6 @@
 "use client";
 
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -370,7 +370,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       await deleteFeedstockType.mutateAsync({ feedstockTypeId: deletingType.id, expectedVersion: deletingType.version });
       toast.success("Feedstock type deleted.");
     } catch (error) {
-      const message = error instanceof StaleVersionError ? staleDeleteMessage(`Feedstock type ${deletingType.code}`) : error instanceof Error ? error.message : "Feedstock type was not deleted. Try again.";
+      const message = toDeleteErrorMessage(error, `Feedstock type ${deletingType.code}`, "Feedstock type was not deleted. Try again.");
       if (message.toLowerCase().includes("archive it instead")) {
         setDeleteConflict(deletingType);
       } else {

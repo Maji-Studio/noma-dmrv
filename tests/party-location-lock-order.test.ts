@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db";
-import { customers, customerLocations, suppliers, supplierLocations } from "@/db/schema";
+import { customers, customerLocations, suppliers, supplierLocations, facilities, feedstockTypes, feedstocks } from "@/db/schema";
 import { createSupplierLocation, deleteSupplier, updateSupplierLocation } from "@/data-access/suppliers";
 import { createCustomerLocation, deleteCustomer, updateCustomerLocation } from "@/data-access/customers";
 import { SafeError } from "@/lib/errors";
@@ -11,6 +11,8 @@ const ctx = makeTestOrgContext();
 const BARRIER_TIMEOUT_MS = 5_000;
 const TEST_TIMEOUT_MS = 15_000;
 const INITIAL_VERSION = 1;
+const INTAKE_LOCK_TIMEOUT = "500ms";
+const INTAKE_DRY_MASS_KG = 100;
 
 beforeAll(() => ensureTestOrg());
 
@@ -99,6 +101,55 @@ describe.each(["supplier", "customer"] as const)("%s location parent-first locks
       await f.cleanup();
     }
   }, TEST_TIMEOUT_MS);
+
+  if (kind === "supplier") it.each(["create", "update"] as const)(
+    "allows a supplier intake insert while a location %s holds the parent lock",
+    async (operation) => {
+      const f = await fixture();
+      const tag = crypto.randomUUID();
+      const [facility] = await db.insert(facilities).values({
+        organizationId: TEST_ORG_ID, code: `FAC-${tag}`, name: `Lock facility ${tag}`, country: "CH",
+      }).returning();
+      const [feedstockType] = await db.insert(feedstockTypes).values({
+        organizationId: TEST_ORG_ID, code: `FT-${tag}`, name: `Lock feedstock ${tag}`, category: "forestry",
+      }).returning();
+      let write: Promise<PromiseSettledResult<unknown>[]> | undefined;
+      try {
+        await db.transaction(async (tx) => {
+          // Hold the child so the real writer retains its parent lock until
+          // the intake has committed. The barrier proves the lock is held.
+          await tx.select({ id: supplierLocations.id }).from(supplierLocations)
+            .where(and(eq(supplierLocations.id, f.location.id), eq(supplierLocations.organizationId, TEST_ORG_ID)))
+            .for("update");
+          const backend = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+          write = Promise.allSettled([f[operation]()]);
+          await expect.poll(async () => (await blockedBy(backend.rows[0].pid)).length,
+            { timeout: BARRIER_TIMEOUT_MS }).toBe(1);
+
+          // An old FOR UPDATE parent lock makes this FK check time out.
+          // FOR NO KEY UPDATE admits its FOR KEY SHARE lock immediately.
+          const [intake] = await db.transaction(async (insertTx) => {
+            await insertTx.execute(sql`select set_config('lock_timeout', ${INTAKE_LOCK_TIMEOUT}, true)`);
+            return insertTx.insert(feedstocks).values({
+              organizationId: TEST_ORG_ID, code: `FI-${tag}`, facilityId: facility.id,
+              supplierId: f.parent.id, feedstockTypeId: feedstockType.id,
+              massDryKg: INTAKE_DRY_MASS_KG,
+            }).returning({ id: feedstocks.id });
+          });
+          expect(intake.id).toBeTruthy();
+          // The writer is still paused: success cannot come from its release.
+          expect(await blockedBy(backend.rows[0].pid)).toHaveLength(1);
+        });
+        expect((await write)![0].status).toBe("fulfilled");
+      } finally {
+        await write;
+        await db.delete(feedstocks).where(and(eq(feedstocks.supplierId, f.parent.id), eq(feedstocks.organizationId, TEST_ORG_ID)));
+        await db.delete(feedstockTypes).where(and(eq(feedstockTypes.id, feedstockType.id), eq(feedstockTypes.organizationId, TEST_ORG_ID)));
+        await db.delete(facilities).where(and(eq(facilities.id, facility.id), eq(facilities.organizationId, TEST_ORG_ID)));
+        await f.cleanup();
+      }
+    }, TEST_TIMEOUT_MS,
+  );
 
   it("queues default creation behind deletion and returns a defined outcome", async () => {
     const f = await fixture();

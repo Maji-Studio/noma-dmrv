@@ -119,7 +119,7 @@ export async function createCustomerLocationInTransaction(
       ),
     )
     // Match deletion and location updates: parent before children.
-    .for("update");
+    .for("no key update");
 
   if (!customer) {
     throw new SafeError("Customer not found");

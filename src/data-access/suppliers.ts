@@ -544,16 +544,7 @@ export async function deleteSupplier(
       .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
       .for("update");
     if (!versioned) throw new SafeError("Supplier not found");
-    assertRowVersion({ entity: "supplier", id: supplierId, expectedVersion, actualVersion: versioned.version });
-
-      const [existing] = await tx
-        .select({ id: suppliers.id })
-        .from(suppliers)
-        .where(and(
-          eq(suppliers.id, supplierId),
-          eq(suppliers.organizationId, ctx.organizationId),
-        ));
-      if (!existing) throw new SafeError("Supplier not found");
+    assertRowVersion({ entity: SUPPLIER_CONFLICT_ENTITY, id: supplierId, expectedVersion, actualVersion: versioned.version });
 
       // These are the restrictive references to suppliers. No schema table
       // references supplier_locations; their own parent FK is handled below.
@@ -639,7 +630,7 @@ export async function createSupplierLocation(
     const [parent] = await tx.select({ id: suppliers.id })
       .from(suppliers)
       .where(and(eq(suppliers.id, data.supplierId), eq(suppliers.organizationId, ctx.organizationId)))
-      .for("update");
+      .for("no key update");
     if (!parent) throw new SafeError("Supplier not found");
 
     // The supplier's first location is always its default.
@@ -718,7 +709,7 @@ export async function updateSupplierLocation(
     const [parent] = await tx.select({ id: suppliers.id })
       .from(suppliers)
       .where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId)))
-      .for("update");
+      .for("no key update");
     if (!parent) throw new SafeError("Supplier not found");
 
     const [locked] = await tx

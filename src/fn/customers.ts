@@ -406,7 +406,7 @@ export async function updateCustomerLocationFn(
     });
 
     return location;
-  }, { fallbackMessage: "Failed to update customer location", log: { message: "customer-location action failed", context: { op: "customer-location:update" } } });
+  }, { fallbackMessage: "Failed to update customer location", log: { message: "customer action failed", context: { op: "customer-location:update" } } });
 }
 
 /**
@@ -421,5 +421,5 @@ export async function deleteCustomerLocationFn(
     await deleteCustomerLocation(ctx, validated.locationId, validated.expectedVersion);
 
     return undefined;
-  }, { fallbackMessage: "Failed to delete customer location", log: { message: "customer-location action failed", context: { op: "customer-location:delete" } } });
+  }, { fallbackMessage: "Failed to delete customer location", log: { message: "customer action failed", context: { op: "customer-location:delete" } } });
 }

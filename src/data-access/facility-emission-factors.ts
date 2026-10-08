@@ -11,11 +11,9 @@ import { db } from "@/db";
 import { facilities, facilityEmissionFactors } from "@/db/schema";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import type { EnergyFactors } from "@/lib/energy/types";
-import { DomainError } from "@/lib/domain-errors";
-import { STALE_VERSION_MESSAGE, STALE_VERSION_CONFLICT_CODE } from "@/lib/stale-version";
 import { SafeError } from "@/lib/errors";
 import type { SaveFacilityEmissionFactorsData } from "@/schemas/emission-factors";
-import { assertRowVersion, nextVersion } from "./row-version";
+import { assertRowVersion, nextVersion, staleRowVersion } from "./row-version";
 import { requireOrgScope } from "./utils";
 
 const EMISSION_FACTORS_CONFLICT_ENTITY = "facilityEmissionFactors";
@@ -98,7 +96,7 @@ export async function upsertFacilityEmissionFactors(
 
     if (existing) {
       if (expectedVersion === null) {
-        throw new DomainError("stale_version", STALE_VERSION_MESSAGE, { conflict: { entity: EMISSION_FACTORS_CONFLICT_ENTITY, id: facilityId, code: STALE_VERSION_CONFLICT_CODE } });
+        throw staleRowVersion(EMISSION_FACTORS_CONFLICT_ENTITY, facilityId);
       }
       assertRowVersion({
         entity: EMISSION_FACTORS_CONFLICT_ENTITY,
@@ -121,7 +119,7 @@ export async function upsertFacilityEmissionFactors(
     }
 
     if (expectedVersion !== null) {
-      throw new DomainError("stale_version", STALE_VERSION_MESSAGE, { conflict: { entity: EMISSION_FACTORS_CONFLICT_ENTITY, id: facilityId, code: STALE_VERSION_CONFLICT_CODE } });
+      throw staleRowVersion(EMISSION_FACTORS_CONFLICT_ENTITY, facilityId);
     }
     const [row] = await tx
       .insert(facilityEmissionFactors)

@@ -23,6 +23,8 @@ import {
   type FormulationFilterData,
 } from "@/schemas/formulations";
 
+const FORMULATION_CONFLICT_ENTITY = "formulation";
+
 // ============================================
 // Types
 // ============================================
@@ -355,7 +357,7 @@ export async function updateFormulation(
     if (!locked) {
       throw new SafeError("Formulation not found");
     }
-    assertRowVersion({ entity: "formulation", id: formulationId, expectedVersion, actualVersion: locked.version });
+    assertRowVersion({ entity: FORMULATION_CONFLICT_ENTITY, id: formulationId, expectedVersion, actualVersion: locked.version });
 
     // Guard the effective post-update blend: a partial payload may change only
     // the biochar ratio or only the ingredients, so reconcile each side against
@@ -508,13 +510,9 @@ export async function deleteFormulation(
       .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)))
       .for("update");
     if (!versioned) throw new SafeError("Formulation not found");
-    assertRowVersion({ entity: "formulation", id: formulationId, expectedVersion, actualVersion: versioned.version });
+    assertRowVersion({ entity: FORMULATION_CONFLICT_ENTITY, id: formulationId, expectedVersion, actualVersion: versioned.version });
 
-    const [existingResult, productCountResult, binCountResult] = await Promise.all([
-      tx
-        .select({ id: formulations.id })
-        .from(formulations)
-        .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId))),
+    const [productCountResult, binCountResult] = await Promise.all([
       tx
         .select({ count: count() })
         .from(biocharProducts)
@@ -524,10 +522,6 @@ export async function deleteFormulation(
         .from(storageLocations)
         .where(and(eq(storageLocations.formulationId, formulationId), eq(storageLocations.organizationId, ctx.organizationId))),
     ]);
-
-    if (existingResult.length === 0) {
-      throw new SafeError("Formulation not found");
-    }
 
     if (Number(productCountResult[0].count) > 0) {
       throw new SafeError(

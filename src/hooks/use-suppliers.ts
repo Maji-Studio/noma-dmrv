@@ -315,6 +315,9 @@ export function useUpdateSupplier(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -506,6 +509,9 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      }
       callbacks?.onError?.(error instanceof Error ? error : new Error("Location was not saved. Try again."), variables);
     },
   });
