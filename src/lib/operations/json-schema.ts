@@ -27,8 +27,10 @@ export type JsonSchemaIo = "input" | "output";
 const INSTANT_JSON_SCHEMA: JsonSchema = { type: "string", format: "date-time" };
 
 function replaceInPlace(target: JsonSchema, replacement: JsonSchema): void {
+  const description = target.description;
   for (const key of Object.keys(target)) delete target[key];
   Object.assign(target, structuredClone(replacement));
+  if (description !== undefined) target.description = description;
 }
 
 function isFormEncodingBranch(node: unknown): boolean {

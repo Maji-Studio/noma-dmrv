@@ -14,5 +14,5 @@ export function parseApiQuery<S extends z.ZodType>(request: Request, schema: S):
 }
 
 export const mutationQuerySchema = z.strictObject({
-  dryRun: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
+  dryRun: z.enum(["true", "false"]).optional().transform((value) => value === "true").describe("true validates and previews the write then rolls back; false commits the write (default)."),
 });
