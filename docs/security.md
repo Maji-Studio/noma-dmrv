@@ -95,17 +95,24 @@ sync). The app refuses to boot on an invalid or missing required var.
 
 Non-obvious semantics only:
 
-- **`CRON_SECRET`** — at least 32 characters; required in production except
-  hermetic CI, optional in development/test. The daily 03:00 UTC Vercel cron
+- **`CRON_SECRET`** — at least 32 characters; required for `NODE_ENV=production`
+  builds and runtimes, including staging, except hermetic CI. Optional in
+  development/test. The daily 03:00 UTC Vercel cron
   calls exactly `/api/cron/purge-api-records` with a bearer secret, compared in
   constant time. An unconfigured route returns 503; invalid credentials return
   an empty 401. It purges expired idempotency records and buckets idle for a day
-  in bounded batches and logs counts only. Provision the secret in all three
-  1Password items and in Vercel before deploying.
+  in bounded batches and logs counts only. It lives in all three
+  1Password items (local, staging, production); `pnpm env:vercel` syncs the
+  staging and production values to Vercel Preview and Production.
+  [Vercel invokes cron jobs only on Production deployments](https://vercel.com/docs/cron-jobs/quickstart),
+  so staging (Preview) never purges on schedule. Its idempotency claim path
+  deletes expired records lazily when their keys are reused; idle rate-limit
+  buckets have no scheduled staging cleanup.
 - **`API_WRITES_DISABLED`** — `true` or `false`, defaults to `false`. API write
   guards return retryable 503 while enabled, including for dry runs; reads keep
   working. Organization API access defaults to enabled and only Platform Admins
-  can disable it; disabled organizations receive 403 on API requests.
+  can toggle it at `/admin/organizations`; disabled organizations receive
+  403 `api_access_disabled` on API requests. This does not revoke their keys.
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).

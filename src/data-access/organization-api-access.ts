@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizationApiAccess } from "@/db/schema";
+import { organizationApiAccess, organizations } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 
@@ -19,4 +19,16 @@ export async function setOrganizationApiAccess(ctx: OrgContext, organizationId: 
       target: organizationApiAccess.organizationId,
       set: { enabled, changedByUserId: ctx.userId, changedAt: new Date() },
     });
+}
+
+// org-scope-ok: Platform Admin directory deliberately reads API access across all organizations.
+export async function listOrganizationApiAccess(ctx: OrgContext) {
+  if (!ctx.isPlatformAdmin) {
+    throw new DomainError("forbidden", "Only Platform Admins can view API access across organizations.");
+  }
+  const rows = await db
+    .select({ organizationId: organizations.id, enabled: organizationApiAccess.enabled })
+    .from(organizations)
+    .leftJoin(organizationApiAccess, eq(organizationApiAccess.organizationId, organizations.id));
+  return rows.map((row) => ({ ...row, enabled: row.enabled ?? true }));
 }
