@@ -1,4 +1,4 @@
-import { calendarDateSchema } from "./helpers";
+import { optionalCalendarDateSchema } from "./helpers";
 import { expectedVersionSchema } from "./helpers";
 /**
  * Samples Validation Schemas
@@ -185,7 +185,7 @@ export const sampleFormSchema = z
     // Lab info (optional)
     labName: z.string().max(200).optional().nullable().or(z.literal("")),
     labAccreditation: z.string().max(200).optional().nullable().or(z.literal("")),
-    analysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
+    analysisDate: optionalCalendarDateSchema(),
 
     // Sample weight/volume
     weightGrams: optionalNonNegativeNumber,
@@ -242,13 +242,13 @@ export const sampleFormSchema = z
         ),
       z.null(),
     ]).optional().nullable(),
-    r0AnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
+    r0AnalysisDate: optionalCalendarDateSchema(),
     r0HistogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
     // TGA non-reactive carbon (required for 1000-year)
     reactiveCarbonPercent: optionalPercentInput,
     residualCarbonPercent: optionalPercentInput,
-    tgaAnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
+    tgaAnalysisDate: optionalCalendarDateSchema(),
     tgaThermogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
     // === Nutrient Claims (from sampleConditionSchema) ===
@@ -348,7 +348,7 @@ export const updateSampleSchema = z.object({
   ]).optional(),
   labName: z.string().max(200).optional().nullable(),
   labAccreditation: z.string().max(200).optional().nullable(),
-  analysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
+  analysisDate: optionalCalendarDateSchema(),
   weightGrams: nonNegativeNumber.optional().nullable(),
   volumeMl: nonNegativeNumber.optional().nullable(),
   totalCarbonPercent: percentNumber.optional(),
@@ -369,11 +369,11 @@ export const updateSampleSchema = z.object({
   randomReflectanceR0Percent: percentNumber.optional().nullable(),
   sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
   r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
-  r0AnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
+  r0AnalysisDate: optionalCalendarDateSchema(),
   r0HistogramFileUrl: z.string().max(2000).optional().nullable(),
   reactiveCarbonPercent: percentNumber.optional().nullable(),
   residualCarbonPercent: percentNumber.optional().nullable(),
-  tgaAnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
+  tgaAnalysisDate: optionalCalendarDateSchema(),
   tgaThermogramFileUrl: z.string().max(2000).optional().nullable(),
   nutrientClaimEnabled: z.boolean().optional(),
   phosphorusPercent: percentNumber.optional().nullable(),

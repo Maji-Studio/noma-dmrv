@@ -83,8 +83,6 @@ export async function deleteDelivery(ctx: OrgContext, deliveryId: string, expect
     if (!versionRow) throw new SafeError("Delivery not found");
     assertRowVersion({ entity: "delivery", id: deliveryId, expectedVersion: expectedVersion, actualVersion: versionRow.version });
 
-    const [row] = await tx.select({ id: deliveries.id }).from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, deliveryId)));
-    if (!row) throw new SafeError('Delivery not found');
     throw new SafeError('Posted deliveries retain their history. Use Correct entry in bin history.');
   });
 }

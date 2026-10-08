@@ -8,6 +8,7 @@ import { samples, biocharProducts, deliveries, outputStockAllocations, applicati
 import { deleteBiocharProduct, updateBiocharProduct } from "@/data-access/biochar-products";
 import { createSample, updateSample, deleteSample } from "@/data-access/samples";
 import { updateDelivery, deleteDelivery } from "@/data-access/delivery-output-writes";
+import { updateCreditBatch } from "@/data-access/credit-batches";
 import { createApplication } from "@/data-access/applications";
 import { getLockedCertifiedLineage } from "@/data-access/certification-lineage-guards";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
@@ -377,6 +378,62 @@ it.each(["update", "delete"] as const)("delivery %s waits for application creati
   } finally {
     resume.release();
     await Promise.all([creating, mutating]);
+    transactionGate?.mockRestore();
+    await cleanup(f);
+  }
+}, TEST_TIMEOUT_MS);
+
+
+it.each(["update", "delete"] as const)("sample %s holds artifacts before a batch metadata update locks the batch", async operation => {
+  const f = await postedStockFixture();
+  const resume = gate();
+  let sampleWriter: ReturnType<typeof outcome> | undefined;
+  let batchWriter: ReturnType<typeof outcome> | undefined;
+  let pid = 0;
+  let transactionGate: ReturnType<typeof vi.spyOn> | undefined;
+  try {
+    await addRemoval(f);
+    const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.organizationId, f.ctx.organizationId));
+    const sample = await createSample(f.ctx, {
+      creditBatchId: batch.id, samplingTime: new Date(STOCK_TIME),
+      sampleCode: `E2E-LOCK-SMP-${f.tag}`, totalCarbonPercent: SAMPLE_CARBON_PERCENT,
+      organicCarbonPercent: SAMPLE_CARBON_PERCENT, ...SAMPLE_TIER_EVIDENCE,
+    });
+    const originalTransaction = db.transaction.bind(db);
+    transactionGate = vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) =>
+      originalTransaction(async tx => {
+        const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "sample", entityId: sample.id });
+        expect(lineage.length).toBeGreaterThan(0);
+        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        pid = await backendPid(tx);
+        await resume.promise;
+        // The batch writer must wait for our artifact without owning the batch.
+        await tx.select({ id: creditBatches.id }).from(creditBatches).where(and(
+          eq(creditBatches.organizationId, f.ctx.organizationId), eq(creditBatches.id, batch.id),
+        )).for("update", { noWait: true });
+        return callback(tx);
+      }, config));
+    sampleWriter = outcome<unknown>(operation === "update"
+      ? updateSample(f.ctx, sample.id, { expectedVersion: sample.version, labName: "E2E updated lab" })
+      : deleteSample(f.ctx, sample.id, sample.version));
+    await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+    batchWriter = outcome(updateCreditBatch(f.ctx, batch.id, {
+      expectedVersion: batch.version, siteManagementNotes: "E2E updated metadata",
+    }));
+    await expect.poll(() => blockedQuery(pid), { timeout: BARRIER_TIMEOUT_MS }).toContain("pg_advisory_xact_lock");
+    resume.release();
+    expect(await sampleWriter).toMatchObject({ ok: true });
+    expect(await batchWriter).toMatchObject({ ok: true });
+    const [savedBatch] = await db.select().from(creditBatches).where(and(
+      eq(creditBatches.organizationId, f.ctx.organizationId), eq(creditBatches.id, batch.id),
+    ));
+    expect(savedBatch).toMatchObject({ version: batch.version + 1, siteManagementNotes: "E2E updated metadata" });
+    const rows = await db.select().from(samples).where(and(eq(samples.organizationId, f.ctx.organizationId), eq(samples.id, sample.id)));
+    if (operation === "delete") expect(rows).toHaveLength(0);
+    else expect(rows[0]).toMatchObject({ version: sample.version + 1, labName: "E2E updated lab" });
+  } finally {
+    resume.release();
+    await Promise.all([sampleWriter, batchWriter]);
     transactionGate?.mockRestore();
     await cleanup(f);
   }

@@ -59,6 +59,7 @@ import { processPendingStorageObjectDeletions } from "./storage-object-deletions
 import {
   assertCreditBatchSlicesAreUnassigned,
   assertRemovalAllowsCreditBatchMutation,
+  lockCreditBatchArtifacts,
 } from "./credit-batch-certification-lock";
 import { reconcileUnassignedCreditBatchApplicationSlices } from "./credit-batch-application-slices";
 import { deleteCreditBatchApplicationSlices } from "./credit-batch-delete-slices";
@@ -614,8 +615,8 @@ export async function updateCreditBatch(
   const committed = await db.transaction(async (tx) => {
     // Discover the current membership without taking a batch/removal lock, then
     // lock old + prospective + auto-discovered members in one sorted run-row
-    // batch. Every writer follows run -> process scope -> batch ->
-    // removal/certification order; production-run reopen also locks the run
+    // batch. Every writer follows run -> process scope -> artifacts -> batch
+    // order; production-run reopen also locks the run
     // before checking membership.
     const currentProductionRunIds = shouldRefreshMembership
       ? await readMemberProductionRunIds(ctx, tx, id)
@@ -701,7 +702,7 @@ export async function updateCreditBatch(
       }
     }
 
-    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update");
+    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "update", existingBatch.lockedRemovals);
     if (shouldRefreshMembership) {
       await assertCreditBatchSlicesAreUnassigned(ctx, tx, id);
     }
@@ -842,6 +843,7 @@ export async function updateCreditBatch(
 export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
   await db.transaction(async (tx) => {
+    const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
     // Lock the batch so a concurrent regroup/submit can't move it mid-delete.
     const [batch] = await tx
       .select({ id: creditBatches.id, version: creditBatches.version })
@@ -856,7 +858,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVer
 
     assertRowVersion({ entity: "creditBatch", id, expectedVersion, actualVersion: batch.version });
 
-    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete");
+    await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete", lockedRemovals);
 
     // Clear app-layer sample links, then delete membership links and the batch.
     await tx

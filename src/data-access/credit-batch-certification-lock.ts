@@ -10,16 +10,19 @@ import { formatCertificationLineageLockMessage } from "@/lib/certification/linea
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { requireOrgScope } from "./utils";
 
 const CERTIFIER_PROVIDER = "isometric" as const;
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 
-export async function isCreditBatchMembershipLockedBySubmission(
+async function readCreditBatchRemovals(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
-): Promise<boolean> {
-  const removalRows = await tx
+  lock = false,
+) {
+  requireOrgScope(ctx);
+  const query = tx
     .select({
       id: certifierRemovals.id,
       ghgStatementId: certifierRemovals.ghgStatementId,
@@ -38,13 +41,26 @@ export async function isCreditBatchMembershipLockedBySubmission(
         eq(creditBatchApplications.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(certifierRemovals.id)
-    .for("update");
+    .orderBy(certifierRemovals.id);
+  // Keep lineage stable without waiting on a Removal lifecycle transaction
+  // that may hold its row while waiting for our artifact lock. An incomplete
+  // result fails the snapshot comparison below and asks the caller to retry.
+  const removalRows = await (lock ? query.for("update", { skipLocked: true }) : query);
   const removals = [
     ...new Map(removalRows.map((removal) => [removal.id, removal])).values(),
   ];
-  if (removals.length === 0) return false;
+  return removals;
+}
 
+type CreditBatchRemovals = Awaited<ReturnType<typeof readCreditBatchRemovals>>;
+
+/** Acquire artifacts from an unlocked read, before taking any batch row lock. */
+export async function lockCreditBatchArtifacts(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  creditBatchId: string,
+): Promise<CreditBatchRemovals> {
+  const removals = await readCreditBatchRemovals(ctx, tx, creditBatchId);
   await acquireCertificationArtifactLocksSorted(tx, [
     ...removals.map((removal) => ({
       provider: CERTIFIER_PROVIDER,
@@ -60,6 +76,27 @@ export async function isCreditBatchMembershipLockedBySubmission(
       } as const)),
   ]);
 
+  return removals;
+}
+
+/** Re-resolve under the batch lock; never acquire newly discovered artifacts here. */
+export async function isCreditBatchMembershipLockedBySubmission(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  creditBatchId: string,
+  lockedRemovals: CreditBatchRemovals,
+): Promise<boolean> {
+  const removals = await readCreditBatchRemovals(ctx, tx, creditBatchId, true);
+  if (
+    removals.length !== lockedRemovals.length ||
+    removals.some((removal, index) =>
+      removal.id !== lockedRemovals[index].id ||
+      removal.ghgStatementId !== lockedRemovals[index].ghgStatementId,
+    )
+  ) {
+    throw new SafeError("Certification lineage changed while it was being locked. Refresh and retry.");
+  }
+  if (removals.length === 0) return false;
   const removalIds = removals.map((removal) => removal.id);
 
   const [removalSubmission] = await tx
@@ -123,12 +160,14 @@ export async function assertRemovalAllowsCreditBatchMutation(
   tx: DbTransaction,
   creditBatchId: string,
   mutation: "update" | "delete",
+  lockedRemovals: CreditBatchRemovals,
 ): Promise<void> {
   if (
     !(await isCreditBatchMembershipLockedBySubmission(
       ctx,
       tx,
       creditBatchId,
+      lockedRemovals,
     ))
   ) {
     return;

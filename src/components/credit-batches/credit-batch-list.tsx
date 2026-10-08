@@ -1,6 +1,6 @@
 "use client";
 
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * CreditBatchList component
  * Card grid layout with operational filters, pagination, and a derived
@@ -325,18 +325,14 @@ export function CreditBatchList({
   const handleDeleteConfirm = async () => {
     if (!deletingBatchId || deletingVersion === null) return;
     try {
-      const result = await deleteCreditBatch.mutateAsync({ creditBatchId: deletingBatchId, expectedVersion: deletingVersion });
-      if (result.success) {
-        if (focusedBatchId === deletingBatchId) {
-          void setFocusedBatchId(null);
-          setSideSheet(null);
-        }
-        toast.success("Credit batch deleted.");
-      } else {
-        toast.error(result.error || "Credit batch was not deleted. Try again.");
+      await deleteCreditBatch.mutateAsync({ creditBatchId: deletingBatchId, expectedVersion: deletingVersion });
+      if (focusedBatchId === deletingBatchId) {
+        void setFocusedBatchId(null);
+        setSideSheet(null);
       }
+      toast.success("Credit batch deleted.");
     } catch (error) {
-      toast.error(error instanceof StaleVersionError ? staleDeleteMessage("Credit batch") : "Credit batch was not deleted. Try again.");
+      toast.error(toDeleteErrorMessage(error, "Credit batch", "Credit batch was not deleted. Try again."));
     }
     setDeletingBatchId(null);
   };

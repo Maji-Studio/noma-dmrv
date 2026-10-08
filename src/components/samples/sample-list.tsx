@@ -307,9 +307,9 @@ export function SampleList({
     : null;
   const displaySideSheet =
     sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
-  const activeFocusTarget = sideSheet
-    ? null
-    : parseEntityFocusTarget(deepLinkFocus);
+  const activeFocusTarget = displaySideSheet?.entity?.id === focusedSampleId
+    ? parseEntityFocusTarget(deepLinkFocus)
+    : null;
 
   const createWithEvidence = useCreateWithEvidence({
     entityType: "sample",

@@ -275,11 +275,11 @@ Pure starter residue; org scoping came later via ADR 0010.
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
 
-### Instant input parsing until Phase 4 (`api/instant-input-parsing`, Kenji, 2026-10-07)
+### Instant input parsing until Phase 4 (`api/instant-input-parsing`, opened 2026-10-07)
 
-Production run start/end (`src/schemas/production-runs.ts`), incident time
-(`src/schemas/production-incidents.ts`), and sample `samplingTime`
-(`src/schemas/samples.ts`) retain instant parsing until Phase 4's API input
+Production run start/end (`src/schemas/production-runs.ts:updateProductionRunSchema.startTime/endTime`), incident time
+(`src/schemas/production-incidents.ts:productionIncidentFormSchema`), and sample `samplingTime`
+(`src/schemas/samples.ts:updateSampleSchema.samplingTime`) retain instant parsing until Phase 4's API input
 schemas. Only sample business dates use strict calendar-date parsing here.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)

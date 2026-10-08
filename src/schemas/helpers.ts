@@ -437,6 +437,14 @@ export function calendarDateSchema(message = INVALID_CALENDAR_DATE_MESSAGE) {
   return schema;
 }
 
+/** Clearable calendar date: omitted stays omitted; an empty input clears it. */
+export function optionalCalendarDateSchema() {
+  return z.preprocess(
+    (value) => value === "" ? null : value,
+    calendarDateSchema().optional().nullable(),
+  );
+}
+
 /**
  * Required date field fed by `<input type="date">` ("YYYY-MM-DD").
  *

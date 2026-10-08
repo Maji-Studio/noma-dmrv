@@ -327,7 +327,7 @@ export async function updateSampleFn(
     });
 
     return sample;
-  }, { fallbackMessage: "Failed to update sample", log: { message: "samples action failed", context: { op: "update" } } });
+  }, { fallbackMessage: "Failed to update sample", log: { message: "sample action failed", context: { op: "sample:update" } } });
 }
 
 // ============================================
@@ -346,5 +346,5 @@ export async function deleteSampleFn(
     await deleteSample(ctx, validated.sampleId, validated.expectedVersion);
 
     return;
-  }, { fallbackMessage: "Failed to delete sample", log: { message: "samples action failed", context: { op: "delete" } } });
+  }, { fallbackMessage: "Failed to delete sample", log: { message: "sample action failed", context: { op: "sample:delete" } } });
 }

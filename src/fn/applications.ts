@@ -175,7 +175,7 @@ export async function updateApplicationFn(
 
     const application = await updateApplicationData(ctx, applicationId, updateData);
     return application;
-  }, { fallbackMessage: "Failed to update application", log: { message: "applications action failed", context: { op: "update" } } });
+  }, { fallbackMessage: "Failed to update application", log: { message: "application action failed", context: { op: "application:update" } } });
 }
 
 /**
@@ -196,5 +196,5 @@ export async function deleteApplicationFn(
 
     await deleteApplicationData(ctx, validated.applicationId, validated.expectedVersion);
     return;
-  }, { fallbackMessage: "Failed to delete application", log: { message: "applications action failed", context: { op: "delete" } } });
+  }, { fallbackMessage: "Failed to delete application", log: { message: "application action failed", context: { op: "application:delete" } } });
 }

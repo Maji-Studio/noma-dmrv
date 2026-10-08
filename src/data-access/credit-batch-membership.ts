@@ -35,7 +35,7 @@ import { SafeError } from "@/lib/errors";
 import { formatCount, pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
-import { isCreditBatchMembershipLockedBySubmission } from "./credit-batch-certification-lock";
+import { isCreditBatchMembershipLockedBySubmission, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
@@ -140,6 +140,7 @@ export async function lockCreditBatchDeclarationRuns(
 }
 
 export interface LockedCreditBatchForUpdate {
+  lockedRemovals: Awaited<ReturnType<typeof lockCreditBatchArtifacts>>;
   version: number;
   facilityId: string;
   startDate: string;
@@ -214,6 +215,7 @@ export async function lockCreditBatchForUpdate(
     facilityId: target.facilityId ?? snapshot.facilityId,
     feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
   });
+  const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
   const [locked] = await tx
     .select(selectFields)
     .from(creditBatches)
@@ -234,7 +236,7 @@ export async function lockCreditBatchForUpdate(
       "The credit batch cohort changed while this update was being prepared. Refresh and retry.",
     );
   }
-  return locked;
+  return { ...locked, lockedRemovals };
 }
 
 /**
@@ -660,8 +662,7 @@ export async function attachProductionRunToMatchingCreditBatch(
         isNull(creditBatches.archivedAt),
       ),
     )
-    .orderBy(creditBatches.id)
-    .for("update");
+    .orderBy(creditBatches.id);
 
   if (matchingBatches.length === 0) return null;
   if (matchingBatches.length > 1) {
@@ -671,11 +672,20 @@ export async function attachProductionRunToMatchingCreditBatch(
   }
 
   const [batch] = matchingBatches;
+  const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, batch.id);
+  const [lockedBatch] = await tx.select({ id: creditBatches.id })
+    .from(creditBatches)
+    .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId),
+      eq(creditBatches.facilityId, run.facilityId), eq(creditBatches.feedstockTypeId, feedstockTypeId),
+      lte(creditBatches.startDate, run.date), gte(creditBatches.endDate, run.date), isNull(creditBatches.archivedAt)))
+    .for("update");
+  if (!lockedBatch) throw new SafeError("Credit batch cohort changed. Refresh and retry.");
   if (
     await isCreditBatchMembershipLockedBySubmission(
       ctx,
       tx,
       batch.id,
+      lockedRemovals,
     )
   ) {
     return null;
