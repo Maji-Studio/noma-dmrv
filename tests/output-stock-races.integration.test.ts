@@ -95,7 +95,7 @@ describe('output stock dependency races', () => {
     let correctionResult: Promise<{ error?: unknown; value?: unknown }> | undefined;
     try {
       const applicationPid = await inserted.promise;
-      correctionResult = postOutputStock(f.ctx, { ...correctionInput, expectedProductVersions: preview.expectedProductVersions ?? {}, basisFingerprint: preview.basisFingerprint,
+      correctionResult = postOutputStock(f.ctx, { ...correctionInput, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint,
         idempotencyKey: randomUUID(), reason: 'E2E correcting while application commits' })
         .then(value => ({ value }), error => ({ error }));
       await expect.poll(async () => {
@@ -136,7 +136,7 @@ describe('output stock dependency races', () => {
       kind: 'count' as const, wetMassKg: 1500, moisturePercent: 0 };
     const preview = await previewOutputStock(f.ctx, input);
     expect(preview.removedDryKg).toBe(0);
-    const count = await postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions ?? {}, basisFingerprint: preview.basisFingerprint,
+    const count = await postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint,
       idempotencyKey: randomUUID(), reason: `E2E allocation-free count ${f.tag}` });
     const effects = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.movementId, count.movementId));
     expect(effects).toHaveLength(0);

@@ -358,7 +358,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T12:00:00.000Z", kind: "delivery" as const, wetMassKg: 80, moisturePercent: 0, correctsMovementId: allocation.movementId };
     const preview = await previewOutputStock(f.ctx, input);
     const results = await Promise.allSettled([
-      postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions ?? {}, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
+      postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
       updateOrder(f.ctx, f.order.id, { quantityKg: 70 }),
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);

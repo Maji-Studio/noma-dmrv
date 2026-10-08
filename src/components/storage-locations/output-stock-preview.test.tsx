@@ -12,6 +12,7 @@ import { OutputStockAvailability, OutputStockPreview, type StockEntry } from "./
 beforeAll(() => Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }));
 
 const rain: Preview = {
+  expectedProductVersions: {},
   basisFingerprint: "basis", storageLocationId: "bin", binName: "Product bin", binCode: "PB-001", formulationName: "Mix", lane: "product",
   beforeDryKg: 1500, afterDryKg: 350, beforeSolidsKg: 1820, afterSolidsKg: 420,
   removedDryKg: 1150, removedWetKg: 2000, movementMoisturePercent: 30,
@@ -158,6 +159,7 @@ describe("OutputStockAvailability", () => {
  */
 describe("StockMovementCard", () => {
   const loss: Preview = {
+    expectedProductVersions: {},
     basisFingerprint: "basis", storageLocationId: "bin", binName: "Biochar bin", binCode: "BB-001", lane: "biochar",
     beforeDryKg: 350, afterDryKg: 343, beforeSolidsKg: 350, afterSolidsKg: 343,
     removedDryKg: 7, removedWetKg: 10, movementMoisturePercent: 30,

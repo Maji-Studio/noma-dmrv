@@ -79,10 +79,10 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   // still wet mass removed from the bin; a replaced count is still a count.
   const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";
   const submit = handleSubmit(async (data) => {
-    if (!input || !canSave || !basisFingerprint) return;
+    if (!input || !canSave || !basisFingerprint || !preview.data) return;
     setServerError(undefined);
     try {
-      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), expectedProductVersions: preview.data?.expectedProductVersions ?? {}, basisFingerprint, idempotencyKey });
+      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), expectedProductVersions: preview.data.expectedProductVersions, basisFingerprint, idempotencyKey });
       setIdempotencyKey(crypto.randomUUID());
       onRecorded();
     } catch (error) {

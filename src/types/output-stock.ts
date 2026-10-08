@@ -25,7 +25,7 @@ export interface OutputStockPreviewInput {
 }
 
 export interface OutputStockPreview {
-  expectedProductVersions?: Record<string, number>;
+  expectedProductVersions: Record<string, number>;
   basisFingerprint: string;
   storageLocationId: string;
   binName: string;

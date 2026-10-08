@@ -116,7 +116,10 @@ export async function updateProductionIncidentFn(
     );
 
     return incident;
-  }, { fallbackMessage: "Production incident was not saved. Try again." });
+  }, {
+    fallbackMessage: "Production incident was not saved. Try again.",
+    log: { message: "updateProductionIncidentFn failed" },
+  });
 }
 
 export async function deleteProductionIncidentFn(
@@ -127,5 +130,8 @@ export async function deleteProductionIncidentFn(
     await deleteProductionIncident(ctx, validated.productionIncidentId, validated.expectedVersion);
 
     return;
-  }, { fallbackMessage: "Failed to delete production incident" });
+  }, {
+    fallbackMessage: "Failed to delete production incident",
+    log: { message: "deleteProductionIncidentFn failed" },
+  });
 }

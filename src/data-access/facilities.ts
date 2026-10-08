@@ -586,8 +586,11 @@ export async function archiveFacility(
       throw new SafeError("Facility is already archived");
     }
 
-    // Stock posting locks product rows by UUID before inserting ledger children.
-    // Match that order; NO KEY UPDATE preserves compatibility with FK readers.
+    // Delivery corrections lock their delivery before products. Match both
+    // table and UUID order; NO KEY UPDATE stays compatible with FK readers.
+    await tx.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)))
+      .orderBy(asc(deliveries.id)).for("no key update");
     await tx.select({ id: biocharProducts.id }).from(biocharProducts)
       .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
       .orderBy(asc(biocharProducts.id)).for("no key update");
@@ -666,8 +669,11 @@ export async function restoreFacility(
       throw new SafeError("Facility is not archived");
     }
 
-    // Stock posting locks product rows by UUID before inserting ledger children.
-    // Match that order; NO KEY UPDATE preserves compatibility with FK readers.
+    // Delivery corrections lock their delivery before products. Match both
+    // table and UUID order; NO KEY UPDATE stays compatible with FK readers.
+    await tx.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.archivedAt, cascadeArchiveStamp)))
+      .orderBy(asc(deliveries.id)).for("no key update");
     await tx.select({ id: biocharProducts.id }).from(biocharProducts)
       .where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)))
       .orderBy(asc(biocharProducts.id)).for("no key update");

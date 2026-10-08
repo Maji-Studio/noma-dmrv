@@ -538,10 +538,11 @@ export async function updateBiocharProduct(ctx: OrgContext, productId: string, d
     const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
     if (!product) throw new SafeError('Biochar product not found');
     await lockBinStocks(ctx, tx, [product.storageLocationId, product.sourceBiocharStorageLocationId]);
+    // Application allocation FKs take product KEY SHARE after artifact locks.
+    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'update');
     const [locked] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
     if (!locked) throw new SafeError("Biochar product not found");
     assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion: data.expectedVersion, actualVersion: locked.version });
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'update');
     const placementChanged = data.placedAt !== undefined && new Date(data.placedAt).getTime() !== product.placedAt.getTime();
     if (placementChanged || (['facilityId', 'formulationId', 'linkedProductionRunId', 'storageLocationId', 'massKg', 'moistureContentPercent', 'waterAddedKg'] as const).some(key => data[key] !== undefined && data[key] !== product[key])) {
       throw new SafeError('Posted product source, composition, placement, and bin are immutable. Use an explicit stock correction.');
@@ -557,12 +558,13 @@ export async function deleteBiocharProduct(ctx: OrgContext, productId: string, e
     const [snapshot] = await tx.select({ storageLocationId: biocharProducts.storageLocationId, sourceBiocharStorageLocationId: biocharProducts.sourceBiocharStorageLocationId })
       .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
     if (!snapshot) throw new SafeError('Biochar product not found');
-    // Match updates: serialize with stock before taking the row/artifact locks.
+    // Match updates: serialize with stock before taking artifact locks, then the product row.
     await lockBinStocks(ctx, tx, [snapshot.storageLocationId, snapshot.sourceBiocharStorageLocationId]);
+    // Application allocation FKs take product KEY SHARE after artifact locks.
+    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'delete');
     const [product] = await tx.select({ id: biocharProducts.id, version: biocharProducts.version }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
     if (!product) throw new SafeError('Biochar product not found');
     assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion, actualVersion: product.version });
-    await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'delete');
     throw new SafeError('Posted products retain their source allocations and history. Use an explicit stock correction.');
   });
 }

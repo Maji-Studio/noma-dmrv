@@ -122,17 +122,17 @@ it("stock posting and correction check preview versions, bump products and prese
   const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: STOCK_TIME, kind: "loss" as const, wetMassKg: LOSS_WET_KG, moisturePercent: 0 };
   const preview = await previewOutputStock(f.ctx, input);
   const saved = await updateBiocharProduct(f.ctx, f.product!.id, { expectedVersion: f.product!.version, densityKgM3: FIRST_VALUE });
-  const command = { ...input, expectedProductVersions: preview.expectedProductVersions!, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E version loss" };
+  const command = { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E version loss" };
   await expect(postOutputStock(f.ctx, command)).rejects.toMatchObject(stale);
   const refreshed = await previewOutputStock(f.ctx, input);
-  const current = { ...command, expectedProductVersions: refreshed.expectedProductVersions!, basisFingerprint: refreshed.basisFingerprint };
+  const current = { ...command, expectedProductVersions: refreshed.expectedProductVersions, basisFingerprint: refreshed.basisFingerprint };
   const posted = await postOutputStock(f.ctx, current);
   expect(posted.savedProducts[0].version).toBe(saved.version + VERSION_INCREMENT);
   const replay = await postOutputStock(f.ctx, current);
   expect(replay.savedProducts[0].version).toBe(posted.savedProducts[0].version);
   const correction = { ...input, correctsMovementId: posted.movementId, wetMassKg: CORRECTED_LOSS_WET_KG };
   const correctionPreview = await previewOutputStock(f.ctx, correction);
-  const corrected = await postOutputStock(f.ctx, { ...correction, expectedProductVersions: correctionPreview.expectedProductVersions!, basisFingerprint: correctionPreview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E correction" });
+  const corrected = await postOutputStock(f.ctx, { ...correction, expectedProductVersions: correctionPreview.expectedProductVersions, basisFingerprint: correctionPreview.basisFingerprint, idempotencyKey: randomUUID(), reason: "E2E correction" });
   expect(corrected.savedProducts[0].version).toBe(posted.savedProducts[0].version + VERSION_INCREMENT);
 });
 
@@ -151,15 +151,15 @@ it("checks and bumps products whose count readings are reversed without replacem
   const preview = await previewOutputStock(f.ctx, input);
   expect(preview.allocations).toEqual([]);
   const edited = await updateBiocharProduct(f.ctx, later.id, {
-    expectedVersion: preview.expectedProductVersions![later.id], densityKgM3: FIRST_VALUE,
+    expectedVersion: preview.expectedProductVersions[later.id], densityKgM3: FIRST_VALUE,
   });
-  const command = { ...input, expectedProductVersions: preview.expectedProductVersions!, basisFingerprint: preview.basisFingerprint,
+  const command = { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint,
     idempotencyKey: randomUUID(), reason: "E2E backdated allocation-free count" };
   await expect(postOutputStock(f.ctx, command)).rejects.toMatchObject(stale);
   const refreshed = await previewOutputStock(f.ctx, input);
   // Metadata alone leaves the stock fingerprint unchanged: the version check matters.
   expect(refreshed.basisFingerprint).toBe(preview.basisFingerprint);
-  const corrected = await postOutputStock(f.ctx, { ...command, expectedProductVersions: refreshed.expectedProductVersions! });
+  const corrected = await postOutputStock(f.ctx, { ...command, expectedProductVersions: refreshed.expectedProductVersions });
   expect(corrected.savedProducts.map(row => row.id).sort()).toEqual([f.product!.id, later.id].sort());
   expect(corrected.savedProducts.find(row => row.id === later.id)?.version).toBe(edited.version + VERSION_INCREMENT);
   const replacementReadings = await db.select().from(outputStockMoistureReadings).where(eq(outputStockMoistureReadings.movementId, corrected.movementId));

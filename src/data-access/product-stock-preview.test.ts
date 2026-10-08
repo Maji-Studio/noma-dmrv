@@ -15,7 +15,7 @@ import { assertProductStockBasis, prepareProductStock, revalidateProductStock, p
 
 const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
 const input: ProductStockPreviewInput = { facilityId: 'facility', formulationId: 'recipe', placedAt: '2026-09-14T12:00:00.000Z', sourceBiocharStorageLocationId: 'source', storageLocationId: 'destination', massKg: 100, moistureContentPercent: 10, waterAddedKg: 20, ingredientBins: [] };
-const preview: OutputStockPreview = { storageLocationId: 'source', binName: 'Source', binCode: 'BC-1', lane: 'biochar', basisFingerprint: 'source-basis', beforeDryKg: 180, afterDryKg: 90, beforeSolidsKg: 180, afterSolidsKg: 90, removedDryKg: 90, removedWetKg: 100, movementMoisturePercent: 10, beforeEstimatedWetKg: 200, afterEstimatedWetKg: 100, discrepancySolidsKg: 0, blockingMessage: null, allocations: [{ layerId: 'run', code: 'RUN-1', wetMassKg: 100, dryMassKg: 90, runs: [{ productionRunId: 'run', code: 'RUN-1', dryMassKg: 90 }] }] };
+const preview: OutputStockPreview = { expectedProductVersions: {}, storageLocationId: 'source', binName: 'Source', binCode: 'BC-1', lane: 'biochar', basisFingerprint: 'source-basis', beforeDryKg: 180, afterDryKg: 90, beforeSolidsKg: 180, afterSolidsKg: 90, removedDryKg: 90, removedWetKg: 100, movementMoisturePercent: 10, beforeEstimatedWetKg: 200, afterEstimatedWetKg: 100, discrepancySolidsKg: 0, blockingMessage: null, allocations: [{ layerId: 'run', code: 'RUN-1', wetMassKg: 100, dryMassKg: 90, runs: [{ productionRunId: 'run', code: 'RUN-1', dryMassKg: 90 }] }] };
 
 beforeEach(() => {
   vi.clearAllMocks();

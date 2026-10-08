@@ -151,7 +151,10 @@ export async function updateProductionSampleFn(
     );
 
     return sample;
-  }, { fallbackMessage: "In-process measurement was not saved. Try again." });
+  }, {
+    fallbackMessage: "In-process measurement was not saved. Try again.",
+    log: { message: "updateProductionSampleFn failed" },
+  });
 }
 
 // ============================================
@@ -169,5 +172,8 @@ export async function deleteProductionSampleFn(
     await deleteProductionSample(ctx, validated.productionSampleId, validated.expectedVersion);
 
     return;
-  }, { fallbackMessage: "In-process measurement was not deleted. Try again." });
+  }, {
+    fallbackMessage: "In-process measurement was not deleted. Try again.",
+    log: { message: "deleteProductionSampleFn failed" },
+  });
 }

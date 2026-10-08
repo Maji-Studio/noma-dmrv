@@ -193,7 +193,10 @@ export async function updateBiocharProductFn(
     });
 
     return product;
-  }, { fallbackMessage: "Failed to update biochar product" });
+  }, {
+    fallbackMessage: "Failed to update biochar product",
+    log: { message: "biochar product action failed", context: { op: "biochar-product:update" } },
+  });
 }
 
 // ============================================
@@ -211,5 +214,8 @@ export async function deleteBiocharProductFn(
     await deleteBiocharProduct(ctx, validated.productId, validated.expectedVersion);
 
     return;
-  }, { fallbackMessage: "Failed to delete biochar product" });
+  }, {
+    fallbackMessage: "Failed to delete biochar product",
+    log: { message: "biochar product action failed", context: { op: "biochar-product:delete" } },
+  });
 }

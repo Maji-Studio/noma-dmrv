@@ -1,3 +1,4 @@
+import { patchArrayListCachesWithSavedRow } from "./list-cache-utils";
 import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 /**
  * Production Incidents React Query Hooks
@@ -84,8 +85,7 @@ export function useUpdateProductionIncident(
       return result.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueriesData<ProductionIncidentWithRelations[]>({ queryKey: productionIncidentKeys.lists() },
-        old => old?.map(row => row.id === data.id ? { ...row, ...data } : row));
+      patchArrayListCachesWithSavedRow<ProductionIncidentWithRelations>(queryClient, productionIncidentKeys.lists(), data);
       queryClient.invalidateQueries({
         queryKey: productionIncidentKeys.list(variables.productionRunId),
       });

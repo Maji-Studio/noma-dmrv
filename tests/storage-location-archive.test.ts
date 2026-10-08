@@ -225,7 +225,7 @@ describe("storage location archive", () => {
       await expect(archiveStorageLocation(fixture.ctx, binId, await masterDataVersion(fixture.ctx, "storageLocations", binId))).rejects.toThrow(/on hand/);
       const input = { facilityId: fixture.facility.id, storageLocationId: binId, occurredAt: "2026-09-14T12:00:00.000Z", kind: "count" as const, wetMassKg: 0 };
       const preview = await previewOutputStock(fixture.ctx, input);
-      await postOutputStock(fixture.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions ?? {}, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E archive empty bin" });
+      await postOutputStock(fixture.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E archive empty bin" });
       await expect(archiveStorageLocation(fixture.ctx, binId, await masterDataVersion(fixture.ctx, "storageLocations", binId))).resolves.toMatchObject({ archivedAt: expect.any(Date) });
     } finally { await cleanupPostedStock(fixture); }
   });

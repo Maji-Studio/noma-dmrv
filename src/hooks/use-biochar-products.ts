@@ -282,9 +282,9 @@ export function useDeleteBiocharProduct(
       }
       return;
     },
-    onMutate: async (productId) => {
+    onMutate: async (variables) => {
       if (!optimistic) {
-        await callbacks?.onMutate?.(productId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -295,7 +295,7 @@ export function useDeleteBiocharProduct(
 
       // Snapshot previous values for rollback
       const previousProduct = queryClient.getQueryData<BiocharProductWithRelations>(
-        biocharProductKeys.detail(productId.productId)
+        biocharProductKeys.detail(variables.productId)
       );
       const previousLists = queryClient.getQueriesData<PaginatedBiocharProducts>({
         queryKey: biocharProductKeys.lists(),
@@ -307,20 +307,20 @@ export function useDeleteBiocharProduct(
           if (!old) return old;
           return {
             ...old,
-            items: old.items.filter((item) => item.id !== productId.productId),
+            items: old.items.filter((item) => item.id !== variables.productId),
             total: Math.max(0, old.total - 1),
           };
         });
       });
 
-      await callbacks?.onMutate?.(productId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousProduct, previousLists };
     },
-    onSuccess: async (_, productId) => {
+    onSuccess: async (_, variables) => {
       // Remove specific product from cache
-      queryClient.removeQueries({ queryKey: biocharProductKeys.detail(productId.productId) });
+      queryClient.removeQueries({ queryKey: biocharProductKeys.detail(variables.productId) });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
       // Invalidate options for dropdowns
@@ -328,9 +328,9 @@ export function useDeleteBiocharProduct(
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       invalidateStockEntityQueries(queryClient, "biocharProduct");
 
-      await callbacks?.onSuccess?.(undefined, productId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, productId, context) => {
+    onError: async (error, variables, context) => {
       void queryClient.invalidateQueries({ queryKey: outputStockKeys.all });
       // Rollback to previous values on error
       if (optimistic && context) {
@@ -341,7 +341,7 @@ export function useDeleteBiocharProduct(
 
         if (previousProduct) {
           queryClient.setQueryData(
-            biocharProductKeys.detail(productId.productId),
+            biocharProductKeys.detail(variables.productId),
             previousProduct
           );
         }
@@ -355,15 +355,15 @@ export function useDeleteBiocharProduct(
 
       if (error instanceof StaleVersionError) {
         queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: biocharProductKeys.detail(productId.productId) });
+        queryClient.invalidateQueries({ queryKey: biocharProductKeys.detail(variables.productId) });
       }
-      await callbacks?.onError?.(error, productId);
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, productId) => {
+    onSettled: async (data, error, variables) => {
       // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, productId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

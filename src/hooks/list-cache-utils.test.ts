@@ -5,7 +5,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { patchListCachesWithSavedRow } from "./list-cache-utils";
+import { patchArrayListCachesWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 
 interface Row {
   id: string;
@@ -71,4 +71,20 @@ describe("patchListCachesWithSavedRow", () => {
     ]);
     expect(cached?.items[0]?.updatedAt).toBe(OPENED_ON);
   });
+});
+
+it("patches every matching array list while preserving enrichment and unrelated caches", () => {
+  const queryClient = new QueryClient();
+  const other = { ...row, id: "other-row" };
+  const keys = [["measurements", "list", "run-a"], ["measurements", "list", "run-b"]];
+  for (const key of keys) queryClient.setQueryData(key, [row, other]);
+  queryClient.setQueryData(["other", "list"], [row]);
+  patchArrayListCachesWithSavedRow<Row>(queryClient, ["measurements", "list"], {
+    id: row.id, updatedAt: SAVED_AT,
+  });
+  for (const key of keys) {
+    expect(queryClient.getQueryData(key)).toEqual([{ ...row, updatedAt: SAVED_AT }, other]);
+  }
+  expect(queryClient.getQueryData(["other", "list"])).toEqual([row]);
+  expect(queryClient.getQueryData(["measurements", "list", "uncached"])).toBeUndefined();
 });

@@ -103,7 +103,7 @@ describe('output stock event times in PostgreSQL', () => {
     for (const occurredAt of ['2026-09-15T22:00:00.000Z', '2026-09-15T23:00:00.000Z']) {
       const input = { storageLocationId: f.source.id, facilityId: f.facility.id, occurredAt, kind: 'count' as const, wetMassKg: 2000, moisturePercent: 0 };
       const preview = await previewOutputStock(f.ctx, input);
-      await postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions ?? {}, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E time chronology count' });
+      await postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: randomUUID(), reason: 'E2E time chronology count' });
       const dependency = db.transaction(tx => getProductionRunDependentProduct(f.ctx, tx, f.runs[0].id));
       if (occurredAt === '2026-09-15T22:00:00.000Z') await expect(dependency).resolves.toBeUndefined();
       else await expect(dependency).rejects.toThrow('covered by count');
