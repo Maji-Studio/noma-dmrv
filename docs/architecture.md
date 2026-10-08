@@ -565,7 +565,7 @@ conserved dry stock, immutable corrections, and saved downstream provenance.
 
 ## REST credential boundary
 
-`/api/v1` bypasses session middleware and authenticates at each route through
+`/api/v1` bypasses session middleware. Private routes authenticate through
 `resolveApiContext`. This privileged authentication seam reads the key's hash,
 owner and live membership through `data-access/api-credential-auth.ts` before
 constructing an `OrgContext`; its cross-organization lookup is explicitly
@@ -694,3 +694,37 @@ parent's organization before querying its children, and paginates locations with
 name search and coordinates in decimal degrees. Its cursor also binds the
 supplier ID; a missing or foreign supplier returns 404, including when it has
 no locations. Supplier locations have no code or archive column.
+
+### Public API contract
+
+`src/lib/api/openapi/document.ts:buildOpenApiDocument` builds OpenAPI 3.1 with
+relative `/api/v1` servers and stable operation ids. Operation bodies use only
+`src/lib/operations/json-schema.ts:toOperationJsonSchema`; output representations
+use Zod's output JSON Schema conversion. Strict query schemas live in
+`src/lib/api/query-schemas.ts` and `src/lib/api/query.ts`. Descriptions belong in
+Zod schemas. Transport headers and possible statuses are declared in the generator.
+The generator imports no runtime credentials, environment or database modules.
+
+`GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public, bypass credential
+resolution and rate-limit guards, and cache publicly for 300 seconds. The short
+agent guide covers discovery, units, local business dates and safe retry behavior.
+The rendered reference and CI-generated TypeScript client remain deferred in
+[open-questions.md](./open-questions.md).
+
+Run `pnpm openapi:generate` after a contract change and include `openapi/v1.json`
+in its PR. The colocated generator test compares the exact stable, pretty-printed
+snapshot with code (compact leaf schemas keep the generated file below the line cap),
+checks route coverage and validates the OpenAPI structure.
+The CI `openapi-breaking` job compares the PR base SHA snapshot with the head
+using checksum-verified oasdiff v1.32.1 and `breaking --fail-on ERR`. A base without
+the snapshot is the first release and passes with an explicit notice.
+
+Prefer additive changes in v1; incompatible versions use v2 with Deprecation and
+Sunset headers. For an accepted deliberate break or contract correction, regenerate
+the snapshot and add the specific method/path and exact change description from
+`oasdiff breaking <base> openapi/v1.json --format singleline` to
+`openapi/accepted-breaking-changes.txt` in the same PR. CI passes that file to
+`--err-ignore`; do not blanket-ignore a check or endpoint. Explain the client
+impact in the PR and remove stale entries after the change reaches the base.
+The [oasdiff ignore-file format](https://github.com/oasdiff/oasdiff/blob/v1.32.1/docs/BREAKING-CHANGES.md#ignoring-specific-breaking-changes)
+requires the method/path (or `components`) and change description on each line.

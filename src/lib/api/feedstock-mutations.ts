@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { feedstockCreateEnvelopeSchema } from "./representations/envelopes";
 import { API_FEEDSTOCK_MAX_ALLOCATIONS, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { readApiFeedstock } from "@/lib/read-models/api-feedstocks";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
@@ -48,7 +49,7 @@ export async function createFeedstockResponse(request: Request, { ctx, headers, 
   return Response.json({
     data, ...(result.data.warning ? { warnings: [result.data.warning] } : {}),
     ...(dryRun ? { preview: feedstockStockPreview(data) } : {}),
-  }, { status: dryRun ? 200 : 201, headers });
+  } satisfies z.infer<typeof feedstockCreateEnvelopeSchema>, { status: dryRun ? 200 : 201, headers });
 }
 
 /** Runs after the idempotency claim/replay, before any domain write. */

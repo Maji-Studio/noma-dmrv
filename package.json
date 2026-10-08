@@ -37,6 +37,7 @@
     "check:spacing-scale": "tsx scripts/check-spacing-scale.ts",
     "check:css-vars": "tsx scripts/check-css-vars.ts",
     "check:ux-copy": "tsx scripts/check-ux-copy.ts",
+    "openapi:generate": "tsx scripts/generate-openapi.ts",
     "docs:check": "node scripts/check-doc-references.mjs",
     "test": "vitest",
     "test:ui": "vitest --ui",
