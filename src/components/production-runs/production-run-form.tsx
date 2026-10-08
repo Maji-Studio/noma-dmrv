@@ -75,7 +75,7 @@ const EMPTY_FEEDSTOCK_DRAW = { storageLocationId: "", wetMassKg: undefined };
 
 export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
   endTime?: ProductionRunFormData["endTime"] | null;
-  expectedUpdatedAt?: Date;
+  expectedVersion?: number;
 };
 
 interface ProductionRunFormProps {
@@ -342,7 +342,7 @@ export function ProductionRunForm({
     }
     const combined: ProductionRunSubmitData = {
       ...data,
-      expectedUpdatedAt: productionRun?.updatedAt,
+      expectedVersion: productionRun?.version,
       startTime: runWindow.startTime,
       endTime: runWindow.endTime,
     };

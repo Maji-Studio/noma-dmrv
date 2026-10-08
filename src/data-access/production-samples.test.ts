@@ -20,24 +20,28 @@ const ctx: OrgContext = {
   isPlatformAdmin: false,
 };
 
-const SAMPLE_ROW = { id: "sample", operatorName: "Operator" };
+const SAMPLE_ROW = { version: 1, id: "sample", operatorName: "Operator" };
 const READ_FAILURE = new Error("connection terminated unexpectedly");
 
 /**
  * A transaction whose reads either resolve to `rows` or reject with the given
  * error, so a spec can inject an enrichment-read failure.
  */
-function makeTx(read: { rows: unknown[] } | { error: Error }) {
+function makeTx(read: { rows: unknown[] } | { error: Error }, lockedRows?: unknown[]) {
+  let firstRead = true;
   const select = vi.fn(() => {
+    const result = firstRead && lockedRows ? { rows: lockedRows } : read;
+    firstRead = false;
     const query = {
       from: () => query,
+      for: () => query,
       leftJoin: () => query,
       where: () => query,
       orderBy: () => query,
       then: (resolve: (rows: unknown) => unknown, reject: (e: unknown) => unknown) =>
-        "error" in read
-          ? Promise.reject(read.error).then(resolve, reject)
-          : Promise.resolve(read.rows).then(resolve),
+        "error" in result
+          ? Promise.reject(result.error).then(resolve, reject)
+          : Promise.resolve(result.rows).then(resolve),
     };
     return query;
   });
@@ -104,18 +108,20 @@ describe("updateProductionSample", () => {
     const globalRead = runInTransaction(tx);
 
     await expect(
-      updateProductionSample(ctx, "sample", { notes: "checked" }),
+      updateProductionSample(ctx, "sample", { expectedVersion: 1, notes: "checked" }),
     ).resolves.toEqual(SAMPLE_ROW);
     expect(tx.update).toHaveBeenCalled();
     expect(globalRead).not.toHaveBeenCalled();
   });
 
   it("does not report a failed read as a measurement that was not saved", async () => {
-    const tx = makeTx({ error: READ_FAILURE });
+    const tx = makeTx({ error: READ_FAILURE }, [SAMPLE_ROW]);
     runInTransaction(tx);
 
     await expect(
-      updateProductionSample(ctx, "sample", { notes: "checked" }),
+      updateProductionSample(ctx, "sample", { expectedVersion: 1, notes: "checked" }),
     ).rejects.toThrow(READ_FAILURE);
+    expect(tx.update).toHaveBeenCalledOnce();
+    expect(tx.select).toHaveBeenCalledTimes(2);
   });
 });

@@ -84,7 +84,7 @@ describe("residenceTimeMinutes PG integer cap", () => {
   });
 
   it("rejects an overflowing value on update", () => {
-    const result = updateProductionRunSchema.safeParse({
+    const result = updateProductionRunSchema.safeParse({ expectedVersion: 1,
       productionRunId: RUN_ID,
       residenceTimeMinutes: OVERFLOW,
     });
@@ -92,7 +92,7 @@ describe("residenceTimeMinutes PG integer cap", () => {
   });
 
   it("accepts PG_INTEGER_MAX itself on update", () => {
-    const result = updateProductionRunSchema.safeParse({
+    const result = updateProductionRunSchema.safeParse({ expectedVersion: 1,
       productionRunId: RUN_ID,
       residenceTimeMinutes: PG_INTEGER_MAX,
     });

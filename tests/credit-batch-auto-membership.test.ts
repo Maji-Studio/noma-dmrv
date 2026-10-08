@@ -1,3 +1,4 @@
+import { productionVersion } from "./helpers/production-version";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -382,13 +383,13 @@ describe("credit batch automatic production-run membership", () => {
         .sort(),
     ).toEqual(["draft", "running"]);
 
-    await updateProductionRun(ctx, draft.id, {
+    await updateProductionRun(ctx, draft.id, { expectedVersion: await productionVersion(ctx, "productionRuns", draft.id),
       status: "complete",
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
 
-    await updateProductionRun(ctx, running.id, {
+    await updateProductionRun(ctx, running.id, { expectedVersion: await productionVersion(ctx, "productionRuns", running.id),
       status: "complete",
       endTime: new Date("2024-02-15T12:00:00.000Z"),
       biocharOutputKg: 30,
@@ -452,15 +453,14 @@ describe("credit batch automatic production-run membership", () => {
       .returning({ id: samples.id });
     sampleIds.push(sample.id);
 
-    await updateProductionRun(ctx, run.id, {
+    const completed = await updateProductionRun(ctx, run.id, { expectedVersion: run.version,
       status: "complete",
       endTime: new Date("2025-01-15T12:00:00.000Z"),
       biocharOutputKg: 30,
       biocharMoisturePercent: 20,
     });
-    await expect(
-      updateProductionRun(ctx, run.id, { feedingRateKgHr: 25 }),
-    ).resolves.toBeDefined();
+    const edited = await updateProductionRun(ctx, run.id, { expectedVersion: completed.version, feedingRateKgHr: 25 });
+    expect(edited).toBeDefined();
 
     const [unchangedRun] = await db
       .select({
@@ -514,7 +514,7 @@ describe("credit batch automatic production-run membership", () => {
     };
 
     await expect(
-      updateProductionRun(ctx, run.id, {
+      updateProductionRun(ctx, run.id, { expectedVersion: edited.version,
         startTime: new Date("2025-02-15T08:00:00.000Z"),
         endTime: new Date("2025-02-15T12:00:00.000Z"),
       }),
@@ -522,14 +522,14 @@ describe("credit batch automatic production-run membership", () => {
     await expectLinksAndCohortInputsUnchanged();
 
     await expect(
-      updateProductionRun(ctx, run.id, {
+      updateProductionRun(ctx, run.id, { expectedVersion: edited.version,
         feedstockStorageLocationId: alternateStorageLocationId,
       }),
     ).rejects.toThrow(/cannot be edited outside its declared cohort/i);
     await expectLinksAndCohortInputsUnchanged();
 
     await expect(
-      updateProductionRun(ctx, run.id, {
+      updateProductionRun(ctx, run.id, { expectedVersion: edited.version,
         facilityId: otherFacilityId,
         reactorId: otherReactorId,
         feedstockStorageLocationId: otherStorageLocationId,
@@ -551,7 +551,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockStorageLocationId: storageLocationId,
     });
     productionRunIds.push(running.id);
-    await updateProductionRun(ctx, running.id, {
+    await updateProductionRun(ctx, running.id, { expectedVersion: await productionVersion(ctx, "productionRuns", running.id),
       status: "complete",
       endTime: new Date("2024-03-15T12:00:00.000Z"),
       biocharOutputKg: 30,
@@ -585,7 +585,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockStorageLocationId: storageLocationId,
     });
     productionRunIds.push(first.id);
-    await updateProductionRun(ctx, first.id, {
+    await updateProductionRun(ctx, first.id, { expectedVersion: await productionVersion(ctx, "productionRuns", first.id),
       status: "complete",
       endTime: new Date("2024-05-10T12:00:00.000Z"),
       biocharOutputKg: 30,
@@ -604,7 +604,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockStorageLocationId: storageLocationId,
     });
     productionRunIds.push(second.id);
-    await updateProductionRun(ctx, second.id, {
+    await updateProductionRun(ctx, second.id, { expectedVersion: await productionVersion(ctx, "productionRuns", second.id),
       status: "complete",
       endTime: new Date("2024-05-11T12:00:00.000Z"),
       biocharOutputKg: 30,
@@ -649,7 +649,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockStorageLocationId: storageLocationId,
     });
     productionRunIds.push(run.id);
-    await updateProductionRun(ctx, run.id, {
+    await updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id),
       status: "complete",
       endTime: new Date("2025-03-15T12:00:00.000Z"),
       biocharOutputKg: 30,
@@ -716,7 +716,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockStorageLocationId: storageLocationId,
     });
     productionRunIds.push(emptyFeedstockRun.id);
-    await updateProductionRun(ctx, emptyFeedstockRun.id, {
+    await updateProductionRun(ctx, emptyFeedstockRun.id, { expectedVersion: await productionVersion(ctx, "productionRuns", emptyFeedstockRun.id),
       status: "complete",
       endTime: new Date("2024-07-10T12:00:00.000Z"),
       biocharOutputKg: 30,
@@ -735,7 +735,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockStorageLocationId: storageLocationId,
     });
     productionRunIds.push(mixedFeedstockRun.id);
-    await updateProductionRun(ctx, mixedFeedstockRun.id, {
+    await updateProductionRun(ctx, mixedFeedstockRun.id, { expectedVersion: await productionVersion(ctx, "productionRuns", mixedFeedstockRun.id),
       status: "complete",
       endTime: new Date("2024-07-11T12:00:00.000Z"),
       biocharOutputKg: 30,
@@ -841,7 +841,7 @@ describe("credit batch automatic production-run membership", () => {
     productionRunIds.push(run.id);
 
     await expect(
-      updateProductionRun(ctx, run.id, {
+      updateProductionRun(ctx, run.id, { expectedVersion: await productionVersion(ctx, "productionRuns", run.id),
         status: "complete",
         endTime: new Date("2024-09-15T12:00:00.000Z"),
         biocharOutputKg: 30,
@@ -898,7 +898,7 @@ describe("credit batch automatic production-run membership", () => {
     let createPromise: ReturnType<typeof createCreditBatch> | undefined;
     try {
       await scopeLockReady;
-      completionPromise = updateProductionRun(ctx, running.id, {
+      completionPromise = updateProductionRun(ctx, running.id, { expectedVersion: await productionVersion(ctx, "productionRuns", running.id),
         status: "complete",
         endTime: new Date("2024-10-15T12:00:00.000Z"),
         biocharOutputKg: 30,

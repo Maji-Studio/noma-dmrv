@@ -36,6 +36,11 @@ migrations, and soft-delete semantics live in [`database.md`](./database.md).
 | Route cache | `src/db/schema/geo.ts` |
 | Shared enums / shared numeric column types | `src/db/schema/common.ts` · `src/db/schema/numeric-families.ts` |
 
+Production runs, incident reports, in-process production samples, and biochar
+products each carry a required integer `version`, initially 1. Every row update
+increments it atomically, including archive cascades and product stock effects.
+Edit and delete commands must send the loaded version.
+
 ## Invariants and traps
 
 - **Multi-tenancy.** Every MRV/domain table carries a NOT NULL

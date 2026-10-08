@@ -41,7 +41,7 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
     mode: "onTouched",
     defaultValues: {
       storageLocationId, facilityId, kind, correctsMovementId: original?.id,
-      basisFingerprint: "pending-preview", idempotencyKey,
+      expectedProductVersions: {}, basisFingerprint: "pending-preview", idempotencyKey,
       occurredAt: original?.occurredAt ?? new Date().toISOString(),
       wetMassKg: original?.wetMassKg ?? undefined,
       // A correction starts from the saved reading. A split draw replays its
@@ -79,10 +79,10 @@ export function OutputStockForm({ storageLocationId, facilityId, kind, original,
   // still wet mass removed from the bin; a replaced count is still a count.
   const entryKind: StockEntryKind = kind === "count" ? "count" : original ? "correction" : "loss";
   const submit = handleSubmit(async (data) => {
-    if (!input || !canSave || !basisFingerprint) return;
+    if (!input || !canSave || !basisFingerprint || !preview.data) return;
     setServerError(undefined);
     try {
-      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), basisFingerprint, idempotencyKey });
+      await mutation.mutateAsync({ ...input, reason: data.reason.trim(), expectedProductVersions: preview.data.expectedProductVersions, basisFingerprint, idempotencyKey });
       setIdempotencyKey(crypto.randomUUID());
       onRecorded();
     } catch (error) {

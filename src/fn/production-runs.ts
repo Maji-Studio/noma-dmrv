@@ -162,7 +162,7 @@ export async function updateProductionRunFn(
         facilityId: validated.facilityId,
         reactorId: validated.reactorId,
         status: validated.status,
-        expectedUpdatedAt: validated.expectedUpdatedAt,
+        expectedVersion: validated.expectedVersion,
         cancellationReason: validated.cancellationReason,
         startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
         // null clears the end time; undefined leaves it unchanged.
@@ -209,7 +209,7 @@ export async function deleteProductionRunFn(
   return withAction(
     async (ctx) => {
       const validated = deleteProductionRunSchema.parse(data);
-      await deleteProductionRun(ctx, validated.productionRunId);
+      await deleteProductionRun(ctx, validated.productionRunId, validated.expectedVersion);
     },
     {
       fallbackMessage: "Failed to delete production run",

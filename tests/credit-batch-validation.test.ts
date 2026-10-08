@@ -1,3 +1,4 @@
+import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -750,7 +751,7 @@ describe("Credit Batch Production-Run Validation", () => {
         return result.rows[0]?.waiting ?? false;
       }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
 
-      reopenPromise = updateProductionRun(ctx, concurrencyRunInFacilityA.id, {
+      reopenPromise = updateProductionRun(ctx, concurrencyRunInFacilityA.id, { expectedVersion: await productionVersion(ctx, "productionRuns", concurrencyRunInFacilityA.id),
         status: "running",
         endTime: null,
       });

@@ -25,6 +25,8 @@ import type {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { invalidateStockEntityQueries } from "./entity-query-keys";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
+import { biocharProductKeys } from "./use-biochar-products";
 import type { MutationCallbacks } from "./types";
 import { certificationKeys } from "./use-certification";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
@@ -151,6 +153,12 @@ export function useCreateDelivery(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
+      for (const row of data.savedProducts) {
+        patchListCachesWithSavedRow(queryClient, biocharProductKeys.lists(), row);
+        queryClient.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: biocharProductKeys.details() });
       // Invalidate all delivery lists
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       // Invalidate stats

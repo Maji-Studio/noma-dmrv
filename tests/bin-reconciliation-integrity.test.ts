@@ -1,3 +1,4 @@
+import { productionVersion } from "./helpers/production-version";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -88,7 +89,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     await db.update(storageLocations).set({ formulationId: f.recipe.id }).where(eq(storageLocations.id, f.bin.id));
     const product = await postProduct(f, { formulationId: f.recipe.id, massKg: 100, composition: { ingredients: [{ formulationIngredientId: f.ingredient.id, feedstockTypeId: f.ingredientType.id, storageLocationId: bin.id, massKg: 30, moistureContentPercent: 0 }] } });
     const [deletion, stockTake] = await Promise.allSettled([
-      deleteBiocharProduct(f.ctx, product.id),
+      deleteBiocharProduct(f.ctx, product.id, await productionVersion(f.ctx, "biocharProducts", product.id)),
       recordStockTakeMovement(f.ctx, { storageLocationId: bin.id, lane: "feedstock", countedMassKg: 50, countedWetMassKg: 50, moistureRatioUsed: 0, reason: "E2E concurrent count" }),
     ]);
     expect(deletion.status).toBe("rejected"); expect(stockTake.status).toBe("fulfilled");
@@ -357,7 +358,7 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
     const input = { facilityId: f.facility.id, storageLocationId: f.bin.id, occurredAt: "2026-09-14T12:00:00.000Z", kind: "delivery" as const, wetMassKg: 80, moisturePercent: 0, correctsMovementId: allocation.movementId };
     const preview = await previewOutputStock(f.ctx, input);
     const results = await Promise.allSettled([
-      postOutputStock(f.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
+      postOutputStock(f.ctx, { ...input, expectedProductVersions: preview.expectedProductVersions, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E correction race" }),
       updateOrder(f.ctx, f.order.id, { quantityKg: 70 }),
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);

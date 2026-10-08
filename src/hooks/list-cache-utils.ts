@@ -34,13 +34,24 @@ export function patchListCachesWithSavedRow<TItem extends { id: string }>(
   );
 }
 
-/** Merge a saved row into unpaginated lists without discarding enriched fields. */
-export function patchArrayListCacheWithSavedRow<TItem extends { id: string }>(
+/** Merge a saved row into one unpaginated list at its exact query key. */
+export function patchArrayListCacheByExactKeyWithSavedRow<TItem extends { id: string }>(
   queryClient: QueryClient,
   listKey: QueryKey,
   saved: Partial<TItem> & { id: string },
 ): void {
   queryClient.setQueryData<TItem[]>(listKey, (old) =>
+    old?.map((item) => item.id === saved.id ? { ...item, ...saved } : item),
+  );
+}
+
+/** Merge a saved row into every unpaginated list under a query-key prefix. */
+export function patchArrayListCachesByPrefixWithSavedRow<TItem extends { id: string }>(
+  queryClient: QueryClient,
+  listsKey: QueryKey,
+  saved: Partial<TItem> & { id: string },
+): void {
+  queryClient.setQueriesData<TItem[]>({ queryKey: listsKey }, (old) =>
     old?.map((item) => item.id === saved.id ? { ...item, ...saved } : item),
   );
 }

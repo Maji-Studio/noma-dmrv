@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Production Incident validation schemas
  * Zod schemas for inline production incident CRUD within a production run
@@ -61,13 +62,17 @@ export const productionIncidentFormSchema = z.object({
 export const createProductionIncidentSchema = productionIncidentFormSchema;
 
 export const updateProductionIncidentSchema = productionIncidentFormSchema.extend({
+  expectedVersion: expectedVersionSchema,
   productionIncidentId: z.string().uuid("Choose a valid production incident."),
 });
 
 export const deleteProductionIncidentSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productionIncidentId: z.string().uuid("Choose a valid production incident."),
 });
 
 export type ProductionIncidentFormData = z.infer<typeof productionIncidentFormSchema>;
 export type CreateProductionIncidentData = z.infer<typeof createProductionIncidentSchema>;
 export type UpdateProductionIncidentData = z.infer<typeof updateProductionIncidentSchema>;
+
+export type DeleteProductionIncidentData = z.infer<typeof deleteProductionIncidentSchema>;

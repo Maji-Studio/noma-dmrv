@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Biochar Products Validation Schemas
  * Zod schemas for biochar product forms, server actions, and filtering
@@ -219,6 +220,7 @@ export const createBiocharProductSchema = biocharProductEntrySchema;
  * All fields optional except productId
  */
 export const updateBiocharProductSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productId: z.string().uuid("Choose a valid biochar product."),
   code: z
     .string()
@@ -249,6 +251,7 @@ export const updateBiocharProductSchema = z.object({
  * Schema for deleting a biochar product
  */
 export const deleteBiocharProductSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productId: z.string().uuid("Choose a valid biochar product."),
 });
 
@@ -298,3 +301,5 @@ export type BiocharProductFormData = z.infer<typeof biocharProductFormSchema>;
 export type CreateBiocharProductData = z.infer<typeof createBiocharProductSchema>;
 export type UpdateBiocharProductData = z.infer<typeof updateBiocharProductSchema>;
 export type BiocharProductFilterData = z.infer<typeof biocharProductFilterSchema>;
+
+export type DeleteBiocharProductData = z.infer<typeof deleteBiocharProductSchema>;

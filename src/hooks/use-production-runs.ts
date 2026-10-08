@@ -1,3 +1,4 @@
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Production Runs React Query Hooks
  * Client-side state management for production run operations
@@ -15,6 +16,7 @@ import type {
   ProductionRunFilterData,
   CreateProductionRunData,
   UpdateProductionRunData,
+  DeleteProductionRunData,
 } from "@/schemas/production-runs";
 import type {
   PaginatedProductionRuns,
@@ -37,7 +39,7 @@ import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { invalidateOnboardingProgress } from "@/hooks/use-onboarding";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
-import { isStaleVersionFailure, throwActionError } from "@/lib/stale-version";
+import { StaleVersionError, isStaleVersionFailure, throwActionError } from "@/lib/stale-version";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 import { invalidateStockEntityQueries } from "./entity-query-keys";
@@ -341,6 +343,7 @@ export function useUpdateProductionRun(
       return { previousRun, previousLists };
     },
     onSuccess: async (data, variables, context) => {
+      patchListCachesWithSavedRow(queryClient, productionRunKeys.lists(), data);
       const previousFacilityId = context?.previousRun?.facilityId;
       // Update cache with actual server data
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
@@ -408,23 +411,23 @@ export function useUpdateProductionRun(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useDeleteProductionRun(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, DeleteProductionRunData>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (productionRunId: string) => {
-      const result = await deleteProductionRunFn({ productionRunId });
+    mutationFn: async (variables: DeleteProductionRunData) => {
+      const result = await deleteProductionRunFn(variables);
       if (!result.success) {
         throwProductionRunActionError(result);
       }
       return;
     },
-    onMutate: async (productionRunId) => {
+    onMutate: async (variables) => {
       if (!optimistic) {
-        await callbacks?.onMutate?.(productionRunId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -435,7 +438,7 @@ export function useDeleteProductionRun(
 
       // Snapshot previous values for rollback (capture facilityId before removing from cache)
       const previousRun = queryClient.getQueryData<ProductionRunWithRelations>(
-        productionRunKeys.detail(productionRunId)
+        productionRunKeys.detail(variables.productionRunId)
       );
       const facilityId = previousRun?.facilityId;
       const previousLists = queryClient.getQueriesData<PaginatedProductionRuns>({
@@ -448,26 +451,26 @@ export function useDeleteProductionRun(
           if (!old) return old;
           return {
             ...old,
-            items: old.items.filter((item) => item.id !== productionRunId),
+            items: old.items.filter((item) => item.id !== variables.productionRunId),
             total: Math.max(0, old.total - 1),
           };
         });
       });
 
-      await callbacks?.onMutate?.(productionRunId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousRun, previousLists, facilityId };
     },
-    onSuccess: async (_, productionRunId, context) => {
+    onSuccess: async (_, variables, context) => {
       const facilityId = (context as { facilityId?: string } | undefined)?.facilityId;
 
       // Remove specific run from cache
       queryClient.removeQueries({
-        queryKey: productionRunKeys.detail(productionRunId),
+        queryKey: productionRunKeys.detail(variables.productionRunId),
       });
       queryClient.removeQueries({
-        queryKey: productionRunKeys.readings(productionRunId),
+        queryKey: productionRunKeys.readings(variables.productionRunId),
       });
       // Invalidate lists for consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
@@ -486,9 +489,9 @@ export function useDeleteProductionRun(
         });
       }
 
-      await callbacks?.onSuccess?.(undefined, productionRunId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, productionRunId, context) => {
+    onError: async (error, variables, context) => {
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousRun, previousLists } = context as {
@@ -498,7 +501,7 @@ export function useDeleteProductionRun(
 
         if (previousRun) {
           queryClient.setQueryData(
-            productionRunKeys.detail(productionRunId),
+            productionRunKeys.detail(variables.productionRunId),
             previousRun
           );
         }
@@ -510,13 +513,17 @@ export function useDeleteProductionRun(
         });
       }
 
-      await callbacks?.onError?.(error, productionRunId);
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: productionRunKeys.detail(variables.productionRunId) });
+      }
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, productionRunId) => {
+    onSettled: async (data, error, variables) => {
       // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, productionRunId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

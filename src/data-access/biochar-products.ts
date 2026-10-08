@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 import { lockBinStocks } from './lock-bin-stocks';
 /**
  * Biochar Products Data Access Layer
@@ -216,6 +217,7 @@ export async function getBiocharProducts(
       expiresAt: biocharProducts.expiresAt,
       archivedAt: biocharProducts.archivedAt,
       createdAt: biocharProducts.createdAt,
+      version: biocharProducts.version,
       updatedAt: biocharProducts.updatedAt,
       // Facility relation
       facilityCode: facilities.code,
@@ -280,6 +282,7 @@ export async function getBiocharProducts(
 
   // Transform to BiocharProductWithRelations
   const items: BiocharProductWithRelations[] = productList.map((row) => ({
+    version: row.version,
     id: row.id,
     organizationId: row.organizationId,
     code: row.code,
@@ -387,6 +390,7 @@ export async function getBiocharProductById(
       expiresAt: biocharProducts.expiresAt,
       archivedAt: biocharProducts.archivedAt,
       createdAt: biocharProducts.createdAt,
+      version: biocharProducts.version,
       updatedAt: biocharProducts.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -447,6 +451,7 @@ export async function getBiocharProductById(
   }
 
   return {
+    version: row.version,
     id: row.id,
     organizationId: row.organizationId,
     code: row.code,
@@ -522,6 +527,7 @@ export { createBiocharProduct } from "./biochar-product-create";
  * Update an existing biochar product
  */
 export async function updateBiocharProduct(ctx: OrgContext, productId: string, data: {
+  expectedVersion: number;
   code?: string; facilityId?: string; formulationId?: string | null; placedAt?: string;
   status?: 'draft' | 'testing' | 'ready' | 'sold'; linkedProductionRunId?: string | null;
   storageLocationId?: string | null; massKg?: number | null; moistureContentPercent?: number | null;
@@ -532,22 +538,33 @@ export async function updateBiocharProduct(ctx: OrgContext, productId: string, d
     const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
     if (!product) throw new SafeError('Biochar product not found');
     await lockBinStocks(ctx, tx, [product.storageLocationId, product.sourceBiocharStorageLocationId]);
+    // Application allocation FKs take product KEY SHARE after artifact locks.
     await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'update');
+    const [locked] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
+    if (!locked) throw new SafeError("Biochar product not found");
+    assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion: data.expectedVersion, actualVersion: locked.version });
     const placementChanged = data.placedAt !== undefined && new Date(data.placedAt).getTime() !== product.placedAt.getTime();
     if (placementChanged || (['facilityId', 'formulationId', 'linkedProductionRunId', 'storageLocationId', 'massKg', 'moistureContentPercent', 'waterAddedKg'] as const).some(key => data[key] !== undefined && data[key] !== product[key])) {
       throw new SafeError('Posted product source, composition, placement, and bin are immutable. Use an explicit stock correction.');
     }
     if (data.composition && compositionAllocationChanged(product.composition as Record<string, unknown>, data.composition)) throw new SafeError('Posted ingredient moisture and dry solids are immutable.');
-    const [saved] = await tx.update(biocharProducts).set({ code: data.code, status: data.status, densityKgM3: data.densityKgM3, updatedAt: new Date() }).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).returning();
+    const [saved] = await tx.update(biocharProducts).set({ version: nextVersion(biocharProducts.version), code: data.code, status: data.status, densityKgM3: data.densityKgM3, updatedAt: new Date() }).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).returning();
     return saved;
   });
 }
-export async function deleteBiocharProduct(ctx: OrgContext, productId: string): Promise<void> {
+export async function deleteBiocharProduct(ctx: OrgContext, productId: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
   await db.transaction(async tx => {
+    const [snapshot] = await tx.select({ storageLocationId: biocharProducts.storageLocationId, sourceBiocharStorageLocationId: biocharProducts.sourceBiocharStorageLocationId })
+      .from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
+    if (!snapshot) throw new SafeError('Biochar product not found');
+    // Match updates: serialize with stock before taking artifact locks, then the product row.
+    await lockBinStocks(ctx, tx, [snapshot.storageLocationId, snapshot.sourceBiocharStorageLocationId]);
+    // Application allocation FKs take product KEY SHARE after artifact locks.
     await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'biocharProduct', entityId: productId }, 'delete');
-    const [product] = await tx.select({ id: biocharProducts.id }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId)));
+    const [product] = await tx.select({ id: biocharProducts.id, version: biocharProducts.version }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for("update");
     if (!product) throw new SafeError('Biochar product not found');
+    assertRowVersion({ entity: "biocharProduct", id: productId, expectedVersion, actualVersion: product.version });
     throw new SafeError('Posted products retain their source allocations and history. Use an explicit stock correction.');
   });
 }

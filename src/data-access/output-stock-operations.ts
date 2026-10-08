@@ -56,8 +56,10 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const events = await reader.select({ id: binMovements.id, sequence: binMovements.postingSequence, kind: binMovements.outputKind, occurredAt: binMovements.occurredAt, reason: binMovements.reason, correctsMovementId: binMovements.correctsMovementId })
     .from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, bin.id))).orderBy(asc(binMovements.postingSequence));
   const basisFingerprint = requestFingerprint({ layers, events: events.map(e => ({ id: e.id, sequence: e.sequence })), formulationId: bin.formulationId, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
-  const codes = lane === 'product'
-    ? await reader.select({ id: biocharProducts.id, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
+  const productCodes = lane === 'product'
+    ? await reader.select({ id: biocharProducts.id, version: biocharProducts.version, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
+    : [];
+  const codes = lane === 'product' ? productCodes
     : await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.biocharStorageLocationId, bin.id)));
   const codeMap = new Map(codes.map(row => [row.id, row.code]));
   const runCodes = await reader.select({ id: productionRuns.id, code: productionRuns.code }).from(productionRuns).where(and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, input.facilityId)));
@@ -113,6 +115,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   };
   const [formulation] = bin.formulationId ? await reader.select({ name: formulations.name }).from(formulations).where(and(eq(formulations.organizationId, ctx.organizationId), eq(formulations.id, bin.formulationId))) : [];
   const preview: OutputStockPreview = {
+    expectedProductVersions: Object.fromEntries(productCodes.map(row => [row.id, row.version])),
     basisFingerprint, storageLocationId: bin.id, binName: bin.name, binCode: bin.code, formulationName: formulation?.name ?? null, lane, beforeDryKg,
     beforeAllocations: layerViews(layers, bases), afterAllocations: layerViews(afterLayers, afterBases),
     afterDryKg: beforeDryKg - Number(plan?.drawnDryKg ?? 0), beforeSolidsKg, afterSolidsKg,

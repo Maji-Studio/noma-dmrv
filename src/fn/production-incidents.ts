@@ -1,4 +1,5 @@
 "use server";
+import { withAction } from "./with-action";
 
 /**
  * Production Incidents Server Actions
@@ -14,7 +15,6 @@ import {
   type ProductionIncidentWithRelations,
 } from "@/data-access/production-incidents";
 import { requireOrgContext } from "@/lib/auth/server";
-import { toActionError } from "@/lib/errors";
 import {
   createProductionIncidentSchema,
   updateProductionIncidentSchema,
@@ -94,15 +94,14 @@ export async function createProductionIncidentFn(
 export async function updateProductionIncidentFn(
   data: z.infer<typeof updateProductionIncidentSchema>
 ): Promise<ActionResult<ProductionIncidentWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = updateProductionIncidentSchema.parse(data);
 
     const incident = await updateProductionIncident(
       ctx,
       validated.productionIncidentId,
       {
+        expectedVersion: validated.expectedVersion,
         incidentTime:
           validated.incidentTime instanceof Date
             ? validated.incidentTime
@@ -116,43 +115,23 @@ export async function updateProductionIncidentFn(
       }
     );
 
-    return { success: true, data: incident };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("updateProductionIncidentFn failed", error);
-    return {
-      success: false,
-      error: "Production incident was not saved. Try again.",
-    };
-  }
+    return incident;
+  }, {
+    fallbackMessage: "Production incident was not saved. Try again.",
+    log: { message: "updateProductionIncidentFn failed" },
+  });
 }
 
 export async function deleteProductionIncidentFn(
   data: z.infer<typeof deleteProductionIncidentSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
-
+  return withAction(async (ctx) => {
     const validated = deleteProductionIncidentSchema.parse(data);
-    await deleteProductionIncident(ctx, validated.productionIncidentId);
+    await deleteProductionIncident(ctx, validated.productionIncidentId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    logServerError("deleteProductionIncidentFn failed", error);
-    return {
-      success: false,
-      error: toActionError(error, "Failed to delete production incident"),
-    };
-  }
+    return;
+  }, {
+    fallbackMessage: "Failed to delete production incident",
+    log: { message: "deleteProductionIncidentFn failed" },
+  });
 }

@@ -68,7 +68,6 @@ import { deleteProductionRunFn, updateProductionRunFn } from "./production-runs"
 
 const RUN_ID = "00000000-0000-4000-8000-000000000001";
 const OTHER_RUN_ID = "00000000-0000-4000-8000-000000000002";
-const OPENED_AT = new Date("2026-09-01T10:00:00.000Z");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -90,9 +89,8 @@ describe("updateProductionRunFn", () => {
       }),
     );
 
-    const result = await updateProductionRunFn({
+    const result = await updateProductionRunFn({ expectedVersion: 1,
       productionRunId: RUN_ID,
-      expectedUpdatedAt: OPENED_AT,
       feedingRateKgHr: 10,
     });
 
@@ -118,7 +116,7 @@ describe("updateProductionRunFn", () => {
       }),
     );
 
-    const result = await updateProductionRunFn({ productionRunId: RUN_ID });
+    const result = await updateProductionRunFn({ expectedVersion: 1, productionRunId: RUN_ID });
 
     expect(result).toEqual({
       success: false,
@@ -130,7 +128,7 @@ describe("updateProductionRunFn", () => {
   it("logs an unexpected failure and answers with the fallback", async () => {
     mocks.updateProductionRun.mockRejectedValue(new Error("connection reset"));
 
-    const result = await updateProductionRunFn({ productionRunId: RUN_ID });
+    const result = await updateProductionRunFn({ expectedVersion: 1, productionRunId: RUN_ID });
 
     expect(result).toEqual({
       success: false,
@@ -143,7 +141,7 @@ describe("updateProductionRunFn", () => {
   });
 
   it("answers invalid input with the field message before touching data", async () => {
-    const result = await updateProductionRunFn({
+    const result = await updateProductionRunFn({ expectedVersion: 1,
       productionRunId: "not-a-uuid",
     });
 
@@ -168,7 +166,7 @@ describe("deleteProductionRunFn", () => {
     mocks.deleteProductionRun.mockResolvedValue(undefined);
 
     await expect(
-      deleteProductionRunFn({ productionRunId: RUN_ID }),
+      deleteProductionRunFn({ expectedVersion: 1, productionRunId: RUN_ID }),
     ).resolves.toEqual({ success: true, data: undefined });
   });
 });

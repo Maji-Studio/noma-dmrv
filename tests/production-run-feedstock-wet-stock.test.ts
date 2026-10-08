@@ -1,3 +1,4 @@
+import { productionVersion } from "./helpers/production-version";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -249,7 +250,7 @@ describe("production-run wet feedstock stock", () => {
       await deriveFeedstockWetStockKg(ctx, db, storageLocationId),
     ).toBe(0);
 
-    const edited = await updateProductionRun(ctx, created.id, {
+    const edited = await updateProductionRun(ctx, created.id, { expectedVersion: await productionVersion(ctx, "productionRuns", created.id),
       feedstockDraws: [
         { storageLocationId, wetMassKg: AVAILABLE_WET_KG },
       ],
@@ -274,7 +275,7 @@ describe("production-run wet feedstock stock", () => {
     });
     productionRunIds.add(created.id);
 
-    const mixed = await updateProductionRun(ctx, created.id, {
+    const mixed = await updateProductionRun(ctx, created.id, { expectedVersion: created.version,
       feedstockDraws: [
         { storageLocationId, wetMassKg: 1_000 },
         { storageLocationId: secondaryStorageLocationId, wetMassKg: 200 },
@@ -300,19 +301,19 @@ describe("production-run wet feedstock stock", () => {
     ).toBe(300);
 
     await expect(
-      updateProductionRun(ctx, created.id, { feedstockWetMassKg: 500 }),
+      updateProductionRun(ctx, created.id, { expectedVersion: mixed.version, feedstockWetMassKg: 500 }),
     ).rejects.toThrow(
       "This run draws from several bins. Send feedstockDraws to change its feedstock.",
     );
     await expect(
-      updateProductionRun(ctx, created.id, {
+      updateProductionRun(ctx, created.id, { expectedVersion: mixed.version,
         feedstockStorageLocationId: storageLocationId,
       }),
     ).rejects.toThrow(
       "This run draws from several bins. Send feedstockDraws to change its feedstock.",
     );
 
-    const replaced = await updateProductionRun(ctx, created.id, {
+    const replaced = await updateProductionRun(ctx, created.id, { expectedVersion: mixed.version,
       feedstockDraws: [
         { storageLocationId: secondaryStorageLocationId, wetMassKg: 100 },
       ],
@@ -342,7 +343,7 @@ describe("production-run wet feedstock stock", () => {
     productionRunIds.add(created.id);
 
     await expect(
-      updateProductionRun(ctx, created.id, {
+      updateProductionRun(ctx, created.id, { expectedVersion: await productionVersion(ctx, "productionRuns", created.id),
         feedstockDraws: [
           { storageLocationId, wetMassKg: 100 },
           {

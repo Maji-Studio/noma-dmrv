@@ -131,6 +131,7 @@ beforeAll(() => {
 afterAll(() => { vi.unstubAllGlobals(); });
 
 const preview: Preview = {
+  expectedProductVersions: {},
   basisFingerprint: "basis", storageLocationId: "bin", binName: "Product bin", binCode: "PB-001", formulationName: "Mix", lane: "product",
   beforeDryKg: 1500, afterDryKg: 350, beforeSolidsKg: 1820, afterSolidsKg: 420,
   removedDryKg: 1150, removedWetKg: 2000, movementMoisturePercent: 30,

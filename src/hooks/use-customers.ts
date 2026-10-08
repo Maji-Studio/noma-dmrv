@@ -41,7 +41,7 @@ import {
 } from "@/fn/customers";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
-import { patchArrayListCacheWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
+import { patchArrayListCacheByExactKeyWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import { customerKeys } from "./customer-query-keys";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
@@ -553,7 +553,7 @@ export function useUpdateCustomerLocation(
       await callbacks?.onMutate?.(variables);
     },
     onSuccess: async (data, variables) => {
-      patchArrayListCacheWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
+      patchArrayListCacheByExactKeyWithSavedRow<CustomerLocation>(queryClient, customerKeys.locations(data.customerId), data);
       // Update cache with actual server data
       queryClient.setQueryData(customerLocationKeys.detail(data.id), data);
 
