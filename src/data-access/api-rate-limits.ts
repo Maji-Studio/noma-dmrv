@@ -34,7 +34,7 @@ export async function consumeRateLimit(
       ${refillPerMinute}::double precision / ${RATE_LIMIT_SECONDS_PER_MINUTE})`;
   // PostgreSQL 18's OLD/NEW RETURNING aliases expose the row locked by the
   // upsert, including after a concurrent debit. No snapshot pre-read can race.
-  const result = await db.execute<{ allowed: boolean; tokens: number }>(sql`
+  const result = await db.execute<{ allowed: boolean; tokens: number; refill_delay_seconds: number }>(sql`
     insert into api_rate_limit_buckets (bucket_key, tokens, refilled_at)
     values (${key}, ${capacity - cost}, ${instant})
     on conflict (bucket_key) do update set
@@ -43,14 +43,18 @@ export async function consumeRateLimit(
       refilled_at = greatest(api_rate_limit_buckets.refilled_at, ${instant})
     returning with (old as previous, new as current)
       (previous.bucket_key is null or ${available("previous")} >= ${cost}) as allowed,
-      current.tokens
+      current.tokens,
+      -- After a backward clock step refill resumes only at the retained timestamp.
+      greatest(0, extract(epoch from (current.refilled_at - ${instant})))::double precision as refill_delay_seconds
   `);
   const row = result.rows[0];
   return {
     allowed: row.allowed,
     limit: capacity,
     remaining: Math.floor(row.tokens),
-    resetSeconds: Math.ceil((capacity - row.tokens) * RATE_LIMIT_SECONDS_PER_MINUTE / refillPerMinute),
+    resetSeconds: Math.ceil(
+      Number(row.refill_delay_seconds) + (capacity - row.tokens) * RATE_LIMIT_SECONDS_PER_MINUTE / refillPerMinute,
+    ),
   };
 }
 

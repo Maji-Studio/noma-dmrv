@@ -31,7 +31,8 @@ it("allows capacity, refuses without debiting, then refills with an injected clo
 it("does not award refill twice when the clock moves backwards", async () => {
   const target = bucket();
   await consumeRateLimit(target, CAPACITY, NOW);
-  await consumeRateLimit(target, 1, new Date(NOW.getTime() - 60_000));
+  // Refill resumes at the retained timestamp: a minute away, then a minute to fill.
+  expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() - 60_000))).toMatchObject({ allowed: false, resetSeconds: 120 });
   expect(await consumeRateLimit(target, 1, NOW)).toMatchObject({ allowed: false, remaining: 0 });
 });
 it("concurrent debits on parallel pool connections never overspend", async () => {
