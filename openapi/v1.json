@@ -93,9 +93,10 @@
           "createdAt": {"description": "Creation event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
           "id": {"description": "Resource identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
-          "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"}
+          "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
+          "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version"],
         "type": "object"
       },
       "facility": {
@@ -251,9 +252,10 @@
           "identifier": {"anyOf": [{"type": "string"}, {"type": "null"}], "description": "Vehicle registration, plate, or operational identifier, plain text, or null when unspecified."},
           "name": {"description": "Human-readable display name, plain text.", "type": "string"},
           "updatedAt": {"description": "Last update event instant in UTC (RFC 3339).", "format": "date-time", "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$", "type": "string"},
-          "vehicleType": {"description": "Transport vehicle classification used to select an emission factor, plain text.", "type": "string"}
+          "vehicleType": {"description": "Transport vehicle classification used to select an emission factor, plain text.", "type": "string"},
+          "version": {"description": "Positive integer row version for concurrency checks.", "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer"}
         },
-        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "identifier", "vehicleType"],
+        "required": ["id", "code", "name", "archivedAt", "createdAt", "updatedAt", "version", "identifier", "vehicleType"],
         "type": "object"
       }
     },
