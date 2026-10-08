@@ -11,7 +11,7 @@ vi.mock("./guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post 
 vi.mock("@/lib/log", () => ({ logger: { error: mocks.log } }));
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.pre.mockResolvedValue(null);
+  mocks.pre.mockResolvedValue({ response: null, result: null });
   mocks.post.mockResolvedValue({ ok: true, headers: new Headers(rateHeaders) });
   mocks.resolve.mockResolvedValue({ ok: true, ctx: { orgRole: "admin", scopes: ["feedstocks:write"] } });
 });
@@ -63,7 +63,7 @@ it("records the absolute deadline before authentication", async () => {
   vi.setSystemTime(start);
   mocks.pre.mockImplementation(async () => {
     vi.setSystemTime(start + OPERATION_DEADLINE_MS / 2);
-    return null;
+    return { response: null, result: null };
   });
   mocks.resolve.mockImplementation(async () => {
     vi.setSystemTime(start + OPERATION_DEADLINE_MS);
@@ -87,7 +87,7 @@ it("runs pre-auth, credential resolution, post-auth and handler in order", async
 
 it("returns a pre-auth 429 without resolving credentials", async () => {
   const refusal = new Response(null, { status: 429 });
-  mocks.pre.mockResolvedValue(refusal);
+  mocks.pre.mockResolvedValue({ response: refusal, result: null });
   const handler = vi.fn();
   expect(await apiRoute("test", undefined, handler)(request())).toBe(refusal);
   expect(mocks.resolve).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ it.each([
   await apiRoute("test", undefined, async () => new Response(null))(
     new Request(request(), { method }),
   );
-  expect(mocks.post).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ access }));
+  expect(mocks.post).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ access }), null);
 });
 
 it.each(["success", "returned problem", "http error", "domain error", "unexpected error"])(

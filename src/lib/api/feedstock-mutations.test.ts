@@ -9,7 +9,7 @@ vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() } }));
 // Admission is covered in route.test.ts; these cases exercise the handlers.
 vi.mock("./guards", () => ({
-  preAuthGuard: vi.fn(async () => null),
+  preAuthGuard: vi.fn(async () => ({ response: null, result: null })),
   postAuthGuard: vi.fn(async () => ({ ok: true, headers: new Headers() })),
 }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));

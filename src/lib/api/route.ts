@@ -8,6 +8,7 @@ import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemRe
 import { unexpectedApiErrorResponse } from "./route-error";
 import { ApiHttpError } from "./http-error";
 import { preAuthGuard, postAuthGuard } from "./guards";
+import type { RateLimitResult } from "@/data-access/api-rate-limits";
 
 export interface ApiRouteContext {
   ctx: ApiContext;
@@ -18,14 +19,16 @@ export interface ApiRouteContext {
 }
 
 /** Scope checks precede the authenticated write switch and rate limits. */
-async function admitApiRequest(request: Request, context: ApiRouteContext, scope?: ApiScope) {
+async function admitApiRequest(
+  request: Request, context: ApiRouteContext, scope: ApiScope | undefined, ipResult: RateLimitResult | null,
+) {
   if (scope && !hasRoleAndScope(context.ctx, scope)) {
     return { ok: false as const, response: apiDenialResponse("missing_scope", context.instance, context.requestId) };
   }
   return postAuthGuard(context.ctx, {
     requestId: context.requestId, instance: context.instance,
     access: request.method === "GET" || request.method === "HEAD" ? "read" : "write",
-  });
+  }, ipResult);
 }
 
 export function apiRoute<Params = Record<string, never>>(
@@ -43,12 +46,12 @@ export function apiRoute<Params = Record<string, never>>(
       return response;
     };
     try {
-      const preAuthDenial = await preAuthGuard(request, { instance, requestId });
-      if (preAuthDenial) return preAuthDenial;
+      const preAuth = await preAuthGuard(request, { instance, requestId });
+      if (preAuth.response) return preAuth.response;
       const resolution = await resolveApiContext(request);
       if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
       const context = { deadlineAt, ctx: resolution.ctx, requestId, instance, headers: apiResponseHeaders(requestId) };
-      const admission = await admitApiRequest(request, context, scope);
+      const admission = await admitApiRequest(request, context, scope, preAuth.result);
       if (!admission.ok) return admission.response;
       for (const [name, value] of admission.headers) {
         headers.set(name, value);
