@@ -702,12 +702,15 @@ no locations. Supplier locations have no code or archive column.
 relative `/api/v1` servers and stable operation ids. Operation bodies use only
 `src/lib/operations/json-schema.ts:toOperationJsonSchema`; output representations
 use Zod's output JSON Schema conversion. Strict query schemas live in
-`src/lib/api/query-schemas.ts` and `src/lib/api/query.ts`. Descriptions belong in
+`src/lib/api/query-schemas.ts` and `src/lib/api/query.ts`. The `resourceQueries`
+map is shared by resource adapters and the document generator. Descriptions belong in
 Zod schemas. Transport headers and possible statuses are declared in the generator.
 The generator imports no runtime credentials, environment or database modules.
 
 `GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public, bypass credential
-resolution and rate-limit guards, and cache publicly for 300 seconds. The short
+resolution and rate-limit guards, and cache publicly for 300 seconds. OpenAPI
+serialization is cached lazily per module instance; the agent guide is a
+module-level string. Each origin response carries a fresh `X-Request-Id`. The short
 agent guide covers discovery, units, local business dates and safe retry behavior.
 The rendered reference remains deferred in
 [open-questions.md](./open-questions.md).

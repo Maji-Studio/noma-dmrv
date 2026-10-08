@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
+import { API_BODY_MAX_BYTES, API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
@@ -118,13 +118,47 @@ it("requires preconditions and documents conditional create idempotency with pos
     name: "Idempotency-Key", in: "header", required: false,
     description: expect.stringContaining("Required for creates unless dryRun=true"),
   }));
-  expect(Object.keys(document.paths["/feedstocks/{idOrCode}"].delete.responses).sort()).toEqual(["200", "204", "400", "401", "403", "404", "409", "412", "422", "428", "429", "500", "503"]);
+  expect(Object.keys(document.paths["/feedstocks/{idOrCode}"].delete.responses).sort()).toEqual(["200", "204", "400", "401", "403", "404", "409", "412", "413", "415", "422", "428", "429", "500", "503"]);
   expect(Object.keys(document.paths["/me"].get.responses).sort()).toEqual(["200", "401", "403", "404", "429", "500"]);
   expect(Object.keys(document.paths["/facilities"].get.responses).sort()).toEqual(["200", "400", "401", "403", "429", "500"]);
   const response = (path: string) => document.paths[path].get.responses["200"] as { headers: Record<string, unknown> };
   expect(response("/facilities/{idOrCode}").headers).toHaveProperty("ETag");
-  expect(response("/drivers/{idOrCode}").headers).not.toHaveProperty("ETag");
-  expect(response("/vehicles/{idOrCode}").headers).not.toHaveProperty("ETag");
+  expect(response("/drivers/{idOrCode}").headers).toHaveProperty("ETag");
+  expect(response("/vehicles/{idOrCode}").headers).toHaveProperty("ETag");
+});
+
+it("accepts an optional empty DELETE object and publishes its body errors", () => {
+  const operation = document.paths["/feedstocks/{idOrCode}"].delete;
+  expect(operation.requestBody).toEqual({
+    required: false,
+    description: `Optional; when sent it must be an empty JSON object, maximum ${API_BODY_MAX_BYTES} bytes.`,
+    content: { "application/json": { schema: { type: "object", properties: {}, additionalProperties: false }, example: {} } },
+  });
+  expect(operation.description).toContain("Malformed JSON returns 400; unknown fields and other JSON values return 422.");
+  for (const status of [400, 413, 415, 422]) {
+    expect(operation.responses[status]).toEqual({ $ref: `#/components/responses/Problem${status}` });
+  }
+});
+
+it("omits dry-run ETags while allowing the conditional PATCH header", () => {
+  const response = (path: string, method: string, status: string) => document.paths[path][method].responses[status] as {
+    description: string; headers: Record<string, JsonSchema>;
+  };
+  expect(response("/feedstocks", "post", "200").headers).not.toHaveProperty("ETag");
+  expect(response("/feedstocks", "post", "201").headers.ETag).toEqual({ $ref: "#/components/headers/ETag" });
+  expect(response("/feedstocks/{idOrCode}", "delete", "200").headers).not.toHaveProperty("ETag");
+  const patch = response("/feedstocks/{idOrCode}", "patch", "200");
+  expect(patch.description).toContain("ETag is absent on dry runs.");
+  expect(patch.headers.ETag).toEqual({ $ref: "#/components/headers/ETag" });
+  expect(document.components.headers.ETag).not.toHaveProperty("required", true);
+});
+
+it("publishes correlation headers on both public discovery responses", () => {
+  for (const path of ["/openapi.json", "/llms.txt"]) {
+    expect(document.paths[path].get.responses["200"]).toMatchObject({
+      headers: { "X-Request-Id": { $ref: "#/components/headers/X-Request-Id" } },
+    });
+  }
 });
 
 it("publishes the runtime header patterns and idempotency length bound", () => {

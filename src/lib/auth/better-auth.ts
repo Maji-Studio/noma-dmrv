@@ -6,7 +6,7 @@ import { apiKey } from "@better-auth/api-key";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements, ownerAc, adminAc, memberAc } from "better-auth/plugins/organization/access";
-import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_MAX_EXPIRY_DAYS } from "@/config/api-keys";
+import { API_KEY_DEFAULT_EXPIRY_SECONDS, API_KEY_LIVE_PREFIX, API_KEY_MAX_EXPIRY_DAYS, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { disableOwnerApiKeys } from "@/data-access/api-credential-auth";
 import { canOwnApiKey } from "./api-scopes";
 import { betterAuth } from "better-auth";
@@ -356,7 +356,7 @@ export const auth = betterAuth({
   plugins: [
     apiKey({
       references: "organization",
-      defaultPrefix: env.NODE_ENV === "production" ? "noma_live_" : "noma_test_",
+      defaultPrefix: env.NODE_ENV === "production" ? API_KEY_LIVE_PREFIX : API_KEY_TEST_PREFIX,
       keyExpiration: {
         // The implementation uses seconds despite the defaultExpiresIn type comment.
         defaultExpiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,

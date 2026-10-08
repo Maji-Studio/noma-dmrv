@@ -298,7 +298,7 @@
           "200": {
             "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/driver", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}},
             "description": "Resource representation.",
-            "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+            "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
           },
           "400": {"$ref": "#/components/responses/Problem400"},
           "401": {"$ref": "#/components/responses/Problem401"},
@@ -408,10 +408,10 @@
         "operationId": "find_feedstocks",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},
+          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Case-insensitive literal prefix search on feedstock code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on feedstock code.", "maxLength": 255, "type": "string"}},
           {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}}
+          {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -429,7 +429,7 @@
         "x-required-scope": "feedstocks:read"
       },
       "post": {
-        "description": "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture 0 to 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock. Required scope: feedstocks:write.",
+        "description": "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture 0 to 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs. Required scope: feedstocks:write.",
         "operationId": "log_feedstock_delivery",
         "parameters": [
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
@@ -509,7 +509,7 @@
               }
             },
             "description": "Dry-run intake preview.",
-            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+            "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
           },
           "201": {
             "content": {
@@ -570,7 +570,7 @@
     },
     "/feedstocks/{idOrCode}": {
       "delete": {
-        "description": "Delete by UUID using a strong If-Match. Locked domain guards may refuse deletion. Dry runs return the would-be deleted representation and roll back; no request body is read. Required scope: feedstocks:delete.",
+        "description": "Delete by UUID using a strong If-Match. Locked domain guards may refuse deletion. Dry runs return the would-be deleted representation and roll back. The request body may be omitted; any supplied body must be an empty JSON object. Malformed JSON returns 400; unknown fields and other JSON values return 422. Required scope: feedstocks:delete.",
         "operationId": "delete_feedstock",
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
@@ -578,6 +578,7 @@
           {"description": "One strong ETag from the resource read, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"([1-9]\\d*)\\.([1-9]\\d*)\"$", "type": "string"}},
           {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
+        "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "Optional; when sent it must be an empty JSON object, maximum 262144 bytes.", "required": false},
         "responses": {
           "200": {
             "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}},
@@ -594,6 +595,8 @@
           "404": {"$ref": "#/components/responses/Problem404"},
           "409": {"$ref": "#/components/responses/Problem409"},
           "412": {"$ref": "#/components/responses/FeedstockProblem412"},
+          "413": {"$ref": "#/components/responses/Problem413"},
+          "415": {"$ref": "#/components/responses/Problem415"},
           "422": {"$ref": "#/components/responses/Problem422"},
           "428": {"$ref": "#/components/responses/Problem428"},
           "429": {"$ref": "#/components/responses/Problem429"},
@@ -661,7 +664,7 @@
         "responses": {
           "200": {
             "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}},
-            "description": "Updated feedstock or dry-run representation.",
+            "description": "Updated feedstock or dry-run representation. ETag is absent on dry runs.",
             "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
           },
           "400": {"$ref": "#/components/responses/Problem400"},
@@ -681,7 +684,7 @@
         "x-required-scope": "feedstocks:write"
       }
     },
-    "/llms.txt": {"get": {"description": "Public agent guide.", "operationId": "get_llms_guide", "responses": {"200": {"content": {"text/plain": {"schema": {"description": "Plain-text guide for API agents.", "type": "string"}}}, "description": "Public agent guide.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}}}}, "security": [], "x-required-scope": null}},
+    "/llms.txt": {"get": {"description": "Public agent guide.", "operationId": "get_llms_guide", "responses": {"200": {"content": {"text/plain": {"schema": {"description": "Plain-text guide for API agents.", "type": "string"}}}, "description": "Public agent guide.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}}, "security": [], "x-required-scope": null}},
     "/me": {
       "get": {
         "description": "Read the credential organization, active facilities, local today dates, role, scopes and safe credential metadata. Required scope: none (any authenticated API key).",
@@ -702,7 +705,15 @@
         "x-required-scope": null
       }
     },
-    "/openapi.json": {"get": {"description": "Public OpenAPI 3.1 contract.", "operationId": "get_openapi_document", "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": true, "description": "OpenAPI 3.1 document.", "type": "object"}}}, "description": "Public OpenAPI 3.1 contract.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}}}}, "security": [], "x-required-scope": null}},
+    "/openapi.json": {
+      "get": {
+        "description": "Public OpenAPI 3.1 contract.",
+        "operationId": "get_openapi_document",
+        "responses": {"200": {"content": {"application/json": {"schema": {"additionalProperties": true, "description": "OpenAPI 3.1 document.", "type": "object"}}}, "description": "Public OpenAPI 3.1 contract.", "headers": {"Cache-Control": {"description": "Public cache, max-age=300 seconds.", "schema": {"type": "string"}}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}}},
+        "security": [],
+        "x-required-scope": null
+      }
+    },
     "/storage-locations": {
       "get": {
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: storage-locations:read.",
@@ -860,7 +871,7 @@
           "200": {
             "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/vehicle", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}},
             "description": "Resource representation.",
-            "headers": {"RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
+            "headers": {"ETag": {"$ref": "#/components/headers/ETag"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
           },
           "400": {"$ref": "#/components/responses/Problem400"},
           "401": {"$ref": "#/components/responses/Problem401"},

@@ -22,10 +22,17 @@ export const supplierLocationListSchema = z.strictObject({
 });
 export const lookupGetSchema = z.strictObject({});
 export const facilityLookupGetSchema = z.strictObject({ facilityId: facilityIdSchema });
-export const feedstockListSchema = z.strictObject({
-  limit: pageLimitSchema,
-  facilityId: facilityIdSchema,
+export const feedstockListSchema = facilityLookupListSchema.extend({
   q: prefixSchema.describe("Case-insensitive literal prefix search on feedstock code."),
-  code: codeSchema,
-  cursor: cursorSchema,
 });
+
+/** Shared by REST adapters and the public contract, without handler dependencies. */
+export const resourceQueries = {
+  feedstocks: { list: feedstockListSchema, get: lookupGetSchema },
+  facilities: { list: lookupListSchema, get: lookupGetSchema },
+  suppliers: { list: lookupListSchema, get: lookupGetSchema },
+  "feedstock-types": { list: lookupListSchema, get: lookupGetSchema },
+  "storage-locations": { list: facilityLookupListSchema, get: facilityLookupGetSchema },
+  vehicles: { list: lookupListSchema, get: lookupGetSchema },
+  drivers: { list: lookupListSchema, get: lookupGetSchema },
+};

@@ -83,6 +83,7 @@ function headerReferences(definitions: Record<string, unknown>) {
   return Object.fromEntries(Object.keys(definitions).map((name) => [name, { $ref: `#/components/headers/${name}` }]));
 }
 export const privateHeaders = headerReferences(privateHeaderDefinitions);
+export const requestIdHeader = { "X-Request-Id": privateHeaders["X-Request-Id"] };
 export const etagHeader = headerReferences(etagDefinition);
 export const writeHeaders = headerReferences(writeHeaderDefinitions);
 export const locationHeader = headerReferences(locationDefinition);

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS, API_DOCS_CACHE_SECONDS } from "@/config/api-rest";
+import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import type { ApiScope } from "@/lib/auth/api-scopes";
@@ -11,7 +12,7 @@ import { meRepresentationSchema } from "../representations/me";
 import { feedstockRepresentationSchema } from "../representations/feedstocks";
 import { itemEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "../representations/envelopes";
 import { resources } from "./resources";
-import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
+import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
 interface OperationDocument {
   operationId: string;
@@ -73,14 +74,14 @@ export function buildOpenApiDocument() {
     paths[`/${resource.path}`] = { get: privateOperation(
       `find_${resource.path.replaceAll("-", "_")}`, resource.scope,
       "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported.",
-      { ...problemResponses(resource.path === "storage-locations" || resource.path === "feedstocks" ? [...READ_ERRORS, 404] : READ_ERRORS),
+      { ...problemResponses("facilityId" in resource.queries.list.shape ? [...READ_ERRORS, 404] : READ_ERRORS),
         "200": jsonResponse("Resource page.", publishOutput(listEnvelopeSchema(resource.schema))) },
-      queryParameters(resource.listQuery),
+      queryParameters(resource.queries.list),
     ) };
     paths[`/${resource.path}/{idOrCode}`] = { get: privateOperation(
       `get_${resource.singular}`, resource.scope, "Read a stable resource representation by UUID or exact code; archived lookups remain readable.",
-      { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Resource representation.", publishOutput(itemEnvelopeSchema(resource.schema)), resource.etag ? etagHeader : {}) },
-      [targetParameter(), ...queryParameters(resource.getQuery)],
+      { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Resource representation.", publishOutput(itemEnvelopeSchema(resource.schema)), etagHeader) },
+      [targetParameter(), ...queryParameters(resource.queries.get)],
     ) };
   }
   paths["/suppliers/{idOrCode}/locations"] = { get: privateOperation(
@@ -96,10 +97,10 @@ export function buildOpenApiDocument() {
   const patchInput = operationInput(updateFeedstockSchema.omit({ feedstockId: true, expectedVersion: true }));
   const requestBody = (schema: JsonSchema, example: unknown) => ({ required: true, description: `JSON body, maximum ${API_BODY_MAX_BYTES} bytes. Unknown properties are rejected.`, content: { "application/json": { schema, example } } });
   paths["/feedstocks"].post = {
-    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture 0 to 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock.",
+    ...privateOperation("log_feedstock_delivery", "feedstocks:write", "Record a wood-chip intake split across receiving bins. Positive wet masses and moisture 0 to 100 are required; allocation overage requires justification. Dry runs roll back, skip external effects and return provisional ids, codes and stock additions. Location and ETag identify the first feedstock on committed responses and are absent on dry runs.",
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
         "201": jsonResponse("Intake committed, or replayed.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...locationHeader, ...writeHeaders }),
-        "200": jsonResponse("Dry-run intake preview.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...writeHeaders }) },
+        "200": jsonResponse("Dry-run intake preview.", publishOutput(feedstockCreateEnvelopeSchema), writeHeaders) },
       [...queryParameters(mutationQuerySchema), idempotencyParameter(false)]),
     requestBody: requestBody(createInput, {
       facilityId: "df2795a4-886b-4a89-bbdd-532c6b1b8e45", deliveryDate: "2026-10-08",
@@ -111,15 +112,22 @@ export function buildOpenApiDocument() {
   };
   paths["/feedstocks/{idOrCode}"].patch = {
     ...privateOperation("update_feedstock", "feedstocks:write", "Update by UUID using a strong If-Match. Omitted fields stay unchanged, null clears clearable fields, zero stays zero. Wet/dry mass and moisture are validated against locked merged state. Dry runs roll back. Replays precede version rechecking.",
-      { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse, "200": jsonResponse("Updated feedstock or dry-run representation.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
+      { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse, "200": jsonResponse("Updated feedstock or dry-run representation. ETag is absent on dry runs.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
       [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: requestBody(patchInput, { massWetKg: 4250, notes: "Corrected weighbridge wet mass for bin B2." }),
   };
-  paths["/feedstocks/{idOrCode}"].delete = privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Locked domain guards may refuse deletion. Dry runs return the would-be deleted representation and roll back; no request body is read.",
-    { ...problemResponses([...WRITE_ERRORS, 412, 428]), ...feedstockPreconditionResponse,
+  paths["/feedstocks/{idOrCode}"].delete = {
+    ...privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Locked domain guards may refuse deletion. Dry runs return the would-be deleted representation and roll back. The request body may be omitted; any supplied body must be an empty JSON object. Malformed JSON returns 400; unknown fields and other JSON values return 422.",
+    { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse,
       "204": { description: "Deleted, or replay of a committed deletion; no body.", headers: { ...privateHeaders, ...writeHeaders } },
       "200": jsonResponse("Dry-run deleted representation.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), writeHeaders) },
-    [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]);
+    [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
+    requestBody: {
+      required: false,
+      description: `Optional; when sent it must be an empty JSON object, maximum ${API_BODY_MAX_BYTES} bytes.`,
+      content: { "application/json": { schema: operationInput(z.strictObject({})), example: {} } },
+    },
+  };
 
   for (const [path, operationId, mediaType, description] of [
     ["/openapi.json", "get_openapi_document", "application/json", "Public OpenAPI 3.1 contract."],
@@ -127,7 +135,7 @@ export function buildOpenApiDocument() {
   ]) {
     paths[path] = { get: { operationId, description, "x-required-scope": null, security: [], responses: { "200": {
       description,
-      headers: { "Cache-Control": { description: `Public cache, max-age=${API_DOCS_CACHE_SECONDS} seconds.`, schema: { type: "string" } } },
+      headers: { ...requestIdHeader, "Cache-Control": { description: `Public cache, max-age=${API_DOCS_CACHE_SECONDS} seconds.`, schema: { type: "string" } } },
       content: { [mediaType]: { schema: mediaType === "text/plain" ? { type: "string", description: "Plain-text guide for API agents." } : { type: "object", description: "OpenAPI 3.1 document.", additionalProperties: true } } },
     } } } };
   }
@@ -135,7 +143,7 @@ export function buildOpenApiDocument() {
     openapi: "3.1.0",
     info: { title: "noma data-entry API", version: "1.0.0", description: "Organization-scoped feedstock intake and read-only lookups. Business dates are facility-local YYYY-MM-DD; event instants use RFC 3339 UTC. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
-    components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: "Authorization: Bearer <key> only. Keys use noma_live_ or noma_test_ prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests." } }, schemas, headers: headerComponents, responses },
+    components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
   };
 }
 
@@ -166,4 +174,11 @@ function prettyJson(value: unknown, level = 0): string {
 }
 export function serializeOpenApiDocument(): string {
   return `${prettyJson(stableKeys(buildOpenApiDocument()))}\n`;
+}
+
+let serializedDocument: string | undefined;
+
+/** Reuse the public contract across requests within this module instance. */
+export function getSerializedOpenApiDocument(): string {
+  return serializedDocument ??= serializeOpenApiDocument();
 }
