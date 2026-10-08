@@ -1,3 +1,4 @@
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 /**
  * Formulations React Query Hooks
  * Client-side state management for formulation operations
@@ -22,6 +23,7 @@ import {
   deleteFormulationFn,
 } from "@/fn/formulations";
 
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 
 // ============================================
@@ -53,7 +55,7 @@ export function useFormulations(filters?: Partial<FormulationFilterData>) {
     queryFn: async () => {
       const result = await getFormulationsFn(filters);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -70,7 +72,7 @@ export function useFormulation(formulationId: string, enabled = true) {
     queryFn: async () => {
       const result = await getFormulationByIdFn(formulationId);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -96,7 +98,7 @@ export function useCreateFormulation(
     mutationFn: async (data: CreateFormulationData) => {
       const result = await createFormulationFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -138,7 +140,7 @@ export function useUpdateFormulation(
     mutationFn: async (data: UpdateFormulationData) => {
       const result = await updateFormulationFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -208,6 +210,7 @@ export function useUpdateFormulation(
     onSuccess: async (data, variables) => {
       // Update cache with actual server data
       queryClient.setQueryData(formulationKeys.detail(data.id), data);
+      patchListCachesWithSavedRow<FormulationWithIngredients>(queryClient, formulationKeys.lists(), data);
 
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
@@ -237,6 +240,9 @@ export function useUpdateFormulation(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: formulationKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -255,23 +261,24 @@ export function useUpdateFormulation(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useDeleteFormulation(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, { formulationId: string; expectedVersion: number }>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (formulationId: string) => {
-      const result = await deleteFormulationFn({ formulationId });
+    mutationFn: async (variables: { formulationId: string; expectedVersion: number }) => {
+      const result = await deleteFormulationFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (formulationId) => {
+    onMutate: async (variables) => {
+      const formulationId = variables.formulationId;
       if (!optimistic) {
-        await callbacks?.onMutate?.(formulationId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -300,12 +307,13 @@ export function useDeleteFormulation(
         });
       });
 
-      await callbacks?.onMutate?.(formulationId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousFormulation, previousLists };
     },
-    onSuccess: async (_, formulationId) => {
+    onSuccess: async (_, variables) => {
+      const formulationId = variables.formulationId;
       // Remove specific formulation from cache
       queryClient.removeQueries({ queryKey: formulationKeys.detail(formulationId) });
       // Invalidate lists for consistency
@@ -313,9 +321,11 @@ export function useDeleteFormulation(
       // Invalidate options for dropdowns
       queryClient.invalidateQueries({ queryKey: formulationKeys.options() });
 
-      await callbacks?.onSuccess?.(undefined, formulationId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, formulationId, context) => {
+    onError: async (error, variables, context) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: formulationKeys.all });
+      const formulationId = variables.formulationId;
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousFormulation, previousLists } = context as {
@@ -337,13 +347,13 @@ export function useDeleteFormulation(
         });
       }
 
-      await callbacks?.onError?.(error, formulationId);
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, formulationId) => {
-      // Refetch lists to ensure consistency
+    onSettled: async (data, error, variables) => {
+            // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: formulationKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, formulationId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

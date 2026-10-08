@@ -84,7 +84,7 @@ describe("formulation schema ratio-sum refinement", () => {
   });
 
   it("rejects an over-allocated update payload", () => {
-    const result = updateFormulationSchema.safeParse({
+    const result = updateFormulationSchema.safeParse({ expectedVersion: 1,
       formulationId: UUID,
       biocharRatio: 0.9,
       ingredients: [{ feedstockTypeId: UUID, ratio: 0.5 }],

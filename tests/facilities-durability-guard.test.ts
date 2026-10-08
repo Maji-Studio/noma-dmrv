@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the durability-tier edit guard on `updateFacility`.
@@ -206,7 +207,7 @@ describe("updateFacility durability-tier guard", () => {
       await insertBatch(chain, status);
 
       await expect(
-        updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+        updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
           durabilityOption: "1000_year",
         }),
       ).rejects.toBeInstanceOf(SafeError);
@@ -225,7 +226,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBlockingRemoval(chain, "submitted");
 
     await expect(
-      updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+      updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
         durabilityOption: "1000_year",
       }),
     ).rejects.toBeInstanceOf(SafeError);
@@ -240,7 +241,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBatch(chain, "pending");
     await insertBatch(chain, "issued", /* archived */ true);
 
-    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
       durabilityOption: "1000_year",
     });
 
@@ -252,7 +253,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBatch(chain, "verified");
 
     // Same tier passed through + an unrelated field change must still succeed.
-    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
+    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, { expectedVersion: await masterDataVersion(makeTestOrgContext(TEST_USER_ID), "facilities", chain.facilityId),
       durabilityOption: "200_year",
       contactEmail: "ops@example.com",
     });
@@ -268,7 +269,7 @@ describe("updateFacility durability-tier guard", () => {
 
     await db.transaction(async (tx) => {
       await acquireFacilityDurabilityLock(ctx, tx, chain.facilityId);
-      updatePromise = updateFacility(ctx, chain.facilityId, {
+      updatePromise = updateFacility(ctx, chain.facilityId, { expectedVersion: await masterDataVersion(ctx, "facilities", chain.facilityId),
         contactPhone: "+41 44 555 01 23",
       });
 

@@ -191,7 +191,7 @@ describe("customer mutations keep the EntitySelect caches fresh", () => {
     );
 
     await act(async () => {
-      await (mutation as DeleteMutation).mutateAsync(customer.id);
+      await (mutation as DeleteMutation).mutateAsync({ customerId: customer.id, expectedVersion: 1 });
     });
 
     expect(queryClient.getQueryData(detailKey)).toBeUndefined();

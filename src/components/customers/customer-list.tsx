@@ -35,7 +35,7 @@ import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { MISSING_VALUE } from "@/lib/copy-utils";
-import { toSaveErrorMessage } from "@/lib/stale-version";
+import { toSaveErrorMessage, StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 import { CUSTOMER_DEEP_LINK_PARAM } from "@/lib/customer-links";
 import { customerSheetSections } from "./customer-read-sections";
 import { Notice } from "@/components/ui/notice";
@@ -121,7 +121,7 @@ export function CustomerList() {
     entity: CustomerWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
+  const [deletingCustomer, setDeletingCustomer] = useState<CustomerWithRelations | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -257,7 +257,7 @@ export function CustomerList() {
         customerId: displaySideSheet.entity.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: displaySideSheet.entity.updatedAt,
+        expectedVersion: displaySideSheet.entity.version,
         ...data,
       });
       closeSideSheet();
@@ -269,17 +269,18 @@ export function CustomerList() {
     }
   };
 
-  const handleDelete = (customerId: string) => setDeletingCustomerId(customerId);
+  const handleDelete = (customerId: string) => setDeletingCustomer((customersData?.items ?? []).find((row) => row.id === customerId) ?? null);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingCustomerId) return;
+    if (!deletingCustomer) return;
     setDeleteError(null);
     try {
-      await deleteCustomer.mutateAsync(deletingCustomerId);
-      setDeletingCustomerId(null);
+      await deleteCustomer.mutateAsync({ customerId: deletingCustomer.id, expectedVersion: deletingCustomer.version });
+      setDeletingCustomer(null);
       toast.success("Customer deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Customer was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeletingCustomer(null);
+      setDeleteError(toDeleteErrorMessage(error, `Customer ${deletingCustomer.code}`, "Customer was not deleted. Try again."));
     }
   };
 
@@ -390,12 +391,12 @@ export function CustomerList() {
       {deleteError && <ServerError message={deleteError} />}
 
       <DeleteConfirmDialog
-        isOpen={!!deletingCustomerId}
+        isOpen={!!deletingCustomer}
         title="Delete customer"
         message="Are you sure you want to delete this customer? This action cannot be undone. Note: Customers with locations cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
-          setDeletingCustomerId(null);
+          setDeletingCustomer(null);
           setDeleteError(null);
         }}
         isPending={deleteCustomer.isPending}

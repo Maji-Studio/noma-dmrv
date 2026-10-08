@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -41,7 +42,7 @@ describe("stock-reducing update guards", () => {
   it("does not recalculate source mass from a formulation volume share", async () => {
     const f = await fixture(); if (!f.product) throw new Error("Expected posted product");
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.targetBiocharProductId, f.product.id));
-    await expect(updateFormulation(f.ctx, f.pure.id, { biocharRatio: 0.9 })).resolves.toMatchObject({ biocharRatio: 0.9 });
+    await expect(updateFormulation(f.ctx, f.pure.id, { expectedVersion: await masterDataVersion(f.ctx, "formulations", f.pure.id), biocharRatio: 0.9 })).resolves.toMatchObject({ biocharRatio: 0.9 });
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.targetBiocharProductId, f.product.id))).toEqual(before);
     expect((await db.select().from(biocharProducts).where(eq(biocharProducts.id, f.product.id)))[0].biocharRatio).toBe(1);
   });

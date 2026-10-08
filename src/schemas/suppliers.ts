@@ -7,7 +7,7 @@ import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
   clearablePositiveNumber,
-  expectedUpdatedAtSchema,
+  expectedVersionSchema,
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
@@ -97,7 +97,7 @@ export const createSupplierSchema = supplierFormSchema;
  */
 export const updateSupplierSchema = z.object({
   supplierId: z.string().uuid("Choose a valid supplier."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   code: z
     .string()
     .min(1)
@@ -121,6 +121,7 @@ export const updateSupplierSchema = z.object({
  * Schema for deleting a supplier
  */
 export const deleteSupplierSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   supplierId: z.string().uuid("Choose a valid supplier."),
 });
 
@@ -205,7 +206,7 @@ export const createSupplierWithLocationsSchema = z.object({
  */
 export const updateSupplierLocationSchema = z.object({
   locationId: z.string().uuid("Choose a valid location."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   name: z.string().max(255).optional().nullable().or(z.literal("")),
   country: z.string().min(1).max(100).optional(),
   stateRegion: z.string().max(100).optional().nullable().or(z.literal("")),
@@ -222,6 +223,7 @@ export const updateSupplierLocationSchema = z.object({
  * Schema for deleting a supplier location
  */
 export const deleteSupplierLocationSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   locationId: z.string().uuid("Choose a valid location."),
 });
 

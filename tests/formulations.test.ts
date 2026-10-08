@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues } from "./helpers/output-contract-fixtures";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -127,7 +128,7 @@ describe("updateFormulation ingredient identity", () => {
       .returning({ id: biocharProducts.id });
     createdProductIds.push(product.id);
 
-    const updated = await updateFormulation(makeTestOrgContext(), formulation.id, {
+    const updated = await updateFormulation(makeTestOrgContext(), formulation.id, { expectedVersion: await masterDataVersion(makeTestOrgContext(), "formulations", formulation.id),
       ingredients: [
         { feedstockTypeId: ingredientTypes[0].id, ratio: 0.2 },
         { feedstockTypeId: ingredientTypes[1].id, ratio: 0.2 },
@@ -232,7 +233,7 @@ describe("formulation unique blend material constraint", () => {
       ),
     ).toBe(true);
 
-    const updateResult = updateFormulationSchema.safeParse({
+    const updateResult = updateFormulationSchema.safeParse({ expectedVersion: 1,
       formulationId: crypto.randomUUID(),
       ...duplicatePayload,
     });

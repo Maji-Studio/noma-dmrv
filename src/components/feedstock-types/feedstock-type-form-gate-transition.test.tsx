@@ -207,6 +207,7 @@ const persistedFeedstockType: FeedstockType = {
   isometricFeedstockTypeId: ISOMETRIC_ID,
   archivedAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 

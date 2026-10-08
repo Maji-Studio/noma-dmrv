@@ -21,7 +21,7 @@ import {
   type StorageLocationSortKey,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
-import { assertExpectedVersion } from "./expected-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 import { storageLocationLastActivityAt } from "./storage-location-activity";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -176,6 +176,7 @@ export async function getStorageLocations(
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
+      version: storageLocations.version,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -273,6 +274,7 @@ export async function getStorageLocationWithFacility(
       facilityId: storageLocations.facilityId,
       archivedAt: storageLocations.archivedAt,
       createdAt: storageLocations.createdAt,
+      version: storageLocations.version,
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
@@ -463,8 +465,8 @@ export async function updateStorageLocation(
     storageMethod?: string | null;
     storageDescription?: string | null;
     supplierReferenceId?: string | null;
-    /** `updatedAt` the edit form loaded; refuses a save built on a stale read. */
-    expectedUpdatedAt?: Date;
+    /** `version` the edit form loaded; refuses a save built on a stale read. */
+    expectedVersion: number;
   }
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
@@ -483,11 +485,11 @@ export async function updateStorageLocation(
       storageLocationId,
       { forUpdate: true },
     );
-    assertExpectedVersion({
+    assertRowVersion({
       entity: STORAGE_LOCATION_CONFLICT_ENTITY,
       id: storageLocationId,
-      expectedUpdatedAt: data.expectedUpdatedAt,
-      actualUpdatedAt: existing.updatedAt,
+      expectedVersion: data.expectedVersion,
+      actualVersion: existing.version,
     });
 
     // If code is being changed, check for duplicates
@@ -616,10 +618,11 @@ export async function updateStorageLocation(
 
     const stockMode = await applyStockModeChange(ctx, tx, existing, { type: effectiveType as StorageLocationType, stockMode: data.stockMode, mergedAt: data.mergedAt });
 
-    const dataWithoutNormalized = { ...data };
+    const dataWithoutNormalized: Partial<typeof data> = { ...data };
+    delete dataWithoutNormalized.expectedVersion;
     delete dataWithoutNormalized.formulationId;
     delete dataWithoutNormalized.feedstockTypeId;
-    delete dataWithoutNormalized.expectedUpdatedAt;
+
     delete dataWithoutNormalized.stockMode;
     delete dataWithoutNormalized.mergedAt;
     // A rename OR a facility move can collide with the per-facility name index.
@@ -631,6 +634,7 @@ export async function updateStorageLocation(
           .update(storageLocations)
           .set({
             ...dataWithoutNormalized,
+            version: nextVersion(storageLocations.version),
             feedstockTypeId: normalizedFeedstockTypeId,
             formulationId: normalizedFormulationId,
             stockMode,
@@ -670,13 +674,16 @@ function archiveResidualMaterialMessage(code: string): string {
 export async function archiveStorageLocation(
   ctx: OrgContext,
   storageLocationId: string,
+  expectedVersion: number,
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, storageLocationId);
+
     const [existing] = await tx
       .select({
+        version: storageLocations.version,
         id: storageLocations.id,
         code: storageLocations.code,
         type: storageLocations.type,
@@ -688,11 +695,12 @@ export async function archiveStorageLocation(
           eq(storageLocations.id, storageLocationId),
           eq(storageLocations.organizationId, ctx.organizationId),
         ),
-      );
+      ).for("update");
 
     if (!existing) {
       throw new SafeError("Storage bin not found");
     }
+    assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: existing.version });
     if (existing.archivedAt) {
       throw new SafeError("Storage bin is already archived");
     }
@@ -719,7 +727,7 @@ export async function archiveStorageLocation(
     const archivedAt = new Date();
     const [archived] = await tx
       .update(storageLocations)
-      .set({ archivedAt, updatedAt: archivedAt })
+      .set({ version: nextVersion(storageLocations.version), archivedAt, updatedAt: archivedAt })
       .where(
         and(
           eq(storageLocations.id, storageLocationId),
@@ -743,12 +751,15 @@ export async function archiveStorageLocation(
 export async function restoreStorageLocation(
   ctx: OrgContext,
   storageLocationId: string,
+  expectedVersion: number,
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
+
     const [existing] = await tx
       .select({
+        version: storageLocations.version,
         id: storageLocations.id,
         archivedAt: storageLocations.archivedAt,
         facilityArchivedAt: facilities.archivedAt,
@@ -772,6 +783,7 @@ export async function restoreStorageLocation(
     if (!existing) {
       throw new SafeError("Storage bin not found");
     }
+    assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: existing.version });
     if (!existing.archivedAt) {
       throw new SafeError("Storage bin is not archived");
     }
@@ -783,7 +795,7 @@ export async function restoreStorageLocation(
 
     const [restored] = await tx
       .update(storageLocations)
-      .set({ archivedAt: null, updatedAt: new Date() })
+      .set({ version: nextVersion(storageLocations.version), archivedAt: null, updatedAt: new Date() })
       .where(
         and(
           eq(storageLocations.id, storageLocationId),
@@ -811,33 +823,33 @@ export async function restoreStorageLocation(
  */
 export async function deleteStorageLocation(
   ctx: OrgContext,
-  storageLocationId: string
+  storageLocationId: string,
+  expectedVersion: number
 ): Promise<void> {
   requireOrgScope(ctx);
+  return db.transaction(async (tx) => {
+    const [versioned] = await tx.select({ version: storageLocations.version })
+      .from(storageLocations)
+      .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
+      .for("update");
+    if (!versioned) throw new SafeError("Storage bin not found");
+    assertRowVersion({ entity: STORAGE_LOCATION_CONFLICT_ENTITY, id: storageLocationId, expectedVersion, actualVersion: versioned.version });
 
-  // Verify storage bin exists
-  const [existing] = await db
-    .select({ id: storageLocations.id })
-    .from(storageLocations)
-    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Storage bin not found");
-  }
-
-  const blockers = storageLocationBlockers(
-    await countStorageLocationReferences(ctx, db, storageLocationId),
-  );
-
-  if (blockers.length > 0) {
-    throw new SafeError(
-      `Cannot delete this storage bin while it has ${blockers.join(", ")}. Move or remove those records first.`
+    const blockers = storageLocationBlockers(
+      await countStorageLocationReferences(ctx, tx, storageLocationId),
     );
-  }
 
-  await db
-    .delete(storageLocations)
-    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
+    if (blockers.length > 0) {
+      throw new SafeError(
+        `Cannot delete this storage bin while it has ${blockers.join(", ")}. Move or remove those records first.`
+      );
+    }
+
+    await tx
+      .delete(storageLocations)
+      .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
+
+  });
 }
 
 // ============================================

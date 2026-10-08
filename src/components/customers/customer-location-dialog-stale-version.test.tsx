@@ -72,6 +72,7 @@ const location: EditableCustomerLocation = {
   distanceSource: "manual",
   defaultSoilTemperatureC: 25,
   isDefault: true,
+  version: 1,
   updatedAt: UPDATED_AT,
 };
 
@@ -126,7 +127,7 @@ describe("CustomerLocationDialog on a stale-version refusal", () => {
     expect(harness.update).toHaveBeenCalledWith(
       expect.objectContaining({
         locationId: LOCATION_ID,
-        expectedUpdatedAt: UPDATED_AT,
+        expectedVersion: 1,
         name: draft.name,
       }),
     );

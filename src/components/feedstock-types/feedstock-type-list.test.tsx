@@ -20,6 +20,7 @@ const activeType: FeedstockType = {
   isometricFeedstockTypeId: "feedstock_type_iso_1",
   archivedAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
+  version: 1,
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 

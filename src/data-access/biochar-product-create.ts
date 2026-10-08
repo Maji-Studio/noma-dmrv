@@ -1,3 +1,4 @@
+import { nextVersion } from "./row-version";
 import { biocharProducts, facilities, formulations, outputStockAllocations, productIngredientSnapshots, storageLocations, type BiocharProduct, type ProductIngredientSnapshot } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
@@ -92,7 +93,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
         wetMassKg: kilograms(grams(Number(ingredient.massKg))), moisturePercentUsed: moisture,
         moistureEstimate: (ingredient.moistureEstimate ?? null) as ProductIngredientSnapshot['moistureEstimate'], drySolidsKg: kilograms(grams(Number(ingredient.massDryKg))) });
     }
-    if (!bin.formulationId) await tx.update(storageLocations).set({ formulationId: data.formulationId, updatedAt: new Date() }).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, bin.id)));
+    if (!bin.formulationId) await tx.update(storageLocations).set({ version: nextVersion(storageLocations.version), formulationId: data.formulationId, updatedAt: new Date() }).where(and(eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.id, bin.id)));
     return product;
   } });
 }

@@ -8,14 +8,14 @@ import {
   CODE_CONFLICT_MESSAGES,
   withUniqueCodeGuard,
 } from "./code-generator";
-import { assertExpectedVersion } from "./expected-version";
+import { assertRowVersion, nextVersion } from "./row-version";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
 
 const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
 /** Entity key on a facility's expected-version conflict. */
-const FACILITY_CONFLICT_ENTITY = "facility";
+export const FACILITY_CONFLICT_ENTITY = "facility";
 
 interface FacilityUpdateData {
   code?: string;
@@ -36,10 +36,11 @@ async function lockFacilityRow(
   ctx: OrgContext,
   tx: DbTransaction,
   facilityId: string,
-): Promise<{ durabilityOption: string; updatedAt: Date }> {
+): Promise<{ durabilityOption: string; version: number; updatedAt: Date }> {
   const [locked] = await tx
     .select({
       durabilityOption: facilities.durabilityOption,
+      version: facilities.version,
       updatedAt: facilities.updatedAt,
     })
     .from(facilities)
@@ -116,7 +117,7 @@ async function updateFacilityRow(
       () =>
         executor
           .update(facilities)
-          .set({ ...data, updatedAt: new Date() })
+          .set({ ...data, version: nextVersion(facilities.version), updatedAt: new Date() })
           .where(
             and(
               eq(facilities.id, facilityId),
@@ -134,10 +135,10 @@ async function updateFacilityRow(
 export async function updateFacility(
   ctx: OrgContext,
   facilityId: string,
-  input: FacilityUpdateData & { expectedUpdatedAt?: Date },
+  input: FacilityUpdateData & { expectedVersion: number },
 ): Promise<Facility> {
   requireOrgScope(ctx);
-  const { expectedUpdatedAt, ...data } = input;
+  const { expectedVersion, ...data } = input;
   const [existing] = await db
     .select({ durabilityOption: facilities.durabilityOption })
     .from(facilities)
@@ -161,11 +162,11 @@ export async function updateFacility(
     delete nonTierData.durabilityOption;
     return db.transaction(async (tx) => {
       const locked = await lockFacilityRow(ctx, tx, facilityId);
-      assertExpectedVersion({
+      assertRowVersion({
         entity: FACILITY_CONFLICT_ENTITY,
         id: facilityId,
-        expectedUpdatedAt,
-        actualUpdatedAt: locked.updatedAt,
+        expectedVersion,
+        actualVersion: locked.version,
       });
       return updateFacilityRow(ctx, tx, facilityId, nonTierData);
     });
@@ -174,11 +175,11 @@ export async function updateFacility(
   return db.transaction(async (tx) => {
     await acquireFacilityDurabilityLock(ctx, tx, facilityId);
     const lockedExisting = await lockFacilityRow(ctx, tx, facilityId);
-    assertExpectedVersion({
+    assertRowVersion({
       entity: FACILITY_CONFLICT_ENTITY,
       id: facilityId,
-      expectedUpdatedAt,
-      actualUpdatedAt: lockedExisting.updatedAt,
+      expectedVersion,
+      actualVersion: lockedExisting.version,
     });
 
     if (data.durabilityOption === lockedExisting.durabilityOption) {

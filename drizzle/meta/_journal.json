@@ -869,6 +869,13 @@
       "when": 1791376252148,
       "tag": "0123_feedstock_version",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1791389337932,
+      "tag": "0124_master_data_versions",
+      "breakpoints": true
     }
   ]
 }

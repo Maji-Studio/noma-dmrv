@@ -74,7 +74,7 @@ export function StorageBinSheet({
         storageLocationId: state.entity.id,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: state.entity.updatedAt,
+        expectedVersion: state.entity.version,
         ...data,
       });
       onStateChange(null);

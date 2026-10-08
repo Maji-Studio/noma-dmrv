@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  expectedUpdatedAtSchema,
+  expectedVersionSchema,
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
@@ -175,7 +175,7 @@ export const createFacilitySchema = facilityFormSchema;
  */
 export const updateFacilitySchema = z.object({
   facilityId: z.string().uuid("Choose a valid facility."),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   code: z
     .string()
     .min(1)
@@ -198,6 +198,7 @@ export const updateFacilitySchema = z.object({
  * Schema for archiving a facility (soft delete, cascades to child data)
  */
 export const archiveFacilitySchema = z.object({
+  expectedVersion: expectedVersionSchema,
   facilityId: z.string().uuid("Choose a valid facility."),
 });
 

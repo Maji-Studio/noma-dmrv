@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { getOutputBinAllLayersDryKg, readOutputBinAllLayers } from "@/data-access/output-stock";
 import { layersHoldMaterial } from "@/lib/output-stock";
 import { postedStockFixture, postMeasurement, cleanupPostedStock } from "./helpers/posted-output-stock-fixture";
@@ -25,6 +26,7 @@ import {
   storageLocations,
 } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
+import { STALE_VERSION_MESSAGE } from "@/lib/stale-version";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -158,15 +160,15 @@ describe("storage location archive", () => {
 
     try {
       await expect(
-        deleteStorageLocation(ctx, fixture.storageLocationId),
+        deleteStorageLocation(ctx, fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrowError(SafeError);
       await expect(
-        deleteStorageLocation(ctx, fixture.storageLocationId),
+        deleteStorageLocation(ctx, fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrow(/movement history/);
 
       const archived = await archiveStorageLocation(
         ctx,
-        fixture.storageLocationId,
+        fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId),
       );
       expect(archived.archivedAt).toBeInstanceOf(Date);
 
@@ -189,7 +191,7 @@ describe("storage location archive", () => {
 
       const restored = await restoreStorageLocation(
         ctx,
-        fixture.storageLocationId,
+        fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId),
       );
       expect(restored.archivedAt).toBeNull();
     } finally {
@@ -209,7 +211,7 @@ describe("storage location archive", () => {
 
     try {
       await expect(
-        archiveStorageLocation(ctx, fixture.storageLocationId),
+        archiveStorageLocation(ctx, fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrow(/10 kg on hand/);
     } finally {
       await cleanupStorageArchiveFixture(fixture);
@@ -220,11 +222,11 @@ describe("storage location archive", () => {
     const fixture = await postedStockFixture({ stockKg: 10 });
     const binId = lane === "biochar" ? fixture.source.id : fixture.bin.id;
     try {
-      await expect(archiveStorageLocation(fixture.ctx, binId)).rejects.toThrow(/on hand/);
+      await expect(archiveStorageLocation(fixture.ctx, binId, await masterDataVersion(fixture.ctx, "storageLocations", binId))).rejects.toThrow(/on hand/);
       const input = { facilityId: fixture.facility.id, storageLocationId: binId, occurredAt: "2026-09-14T12:00:00.000Z", kind: "count" as const, wetMassKg: 0 };
       const preview = await previewOutputStock(fixture.ctx, input);
       await postOutputStock(fixture.ctx, { ...input, basisFingerprint: preview.basisFingerprint, idempotencyKey: crypto.randomUUID(), reason: "E2E archive empty bin" });
-      await expect(archiveStorageLocation(fixture.ctx, binId)).resolves.toMatchObject({ archivedAt: expect.any(Date) });
+      await expect(archiveStorageLocation(fixture.ctx, binId, await masterDataVersion(fixture.ctx, "storageLocations", binId))).resolves.toMatchObject({ archivedAt: expect.any(Date) });
     } finally { await cleanupPostedStock(fixture); }
   });
 
@@ -237,12 +239,12 @@ describe("storage location archive", () => {
       const { layers } = await readOutputBinAllLayers(fixture.ctx, fixture.bin.id);
       expect(layersHoldMaterial(layers)).toBe(true);
 
-      await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id)).rejects.toThrow(/record a stock count of zero/i);
+      await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id, await masterDataVersion(fixture.ctx, "storageLocations", fixture.bin.id))).rejects.toThrow(/record a stock count of zero/i);
 
       await postMeasurement(fixture, { kind: "count", storageLocationId: fixture.bin.id, wetMassKg: 0, moisturePercent: undefined });
       const cleared = await readOutputBinAllLayers(fixture.ctx, fixture.bin.id);
       expect(layersHoldMaterial(cleared.layers)).toBe(false);
-      await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id)).resolves.toMatchObject({ archivedAt: expect.any(Date) });
+      await expect(archiveStorageLocation(fixture.ctx, fixture.bin.id, await masterDataVersion(fixture.ctx, "storageLocations", fixture.bin.id))).resolves.toMatchObject({ archivedAt: expect.any(Date) });
     } finally { await cleanupPostedStock(fixture); }
   });
 
@@ -252,7 +254,7 @@ describe("storage location archive", () => {
 
     try {
       await expect(
-        archiveStorageLocation(ctx, fixture.storageLocationId),
+        archiveStorageLocation(ctx, fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId)),
       ).rejects.toThrow(/-0\.4 kg on hand/);
     } finally {
       await cleanupStorageArchiveFixture(fixture);
@@ -264,7 +266,7 @@ describe("storage location archive", () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
 
     try {
-      await archiveStorageLocation(ctx, fixture.storageLocationId);
+      await archiveStorageLocation(ctx, fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId));
       await expect(
         recordStockTakeMovement(ctx, {
           storageLocationId: fixture.storageLocationId,
@@ -287,9 +289,9 @@ describe("storage location archive", () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
 
     try {
-      await archiveStorageLocation(ctx, fixture.storageLocationId);
+      await archiveStorageLocation(ctx, fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId));
       await expect(
-        updateStorageLocation(ctx, fixture.storageLocationId, {
+        updateStorageLocation(ctx, fixture.storageLocationId, { expectedVersion: await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId),
           name: "Archived bins must not be editable",
         }),
       ).rejects.toThrow(/restore this storage bin before editing it/i);
@@ -319,7 +321,7 @@ describe("storage location archive", () => {
     let facilityArchiveTransaction: Promise<void> | undefined;
 
     try {
-      await archiveStorageLocation(ctx, fixture.storageLocationId);
+      await archiveStorageLocation(ctx, fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId));
 
       let signalFacilityArchiveReady = () => {};
       const facilityArchiveReady = new Promise<void>((resolve) => {
@@ -351,7 +353,7 @@ describe("storage location archive", () => {
 
       const restoreOutcome = restoreStorageLocation(
         ctx,
-        fixture.storageLocationId,
+        fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId),
       ).then(
         (value) => ({ ok: true as const, value }),
         (error: unknown) => ({ ok: false as const, error }),
@@ -448,8 +450,8 @@ describe("storage location archive", () => {
       await facilityLockReady;
 
       const archiveOutcomes = [
-        archiveFacility(ctx, fixture.facilityId),
-        archiveFacility(ctx, fixture.facilityId),
+        archiveFacility(ctx, fixture.facilityId, await masterDataVersion(ctx, "facilities", fixture.facilityId)),
+        archiveFacility(ctx, fixture.facilityId, await masterDataVersion(ctx, "facilities", fixture.facilityId)),
       ].map((archive) =>
         archive.then(
           (value) => ({ ok: true as const, value }),
@@ -481,11 +483,13 @@ describe("storage location archive", () => {
       expect(outcomes.filter((outcome) => outcome.ok)).toHaveLength(1);
       const rejected = outcomes.find((outcome) => !outcome.ok);
       expect(rejected?.error).toBeInstanceOf(SafeError);
-      expect((rejected?.error as Error).message).toMatch(
-        /facility is already archived/i,
-      );
+      expect(rejected?.error).toMatchObject({
+        name: "DomainError",
+        code: "stale_version",
+        message: STALE_VERSION_MESSAGE,
+      });
 
-      await restoreFacility(ctx, fixture.facilityId);
+      await restoreFacility(ctx, fixture.facilityId, await masterDataVersion(ctx, "facilities", fixture.facilityId));
       const [restored] = await db
         .select({
           binArchivedAt: storageLocations.archivedAt,
@@ -521,9 +525,9 @@ describe("storage location archive", () => {
     try {
       const individuallyArchived = await archiveStorageLocation(
         ctx,
-        fixture.storageLocationId,
+        fixture.storageLocationId, await masterDataVersion(ctx, "storageLocations", fixture.storageLocationId),
       );
-      await archiveFacility(ctx, fixture.facilityId);
+      await archiveFacility(ctx, fixture.facilityId, await masterDataVersion(ctx, "facilities", fixture.facilityId));
 
       const [archivePrecision] = await db
         .select({
@@ -557,7 +561,7 @@ describe("storage location archive", () => {
       expect(archivePrecision.binOffsetMicroseconds).toBe(0);
       expect(archivePrecision.facilityOffsetMicroseconds).toBe(500);
 
-      await restoreFacility(ctx, fixture.facilityId);
+      await restoreFacility(ctx, fixture.facilityId, await masterDataVersion(ctx, "facilities", fixture.facilityId));
 
       const [bin] = await db
         .select({ archivedAt: storageLocations.archivedAt })

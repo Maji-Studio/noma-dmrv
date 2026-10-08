@@ -43,9 +43,9 @@ import {
   deleteSupplierLocationFn,
 } from "@/fn/suppliers";
 
-import { throwActionError } from "@/lib/stale-version";
+import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
-import { patchListCachesWithSavedRow } from "./list-cache-utils";
+import { patchArrayListCacheWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
@@ -86,7 +86,7 @@ export function useSuppliers(filters?: Partial<SupplierFilterData>) {
     queryFn: async () => {
       const result = await getSuppliersFn(filters);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -108,7 +108,7 @@ export function useSupplier(supplierId: string, enabled = true) {
     queryFn: async () => {
       const result = await getSupplierByIdFn(supplierId);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -134,7 +134,7 @@ export function useCreateSupplier(
     mutationFn: async (data: CreateSupplierData) => {
       const result = await createSupplierFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -172,7 +172,7 @@ export function useCreateSupplierWithLocations(
     mutationFn: async (data: CreateSupplierWithLocationsData) => {
       const result = await createSupplierWithLocationsFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -315,6 +315,9 @@ export function useUpdateSupplier(
         });
       }
 
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      }
       await callbacks?.onError?.(error, variables);
     },
     onSettled: async (data, error, variables) => {
@@ -333,23 +336,24 @@ export function useUpdateSupplier(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useDeleteSupplier(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, { supplierId: string; expectedVersion: number }>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (supplierId: string) => {
-      const result = await deleteSupplierFn({ supplierId });
+    mutationFn: async (variables: { supplierId: string; expectedVersion: number }) => {
+      const result = await deleteSupplierFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (supplierId) => {
+    onMutate: async (variables) => {
+      const supplierId = variables.supplierId;
       if (!optimistic) {
-        await callbacks?.onMutate?.(supplierId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -378,12 +382,13 @@ export function useDeleteSupplier(
         });
       });
 
-      await callbacks?.onMutate?.(supplierId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousSupplier, previousLists };
     },
-    onSuccess: async (_, supplierId) => {
+    onSuccess: async (_, variables) => {
+      const supplierId = variables.supplierId;
       // Remove specific supplier from cache
       queryClient.removeQueries({ queryKey: supplierKeys.detail(supplierId) });
       // Invalidate lists for consistency
@@ -399,9 +404,11 @@ export function useDeleteSupplier(
       // Feedstock and delivery pickers read the supplier through EntitySelect.
       invalidateEntityTypeQueries(queryClient, SUPPLIER_ENTITY_TYPE);
 
-      await callbacks?.onSuccess?.(undefined, supplierId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, supplierId, context) => {
+    onError: async (error, variables, context) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      const supplierId = variables.supplierId;
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousSupplier, previousLists } = context as {
@@ -423,13 +430,13 @@ export function useDeleteSupplier(
         });
       }
 
-      await callbacks?.onError?.(error, supplierId);
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, supplierId) => {
-      // Refetch lists to ensure consistency
+    onSettled: async (data, error, variables) => {
+            // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, supplierId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }
@@ -454,7 +461,7 @@ export function useSupplierLocationsBySupplier(
     queryKey: supplierKeys.supplierLocations(supplierId),
     queryFn: async () => {
       const result = await getSupplierLocationsBySupplierFn(supplierId);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     enabled: !!supplierId && enabled,
@@ -468,7 +475,7 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
   return useMutation({
     mutationFn: async (data: CreateSupplierLocationData) => {
       const result = await createSupplierLocationFn(data);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {
@@ -495,24 +502,28 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       return result.data;
     },
     onSuccess: (data, variables) => {
+      patchArrayListCacheWithSavedRow<SupplierLocation>(queryClient, supplierKeys.supplierLocations(supplierId), data);
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
+      }
       callbacks?.onError?.(error instanceof Error ? error : new Error("Location was not saved. Try again."), variables);
     },
   });
 }
 
-export function useDeleteSupplierLocation(supplierId: string, callbacks?: MutationCallbacks<void, string>) {
+export function useDeleteSupplierLocation(supplierId: string, callbacks?: MutationCallbacks<void, { locationId: string; expectedVersion: number }>) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (locationId: string) => {
-      const result = await deleteSupplierLocationFn({ locationId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (variables: { locationId: string; expectedVersion: number }) => {
+      const result = await deleteSupplierLocationFn(variables);
+      if (!result.success) throwActionError(result);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
@@ -521,6 +532,7 @@ export function useDeleteSupplierLocation(supplierId: string, callbacks?: Mutati
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: (error, variables) => {
+      if (error instanceof StaleVersionError) void queryClient.invalidateQueries({ queryKey: supplierKeys.all });
       callbacks?.onError?.(error instanceof Error ? error : new Error("Location was not deleted. Try again."), variables);
     },
   });

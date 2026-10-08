@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
 import { deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues } from "./helpers/output-contract-fixtures";
@@ -371,7 +372,7 @@ describe(
         locationUpdatePromise = updateCustomerLocation(
           ctx,
           fixture.locationIds[0],
-          { distanceFromFacilityKm: 55, distanceSource: "manual" },
+          { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), distanceFromFacilityKm: 55, distanceSource: "manual" },
         );
 
         await expect
@@ -510,7 +511,7 @@ describe(
       await expect(updateOrder(ctx, fixture.orderId, {
         customerLocationId: fixture.locationIds[1],
       })).rejects.toThrow(/Order relationship is used by delivery/);
-      await updateCustomerLocation(ctx, fixture.locationIds[0], { distanceFromFacilityKm: 60, distanceSource: "manual" });
+      await updateCustomerLocation(ctx, fixture.locationIds[0], { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), distanceFromFacilityKm: 60, distanceSource: "manual" });
 
       const [derived] = await db
         .select({

@@ -16,7 +16,7 @@ import { seedRegistryAndTypes } from "./registry";
 export async function seedInfrastructure(counts: SeedCounts) {
   const facility = await unwrap("create facility", createFacilityFn(createFacilitySchema.parse(FACILITY)));
   counts.add("facilities");
-  await unwrap("set facility idempotency code", updateFacilityFn({ facilityId: facility.id, code: MAFINGA_CODE }));
+  await unwrap("set facility idempotency code", updateFacilityFn({ facilityId: facility.id, expectedVersion: facility.version, code: MAFINGA_CODE }));
   const facilityId = facility.id;
   const types = await seedRegistryAndTypes(facilityId, counts);
   const reactor = await unwrap("create reactor", createReactorFn({ ...EQUIPMENT.reactor, facilityId }));

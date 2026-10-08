@@ -63,8 +63,8 @@ export async function archiveFeedstockTypeFn(
   input: unknown,
 ): Promise<ActionResult<FeedstockType>> {
   return withAction((ctx) => {
-    const { feedstockTypeId } = deleteFeedstockTypeSchema.parse(input);
-    return archiveFeedstockType(ctx, feedstockTypeId);
+    const { feedstockTypeId, expectedVersion } = deleteFeedstockTypeSchema.parse(input);
+    return archiveFeedstockType(ctx, feedstockTypeId, expectedVersion);
   });
 }
 
@@ -72,8 +72,8 @@ export async function unarchiveFeedstockTypeFn(
   input: unknown,
 ): Promise<ActionResult<FeedstockType>> {
   return withAction((ctx) => {
-    const { feedstockTypeId } = deleteFeedstockTypeSchema.parse(input);
-    return unarchiveFeedstockType(ctx, feedstockTypeId);
+    const { feedstockTypeId, expectedVersion } = deleteFeedstockTypeSchema.parse(input);
+    return unarchiveFeedstockType(ctx, feedstockTypeId, expectedVersion);
   });
 }
 
@@ -81,8 +81,8 @@ export async function deleteFeedstockTypeFn(
   input: unknown,
 ): Promise<ActionResult<{ id: string }>> {
   return withAction((ctx) => {
-    const { feedstockTypeId } = deleteFeedstockTypeSchema.parse(input);
-    return deleteFeedstockType(ctx, feedstockTypeId);
+    const { feedstockTypeId, expectedVersion } = deleteFeedstockTypeSchema.parse(input);
+    return deleteFeedstockType(ctx, feedstockTypeId, expectedVersion);
   });
 }
 

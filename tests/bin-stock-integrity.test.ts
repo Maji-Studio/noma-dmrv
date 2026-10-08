@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Bin stock integrity (issue #767).
  *
@@ -494,7 +495,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     const f = await fixture(PROBE_STOCK_WET_KG);
 
     await expect(
-      updateStorageLocation(f.ctx, f.binId, {
+      updateStorageLocation(f.ctx, f.binId, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.binId),
         feedstockTypeId: f.otherFeedstockTypeId,
       }),
     ).rejects.toThrow(stockBlocksMessage("Feedstock type"));
@@ -510,7 +511,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     const f = await fixture(PROBE_STOCK_WET_KG);
 
     await expect(
-      updateStorageLocation(f.ctx, f.binId, { type: "biochar_bin" }),
+      updateStorageLocation(f.ctx, f.binId, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.binId), type: "biochar_bin" }),
     ).rejects.toThrow(stockBlocksMessage("Storage type"));
 
     expect((await readBin(f)).type).toBe("feedstock_bin");
@@ -521,7 +522,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     const otherFacilityId = await insertOtherFacility(f.ctx.organizationId, f.tag);
 
     await expect(
-      updateStorageLocation(f.ctx, f.binId, { facilityId: otherFacilityId }),
+      updateStorageLocation(f.ctx, f.binId, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.binId), facilityId: otherFacilityId }),
     ).rejects.toThrow(stockBlocksMessage("Facility"));
 
     expect((await readBin(f)).facilityId).toBe(f.facilityId);
@@ -533,7 +534,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     const otherFacilityId = await insertOtherFacility(f.ctx.organizationId, f.tag);
 
     await expect(
-      updateStorageLocation(f.ctx, f.binId, { facilityId: otherFacilityId }),
+      updateStorageLocation(f.ctx, f.binId, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.binId), facilityId: otherFacilityId }),
     ).rejects.toThrow(historyBlocksMessage("Facility"));
   });
 
@@ -546,7 +547,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
         const otherFacilityId = await insertOtherFacility(posted.ctx.organizationId, posted.tag);
 
         await expect(
-          updateStorageLocation(posted.ctx, binId, { facilityId: otherFacilityId }),
+          updateStorageLocation(posted.ctx, binId, { expectedVersion: await masterDataVersion(posted.ctx, "storageLocations", binId), facilityId: otherFacilityId }),
         ).rejects.toThrow(stockBlocksMessage("Facility"));
 
         const [bin] = await db
@@ -575,7 +576,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
       })
       .returning({ id: storageLocations.id });
 
-    const moved = await updateStorageLocation(f.ctx, empty.id, { facilityId: otherFacilityId });
+    const moved = await updateStorageLocation(f.ctx, empty.id, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", empty.id), facilityId: otherFacilityId });
 
     expect(moved.facilityId).toBe(otherFacilityId);
   });
@@ -584,7 +585,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     const f = await fixture(PROBE_STOCK_WET_KG);
     const name = `E2E Bin integrity renamed ${f.tag}`;
 
-    const updated = await updateStorageLocation(f.ctx, f.binId, {
+    const updated = await updateStorageLocation(f.ctx, f.binId, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.binId),
       name,
       capacityKg: RENAMED_CAPACITY_KG,
       storageDescription: "Covered concrete bay",
@@ -624,7 +625,7 @@ describe("a stocked bin keeps the setup its stock was recorded against", () => {
     });
 
     await lockAcquired;
-    const identityChange = updateStorageLocation(f.ctx, f.binId, {
+    const identityChange = updateStorageLocation(f.ctx, f.binId, { expectedVersion: await masterDataVersion(f.ctx, "storageLocations", f.binId),
       feedstockTypeId: f.otherFeedstockTypeId,
     });
 

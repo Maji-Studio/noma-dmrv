@@ -108,7 +108,7 @@ describe("mass input caps", () => {
         facilityId: UUID,
         capacityKg: MASS_INPUT_MAX_KG + 1,
       }),
-      updateStorageLocationSchema.safeParse({
+      updateStorageLocationSchema.safeParse({ expectedVersion: 1,
         storageLocationId: UUID,
         capacityKg: MASS_INPUT_MAX_KG + 1,
       }),

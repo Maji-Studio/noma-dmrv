@@ -39,17 +39,7 @@ import {
   createApplication,
   updateApplication,
 } from "@/data-access/applications";
-import {
-  updateCustomer,
-  updateCustomerLocation,
-} from "@/data-access/customers";
-import { updateFacility } from "@/data-access/facility-mutations";
 import { updateProductionRun } from "@/data-access/production-runs";
-import { updateStorageLocation } from "@/data-access/storage-locations";
-import {
-  updateSupplier,
-  updateSupplierLocation,
-} from "@/data-access/suppliers";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   STALE_VERSION_CONFLICT_CODE,
@@ -132,45 +122,6 @@ const versionOf = (table: VersionedTable) => async (id: string): Promise<Date> =
 };
 
 const UPDATERS: UpdaterCase[] = [
-  {
-    entity: "facility",
-    readUpdatedAt: versionOf(facilities),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateFacility(f.ctx, id, { location: label, expectedUpdatedAt }),
-  },
-  {
-    entity: "storageLocation",
-    readUpdatedAt: versionOf(storageLocations),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateStorageLocation(f.ctx, id, {
-        storageDescription: label,
-        expectedUpdatedAt,
-      }),
-  },
-  {
-    entity: "customer",
-    readUpdatedAt: versionOf(customers),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateCustomer(f.ctx, id, { address: label, expectedUpdatedAt }),
-  },
-  {
-    entity: "customerLocation",
-    readUpdatedAt: versionOf(customerLocations),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateCustomerLocation(f.ctx, id, { address: label, expectedUpdatedAt }),
-  },
-  {
-    entity: "supplier",
-    readUpdatedAt: versionOf(suppliers),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateSupplier(f.ctx, id, { address: label, expectedUpdatedAt }),
-  },
-  {
-    entity: "supplierLocation",
-    readUpdatedAt: versionOf(supplierLocations),
-    save: (f, id, label, expectedUpdatedAt) =>
-      updateSupplierLocation(f.ctx, id, { address: label, expectedUpdatedAt }),
-  },
   {
     entity: "productionRun",
     readUpdatedAt: versionOf(productionRuns),

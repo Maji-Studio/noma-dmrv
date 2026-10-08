@@ -10,7 +10,7 @@ async function action<T>(name: string, input: unknown, schema: { parse(input: un
   const data = schema.parse(input);
   calls.inputs.set(name, [...(calls.inputs.get(name) ?? []), data]);
   calls.sequence.push(name);
-  return { success: true as const, data: { ...data, id: randomUUID() } };
+  return { success: true as const, data: { ...data, id: randomUUID(), version: 1 } };
 }
 vi.mock("@/fn/facilities", async () => {
   const s = await import("@/schemas/facilities");

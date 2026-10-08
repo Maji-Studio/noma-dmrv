@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Expected-version conflict check (issue #768, F03).
  *
@@ -51,7 +52,8 @@ const CASCADE_TRANSITIONS = 2;
 const EXPECTED_COMMITS = 1;
 
 const STALE_CONFLICT = {
-  name: "ActionConflictError",
+  name: "DomainError",
+  code: "stale_version",
   message: STALE_VERSION_MESSAGE,
   conflict: { code: STALE_VERSION_CONFLICT_CODE },
 };
@@ -168,6 +170,7 @@ async function readFacility(fixture: Fixture) {
       name: facilities.name,
       location: facilities.location,
       country: facilities.country,
+      version: facilities.version,
       updatedAt: facilities.updatedAt,
     })
     .from(facilities)
@@ -216,17 +219,17 @@ afterEach(async () => {
 describe("facility saves carry an expected version", () => {
   it("refuses the second of two snapshots taken from the same read", async () => {
     const f = await fixture();
-    const opened = (await readFacility(f))!.updatedAt;
+    const opened = (await readFacility(f))!.version;
 
     await updateFacility(f.ctx, f.facilityId, {
       name: `First writer ${f.tag}`,
-      expectedUpdatedAt: opened,
+      expectedVersion: opened,
     });
 
     await expect(
       updateFacility(f.ctx, f.facilityId, {
         name: `Second writer ${f.tag}`,
-        expectedUpdatedAt: opened,
+        expectedVersion: opened,
       }),
     ).rejects.toMatchObject({
       ...STALE_CONFLICT,
@@ -238,14 +241,14 @@ describe("facility saves carry an expected version", () => {
 
   it("refuses an unrelated-metadata edit built on a stale read", async () => {
     const f = await fixture();
-    const opened = (await readFacility(f))!.updatedAt;
+    const opened = (await readFacility(f))!.version;
 
-    await updateFacility(f.ctx, f.facilityId, { country: "Kenya" });
+    await updateFacility(f.ctx, f.facilityId, { country: "Kenya", expectedVersion: opened });
 
     await expect(
       updateFacility(f.ctx, f.facilityId, {
         location: "Stale writer's town",
-        expectedUpdatedAt: opened,
+        expectedVersion: opened,
       }),
     ).rejects.toMatchObject(STALE_CONFLICT);
 
@@ -256,26 +259,17 @@ describe("facility saves carry an expected version", () => {
 
   it("saves when the expected version matches the stored row", async () => {
     const f = await fixture();
-    const opened = (await readFacility(f))!.updatedAt;
+    const opened = (await readFacility(f))!.version;
 
     await updateFacility(f.ctx, f.facilityId, {
       location: "Matching writer's town",
-      expectedUpdatedAt: opened,
+      expectedVersion: opened,
     });
 
     expect((await readFacility(f))!.location).toBe("Matching writer's town");
   });
 
-  it("still saves when the payload carries no expected version", async () => {
-    const f = await fixture();
-    await updateFacility(f.ctx, f.facilityId, { country: "Kenya" });
 
-    await updateFacility(f.ctx, f.facilityId, {
-      location: "Versionless writer's town",
-    });
-
-    expect((await readFacility(f))!.location).toBe("Versionless writer's town");
-  });
 });
 
 describe("feedstock row versions", () => {
@@ -347,14 +341,14 @@ describe("feedstock row versions", () => {
     }).returning();
     const affected = [opened, sibling];
 
-    await archiveFacility(f.ctx, f.facilityId);
+    const archivedFacility = await archiveFacility(f.ctx, f.facilityId, await masterDataVersion(f.ctx, "facilities", f.facilityId));
     for (const row of affected) {
       const archived = (await readFeedstock({ ...f, feedstockId: row.id }))!;
       expect(archived.archivedAt).toBeInstanceOf(Date);
       expect(archived.version).toBe(row.version + VERSION_INCREMENT);
     }
 
-    await restoreFacility(f.ctx, f.facilityId);
+    await restoreFacility(f.ctx, f.facilityId, archivedFacility.version);
     for (const row of affected) {
       const restored = (await readFeedstock({ ...f, feedstockId: row.id }))!;
       expect(restored.archivedAt).toBeNull();

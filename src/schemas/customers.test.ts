@@ -35,7 +35,7 @@ describe("customer location site description", () => {
       }).success,
     ).toBe(true);
     expect(
-      updateCustomerLocationSchema.safeParse({
+      updateCustomerLocationSchema.safeParse({ expectedVersion: 1,
         locationId: LOCATION_ID,
       }).success,
     ).toBe(true);

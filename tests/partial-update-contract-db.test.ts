@@ -1,3 +1,4 @@
+import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * The partial-update contract against the real database (issue #770).
  *
@@ -253,7 +254,7 @@ describe("partial-update contract (database)", () => {
     // "forestry" is a pyrolysis category, so flipping usage alone to blend
     // leaves the row in a combination the create form would reject.
     await expect(
-      updateFeedstockType(fixture.ctx, {
+      updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
         feedstockTypeId: fixture.feedstockTypeId,
         usage: "blend",
       }),
@@ -269,7 +270,7 @@ describe("partial-update contract (database)", () => {
     fixture = await seedFixture();
 
     await expect(
-      updateFeedstockType(fixture.ctx, {
+      updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
         feedstockTypeId: fixture.feedstockTypeId,
         category: "compost",
       }),
@@ -283,7 +284,7 @@ describe("partial-update contract (database)", () => {
   it("accepts a patch that moves both halves of the pair together", async () => {
     fixture = await seedFixture();
 
-    await updateFeedstockType(fixture.ctx, {
+    await updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
       feedstockTypeId: fixture.feedstockTypeId,
       category: "compost",
       usage: "blend",
@@ -299,7 +300,7 @@ describe("partial-update contract (database)", () => {
     fixture = await seedFixture();
     const renamed = `E2E Patch contract renamed ${fixture.tag}`;
 
-    await updateFeedstockType(fixture.ctx, {
+    await updateFeedstockType(fixture.ctx, { expectedVersion: await masterDataVersion(fixture.ctx, "feedstockTypes", fixture.feedstockTypeId),
       feedstockTypeId: fixture.feedstockTypeId,
       name: renamed,
     });

@@ -1,5 +1,7 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Reactors Server Actions
  * Server-side functions for reactor CRUD operations
@@ -145,12 +147,12 @@ export async function createReactorFn(
 export async function updateReactorFn(
   data: z.infer<typeof updateReactorSchema>
 ): Promise<ActionResult<Reactor>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateReactorSchema.parse(data);
 
     const reactor = await updateReactor(ctx, validated.reactorId, {
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       identifier: validated.identifier,
       facilityId: validated.facilityId,
@@ -159,23 +161,8 @@ export async function updateReactorFn(
       specifications: validated.specifications,
     });
 
-    return { success: true, data: reactor };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to update reactor",
-        "reactor:update",
-      ),
-    };
-  }
+    return reactor;
+  }, { fallbackMessage: "Failed to update reactor", log: { message: "reactor action failed", context: { op: "reactor:update" } } });
 }
 
 // ============================================
@@ -188,27 +175,11 @@ export async function updateReactorFn(
 export async function deleteReactorFn(
   data: z.infer<typeof deleteReactorSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteReactorSchema.parse(data);
-    await deleteReactor(ctx, validated.reactorId);
+    await deleteReactor(ctx, validated.reactorId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: reactorActionError(
-        error,
-        "Failed to delete reactor",
-        "reactor:delete",
-      ),
-    };
-  }
+    return undefined;
+  }, { fallbackMessage: "Failed to delete reactor", log: { message: "reactor action failed", context: { op: "reactor:delete" } } });
 }
