@@ -1082,19 +1082,6 @@ operational tradeoff, and this is not a registry requirement we verified.
   organization admins when the scheduled-job/notification infrastructure lands
   (data-entry API plan, decisions 8 and 13). The credential foundation records
   expiry and revocation but sends no notices. Pointers: `src/db/schema/api-keys.ts:apiKeys.expiresAt` and `src/data-access/api-credential-auth.ts:disableOwnerApiKeys`.
-- Runtime prefixes closed (decided 2026-10-08): prefixes follow `NODE_ENV`
-  only. Staging keeps `noma_live_` because it uses production-mode builds;
-  development/test use `noma_test_`. No deployment-stage prefix or new env var.
-  Pointer: `src/lib/auth/better-auth.ts:auth` (`apiKey.defaultPrefix`).
-- Kill switches built: `organization_api_access` defaults to on when absent;
-  Platform Admins toggle it at `/admin/organizations`. The resolver denies
-  disabled organizations with 403 `api_access_disabled` without revoking keys.
-  `API_WRITES_DISABLED` returns retryable 503 for API writes, including dry
-  runs, while reads keep working. Pointers:
-  `src/lib/auth/api-context.ts:resolveApiContext`,
-  `src/lib/api/guards.ts:postAuthGuard`,
-  `src/fn/organization-api-access.ts:setOrganizationApiAccessFn`. API-key
-  session emulation remains off; service accounts and OAuth are later tracks.
 - Staging cron gap: Vercel Cron does not run on Preview deployments. Staging
   relies on the claim path deleting expired idempotency records lazily, and
   idle rate-limit buckets are not purged on schedule. If record growth ever

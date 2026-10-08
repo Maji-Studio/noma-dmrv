@@ -9,7 +9,7 @@ vi.mock("@/data-access/api-rate-limits", () => ({ consumeRateLimit: mocks.consum
 import { preAuthGuard, postAuthGuard } from "./guards";
 const ctx = { credentialId: "credential", organizationId: "organization" } as ApiContext;
 const info = { requestId: "request", instance: "/api/v1/me" };
-const allowed = { allowed: true, limit: 600, remaining: 599, resetSeconds: 1 };
+const allowed = { allowed: true, limit: 600, remaining: 599, resetSeconds: 1, retryAfterSeconds: 0 };
 beforeEach(() => {
   mocks.consume.mockReset().mockResolvedValue(allowed);
   mocks.env.NODE_ENV = "test";
@@ -66,11 +66,12 @@ it("uses the write budgets, including callers doing dry runs", async () => {
 });
 it.each([0, 1])("returns 429 and retry headers when bucket %s refuses", async (position) => {
   if (position) mocks.consume.mockResolvedValueOnce(allowed);
-  mocks.consume.mockResolvedValueOnce({ allowed: false, limit: 120, remaining: 0, resetSeconds: 60 });
+  mocks.consume.mockResolvedValueOnce({ allowed: false, limit: 120, remaining: 0, resetSeconds: 60, retryAfterSeconds: 1 });
   const result = await postAuthGuard(ctx, { ...info, access: "write" }, null);
   if (result.ok) throw new Error("expected refusal");
   expect(result.response.status).toBe(429);
-  expect(result.response.headers.get("Retry-After")).toBe("60");
+  expect(result.response.headers.get("Retry-After")).toBe("1");
+  expect(result.response.headers.get("RateLimit-Reset")).toBe("60");
   expect(result.response.headers.get("RateLimit-Remaining")).toBe("0");
   expect(await result.response.json()).toMatchObject({ code: "rate_limited", retryable: true });
 });

@@ -14,6 +14,8 @@ export interface RateLimitResult {
   remaining: number;
   /** Seconds until the bucket is full again. */
   resetSeconds: number;
+  /** Seconds until one more request of this cost is admitted; 0 when allowed now. */
+  retryAfterSeconds: number;
 }
 
 // org-scope-ok: system abuse protection spans unauthenticated IPs, credentials and organizations.
@@ -54,6 +56,9 @@ export async function consumeRateLimit(
     remaining: Math.floor(row.tokens),
     resetSeconds: Math.ceil(
       Number(row.refill_delay_seconds) + (capacity - row.tokens) * RATE_LIMIT_SECONDS_PER_MINUTE / refillPerMinute,
+    ),
+    retryAfterSeconds: row.tokens >= cost ? 0 : Math.ceil(
+      Number(row.refill_delay_seconds) + (cost - row.tokens) * RATE_LIMIT_SECONDS_PER_MINUTE / refillPerMinute,
     ),
   };
 }

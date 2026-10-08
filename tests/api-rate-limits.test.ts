@@ -24,7 +24,7 @@ it("allows capacity, refuses without debiting, then refills with an injected clo
   for (let remaining = CAPACITY - 1; remaining >= 0; remaining--) {
     expect(await consumeRateLimit(target, 1, NOW)).toMatchObject({ allowed: true, remaining, limit: CAPACITY });
   }
-  expect(await consumeRateLimit(target, 1, NOW)).toEqual({ allowed: false, remaining: 0, limit: CAPACITY, resetSeconds: 60 });
+  expect(await consumeRateLimit(target, 1, NOW)).toEqual({ allowed: false, remaining: 0, limit: CAPACITY, resetSeconds: 60, retryAfterSeconds: 20 });
   expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() + 20_000))).toMatchObject({ allowed: true, remaining: 0 });
   expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() + 120_000))).toMatchObject({ allowed: true, remaining: 2 });
 });
@@ -32,7 +32,7 @@ it("does not award refill twice when the clock moves backwards", async () => {
   const target = bucket();
   await consumeRateLimit(target, CAPACITY, NOW);
   // Refill resumes at the retained timestamp: a minute away, then a minute to fill.
-  expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() - 60_000))).toMatchObject({ allowed: false, resetSeconds: 120 });
+  expect(await consumeRateLimit(target, 1, new Date(NOW.getTime() - 60_000))).toMatchObject({ allowed: false, resetSeconds: 120, retryAfterSeconds: 80 });
   expect(await consumeRateLimit(target, 1, NOW)).toMatchObject({ allowed: false, remaining: 0 });
 });
 it("concurrent debits on parallel pool connections never overspend", async () => {

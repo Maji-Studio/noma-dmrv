@@ -22,7 +22,7 @@ function rateLimitHeaders(result: RateLimitResult): Headers {
 function limitedResponse(result: RateLimitResult, info: RequestInfo): Response {
   const response = problemResponse({
     ...info, status: 429, code: "rate_limited", detail: "Too many requests. Try again later.",
-    retryable: true, retryAfterSeconds: Math.max(1, result.resetSeconds),
+    retryable: true, retryAfterSeconds: Math.max(1, result.retryAfterSeconds),
   });
   rateLimitHeaders(result).forEach((value, key) => response.headers.set(key, value));
   return response;
