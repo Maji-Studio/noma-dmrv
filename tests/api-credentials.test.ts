@@ -15,6 +15,7 @@ import { removeMemberAsPlatformAdmin, updateMemberRoleAsPlatformAdmin } from "@/
 import { GET } from "@/app/api/v1/me/route";
 import { makeTestOrgContext } from "./helpers/test-org";
 import type { OrgContext } from "@/lib/auth/server";
+import * as sessionProvider from "@/lib/auth/providers/better-auth-server";
 
 let ctx: OrgContext;
 
@@ -546,14 +547,16 @@ it.each(["remove", "demote"])("Platform Admin %s override disables credentials i
 it("defaults to enabled and only lets Platform Admins disable and restore organization API access", async () => {
   const created = await createApiKey(ctx, input());
   expect(await getOrganizationApiAccess(ctx.organizationId)).toBe(true);
-  await expect(setOrganizationApiAccess({ ...ctx, orgRole: "owner", isPlatformAdmin: false }, ctx.organizationId, false))
-    .rejects.toMatchObject({ code: "forbidden" });
-  const platform = { ...ctx, userId: actorId, isPlatformAdmin: true };
-  await setOrganizationApiAccess(platform, ctx.organizationId, false);
+  const session = await auth.api.getSession({ headers: adminHeaders });
+  vi.spyOn(sessionProvider, "getBetterAuthSession").mockResolvedValue(session);
+  await expect(setOrganizationApiAccess(ctx.organizationId, false))
+    .rejects.toThrow("Admin access is required");
+  await db.update(users).set({ role: "admin" }).where(eq(users.id, actorId));
+  await setOrganizationApiAccess(ctx.organizationId, false);
   const response = await GET(request(created.key));
   expect(response.status).toBe(403);
   expect(await response.json()).toMatchObject({ code: "api_access_disabled" });
   expect(await getOrganizationApiAccess(otherOrg)).toBe(true);
-  await setOrganizationApiAccess(platform, ctx.organizationId, true);
+  await setOrganizationApiAccess(ctx.organizationId, true);
   expect((await GET(request(created.key))).status).toBe(200);
 });

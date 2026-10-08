@@ -12,10 +12,10 @@ export async function GET(request: Request) {
   const instance = new URL(request.url).pathname;
   try {
     const preAuth = await preAuthGuard(request, { requestId, instance });
-    if (preAuth) return preAuth;
+    if (preAuth.response) return preAuth.response;
     const resolution = await resolveApiContext(request);
     if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
-    const guarded = await postAuthGuard(resolution.ctx, { access: "read", requestId, instance });
+    const guarded = await postAuthGuard(resolution.ctx, { access: "read", requestId, instance }, preAuth.result);
     if (!guarded.ok) return guarded.response;
     const headers = apiResponseHeaders(requestId);
     guarded.headers.forEach((value, key) => headers.set(key, value));

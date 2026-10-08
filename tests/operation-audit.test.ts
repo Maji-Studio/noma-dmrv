@@ -1,4 +1,4 @@
-/** DB suite: requires the API infrastructure schema; reviewer runs this. */
+/** Database coverage for transactional API write audit events. */
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";

@@ -1,8 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizationApiAccess, organizations } from "@/db/schema";
-import type { OrgContext } from "@/lib/auth/server";
-import { DomainError } from "@/lib/domain-errors";
+import { requirePlatformAdmin } from "@/lib/auth/server";
 
 // org-scope-ok: credential resolver checks the credential's organization before constructing an OrgContext.
 export async function getOrganizationApiAccess(organizationId: string): Promise<boolean> {
@@ -12,20 +11,18 @@ export async function getOrganizationApiAccess(organizationId: string): Promise<
 }
 
 // org-scope-ok: Platform Admins explicitly administer API access across organizations.
-export async function setOrganizationApiAccess(ctx: OrgContext, organizationId: string, enabled: boolean): Promise<void> {
-  if (!ctx.isPlatformAdmin) throw new DomainError("forbidden", "Only Platform Admins can change API access.");
-  await db.insert(organizationApiAccess).values({ organizationId, enabled, changedByUserId: ctx.userId })
+export async function setOrganizationApiAccess(organizationId: string, enabled: boolean): Promise<void> {
+  const admin = await requirePlatformAdmin();
+  await db.insert(organizationApiAccess).values({ organizationId, enabled, changedByUserId: admin.id })
     .onConflictDoUpdate({
       target: organizationApiAccess.organizationId,
-      set: { enabled, changedByUserId: ctx.userId, changedAt: new Date() },
+      set: { enabled, changedByUserId: admin.id, changedAt: new Date() },
     });
 }
 
 // org-scope-ok: Platform Admin directory deliberately reads API access across all organizations.
-export async function listOrganizationApiAccess(ctx: OrgContext) {
-  if (!ctx.isPlatformAdmin) {
-    throw new DomainError("forbidden", "Only Platform Admins can view API access across organizations.");
-  }
+export async function listOrganizationApiAccess() {
+  await requirePlatformAdmin();
   const rows = await db
     .select({ organizationId: organizations.id, enabled: organizationApiAccess.enabled })
     .from(organizations)

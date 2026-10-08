@@ -11,7 +11,7 @@ vi.mock("@/data-access/api-credential-auth", () => ({
   findApiCredentialMember: mocks.member,
 }));
 vi.mock("@/data-access/organization-api-access", () => ({ getOrganizationApiAccess: mocks.access }));
-vi.mock("@/lib/api/guards", () => ({ preAuthGuard: async () => null, postAuthGuard: async () => ({ ok: true, headers: new Headers() }) }));
+vi.mock("@/lib/api/guards", () => ({ preAuthGuard: async () => ({ response: null, result: null }), postAuthGuard: async () => ({ ok: true, headers: new Headers() }) }));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() } }));
 vi.mock("./better-auth", () => ({ auth: { api: { verifyApiKey: mocks.verify } } }));
 vi.mock("@/lib/read-models/api-me", () => ({ readApiMe: vi.fn() }));

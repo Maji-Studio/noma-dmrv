@@ -10,7 +10,7 @@ import { GET } from "./route";
 const request = () => new Request("http://localhost/api/v1/me");
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.pre.mockResolvedValue(null);
+  mocks.pre.mockResolvedValue({ response: null, result: { allowed: true, limit: 300, remaining: 299, resetSeconds: 1 } });
   mocks.resolve.mockResolvedValue({ ok: true, ctx: { credentialId: "credential" } });
   mocks.post.mockResolvedValue({ ok: true, headers: new Headers({ "RateLimit-Limit": "600", "RateLimit-Remaining": "599", "RateLimit-Reset": "1" }) });
   mocks.read.mockResolvedValue({ organization: { id: "org" } });
@@ -24,11 +24,11 @@ it("runs both guards and merges rate headers with private response headers", asy
   expect(response.headers.get("X-Request-Id")).toBeTruthy();
   expect(mocks.post).toHaveBeenCalledWith({ credentialId: "credential" }, {
     access: "read", requestId: response.headers.get("X-Request-Id"), instance: "/api/v1/me",
-  });
+  }, { allowed: true, limit: 300, remaining: 299, resetSeconds: 1 });
 });
 it("does not resolve credentials after a pre-auth refusal", async () => {
   const refusal = new Response(null, { status: 429 });
-  mocks.pre.mockResolvedValue(refusal);
+  mocks.pre.mockResolvedValue({ response: refusal, result: null });
   expect(await GET(request())).toBe(refusal);
   expect(mocks.resolve).not.toHaveBeenCalled();
   expect(mocks.read).not.toHaveBeenCalled();

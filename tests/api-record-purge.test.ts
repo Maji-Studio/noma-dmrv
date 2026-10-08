@@ -1,4 +1,4 @@
-/** DB suite: run after the reviewer generates/applies schema changes. */
+/** Database coverage for API record retention and bounded purges. */
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";

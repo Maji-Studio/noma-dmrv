@@ -28,17 +28,21 @@ function limitedResponse(result: RateLimitResult, info: RequestInfo): Response {
   return response;
 }
 
-export async function preAuthGuard(request: Request, info: RequestInfo): Promise<Response | null> {
-  if (bypassLimits()) return null;
+export async function preAuthGuard(
+  request: Request,
+  info: RequestInfo,
+): Promise<{ response: Response | null; result: RateLimitResult | null }> {
+  if (bypassLimits()) return { response: null, result: null };
   const result = await consumeRateLimit({
     key: clientIpBucketKey(request.headers), capacity: API_RATE_LIMITS.ip, refillPerMinute: API_RATE_LIMITS.ip,
   });
-  return result.allowed ? null : limitedResponse(result, info);
+  return { response: result.allowed ? null : limitedResponse(result, info), result };
 }
 
 export async function postAuthGuard(
   ctx: ApiContext,
   options: RequestInfo & { access: "read" | "write" },
+  ipResult: RateLimitResult | null,
 ): Promise<{ ok: false; response: Response } | { ok: true; headers: Headers }> {
   const { access } = options;
   if (access === "write" && env.API_WRITES_DISABLED) {
@@ -47,7 +51,7 @@ export async function postAuthGuard(
     }) };
   }
   if (bypassLimits()) return { ok: true, headers: new Headers() };
-  const results: RateLimitResult[] = [];
+  const results: RateLimitResult[] = ipResult ? [ipResult] : [];
   for (const [kind, id] of [["credential", ctx.credentialId], ["organization", ctx.organizationId]] as const) {
     const capacity = API_RATE_LIMITS[kind][access];
     const result = await consumeRateLimit({ key: `${kind}:${id}:${access}`, capacity, refillPerMinute: capacity });
