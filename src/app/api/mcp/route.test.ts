@@ -44,7 +44,10 @@ describe("MCP route (Phase 0 spike)", () => {
 
     const check = result.tools.find((tool) => tool.name === "check_feedstock_delivery");
     const properties = check?.inputSchema.properties as Record<string, Record<string, unknown>>;
-    expect(properties.deliveryDate).toEqual({ type: "string", format: "date" });
+    expect(properties.deliveryDate).toEqual({
+      type: "string", format: "date",
+      description: "Facility-local delivery business date, YYYY-MM-DD, never an instant.",
+    });
     expect(properties.totalWetMassKg).toMatchObject({
       type: "number",
       exclusiveMinimum: 0,

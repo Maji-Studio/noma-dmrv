@@ -49,6 +49,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: OpenAPI TypeScript client check
+        run: pnpm openapi:client-check
+
       - name: Org-scoping check
         run: pnpm check:org-scoping
 
@@ -73,6 +76,46 @@ jobs:
       # parses string literals and JSX text (never comments) to enforce it.
       - name: UX-copy dash check
         run: pnpm check:ux-copy
+
+  openapi-breaking:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Checkout comparison base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .openapi-base
+          persist-credentials: false
+
+      - name: Compare public API contracts
+        # A deliberate break regenerates v1.json and adds its method/path and
+        # exact oasdiff singleline change description to accepted-breaking-changes.txt
+        # in the same PR. --err-ignore accepts only those listed findings.
+        # Remove stale acceptances once the changed contract reaches the base.
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=.openapi-base/openapi/v1.json
+          if [[ ! -f "$base" ]]; then
+            echo "Base branch has no openapi/v1.json; first release has no breaking-change baseline."
+            exit 0
+          fi
+          curl --fail --silent --show-error --location \
+            https://github.com/oasdiff/oasdiff/releases/download/v1.32.1/oasdiff_1.32.1_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/oasdiff.tar.gz"
+          echo "7c8939fc49b75ee11fec66a5b83b37a2fca6aee109fed85013b1ba2ac2a1ee7f  $RUNNER_TEMP/oasdiff.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/oasdiff"
+          tar -xzf "$RUNNER_TEMP/oasdiff.tar.gz" -C "$RUNNER_TEMP/oasdiff" oasdiff
+          "$RUNNER_TEMP/oasdiff/oasdiff" breaking "$base" openapi/v1.json \
+            --fail-on ERR --err-ignore openapi/accepted-breaking-changes.txt
 
   # Full Vitest suite. No secrets — tests/setup.ts fills safe env defaults and
   # the Isometric sandbox *.integration.test.ts suites self-skip without

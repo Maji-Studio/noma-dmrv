@@ -1,3 +1,5 @@
+import type { z } from "zod";
+import type { problemSchema } from "./problem-schema";
 import type { ActionFailure } from "@/fn/action-errors";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
 import type { DomainErrorCode } from "@/lib/domain-errors";
@@ -44,7 +46,7 @@ export function problemResponse(options: ProblemOptions): Response {
     ...(!internal && options.conflict ? { conflict: options.conflict } : {}),
     ...(!internal && options.blockers ? { blockers: options.blockers } : {}),
     ...(!internal && options.current !== undefined ? { current: options.current } : {}),
-  }, { status, headers });
+  } satisfies z.infer<typeof problemSchema>, { status, headers });
 }
 
 export function apiDenialResponse(denial: ApiContextDenial, instance: string, requestId: string) {

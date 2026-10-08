@@ -1,3 +1,5 @@
+export const API_KEY_LIVE_PREFIX = "noma_live_";
+export const API_KEY_TEST_PREFIX = "noma_test_";
 export const API_KEY_DEFAULT_EXPIRY_DAYS = 90;
 export const API_KEY_MAX_EXPIRY_DAYS = 365;
 export const SECONDS_PER_DAY = 24 * 60 * 60;

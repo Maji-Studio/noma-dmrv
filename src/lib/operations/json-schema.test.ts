@@ -15,7 +15,7 @@ import { toOperationJsonSchema, type JsonSchema } from "./json-schema";
 function contract(schema: z.ZodType): JsonSchema {
   return JSON.parse(
     JSON.stringify(toOperationJsonSchema(schema), (key, value) =>
-      key === "pattern" || key === "$schema" ? undefined : value,
+      key === "description" || key === "pattern" || key === "$schema" ? undefined : value,
     ),
   );
 }
@@ -62,6 +62,12 @@ describe("toOperationJsonSchema: shared helpers", () => {
       properties: { at: { type: "string", format: "date-time" } },
       required: ["at"],
     });
+  });
+
+  it("preserves schema descriptions when publishing calendar dates and instants", () => {
+    const schema = createFeedstockSchema.shape.deliveryDate;
+    expect(toOperationJsonSchema(schema)).toMatchObject({ format: "date", description: schema.description });
+    expect(toOperationJsonSchema(z.date().describe("Recorded instant, RFC 3339."))).toMatchObject({ format: "date-time", description: "Recorded instant, RFC 3339." });
   });
 
   it("is deterministic", () => {

@@ -63,7 +63,7 @@ describe("Auth middleware", () => {
 });
 
 describe("REST proxy carve-out", () => {
-  it.each(["/api/v1", "/api/v1/", "/api/v1/me"])("passes %s without session lookup", async (path) => {
+  it.each(["/api/v1", "/api/v1/", "/api/v1/me", "/api/v1/openapi.json", "/api/v1/llms.txt"])("passes %s without session lookup", async (path) => {
     getSessionMock.mockClear();
     const { updateSession } = await import("@/lib/auth/middleware");
     expect((await updateSession(new NextRequest(`http://localhost:3100${path}`))).status).toBe(200);
