@@ -49,6 +49,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: OpenAPI TypeScript client check
+        run: pnpm openapi:client-check
+
       - name: Org-scoping check
         run: pnpm check:org-scoping
 
