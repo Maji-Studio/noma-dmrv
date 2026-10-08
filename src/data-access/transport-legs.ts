@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 import { deliveryProductAllocations } from "./delivery-allocation-provenance";
 // `transport_legs.entity_id` is polymorphic and not FK-constrained, so every
 // read of a single leg and every write resolves the parent chain back to a
@@ -283,8 +284,8 @@ export async function createTransportLeg(
 }
 
 export type UpdateTransportLegInput = Partial<
-  Omit<NewTransportLeg, "id" | "organizationId" | "createdAt" | "updatedAt" | "entityType" | "entityId">
->;
+  Omit<NewTransportLeg, "id" | "organizationId" | "createdAt" | "updatedAt" | "entityType" | "entityId" | "version">
+> & { expectedVersion: number };
 
 export async function updateTransportLeg(
   ctx: OrgContext,
@@ -314,9 +315,13 @@ export async function updateTransportLeg(
       "transportLeg",
     );
 
+    // Parent writers take lineage locks before touching their transport legs.
+    const [versionRow] = await tx.select().from(transportLegs).where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId))).for("update");
+    if (!versionRow) throw new SafeError("Transport leg not found");
+    assertRowVersion({ entity: "transportLeg", id, expectedVersion: input.expectedVersion, actualVersion: versionRow.version });
     return tx
       .update(transportLegs)
-      .set({ ...input, updatedAt: new Date() })
+      .set({ ...input, version: nextVersion(transportLegs.version), updatedAt: new Date() })
       .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
       .returning();
   });
@@ -331,6 +336,7 @@ export async function updateTransportLeg(
 export async function deleteTransportLeg(
   ctx: OrgContext,
   id: string,
+  expectedVersion: number,
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -355,6 +361,10 @@ export async function deleteTransportLeg(
       "transportLeg",
     );
 
+    // Parent writers take lineage locks before touching their transport legs.
+    const [versionRow] = await tx.select().from(transportLegs).where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId))).for("update");
+    if (!versionRow) throw new SafeError("Transport leg not found");
+    assertRowVersion({ entity: "transportLeg", id, expectedVersion, actualVersion: versionRow.version });
     const rows = await tx
       .delete(transportLegs)
       .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
@@ -488,7 +498,7 @@ async function replaceDerivedTransportLeg(
     .onConflictDoUpdate({
       target: [transportLegs.entityType, transportLegs.entityId],
       targetWhere: sql`${transportLegs.isDerived} = true`,
-      set: { ...fields, updatedAt: new Date() },
+      set: { ...fields, version: nextVersion(transportLegs.version), updatedAt: new Date() },
     });
 }
 

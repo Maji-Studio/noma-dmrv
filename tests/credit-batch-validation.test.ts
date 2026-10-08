@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
@@ -649,7 +650,7 @@ describe("Credit Batch Production-Run Validation", () => {
     // Try to change facilityId to B without updating productionRunIds.
     // Existing membership points to facility A runs — should fail against facility B.
     await expect(
-      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
         facilityId: facilityB.id,
       })
     ).rejects.toThrow("does not belong to the selected facility");
@@ -690,7 +691,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
     // Try to update with a production run from facility B.
     await expect(
-      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
         productionRunIds: [runInFacilityB.id],
       })
     ).rejects.toThrow("does not belong to the selected facility");

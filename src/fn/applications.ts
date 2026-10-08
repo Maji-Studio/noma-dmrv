@@ -1,5 +1,8 @@
 "use server";
 
+import { withAction } from "./with-action";
+
+import { SafeError } from "@/lib/errors";
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { type Application, applications } from "@/db/schema/application";
@@ -25,29 +28,11 @@ import {
   deleteApplicationSchema,
 } from "@/schemas/applications";
 import {
-  type ActionFailure,
   formatZodActionError,
-  toActionFailure,
   toLoggedActionError,
 } from "./action-errors";
 
 const MAX_APPLICATION_LIST_SIZE = 100;
-
-/**
- * Failure shape for the write paths. Unlike the read helper below it keeps an
- * `ActionConflictError`'s `conflict`, so the form can tell an expected-version
- * refusal from an ordinary save failure and hold on to the operator's draft.
- */
-function applicationActionFailure(
-  error: unknown,
-  fallbackMessage: string,
-  op: string,
-): ActionFailure {
-  return toActionFailure(error, {
-    fallbackMessage,
-    log: { message: "application action failed", context: { op } },
-  });
-}
 
 function applicationActionError(
   error: unknown,
@@ -169,8 +154,7 @@ export async function createApplicationFn(
 export async function updateApplicationFn(
   data: z.infer<typeof updateApplicationSchema>
 ): Promise<ActionResult<Application>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateApplicationSchema.parse(data);
     const { applicationId, ...updateData } = validated;
@@ -178,25 +162,20 @@ export async function updateApplicationFn(
     // Check application exists
     const existing = await getApplicationById(ctx, applicationId);
     if (!existing) {
-      return { success: false, error: "Application not found" };
+      throw new SafeError("Application not found");
     }
 
     // Check for duplicate code if code is being updated
     if (updateData.code && updateData.code !== existing.code) {
       const codeExists = await applicationCodeExists(ctx, updateData.code, applicationId);
       if (codeExists) {
-        return {
-          success: false,
-          error: `Application code "${updateData.code}" already exists`,
-        };
+        throw new SafeError(`Application code "${updateData.code}" already exists`);
       }
     }
 
     const application = await updateApplicationData(ctx, applicationId, updateData);
-    return { success: true, data: application };
-  } catch (error) {
-    return applicationActionFailure(error, "Failed to update application", "application:update");
-  }
+    return application;
+  }, { fallbackMessage: "Failed to update application", log: { message: "applications action failed", context: { op: "update" } } });
 }
 
 /**
@@ -205,33 +184,17 @@ export async function updateApplicationFn(
 export async function deleteApplicationFn(
   data: z.infer<typeof deleteApplicationSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteApplicationSchema.parse(data);
 
     // Check application exists
     const existing = await getApplicationById(ctx, validated.applicationId);
     if (!existing) {
-      return { success: false, error: "Application not found" };
+      throw new SafeError("Application not found");
     }
 
-    await deleteApplicationData(ctx, validated.applicationId);
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: applicationActionError(
-        error,
-        "Failed to delete application",
-        "application:delete",
-      ),
-    };
-  }
+    await deleteApplicationData(ctx, validated.applicationId, validated.expectedVersion);
+    return;
+  }, { fallbackMessage: "Failed to delete application", log: { message: "applications action failed", context: { op: "delete" } } });
 }

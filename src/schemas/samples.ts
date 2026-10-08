@@ -1,3 +1,5 @@
+import { calendarDateSchema } from "./helpers";
+import { expectedVersionSchema } from "./helpers";
 /**
  * Samples Validation Schemas
  * Zod schemas for lab sample tracking forms, server actions, and filtering
@@ -183,11 +185,7 @@ export const sampleFormSchema = z
     // Lab info (optional)
     labName: z.string().max(200).optional().nullable().or(z.literal("")),
     labAccreditation: z.string().max(200).optional().nullable().or(z.literal("")),
-    analysisDate: z.union([
-      z.date(),
-      z.string().transform((val) => (val ? new Date(val) : null)),
-      z.null(),
-    ]).optional().nullable(),
+    analysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
 
     // Sample weight/volume
     weightGrams: optionalNonNegativeNumber,
@@ -244,21 +242,13 @@ export const sampleFormSchema = z
         ),
       z.null(),
     ]).optional().nullable(),
-    r0AnalysisDate: z.union([
-      z.date(),
-      z.string().transform((val) => (val ? new Date(val) : null)),
-      z.null(),
-    ]).optional().nullable(),
+    r0AnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
     r0HistogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
     // TGA non-reactive carbon (required for 1000-year)
     reactiveCarbonPercent: optionalPercentInput,
     residualCarbonPercent: optionalPercentInput,
-    tgaAnalysisDate: z.union([
-      z.date(),
-      z.string().transform((val) => (val ? new Date(val) : null)),
-      z.null(),
-    ]).optional().nullable(),
+    tgaAnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
     tgaThermogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
     // === Nutrient Claims (from sampleConditionSchema) ===
@@ -336,6 +326,7 @@ export const createSampleSchema = sampleFormSchema;
  * All fields optional except sampleId
  */
 export const updateSampleSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   sampleId: z.string().uuid("Choose a valid Sample."),
   sampleCode: z
     .string()
@@ -357,11 +348,7 @@ export const updateSampleSchema = z.object({
   ]).optional(),
   labName: z.string().max(200).optional().nullable(),
   labAccreditation: z.string().max(200).optional().nullable(),
-  analysisDate: z.union([
-    z.date(),
-    z.string().transform((val) => (val ? new Date(val) : null)),
-    z.null(),
-  ]).optional().nullable(),
+  analysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
   weightGrams: nonNegativeNumber.optional().nullable(),
   volumeMl: nonNegativeNumber.optional().nullable(),
   totalCarbonPercent: percentNumber.optional(),
@@ -382,11 +369,11 @@ export const updateSampleSchema = z.object({
   randomReflectanceR0Percent: percentNumber.optional().nullable(),
   sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
   r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
-  r0AnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
+  r0AnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
   r0HistogramFileUrl: z.string().max(2000).optional().nullable(),
   reactiveCarbonPercent: percentNumber.optional().nullable(),
   residualCarbonPercent: percentNumber.optional().nullable(),
-  tgaAnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
+  tgaAnalysisDate: z.preprocess((value) => value === "" ? null : value, calendarDateSchema().optional().nullable()),
   tgaThermogramFileUrl: z.string().max(2000).optional().nullable(),
   nutrientClaimEnabled: z.boolean().optional(),
   phosphorusPercent: percentNumber.optional().nullable(),
@@ -400,6 +387,7 @@ export const updateSampleSchema = z.object({
  * Schema for deleting a sample
  */
 export const deleteSampleSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   sampleId: z.string().uuid("Choose a valid Sample."),
 });
 
@@ -493,3 +481,5 @@ export function formatDurabilityOption(option: "200_year" | "1000_year"): string
   };
   return labels[option];
 }
+
+export type DeleteSampleData = z.infer<typeof deleteSampleSchema>;

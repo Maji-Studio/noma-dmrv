@@ -102,3 +102,13 @@ pending-invitation uniqueness constraint are preserved.
 - Chain-of-custody traversal: [`traceability.md`](./traceability.md) · [ADR 0011](./adr/0011-credit-batch-anchored-chain-of-custody.md)
 - Layering rules for queries on these tables: [`architecture.md`](./architecture.md)
 - Isometric requirement mapping: [`isometric/schema-mapping.md`](./isometric/schema-mapping.md) · conditional fields: [`isometric/condition-registry.md`](./isometric/condition-registry.md)
+
+## Edit-form row versions
+
+Editable entity rows carry an integer `version NOT NULL DEFAULT 1`. This includes
+lab `samples`, `orders`, `deliveries`, `transport_legs`, `applications`, and
+`credit_batches`. Every update, including derived and cascade changes, increments
+the version in the same statement. UI commands require the loaded version; see
+[expected-version checks](./architecture.md#expected-version-checks-on-edit-forms).
+Sample `analysis_date`, `r0_analysis_date`, and `tga_analysis_date` are calendar
+`date` columns; `sampling_time` remains a timestamp instant.

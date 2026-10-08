@@ -65,9 +65,10 @@ export async function updateTransportLegFn(
 
 export async function deleteTransportLegFn(input: {
   id: string;
+  expectedVersion: number;
 }): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
-    const { id } = deleteTransportLegSchema.parse(input);
-    await deleteTransportLeg(ctx, id);
+    const { id, expectedVersion } = deleteTransportLegSchema.parse(input);
+    await deleteTransportLeg(ctx, id, expectedVersion);
   });
 }

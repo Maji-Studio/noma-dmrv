@@ -1,8 +1,10 @@
+"use client";
+
+import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
 /**
  * SampleList component
  * Main sample listing with CRUD operations, stat cards, filters, and DataTable
  */
-"use client";
 
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { useEffect, useState } from "react";
@@ -230,6 +232,7 @@ export function SampleList({
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingSampleId, setDeletingSampleId] = useState<string | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -257,6 +260,10 @@ export function SampleList({
     error: creditBatchesError,
   } = useCreditBatches(contextFacilityId || undefined);
   const focusedSample = useSample(focusedSampleId ?? "", !!focusedSampleId);
+
+  if (!sideSheet && deepLinkMode === "edit" && focusedSample.data && focusedSampleId === focusedSample.data.id) {
+    setSideSheet({ mode: "edit", entity: focusedSample.data });
+  }
 
   const createSample = useCreateSample();
   const updateSample = useUpdateSample();
@@ -438,6 +445,7 @@ export function SampleList({
     try {
       await updateSample.mutateAsync({
         sampleId: displaySideSheet.entity.id,
+        expectedVersion: displaySideSheet.entity.version,
         ...data,
       });
       closeSideSheet();
@@ -447,16 +455,21 @@ export function SampleList({
     }
   };
 
-  const handleDelete = (sampleId: string) => setDeletingSampleId(sampleId);
+  const handleDelete = (sampleId: string) => {
+    const row = (samples).find((item) => item.id === sampleId);
+    if (!row) return;
+    setDeletingVersion(row.version);
+    setDeletingSampleId(sampleId);
+  };
   const handleDeleteConfirm = async () => {
-    if (!deletingSampleId) return;
+    if (!deletingSampleId || deletingVersion === null) return;
     setDeleteError(null);
     try {
-      await deleteSample.mutateAsync(deletingSampleId);
+      await deleteSample.mutateAsync({ sampleId: deletingSampleId, expectedVersion: deletingVersion });
       setDeletingSampleId(null);
       toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Sample was not deleted. Try again.");
+      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage("Sample") : error instanceof Error ? error.message : "Sample was not deleted. Try again.");
     }
   };
 

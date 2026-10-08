@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 import {
   and,
   desc,
@@ -456,7 +457,7 @@ export async function createCreditBatch(
       // unique constraint means these samples can't already belong elsewhere.
       await tx
         .update(samples)
-        .set({ creditBatchId: batch.id, updatedAt: new Date() })
+        .set({ version: nextVersion(samples.version), creditBatchId: batch.id, updatedAt: new Date() })
         .where(and(inArray(samples.productionRunId, runIds), eq(samples.organizationId, ctx.organizationId)));
     }
 
@@ -661,6 +662,7 @@ export async function updateCreditBatch(
     }
 
     const existingBatch = await lockCreditBatchForUpdate(ctx, tx, id, {
+      expectedVersion: data.expectedVersion,
       facilityId: updateFields.facilityId,
       feedstockTypeId: updateFields.feedstockTypeId,
     });
@@ -761,7 +763,7 @@ export async function updateCreditBatch(
 
     const [updatedBatch] = await tx
       .update(creditBatches)
-      .set(updateData)
+      .set({ ...updateData, version: nextVersion(creditBatches.version) })
       .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
       .returning();
     if (!updatedBatch) {
@@ -796,7 +798,7 @@ export async function updateCreditBatch(
       // readiness, aggregation, and the source candidate walk).
       await tx
         .update(samples)
-        .set({ creditBatchId: null, updatedAt: new Date() })
+        .set({ version: nextVersion(samples.version), creditBatchId: null, updatedAt: new Date() })
         .where(
           and(
             eq(samples.creditBatchId, id),
@@ -810,7 +812,7 @@ export async function updateCreditBatch(
       ) {
         await tx
           .update(samples)
-          .set({ creditBatchId: id, updatedAt: new Date() })
+          .set({ version: nextVersion(samples.version), creditBatchId: id, updatedAt: new Date() })
           .where(and(inArray(samples.productionRunId, resolvedProductionRunIds), eq(samples.organizationId, ctx.organizationId)));
       }
 
@@ -837,12 +839,12 @@ export async function updateCreditBatch(
 /**
  * Delete a credit batch and its production-run membership links.
  */
-export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<void> {
+export async function deleteCreditBatch(ctx: OrgContext, id: string, expectedVersion: number): Promise<void> {
   requireOrgScope(ctx);
   await db.transaction(async (tx) => {
     // Lock the batch so a concurrent regroup/submit can't move it mid-delete.
     const [batch] = await tx
-      .select({ id: creditBatches.id })
+      .select({ id: creditBatches.id, version: creditBatches.version })
       .from(creditBatches)
       .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
       .for("update")
@@ -852,12 +854,14 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
       throw new SafeError("Credit batch not found");
     }
 
+    assertRowVersion({ entity: "creditBatch", id, expectedVersion, actualVersion: batch.version });
+
     await assertRemovalAllowsCreditBatchMutation(ctx, tx, id, "delete");
 
     // Clear app-layer sample links, then delete membership links and the batch.
     await tx
       .update(samples)
-      .set({ creditBatchId: null, updatedAt: new Date() })
+      .set({ version: nextVersion(samples.version), creditBatchId: null, updatedAt: new Date() })
       .where(and(eq(samples.creditBatchId, id), eq(samples.organizationId, ctx.organizationId)));
     await tx
       .delete(creditBatchProductionRuns)

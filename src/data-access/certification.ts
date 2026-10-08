@@ -1,3 +1,4 @@
+import { nextVersion } from "./row-version";
 import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
@@ -752,7 +753,7 @@ async function stampProductionEmissionsClaimWithExecutor(
   const { removalId, creditBatchIds } = args;
   const stamped = await executor
     .update(creditBatches)
-    .set({
+    .set({ version: nextVersion(creditBatches.version),
       productionEmissionsClaimedByRemovalId: removalId,
       productionEmissionsClaimReservedBySubmissionId: null,
       updatedAt: sql`now()`,

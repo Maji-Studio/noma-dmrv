@@ -507,16 +507,6 @@ export function stockEventInstantSchema(message = "Enter the date and time.") {
 // Expected-version (optimistic concurrency)
 // ============================================
 
-/**
- * The `updatedAt` an edit form loaded, echoed back so the updater can refuse a
- * save built on a stale read (issue #768). Optional on purpose: payloads that
- * never carried a version — quick-add, imports, older clients — still save.
- *
- * `z.coerce.date()` because the value crosses the server-action boundary and
- * may arrive as an ISO string.
- */
-export const expectedUpdatedAtSchema = z.coerce.date().optional();
-
 const EXPECTED_VERSION_MESSAGE = "Reload this record before saving.";
 
 /** Required integer row version loaded with the record, without coercion. */

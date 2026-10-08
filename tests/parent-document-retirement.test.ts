@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { productionVersion } from "./helpers/production-version";
 import { deleteOutputFacilityFixtures, outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures } from "./helpers/output-contract-fixtures";
@@ -301,7 +302,7 @@ describe("parent document retirement", () => {
       });
 
       await expect(
-        deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id),
+        deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", delivery.id)),
       ).rejects.toThrow(/posted deliveries|bin history/i);
 
       expect(provider.deleteCalls).toEqual([]);

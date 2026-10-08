@@ -1,5 +1,5 @@
 /**
- * The list caches feed the edit sheets that save with `expectedUpdatedAt`
+ * The list caches feed the edit sheets that save with `expectedVersion`
  * (issue #768), so the row they hold has to carry a version the server wrote.
  */
 

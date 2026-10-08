@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { outputProductFixtureValues, outputOrderFixtureValues, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -243,19 +244,19 @@ beforeAll(async () => {
 
   it("rejects changing an order customer while preserving another customer's location", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { customerId: customerBId }),
+      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerId: customerBId }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("rejects changing an order location to another customer's location", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { customerLocationId: locationBId }),
+      updateOrder(makeTestOrgContext(TEST_USER_ID), orderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", orderId), customerLocationId: locationBId }),
     ).rejects.toThrow("Delivery location belongs to a different customer");
   });
 
   it("updates request metadata without reserving source stock", async () => {
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, {
+      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId),
         packaging: "bagged",
       }),
     ).resolves.toMatchObject({ packaging: "bagged" });
@@ -266,7 +267,7 @@ beforeAll(async () => {
     // them. Rows that already hold a price must keep it.
     await db.update(orders).set({ value: 500, currency: "KES" }).where(eq(orders.id, zeroProductOrderId));
     await expect(
-      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, { packaging: "loose" }),
+      updateOrder(makeTestOrgContext(TEST_USER_ID), zeroProductOrderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", zeroProductOrderId), packaging: "loose" }),
     ).resolves.toMatchObject({ packaging: "loose", value: 500, currency: "KES" });
   });
 
@@ -359,11 +360,11 @@ beforeAll(async () => {
 
   it("updates request metadata independently of concurrent product stock changes", async () => {
     await expect(
-      runWhileProductBecomesZero(concurrentUpdateProductId, () =>
+      runWhileProductBecomesZero(concurrentUpdateProductId, async () =>
         updateOrder(
           makeTestOrgContext(TEST_USER_ID),
           concurrentUpdateOrderId,
-          { packaging: "bagged" },
+          { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", concurrentUpdateOrderId), packaging: "bagged" },
         ),
       ),
     ).resolves.toMatchObject({ packaging: "bagged" });

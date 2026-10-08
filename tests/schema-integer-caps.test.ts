@@ -137,7 +137,7 @@ describe("r0MeasurementCount PG integer cap", () => {
   });
 
   it("rejects an overflowing value on update", () => {
-    const result = updateSampleSchema.safeParse({
+    const result = updateSampleSchema.safeParse({ expectedVersion: 1,
       sampleId: SAMPLE_ID,
       r0MeasurementCount: OVERFLOW,
     });
@@ -145,7 +145,7 @@ describe("r0MeasurementCount PG integer cap", () => {
   });
 
   it("accepts PG_INTEGER_MAX itself on update", () => {
-    const result = updateSampleSchema.safeParse({
+    const result = updateSampleSchema.safeParse({ expectedVersion: 1,
       sampleId: SAMPLE_ID,
       r0MeasurementCount: PG_INTEGER_MAX,
     });
@@ -164,7 +164,7 @@ describe("sample chemistry ranges", () => {
         }).success,
       ).toBe(false);
       expect(
-        updateSampleSchema.safeParse({
+        updateSampleSchema.safeParse({ expectedVersion: 1,
           sampleId: SAMPLE_ID,
           [field]: 101,
         }).success,
@@ -182,7 +182,7 @@ describe("sample chemistry ranges", () => {
         }).success,
       ).toBe(false);
       expect(
-        updateSampleSchema.safeParse({
+        updateSampleSchema.safeParse({ expectedVersion: 1,
           sampleId: SAMPLE_ID,
           [field]: -1,
         }).success,
@@ -230,7 +230,7 @@ describe("sample chemistry ranges", () => {
   });
 
   it("rejects out-of-range chemistry on update", () => {
-    const result = updateSampleSchema.safeParse({
+    const result = updateSampleSchema.safeParse({ expectedVersion: 1,
       sampleId: SAMPLE_ID,
       organicCarbonPercent: 101,
     });
@@ -243,7 +243,7 @@ describe("sample chemistry ranges", () => {
       createSampleSchema.safeParse({ ...validSampleBase, ph: "14.1" }).success,
     ).toBe(false);
     expect(
-      updateSampleSchema.safeParse({ sampleId: SAMPLE_ID, weightGrams: -1 })
+      updateSampleSchema.safeParse({ expectedVersion: 1, sampleId: SAMPLE_ID, weightGrams: -1 })
         .success,
     ).toBe(false);
   });

@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Credit Batch Membership Rules
  *
@@ -139,6 +140,7 @@ export async function lockCreditBatchDeclarationRuns(
 }
 
 export interface LockedCreditBatchForUpdate {
+  version: number;
   facilityId: string;
   startDate: string;
   endDate: string;
@@ -190,9 +192,10 @@ export async function lockCreditBatchForUpdate(
   ctx: OrgContext,
   tx: DbTransaction,
   id: string,
-  target: { facilityId?: string; feedstockTypeId?: string },
+  target: { facilityId?: string; feedstockTypeId?: string; expectedVersion: number },
 ): Promise<LockedCreditBatchForUpdate> {
   const selectFields = {
+    version: creditBatches.version,
     facilityId: creditBatches.facilityId,
     startDate: creditBatches.startDate,
     endDate: creditBatches.endDate,
@@ -220,6 +223,7 @@ export async function lockCreditBatchForUpdate(
     ))
     .for("update");
   if (!locked) throw new SafeError("Credit batch not found");
+  assertRowVersion({ entity: "creditBatch", id, expectedVersion: target.expectedVersion, actualVersion: locked.version });
   if (
     locked.facilityId !== snapshot.facilityId ||
     locked.feedstockTypeId !== snapshot.feedstockTypeId ||
@@ -682,9 +686,14 @@ export async function attachProductionRunToMatchingCreditBatch(
     creditBatchId: batch.id,
     productionRunId,
   });
+  // The edit form includes membership, so auto-attachment also invalidates an
+  // already-open batch form even though no scalar batch field was edited.
+  await tx.update(creditBatches)
+    .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
+    .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
   await tx
     .update(samples)
-    .set({ creditBatchId: batch.id, updatedAt: new Date() })
+    .set({ version: nextVersion(samples.version), creditBatchId: batch.id, updatedAt: new Date() })
     .where(
       and(
         eq(samples.productionRunId, productionRunId),

@@ -75,7 +75,7 @@ describe("sample credit batch window guard", () => {
       timezone: "Africa/Nairobi",
     });
 
-    const result = await updateSampleFn({
+    const result = await updateSampleFn({ expectedVersion: 1,
       sampleId: SAMPLE_ID,
       samplingTime: new Date("2026-01-14T21:30:00.000Z"),
     });
@@ -94,7 +94,7 @@ describe("sample credit batch window guard", () => {
       timezone: "America/Los_Angeles",
     });
 
-    const result = await updateSampleFn({
+    const result = await updateSampleFn({ expectedVersion: 1,
       sampleId: SAMPLE_ID,
       samplingTime: new Date("2026-01-15T07:30:00.000Z"),
     });
@@ -120,7 +120,7 @@ describe("sample credit batch window guard", () => {
     });
     const samplingTime = new Date("2026-01-20T09:00:00.000Z");
 
-    const result = await updateSampleFn({
+    const result = await updateSampleFn({ expectedVersion: 1,
       sampleId: SAMPLE_ID,
       samplingTime,
     });
@@ -140,7 +140,7 @@ describe("sample credit batch window guard", () => {
       timezone: "Africa/Nairobi",
     });
 
-    const result = await updateSampleFn({
+    const result = await updateSampleFn({ expectedVersion: 1,
       sampleId: SAMPLE_ID,
       samplingTime: new Date("2026-01-20T09:00:00.000Z"),
     });

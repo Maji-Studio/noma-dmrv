@@ -16,7 +16,41 @@ vi.mock('./output-stock', () => ({ getBiocharOutputStockLayers: mocks.state, get
 vi.mock('./output-stock-corrections', () => ({ prepareOutputCorrection: mocks.correction }));
 vi.mock('./certification-lineage-guards', () => ({ getCertifiedLineage: mocks.lineage }));
 vi.mock('./output-stock-history', () => ({ getOutputStockHistory: vi.fn() }));
-import { getMatchingOutputBins, previewOutputStock } from './output-stock-operations';
+import { getMatchingOutputBins, prepareOutputStock, previewOutputStock } from './output-stock-operations';
+
+it('keeps a correction fingerprint stable when product rows return in a different order', async () => {
+  const binId = '00000000-0000-4000-8000-000000000001';
+  const initialVersion = 1;
+  const editedVersion = 2;
+  const layers = ['earlier', 'later'].map((id, index) => ({
+    id, placedAt: `2026-09-${index === 0 ? '12' : '13'}T12:00:00.000Z`,
+    postingSequence: BigInt(index + 1), establishedDryBiocharKg: '100',
+    ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100',
+    remainingSolidsKg: rational(BigInt(100)),
+    runs: [{ productionRunId: id, establishedDryKg: '100', remainingDryKg: '100' }],
+  }));
+  const input = { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002',
+    correctsMovementId: '00000000-0000-4000-8000-000000000003', occurredAt: '2026-09-12T18:00:00.000Z',
+    kind: 'count' as const, wetMassKg: 125, moisturePercent: 20 };
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  const prepare = async (orderedLayers: typeof layers, version: number) => {
+    mocks.reads = [[{ id: binId, type: 'product_bin', name: 'Products', code: 'PRODUCTS', formulationId: null }], [], [],
+      layers.map(layer => ({ id: layer.id, code: layer.id, version: layer.id === 'later' ? version : initialVersion })), []];
+    mocks.state.mockResolvedValue({ layers: orderedLayers });
+    mocks.correction.mockResolvedValue({ original: { inputSnapshot: {} }, layers: orderedLayers, allocations: [], deliveryId: null });
+    return prepareOutputStock(ctx, input);
+  };
+  const original = await prepare(layers, initialVersion);
+  const refreshed = await prepare([...layers].reverse(), editedVersion);
+  expect(original.preview.allocations).toEqual([]);
+  expect(refreshed.readings.map(reading => reading.layerId)).toEqual(['earlier']);
+  expect(refreshed.preview.expectedProductVersions?.later).toBe(editedVersion);
+  expect(refreshed.preview.basisFingerprint).toBe(original.preview.basisFingerprint);
+
+  const changedLayers = layers.map(layer => layer.id === 'later'
+    ? { ...layer, placedAt: '2026-09-14T12:00:00.000Z' } : layer);
+  expect((await prepare(changedLayers, editedVersion)).preview.basisFingerprint).not.toBe(original.preview.basisFingerprint);
+});
 
 it('returns certification artifact identities while checking both affected sources and the corrected delivery', async () => {
   const binId = '00000000-0000-4000-8000-000000000001';

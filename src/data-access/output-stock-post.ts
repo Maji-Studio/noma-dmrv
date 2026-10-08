@@ -92,6 +92,7 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
     for (const reading of originalReadings) if (reading.productId) productIds.add(reading.productId);
   }
   const savedProducts = [];
+  const savedDeliveries = [];
   for (const productId of [...productIds].sort()) {
     const [product] = await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.id, productId))).for('update');
     if (!product) throw new SafeError('Biochar product not found');
@@ -156,13 +157,13 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
     const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, correction.deliveryId))).for('update');
     if (!delivery || delivery.storageLocationId !== input.storageLocationId || delivery.facilityId !== input.facilityId) throw new SafeError('Delivery source changed. Refresh and retry.');
     await lockDeliveryOrderAndAssertBalance(ctx, tx, { orderId: delivery.orderId, requestedWetKg: input.wetMassKg, excludeDeliveryId: delivery.id });
-    await tx.update(deliveries).set({ deliveredWetMassKg: input.wetMassKg, moistureContentPercent: postedMoisturePercent(prepared), massDryKg: Number(plan.drawnDryKg), deliveryDate: new Date(input.occurredAt), updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id)));
+    savedDeliveries.push(...await tx.update(deliveries).set({ version: nextVersion(deliveries.version), deliveredWetMassKg: input.wetMassKg, moistureContentPercent: postedMoisturePercent(prepared), massDryKg: Number(plan.drawnDryKg), deliveryDate: new Date(input.occurredAt), updatedAt: new Date() }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning());
     await syncBiocharProductTransportLegs(ctx, tx, [...productIds]);
   }
   if (productIds.size) savedProducts.push(...await tx.update(biocharProducts)
     .set({ version: nextVersion(biocharProducts.version), updatedAt: new Date() })
     .where(and(eq(biocharProducts.organizationId, ctx.organizationId), inArray(biocharProducts.id, [...productIds]))).returning());
-  return { movement, preview, savedProducts, moisturePercent: postedMoisturePercent(prepared) };
+  return { movement, preview, savedProducts, savedDeliveries, moisturePercent: postedMoisturePercent(prepared) };
 }
 export async function postOutputStock(ctx: OrgContext, raw: OutputStockPostInput) {
   requireOrgScope(ctx);
@@ -171,11 +172,13 @@ export async function postOutputStock(ctx: OrgContext, raw: OutputStockPostInput
   return withOutputStockPosting(ctx, {
     input,
     locksTransportRoutes: true,
-    replay: async (tx, existing) => ({ movementId: existing.id, preview: existing.inputSnapshot!.preview as unknown as PostedOutputStock['preview'],
+    replay: async (tx, existing) => ({ savedDeliveries: existing.inputSnapshot?.deliveryId
+      ? await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, String(existing.inputSnapshot.deliveryId))))
+      : [], movementId: existing.id, preview: existing.inputSnapshot!.preview as unknown as PostedOutputStock['preview'],
       savedProducts: await tx.select().from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, input.storageLocationId))) }),
     write: async (_tx, post) => {
       const result = await post();
-      return { movementId: result.movement.id, preview: result.preview, savedProducts: result.savedProducts };
+      return { movementId: result.movement.id, preview: result.preview, savedProducts: result.savedProducts, savedDeliveries: result.savedDeliveries };
     },
   });
 }

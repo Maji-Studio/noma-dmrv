@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
@@ -434,7 +435,7 @@ describe("certification lineage guards", () => {
   it("rejects cohort changes after a slice is assigned to a draft Removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, {
+        updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", fixture.batchId),
           startDate: new Date("2026-06-02T00:00:00Z"),
         }),
       ).rejects.toThrow(
@@ -457,7 +458,7 @@ describe("certification lineage guards", () => {
 
   it("allows application edits while the lineage has no submitted certification artifact", async () => {
     await withFixture(async (fixture) => {
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, {
+      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId),
         fieldIdentifier: "editable-field",
       });
 
@@ -575,7 +576,7 @@ describe("certification lineage guards", () => {
   it("rejects sample edits once the sample supports a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateSample(makeTestOrgContext(TEST_USER_ID), fixture.sampleId, {
+        updateSample(makeTestOrgContext(TEST_USER_ID), fixture.sampleId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", fixture.sampleId),
           organicCarbonPercent: 79,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -585,7 +586,7 @@ describe("certification lineage guards", () => {
   it("rejects deleting upstream sample evidence for a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteSample(makeTestOrgContext(TEST_USER_ID), fixture.sampleId),
+        deleteSample(makeTestOrgContext(TEST_USER_ID), fixture.sampleId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", fixture.sampleId)),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });
@@ -593,7 +594,7 @@ describe("certification lineage guards", () => {
   it("rejects delivery edits once the removal is verifier-bound through a GHG statement", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, {
+        updateDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId),
           deliveredWetMassKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -625,7 +626,7 @@ describe("certification lineage guards", () => {
       const completion = updateDelivery(
         makeTestOrgContext(TEST_USER_ID),
         fixture.deliveryId,
-        { distanceNote: "lineage lock independence" },
+        { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId), distanceNote: "lineage lock independence" },
       ).finally(() => {
         completionSettled = true;
       });
@@ -674,7 +675,7 @@ describe("certification lineage guards", () => {
       const completion = updateDelivery(
         makeTestOrgContext(TEST_USER_ID),
         fixture.deliveryId,
-        { distanceNote: "concurrent lineage mutation" },
+        { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId), distanceNote: "concurrent lineage mutation" },
       );
       const completionAssertion = expect(completion).rejects.toThrow(
         "Certification lineage changed while it was being locked",
@@ -731,7 +732,7 @@ describe("certification lineage guards", () => {
       });
 
       await expect(
-        updateDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, {
+        updateDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId),
           distanceNote: "must stay locked",
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -812,7 +813,7 @@ describe("certification lineage guards", () => {
   it("rejects order edits once linked to a submitted removal lineage", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateOrder(makeTestOrgContext(TEST_USER_ID), fixture.orderId, {
+        updateOrder(makeTestOrgContext(TEST_USER_ID), fixture.orderId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "orders", fixture.orderId),
           quantityKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -828,7 +829,7 @@ describe("certification lineage guards", () => {
         biocharAppliedTons: 0.01,
         fieldSizeHa: 1,
       })).rejects.toThrow(LOCKED_COPY);
-      await expect(updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { fieldSizeHa: 2 })).rejects.toThrow(LOCKED_COPY);
+      await expect(updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId), fieldSizeHa: 2 })).rejects.toThrow(LOCKED_COPY);
     });
   });
 
@@ -851,7 +852,7 @@ describe("certification lineage guards", () => {
   it("rejects application edits once linked to a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId),
           fieldIdentifier: "locked-field",
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -861,7 +862,7 @@ describe("certification lineage guards", () => {
   it("rejects deleting applications from a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId),
+        deleteApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", fixture.applicationId)),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });
@@ -869,7 +870,7 @@ describe("certification lineage guards", () => {
   it("rejects credit batch edits once its removal is submitted", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, {
+        updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", fixture.batchId),
           siteManagementNotes: "locked notes",
         }),
       ).rejects.toThrow(
@@ -881,7 +882,7 @@ describe("certification lineage guards", () => {
   it("rejects credit batch deletion once its removal is verifier-bound through a GHG statement", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId),
+        deleteCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", fixture.batchId)),
       ).rejects.toThrow(LOCKED_COPY);
     }, "ghgStatement");
   });
