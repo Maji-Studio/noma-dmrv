@@ -1098,3 +1098,19 @@ operational tradeoff, and this is not a registry requirement we verified.
 
 ## Design review 2026-08-13 follow-ups (opened 2026-08-14)
 
+
+## API credential lifecycle follow-ups
+
+- Deliver the decided 14-day expiry notices and owner-removal notices to
+  organization admins when the scheduled-job/notification infrastructure lands
+  (data-entry API plan, decisions 8 and 13). The credential foundation records
+  expiry and revocation but sends no notices. Pointers: `src/db/schema/api-keys.ts:apiKeys.expiresAt` and `src/data-access/api-credential-auth.ts:disableOwnerApiKeys`.
+- Runtime prefix semantics: current environment helpers distinguish Node
+  production builds from development/test, so production-mode staging builds
+  use `noma_live_` too. Decide whether deployment-stage-specific prefixes are
+  required before exposing credential management in staging; no new env var
+  was added. Pointer: `src/lib/auth/better-auth.ts:auth` (`apiKey.defaultPrefix`).
+- Organization API-access and global-write kill switches remain with the REST
+  operation rollout, alongside the Phase 2b rate limiter, audit and idempotency
+  work (disabled plugin limiter: `src/lib/auth/better-auth.ts:auth`, `apiKey.rateLimit`). API-key session emulation remains off; service accounts and OAuth are
+  later tracks. Pointer: `src/lib/auth/api-context.ts:resolveApiContext`.
