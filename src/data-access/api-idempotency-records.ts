@@ -240,13 +240,15 @@ export async function recordIdempotencyOutcome(
 }
 
 /** System retention job; each statement locks and deletes a bounded batch. */
+// `expires_at` has no zone and Drizzle stores UTC wall time; a raw Date parameter
+// would be sent with the local offset, which a cast to `timestamp` drops.
 // org-scope-ok: authenticated cron purges expired bookkeeping across organizations.
 export async function purgeExpiredIdempotencyRecords(now: Date): Promise<number> {
   let count = 0;
   for (;;) {
     const result = await db.execute(sql`
       delete from api_idempotency_records where id in (
-        select id from api_idempotency_records where expires_at <= ${now}
+        select id from api_idempotency_records where expires_at <= ${now.toISOString()}::timestamp
         order by expires_at limit ${API_RECORD_PURGE_BATCH_SIZE} for update skip locked
       ) returning id
     `);

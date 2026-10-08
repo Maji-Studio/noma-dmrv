@@ -22,7 +22,7 @@ it("commits one audit and replays its effect without another event", async () =>
   expect(first.effect).toEqual({
     outcome: "created", entityType: "feedstock", entityIds: first.data.feedstocks.map((item) => item.id),
     versionBefore: null, versionAfter: 1,
-    changedFields: ["allocations", "deliveryDate", "moisturePercent", "notes", "totalWetMassKg", "transportDistanceKm"],
+    changedFields: ["allocations", "deliveryDate", "facilityId", "feedstockTypeId", "moisturePercent", "notes", "supplierId", "totalWetMassKg", "transportDistanceKm"],
   });
   const events = await rows();
   expect(events).toHaveLength(1);
