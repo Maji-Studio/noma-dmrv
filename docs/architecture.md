@@ -616,9 +616,12 @@ Staging is Preview and relies on lazy claim expiry; see
 
 ### Feedstock REST adapter
 
-`lib/api/route.ts` authenticates each v1 request, admits its role/scope through
-`admitApiRequest`, and applies private response headers and problem responses.
-This admission boundary is the integration point for request guards. Domain
+`lib/api/route.ts` records the deadline, runs `preAuthGuard`, resolves the
+credential, checks role/scope through `admitApiRequest`, then runs
+`postAuthGuard` before the handler. GET and HEAD use read budgets (including
+`/api/v1/me`); all other methods, including dry runs, use write budgets. Guard
+denials return directly. Admitted responses, including problems, carry the
+returned rate-limit headers alongside private response headers. Domain
 failures use the server-action conversion with REST's value-free logger;
 unexpected errors never expose their messages or causes.
 

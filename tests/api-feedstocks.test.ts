@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { apiIdempotencyRecords, feedstocks, members, storageLocations, users } from "@/db/schema";
+import { apiAuditEvents, organizationApiAccess, apiIdempotencyRecords, feedstocks, members, storageLocations, users } from "@/db/schema";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS } from "@/config/api-rest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
@@ -13,15 +13,23 @@ import { GET as LIST, POST } from "@/app/api/v1/feedstocks/route";
 import { GET, PATCH, DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
 import { createIntakeFixture, feedstockCount, removeIntakeFixture, type IntakeFixture } from "./helpers/operation-fixture";
 
+const mocks = vi.hoisted(() => ({ env: { API_WRITES_DISABLED: false } }));
+vi.mock("@/config/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/config/env")>();
+  return { ...actual, env: { ...actual.env, get API_WRITES_DISABLED() { return mocks.env.API_WRITES_DISABLED; } } };
+});
+
 const SUITE_TIMEOUT_MS = 30_000;
 let a: IntakeFixture;
 let b: IntakeFixture;
 let keyA: string;
+let credentialIdA: string;
 let keyB: string;
 let readOnly: string;
 const scopes = ["feedstocks:read", "feedstocks:write", "feedstocks:delete"];
 
 beforeEach(async () => {
+  mocks.env.API_WRITES_DISABLED = false;
   a = await createIntakeFixture(`rest-a-${randomUUID()}`);
   b = await createIntakeFixture(`rest-b-${randomUUID()}`);
   for (const fixture of [a, b]) {
@@ -29,11 +37,14 @@ beforeEach(async () => {
     await db.insert(members).values({ id: randomUUID(), organizationId: fixture.ctx.organizationId, userId: fixture.ctx.userId, role: "owner" });
     await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId }).where(eq(storageLocations.id, fixture.binId));
   }
-  keyA = (await createApiKey(a.ctx, { name: "Intake A", scopes, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
+  const credential = await createApiKey(a.ctx, { name: "Intake A", scopes, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS });
+  keyA = credential.key;
+  credentialIdA = credential.id;
   keyB = (await createApiKey(b.ctx, { name: "Intake B", scopes, expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
   readOnly = (await createApiKey(a.ctx, { name: "Read only", scopes: ["feedstocks:read"], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS })).key;
 });
 afterEach(async () => {
+  mocks.env.API_WRITES_DISABLED = false;
   await removeIntakeFixture(a);
   await removeIntakeFixture(b);
   await db.delete(users).where(inArray(users.id, [a.ctx.userId, b.ctx.userId]));
@@ -315,5 +326,86 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     await problem(await POST(new Request("http://localhost/api/v1/feedstocks", { method: "POST", headers, body: stream, duplex: "half" } as RequestInit)), 413, "payload_too_large");
     await problem(await POST(request("POST", "?dryRun=1", a.input(), headers)), 400, "invalid_query");
     expect(await feedstockCount(a)).toBe(0);
+  });
+});
+
+
+const auditRows = () => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, a.ctx.organizationId));
+
+describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () => {
+  it("audits create, update and delete once with field names and response request ids", async () => {
+    const privateNotes = "Private intake detail excluded from audit";
+    const created = await create({ ...a.input(), notes: privateNotes });
+    const updated = await patch(created.row.id, { notes: privateNotes + " updated" }, created.etag);
+    expect(updated.status).toBe(200);
+    const deleted = await DELETE(request("DELETE", `/${created.row.id}`, undefined, { "if-match": updated.headers.get("etag")! }), params(created.row.id));
+    expect(deleted.status).toBe(204);
+    const events = await auditRows();
+    expect(events).toHaveLength(3);
+    const expected = [
+      { response: created.response, operationId: "log_feedstock_delivery", outcomeCode: "created", versionBefore: null, versionAfter: 1,
+        changedFields: ["allocations", "deliveryDate", "facilityId", "feedstockTypeId", "moisturePercent", "notes", "supplierId", "totalWetMassKg", "transportDistanceKm"] },
+      { response: updated, operationId: "update_feedstock", outcomeCode: "updated", versionBefore: 1, versionAfter: 2, changedFields: ["notes"] },
+      { response: deleted, operationId: "delete_feedstock", outcomeCode: "deleted", versionBefore: 2, versionAfter: null, changedFields: [] },
+    ];
+    for (const { response, ...effect } of expected) {
+      const requestId = response.headers.get("x-request-id");
+      expect(requestId).toBeTruthy();
+      expect(events.filter((event) => event.requestId === requestId)).toHaveLength(1);
+      expect(events.find((event) => event.requestId === requestId)).toMatchObject({
+        ...effect, organizationId: a.ctx.organizationId, userId: a.ctx.userId,
+        credentialId: credentialIdA, entityType: "feedstock", entityIds: [created.row.id],
+      });
+    }
+    expect(JSON.stringify(events)).not.toContain(privateNotes);
+  });
+
+  it("adds no audit rows for dry runs or create, update and delete replays", async () => {
+    const dryCreate = await POST(request("POST", "?dryRun=true", a.input()));
+    expect(dryCreate.status).toBe(200);
+    expect(await auditRows()).toEqual([]);
+    const created = await create();
+    const path = `/${created.row.id}`;
+    const dryPatch = await PATCH(request("PATCH", path + "?dryRun=true", { notes: "Preview" }, { "if-match": created.etag }), params(created.row.id));
+    expect(dryPatch.status).toBe(200);
+    const dryDelete = await DELETE(request("DELETE", path + "?dryRun=true", undefined, { "if-match": created.etag }), params(created.row.id));
+    expect(dryDelete.status).toBe(200);
+    const beforeReplay = await auditRows();
+    expect(beforeReplay).toHaveLength(1);
+    const replayCreate = await POST(request("POST", "", created.body, { "idempotency-key": created.key }));
+    expect(replayCreate.status).toBe(201);
+    expect(replayCreate.headers.get("idempotent-replayed")).toBe("true");
+    expect(await auditRows()).toEqual(beforeReplay);
+    const updateKey = randomUUID();
+    const updated = await patch(created.row.id, { notes: "Saved" }, created.etag, keyA, { "idempotency-key": updateKey });
+    expect(updated.status).toBe(200);
+    const replayUpdate = await patch(created.row.id, { notes: "Saved" }, created.etag, keyA, { "idempotency-key": updateKey });
+    expect(replayUpdate.status).toBe(200);
+    expect(replayUpdate.headers.get("idempotent-replayed")).toBe("true");
+    expect(await auditRows()).toHaveLength(2);
+    const deleteHeaders = { "if-match": updated.headers.get("etag")!, "idempotency-key": randomUUID() };
+    expect((await DELETE(request("DELETE", path, undefined, deleteHeaders), params(created.row.id))).status).toBe(204);
+    const replayDelete = await DELETE(request("DELETE", path, undefined, deleteHeaders), params(created.row.id));
+    expect(replayDelete.status).toBe(204);
+    expect(replayDelete.headers.get("idempotent-replayed")).toBe("true");
+    expect(await auditRows()).toHaveLength(3);
+  });
+
+  it("refuses a feedstock GET when organization API access is disabled", async () => {
+    const created = await create();
+    await db.insert(organizationApiAccess).values({ organizationId: a.ctx.organizationId, enabled: false, changedByUserId: a.ctx.userId });
+    await problem(await GET(request("GET", `/${created.row.id}`), params(created.row.id)), 403, "api_access_disabled");
+  });
+
+  it("blocks POST and dry-run POST without writes while GET remains available", async () => {
+    mocks.env.API_WRITES_DISABLED = true;
+    for (const path of ["", "?dryRun=true"]) {
+      await problem(await POST(request("POST", path, a.input(), { "idempotency-key": randomUUID() })), 503, "api_writes_disabled");
+    }
+    expect((await LIST(request("GET"))).status).toBe(200);
+    expect(await feedstockCount(a)).toBe(0);
+    expect(await stock()).toBe(0);
+    expect(await auditRows()).toEqual([]);
+    expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, a.ctx.organizationId))).toEqual([]);
   });
 });

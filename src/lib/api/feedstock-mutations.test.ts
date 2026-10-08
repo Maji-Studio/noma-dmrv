@@ -7,6 +7,11 @@ import { apiRoute } from "./route";
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), run: vi.fn() }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn() } }));
+// Admission is covered in route.test.ts; these cases exercise the handlers.
+vi.mock("./guards", () => ({
+  preAuthGuard: vi.fn(async () => null),
+  postAuthGuard: vi.fn(async () => ({ ok: true, headers: new Headers() })),
+}));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));
 vi.mock("@/data-access/api-feedstocks", () => ({ findApiFeedstock: vi.fn() }));
 vi.mock("@/lib/operations/feedstocks", async () => {

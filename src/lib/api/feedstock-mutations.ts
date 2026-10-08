@@ -22,7 +22,7 @@ function remainingDeadlineMs(deadlineAt: number): number {
   return remaining;
 }
 
-export async function createFeedstockResponse(request: Request, { ctx, headers, deadlineAt }: ApiRouteContext) {
+export async function createFeedstockResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext) {
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
   const key = readIdempotencyKey(request, !dryRun);
   const body = await readJsonBody(request);
@@ -35,6 +35,7 @@ export async function createFeedstockResponse(request: Request, { ctx, headers, 
   }
   const result = await runOperation(logFeedstockDelivery, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt),
+    audit: { requestId, credentialId: ctx.credentialId },
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const data = result.data.feedstocks.map(representFeedstock);
@@ -56,13 +57,14 @@ async function checkRepresentation(scope: OperationScope, id: string, revision: 
 }
 
 export async function mutateFeedstockResponse(request: Request, context: ApiRouteContext, id: string, method: "PATCH" | "DELETE") {
-  const { ctx, headers, deadlineAt } = context;
+  const { ctx, headers, deadlineAt, requestId } = context;
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
   const precondition = request.headers.get("if-match");
   const { version, revision } = parseIfMatch(precondition);
   if (!z.uuid().safeParse(id).success) throw new DomainError("not_found", "Feedstock was not found.");
   const key = readIdempotencyKey(request, false);
   const options = {
+    audit: { requestId, credentialId: ctx.credentialId },
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
   };
   try {

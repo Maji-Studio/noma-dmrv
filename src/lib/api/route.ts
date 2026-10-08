@@ -7,6 +7,7 @@ import { toActionFailure } from "@/fn/action-errors";
 import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse } from "./problem";
 import { unexpectedApiErrorResponse } from "./route-error";
 import { ApiHttpError } from "./http-error";
+import { preAuthGuard, postAuthGuard } from "./guards";
 
 export interface ApiRouteContext {
   ctx: ApiContext;
@@ -16,11 +17,15 @@ export interface ApiRouteContext {
   headers: Headers;
 }
 
-/** Authenticated admission boundary; request guards attach here after the rebase. */
-async function admitApiRequest(context: ApiRouteContext, scope?: ApiScope): Promise<Response | undefined> {
+/** Scope checks precede the authenticated write switch and rate limits. */
+async function admitApiRequest(request: Request, context: ApiRouteContext, scope?: ApiScope) {
   if (scope && !hasRoleAndScope(context.ctx, scope)) {
-    return apiDenialResponse("missing_scope", context.instance, context.requestId);
+    return { ok: false as const, response: apiDenialResponse("missing_scope", context.instance, context.requestId) };
   }
+  return postAuthGuard(context.ctx, {
+    requestId: context.requestId, instance: context.instance,
+    access: request.method === "GET" || request.method === "HEAD" ? "read" : "write",
+  });
 }
 
 export function apiRoute<Params = Record<string, never>>(
@@ -32,18 +37,28 @@ export function apiRoute<Params = Record<string, never>>(
     const deadlineAt = Date.now() + OPERATION_DEADLINE_MS;
     const requestId = randomUUID();
     const instance = new URL(request.url).pathname;
+    const headers = apiResponseHeaders(requestId);
+    const finish = (response: Response) => {
+      for (const [name, value] of headers) response.headers.set(name, value);
+      return response;
+    };
     try {
+      const preAuthDenial = await preAuthGuard(request, { instance, requestId });
+      if (preAuthDenial) return preAuthDenial;
       const resolution = await resolveApiContext(request);
       if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
       const context = { deadlineAt, ctx: resolution.ctx, requestId, instance, headers: apiResponseHeaders(requestId) };
-      const denied = await admitApiRequest(context, scope);
-      if (denied) return denied;
+      const admission = await admitApiRequest(request, context, scope);
+      if (!admission.ok) return admission.response;
+      for (const [name, value] of admission.headers) {
+        headers.set(name, value);
+        context.headers.set(name, value);
+      }
       const response = await handler(request, context, route ? await route.params : {} as Params);
-      for (const [name, value] of apiResponseHeaders(requestId)) response.headers.set(name, value);
-      return response;
+      return finish(response);
     } catch (error) {
       if (error instanceof ApiHttpError) {
-        return problemResponse({ status: error.status, code: error.code, detail: error.message, current: error.current, instance, requestId });
+        return finish(problemResponse({ status: error.status, code: error.code, detail: error.message, current: error.current, instance, requestId }));
       }
       if (error instanceof DomainError) {
         // The action converter logs raw causes. REST logs only trusted classes
@@ -55,9 +70,9 @@ export function apiRoute<Params = Record<string, never>>(
           fallbackMessage: "The request could not be completed.", log: { message: "API request failed" },
           logUnexpected: false,
         });
-        return actionFailureResponse(failure, instance, requestId);
+        return finish(actionFailureResponse(failure, instance, requestId));
       }
-      return unexpectedApiErrorResponse(error, op, instance, requestId);
+      return finish(unexpectedApiErrorResponse(error, op, instance, requestId));
     }
   };
 }
