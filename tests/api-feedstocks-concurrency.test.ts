@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { and, eq } from "drizzle-orm";
 import type { Pool } from "pg";
 import { db } from "@/db";
-import { apiIdempotencyRecords, feedstocks } from "@/db/schema";
+import { apiAuditEvents, apiIdempotencyRecords, feedstocks } from "@/db/schema";
 import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
 import { lockBinStock } from "@/data-access/lock-bin-stocks";
 import { updateFeedstockFn } from "@/fn/feedstocks";
@@ -108,6 +108,12 @@ describe("feedstock REST concurrency", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ idempotencyKey: key, operationId: "log_feedstock_delivery" });
     expect(records[0].outcome).not.toBeNull();
+    const audits = await db.select().from(apiAuditEvents).where(and(
+      eq(apiAuditEvents.organizationId, fixture.ctx.organizationId),
+      eq(apiAuditEvents.credentialId, fixture.credentialId),
+    ));
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ operationId: "log_feedstock_delivery", outcomeCode: "created" });
   });
 
   it("serializes reductions of two intakes in one drawn bin and rolls back the loser", async () => {
