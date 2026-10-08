@@ -613,3 +613,70 @@ expired idempotency records and idle rate-limit buckets in bounded batches.
 `vercel.json` schedules it daily at 03:00 UTC on Production deployments only.
 Staging is Preview and relies on lazy claim expiry; see
 [security.md](./security.md#environment-variables).
+
+### Feedstock REST adapter
+
+`lib/api/route.ts` authenticates each v1 request, admits its role/scope through
+`admitApiRequest`, and applies private response headers and problem responses.
+This admission boundary is the integration point for request guards. Domain
+failures use the server-action conversion with REST's value-free logger;
+unexpected errors never expose their messages or causes.
+
+Feedstock reads use `data-access/api-feedstocks.ts`. The list orders by
+`(createdAt, id)` descending and keeps PostgreSQL microseconds in the cursor;
+cursors bind the resource, organization and filters, but not page size. The
+representation deliberately contains only feedstock-owned fields and reference
+ids, without joined transport data or entity names. Supplier-location and driver
+ids are not feedstock columns. Percent values use 0–100. Business dates use
+`YYYY-MM-DD`; creation/update instants use UTC RFC 3339.
+
+`POST /api/v1/feedstocks` records an intake that may split across bins, so
+`data` is always an array of the created feedstock representations, including
+for one allocation. The REST adapter caps each intake at 200 allocations.
+`Location` and `ETag` identify the first returned feedstock;
+each array member also has its own id and version. GET detail and PATCH return
+one object. All mutation responses map the runner's JSON outcome, keeping
+create and PATCH replay bodies identical to the original response.
+
+PATCH passes partial input to the operation, which resolves omitted fields
+against the locked row. The body cannot supply `feedstockId` or
+`expectedVersion`; these come from the path and strong If-Match tag. Revision
+and target checks run in the operation's execute phase, after the runner's
+idempotency replay, so a committed retry remains recoverable after later edits
+or deletion. Version/revision conflicts return the current representation.
+
+A create dry run returns `preview` alongside `data`: one entry per allocation,
+with wet/dry kilograms and the stock contribution. These are additions, not
+projected bin balances; only complete intake rows contribute to the wet stock
+lane. DELETE dry runs return the representation that would be removed, and
+run the same locked deletion guards before rolling back.
+
+### Intake lookup REST adapters
+
+Facilities, suppliers, feedstock types, storage locations, vehicles and drivers
+expose read-only list and id-or-code routes through `lib/api/route.ts` and their
+resource scopes. `lib/api/*-queries.ts` validates strict query schemas and maps
+explicit output schemas in `lib/api/representations/`; organization predicates
+and facility-filter checks remain in `data-access/api-*.ts`.
+
+`lib/api/lookup-query.ts` shares the feedstock cursor contract: newest-first
+`(createdAt, id)` ordering, PostgreSQL microseconds, organization/resource/filter
+binding, configured page limits, and no totals. Lookup search is a literal,
+case-insensitive prefix on code or name; `code` is exact. Only storage locations
+have a facility filter. Each lookup table reserves codes per organization, so
+facility-level code ambiguity is not possible with the current constraints.
+
+Lists exclude archived rows where supported; detail reads return them with
+`archivedAt`. Facilities, suppliers, feedstock types and storage locations
+return row versions and strong version/revision ETags on detail reads. Vehicles
+and drivers have no version or archive column; their representations omit
+`version` and return `archivedAt: null`, with no ETag. Output projections exclude
+contact fields and driver license numbers. Facilities expose `timeZone`, storage
+locations expose the material lane, capacity in kilograms and feedstock-type
+restriction, and vehicles expose their stored identifier/plate and vehicle type.
+
+`GET /api/v1/suppliers/{id}/locations` accepts a supplier UUID only, checks the
+parent's organization before querying its children, and paginates locations with
+name search and coordinates in decimal degrees. Its cursor also binds the
+supplier ID; a missing or foreign supplier returns 404, including when it has
+no locations. Supplier locations have no code or archive column.

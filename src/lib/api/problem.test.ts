@@ -109,3 +109,14 @@ it.each([[429, "Too many requests"], [503, "Service unavailable"]] as const)("ti
   const response = problemResponse({ status, code: "test", detail: "", instance: "/api/v1/me", requestId: "id", retryable: true });
   expect(await response.json()).toMatchObject({ title, status, retryable: true });
 });
+
+it.each([["supplierId"], ["allocations", 0, "storageLocationId"]])("preserves not-found reference pointers: %j", async (...path) => {
+  const response = actionFailureResponse({
+    success: false, code: "not_found", error: "Reference not found",
+    issues: [{ path, code: "not_found", message: "Reference not found" }],
+  }, "/api/v1/feedstocks", "request-id");
+  expect(response.status).toBe(404);
+  expect((await response.json()).errors).toEqual([{
+    pointer: `/${path.join("/")}`, code: "not_found", detail: "Reference not found",
+  }]);
+});
