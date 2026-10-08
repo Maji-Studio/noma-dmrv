@@ -106,3 +106,18 @@ export function toDeleteErrorMessage(error: unknown, recordLabel: string, fallba
   if (getStaleVersionConflict(error)) return staleDeleteMessage(recordLabel);
   return error instanceof Error ? error.message : fallback;
 }
+
+/** Message for a refused archive or restore, preserving other errors and fallbacks. */
+export function toArchiveRestoreErrorMessage(
+  error: unknown,
+  recordLabel: string,
+  action: "archive" | "restore",
+  fallback: string,
+): string {
+  if (getStaleVersionConflict(error)) {
+    const outcome = action === "archive" ? "archived" : "restored";
+    const retry = action === "archive" ? "archiving" : "restoring";
+    return `${recordLabel} was not ${outcome}. It changed since the list loaded. Review it before ${retry}.`;
+  }
+  return error instanceof Error ? error.message : fallback;
+}

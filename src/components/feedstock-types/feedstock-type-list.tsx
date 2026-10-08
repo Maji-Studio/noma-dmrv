@@ -1,6 +1,6 @@
 "use client";
 
-import { toDeleteErrorMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { parseAsString, useQueryState } from "nuqs";
@@ -351,7 +351,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       setDeleteConflict(null);
       toast.success("Feedstock type archived");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The feedstock type was not archived. Try again.");
+      toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "archive", "The feedstock type was not archived. Try again."));
     }
   };
 
@@ -360,7 +360,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
       await unarchiveFeedstockType.mutateAsync({ feedstockTypeId: entity.id, expectedVersion: entity.version });
       toast.success("Feedstock type unarchived");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The feedstock type was not restored. Try again.");
+      toast.error(toArchiveRestoreErrorMessage(error, `Feedstock type ${entity.code}`, "restore", "The feedstock type was not restored. Try again."));
     }
   };
 

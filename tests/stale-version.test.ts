@@ -17,6 +17,7 @@ import {
   throwActionError,
   toSaveErrorMessage,
   toDeleteErrorMessage,
+  toArchiveRestoreErrorMessage,
 } from "@/lib/stale-version";
 import { toActionFailure } from "@/fn/action-errors";
 import { ConflictError, conflictCode } from "@/lib/conflict-ref";
@@ -94,5 +95,30 @@ describe("delete error copy", () => {
   it("preserves ordinary errors and falls back for unknown failures", () => {
     expect(toDeleteErrorMessage(new Error("Still has locations"), label, fallback)).toBe("Still has locations");
     expect(toDeleteErrorMessage(null, label, fallback)).toBe(fallback);
+  });
+});
+
+describe("archive and restore error copy", () => {
+  const label = "Facility FAC-1";
+
+  it.each([
+    ["archive", "archived", "archiving"],
+    ["restore", "restored", "restoring"],
+  ] as const)("names the stale record and offers the %s recovery action", (action, outcome, retry) => {
+    const message = toArchiveRestoreErrorMessage(
+      new StaleVersionError(STALE_VERSION_MESSAGE, staleConflict),
+      label,
+      action,
+      FALLBACK,
+    );
+    expect(message).toBe(`Facility FAC-1 was not ${outcome}. It changed since the list loaded. Review it before ${retry}.`);
+    expect(message).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it.each(["archive", "restore"] as const)("preserves ordinary %s errors and unknown-failure fallbacks", (action) => {
+    const fallback = `Facility was not ${action === "archive" ? "archived" : "restored"}. Try again.`;
+    expect(toArchiveRestoreErrorMessage(new Error("Facility has active runs."), label, action, fallback))
+      .toBe("Facility has active runs.");
+    expect(toArchiveRestoreErrorMessage(null, label, action, fallback)).toBe(fallback);
   });
 });

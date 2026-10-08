@@ -25,7 +25,7 @@ import {
 } from "@/hooks/use-facilities";
 import { formatMass } from "@/lib/format-utils";
 import { formatCount } from "@/lib/copy-utils";
-import { toSaveErrorMessage, StaleVersionError } from "@/lib/stale-version";
+import { toSaveErrorMessage, StaleVersionError, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -190,7 +190,7 @@ export function FacilityList() {
       toast.success("Facility archived. Restore it from the archived view.");
     } catch (error) {
       if (error instanceof StaleVersionError) setArchivingFacility(null);
-      setArchiveError(error instanceof Error ? error.message : "The facility was not archived. Try again.");
+      setArchiveError(toArchiveRestoreErrorMessage(error, `Facility ${archivingFacility.code}`, "archive", "The facility was not archived. Try again."));
     }
   };
 
@@ -202,7 +202,7 @@ export function FacilityList() {
       await restoreFacility.mutateAsync({ facilityId, expectedVersion: facility.version });
       toast.success("Facility restored");
     } catch (error) {
-      setArchiveError(error instanceof Error ? error.message : "The facility was not restored. Try again.");
+      setArchiveError(toArchiveRestoreErrorMessage(error, `Facility ${facility.code}`, "restore", "The facility was not restored. Try again."));
     }
   };
 

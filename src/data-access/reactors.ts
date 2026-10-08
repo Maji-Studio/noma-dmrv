@@ -366,16 +366,6 @@ export async function deleteReactor(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify reactor exists
-  const [existing] = await db
-    .select({ id: reactors.id })
-    .from(reactors)
-    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Reactor not found");
-  }
-
   await db.transaction(async (tx) => {
     const [versioned] = await tx.select({ version: reactors.version })
       .from(reactors)

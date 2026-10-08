@@ -7,7 +7,7 @@
  * already facility-scoped, so the facility is not repeated per bin.
  */
 "use client";
-import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, toDeleteErrorMessage, toArchiveRestoreErrorMessage } from "@/lib/stale-version";
 
 
 import { ServerError } from "@/components/forms";
@@ -110,9 +110,7 @@ export function StorageLocationList() {
       );
     } catch (error) {
       setDeleteError(
-        error instanceof Error
-          ? error.message
-          : "The storage bin was not archived. Try again.",
+        toArchiveRestoreErrorMessage(error, `Storage bin ${bin.code}`, "archive", "The storage bin was not archived. Try again."),
       );
     }
   };
@@ -126,9 +124,7 @@ export function StorageLocationList() {
       toast.success("Storage bin restored");
     } catch (error) {
       setDeleteError(
-        error instanceof Error
-          ? error.message
-          : "The storage bin was not restored. Try again.",
+        toArchiveRestoreErrorMessage(error, `Storage bin ${bin.code}`, "restore", "The storage bin was not restored. Try again."),
       );
     }
   };
