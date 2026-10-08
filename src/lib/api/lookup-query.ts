@@ -20,22 +20,15 @@ export function lookupIdentifier(idOrCode: string) {
   return z.uuid().safeParse(idOrCode).success ? { id: idOrCode } : { code: idOrCode };
 }
 
-export async function readLookupPage<Filters extends Record<string, string | undefined>, Row extends { id: string; cursorCreatedAt: string }, Output>(
+export async function readLookupPage<Filters extends Record<string, string | undefined>, Output>(
   ctx: ApiContext, resource: string, query: { filters: Filters; limit: number; cursor?: string },
-  list: (ctx: ApiContext, filters: Filters, limit: number, position?: CursorPosition) => Promise<Row[]>,
-  represent: (row: NoInfer<Row>) => Output,
+  read: (ctx: ApiContext, query: { filters: Filters; limit: number; cursor?: CursorPosition }) => Promise<{ data: Output[]; nextPosition: CursorPosition | null }>,
 ) {
   const { limit, cursor, filters } = query;
   const binding = { organizationId: ctx.organizationId, resource, filters };
   const position = cursor === undefined ? undefined : decodeCursor(cursor, binding);
-  const rows = await list(ctx, filters, limit, position);
-  const page = rows.slice(0, limit);
-  const last = page.at(-1);
-  return {
-    data: page.map(represent),
-    nextCursor: rows.length > limit && last
-      ? encodeCursor({ id: last.id, createdAt: last.cursorCreatedAt }, binding) : null,
-  };
+  const page = await read(ctx, { filters, limit, cursor: position });
+  return { data: page.data, nextCursor: page.nextPosition ? encodeCursor(page.nextPosition, binding) : null };
 }
 
 export { parseApiQuery };

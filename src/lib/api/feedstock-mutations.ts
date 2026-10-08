@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { API_FEEDSTOCK_MAX_ALLOCATIONS, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { findApiFeedstock } from "@/data-access/api-feedstocks";
+import { readApiFeedstock } from "@/lib/read-models/api-feedstocks";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
 import { runOperation, type Operation, type OperationScope } from "@/lib/operations/runner";
@@ -13,6 +13,8 @@ import { readIdempotencyKey, readJsonBody } from "./request-body";
 import { rejectUnknownFields } from "./unknown-fields";
 import { feedstockEtag, feedstockStockPreview, representFeedstock } from "./representations/feedstocks";
 
+const deleteBodySchema = z.strictObject({});
+const deleteContract = toOperationJsonSchema(deleteBodySchema);
 const createContract = toOperationJsonSchema(logFeedstockDelivery.input);
 const patchContract = toOperationJsonSchema(updateFeedstock.input.omit({ feedstockId: true, expectedVersion: true }));
 
@@ -51,7 +53,7 @@ export async function createFeedstockResponse(request: Request, { ctx, headers, 
 
 /** Runs after the idempotency claim/replay, before any domain write. */
 async function checkRepresentation(scope: OperationScope, id: string, revision: number) {
-  const row = await findApiFeedstock(scope.ctx, { id }, scope.tx);
+  const row = await readApiFeedstock(scope.ctx, { id }, scope.tx);
   if (revision !== FEEDSTOCK_REPRESENTATION_REVISION) throw new DomainError("stale_version", "The representation has changed.");
   return row;
 }
@@ -89,9 +91,15 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
       if (dryRun) headers.set("Dry-Run", "true");
       return Response.json({ data }, { headers });
     }
+    if (request.body !== null) {
+      const body = await readJsonBody(request);
+      rejectUnknownFields(body, deleteContract);
+      const parsed = deleteBodySchema.safeParse(body);
+      if (!parsed.success) throw new DomainError("validation_failed", "DELETE accepts only an empty JSON object.");
+    }
     // DELETE has no surviving representation. A dry run returns the version
     // that would be deleted; the operation still checks it while locked.
-    const operation: Operation<typeof deleteFeedstock.input, Awaited<ReturnType<typeof findApiFeedstock>> | null> = {
+    const operation: Operation<typeof deleteFeedstock.input, Awaited<ReturnType<typeof readApiFeedstock>> | null> = {
       ...deleteFeedstock,
       describe: (input) => deleteFeedstock.describe!(input, undefined),
       execute: async (scope, input) => {
@@ -109,7 +117,7 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
     return new Response(null, { status: 204, headers });
   } catch (error) {
     if (error instanceof DomainError && error.code === "stale_version") {
-      const current = representFeedstock(await findApiFeedstock(ctx, { id }));
+      const current = await readApiFeedstock(ctx, { id });
       throw new ApiHttpError(412, "stale_version", "The feedstock has changed. Read the current representation before retrying.", current);
     }
     throw error;

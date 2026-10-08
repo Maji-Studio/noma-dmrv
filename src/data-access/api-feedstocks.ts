@@ -1,11 +1,12 @@
-import { and, desc, eq, getTableColumns, ilike, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { facilities, feedstocks } from "@/db/schema";
+import { feedstocks } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { DomainError } from "@/lib/domain-errors";
 import { requireOrgScope, type Executor } from "./utils";
+import { requireApiLookupFacility, lookupCursorCreatedAt, lookupPosition, lookupSearch, type ApiFacilityLookupFilters } from "./api-lookup-filters";
 
-export interface ApiFeedstockFilters { facilityId?: string; q?: string; code?: string }
+export type ApiFeedstockFilters = ApiFacilityLookupFilters;
 
 export async function findApiFeedstock(ctx: OrgContext, identifier: { id: string } | { code: string }, executor: Executor = db) {
   requireOrgScope(ctx);
@@ -21,22 +22,15 @@ export async function listApiFeedstocks(
   ctx: OrgContext, filters: ApiFeedstockFilters, limit: number, cursor?: { createdAt: string; id: string },
 ) {
   requireOrgScope(ctx);
-  if (filters.facilityId) {
-    const [facility] = await db.select({ id: facilities.id }).from(facilities).where(and(
-      eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, filters.facilityId),
-    )).limit(1);
-    if (!facility) throw new DomainError("not_found", "Facility was not found.", {
-      issues: [{ path: ["facilityId"], code: "not_found", message: "Facility was not found." }],
-    });
-  }
+  await requireApiLookupFacility(ctx, filters.facilityId);
   return db.select({
     ...getTableColumns(feedstocks),
-    cursorCreatedAt: sql<string>`to_char(${feedstocks.createdAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+    cursorCreatedAt: lookupCursorCreatedAt(feedstocks.createdAt),
   }).from(feedstocks).where(and(
     eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt),
     filters.facilityId ? eq(feedstocks.facilityId, filters.facilityId) : undefined,
     filters.code !== undefined ? eq(feedstocks.code, filters.code) : undefined,
-    filters.q !== undefined ? ilike(feedstocks.code, `${filters.q.replace(/[\\%_]/g, "\\$&")}%`) : undefined,
-    cursor ? sql`(${feedstocks.createdAt}, ${feedstocks.id}) < (${cursor.createdAt}::timestamp, ${cursor.id}::uuid)` : undefined,
+    lookupSearch({ name: feedstocks.code }, filters.q),
+    lookupPosition(feedstocks, cursor),
   )).orderBy(desc(feedstocks.createdAt), desc(feedstocks.id)).limit(limit + 1);
 }

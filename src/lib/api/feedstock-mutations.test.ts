@@ -13,7 +13,7 @@ vi.mock("./guards", () => ({
   postAuthGuard: vi.fn(async () => ({ ok: true, headers: new Headers() })),
 }));
 vi.mock("@/lib/operations/runner", () => ({ runOperation: mocks.run }));
-vi.mock("@/data-access/api-feedstocks", () => ({ findApiFeedstock: vi.fn() }));
+vi.mock("@/lib/read-models/api-feedstocks", () => ({ readApiFeedstock: vi.fn() }));
 vi.mock("@/lib/operations/feedstocks", async () => {
   const schemas = await import("@/schemas/feedstocks");
   return {
@@ -87,5 +87,56 @@ it("does not start a POST when authentication consumes the budget", async () => 
     },
   ));
   expect(await response.json()).toMatchObject({ code: "deadline_exceeded", retryable: true });
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+
+function deleteRequest(body?: BodyInit, contentType = "application/json") {
+  return new Request(`https://example.test/api/v1/feedstocks/${ID}`, {
+    method: "DELETE", headers: { "content-type": contentType, "if-match": '"1.1"' },
+    ...(body === undefined ? {} : { body, duplex: "half" }),
+  } as RequestInit);
+}
+const deleteRoute = apiRoute("test", "feedstocks:delete", (request, context) =>
+  mutateFeedstockResponse(request, context, ID, "DELETE"));
+
+it.each([undefined, "{}"])("accepts the empty DELETE contract (%s)", async (body) => {
+  await deleteRoute(deleteRequest(body));
+  expect(mocks.run).toHaveBeenCalledOnce();
+});
+
+it("rejects every DELETE property with escaped pointers before running the operation", async () => {
+  const response = await deleteRoute(deleteRequest(JSON.stringify({ dryRun: true, "a/b~": true })));
+  expect(response.status).toBe(422);
+  expect(await response.json()).toMatchObject({ code: "validation_failed", errors: [
+    { pointer: "/dryRun", code: "unknown_field" }, { pointer: "/a~1b~0", code: "unknown_field" },
+  ] });
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+
+it.each(["null", "[]", "true", '"text"'])("rejects non-object DELETE body %s", async (body) => {
+  expect((await deleteRoute(deleteRequest(body))).status).toBe(422);
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["{}", "text/plain", 415, "unsupported_media_type"],
+  ["{", "application/json", 400, "malformed_json"],
+] as const)("validates DELETE media and JSON (%s)", async (body, media, status, code) => {
+  const response = await deleteRoute(deleteRequest(body, media));
+  expect(response.status).toBe(status);
+  expect(await response.json()).toMatchObject({ code });
+  expect(mocks.run).not.toHaveBeenCalled();
+});
+
+it("bounds a streamed DELETE body before running the operation", async () => {
+  const { API_BODY_MAX_BYTES } = await import("@/config/api-rest");
+  const body = new ReadableStream({ start(controller) {
+    controller.enqueue(new Uint8Array(API_BODY_MAX_BYTES));
+    controller.enqueue(new Uint8Array(1));
+    controller.close();
+  } });
+  const response = await deleteRoute(deleteRequest(body));
+  expect(response.status).toBe(413);
+  expect(await response.json()).toMatchObject({ code: "payload_too_large" });
   expect(mocks.run).not.toHaveBeenCalled();
 });

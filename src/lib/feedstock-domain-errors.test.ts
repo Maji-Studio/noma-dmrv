@@ -38,3 +38,23 @@ it("keeps the reference message through the server-action and form error path", 
     }
   }
 });
+
+it("preserves stock metadata and the existing operator message through actions and forms", async () => {
+  const { toActionFailure } = await import("@/fn/action-errors");
+  const { throwActionError, toSaveErrorMessage } = await import("@/lib/stale-version");
+  const message = "Feedstock was not saved. Bin BIN-01 would go 10 kg below zero. Review bin BIN-01 intake and withdrawal history, including recorded losses.";
+  const meta = { storageLocationId: "bin-id", availableWetKg: 20, requestedWetKg: 30, unit: "kg" };
+  const error = new DomainError("insufficient_stock", message, {
+    conflict: { entity: "storageLocation", id: "bin-id", code: conflictCode("BIN-01") },
+    issues: [{ path: ["storageLocationId"], code: "insufficient_stock", message, meta }],
+  });
+  await expect(withFeedstockErrors(async () => { throw error; })).rejects.toBe(error);
+  const failure = toActionFailure(error, { fallbackMessage: "Unable to save", log: { message: "Save failed" } });
+  expect(failure).toMatchObject({ code: "insufficient_stock", error: message, issues: [{ meta }] });
+  try {
+    throwActionError(failure);
+    expect.unreachable("The form must receive the refusal");
+  } catch (formError) {
+    expect(toSaveErrorMessage(formError, "Unable to save")).toBe(message);
+  }
+});

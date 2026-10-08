@@ -1,6 +1,9 @@
 /** Real actions, REST handlers and Postgres. Reviewer execution only. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { binMovements } from "@/db/schema";
 import type { ActionResult } from "@/types/actions";
 import { createFeedstockFn, deleteFeedstockFn, updateFeedstockFn } from "@/fn/feedstocks";
 import type { CreateFeedstockResult } from "@/data-access/feedstocks";
@@ -31,7 +34,7 @@ const INVALID_WET_KG = -1;
 const INITIAL_VERSION = 1;
 const NEXT_VERSION = 2;
 
-type Scenario = "create" | "create-warning" | "update" | "delete" | "validation" | "foreign-reference" | "stale" | "blocked-delete";
+type Scenario = "create" | "create-warning" | "update" | "delete" | "validation" | "foreign-reference" | "stale" | "blocked-delete" | "stock-blocked-delete";
 const cases: {
   scenario: Scenario; status: number; code: string; paths: (string | number)[][];
   rowCount: number; stock: number; wetKg: number; dryKg: number; version: number; notes: string | null;
@@ -44,6 +47,7 @@ const cases: {
   { scenario: "foreign-reference", status: 404, code: "not_found", paths: [["supplierId"]], rowCount: 0, stock: 0, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
   { scenario: "stale", status: 412, code: "stale_version", paths: [], rowCount: 1, stock: INTAKE_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: NEXT_VERSION, notes: "Saved first" },
   { scenario: "blocked-delete", status: 409, code: "conflict", paths: [], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
+  { scenario: "stock-blocked-delete", status: 409, code: "insufficient_stock", paths: [["storageLocationId"]], rowCount: 1, stock: INTAKE_WET_KG - DRAW_WET_KG, wetKg: INTAKE_WET_KG, dryKg: INTAKE_DRY_KG, version: INITIAL_VERSION, notes: null },
 ];
 
 let fixture: ApiFeedstockFixture;
@@ -55,7 +59,10 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   for (const entry of [fixture, foreignFixture]) {
-    if (entry) await removeApiFeedstockFixture(entry);
+    if (entry) {
+      await db.delete(binMovements).where(eq(binMovements.organizationId, entry.ctx.organizationId));
+      await removeApiFeedstockFixture(entry);
+    }
   }
   foreignFixture = undefined;
   auth.requireOrgContext.mockReset();
@@ -89,6 +96,12 @@ async function prepare(fixture: ApiFeedstockFixture, scenario: Scenario) {
   if (scenario === "blocked-delete") {
     await seedFeedstockDraw(fixture, [{ feedstockId: saved.row.id, wetMassUsedKg: DRAW_WET_KG }]);
   }
+  if (scenario === "stock-blocked-delete") {
+    await db.insert(binMovements).values({
+      organizationId: fixture.ctx.organizationId, storageLocationId: fixture.binId,
+      lane: "feedstock", movementType: "loss", massDeltaKg: -DRAW_WET_KG, reason: "Recorded loss",
+    });
+  }
   return saved;
 }
 
@@ -107,7 +120,7 @@ async function dispatch(
     return transport === "action" ? createFeedstockFn(command) : postFeedstock(fixture, command);
   }
   const target = { feedstockId: saved.row.id, expectedVersion: saved.row.version };
-  if (scenario === "delete" || scenario === "blocked-delete") {
+  if (scenario === "delete" || scenario === "blocked-delete" || scenario === "stock-blocked-delete") {
     return transport === "action" ? deleteFeedstockFn(target) : deleteFeedstock(fixture, saved.row, saved.etag);
   }
   const patch = scenario === "stale" ? { notes: "Stale draft" } : {
@@ -147,6 +160,14 @@ describe("feedstock action vs REST decoded-command parity", { timeout: SUITE_TIM
     } else {
       const body = await expectFeedstockProblem(rest, testCase.status, testCase.code);
       expect(body.errors.map((issue: { pointer: string }) => pointerPath(issue.pointer))).toEqual(actionPaths);
+      if (testCase.scenario === "stock-blocked-delete") {
+        const meta = { storageLocationId: fixture.binId, availableWetKg: 0, requestedWetKg: DRAW_WET_KG, unit: "kg" };
+        expect(action.issues?.[0].meta).toEqual(meta);
+        expect(body.errors[0].meta).toEqual(meta);
+        expect(body.detail).toBe(action.error);
+        expect(body.conflict).toEqual(action.conflict);
+        expect(body.blockers).toEqual(action.blockers);
+      }
       expect(body.errors.map((issue: { code: string }) => issue.code)).toEqual((action.issues ?? []).map((issue) => issue.code));
     }
 

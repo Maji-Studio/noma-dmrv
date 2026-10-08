@@ -7,7 +7,7 @@ import { apiAuditEvents, organizationApiAccess, apiIdempotencyRecords, feedstock
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS } from "@/config/api-rest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_KEY_DEFAULT_EXPIRY_SECONDS } from "@/config/api-keys";
-import { createApiKey } from "@/data-access/api-keys";
+import { createApiKey, revokeApiKey } from "@/data-access/api-keys";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { GET as LIST, POST } from "@/app/api/v1/feedstocks/route";
 import { GET, PATCH, DELETE } from "@/app/api/v1/feedstocks/[idOrCode]/route";
@@ -205,6 +205,35 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
       expect(replay.headers.get("idempotent-replayed")).toBe("true");
       expect(await replay.text()).toBe(text);
     }
+  });
+
+  it.each(["revoked", "owner removed"])("re-authenticates a stored POST replay after %s", async (change) => {
+    const saved = await create();
+    if (change === "revoked") await revokeApiKey(a.ctx, { id: credentialIdA, expectedVersion: 1 });
+    else await db.delete(members).where(eq(members.userId, a.ctx.userId));
+    const replay = await POST(request("POST", "", saved.body, { "idempotency-key": saved.key }));
+    expect(replay.status).toBe(401);
+    expect(replay.headers.get("idempotent-replayed")).toBeNull();
+    const body = await replay.json();
+    expect(body).not.toHaveProperty("data");
+    expect(JSON.stringify(body)).not.toContain(saved.row.id);
+    expect(await feedstockCount(a)).toBe(1);
+    expect(await stock()).toBe(4200);
+  });
+
+  it("binds a PATCH key to its target, precondition and operation", async () => {
+    const first = await create();
+    const second = await create();
+    const key = randomUUID();
+    const body = { notes: "Bound patch" };
+    expect((await patch(first.row.id, body, first.etag, keyA, { "idempotency-key": key })).status).toBe(200);
+    await problem(await patch(second.row.id, body, second.etag, keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
+    await problem(await patch(first.row.id, body, '"2.1"', keyA, { "idempotency-key": key }), 422, "idempotency_key_reused");
+    await problem(await DELETE(request("DELETE", `/${first.row.id}`, undefined, {
+      "if-match": first.etag, "idempotency-key": key,
+    }), params(first.row.id)), 422, "idempotency_key_reused");
+    expect(await feedstockCount(a)).toBe(2);
+    expect(await stock()).toBe(8400);
   });
 
   it("rolls back PATCH and DELETE dry runs, then deletes and replays a real delete", async () => {

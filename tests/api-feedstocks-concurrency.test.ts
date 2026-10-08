@@ -146,8 +146,13 @@ describe("feedstock REST concurrency", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
     const loserIndex = responses.findIndex((response) => response.status !== 200);
     const loser = responses[loserIndex];
-    expect([409, 412]).toContain(loser.status);
-    await expectFeedstockProblem(loser, loser.status, loser.status === 412 ? "stale_version" : "conflict");
+    const failure = await expectFeedstockProblem(loser, 409, "insufficient_stock");
+    expect(failure.errors).toEqual([expect.objectContaining({
+      pointer: "/storageLocationId", code: "insufficient_stock", meta: {
+        storageLocationId: fixture.binId, availableWetKg: CONCURRENT_WRITERS * REDUCED_WET_KG,
+        requestedWetKg: CONCURRENT_WRITERS * DRAW_PER_INTAKE_WET_KG, unit: "kg",
+      },
+    })]);
     const winnerIndex = loserIndex === 0 ? 1 : 0;
     const winner = (await responses[winnerIndex].json()).data;
     expect(winner).toMatchObject({ id: intakes[winnerIndex].row.id, massWetKg: REDUCED_WET_KG, version: NEXT_VERSION });

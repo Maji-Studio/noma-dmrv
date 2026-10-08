@@ -5,7 +5,7 @@ import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
 import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse } from "./problem";
-import { unexpectedApiErrorResponse } from "./route-error";
+import { logApiError, unexpectedApiErrorResponse } from "./route-error";
 import { ApiHttpError } from "./http-error";
 import { preAuthGuard, postAuthGuard } from "./guards";
 import type { RateLimitResult } from "@/data-access/api-rate-limits";
@@ -67,7 +67,7 @@ export function apiRoute<Params = Record<string, never>>(
         // The action converter logs raw causes. REST logs only trusted classes
         // and codes, then uses the same conversion without its action logger.
         if (error.cause !== undefined || error.code === "outcome_unknown" || error.code === "deadline_exceeded") {
-          unexpectedApiErrorResponse(error, op, instance, requestId);
+          logApiError(error, op, requestId);
         }
         const failure = toActionFailure(error, {
           fallbackMessage: "The request could not be completed.", log: { message: "API request failed" },

@@ -625,7 +625,11 @@ returned rate-limit headers alongside private response headers. Domain
 failures use the server-action conversion with REST's value-free logger;
 unexpected errors never expose their messages or causes.
 
-Feedstock reads use `data-access/api-feedstocks.ts`. The list orders by
+Feedstock reads and stale-write re-reads use `lib/read-models/api-feedstocks.ts`,
+which calls `data-access/api-feedstocks.ts`. Read models accept an organization
+context, parsed filters, a limit and a decoded cursor position, and return
+representations plus the next position. REST owns cursor encoding and decoding;
+`lib/read-models/api-list.ts` owns page slicing for feedstock and lookup reads. The list orders by
 `(createdAt, id)` descending and keeps PostgreSQL microseconds in the cursor;
 cursors bind the resource, organization and filters, but not page size. The
 representation deliberately contains only feedstock-owned fields and reference
@@ -652,14 +656,21 @@ A create dry run returns `preview` alongside `data`: one entry per allocation,
 with wet/dry kilograms and the stock contribution. These are additions, not
 projected bin balances; only complete intake rows contribute to the wet stock
 lane. DELETE dry runs return the representation that would be removed, and
-run the same locked deletion guards before rolling back.
+run the same locked deletion guards before rolling back. Bodyless DELETE is
+accepted; supplied bodies use the bounded JSON reader and must be empty objects.
+Stock-lane refusals return `insufficient_stock` with the bin and blockers plus
+`errors[].meta`: `storageLocationId`, `availableWetKg`, `requestedWetKg` and
+`unit: "kg"`. For post-write integrity, available mass is the proposed intake
+supply plus positive net movements; requested mass is existing consumption plus
+negative net movements. The operator message remains unchanged.
 
 ### Intake lookup REST adapters
 
 Facilities, suppliers, feedstock types, storage locations, vehicles and drivers
 expose read-only list and id-or-code routes through `lib/api/route.ts` and their
-resource scopes. `lib/api/*-queries.ts` validates strict query schemas and maps
-explicit output schemas in `lib/api/representations/`; organization predicates
+resource scopes. `lib/api/*-queries.ts` validates strict query schemas and calls
+`lib/read-models/api-*.ts`, including the supplier-location list. The read models
+map explicit output schemas in `lib/api/representations/`; organization predicates
 and facility-filter checks remain in `data-access/api-*.ts`.
 
 `lib/api/lookup-query.ts` shares the feedstock cursor contract: newest-first

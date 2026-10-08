@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
 import type { ApiContext } from "@/lib/auth/api-context";
+import { readListPage, type ReadListQuery } from "@/lib/read-models/api-list";
 import { decodeCursor, encodeCursor } from "./cursor";
 import {
   facilityLookupGetSchema, facilityLookupListSchema, lookupGetSchema, lookupIdentifier, lookupListSchema,
@@ -39,13 +40,14 @@ it("returns only the requested page and preserves the last row's timestamp micro
   const row = { id, cursorCreatedAt: "2026-10-08T12:00:00.123456Z" };
   const list = vi.fn().mockResolvedValue([row, { id: otherId, cursorCreatedAt: "2026-10-08T12:00:00.123455Z" }]);
   const represent = (entry: typeof row) => ({ id: entry.id });
-  const first = await readLookupPage(ctx, "facilities", { limit: 1, filters }, list, represent);
+  const read = (context: ApiContext, query: ReadListQuery<typeof filters>) => readListPage(context, query, list, represent);
+  const first = await readLookupPage(ctx, "facilities", { limit: 1, filters }, read);
   expect(first.data).toEqual([{ id }]);
   expect(list).toHaveBeenCalledWith(ctx, filters, 1, undefined);
   const binding = { organizationId: ctx.organizationId, resource: "facilities", filters };
   expect(decodeCursor(first.nextCursor!, binding)).toEqual({ id, createdAt: row.cursorCreatedAt });
   list.mockResolvedValue([]);
-  expect(await readLookupPage(ctx, "facilities", { limit: 1, filters, cursor: first.nextCursor! }, list, represent)).toEqual({ data: [], nextCursor: null });
+  expect(await readLookupPage(ctx, "facilities", { limit: 1, filters, cursor: first.nextCursor! }, read)).toEqual({ data: [], nextCursor: null });
   expect(list).toHaveBeenLastCalledWith(ctx, filters, 1, { id, createdAt: row.cursorCreatedAt });
 });
 
@@ -58,7 +60,7 @@ it("rejects a cursor bound to another resource, organization, filter or parent b
     ["org-b", binding.resource, filters], ["org-a", "facilities", filters],
     ["org-a", binding.resource, { ...filters, supplierId: otherId }], ["org-a", binding.resource, { ...filters, q: "changed" }],
   ] as const) {
-    await expect(readLookupPage({ ...ctx, organizationId }, resource, { limit: 1, cursor, filters: boundFilters }, list, (row) => row))
+    await expect(readLookupPage({ ...ctx, organizationId }, resource, { limit: 1, cursor, filters: boundFilters }, list))
       .rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
   }
   expect(list).not.toHaveBeenCalled();
