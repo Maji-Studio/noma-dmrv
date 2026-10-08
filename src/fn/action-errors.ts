@@ -16,6 +16,8 @@ interface LogActionErrorOptions {
 export type ActionFailure = Extract<ActionResult<never>, { success: false }>;
 
 interface ActionFailureOptions {
+  /** Adapters with stricter logging can log safely before converting. */
+  logUnexpected?: boolean;
   /** Fallback message when the error is not safe to show verbatim. */
   fallbackMessage: string;
   /** Structured log line for unexpected errors (Zod and conflicts are not). */
@@ -83,7 +85,7 @@ export function toLoggedActionError(
  */
 export function toActionFailure(
   error: unknown,
-  { fallbackMessage, log, zodErrorPrefix }: ActionFailureOptions,
+  { fallbackMessage, log, zodErrorPrefix, logUnexpected = true }: ActionFailureOptions,
 ): ActionFailure {
   if (error instanceof DomainError) {
     let rootCause: unknown = error;
@@ -98,7 +100,7 @@ export function toActionFailure(
       rootCause = rootCause.cause;
       if (!(rootCause instanceof SafeError)) hasUnexpectedCause = true;
     }
-    if (error.code === "outcome_unknown" || error.code === "deadline_exceeded" || hasUnexpectedCause) {
+    if (logUnexpected && (error.code === "outcome_unknown" || error.code === "deadline_exceeded" || hasUnexpectedCause)) {
       logger.error(
         {
           ...log.context,
@@ -135,6 +137,6 @@ export function toActionFailure(
       ...(error.blockers ? { blockers: error.blockers } : {}),
     };
   }
-  logActionError(error, log);
+  if (logUnexpected) logActionError(error, log);
   return { success: false, error: toActionError(error, fallbackMessage) };
 }

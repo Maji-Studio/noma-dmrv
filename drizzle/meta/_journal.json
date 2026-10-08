@@ -904,6 +904,13 @@
       "when": 1791475086961,
       "tag": "0128_api_infrastructure",
       "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1791488802439,
+      "tag": "0129_vehicle_driver_versions",
+      "breakpoints": true
     }
   ]
 }

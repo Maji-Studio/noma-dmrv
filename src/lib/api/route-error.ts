@@ -15,7 +15,7 @@ function databaseCause(error: unknown): DatabaseError | undefined {
 }
 
 /** REST failures never log messages, headers, payloads, stacks or raw causes. */
-export function unexpectedApiErrorResponse(error: unknown, op: string, instance: string, requestId: string) {
+export function logApiError(error: unknown, op: string, requestId: string): void {
   // Classify by trusted classes rather than a mutable error.name, which could
   // itself contain credential material supplied by a plugin or upstream API.
   const databaseError = databaseCause(error);
@@ -28,5 +28,9 @@ export function unexpectedApiErrorResponse(error: unknown, op: string, instance:
   const code = error instanceof DomainError ? error.code
     : databaseError ? pgErrorCode(databaseError) : undefined;
   logger.error({ op, requestId, errorName, ...(code ? { code } : {}) }, "API request failed");
+}
+
+export function unexpectedApiErrorResponse(error: unknown, op: string, instance: string, requestId: string) {
+  logApiError(error, op, requestId);
   return problemResponse({ status: 500, code: "internal_error", detail: "", instance, requestId });
 }

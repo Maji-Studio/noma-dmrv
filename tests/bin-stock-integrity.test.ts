@@ -290,7 +290,8 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
         massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
       })),
     ).rejects.toMatchObject({
-      name: "ActionConflictError",
+      name: "DomainError",
+      code: "insufficient_stock",
       message: `Feedstock was not saved. Bin ${binCodeOf(f)} would go ${SHORTFALL_AFTER_REDUCTION_KG} kg below zero. Review bin ${binCodeOf(f)} intake and withdrawal history, including recorded losses.`,
       blockers: [lossBlocker],
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
@@ -344,7 +345,8 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     const lossBlocker = await recordLoss(f, LOSS_WET_KG);
 
     await expect(db.transaction((tx) => deleteFeedstockInTransaction(f.ctx, tx, f.feedstockId, 1))).rejects.toMatchObject({
-      name: "ActionConflictError",
+      name: "DomainError",
+      code: "insufficient_stock",
       message: negativeStockDeleteMessage(f),
       blockers: [lossBlocker],
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
@@ -392,7 +394,8 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
         massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
       })),
     ).rejects.toMatchObject({
-      name: "ActionConflictError",
+      name: "DomainError",
+      code: "insufficient_stock",
       conflict: { entity: "storageLocation", id: f.binId, code: binCodeOf(f) },
       blockers: [{ entity: "productionRun", code: runCode }],
     });
@@ -437,7 +440,8 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
         massDryKg: REDUCED_BELOW_LOSS_WET_KG * DRY_RATIO,
       })),
     ).rejects.toMatchObject({
-      name: "ActionConflictError",
+      name: "DomainError",
+      code: "insufficient_stock",
       blockers: [{ entity: "biocharProduct", code: drawingCode }, lossBlocker],
     });
   });
@@ -480,7 +484,8 @@ describe("feedstock writes cannot drive a bin lane negative", () => {
     await withdrawal;
 
     await expect(reduction).rejects.toMatchObject({
-      name: "ActionConflictError",
+      name: "DomainError",
+      code: "insufficient_stock",
       message: negativeStockMessage(f),
     });
     expect(await readFeedstockWetKg(f)).toBe(INTAKE_WET_KG);

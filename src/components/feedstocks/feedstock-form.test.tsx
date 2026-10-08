@@ -20,15 +20,15 @@ const mocks = vi.hoisted(() => ({
     | undefined,
 }));
 
-vi.mock("@/components/forms", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/components/forms")>();
+vi.mock("@/components/forms", async () => {
+  const { FormError } = await import("@/components/forms/form-error");
   const { useWatch } = await vi.importActual<
     typeof import("react-hook-form")
   >("react-hook-form");
   const Wrapper = ({ children }: { children: ReactNode }) => children;
 
   return {
-    ...actual,
+    FormError,
     FormEntitySelect: ({
       control,
       name,
@@ -56,7 +56,7 @@ vi.mock("@/components/forms", async (importOriginal) => {
     FormSection: Wrapper,
     FormSpine: Wrapper,
     FormTextarea: () => null,
-    MassMoistureFields: ({ wet, moisture }: ComponentProps<typeof actual.MassMoistureFields>) => (
+    MassMoistureFields: ({ wet, moisture }: ComponentProps<typeof import("@/components/forms/mass-moisture-fields").MassMoistureFields>) => (
       <>
         <input {...wet.registration} />
         <input {...moisture.registration} />
@@ -68,6 +68,8 @@ vi.mock("@/components/forms", async (importOriginal) => {
   };
 });
 
+vi.mock("@/hooks/use-geo", () => ({ useGeoCapabilities: vi.fn(), useRouteDistance: vi.fn() }));
+
 vi.mock("@/components/forms/form-actions", () => ({
   FormActions: () => null,
 }));
@@ -76,13 +78,9 @@ vi.mock("@/components/forms/form-select", () => ({
   FormSelect: () => null,
 }));
 
-vi.mock("@/components/forms/entity-select", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("@/components/forms/entity-select")
-  >();
+vi.mock("@/components/forms/entity-select", async () => {
   const { useState } = await vi.importActual<typeof import("react")>("react");
   return {
-    ...actual,
     useQuickAddDialog: () => {
       const [isOpen, setIsOpen] = useState(false);
       return {
