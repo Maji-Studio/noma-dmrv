@@ -56,10 +56,22 @@ export function buildOpenApiDocument() {
   const schemas: Record<string, JsonSchema> = {
     ...Object.fromEntries(Object.entries(representations).map(([name, schema]) => [name, outputSchema(schema)])),
     Problem: outputSchema(problemSchema),
+    FeedstockPreconditionProblem: {
+      allOf: [
+        { $ref: "#/components/schemas/Problem" },
+        { type: "object", properties: { current: { $ref: "#/components/schemas/feedstock", description: "Current feedstock representation after a failed version precondition." } }, required: ["current"] },
+      ],
+    },
   };
+  const responses = problemResponseComponents();
+  responses.FeedstockProblem412 = {
+    ...responses.Problem412,
+    content: { "application/problem+json": { schema: { $ref: "#/components/schemas/FeedstockPreconditionProblem" } } },
+  };
+  const feedstockPreconditionResponse = { "412": { $ref: "#/components/responses/FeedstockProblem412" } };
   for (const resource of resources) {
     paths[`/${resource.path}`] = { get: privateOperation(
-      `list_${resource.path.replaceAll("-", "_")}`, resource.scope,
+      `find_${resource.path.replaceAll("-", "_")}`, resource.scope,
       "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported.",
       { ...problemResponses(resource.path === "storage-locations" || resource.path === "feedstocks" ? [...READ_ERRORS, 404] : READ_ERRORS),
         "200": jsonResponse("Resource page.", publishOutput(listEnvelopeSchema(resource.schema))) },
@@ -72,11 +84,11 @@ export function buildOpenApiDocument() {
     ) };
   }
   paths["/suppliers/{idOrCode}/locations"] = { get: privateOperation(
-    "list_supplier_locations", "suppliers:read", "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent.",
+    "find_supplier_locations", "suppliers:read", "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent.",
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Supplier location page.", publishOutput(listEnvelopeSchema(supplierLocationRepresentationSchema))) },
     [targetParameter(true), ...queryParameters(supplierLocationListSchema)],
   ) };
-  paths["/me"] = { get: privateOperation("get_me", undefined, "Read the credential organization, active facilities, local today dates, role, scopes and safe credential metadata.",
+  paths["/me"] = { get: privateOperation("whoami", undefined, "Read the credential organization, active facilities, local today dates, role, scopes and safe credential metadata.",
     { ...problemResponses([401, 403, 404, 429, 500]), "200": jsonResponse("Credential context.", publishOutput(itemEnvelopeSchema(meRepresentationSchema))) }) };
 
   const createInput = operationInput(createFeedstockSchema);
@@ -99,12 +111,12 @@ export function buildOpenApiDocument() {
   };
   paths["/feedstocks/{idOrCode}"].patch = {
     ...privateOperation("update_feedstock", "feedstocks:write", "Update by UUID using a strong If-Match. Omitted fields stay unchanged, null clears clearable fields, zero stays zero. Wet/dry mass and moisture are validated against locked merged state. Dry runs roll back. Replays precede version rechecking.",
-      { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), "200": jsonResponse("Updated feedstock or dry-run representation.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
+      { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse, "200": jsonResponse("Updated feedstock or dry-run representation.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
       [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: requestBody(patchInput, { massWetKg: 4250, notes: "Corrected weighbridge wet mass for bin B2." }),
   };
   paths["/feedstocks/{idOrCode}"].delete = privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Locked domain guards may refuse deletion. Dry runs return the would-be deleted representation and roll back; no request body is read.",
-    { ...problemResponses([...WRITE_ERRORS, 412, 428]),
+    { ...problemResponses([...WRITE_ERRORS, 412, 428]), ...feedstockPreconditionResponse,
       "204": { description: "Deleted, or replay of a committed deletion; no body.", headers: { ...privateHeaders, ...writeHeaders } },
       "200": jsonResponse("Dry-run deleted representation.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), writeHeaders) },
     [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]);
@@ -123,7 +135,7 @@ export function buildOpenApiDocument() {
     openapi: "3.1.0",
     info: { title: "noma data-entry API", version: "1.0.0", description: "Organization-scoped feedstock intake and read-only lookups. Business dates are facility-local YYYY-MM-DD; event instants use RFC 3339 UTC. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
-    components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: "Authorization: Bearer <key> only. Keys use noma_live_ or noma_test_ prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests." } }, schemas, headers: headerComponents, responses: problemResponseComponents() },
+    components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: "Authorization: Bearer <key> only. Keys use noma_live_ or noma_test_ prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests." } }, schemas, headers: headerComponents, responses },
   };
 }
 

@@ -2,10 +2,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { API_CURSOR_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
+import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_QUERY_MAX_LENGTH } from "@/config/api-rest";
 import { createFeedstockSchema, updateFeedstockSchema } from "@/schemas/feedstocks";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "./document";
+import { parseIfMatch, representationEtag, STRONG_ETAG_PATTERN } from "../etag";
+import { IDEMPOTENCY_KEY_PATTERN, readIdempotencyKey } from "../request-body";
 
 const document = buildOpenApiDocument();
 const routeRoot = join(process.cwd(), "src/app/api/v1");
@@ -47,6 +49,14 @@ it("covers every exported v1 route method, with unique operation ids", () => {
   expect(document.paths["/feedstocks"].post.operationId).toBe("log_feedstock_delivery");
   expect(document.paths["/feedstocks/{idOrCode}"].patch.operationId).toBe("update_feedstock");
   expect(document.paths["/feedstocks/{idOrCode}"].delete.operationId).toBe("delete_feedstock");
+  expect(document.paths["/me"].get.operationId).toBe("whoami");
+  expect(document.paths["/suppliers/{idOrCode}/locations"].get.operationId).toBe("find_supplier_locations");
+  for (const [path, singular] of [["feedstocks", "feedstock"], ["facilities", "facility"], ["suppliers", "supplier"], ["feedstock-types", "feedstock_type"], ["storage-locations", "storage_location"], ["vehicles", "vehicle"], ["drivers", "driver"]]) {
+    expect(document.paths[`/${path}`].get.operationId).toBe(`find_${path.replaceAll("-", "_")}`);
+    expect(document.paths[`/${path}/{idOrCode}`].get.operationId).toBe(`get_${singular}`);
+  }
+  expect(document.paths["/openapi.json"].get.operationId).toBe("get_openapi_document");
+  expect(document.paths["/llms.txt"].get.operationId).toBe("get_llms_guide");
 });
 
 it("describes every schema property, including nested allocations, errors and envelopes", () => {
@@ -82,7 +92,7 @@ it("publishes business dates as date, and preserves operation input types and co
 
 it("publishes pagination and search bounds on every list route", () => {
   const lists = Object.values(document.paths).map((methods) => methods.get)
-    .filter((operation) => operation?.operationId.startsWith("list_"));
+    .filter((operation) => operation?.operationId.startsWith("find_"));
   expect(lists).toHaveLength(8);
   for (const operation of lists) {
     const parameters = operation.parameters as { name: string; in: string; required: boolean; schema: JsonSchema }[];
@@ -91,7 +101,7 @@ it("publishes pagination and search bounds on every list route", () => {
     expect(query.limit.schema).not.toHaveProperty("pattern");
     expect(query.cursor).toMatchObject({ required: false, schema: { type: "string", maxLength: API_CURSOR_MAX_LENGTH } });
     expect(query.q).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
-    if (operation.operationId !== "list_supplier_locations") {
+    if (operation.operationId !== "find_supplier_locations") {
       expect(query.code).toMatchObject({ required: false, schema: { type: "string", maxLength: API_QUERY_MAX_LENGTH } });
     }
   }
@@ -115,6 +125,45 @@ it("requires preconditions and documents conditional create idempotency with pos
   expect(response("/facilities/{idOrCode}").headers).toHaveProperty("ETag");
   expect(response("/drivers/{idOrCode}").headers).not.toHaveProperty("ETag");
   expect(response("/vehicles/{idOrCode}").headers).not.toHaveProperty("ETag");
+});
+
+it("publishes the runtime header patterns and idempotency length bound", () => {
+  const parameters = document.paths["/feedstocks/{idOrCode}"].patch.parameters as { name: string; schema: JsonSchema }[];
+  const idempotency = parameters.find((parameter) => parameter.name === "Idempotency-Key")!.schema;
+  expect(idempotency).toMatchObject({ minLength: 1, maxLength: API_IDEMPOTENCY_KEY_MAX_LENGTH, pattern: IDEMPOTENCY_KEY_PATTERN.source });
+  const keyPattern = new RegExp(idempotency.pattern as string);
+  for (const key of ["delivery-B2:retry_1", "!~", "contains space", "é", ""]) {
+    const request = new Request("https://example.test", { headers: { "Idempotency-Key": key } });
+    if (keyPattern.test(key)) expect(readIdempotencyKey(request, true)).toBe(key);
+    else expect(() => readIdempotencyKey(request, true)).toThrow();
+  }
+  const ifMatch = parameters.find((parameter) => parameter.name === "If-Match")!.schema;
+  expect(ifMatch.pattern).toBe(STRONG_ETAG_PATTERN.source);
+  expect(document.components.headers.ETag.schema).toMatchObject({ pattern: STRONG_ETAG_PATTERN.source });
+  const etagPattern = new RegExp(ifMatch.pattern as string);
+  for (const tag of [representationEtag(42, 3), '"0.1"', '"01.1"', '"1.0"', 'W/"1.1"', "*", '"1.1", "2.1"']) {
+    if (etagPattern.test(tag)) expect(parseIfMatch(tag)).toEqual({ version: 42, revision: 3 });
+    else expect(() => parseIfMatch(tag)).toThrow();
+  }
+});
+
+it("types current as a feedstock only on feedstock precondition responses", () => {
+  const preconditionRef = { $ref: "#/components/responses/FeedstockProblem412" };
+  for (const method of ["patch", "delete"]) {
+    const responses = document.paths["/feedstocks/{idOrCode}"][method].responses;
+    expect(responses["412"]).toEqual(preconditionRef);
+    expect(responses["422"]).toEqual({ $ref: "#/components/responses/Problem422" });
+  }
+  expect(document.components.responses.FeedstockProblem412.content["application/problem+json"].schema)
+    .toEqual({ $ref: "#/components/schemas/FeedstockPreconditionProblem" });
+  expect(document.components.schemas.FeedstockPreconditionProblem.allOf).toEqual([
+    { $ref: "#/components/schemas/Problem" },
+    expect.objectContaining({ properties: { current: expect.objectContaining({ $ref: "#/components/schemas/feedstock" }) }, required: ["current"] }),
+  ]);
+  for (const [name, response] of Object.entries(document.components.responses)) {
+    if (name === "FeedstockProblem412") continue;
+    expect(response.content["application/problem+json"].schema).toEqual({ $ref: "#/components/schemas/Problem" });
+  }
 });
 
 describe("OpenAPI 3.1 structure (no validator dependency)", () => {

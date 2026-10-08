@@ -1,6 +1,8 @@
 import { API_BODY_MAX_BYTES, API_IDEMPOTENCY_KEY_MAX_LENGTH } from "@/config/api-rest";
 import { ApiHttpError } from "./http-error";
 
+export const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7e]+$/;
+
 export async function readJsonBody(request: Request): Promise<unknown> {
   if (request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
     throw new ApiHttpError(415, "unsupported_media_type", "Use Content-Type: application/json.");
@@ -37,8 +39,8 @@ export function readIdempotencyKey(request: Request, required: boolean): string 
     if (required) throw new ApiHttpError(400, "idempotency_key_required", "Send an Idempotency-Key for this create.");
     return undefined;
   }
-  if (!key.length || key.length > API_IDEMPOTENCY_KEY_MAX_LENGTH || !/^[\x21-\x7e]+$/.test(key)) {
-    throw new ApiHttpError(400, "idempotency_key_invalid", "Use 1 to 255 visible ASCII characters for Idempotency-Key.");
+  if (!key.length || key.length > API_IDEMPOTENCY_KEY_MAX_LENGTH || !IDEMPOTENCY_KEY_PATTERN.test(key)) {
+    throw new ApiHttpError(400, "idempotency_key_invalid", `Use 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters for Idempotency-Key.`);
   }
   return key;
 }

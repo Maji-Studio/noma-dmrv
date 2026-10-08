@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT } from "@/config/api-rest";
+import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
 import type { JsonSchema } from "@/lib/operations/json-schema";
+import { IDEMPOTENCY_KEY_PATTERN } from "../request-body";
+import { STRONG_ETAG_PATTERN } from "../etag";
 
 export function outputSchema(schema: z.ZodType, representations: Record<string, z.ZodType> = {}): JsonSchema {
   const root: z.core.$ZodType = schema;
@@ -48,13 +51,13 @@ export const targetParameter = (uuidOnly = false) => ({
 });
 export const idempotencyParameter = (required: boolean) => ({
   name: "Idempotency-Key", in: "header", required,
-  description: "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.",
-  schema: { type: "string", minLength: 1, maxLength: API_IDEMPOTENCY_KEY_MAX_LENGTH, pattern: "^[\\x21-\\x7e]+$" },
+  description: `Unique key per intended write, 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters. Reuse on retry; credential-scoped, retained for ${IDEMPOTENCY_RETENTION_DAYS} days. Required for creates unless dryRun=true; dry runs never consume or replay keys.`,
+  schema: { type: "string", minLength: 1, maxLength: API_IDEMPOTENCY_KEY_MAX_LENGTH, pattern: IDEMPOTENCY_KEY_PATTERN.source },
 });
 export const ifMatchParameter = {
   name: "If-Match", in: "header", required: true,
   description: 'One strong ETag from the resource read, for example "3.1". Wildcards and weak tags are refused. A mismatch returns the current representation.',
-  schema: { type: "string", pattern: '^"[1-9][0-9]*\\.[1-9][0-9]*"$' },
+  schema: { type: "string", pattern: STRONG_ETAG_PATTERN.source },
 };
 
 const header = (description: string, schema: JsonSchema = { type: "string" }) => ({ description, schema: { description, ...schema } });
@@ -64,7 +67,7 @@ const privateHeaderDefinitions = {
   "RateLimit-Remaining": header("Remaining requests in the tightest bucket, integer encoded as decimal text."),
   "RateLimit-Reset": header("Seconds until the bucket refills, integer encoded as decimal text."),
 };
-const etagDefinition = { ETag: header('Strong row-version and representation-revision tag, for example "3.1".') };
+const etagDefinition = { ETag: header('Strong row-version and representation-revision tag, for example "3.1".', { type: "string", pattern: STRONG_ETAG_PATTERN.source }) };
 const writeHeaderDefinitions = {
   "Idempotent-Replayed": header("true when returning a previously committed outcome.", { type: "string", enum: ["true"] }),
   "Dry-Run": header("true when validation and domain guards ran but the transaction rolled back.", { type: "string", enum: ["true"] }),

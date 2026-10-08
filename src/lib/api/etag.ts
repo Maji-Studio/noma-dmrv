@@ -1,5 +1,7 @@
 import { ApiHttpError } from "./http-error";
 
+export const STRONG_ETAG_PATTERN = /^"([1-9]\d*)\.([1-9]\d*)"$/;
+
 export function representationEtag(version: number, revision: number): string {
   return `"${version}.${revision}"`;
 }
@@ -9,7 +11,7 @@ export function parseIfMatch(value: string | null): { version: number; revision:
   if (value === "*" || value.startsWith("W/")) {
     throw new ApiHttpError(428, "strong_etag_required", "Send one strong resource ETag in If-Match.");
   }
-  const match = /^"([1-9]\d*)\.([1-9]\d*)"$/.exec(value);
+  const match = STRONG_ETAG_PATTERN.exec(value);
   if (!match || !Number.isSafeInteger(Number(match[1])) || !Number.isSafeInteger(Number(match[2]))) {
     throw new ApiHttpError(400, "invalid_etag", "Send one valid resource ETag in If-Match.");
   }
