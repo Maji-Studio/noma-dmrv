@@ -103,6 +103,9 @@ jobs:
       # service above. vitest sets NODE_ENV=test, so the local-fs storage
       # default and missing secrets are accepted by @/config/env.
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_test
+      # Matches .env.test: contract suites share one localhost IP bucket. The
+      # limiter's own tests stub this off or call the bucket directly.
+      DISABLE_RATE_LIMIT: "true"
 
     steps:
       - name: Checkout code
