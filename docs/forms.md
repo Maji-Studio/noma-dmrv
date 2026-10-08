@@ -39,8 +39,7 @@ When form and update variants share a repeated object shape (ingredient bins, al
 For integer row-version preconditions, use `expectedVersionSchema` from
 `@/schemas/helpers` on update and delete schemas. It requires the positive
 integer loaded with the record and tells the operator to reload when it is
-missing or invalid. `expectedUpdatedAtSchema` is the optional timestamp helper
-for legacy edit forms. See [architecture.md](./architecture.md#expected-version-checks-on-edit-forms).
+missing or invalid. Every edit form uses this integer mechanism. See [architecture.md](./architecture.md#expected-version-checks-on-edit-forms).
 
 ### Zod 4 string formats
 

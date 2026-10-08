@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 import { z } from "zod";
 import { getCreditBatchProductionWindowIssue } from "@/lib/credit-batch-production-window";
 
@@ -184,6 +185,7 @@ export const createCreditBatchSchema = creditBatchFormSchema;
  * Schema for updating a credit batch (server action)
  */
 export const updateCreditBatchSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   creditBatchId: z.string().uuid("Choose a valid credit batch."),
   code: z
     .string()
@@ -217,6 +219,7 @@ export const updateCreditBatchSchema = z.object({
  * Schema for deleting a credit batch
  */
 export const deleteCreditBatchSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   creditBatchId: z.string().uuid("Choose a valid credit batch."),
 });
 
@@ -255,3 +258,5 @@ export function formatDurabilityOption(option: DurabilityOption): string {
   };
   return labels[option];
 }
+
+export type DeleteCreditBatchData = z.infer<typeof deleteCreditBatchSchema>;

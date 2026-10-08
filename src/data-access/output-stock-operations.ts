@@ -55,7 +55,10 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const planningLayers = preserveLossSources ? layers.filter(l => correction!.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === l.id)) : layers;
   const events = await reader.select({ id: binMovements.id, sequence: binMovements.postingSequence, kind: binMovements.outputKind, occurredAt: binMovements.occurredAt, reason: binMovements.reason, correctsMovementId: binMovements.correctsMovementId })
     .from(binMovements).where(and(eq(binMovements.organizationId, ctx.organizationId), eq(binMovements.storageLocationId, bin.id))).orderBy(asc(binMovements.postingSequence));
-  const basisFingerprint = requestFingerprint({ layers, events: events.map(e => ({ id: e.id, sequence: e.sequence })), formulationId: bin.formulationId, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
+  // Layer queries have no row-order contract; metadata updates may reorder them.
+  // Hash the same stock identically without changing the planner's layer input.
+  const fingerprintLayers = [...layers].sort((a, b) => a.id.localeCompare(b.id));
+  const basisFingerprint = requestFingerprint({ layers: fingerprintLayers, events: events.map(e => ({ id: e.id, sequence: e.sequence })), formulationId: bin.formulationId, occurredAt: input.occurredAt, correctsMovementId: input.correctsMovementId });
   const productCodes = lane === 'product'
     ? await reader.select({ id: biocharProducts.id, version: biocharProducts.version, code: biocharProducts.code }).from(biocharProducts).where(and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.storageLocationId, bin.id)))
     : [];

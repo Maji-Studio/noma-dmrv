@@ -78,7 +78,7 @@ describe.each(cases)("$entity version caches", testCase => {
 });
 
 it("merges corrected stock product versions into cached edit rows", async () => {
-  mocks.post.mockResolvedValueOnce({ success: true, data: { savedProducts: [saved] } });
+  mocks.post.mockResolvedValueOnce({ success: true, data: { savedProducts: [saved], savedDeliveries: [] } });
   const client = new QueryClient();
   const key = ["biocharProducts", "list", "one"];
   client.setQueryData(key, { items: [{ id: ID, version: INITIAL_VERSION }] });

@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
@@ -210,7 +211,7 @@ describe("delete dependency guards", () => {
     });
 
     try {
-      await expect(deleteDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId)).rejects.toThrow(
+      await expect(deleteDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "deliveries", fixture.deliveryId))).rejects.toThrow(
         /Posted deliveries retain their history/,
       );
     } finally {

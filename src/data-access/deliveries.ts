@@ -170,6 +170,7 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
       : sql<Date | null>`null`.as("archived_at"),
     createdAt: deliveries.createdAt,
     updatedAt: deliveries.updatedAt,
+      version: deliveries.version,
   };
 }
 
@@ -407,6 +408,7 @@ export async function getDeliveryWithRelations(
     archivedAt: deliveryRow.archivedAt,
     createdAt: deliveryRow.createdAt,
     updatedAt: deliveryRow.updatedAt,
+    version: deliveryRow.version,
     effectiveDistanceKm: deliveryRow.effectiveDistanceKm,
     effectiveDistanceSource: deliveryRow.effectiveDistanceSource,
     transportEvidenceDocumentCount:

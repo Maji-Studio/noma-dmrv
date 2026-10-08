@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
 import { deleteOutputApplicationFixtures } from "./helpers/output-contract-fixtures";
 import { outputProductFixtureValues, outputOrderFixtureValues, insertOutputDeliveryFixture, deleteOutputDeliveryFixtures, deleteOutputProductFixtures, deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
@@ -219,7 +220,7 @@ describe("application mutations", () => {
         updateApplication(
           makeTestOrgContext(TEST_USER_ID),
           application.id,
-          { fieldSizeHa: 0 },
+          { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id), fieldSizeHa: 0 },
         ),
       ).rejects.toThrow(
         `Application ${application.code} needs a field size greater than 0 ha. Enter a field size and save again.`,
@@ -362,7 +363,7 @@ describe("application mutations", () => {
 
       expect(application.gisBoundary).toEqual(TEST_GIS_BOUNDARY);
 
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
         gisBoundary: null,
       });
       expect(updated.gisBoundary).toBeNull();
@@ -472,7 +473,7 @@ describe("application mutations", () => {
       );
       fixture.applicationIds.push(application.id);
 
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           fieldIdentifier: "Updated field",
         });
       expect(updated.biocharAppliedDryTons).toBeCloseTo(1.6);
@@ -568,7 +569,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           applicationDate: new Date("2025-07-04"),
         }),
       ).rejects.toThrow("cannot be before the delivery date");
@@ -596,7 +597,7 @@ describe("application mutations", () => {
       const unresolvedDeliveryId = await insertUnresolvedDelivery(fixture, runId);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           deliveryId: unresolvedDeliveryId,
         }),
       ).rejects.toThrow(
@@ -623,7 +624,7 @@ describe("application mutations", () => {
       });
       fixture.applicationIds.push(application.id);
 
-      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
         deliveryId: fixture.deliveryIds[1],
         biocharAppliedTons: 2,
         fieldSizeHa: 1,
@@ -654,7 +655,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           gpsLatitude: null,
           gpsLongitude: null,
         }),
@@ -694,7 +695,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           gpsLongitude: null,
         }),
       ).rejects.toThrow("Longitude is required when a latitude is entered.");
@@ -735,7 +736,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           evidenceMethod: "location",
         }),
       ).rejects.toThrow("Customer location coordinates are required.");
@@ -774,7 +775,7 @@ describe("application mutations", () => {
       const updated = await updateApplication(
         makeTestOrgContext(TEST_USER_ID),
         application.id,
-        {
+        { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           gpsLatitude: null,
           gpsLongitude: null,
         },
@@ -807,7 +808,7 @@ describe("application mutations", () => {
       fixture.applicationIds.push(application.id);
 
       await expect(
-        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), application.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "applications", application.id),
           biocharAppliedTons: 6,
           fieldSizeHa: 1,
         }),

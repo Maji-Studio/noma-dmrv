@@ -1,3 +1,4 @@
+import { nextVersion } from "./row-version";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -185,7 +186,7 @@ export async function reserveProductionEmissionsClaims(
 
     const reserved = await tx
       .update(creditBatches)
-      .set({
+      .set({ version: nextVersion(creditBatches.version),
         productionEmissionsClaimReservedBySubmissionId: args.submissionId,
         updatedAt: sql`now()`,
       })
@@ -252,7 +253,7 @@ export async function rejectSubmissionAndReleaseProductionClaims(
     }
     await tx
       .update(creditBatches)
-      .set({
+      .set({ version: nextVersion(creditBatches.version),
         productionEmissionsClaimReservedBySubmissionId: null,
         updatedAt: sql`now()`,
       })

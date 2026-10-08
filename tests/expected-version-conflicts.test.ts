@@ -2,8 +2,7 @@ import { masterDataVersion } from "./helpers/master-data-version";
 /**
  * Expected-version conflict check (issue #768, F03).
  *
- * An edit form echoes back the version it loaded: an integer for feedstocks,
- * `updatedAt` for the remaining timestamp-based writers. The updater compares
+ * An edit form echoes back the integer version it loaded. The updater compares
  * it against the row it locked and refuses the save when they differ,
  * so two operators who opened the same record cannot silently overwrite each
  * other. These run against the real database because the guard lives inside the

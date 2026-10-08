@@ -1,3 +1,4 @@
+import { nextVersion } from "./row-version";
 import { REMOVAL_DELETION_LEASE_KEY, hasFreshRemovalDeletionLease, removalDeletionLeaseTimestamp } from "@/lib/certification/removal-deletion-lease";
 import { removalOwnedMeasurements, type RemovalOwnedMeasurement } from "@/lib/certification/removal-deletion-artifacts";
 import { removalProductionBatchTargets, clearDeletedRemovalProductionBatches, type RemovalProductionBatch, type ProductionBatchDeletionOutcome } from "./removal-production-batch-deletion";
@@ -625,7 +626,7 @@ export async function finalizeRemovalDeletion(
 
       await tx
         .update(creditBatches)
-        .set({
+        .set({ version: nextVersion(creditBatches.version),
           productionEmissionsClaimReservedBySubmissionId: null,
           updatedAt: sql`now()`,
         })
@@ -644,7 +645,7 @@ export async function finalizeRemovalDeletion(
 
     await tx
       .update(creditBatches)
-      .set({
+      .set({ version: nextVersion(creditBatches.version),
         productionEmissionsClaimedByRemovalId: null,
         updatedAt: sql`now()`,
       })

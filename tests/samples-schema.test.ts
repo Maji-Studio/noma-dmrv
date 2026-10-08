@@ -63,7 +63,7 @@ describe("sample carbon reconciliation", () => {
   });
 
   it("applies reconciliation when an update supplies all carbon fields", () => {
-    const result = updateSampleSchema.safeParse({
+    const result = updateSampleSchema.safeParse({ expectedVersion: 1,
       sampleId: "11111111-1111-4111-8111-111111111111",
       totalCarbonPercent: 70,
       organicCarbonPercent: 68,

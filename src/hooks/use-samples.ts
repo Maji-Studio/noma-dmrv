@@ -1,3 +1,5 @@
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 /**
  * Samples React Query Hooks
  * Client-side state management for sample operations
@@ -9,6 +11,7 @@ import type {
   SampleFilterData,
   CreateSampleData,
   UpdateSampleData,
+  DeleteSampleData,
 } from "@/schemas/samples";
 import type {
   PaginatedSamples,
@@ -177,7 +180,7 @@ export function useUpdateSample(
     mutationFn: async (data: UpdateSampleData) => {
       const result = await updateSampleFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
@@ -248,6 +251,7 @@ export function useUpdateSample(
       return { previousSample, previousLists };
     },
     onSuccess: async (data, variables) => {
+      patchListCachesWithSavedRow(queryClient, sampleKeys.lists(), data);
       // Update cache with actual server data
       queryClient.setQueryData(sampleKeys.detail(data.id), data);
 
@@ -304,23 +308,24 @@ export function useUpdateSample(
  * Supports optimistic updates for immediate UI feedback
  */
 export function useDeleteSample(
-  callbacks?: MutationCallbacks<void, string>,
+  callbacks?: MutationCallbacks<void, DeleteSampleData>,
   options?: OptimisticUpdateOptions
 ) {
   const queryClient = useQueryClient();
   const { optimistic = true } = options ?? {};
 
   return useMutation({
-    mutationFn: async (sampleId: string) => {
-      const result = await deleteSampleFn({ sampleId });
+    mutationFn: async (variables: DeleteSampleData) => {
+      const result = await deleteSampleFn(variables);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return;
     },
-    onMutate: async (sampleId) => {
+    onMutate: async (variables) => {
+      const { sampleId } = variables;
       if (!optimistic) {
-        await callbacks?.onMutate?.(sampleId);
+        await callbacks?.onMutate?.(variables);
         return;
       }
 
@@ -348,12 +353,13 @@ export function useDeleteSample(
         });
       });
 
-      await callbacks?.onMutate?.(sampleId);
+      await callbacks?.onMutate?.(variables);
 
       // Return context with snapshots for rollback
       return { previousSample, previousLists };
     },
-    onSuccess: async (_, sampleId) => {
+    onSuccess: async (_, variables) => {
+      const { sampleId } = variables;
       // Remove specific sample from cache
       queryClient.removeQueries({
         queryKey: sampleKeys.detail(sampleId),
@@ -369,9 +375,10 @@ export function useDeleteSample(
         creditBatchPreviews: true,
       });
 
-      await callbacks?.onSuccess?.(undefined, sampleId);
+      await callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: async (error, sampleId, context) => {
+    onError: async (error, variables, context) => {
+      const { sampleId } = variables;
       // Rollback to previous values on error
       if (optimistic && context) {
         const { previousSample, previousLists } = context as {
@@ -393,13 +400,17 @@ export function useDeleteSample(
         });
       }
 
-      await callbacks?.onError?.(error, sampleId);
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: sampleKeys.detail(sampleId) });
+      }
+      await callbacks?.onError?.(error, variables);
     },
-    onSettled: async (data, error, sampleId) => {
+    onSettled: async (data, error, variables) => {
       // Refetch lists to ensure consistency
       queryClient.invalidateQueries({ queryKey: sampleKeys.lists() });
 
-      await callbacks?.onSettled?.(data, error, sampleId);
+      await callbacks?.onSettled?.(data, error, variables);
     },
   });
 }

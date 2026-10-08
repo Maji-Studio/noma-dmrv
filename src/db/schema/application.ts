@@ -1,4 +1,5 @@
-import { check, doublePrecision, foreignKey, index, jsonb, pgTable, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
+import { check, doublePrecision, foreignKey, index, jsonb, pgTable,
+  integer, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import type { GisBoundary } from "@/lib/geojson/types";
 import {
@@ -19,6 +20,7 @@ import { organizations } from "./auth";
 export const applications = pgTable(
   "applications",
   {
+    version: integer('version').notNull().default(1),
     id: uuid("id").primaryKey().defaultRandom(),
     organizationId: text("organization_id")
       .notNull()

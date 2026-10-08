@@ -4,8 +4,11 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { expect, it, vi } from "vitest";
 import { db, type DbTransaction } from "@/db";
-import { biocharProducts, deliveries, outputStockAllocations, applicationOutputAllocations, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, creditBatches, productionProcesses } from "@/db/schema";
+import { samples, biocharProducts, deliveries, outputStockAllocations, applicationOutputAllocations, certifierRemovals, creditBatchApplications, creditBatchProductionRuns, creditBatches, productionProcesses } from "@/db/schema";
 import { deleteBiocharProduct, updateBiocharProduct } from "@/data-access/biochar-products";
+import { createSample, updateSample, deleteSample } from "@/data-access/samples";
+import { updateDelivery, deleteDelivery } from "@/data-access/delivery-output-writes";
+import { updateCreditBatch } from "@/data-access/credit-batches";
 import { createApplication } from "@/data-access/applications";
 import { getLockedCertifiedLineage } from "@/data-access/certification-lineage-guards";
 import { archiveFacility, restoreFacility } from "@/data-access/facilities";
@@ -20,6 +23,12 @@ const LOSS_KG = 10;
 const KG_PER_TON = 1000;
 const STOCK_KG_PER_PRODUCT = 100;
 const EXPECTED_FINAL_VERSION = 3;
+const SAMPLE_CARBON_PERCENT = 80;
+const SAMPLE_TIER_EVIDENCE = {
+  randomReflectanceR0Percent: 2.1,
+  sReflectanceFraction: 0.92,
+  residualCarbonPercent: 65,
+};
 type Fixture = Awaited<ReturnType<typeof postedStockFixture>>;
 
 function gate() {
@@ -73,6 +82,7 @@ async function addRemoval(f: Fixture, deliveryKg = LOSS_KG) {
   return delivery;
 }
 async function cleanup(f: Fixture) {
+  await db.delete(samples).where(eq(samples.organizationId, f.ctx.organizationId));
   await db.delete(creditBatchApplications).where(eq(creditBatchApplications.organizationId, f.ctx.organizationId));
   await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.organizationId, f.ctx.organizationId));
   await db.delete(creditBatches).where(eq(creditBatches.organizationId, f.ctx.organizationId));
@@ -273,6 +283,157 @@ it("application creation holds artifacts before product edits can lock the produ
   } finally {
     resume.release();
     await Promise.all([creating, editing]);
+    transactionGate?.mockRestore();
+    await cleanup(f);
+  }
+}, TEST_TIMEOUT_MS);
+
+
+it.each(["update", "delete"] as const)("sample %s waits for artifacts before locking its batch", async operation => {
+  const f = await postedStockFixture();
+  const resume = gate();
+  let creating: ReturnType<typeof outcome> | undefined;
+  let mutating: ReturnType<typeof outcome> | undefined;
+  let pid = 0;
+  let transactionGate: ReturnType<typeof vi.spyOn> | undefined;
+  try {
+    await addRemoval(f);
+    const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.organizationId, f.ctx.organizationId));
+    const input = { creditBatchId: batch.id, samplingTime: new Date(STOCK_TIME),
+      totalCarbonPercent: SAMPLE_CARBON_PERCENT, organicCarbonPercent: SAMPLE_CARBON_PERCENT,
+      ...SAMPLE_TIER_EVIDENCE };
+    const sample = await createSample(f.ctx, { ...input, sampleCode: `E2E-LOCK-SMP-${f.tag}` });
+    const originalTransaction = db.transaction.bind(db);
+    transactionGate = vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) =>
+      originalTransaction(async tx => {
+        const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "creditBatch", entityId: batch.id });
+        expect(lineage.length).toBeGreaterThan(0);
+        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        pid = await backendPid(tx);
+        await resume.promise;
+        // Creation's batch FK must remain available while the other writer waits.
+        // This fails immediately with the old batch-before-artifact ordering.
+        await tx.select({ id: creditBatches.id }).from(creditBatches).where(and(
+          eq(creditBatches.organizationId, f.ctx.organizationId), eq(creditBatches.id, batch.id),
+        )).for("key share", { noWait: true });
+        return callback(tx);
+      }, config));
+    creating = outcome(createSample(f.ctx, { ...input, sampleCode: `E2E-LOCK-SMP-SECOND-${f.tag}` }));
+    await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+    mutating = outcome<unknown>(operation === "update"
+      ? updateSample(f.ctx, sample.id, { expectedVersion: sample.version, labName: "E2E updated lab" })
+      : deleteSample(f.ctx, sample.id, sample.version));
+    await expect.poll(() => blockedQuery(pid), { timeout: BARRIER_TIMEOUT_MS }).toContain("pg_advisory_xact_lock");
+    resume.release();
+    expect(await creating).toMatchObject({ ok: true });
+    expect(await mutating).toMatchObject({ ok: true });
+    const rows = await db.select().from(samples).where(and(eq(samples.organizationId, f.ctx.organizationId), eq(samples.id, sample.id)));
+    if (operation === "delete") expect(rows).toHaveLength(0);
+    else expect(rows[0]).toMatchObject({ labName: "E2E updated lab", version: sample.version + 1 });
+  } finally {
+    resume.release();
+    await Promise.all([creating, mutating]);
+    transactionGate?.mockRestore();
+    await cleanup(f);
+  }
+}, TEST_TIMEOUT_MS);
+
+it.each(["update", "delete"] as const)("delivery %s waits for application creation's artifact before locking the delivery", async operation => {
+  const f = await postedStockFixture({ stockKg: STOCK_KG_PER_PRODUCT });
+  const resume = gate();
+  let creating: ReturnType<typeof outcome> | undefined;
+  let mutating: ReturnType<typeof outcome> | undefined;
+  let pid = 0;
+  let transactionGate: ReturnType<typeof vi.spyOn> | undefined;
+  try {
+    const delivery = await addRemoval(f, STOCK_KG_PER_PRODUCT);
+    const originalTransaction = db.transaction.bind(db);
+    transactionGate = vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) =>
+      originalTransaction(async tx => {
+        const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "delivery", entityId: delivery.id });
+        expect(lineage.length).toBeGreaterThan(0);
+        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        pid = await backendPid(tx);
+        await resume.promise;
+        // Probe the next real createApplication lock, without waiting out a deadlock.
+        await tx.select({ id: deliveries.id }).from(deliveries).where(and(
+          eq(deliveries.organizationId, f.ctx.organizationId), eq(deliveries.id, delivery.id),
+        )).for("update", { noWait: true });
+        return callback(tx);
+      }, config));
+    creating = outcome(createApplication(f.ctx, {
+      code: `E2E-LOCK-SECOND-AP-${f.tag}`, deliveryId: delivery.id, applicationDate: new Date(STOCK_TIME),
+      biocharAppliedTons: LOSS_KG / KG_PER_TON, fieldSizeHa: 1, evidenceMethod: "location",
+    }));
+    await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+    mutating = outcome<unknown>(operation === "update"
+      ? updateDelivery(f.ctx, delivery.id, { expectedVersion: delivery.version, distanceNote: "E2E edited route" })
+      : deleteDelivery(f.ctx, delivery.id, delivery.version));
+    await expect.poll(() => blockedQuery(pid), { timeout: BARRIER_TIMEOUT_MS }).toContain("pg_advisory_xact_lock");
+    resume.release();
+    expect(await creating).toMatchObject({ ok: true });
+    expect(await mutating).toMatchObject(operation === "update"
+      ? { ok: true, value: { version: delivery.version + 1, distanceNote: "E2E edited route" } }
+      : { ok: false, error: { message: "Posted deliveries retain their history. Use Correct entry in bin history." } });
+  } finally {
+    resume.release();
+    await Promise.all([creating, mutating]);
+    transactionGate?.mockRestore();
+    await cleanup(f);
+  }
+}, TEST_TIMEOUT_MS);
+
+
+it.each(["update", "delete"] as const)("sample %s holds artifacts before a batch metadata update locks the batch", async operation => {
+  const f = await postedStockFixture();
+  const resume = gate();
+  let sampleWriter: ReturnType<typeof outcome> | undefined;
+  let batchWriter: ReturnType<typeof outcome> | undefined;
+  let pid = 0;
+  let transactionGate: ReturnType<typeof vi.spyOn> | undefined;
+  try {
+    await addRemoval(f);
+    const [batch] = await db.select().from(creditBatches).where(eq(creditBatches.organizationId, f.ctx.organizationId));
+    const sample = await createSample(f.ctx, {
+      creditBatchId: batch.id, samplingTime: new Date(STOCK_TIME),
+      sampleCode: `E2E-LOCK-SMP-${f.tag}`, totalCarbonPercent: SAMPLE_CARBON_PERCENT,
+      organicCarbonPercent: SAMPLE_CARBON_PERCENT, ...SAMPLE_TIER_EVIDENCE,
+    });
+    const originalTransaction = db.transaction.bind(db);
+    transactionGate = vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) =>
+      originalTransaction(async tx => {
+        const lineage = await getLockedCertifiedLineage(f.ctx, tx, { entityType: "sample", entityId: sample.id });
+        expect(lineage.length).toBeGreaterThan(0);
+        expect(lineage.every(row => row.removalSubmissionId === null && row.ghgStatementSubmissionId === null)).toBe(true);
+        pid = await backendPid(tx);
+        await resume.promise;
+        // The batch writer must wait for our artifact without owning the batch.
+        await tx.select({ id: creditBatches.id }).from(creditBatches).where(and(
+          eq(creditBatches.organizationId, f.ctx.organizationId), eq(creditBatches.id, batch.id),
+        )).for("update", { noWait: true });
+        return callback(tx);
+      }, config));
+    sampleWriter = outcome<unknown>(operation === "update"
+      ? updateSample(f.ctx, sample.id, { expectedVersion: sample.version, labName: "E2E updated lab" })
+      : deleteSample(f.ctx, sample.id, sample.version));
+    await expect.poll(() => pid, { timeout: BARRIER_TIMEOUT_MS }).not.toBe(0);
+    batchWriter = outcome(updateCreditBatch(f.ctx, batch.id, {
+      expectedVersion: batch.version, siteManagementNotes: "E2E updated metadata",
+    }));
+    await expect.poll(() => blockedQuery(pid), { timeout: BARRIER_TIMEOUT_MS }).toContain("pg_advisory_xact_lock");
+    resume.release();
+    expect(await sampleWriter).toMatchObject({ ok: true });
+    expect(await batchWriter).toMatchObject({ ok: true });
+    const [savedBatch] = await db.select().from(creditBatches).where(and(
+      eq(creditBatches.organizationId, f.ctx.organizationId), eq(creditBatches.id, batch.id),
+    ));
+    expect(savedBatch).toMatchObject({ version: batch.version + 1, siteManagementNotes: "E2E updated metadata" });
+    const rows = await db.select().from(samples).where(and(eq(samples.organizationId, f.ctx.organizationId), eq(samples.id, sample.id)));
+    if (operation === "delete") expect(rows).toHaveLength(0);
+    else expect(rows[0]).toMatchObject({ version: sample.version + 1, labName: "E2E updated lab" });
+  } finally {
+    resume.release();
+    await Promise.all([sampleWriter, batchWriter]);
     transactionGate?.mockRestore();
     await cleanup(f);
   }
