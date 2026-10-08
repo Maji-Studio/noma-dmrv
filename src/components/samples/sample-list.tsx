@@ -1,6 +1,6 @@
 "use client";
 
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * SampleList component
  * Main sample listing with CRUD operations, stat cards, filters, and DataTable
@@ -469,7 +469,7 @@ export function SampleList({
       setDeletingSampleId(null);
       toast.success("Sample deleted.");
     } catch (error) {
-      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage("Sample") : error instanceof Error ? error.message : "Sample was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Sample", "Sample was not deleted. Try again."));
     }
   };
 

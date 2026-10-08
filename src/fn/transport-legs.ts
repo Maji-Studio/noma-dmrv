@@ -15,6 +15,7 @@ import {
   transportEntityTypes,
   updateTransportLegSchema,
   type CreateTransportLegData,
+  type DeleteTransportLegData,
   type UpdateTransportLegData,
 } from "@/schemas/transport-legs";
 import { resolveDistanceSource } from "@/schemas/distance-source";
@@ -63,10 +64,7 @@ export async function updateTransportLegFn(
   });
 }
 
-export async function deleteTransportLegFn(input: {
-  id: string;
-  expectedVersion: number;
-}): Promise<ActionResult<void>> {
+export async function deleteTransportLegFn(input: DeleteTransportLegData): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
     const { id, expectedVersion } = deleteTransportLegSchema.parse(input);
     await deleteTransportLeg(ctx, id, expectedVersion);

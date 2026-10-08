@@ -277,10 +277,14 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Instant input parsing until Phase 4 (`api/instant-input-parsing`, opened 2026-10-07)
 
-Production run start/end (`src/schemas/production-runs.ts:updateProductionRunSchema.startTime/endTime`), incident time
-(`src/schemas/production-incidents.ts:productionIncidentFormSchema`), and sample `samplingTime`
-(`src/schemas/samples.ts:updateSampleSchema.samplingTime`) retain instant parsing until Phase 4's API input
-schemas. Only sample business dates use strict calendar-date parsing here.
+- Production run start/end (`src/schemas/production-runs.ts:updateProductionRunSchema.startTime/endTime`),
+  incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`),
+  and sample `samplingTime` (`src/schemas/samples.ts:updateSampleSchema.samplingTime`)
+  retain instant parsing until Phase 4's API input schemas. Only sample business
+  dates use strict calendar-date parsing here.
+- **Resolve via:** Phase 4 API input schemas moving these fields onto the shared
+  instant/calendar helpers, with schema tests proving the intended parsing for
+  each field; then delete this entry.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 

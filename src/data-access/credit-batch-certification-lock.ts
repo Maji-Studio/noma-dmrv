@@ -15,6 +15,13 @@ import { requireOrgScope } from "./utils";
 const CERTIFIER_PROVIDER = "isometric" as const;
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 
+export class CreditBatchLineageChangedError extends SafeError {
+  constructor() {
+    super("Certification lineage changed while it was being locked. Refresh and retry.");
+    this.name = "CreditBatchLineageChangedError";
+  }
+}
+
 async function readCreditBatchRemovals(
   ctx: OrgContext,
   tx: DbTransaction,
@@ -94,7 +101,7 @@ export async function isCreditBatchMembershipLockedBySubmission(
       removal.ghgStatementId !== lockedRemovals[index].ghgStatementId,
     )
   ) {
-    throw new SafeError("Certification lineage changed while it was being locked. Refresh and retry.");
+    throw new CreditBatchLineageChangedError();
   }
   if (removals.length === 0) return false;
   const removalIds = removals.map((removal) => removal.id);

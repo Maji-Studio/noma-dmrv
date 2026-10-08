@@ -46,8 +46,7 @@ import { sumNullableBy } from "@/lib/nullable-sum";
 import {
   isStaleVersionFailure,
   STALE_VERSION_MESSAGE,
-  StaleVersionError,
-  staleDeleteMessage,
+  toDeleteErrorMessage,
   toSaveErrorMessage,
 } from "@/lib/stale-version";
 import type { ApplicationFormData } from "@/schemas/applications";
@@ -450,7 +449,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setDeleteError(result.error || "Application was not deleted. Try again.");
       }
     } catch (error) {
-      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage("Application") : error instanceof Error ? error.message : "Application was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Application", "Application was not deleted. Try again."));
     }
   };
 

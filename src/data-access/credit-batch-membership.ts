@@ -35,7 +35,7 @@ import { SafeError } from "@/lib/errors";
 import { formatCount, pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
-import { isCreditBatchMembershipLockedBySubmission, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
+import { CreditBatchLineageChangedError, isCreditBatchMembershipLockedBySubmission, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
@@ -679,16 +679,23 @@ export async function attachProductionRunToMatchingCreditBatch(
       eq(creditBatches.facilityId, run.facilityId), eq(creditBatches.feedstockTypeId, feedstockTypeId),
       lte(creditBatches.startDate, run.date), gte(creditBatches.endDate, run.date), isNull(creditBatches.archivedAt)))
     .for("update");
-  if (!lockedBatch) throw new SafeError("Credit batch cohort changed. Refresh and retry.");
-  if (
-    await isCreditBatchMembershipLockedBySubmission(
-      ctx,
-      tx,
-      batch.id,
-      lockedRemovals,
-    )
-  ) {
-    return null;
+  if (!lockedBatch) return null;
+  try {
+    if (
+      await isCreditBatchMembershipLockedBySubmission(
+        ctx,
+        tx,
+        batch.id,
+        lockedRemovals,
+      )
+    ) {
+      return null;
+    }
+  } catch (error) {
+    // Routine production recording can continue without attaching uncertain
+    // membership. Explicit batch edits still refuse this lineage race.
+    if (error instanceof CreditBatchLineageChangedError) return null;
+    throw error;
   }
 
   await tx.insert(creditBatchProductionRuns).values({

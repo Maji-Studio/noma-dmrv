@@ -1,6 +1,6 @@
 "use client";
 
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -170,7 +170,7 @@ export function TransportLegsEditor({
       setDeleteTarget(null);
     } catch (err) {
       setDeleteError(
-        err instanceof StaleVersionError ? staleDeleteMessage("Transport leg") : err instanceof Error ? err.message : "Transport leg was not deleted. Try again.",
+        toDeleteErrorMessage(err, "Transport leg", "Transport leg was not deleted. Try again."),
       );
     }
   };

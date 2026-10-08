@@ -1,6 +1,6 @@
 "use client";
 
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 /**
  * OrderList component
  * Main order listing with CRUD operations, filters, and DataTable
@@ -253,7 +253,7 @@ export function OrderList() {
       setDeletingOrderId(null);
       toast.success("Order deleted.");
     } catch (error) {
-      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage("Order") : error instanceof Error ? error.message : "Order was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Order", "Order was not deleted. Try again."));
     }
   };
 

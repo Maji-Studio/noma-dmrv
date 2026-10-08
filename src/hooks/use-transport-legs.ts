@@ -13,6 +13,7 @@ import {
 import type { TransportLegWithEvidence } from "@/data-access/transport-legs";
 import type {
   CreateTransportLegData,
+  DeleteTransportLegData,
   TransportEntityTypeValue,
   UpdateTransportLegData,
 } from "@/schemas/transport-legs";
@@ -124,11 +125,11 @@ export function useUpdateTransportLeg(
 export function useDeleteTransportLeg(
   entityType: TransportEntityTypeValue,
   entityId: string,
-  callbacks?: MutationCallbacks<void, { id: string; expectedVersion: number }>,
+  callbacks?: MutationCallbacks<void, DeleteTransportLegData>,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string; expectedVersion: number }): Promise<void> => {
+    mutationFn: async (input: DeleteTransportLegData): Promise<void> => {
       const result = await deleteTransportLegFn(input);
       if (!result.success) {
         throwActionError(result);
