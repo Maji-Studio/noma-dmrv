@@ -1,5 +1,7 @@
 "use server";
 
+import { withAction } from "./with-action";
+
 /**
  * Samples Server Actions
  * Server-side functions for sample CRUD operations
@@ -203,11 +205,7 @@ export async function createSampleFn(
           samplingTime,
           labName: validated.labName || null,
           labAccreditation: validated.labAccreditation || null,
-          analysisDate: validated.analysisDate
-            ? validated.analysisDate instanceof Date
-              ? validated.analysisDate
-              : new Date(validated.analysisDate)
-            : null,
+          analysisDate: validated.analysisDate,
           weightGrams: validated.weightGrams ?? null,
           volumeMl: validated.volumeMl ?? null,
           totalCarbonPercent: validated.totalCarbonPercent as number,
@@ -227,19 +225,11 @@ export async function createSampleFn(
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent ?? null,
       sReflectanceFraction: validated.sReflectanceFraction ?? null,
       r0MeasurementCount: validated.r0MeasurementCount ?? null,
-      r0AnalysisDate: validated.r0AnalysisDate
-        ? validated.r0AnalysisDate instanceof Date
-          ? validated.r0AnalysisDate
-          : new Date(validated.r0AnalysisDate)
-        : null,
+      r0AnalysisDate: validated.r0AnalysisDate,
       r0HistogramFileUrl: validated.r0HistogramFileUrl || null,
       reactiveCarbonPercent: validated.reactiveCarbonPercent ?? null,
       residualCarbonPercent: validated.residualCarbonPercent ?? null,
-      tgaAnalysisDate: validated.tgaAnalysisDate
-        ? validated.tgaAnalysisDate instanceof Date
-          ? validated.tgaAnalysisDate
-          : new Date(validated.tgaAnalysisDate)
-        : null,
+      tgaAnalysisDate: validated.tgaAnalysisDate,
       tgaThermogramFileUrl: validated.tgaThermogramFileUrl || null,
       phosphorusPercent: validated.phosphorusPercent ?? null,
       potassiumPercent: validated.potassiumPercent ?? null,
@@ -279,8 +269,7 @@ export async function createSampleFn(
 export async function updateSampleFn(
   data: z.infer<typeof updateSampleSchema>
 ): Promise<ActionResult<SampleWithRelations>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = updateSampleSchema.parse(data);
 
@@ -294,6 +283,7 @@ export async function updateSampleFn(
     }
 
     const sample = await updateSample(ctx, validated.sampleId, {
+      expectedVersion: validated.expectedVersion,
       sampleCode: validated.sampleCode,
       creditBatchId: validated.creditBatchId,
       samplingTime: validated.samplingTime
@@ -303,15 +293,7 @@ export async function updateSampleFn(
         : undefined,
       labName: validated.labName,
       labAccreditation: validated.labAccreditation,
-      analysisDate: validated.analysisDate
-        ? validated.analysisDate instanceof Date
-          ? validated.analysisDate
-          : typeof validated.analysisDate === "string"
-          ? new Date(validated.analysisDate)
-          : null
-        : validated.analysisDate === null
-        ? null
-        : undefined,
+      analysisDate: validated.analysisDate,
       weightGrams: validated.weightGrams,
       volumeMl: validated.volumeMl,
       totalCarbonPercent: validated.totalCarbonPercent,
@@ -331,27 +313,11 @@ export async function updateSampleFn(
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent,
       sReflectanceFraction: validated.sReflectanceFraction,
       r0MeasurementCount: validated.r0MeasurementCount,
-      r0AnalysisDate: validated.r0AnalysisDate
-        ? validated.r0AnalysisDate instanceof Date
-          ? validated.r0AnalysisDate
-          : typeof validated.r0AnalysisDate === "string"
-          ? new Date(validated.r0AnalysisDate)
-          : null
-        : validated.r0AnalysisDate === null
-        ? null
-        : undefined,
+      r0AnalysisDate: validated.r0AnalysisDate,
       r0HistogramFileUrl: validated.r0HistogramFileUrl,
       reactiveCarbonPercent: validated.reactiveCarbonPercent,
       residualCarbonPercent: validated.residualCarbonPercent,
-      tgaAnalysisDate: validated.tgaAnalysisDate
-        ? validated.tgaAnalysisDate instanceof Date
-          ? validated.tgaAnalysisDate
-          : typeof validated.tgaAnalysisDate === "string"
-          ? new Date(validated.tgaAnalysisDate)
-          : null
-        : validated.tgaAnalysisDate === null
-        ? null
-        : undefined,
+      tgaAnalysisDate: validated.tgaAnalysisDate,
       tgaThermogramFileUrl: validated.tgaThermogramFileUrl,
       phosphorusPercent: validated.phosphorusPercent,
       potassiumPercent: validated.potassiumPercent,
@@ -360,23 +326,8 @@ export async function updateSampleFn(
       ironPercent: validated.ironPercent,
     });
 
-    return { success: true, data: sample };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to update sample",
-        "sample:update",
-      ),
-    };
-  }
+    return sample;
+  }, { fallbackMessage: "Failed to update sample", log: { message: "sample action failed", context: { op: "sample:update" } } });
 }
 
 // ============================================
@@ -389,27 +340,11 @@ export async function updateSampleFn(
 export async function deleteSampleFn(
   data: z.infer<typeof deleteSampleSchema>
 ): Promise<ActionResult<void>> {
-  try {
-    const ctx = await requireOrgContext();
+  return withAction(async (ctx) => {
 
     const validated = deleteSampleSchema.parse(data);
-    await deleteSample(ctx, validated.sampleId);
+    await deleteSample(ctx, validated.sampleId, validated.expectedVersion);
 
-    return { success: true, data: undefined };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: formatZodActionError(error),
-      };
-    }
-    return {
-      success: false,
-      error: sampleActionError(
-        error,
-        "Failed to delete sample",
-        "sample:delete",
-      ),
-    };
-  }
+    return;
+  }, { fallbackMessage: "Failed to delete sample", log: { message: "sample action failed", context: { op: "sample:delete" } } });
 }

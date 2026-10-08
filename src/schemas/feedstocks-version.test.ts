@@ -12,7 +12,7 @@ describe.each([updateFeedstockSchema, deleteFeedstockSchema])("feedstock write p
       ]);
     }
   });
-  it("requires a positive integer and retires the timestamp precondition", () => {
-    expect(schema.parse({ feedstockId, expectedVersion: 1, expectedUpdatedAt: new Date() })).toEqual({ feedstockId, expectedVersion: 1 });
+  it("accepts a loaded positive integer", () => {
+    expect(schema.parse({ feedstockId, expectedVersion: 1 })).toEqual({ feedstockId, expectedVersion: 1 });
   });
 });

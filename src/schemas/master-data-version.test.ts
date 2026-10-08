@@ -17,9 +17,8 @@ const contracts = [
   [updateFeedstockTypeSchema, { feedstockTypeId: ID }], [deleteFeedstockTypeSchema, { feedstockTypeId: ID }],
 ] as const;
 describe.each(contracts)("master-data write contract %#", (schema, identity) => {
-  it("requires a loaded positive integer and strips the old timestamp", () => {
-    expect(schema.parse({ ...identity, expectedVersion: 1, expectedUpdatedAt: new Date() })).toMatchObject({ ...identity, expectedVersion: 1 });
-    expect(schema.parse({ ...identity, expectedVersion: 1 })).not.toHaveProperty("expectedUpdatedAt");
+  it("requires a loaded positive integer", () => {
+    expect(schema.parse({ ...identity, expectedVersion: 1 })).toEqual({ ...identity, expectedVersion: 1 });
     for (const expectedVersion of [undefined, null, 0, -1, 1.5, "1"]) {
       const result = schema.safeParse({ ...identity, expectedVersion });
       expect(result.success).toBe(false);

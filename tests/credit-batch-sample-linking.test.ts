@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the credit-batch ↔ lab-sample linking write paths.
@@ -349,7 +350,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
     });
     createdIds.creditBatches.push(batchB.id);
 
-    await updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { creditBatchId: batchB.id });
+    await updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sampleId), creditBatchId: batchB.id });
     expect(await batchIdOfSample(sampleId)).toBe(batchB.id);
   });
 });
@@ -511,7 +512,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
   it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {
     const sampleId = await makeSample(fromBatchId, `S-SL-TMOVE-${Date.now()}`);
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { creditBatchId: tier1000BatchId }),
+      updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sampleId), creditBatchId: tier1000BatchId }),
     ).rejects.toThrow(/R₀ reflectance is required/);
     expect(await batchIdOfSample(sampleId)).toBe(fromBatchId);
   });
@@ -525,7 +526,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     createdIds.samples.push(sample.id);
 
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sample.id),
         randomReflectanceR0Percent: null,
       }),
     ).rejects.toThrow(/R₀ reflectance is required/);
@@ -539,7 +540,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     });
     createdIds.samples.push(sample.id);
 
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sample.id),
       labName: "Tier Lab",
     });
     expect(updated.labName).toBe("Tier Lab");
@@ -552,7 +553,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       ...completeEvidence(),
     });
     createdIds.samples.push(sample.id);
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", sample.id),
       sReflectanceFraction: 0.94,
     });
     expect(updated.sReflectanceFraction).toBe(0.94);
@@ -621,7 +622,7 @@ describe("Batch side — back-fill and re-point LEGACY run-linked samples", () =
     expect(await batchIdOfSample(sampleC)).toBeNull();
 
     // Drop runReB, add runReC.
-    await updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
+    await updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "creditBatches", batch.id),
       productionRunIds: [runReA, runReC],
     });
 

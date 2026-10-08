@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Samples Data Access Layer
  * CRUD operations for lab samples with auth guards, pagination, and filtering
@@ -6,7 +7,7 @@
  * legacy provenance only (pre-re-grain rows) and is no longer written.
  */
 
-import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, type DbTransaction } from "@/db";
 import { avgNumeric } from "@/db/aggregate";
@@ -92,6 +93,7 @@ export interface SampleWithRelations {
 
   createdAt: Date;
   updatedAt: Date;
+  version: number;
 
   // Relations
   creditBatchCode: string | null;
@@ -285,6 +287,7 @@ export async function getSamples(
       ironPercent: samples.ironPercent,
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
+      version: samples.version,
       creditBatchCode: creditBatches.code,
       sampling: creditBatches.sampling,
       batchDurabilityOption: batchFacilities.durabilityOption,
@@ -384,6 +387,7 @@ export async function getSampleById(
       ironPercent: samples.ironPercent,
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
+      version: samples.version,
       creditBatchCode: creditBatches.code,
       sampling: creditBatches.sampling,
       batchDurabilityOption: batchFacilities.durabilityOption,
@@ -672,6 +676,7 @@ export async function updateSample(
   ctx: OrgContext,
   sampleId: string,
   data: {
+    expectedVersion: number;
     sampleCode?: string;
     creditBatchId?: string;
     samplingTime?: Date;
@@ -787,17 +792,7 @@ export async function updateSample(
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
   return guardSampleMutation(() => db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(samples)
-      .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Sample not found");
-    }
-    assertCarbonReconciliation(locked, data);
-
+    // Artifact locks precede batch rows, matching sample creation and Removal deletion.
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -820,6 +815,24 @@ export async function updateSample(
         "selected",
       );
     }
+
+    // Membership writers lock the batch before its samples. Keep that order
+    // when moving a sample, since the new batch FK is checked during the write.
+    const batchIds = [...new Set([existing.creditBatchId, data.creditBatchId].filter((id): id is string => !!id))].sort();
+    if (batchIds.length) await tx.select({ id: creditBatches.id }).from(creditBatches)
+      .where(and(inArray(creditBatches.id, batchIds), eq(creditBatches.organizationId, ctx.organizationId)))
+      .orderBy(creditBatches.id).for("update");
+    const [locked] = await tx
+      .select()
+      .from(samples)
+      .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Sample not found");
+    }
+    assertRowVersion({ entity: "sample", id: sampleId, expectedVersion: data.expectedVersion, actualVersion: locked.version });
+    assertCarbonReconciliation(locked, data);
 
     // Enforce the 1000-year evidence invariant against the EFFECTIVE
     // post-update state (update merged over the LOCKED row) and the
@@ -855,7 +868,7 @@ export async function updateSample(
       });
     }
 
-    await tx.update(samples).set(updateData).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+    await tx.update(samples).set({ ...updateData, version: nextVersion(samples.version) }).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
 
     // Read the row back inside the transaction (issue #769).
     return getSampleById(ctx, sampleId, tx);
@@ -871,7 +884,8 @@ export async function updateSample(
  */
 export async function deleteSample(
   ctx: OrgContext,
-  sampleId: string
+  sampleId: string,
+  expectedVersion: number,
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -882,6 +896,14 @@ export async function deleteSample(
       { entityType: "sample", entityId: sampleId },
       "delete",
     );
+
+    const [snapshot] = await tx.select({ creditBatchId: samples.creditBatchId }).from(samples)
+      .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+    if (snapshot?.creditBatchId) await tx.select({ id: creditBatches.id }).from(creditBatches)
+      .where(and(eq(creditBatches.id, snapshot.creditBatchId), eq(creditBatches.organizationId, ctx.organizationId))).for("update");
+    const [versionRow] = await tx.select().from(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId))).for("update");
+    if (!versionRow) throw new SafeError("Sample not found");
+    assertRowVersion({ entity: "sample", id: sampleId, expectedVersion: expectedVersion, actualVersion: versionRow.version });
 
     const transportLegDocuments = await deleteTransportLegsForEntity(
       ctx,

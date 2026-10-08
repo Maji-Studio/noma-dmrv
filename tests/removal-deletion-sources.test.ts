@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { deleteDocumentWithCertificationSafety } from "@/data-access/documents";
 import { deleteOutputFacilityFixtures } from "./helpers/output-contract-fixtures";
 import { createRemovalDeletionFixture, insertLedgerRow, type Fixture } from "./helpers/removal-deletion-fixture";
@@ -271,8 +272,8 @@ describe("deleteRemoval evidence cleanup", () => {
       ]),
     );
     const ctx = makeTestOrgContext();
-    await expect(deleteApplication(ctx, chain.applicationId)).resolves.toBeUndefined();
-    await expect(deleteDelivery(ctx, application.deliveryId!)).rejects.toThrow(/Posted deliveries retain their history/);
+    await expect(deleteApplication(ctx, chain.applicationId, await labLogisticsVersion(ctx, "applications", chain.applicationId))).resolves.toBeUndefined();
+    await expect(deleteDelivery(ctx, application.deliveryId!, await labLogisticsVersion(ctx, "deliveries", application.deliveryId!))).rejects.toThrow(/Posted deliveries retain their history/);
     await expect(deleteDocumentWithCertificationSafety(ctx, deliveryDocumentId)).resolves.toMatchObject({ id: deliveryDocumentId });
     expect(
       await db
@@ -313,7 +314,7 @@ describe("deleteRemoval evidence cleanup", () => {
     expect(registry.sources).toHaveLength(1);
     expect(registry.requestCount("DELETE", `/sources/${sharedSourceId}`)).toBe(0);
     await expect(
-      deleteApplication(makeTestOrgContext(), chain.applicationId),
+      deleteApplication(makeTestOrgContext(), chain.applicationId, await labLogisticsVersion(makeTestOrgContext(), "applications", chain.applicationId)),
     ).rejects.toThrow(/certification provider/);
   });
 

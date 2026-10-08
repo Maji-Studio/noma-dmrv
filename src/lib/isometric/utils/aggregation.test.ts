@@ -13,6 +13,7 @@ function leg(
   overrides: Partial<TransportLeg> = {},
 ): TransportLeg {
   return {
+    version: 1,
     organizationId: TEST_ORG_ID,
     id,
     entityType: "feedstock",

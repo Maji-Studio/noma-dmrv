@@ -1,9 +1,10 @@
+"use client";
+
 /**
  * ApplicationList component
  * Displays application records in a DataTable with create/edit/delete
  * Includes stat cards, search, and pagination
  */
-"use client";
 
 
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -45,6 +46,7 @@ import { sumNullableBy } from "@/lib/nullable-sum";
 import {
   isStaleVersionFailure,
   STALE_VERSION_MESSAGE,
+  toDeleteErrorMessage,
   toSaveErrorMessage,
 } from "@/lib/stale-version";
 import type { ApplicationFormData } from "@/schemas/applications";
@@ -233,6 +235,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     mode: SideSheetMode;
   } | null>(null);
   const [deletingApplicationId, setDeletingApplicationId] = useState<string | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
 
   // `?application=<id>` opens that application's view sheet, mirroring
   // `?delivery=` on the delivery list. The row is read through the exact-id
@@ -376,7 +379,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         applicationId,
         // The version the side sheet opened on, never a refetched one, so a
         // concurrent edit is refused instead of silently overwritten (#768).
-        expectedUpdatedAt: displaySideSheet.entity.updatedAt,
+        expectedVersion: displaySideSheet.entity.version,
         ...data,
       });
       if (result.success) {
@@ -428,14 +431,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   };
 
   const handleDelete = (applicationId: string) => {
+    const row = (items).find((item) => item.id === applicationId);
+    if (!row) return;
+    setDeletingVersion(row.version);
     setDeletingApplicationId(applicationId);
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingApplicationId) return;
+    if (!deletingApplicationId || deletingVersion === null) return;
     setDeleteError(null);
     try {
-      const result = await deleteApplication.mutateAsync(deletingApplicationId);
+      const result = await deleteApplication.mutateAsync({ applicationId: deletingApplicationId, expectedVersion: deletingVersion });
       if (result.success) {
         setDeletingApplicationId(null);
         toast.success("Application deleted.");
@@ -443,7 +449,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         setDeleteError(result.error || "Application was not deleted. Try again.");
       }
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Application was not deleted. Try again.");
+      setDeleteError(toDeleteErrorMessage(error, "Application", "Application was not deleted. Try again."));
     }
   };
 

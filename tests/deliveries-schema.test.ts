@@ -40,7 +40,7 @@ describe("delivery moisture precision", () => {
   it.each([-1, 100, 101])(
     "rejects out-of-range moisture at the update boundary (%s)",
     (moistureContentPercent) => {
-      const result = updateDeliverySchema.safeParse({
+      const result = updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         moistureContentPercent,
       });
@@ -75,7 +75,7 @@ describe("delivery wet mass", () => {
       }).success,
     ).toBe(false);
     expect(
-      updateDeliverySchema.safeParse({
+      updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         deliveredWetMassKg: 0,
       }).success,
@@ -119,7 +119,7 @@ describe("delivery wet mass", () => {
   });
 
   it("rejects an upcoming status in a partial update", () => {
-    const result = updateDeliverySchema.safeParse({ deliveryId: UUID_A, status: "upcoming" });
+    const result = updateDeliverySchema.safeParse({ expectedVersion: 1, deliveryId: UUID_A, status: "upcoming" });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues).toEqual(
@@ -152,13 +152,13 @@ describe("delivery wet mass", () => {
 
   it("defers delivered status/mass validation until a partial update is merged", () => {
     expect(
-      updateDeliverySchema.safeParse({
+      updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         status: "delivered",
       }).success,
     ).toBe(true);
     expect(
-      updateDeliverySchema.safeParse({
+      updateDeliverySchema.safeParse({ expectedVersion: 1,
         deliveryId: UUID_A,
         status: "delivered",
         deliveredWetMassKg: null,

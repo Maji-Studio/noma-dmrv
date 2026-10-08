@@ -2,8 +2,7 @@
  * Expected-version (optimistic concurrency) vocabulary, shared by the server
  * updaters, the React Query hooks and the edit forms (issue #768).
  *
- * Edit forms send the integer `expectedVersion` they loaded. Applications still
- * use legacy `expectedUpdatedAt`. A mismatch carries the stale-version conflict
+ * Edit forms send the integer `expectedVersion` they loaded. A mismatch carries the stale-version conflict
  * through ActionResult; hooks rethrow StaleVersionError so the open form keeps
  * the operator's draft.
  *

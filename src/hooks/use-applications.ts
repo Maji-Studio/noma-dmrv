@@ -1,3 +1,7 @@
+import type { ActionResult } from "@/types/actions";
+import type { DeleteApplicationData } from "@/schemas/applications";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 import { loadApplicationCertificationLock } from "@/fn/application-certification-lock";
 import {
   useMutation,
@@ -130,13 +134,19 @@ export function useUpdateApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpdateApplicationData) => updateApplicationFn(data),
+    mutationFn: async (data: UpdateApplicationData): Promise<Awaited<ReturnType<typeof updateApplicationFn>>> => {
+      const result = await updateApplicationFn(data);
+      if (!result.success) throwActionError(result);
+      return result;
+    },
     onSuccess: (result) => {
+      if (result.success) patchListCachesWithSavedRow(queryClient, applicationKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
       if (result.success && result.data) {
+        queryClient.setQueryData(applicationKeys.detail(result.data.id), (old: object | undefined) => old ? { ...old, ...result.data } : old);
         queryClient.invalidateQueries({
           queryKey: applicationKeys.detail(result.data.id),
         });
@@ -157,8 +167,17 @@ export function useDeleteApplication() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (applicationId: string) =>
-      deleteApplicationFn({ applicationId }),
+    mutationFn: async (data: DeleteApplicationData): Promise<ActionResult<void>> => {
+      const result = await deleteApplicationFn(data);
+      if (!result.success) throwActionError(result);
+      return result;
+    },
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: applicationKeys.detail(variables.applicationId) });
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       queryClient.invalidateQueries({

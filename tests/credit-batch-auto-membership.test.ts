@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { productionVersion } from "./helpers/production-version";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -34,6 +35,8 @@ import {
   makeTestOrgContext,
   TEST_ORG_ID,
 } from "./helpers/test-org";
+
+const AUTO_ATTACHED_RUN_COUNT = 2;
 
 const TEST_USER_ID = "test-user-credit-batch-auto-membership";
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
@@ -413,6 +416,8 @@ describe("credit batch automatic production-run membership", () => {
       .from(creditBatchProductionRuns)
       .where(eq(creditBatchProductionRuns.productionRunId, draft.id));
     expect(directCompletionMembership?.creditBatchId).toBe(batch.id);
+    expect(await labLogisticsVersion(ctx, "creditBatches", batch.id)).toBe(batch.version + AUTO_ATTACHED_RUN_COUNT);
+    await expect(updateCreditBatch(ctx, batch.id, { expectedVersion: batch.version, siteManagementNotes: "Stale before run completion" })).rejects.toMatchObject({ code: "stale_version" });
   });
 
   it("rejects completed-run edits outside the attached cohort without changing links", async () => {
@@ -669,7 +674,7 @@ describe("credit batch automatic production-run membership", () => {
       .returning({ id: samples.id });
     sampleIds.push(sample.id);
 
-    const updated = await updateCreditBatch(ctx, batch.id, {
+    const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: await labLogisticsVersion(ctx, "creditBatches", batch.id),
       startDate: new Date("2025-03-01T00:00:00.000Z"),
       endDate: new Date("2025-03-31T00:00:00.000Z"),
     });
@@ -694,7 +699,7 @@ describe("credit batch automatic production-run membership", () => {
     });
     creditBatchIds.push(batch.id);
 
-    const updated = await updateCreditBatch(ctx, batch.id, {
+    const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: await labLogisticsVersion(ctx, "creditBatches", batch.id),
       productionRunIds: [],
       siteManagementNotes: "Declared before production",
     });
@@ -808,7 +813,7 @@ describe("credit batch automatic production-run membership", () => {
     );
 
     await expect(
-      updateCreditBatch(ctx, second.id, {
+      updateCreditBatch(ctx, second.id, { expectedVersion: await labLogisticsVersion(ctx, "creditBatches", second.id),
         startDate: new Date("2024-08-10T00:00:00.000Z"),
       }),
     ).rejects.toThrow(

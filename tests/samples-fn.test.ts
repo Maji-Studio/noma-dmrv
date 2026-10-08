@@ -160,7 +160,7 @@ describe("updateSampleFn", () => {
   });
 
   it("rejects moving an assigned sample before its batch window", async () => {
-    const result = await updateSampleFn({
+    const result = await updateSampleFn({ expectedVersion: 1,
       sampleId: "33333333-3333-4333-8333-333333333333",
       samplingTime: new Date("2025-12-31T23:59:59.000Z"),
     });
@@ -177,7 +177,7 @@ describe("updateSampleFn", () => {
       endDate: "2026-02-28",
     });
 
-    const result = await updateSampleFn({
+    const result = await updateSampleFn({ expectedVersion: 1,
       sampleId: "33333333-3333-4333-8333-333333333333",
       creditBatchId: LATER_CREDIT_BATCH_ID,
     });
@@ -192,7 +192,7 @@ describe("updateSampleFn", () => {
   });
 
   it("allows moving an assigned sample after its batch window", async () => {
-    const result = await updateSampleFn({
+    const result = await updateSampleFn({ expectedVersion: 1,
       sampleId: "33333333-3333-4333-8333-333333333333",
       samplingTime: new Date("2026-02-15T12:00:00.000Z"),
     });

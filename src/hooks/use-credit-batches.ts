@@ -1,3 +1,7 @@
+import type { ActionResult } from "@/types/actions";
+import type { DeleteCreditBatchData } from "@/schemas/credit-batches";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import {
   useMutation,
   useQueries,
@@ -193,8 +197,13 @@ export function useUpdateCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: UpdateCreditBatchData) => updateCreditBatchFn(data),
+    mutationFn: async (data: UpdateCreditBatchData): Promise<Awaited<ReturnType<typeof updateCreditBatchFn>>> => {
+      const result = await updateCreditBatchFn(data);
+      if (!result.success) throwActionError(result);
+      return result;
+    },
     onSuccess: (result) => {
+      if (result.success) patchArrayListCachesByPrefixWithSavedRow(queryClient, creditBatchKeys.lists(), result.data);
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
@@ -203,6 +212,7 @@ export function useUpdateCreditBatch() {
         creditBatchPreviews: true,
       });
       if (result.success && result.data) {
+        queryClient.setQueryData(creditBatchKeys.detail(result.data.id), (old: object | undefined) => old ? { ...old, ...result.data } : old);
         queryClient.invalidateQueries({
           queryKey: creditBatchKeys.detail(result.data.id),
         });
@@ -218,8 +228,17 @@ export function useDeleteCreditBatch() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (creditBatchId: string) =>
-      deleteCreditBatchFn({ creditBatchId }),
+    mutationFn: async (data: DeleteCreditBatchData): Promise<ActionResult<void>> => {
+      const result = await deleteCreditBatchFn(data);
+      if (!result.success) throwActionError(result);
+      return result;
+    },
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) {
+        queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: creditBatchKeys.detail(variables.creditBatchId) });
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
       invalidateCertificationReadiness(queryClient);

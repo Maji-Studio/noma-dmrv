@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { productionVersion } from "./helpers/production-version";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,7 +20,7 @@ describe("stock-reducing update guards", () => {
   it("prevents a used order from changing formulation without reassigning saved product sources", async () => {
     const f = await fixture(); const delivery = await postDelivery(f, 500);
     const before = await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id));
-    await expect(updateOrder(f.ctx, f.order.id, { formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
+    await expect(updateOrder(f.ctx, f.order.id, { expectedVersion: await labLogisticsVersion(f.ctx, "orders", f.order.id), formulationId: f.recipe.id })).rejects.toThrow(delivery.code);
     expect(await db.select().from(outputStockAllocations).where(eq(outputStockAllocations.deliveryId, delivery.id))).toEqual(before);
     expect(await getOutputBinAllLayersDryKg(f.ctx, f.bin.id)).toBe(500);
   });

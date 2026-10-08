@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -59,8 +60,8 @@ describe('output FIFO transactions', () => {
       expect(a.basisSnapshot.solidsKg).toBeTruthy();
     }
     await expect(createDelivery(f.ctx, { ...f.deliveryInput, deliveredWetMassKg: 1900 })).rejects.toThrow('different values');
-    await expect(updateDelivery(f.ctx, delivery.id, { deliveredWetMassKg: 1900 })).rejects.toThrow('Correct entry');
-    await expect(deleteDelivery(f.ctx, delivery.id)).rejects.toThrow('history');
+    await expect(updateDelivery(f.ctx, delivery.id, { expectedVersion: await labLogisticsVersion(f.ctx, "deliveries", delivery.id), deliveredWetMassKg: 1900 })).rejects.toThrow('Correct entry');
+    await expect(deleteDelivery(f.ctx, delivery.id, await labLogisticsVersion(f.ctx, "deliveries", delivery.id))).rejects.toThrow('history');
     const [recorded] = await db.select({ wet: sql<number>`sum(${biocharProducts.massKg})`.mapWith(Number) }).from(biocharProducts).where(eq(biocharProducts.storageLocationId, f.bin.id));
     expect(recorded.wet).toBe(2500);
   });

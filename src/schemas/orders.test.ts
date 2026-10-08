@@ -20,7 +20,7 @@ describe("order schemas", () => {
   });
 
   it("drops price and currency from an update payload so stored values survive", () => {
-    const parsed = updateOrderSchema.parse({ orderId: UUID, value: 1, currency: "EUR" });
-    expect(parsed).toEqual({ orderId: UUID });
+    const parsed = updateOrderSchema.parse({ expectedVersion: 1, orderId: UUID, value: 1, currency: "EUR" });
+    expect(parsed).toEqual({ orderId: UUID, expectedVersion: 1 });
   });
 });

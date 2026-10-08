@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Credit Batch Membership Rules
  *
@@ -34,7 +35,7 @@ import { SafeError } from "@/lib/errors";
 import { formatCount, pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
-import { isCreditBatchMembershipLockedBySubmission } from "./credit-batch-certification-lock";
+import { CreditBatchLineageChangedError, isCreditBatchMembershipLockedBySubmission, lockCreditBatchArtifacts } from "./credit-batch-certification-lock";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
@@ -139,6 +140,8 @@ export async function lockCreditBatchDeclarationRuns(
 }
 
 export interface LockedCreditBatchForUpdate {
+  lockedRemovals: Awaited<ReturnType<typeof lockCreditBatchArtifacts>>;
+  version: number;
   facilityId: string;
   startDate: string;
   endDate: string;
@@ -190,9 +193,10 @@ export async function lockCreditBatchForUpdate(
   ctx: OrgContext,
   tx: DbTransaction,
   id: string,
-  target: { facilityId?: string; feedstockTypeId?: string },
+  target: { facilityId?: string; feedstockTypeId?: string; expectedVersion: number },
 ): Promise<LockedCreditBatchForUpdate> {
   const selectFields = {
+    version: creditBatches.version,
     facilityId: creditBatches.facilityId,
     startDate: creditBatches.startDate,
     endDate: creditBatches.endDate,
@@ -211,6 +215,7 @@ export async function lockCreditBatchForUpdate(
     facilityId: target.facilityId ?? snapshot.facilityId,
     feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
   });
+  const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, id);
   const [locked] = await tx
     .select(selectFields)
     .from(creditBatches)
@@ -220,6 +225,7 @@ export async function lockCreditBatchForUpdate(
     ))
     .for("update");
   if (!locked) throw new SafeError("Credit batch not found");
+  assertRowVersion({ entity: "creditBatch", id, expectedVersion: target.expectedVersion, actualVersion: locked.version });
   if (
     locked.facilityId !== snapshot.facilityId ||
     locked.feedstockTypeId !== snapshot.feedstockTypeId ||
@@ -230,7 +236,7 @@ export async function lockCreditBatchForUpdate(
       "The credit batch cohort changed while this update was being prepared. Refresh and retry.",
     );
   }
-  return locked;
+  return { ...locked, lockedRemovals };
 }
 
 /**
@@ -656,8 +662,7 @@ export async function attachProductionRunToMatchingCreditBatch(
         isNull(creditBatches.archivedAt),
       ),
     )
-    .orderBy(creditBatches.id)
-    .for("update");
+    .orderBy(creditBatches.id);
 
   if (matchingBatches.length === 0) return null;
   if (matchingBatches.length > 1) {
@@ -667,14 +672,30 @@ export async function attachProductionRunToMatchingCreditBatch(
   }
 
   const [batch] = matchingBatches;
-  if (
-    await isCreditBatchMembershipLockedBySubmission(
-      ctx,
-      tx,
-      batch.id,
-    )
-  ) {
-    return null;
+  const lockedRemovals = await lockCreditBatchArtifacts(ctx, tx, batch.id);
+  const [lockedBatch] = await tx.select({ id: creditBatches.id })
+    .from(creditBatches)
+    .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId),
+      eq(creditBatches.facilityId, run.facilityId), eq(creditBatches.feedstockTypeId, feedstockTypeId),
+      lte(creditBatches.startDate, run.date), gte(creditBatches.endDate, run.date), isNull(creditBatches.archivedAt)))
+    .for("update");
+  if (!lockedBatch) return null;
+  try {
+    if (
+      await isCreditBatchMembershipLockedBySubmission(
+        ctx,
+        tx,
+        batch.id,
+        lockedRemovals,
+      )
+    ) {
+      return null;
+    }
+  } catch (error) {
+    // Routine production recording can continue without attaching uncertain
+    // membership. Explicit batch edits still refuse this lineage race.
+    if (error instanceof CreditBatchLineageChangedError) return null;
+    throw error;
   }
 
   await tx.insert(creditBatchProductionRuns).values({
@@ -682,9 +703,14 @@ export async function attachProductionRunToMatchingCreditBatch(
     creditBatchId: batch.id,
     productionRunId,
   });
+  // The edit form includes membership, so auto-attachment also invalidates an
+  // already-open batch form even though no scalar batch field was edited.
+  await tx.update(creditBatches)
+    .set({ version: nextVersion(creditBatches.version), updatedAt: new Date() })
+    .where(and(eq(creditBatches.id, batch.id), eq(creditBatches.organizationId, ctx.organizationId)));
   await tx
     .update(samples)
-    .set({ creditBatchId: batch.id, updatedAt: new Date() })
+    .set({ version: nextVersion(samples.version), creditBatchId: batch.id, updatedAt: new Date() })
     .where(
       and(
         eq(samples.productionRunId, productionRunId),

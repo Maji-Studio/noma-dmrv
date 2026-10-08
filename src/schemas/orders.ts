@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Orders Validation Schemas
  * Zod schemas for order forms, server actions, and filtering
@@ -65,6 +66,7 @@ export const createOrderSchema = orderFormSchema;
  * All fields optional except orderId
  */
 export const updateOrderSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   orderId: z.string().uuid("Choose a valid order."),
   code: z
     .string()
@@ -85,6 +87,7 @@ export const updateOrderSchema = z.object({
  * Schema for deleting an order
  */
 export const deleteOrderSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   orderId: z.string().uuid("Choose a valid order."),
 });
 
@@ -135,3 +138,5 @@ export type OrderFormData = z.infer<typeof orderFormSchema>;
 export type CreateOrderData = z.infer<typeof createOrderSchema>;
 export type UpdateOrderData = z.infer<typeof updateOrderSchema>;
 export type OrderFilterData = z.infer<typeof orderFilterSchema>;
+
+export type DeleteOrderData = z.infer<typeof deleteOrderSchema>;

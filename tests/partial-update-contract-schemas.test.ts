@@ -110,7 +110,7 @@ describe("updateFeedstockSchema transport distance", () => {
 
 describe("updateOrderSchema value", () => {
   it("no longer accepts a price, so an edit cannot clear or overwrite one", () => {
-    const result = parsed(updateOrderSchema, {
+    const result = parsed(updateOrderSchema, { expectedVersion: 1,
       orderId: ORDER_ID,
       value: null,
     });
@@ -122,24 +122,24 @@ describe("updateOrderSchema value", () => {
 describe("updateApplicationSchema soil temperature", () => {
   it("separates omitted, cleared and zero", () => {
     expect(
-      parsed(updateApplicationSchema, { applicationId: APPLICATION_ID })
+      parsed(updateApplicationSchema, { expectedVersion: 1, applicationId: APPLICATION_ID })
         .soilTemperatureC,
     ).toBeUndefined();
     expect(
-      parsed(updateApplicationSchema, {
+      parsed(updateApplicationSchema, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: null,
       }).soilTemperatureC,
     ).toBeNull();
     // Zero °C is a real soil temperature, not a missing one.
     expect(
-      parsed(updateApplicationSchema, {
+      parsed(updateApplicationSchema, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: 0,
       }).soilTemperatureC,
     ).toBe(0);
     expect(
-      parsed(updateApplicationSchema, {
+      parsed(updateApplicationSchema, { expectedVersion: 1,
         applicationId: APPLICATION_ID,
         soilTemperatureC: 25,
       }).soilTemperatureC,

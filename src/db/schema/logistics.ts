@@ -62,6 +62,7 @@ export const vehicles = pgTable('vehicles', {
 // ============================================
 
 export const orders = pgTable('orders', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()
@@ -106,6 +107,7 @@ export const orders = pgTable('orders', {
 export const deliveries = pgTable(
   'deliveries',
   {
+    version: integer('version').notNull().default(1),
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: text('organization_id')
       .notNull()
@@ -206,6 +208,7 @@ export const deliveries = pgTable(
 export const transportLegs = pgTable(
   'transport_legs',
   {
+    version: integer('version').notNull().default(1),
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: text('organization_id')
       .notNull()

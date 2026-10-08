@@ -31,6 +31,7 @@ import { organizations } from './auth';
 export const creditBatches = pgTable(
   'credit_batches',
   {
+    version: integer('version').notNull().default(1),
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: text('organization_id')
       .notNull()

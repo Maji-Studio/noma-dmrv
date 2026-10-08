@@ -136,6 +136,7 @@ export async function updateOrderFn(
     const validated = updateOrderSchema.parse(data);
 
     return updateOrder(ctx, validated.orderId, {
+      expectedVersion: validated.expectedVersion,
       code: validated.code,
       facilityId: validated.facilityId,
       customerId: validated.customerId,
@@ -160,6 +161,6 @@ export async function deleteOrderFn(
 ): Promise<ActionResult<void>> {
   return withAction(async (ctx) => {
     const validated = deleteOrderSchema.parse(data);
-    await deleteOrder(ctx, validated.orderId);
+    await deleteOrder(ctx, validated.orderId, validated.expectedVersion);
   }, { fallbackMessage: "Failed to delete order" });
 }

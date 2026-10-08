@@ -1,3 +1,4 @@
+import { expectedVersionSchema } from "./helpers";
 /**
  * Deliveries Validation Schemas
  * Zod schemas for delivery forms, server actions, and filtering
@@ -182,6 +183,7 @@ export const createDeliverySchema = z.object({
  * All fields optional except deliveryId
  */
 export const updateDeliverySchema = z.object({
+  expectedVersion: expectedVersionSchema,
   deliveryId: z.string().uuid("Choose a valid delivery."),
   code: z
     .string()
@@ -211,6 +213,7 @@ export const updateDeliverySchema = z.object({
  * Schema for deleting a delivery
  */
 export const deleteDeliverySchema = z.object({
+  expectedVersion: expectedVersionSchema,
   deliveryId: z.string().uuid("Choose a valid delivery."),
 });
 
@@ -274,3 +277,5 @@ export type UpdateDeliveryData = z.infer<typeof updateDeliverySchema>;
 export type DeliveryFilterData = z.infer<typeof deliveryFilterSchema>;
 // Re-export the delivery dry mass schema for use in forms
 export { deliveryDryMassSchema };
+
+export type DeleteDeliveryData = z.infer<typeof deleteDeliverySchema>;

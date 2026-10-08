@@ -14,7 +14,7 @@ const UUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 // the mass-cap approach from #345 (tests/mass-input-caps.test.ts).
 describe("sample ratio input caps", () => {
   it("rejects an hToCOrgRatio above the numeric(7,6) cap", () => {
-    const result = updateSampleSchema.safeParse({
+    const result = updateSampleSchema.safeParse({ expectedVersion: 1,
       sampleId: UUID,
       hToCOrgRatio: RATIO_INPUT_MAX + 1,
     });
@@ -33,7 +33,7 @@ describe("sample ratio input caps", () => {
   });
 
   it("rejects an oToCOrgRatio above the numeric(7,6) cap", () => {
-    const result = updateSampleSchema.safeParse({
+    const result = updateSampleSchema.safeParse({ expectedVersion: 1,
       sampleId: UUID,
       oToCOrgRatio: RATIO_INPUT_MAX + 1,
     });
@@ -52,7 +52,7 @@ describe("sample ratio input caps", () => {
   });
 
   it("accepts ratios exactly at the cap", () => {
-    const result = updateSampleSchema.safeParse({
+    const result = updateSampleSchema.safeParse({ expectedVersion: 1,
       sampleId: UUID,
       hToCOrgRatio: RATIO_INPUT_MAX,
       oToCOrgRatio: RATIO_INPUT_MAX,

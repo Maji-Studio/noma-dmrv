@@ -3,7 +3,7 @@ import { updateCreditBatchSchema } from "./credit-batches";
 
 describe("updateCreditBatchSchema sampling immutability", () => {
   it("rejects an attempt to change sampling after creation", () => {
-    const result = updateCreditBatchSchema.safeParse({
+    const result = updateCreditBatchSchema.safeParse({ expectedVersion: 1,
       creditBatchId: "00000000-0000-0000-0000-000000000101",
       sampling: "unsampled",
     });

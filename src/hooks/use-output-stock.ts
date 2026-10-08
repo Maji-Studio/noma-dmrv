@@ -116,6 +116,10 @@ export function usePostOutputStock() {
       return result.data;
     },
     onSuccess: (data) => {
+      for (const row of data.savedDeliveries) {
+        patchListCachesWithSavedRow(client, deliveryKeys.lists(), row);
+        client.setQueriesData({ queryKey: deliveryKeys.detail(row.id) }, (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
       for (const row of data.savedProducts) {
         patchListCachesWithSavedRow(client, biocharProductKeys.lists(), row);
         client.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);

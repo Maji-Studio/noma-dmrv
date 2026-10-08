@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed concurrency tests for DB-enforced sample_code uniqueness
@@ -257,7 +258,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     const { id } = await createConcurrentSample(undefined);
 
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
         organicCarbonPercent: 95,
       }),
     ).rejects.toThrow(/Organic carbon cannot exceed total carbon/);
@@ -271,7 +272,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     // semantics that must still fall back to the stored total.
     const { id } = await createConcurrentSample(undefined);
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
         totalCarbonPercent: undefined,
         organicCarbonPercent: 95,
         inorganicCarbonPercent: undefined,
@@ -282,7 +283,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
   it("accepts a partial update that stays reconciled with the stored total", async () => {
     const { id } = await createConcurrentSample(undefined);
 
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
       organicCarbonPercent: 75,
     });
     expect(updated.organicCarbonPercent).toBe(75);
@@ -296,7 +297,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     const { id } = await createConcurrentSample(undefined);
 
     await expect(
-      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
         inorganicCarbonPercent: 5,
       }),
     ).rejects.toThrow(
@@ -307,7 +308,7 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
   it("accepts an explicit null inorganic patch (the null short-circuit)", async () => {
     const { id } = await createConcurrentSample(undefined);
 
-    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, { expectedVersion: await labLogisticsVersion(makeTestOrgContext(TEST_USER_ID), "samples", id),
       inorganicCarbonPercent: null,
     });
     expect(updated.inorganicCarbonPercent).toBeNull();

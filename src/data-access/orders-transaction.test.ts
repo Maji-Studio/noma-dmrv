@@ -8,7 +8,7 @@ const ctx: OrgContext = { organizationId: 'org', userId: 'user', orgRole: 'owner
 
 describe('order transaction customer-location validation', () => {
   it.each(['customer', 'wrong-customer', null])('uses the held transaction and enforces ownership: %s', async customerId => {
-    const saved = { id: 'order', customerId: 'customer', customerLocationId: 'location' };
+    const saved = { version: 1, id: 'order', customerId: 'customer', customerLocationId: 'location' };
     const responses = [[saved], [], customerId == null ? [] : [{ customerId }]];
     const tx = { select: vi.fn(() => {
       const rows = responses.shift();
@@ -17,7 +17,7 @@ describe('order transaction customer-location validation', () => {
     }), update: vi.fn(() => ({ set: () => ({ where: () => ({ returning: async () => [saved] }) }) })) } as unknown as DbTransaction;
     vi.spyOn(db, 'transaction').mockImplementation(async callback => callback(tx));
     const globalRead = vi.spyOn(db, 'select').mockImplementation(() => { throw new Error('Global pool must not be used'); });
-    const result = updateOrder(ctx, 'order', { code: 'renamed' });
+    const result = updateOrder(ctx, 'order', { expectedVersion: 1, code: 'renamed' });
     if (customerId === 'customer') await expect(result).resolves.toEqual(saved);
     else await expect(result).rejects.toThrow(customerId == null ? 'not found' : 'different customer');
     expect(globalRead).not.toHaveBeenCalled();

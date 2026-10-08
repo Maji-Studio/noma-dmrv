@@ -1,3 +1,4 @@
+import { assertRowVersion, nextVersion } from "./row-version";
 /**
  * Orders Data Access Layer
  * CRUD operations for orders with auth guards, pagination, and filtering
@@ -195,6 +196,7 @@ export async function getOrders(
       archivedAt: orders.archivedAt,
       createdAt: orders.createdAt,
       updatedAt: orders.updatedAt,
+      version: orders.version,
       facilityName: facilities.name,
       customerName: customers.name,
       customerLocationName: customerLocations.name,
@@ -333,7 +335,7 @@ export async function createOrder(ctx: OrgContext, data: {
     return order;
   });
 }
-export async function updateOrder(ctx: OrgContext, orderId: string, data: Partial<Omit<Order, 'id' | 'organizationId' | 'createdAt' | 'archivedAt'>>): Promise<Order> {
+export async function updateOrder(ctx: OrgContext, orderId: string, data: Partial<Omit<Order, 'id' | 'organizationId' | 'createdAt' | 'archivedAt' | 'version'>> & { expectedVersion: number }): Promise<Order> {
   requireOrgScope(ctx);
   if (data.customerId) await assertSameOrg(ctx, customers, data.customerId);
   if (data.formulationId) await assertSameOrg(ctx, formulations, data.formulationId);
@@ -341,6 +343,7 @@ export async function updateOrder(ctx: OrgContext, orderId: string, data: Partia
     await lockBiocharTransportRouteTopology(ctx, tx);
     const [existing] = await tx.select().from(orders).where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).for('update');
     if (!existing) throw new SafeError('Order not found');
+    assertRowVersion({ entity: "order", id: orderId, expectedVersion: data.expectedVersion, actualVersion: existing.version });
     await assertCanMutateCertifiedLineage(ctx, tx, { entityType: 'order', entityId: orderId }, 'update');
     const [delivery] = await tx.select({ code: deliveries.code }).from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.orderId, orderId)));
     if (delivery && ['formulationId', 'facilityId', 'customerId', 'customerLocationId'].some(key => key in data && data[key as keyof typeof data] !== existing[key as keyof Order])) throw new SafeError(`Order relationship is used by delivery ${delivery.code}.`);
@@ -350,14 +353,15 @@ export async function updateOrder(ctx: OrgContext, orderId: string, data: Partia
       if (!facility) throw new SafeError('Facility not found or archived');
     }
     if (data.quantityKg !== undefined) await assertOrderQuantityCoversAllocations(ctx, tx, { orderId, orderQuantityKg: data.quantityKg });
-    const [saved] = await tx.update(orders).set({ ...data, updatedAt: new Date() }).where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).returning();
+    const [saved] = await tx.update(orders).set({ ...data, version: nextVersion(orders.version), updatedAt: new Date() }).where(and(eq(orders.organizationId, ctx.organizationId), eq(orders.id, orderId))).returning();
     return saved;
   });
 }
 
 export async function deleteOrder(
   ctx: OrgContext,
-  orderId: string
+  orderId: string,
+  expectedVersion: number,
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -372,6 +376,11 @@ export async function deleteOrder(
   }
 
   await db.transaction(async (tx) => {
+    await lockBiocharTransportRouteTopology(ctx, tx);
+    const [versionRow] = await tx.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId))).for("update");
+    if (!versionRow) throw new SafeError("Order not found");
+    assertRowVersion({ entity: "order", id: orderId, expectedVersion: expectedVersion, actualVersion: versionRow.version });
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,

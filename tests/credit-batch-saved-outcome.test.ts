@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed contract for the two outcomes of a credit-batch write (issues
@@ -173,7 +174,7 @@ describe("credit batch writes describe what they committed", () => {
   it("update answers the committed row with its roll-up when the roll-up loads", async () => {
     const batch = await makeBatch("2025-03", `CB-SO-UPDATE-OK-${Date.now()}`);
 
-    const updated = await updateCreditBatch(ctx, batch.id, {
+    const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: await labLogisticsVersion(ctx, "creditBatches", batch.id),
       hToCorgRatio: H_TO_CORG_AFTER,
     });
 
@@ -188,7 +189,7 @@ describe("credit batch writes describe what they committed", () => {
     const batch = await makeBatch("2025-04", `CB-SO-UPDATE-NOROLLUP-${Date.now()}`);
     mocks.rollupFailure = new Error("roll-up unavailable");
 
-    const updated = await updateCreditBatch(ctx, batch.id, {
+    const updated = await updateCreditBatch(ctx, batch.id, { expectedVersion: await labLogisticsVersion(ctx, "creditBatches", batch.id),
       hToCorgRatio: H_TO_CORG_AFTER,
     });
 

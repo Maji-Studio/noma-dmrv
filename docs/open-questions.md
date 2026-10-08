@@ -275,35 +275,16 @@ Pure starter residue; org scoping came later via ADR 0010.
   transaction, race the callback against the deadline and keep the client out
   of the pool until the callback settles; until then keep `execute` database-only.
 
-### Eight edit forms still save without an expected-version check (`architecture/expected-version-gaps`, opened 2026-09-17)
+### Instant input parsing until Phase 4 (`api/instant-input-parsing`, opened 2026-10-07)
 
-- **Rule:** every updater behind an edit form checks the version its form
-  loaded, so a save built on a stale cached row is refused
-  ([architecture.md](./architecture.md#expected-version-checks-on-edit-forms)).
-- **Observed:** feedstock updates and deletes require integer `expectedVersion`
-  and use `src/data-access/row-version.ts`, as do facilities, reactors, storage
-  bins, customers and suppliers with their locations, formulations, feedstock
-  types, facility emission factors, production runs, production incidents,
-  in-process measurements, and biochar products. Applications still use
-  `expectedUpdatedAt` through
-  `src/data-access/expected-version.ts:assertExpectedVersion`.
-  These edit-form updaters do not accept or check a version
-  (some lock their row, some do not):
-  `src/data-access/credit-batches.ts:updateCreditBatch`,
-  `src/data-access/samples.ts:updateSample`,
-  `src/data-access/orders.ts:updateOrder`,
-  `src/data-access/delivery-output-writes.ts:updateDelivery`,
-  `src/data-access/transport-legs.ts:updateTransportLeg`. Their edit
-  sheets (`src/components/<entity>/<entity>-list.tsx` and
-  `src/components/transport-legs/transport-legs-editor.tsx`) call the
-  matching `useUpdate*` hook without a version.
-- **Resolve via:** follow the feedstock row-version pattern in Phase 1b.
-  Add an integer `version`, bump it in every writer with `nextVersion`, call
-  `assertRowVersion` after the locked read, and require `expectedVersion` on
-  UI updates and deletes. Re-throw through `throwActionError`
-  (`src/lib/stale-version.ts`) and add focused expected-version tests in
-  `tests/`. One PR per entity family is fine; delete this entry when the tests
-  cover all of them.
+- Production run `startTime` and `endTime` (`src/schemas/production-runs.ts:updateProductionRunSchema`),
+  incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`),
+  and sample `samplingTime` (`src/schemas/samples.ts:updateSampleSchema.samplingTime`)
+  retain instant parsing until Phase 4's API input schemas. Only sample business
+  dates use strict calendar-date parsing here.
+- **Resolve via:** Phase 4 API input schemas moving these fields onto the shared
+  instant/calendar helpers, with schema tests proving the intended parsing for
+  each field; then delete this entry.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 

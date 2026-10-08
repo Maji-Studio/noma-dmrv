@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
@@ -466,7 +467,7 @@ describe("derived transport-leg transaction boundaries", () => {
       isDerived: false,
     });
 
-    await expect(updateDelivery(ctx, delivery.id, { orderId: secondOrder.id })).rejects.toThrow(/Correct entry/);
+    await expect(updateDelivery(ctx, delivery.id, { expectedVersion: await labLogisticsVersion(ctx, "deliveries", delivery.id), orderId: secondOrder.id })).rejects.toThrow(/Correct entry/);
 
     const legsAfterReassignment = await db
       .select({
@@ -511,7 +512,7 @@ describe("derived transport-leg transaction boundaries", () => {
       ));
     expect(firstDerived).toEqual([{ distanceKm: 40 }]);
 
-    await expect(deleteDelivery(ctx, delivery.id)).rejects.toThrow(/Correct entry/);
+    await expect(deleteDelivery(ctx, delivery.id, await labLogisticsVersion(ctx, "deliveries", delivery.id))).rejects.toThrow(/Correct entry/);
     const remainingLegs = await db
       .select({
         entityId: transportLegs.entityId,

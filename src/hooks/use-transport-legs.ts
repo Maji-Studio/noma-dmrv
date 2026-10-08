@@ -1,3 +1,5 @@
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
+import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createTransportLegFn,
@@ -11,6 +13,7 @@ import {
 import type { TransportLegWithEvidence } from "@/data-access/transport-legs";
 import type {
   CreateTransportLegData,
+  DeleteTransportLegData,
   TransportEntityTypeValue,
   UpdateTransportLegData,
 } from "@/schemas/transport-legs";
@@ -98,11 +101,12 @@ export function useUpdateTransportLeg(
     mutationFn: async (input: UpdateTransportLegData): Promise<TransportLeg> => {
       const result = await updateTransportLegFn(input);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
       return result.data;
     },
     onSuccess: async (data, variables) => {
+      patchArrayListCachesByPrefixWithSavedRow(queryClient, transportLegKeys.byEntity(entityType, entityId), data);
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
@@ -121,14 +125,14 @@ export function useUpdateTransportLeg(
 export function useDeleteTransportLeg(
   entityType: TransportEntityTypeValue,
   entityId: string,
-  callbacks?: MutationCallbacks<void, { id: string }>,
+  callbacks?: MutationCallbacks<void, DeleteTransportLegData>,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { id: string }): Promise<void> => {
+    mutationFn: async (input: DeleteTransportLegData): Promise<void> => {
       const result = await deleteTransportLegFn(input);
       if (!result.success) {
-        throw new Error(result.error);
+        throwActionError(result);
       }
     },
     onSuccess: async (data, variables) => {
@@ -141,7 +145,10 @@ export function useDeleteTransportLeg(
       await queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       await callbacks?.onSuccess?.(data, variables);
     },
-    onError: callbacks?.onError,
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) queryClient.invalidateQueries({ queryKey: transportLegKeys.byEntity(entityType, entityId) });
+      return callbacks?.onError?.(error, variables);
+    },
     onMutate: callbacks?.onMutate,
     onSettled: callbacks?.onSettled,
   });

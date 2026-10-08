@@ -82,7 +82,7 @@ describe("mass input caps", () => {
   });
 
   it("rejects a tonne-denominated application mass above the shared cap", () => {
-    const result = updateApplicationSchema.safeParse({
+    const result = updateApplicationSchema.safeParse({ expectedVersion: 1,
       applicationId: UUID,
       biocharAppliedTons: MASS_INPUT_MAX_TONNES + 1,
     });

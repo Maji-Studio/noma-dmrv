@@ -1,3 +1,4 @@
+import { labLogisticsVersion } from "./helpers/lab-logistics-version";
 import { masterDataVersion } from "./helpers/master-data-version";
 import { preparePureOutputProductFixture, ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { previewOutputStock } from "@/data-access/output-stock-operations";
@@ -246,11 +247,11 @@ describe(
       try {
         await barrierReady;
         updates = Promise.allSettled([
-          updateDelivery(ctx, first.id, {
+          updateDelivery(ctx, first.id, { expectedVersion: await labLogisticsVersion(ctx, "deliveries", first.id),
             distanceKmOverride: 30,
             distanceSource: "manual",
           }),
-          updateDelivery(ctx, second.id, {
+          updateDelivery(ctx, second.id, { expectedVersion: await labLogisticsVersion(ctx, "deliveries", second.id),
             distanceKmOverride: 70,
             distanceSource: "manual",
           }),
@@ -454,7 +455,7 @@ describe(
 
       const otherRecipe = await outputProductFixtureValues(db, { organizationId: TEST_ORG_ID, facilityId: fixture.facilityId, code: "unused" });
       await expect(
-        updateOrder(ctx, fixture.orderId, {
+        updateOrder(ctx, fixture.orderId, { expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
           formulationId: otherRecipe.formulationId,
         }),
       ).rejects.toThrow(
@@ -508,7 +509,7 @@ describe(
         syncBiocharProductTransportLegs(ctx, tx, [fixture.productIds[0]]),
       );
 
-      await expect(updateOrder(ctx, fixture.orderId, {
+      await expect(updateOrder(ctx, fixture.orderId, { expectedVersion: await labLogisticsVersion(ctx, "orders", fixture.orderId),
         customerLocationId: fixture.locationIds[1],
       })).rejects.toThrow(/Order relationship is used by delivery/);
       await updateCustomerLocation(ctx, fixture.locationIds[0], { expectedVersion: await masterDataVersion(ctx, "customerLocations", fixture.locationIds[0]), distanceFromFacilityKm: 60, distanceSource: "manual" });
