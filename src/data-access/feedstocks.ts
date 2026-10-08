@@ -748,6 +748,7 @@ export async function deleteFeedstockInTransaction(
     .where(and(
       eq(feedstocks.id, feedstockId),
       eq(feedstocks.organizationId, ctx.organizationId),
+      isNull(feedstocks.archivedAt),
     ))
     .for("update");
 

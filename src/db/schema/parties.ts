@@ -216,6 +216,7 @@ export const supplierLocations = pgTable(
 // ============================================
 
 export const drivers = pgTable('drivers', {
+  version: integer('version').notNull().default(1),
   id: uuid('id').primaryKey().defaultRandom(),
   organizationId: text('organization_id')
     .notNull()

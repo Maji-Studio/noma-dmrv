@@ -4,8 +4,8 @@ import { facilityEtag, facilityRepresentationSchema, representFacility } from ".
 import { supplierEtag, supplierRepresentationSchema, representSupplier } from "./suppliers";
 import { feedstockTypeEtag, feedstockTypeRepresentationSchema, representFeedstockType } from "./feedstock-types";
 import { storageLocationEtag, storageLocationRepresentationSchema, representStorageLocation } from "./storage-locations";
-import { vehicleRepresentationSchema, representVehicle } from "./vehicles";
-import { driverRepresentationSchema, representDriver } from "./drivers";
+import { vehicleEtag, vehicleRepresentationSchema, representVehicle } from "./vehicles";
+import { driverEtag, driverRepresentationSchema, representDriver } from "./drivers";
 import { supplierLocationRepresentationSchema, representSupplierLocation } from "./supplier-locations";
 
 const id = "4d766880-6bb2-4dcb-ad62-e00c04bcbb4b";
@@ -37,13 +37,13 @@ const cases = [
     json: () => representStorageLocation({ ...base, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null, createdAt: instant, updatedAt: instant }),
     expected: { ...expected, version: 7, facilityId: id, type: "feedstock_bin", capacityKg: 0, feedstockTypeId: null } },
   { name: "vehicle", schema: vehicleRepresentationSchema,
-    map: () => representVehicle({ ...base, ...privateFields, identifier: "T 123 ABC", vehicleType: "truck" }),
-    json: () => representVehicle({ ...base, identifier: "T 123 ABC", vehicleType: "truck", createdAt: instant, updatedAt: instant }),
-    expected: { ...expected, identifier: "T 123 ABC", vehicleType: "truck" } },
+    map: () => representVehicle({ ...base, version: 7, ...privateFields, identifier: "T 123 ABC", vehicleType: "truck" }),
+    json: () => representVehicle({ ...base, version: 7, identifier: "T 123 ABC", vehicleType: "truck", createdAt: instant, updatedAt: instant }),
+    expected: { ...expected, version: 7, identifier: "T 123 ABC", vehicleType: "truck" } },
   { name: "driver", schema: driverRepresentationSchema,
-    map: () => representDriver({ ...base, ...privateFields }),
-    json: () => representDriver({ ...base, createdAt: instant, updatedAt: instant }),
-    expected },
+    map: () => representDriver({ ...base, version: 7, ...privateFields }),
+    json: () => representDriver({ ...base, version: 7, createdAt: instant, updatedAt: instant }),
+    expected: { ...expected, version: 7 } },
   { name: "supplier location", schema: supplierLocationRepresentationSchema,
     map: () => representSupplierLocation({ ...base, ...privateFields, name: null, version: 7, supplierId: id, gpsLatitude: 0, gpsLongitude: null }),
     json: () => representSupplierLocation({ ...base, name: null, version: 7, supplierId: id, gpsLatitude: 0, gpsLongitude: null, createdAt: instant, updatedAt: instant }),
@@ -65,6 +65,6 @@ it("serializes archive Dates and stored instants, and emits strong version/revis
   expect(representFacility({ ...base, version: 7, timezone: "UTC", archivedAt: new Date(archived) }).archivedAt).toBe(archived);
   expect(representFeedstockType({ ...base, version: 7, category: "forestry", usage: "pyrolysis", archivedAt: archived }).archivedAt).toBe(archived);
   expect(representStorageLocation({ ...base, version: 7, facilityId: id, type: "biochar_bin", capacityKg: null, feedstockTypeId: null, archivedAt: new Date(archived) })).toMatchObject({ archivedAt: archived, capacityKg: null });
-  for (const etag of [facilityEtag, supplierEtag, feedstockTypeEtag, storageLocationEtag]) expect(etag({ version: 7 })).toBe('"7.1"');
-  expect(representVehicle({ ...base, vehicleType: "truck", identifier: null }).identifier).toBeNull();
+  for (const etag of [facilityEtag, supplierEtag, feedstockTypeEtag, storageLocationEtag, vehicleEtag, driverEtag]) expect(etag({ version: 7 })).toBe('"7.1"');
+  expect(representVehicle({ ...base, version: 7, vehicleType: "truck", identifier: null }).identifier).toBeNull();
 });

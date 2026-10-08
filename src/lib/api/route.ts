@@ -2,7 +2,7 @@ import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { randomUUID } from "node:crypto";
 import { resolveApiContext, type ApiContext } from "@/lib/auth/api-context";
 import { hasRoleAndScope, type ApiScope } from "@/lib/auth/api-scopes";
-import { DomainError } from "@/lib/domain-errors";
+import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 import { actionFailureResponse, apiDenialResponse, apiResponseHeaders, problemResponse } from "./problem";
 import { logApiError, unexpectedApiErrorResponse } from "./route-error";
@@ -57,7 +57,9 @@ export function apiRoute<Params = Record<string, never>>(
         headers.set(name, value);
         context.headers.set(name, value);
       }
-      const response = await handler(request, context, route ? await route.params : {} as Params);
+      const params = route ? await route.params : {} as Params;
+      if (Date.now() >= deadlineAt) throw deadlineExceeded("before starting");
+      const response = await handler(request, context, params);
       return finish(response);
     } catch (error) {
       if (error instanceof ApiHttpError) {
