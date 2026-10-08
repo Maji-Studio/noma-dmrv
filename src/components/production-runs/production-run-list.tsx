@@ -46,7 +46,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatDateRange, formatMassKg } from "@/lib/format-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
-import { StaleVersionError, staleDeleteMessage, toSaveErrorMessage } from "@/lib/stale-version";
+import { StaleVersionError, toDeleteErrorMessage, toSaveErrorMessage } from "@/lib/stale-version";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { productionRunSheetSections, RunStatusBadge } from "./production-run-read-sections";
@@ -325,17 +325,18 @@ export function ProductionRunList() {
   const handleDelete = (runId: string) => setDeletingRunId(runId);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingRunId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteRun.mutateAsync({ productionRunId: deletingRunId, expectedVersion: deleting!.version });
+      await deleteRun.mutateAsync({ productionRunId: deleting.id, expectedVersion: deleting.version });
       if (focusedRunId === deletingRunId) {
         setFocusedRunId(null);
       }
       setDeletingRunId(null);
       toast.success("Production run deleted.");
     } catch (error) {
-      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage(`Production run ${deleting!.code}`) : error instanceof Error ? error.message : "Production run was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeleting(null);
+      setDeleteError(toDeleteErrorMessage(error, `Production run ${deleting.code}`, "Production run was not deleted. Try again."));
     }
   };
 

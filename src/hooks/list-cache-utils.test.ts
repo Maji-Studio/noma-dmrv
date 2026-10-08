@@ -5,7 +5,7 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
-import { patchArrayListCachesWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
+import { patchArrayListCacheByExactKeyWithSavedRow, patchArrayListCachesByPrefixWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 
 interface Row {
   id: string;
@@ -79,7 +79,7 @@ it("patches every matching array list while preserving enrichment and unrelated 
   const keys = [["measurements", "list", "run-a"], ["measurements", "list", "run-b"]];
   for (const key of keys) queryClient.setQueryData(key, [row, other]);
   queryClient.setQueryData(["other", "list"], [row]);
-  patchArrayListCachesWithSavedRow<Row>(queryClient, ["measurements", "list"], {
+  patchArrayListCachesByPrefixWithSavedRow<Row>(queryClient, ["measurements", "list"], {
     id: row.id, updatedAt: SAVED_AT,
   });
   for (const key of keys) {
@@ -87,4 +87,16 @@ it("patches every matching array list while preserving enrichment and unrelated 
   }
   expect(queryClient.getQueryData(["other", "list"])).toEqual([row]);
   expect(queryClient.getQueryData(["measurements", "list", "uncached"])).toBeUndefined();
+});
+
+
+it("patches only the exact array key, leaving its descendants alone", () => {
+  const queryClient = new QueryClient();
+  const exactKey = ["locations", "list"];
+  const descendantKey = [...exactKey, "customer"];
+  queryClient.setQueryData(exactKey, [row]);
+  queryClient.setQueryData(descendantKey, [row]);
+  patchArrayListCacheByExactKeyWithSavedRow<Row>(queryClient, exactKey, { id: row.id, updatedAt: SAVED_AT });
+  expect(queryClient.getQueryData(exactKey)).toEqual([{ ...row, updatedAt: SAVED_AT }]);
+  expect(queryClient.getQueryData(descendantKey)).toEqual([row]);
 });

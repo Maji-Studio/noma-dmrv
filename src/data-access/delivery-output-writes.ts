@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { deliveries, drivers, facilities, orders, storageLocations, vehicles, type Delivery } from '@/db/schema';
+import { deliveries, drivers, facilities, orders, storageLocations, vehicles, type BiocharProduct, type Delivery } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { SafeError } from '@/lib/errors';
 import { createDeliverySchema, updateDeliverySchema } from '@/schemas/deliveries';
@@ -13,7 +13,9 @@ import { withOutputStockPosting } from './output-stock-post';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { assertSameOrg, requireOrgScope } from './utils';
 
-export async function createDelivery(ctx: OrgContext, raw: z.input<typeof createDeliverySchema>): Promise<Delivery> {
+export type CreatedDelivery = Delivery & { savedProducts: BiocharProduct[] };
+
+export async function createDelivery(ctx: OrgContext, raw: z.input<typeof createDeliverySchema>): Promise<CreatedDelivery> {
   requireOrgScope(ctx);
   const data = createDeliverySchema.parse(raw);
   const input = { storageLocationId: data.storageLocationId, facilityId: data.facilityId, occurredAt: data.deliveryDate.toISOString(), kind: 'delivery' as const,
@@ -24,7 +26,8 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
   return withOutputStockPosting(ctx, { input, payload, locksTransportRoutes: true, replay: async (tx, existing) => {
       const [delivery] = await tx.select().from(deliveries).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, String(existing.inputSnapshot?.deliveryId))));
       if (!delivery) throw new SafeError('Posted delivery not found');
-      return delivery;
+      // Replays write no products; the client invalidates their caches.
+      return { ...delivery, savedProducts: [] };
     }, write: async (tx, post) => {
     const [facility] = await tx.select({ id: facilities.id }).from(facilities).where(and(eq(facilities.organizationId, ctx.organizationId), eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))).for('share');
     if (!facility) throw new SafeError('Facility not found or archived');
@@ -41,7 +44,7 @@ export async function createDelivery(ctx: OrgContext, raw: z.input<typeof create
     // A split-bin load stores its overall moisture, 1 − solids ÷ wet, from the per-sub-bin readings.
     const [saved] = await tx.update(deliveries).set({ massDryKg: posted.preview.removedDryKg, moistureContentPercent: posted.moisturePercent }).where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.id, delivery.id))).returning();
     await syncBiocharProductTransportLegs(ctx, tx, posted.preview.allocations.map(a => a.layerId));
-    return saved;
+    return { ...saved, savedProducts: posted.savedProducts };
   } });
 }
 export async function updateDelivery(ctx: OrgContext, deliveryId: string, raw: Omit<z.input<typeof updateDeliverySchema>, 'deliveryId'>): Promise<Delivery> {

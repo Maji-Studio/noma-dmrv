@@ -3,16 +3,27 @@ import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { STALE_VERSION_CONFLICT_CODE, STALE_VERSION_MESSAGE, StaleVersionError } from "@/lib/stale-version";
 
-const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), post: vi.fn() }));
+const mocks = vi.hoisted(() => ({ update: vi.fn(), remove: vi.fn(), post: vi.fn(), createDelivery: vi.fn() }));
 vi.mock("@/fn/production-incidents", () => ({ getProductionIncidentsFn: vi.fn(), createProductionIncidentFn: vi.fn(), updateProductionIncidentFn: mocks.update, deleteProductionIncidentFn: mocks.remove }));
 vi.mock("@/fn/production-samples", () => ({ getProductionSamplesFn: vi.fn(), createProductionSampleFn: vi.fn(), updateProductionSampleFn: mocks.update, deleteProductionSampleFn: mocks.remove }));
 vi.mock("@/fn/production-runs", () => ({ getProductionRunByIdFn: vi.fn(), getProductionRunReadingsFn: vi.fn(), createProductionRunFn: vi.fn(), updateProductionRunFn: mocks.update, deleteProductionRunFn: mocks.remove }));
 vi.mock("@/fn/biochar-products", () => ({ getBiocharProductsFn: vi.fn(), getBiocharProductByIdFn: vi.fn(), createBiocharProductFn: vi.fn(), updateBiocharProductFn: mocks.update, deleteBiocharProductFn: mocks.remove }));
 vi.mock("@/fn/output-stock", () => ({ getMatchingOutputBinsFn: vi.fn(), getOutputStockHistoryFn: vi.fn(), getOutputSubBinsFn: vi.fn(), postOutputStockFn: mocks.post, previewOutputStockFn: vi.fn() }));
+// Keep indirectly imported query-key factories without loading server modules.
+vi.mock("@/fn/certification", () => ({}));
+vi.mock("@/fn/orders", () => ({}));
+vi.mock("@/fn/chain-of-custody", () => ({}));
+vi.mock("@/fn/storage-locations", () => ({}));
+vi.mock("@/fn/facilities", () => ({}));
+vi.mock("@/fn/reactors", () => ({}));
+vi.mock("@/fn/credit-batches", () => ({}));
 import { useUpdateProductionIncident, useDeleteProductionIncident } from "./use-production-incidents";
 import { useUpdateProductionSample, useDeleteProductionSample } from "./use-production-samples";
 import { useUpdateProductionRun, useDeleteProductionRun } from "./use-production-runs";
 import { useUpdateBiocharProduct, useDeleteBiocharProduct } from "./use-biochar-products";
+vi.mock("@/fn/deliveries", () => ({ createDeliveryFn: mocks.createDelivery, deleteDeliveryFn: vi.fn(), getDeliveriesFn: vi.fn(), getDeliveryStatsFn: vi.fn(), getDeliveryWithRelationsFn: vi.fn(), updateDeliveryFn: vi.fn() }));
+import { useCreateDelivery, deliveryKeys } from "./use-deliveries";
+import { biocharProductKeys } from "./use-biochar-products";
 import { usePostOutputStock } from "./use-output-stock";
 
 const ID = "33333333-3333-4333-8333-333333333333";
@@ -74,5 +85,42 @@ it("merges corrected stock product versions into cached edit rows", async () => 
   await harness(usePostOutputStock, client, {}, async invoke => {
     await act(async () => { await invoke(); });
     expect(client.getQueryData(key)).toMatchObject({ items: [{ version: SAVED_VERSION }] });
+  });
+});
+
+
+describe("delivery creation product caches", () => {
+  it.each([false, true])("merges saved product rows and invalidates lists and details (replay: %s)", async replay => {
+    const delivery = { id: "delivery", savedProducts: replay ? [] : [saved] };
+    mocks.createDelivery.mockResolvedValueOnce({ success: true, data: delivery });
+    const client = new QueryClient();
+    const initial = { id: ID, version: INITIAL_VERSION, relation: "preserved" };
+    const other = { id: "unaffected", version: INITIAL_VERSION };
+    const keys = [biocharProductKeys.list({ page: 1 }), biocharProductKeys.list({ page: 2 })];
+    for (const key of keys) client.setQueryData(key, { items: [initial, other], total: 2 });
+    client.setQueryData(biocharProductKeys.detail(ID), initial);
+    client.setQueryData(biocharProductKeys.detail(other.id), other);
+    const unrelatedKey = ["unrelated", "list"];
+    client.setQueryData(unrelatedKey, initial);
+    const expected = replay ? initial : { ...initial, ...saved };
+    const invalidate = client.invalidateQueries.bind(client);
+    vi.spyOn(client, "invalidateQueries").mockImplementation((...args) => {
+      expect(client.getQueryData(biocharProductKeys.detail(ID))).toEqual(expected);
+      for (const key of keys) expect(client.getQueryData(key)).toEqual({ items: [expected, other], total: 2 });
+      return invalidate(...args);
+    });
+    await harness(useCreateDelivery, client, {}, async invoke => {
+      await act(async () => { await invoke(); });
+      for (const key of keys) {
+        expect(client.getQueryData(key)).toEqual({ items: [expected, other], total: 2 });
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      }
+      expect(client.getQueryData(biocharProductKeys.detail(ID))).toEqual(expected);
+      expect(client.getQueryState(biocharProductKeys.detail(ID))?.isInvalidated).toBe(true);
+      expect(client.getQueryData(biocharProductKeys.detail(other.id))).toEqual(other);
+      expect(client.getQueryState(biocharProductKeys.detail(other.id))?.isInvalidated).toBe(true);
+      expect(client.getQueryData(deliveryKeys.detail(delivery.id))).toEqual(delivery);
+      expect(client.getQueryState(unrelatedKey)?.isInvalidated).toBe(false);
+    });
   });
 });

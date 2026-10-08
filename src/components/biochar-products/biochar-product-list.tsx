@@ -3,7 +3,7 @@
  * Main biochar product listing with CRUD operations, stat cards, and DataTable
  */
 "use client";
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { StaleVersionError, toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -396,14 +396,15 @@ export function BiocharProductList() {
   const handleDelete = (productId: string) => setDeletingProductId(productId);
 
   const handleDeleteConfirm = async () => {
-    if (!deletingProductId) return;
+    if (!deleting) return;
     setDeleteError(null);
     try {
-      await deleteProduct.mutateAsync({ productId: deletingProductId, expectedVersion: deleting!.version });
+      await deleteProduct.mutateAsync({ productId: deleting.id, expectedVersion: deleting.version });
       setDeletingProductId(null);
       toast.success("Biochar product deleted.");
     } catch (error) {
-      setDeleteError(error instanceof StaleVersionError ? staleDeleteMessage(`Biochar product ${deleting!.code}`) : error instanceof Error ? error.message : "Biochar product was not deleted. Try again.");
+      if (error instanceof StaleVersionError) setDeleting(null);
+      setDeleteError(toDeleteErrorMessage(error, `Biochar product ${deleting.code}`, "Biochar product was not deleted. Try again."));
     }
   };
 

@@ -45,7 +45,7 @@ import {
 
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
-import { patchArrayListCacheWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
+import { patchArrayListCacheByExactKeyWithSavedRow, patchListCachesWithSavedRow } from "./list-cache-utils";
 import { invalidateOnboardingProgress } from "./use-onboarding";
 import { supplierKeys } from "./supplier-query-keys";
 import { entityKeys, invalidateEntityTypeQueries } from "./entity-query-keys";
@@ -502,7 +502,7 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       return result.data;
     },
     onSuccess: (data, variables) => {
-      patchArrayListCacheWithSavedRow<SupplierLocation>(queryClient, supplierKeys.supplierLocations(supplierId), data);
+      patchArrayListCacheByExactKeyWithSavedRow<SupplierLocation>(queryClient, supplierKeys.supplierLocations(supplierId), data);
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
       queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
       queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });

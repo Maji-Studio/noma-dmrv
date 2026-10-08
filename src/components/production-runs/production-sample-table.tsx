@@ -4,7 +4,7 @@
  * production run detail.
  */
 "use client";
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -149,14 +149,14 @@ export function ProductionSampleTable({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     try {
-      await deleteSample.mutateAsync({ productionSampleId: deletingId, expectedVersion: deleting!.version });
+      await deleteSample.mutateAsync({ productionSampleId: deleting.id, expectedVersion: deleting.version });
       setDeletingId(null);
       toast.success("In-process measurement deleted.");
     } catch (err) {
-      toast.error(err instanceof StaleVersionError ? staleDeleteMessage("In-process measurement") : err instanceof Error ? err.message : "In-process measurement was not deleted. Try again.");
-      setDeletingId(null);
+      setDeleting(null);
+      toast.error(toDeleteErrorMessage(err, "In-process measurement", "In-process measurement was not deleted. Try again."));
     }
   };
 

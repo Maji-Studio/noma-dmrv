@@ -461,4 +461,4 @@ export async function getDeliveryWithRelations(
 /**
  * Create a new delivery
  */
-export { createDelivery, deleteDelivery, updateDelivery } from './delivery-output-writes';
+export { createDelivery, deleteDelivery, updateDelivery, type CreatedDelivery } from './delivery-output-writes';

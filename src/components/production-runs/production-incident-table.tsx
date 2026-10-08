@@ -4,7 +4,7 @@
  * production run.
  */
 "use client";
-import { StaleVersionError, staleDeleteMessage } from "@/lib/stale-version";
+import { toDeleteErrorMessage } from "@/lib/stale-version";
 
 import { useState } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr";
@@ -93,14 +93,14 @@ export function ProductionIncidentTable({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleting) return;
     try {
-      await deleteIncident.mutateAsync({ productionIncidentId: deletingId, expectedVersion: deleting!.version });
+      await deleteIncident.mutateAsync({ productionIncidentId: deleting.id, expectedVersion: deleting.version });
       setDeletingId(null);
       toast.success("Incident deleted");
     } catch (err) {
-      toast.error(err instanceof StaleVersionError ? staleDeleteMessage("Incident") : err instanceof Error ? err.message : "Incident was not deleted. Try again.");
-      setDeletingId(null);
+      setDeleting(null);
+      toast.error(toDeleteErrorMessage(err, "Incident", "Incident was not deleted. Try again."));
     }
   };
 

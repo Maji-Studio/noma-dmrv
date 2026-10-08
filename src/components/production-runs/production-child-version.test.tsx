@@ -60,6 +60,11 @@ for (const [label, title, idKey, Component] of [
         await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
         expect(state.remove).toHaveBeenCalledWith({ [idKey]: "child", expectedVersion: INITIAL_VERSION });
         expect(state.toast).toHaveBeenCalledWith(staleDeleteMessage(title));
+        expect(renderer.root.findAllByProps({ "aria-label": "Confirm delete" })).toHaveLength(0);
+        state.remove.mockResolvedValueOnce(undefined);
+        await act(async () => { renderer.root.findByProps({ "aria-label": `Delete ${label}` }).props.onClick(); });
+        await act(async () => { await renderer.root.findByProps({ "aria-label": "Confirm delete" }).props.onClick(); });
+        expect(state.remove).toHaveBeenLastCalledWith({ [idKey]: "child", expectedVersion: NEW_VERSION });
       } finally { await act(async () => renderer.unmount()); }
     });
   });

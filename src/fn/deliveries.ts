@@ -15,6 +15,7 @@ import {
   getDeliveries as getDeliveriesData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
   updateDelivery,
+  type CreatedDelivery,
   type DeliveryDetail,
   type PaginatedDeliveries,
 } from "@/data-access/deliveries";
@@ -162,7 +163,7 @@ export async function getDeliveryStatsFn(
  */
 export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
-): Promise<ActionResult<Delivery>> {
+): Promise<ActionResult<CreatedDelivery>> {
   return withAction(async (ctx) => {
     const delivery = await withAutoCode(
       ctx,
