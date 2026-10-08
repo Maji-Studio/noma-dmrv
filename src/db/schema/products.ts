@@ -93,6 +93,7 @@ export const formulationIngredients = pgTable(
 
 export const biocharProducts = pgTable('biochar_products', {
   id: uuid('id').primaryKey().defaultRandom(),
+    version: integer('version').notNull().default(1),
   organizationId: text('organization_id')
     .notNull()
     .references(() => organizations.id),

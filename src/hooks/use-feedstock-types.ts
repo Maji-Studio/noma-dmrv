@@ -3,7 +3,7 @@
 import { throwActionError, StaleVersionError } from "@/lib/stale-version";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { patchArrayListCacheWithSavedRow } from "./list-cache-utils";
+import { patchArrayListCacheByExactKeyWithSavedRow } from "./list-cache-utils";
 import type { FeedstockType } from "@/db/schema";
 import { entityKeys } from "./entity-query-keys";
 import {
@@ -73,7 +73,7 @@ export function useUpdateFeedstockType() {
     },
     onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
     onSuccess: (data) => {
-      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      patchArrayListCacheByExactKeyWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
       invalidate();
     },
   });
@@ -89,7 +89,7 @@ export function useArchiveFeedstockType() {
       return result.data;
     },
     onSuccess: (data) => {
-      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      patchArrayListCacheByExactKeyWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
       invalidate();
     },
     onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },
@@ -106,7 +106,7 @@ export function useUnarchiveFeedstockType() {
       return result.data;
     },
     onSuccess: (data) => {
-      patchArrayListCacheWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
+      patchArrayListCacheByExactKeyWithSavedRow<FeedstockType>(queryClient, feedstockTypeKeys.list(), data);
       invalidate();
     },
     onError: (error) => { if (error instanceof StaleVersionError) invalidate(); },

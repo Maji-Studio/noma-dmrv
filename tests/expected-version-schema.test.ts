@@ -8,7 +8,6 @@
 
 import { describe, expect, it } from "vitest";
 import { updateApplicationSchema } from "@/schemas/applications";
-import { updateProductionRunSchema } from "@/schemas/production-runs";
 
 const ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const DELIVERY_ID = "11111111-2222-4333-8444-555555555555";
@@ -21,7 +20,6 @@ const schemas = [
     updateApplicationSchema,
     { applicationId: ID, deliveryId: DELIVERY_ID },
   ],
-  ["production run", updateProductionRunSchema, { productionRunId: ID }],
 ] as const;
 
 describe("expectedUpdatedAt on the update schemas", () => {

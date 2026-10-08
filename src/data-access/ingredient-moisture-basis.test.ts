@@ -45,7 +45,7 @@ describe('remaining ingredient moisture', () => {
   it('round-trips repeating moisture through the production schema without rounding the solids ratio', async () => {
     const basis = await getIngredientMoistureBasis(ctx, 'bin', undefined, reader([{ wet: 150, dry: 140 }]));
     expect(basis?.moisturePercent).toBe(6.666667);
-    const parsed = updateProductionRunSchema.parse({
+    const parsed = updateProductionRunSchema.parse({ expectedVersion: 1,
       productionRunId: '00000000-0000-4000-8000-000000000001', feedstockMoisturePercent: basis?.moisturePercent,
     });
     expect(parsed.feedstockMoisturePercent).toBe(basis?.moisturePercent);

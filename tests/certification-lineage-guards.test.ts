@@ -1,3 +1,4 @@
+import { productionVersion } from "./helpers/production-version";
 import { ensureOutputFixtureActor } from "./helpers/output-contract-fixtures";
 import { withProductStockFingerprint } from "./helpers/product-stock-preview-fixture";
 import { insertOutputApplicationFixture } from "./helpers/output-contract-fixtures";
@@ -421,7 +422,7 @@ describe("certification lineage guards", () => {
       const updated = await updateProductionRun(
         makeTestOrgContext(TEST_USER_ID),
         fixture.productionRunId,
-        {
+        { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId),
           feedingRateKgHr: 1_100,
         },
       );
@@ -448,7 +449,7 @@ describe("certification lineage guards", () => {
         updateProductionRun(
           makeTestOrgContext(TEST_USER_ID),
           fixture.productionRunId,
-          { feedstockWetMassKg: 1_100 },
+          { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId), feedstockWetMassKg: 1_100 },
         ),
       ).rejects.toThrow("A feedstock source bin is required");
     }, "none");
@@ -467,7 +468,7 @@ describe("certification lineage guards", () => {
   it("rejects production run dry-mass edits once a linked removal is submitted", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, {
+        updateProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId),
           feedstockMoisturePercent: 11,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -477,7 +478,7 @@ describe("certification lineage guards", () => {
   it("rejects production run deletion once linked to a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId),
+        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId)),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });
@@ -536,7 +537,7 @@ describe("certification lineage guards", () => {
           updateProductionRun(
             makeTestOrgContext(TEST_USER_ID),
             fixture.productionRunId,
-            { feedstockMoisturePercent: 11 },
+            { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId), feedstockMoisturePercent: 11 },
           ),
         ).rejects.toThrow(LOCKED_COPY);
       } finally {
@@ -740,7 +741,7 @@ describe("certification lineage guards", () => {
   it("rejects biochar product edits once linked to a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), fixture.productId, {
+        updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), fixture.productId, { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "biocharProducts", fixture.productId),
           massKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);

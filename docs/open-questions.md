@@ -283,23 +283,19 @@ Pure starter residue; org scoping came later via ADR 0010.
 - **Observed:** feedstock updates and deletes require integer `expectedVersion`
   and use `src/data-access/row-version.ts`, as do facilities, reactors, storage
   bins, customers and suppliers with their locations, formulations, feedstock
-  types, and facility emission factors. Applications and production runs still
-  use `expectedUpdatedAt` through
+  types, facility emission factors, production runs, production incidents,
+  in-process measurements, and biochar products. Applications still use
+  `expectedUpdatedAt` through
   `src/data-access/expected-version.ts:assertExpectedVersion`.
   These edit-form updaters do not accept or check a version
   (some lock their row, some do not):
   `src/data-access/credit-batches.ts:updateCreditBatch`,
-  `src/data-access/biochar-products.ts:updateBiocharProduct`,
   `src/data-access/samples.ts:updateSample`,
   `src/data-access/orders.ts:updateOrder`,
   `src/data-access/delivery-output-writes.ts:updateDelivery`,
-  `src/data-access/transport-legs.ts:updateTransportLeg`,
-  `src/data-access/production-incidents.ts:updateProductionIncident`,
-  `src/data-access/production-samples.ts:updateProductionSample`. Their edit
-  sheets (`src/components/<entity>/<entity>-list.tsx`,
-  `src/components/transport-legs/transport-legs-editor.tsx`,
-  `src/components/production-runs/production-incident-table.tsx`,
-  `src/components/production-runs/production-sample-table.tsx`) call the
+  `src/data-access/transport-legs.ts:updateTransportLeg`. Their edit
+  sheets (`src/components/<entity>/<entity>-list.tsx` and
+  `src/components/transport-legs/transport-legs-editor.tsx`) call the
   matching `useUpdate*` hook without a version.
 - **Resolve via:** follow the feedstock row-version pattern in Phase 1b.
   Add an integer `version`, bump it in every writer with `nextVersion`, call

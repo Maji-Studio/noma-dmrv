@@ -9,7 +9,7 @@ import {
   emptyToNull,
   MASS_INPUT_MAX_KG,
   massKgSchema,
-  expectedUpdatedAtSchema,
+  expectedVersionSchema,
   optionalDateOnly,
   optionalStoredPercent,
   PG_INTEGER_MAX,
@@ -496,7 +496,7 @@ export const updateProductionRunSchema = z.object({
   facilityId: z.string().uuid().optional(),
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
-  expectedUpdatedAt: expectedUpdatedAtSchema,
+  expectedVersion: expectedVersionSchema,
   cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
   startTime: z.union([
     z.date(),
@@ -551,6 +551,7 @@ export const updateProductionRunSchema = z.object({
  * Schema for deleting a production run
  */
 export const deleteProductionRunSchema = z.object({
+  expectedVersion: expectedVersionSchema,
   productionRunId: z.string().uuid("Choose a valid production run."),
 });
 
@@ -624,3 +625,5 @@ export function formatProductionRunStatus(status: ProductionRunStatus): string {
   };
   return labels[status];
 }
+
+export type DeleteProductionRunData = z.infer<typeof deleteProductionRunSchema>;

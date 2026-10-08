@@ -1,4 +1,6 @@
 "use client";
+import { throwActionError } from "@/lib/stale-version";
+import { patchListCachesWithSavedRow } from "./list-cache-utils";
 
 import { getMatchingOutputBinsFn, getOutputStockHistoryFn, getOutputSubBinsFn, postOutputStockFn, previewOutputStockFn } from "@/fn/output-stock";
 import type { OutputStockPostInput, OutputStockPreviewInput, OutputSubBinsInput } from "@/types/output-stock";
@@ -110,10 +112,14 @@ export function usePostOutputStock() {
   return useMutation({
     mutationFn: async (input: OutputStockPostInput) => {
       const result = await postOutputStockFn(input);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      for (const row of data.savedProducts) {
+        patchListCachesWithSavedRow(client, biocharProductKeys.lists(), row);
+        client.setQueryData(biocharProductKeys.detail(row.id), (old: object | undefined) => old ? { ...old, ...row } : old);
+      }
       for (const key of [outputStockKeys.all, storageLocationKeys.all, biocharProductKeys.all, deliveryKeys.all, orderKeys.all, dashboardOverviewKeys.all, certificationKeys.all, creditBatchKeys.all, chainOfCustodyKeys.all]) {
         void client.invalidateQueries({ queryKey: key });
       }

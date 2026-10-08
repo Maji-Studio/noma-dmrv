@@ -163,8 +163,19 @@ in the same statement as the change. Sibling and cascade writes bump every
 affected row too, including facility archive and restore. Ordinary UI updates
 and deletes must send the `expectedVersion` loaded when the operator opened
 the record. Feedstocks, facilities, reactors, storage bins, suppliers and their
-locations, customers and their locations, formulations, feedstock types, and
-facility emission factors use integer row versions. Inserts start at version 1.
+locations, customers and their locations, formulations, feedstock types,
+facility emission factors, production runs, production incidents, in-process
+measurements (`productionSamples`), and biochar products use integer row
+versions. Inserts start at version 1. Stock loss, count, and correction commands
+send the product versions from their preview; posting checks the affected
+products and returns their incremented rows. Delivery creation deliberately
+consumes current stock under bin locks and bumps its affected products as an
+internal side effect. Facility archive and restore bump descendant runs and
+products without child preconditions.
+
+Successful saves and corrections merge returned versions into every list cache
+that supplies edit sheets before invalidation. Stale deletes refresh the list
+and explain that the record was not deleted.
 
 A mismatch throws `DomainError` with `code: "stale_version"` and a conflict
 reference to the edited record using the `stale-version` sentinel. The hook
@@ -174,7 +185,7 @@ form shows `STALE_VERSION_MESSAGE` while keeping the operator's draft.
 The existing timestamp checks use `assertExpectedVersion`
 in `src/data-access/expected-version.ts`: edit forms send `updatedAt` as
 `expectedUpdatedAt`, and the updater compares it after locking the row.
-Those legacy fields remain optional for applications and production runs.
+Those legacy fields remain optional for applications.
 The emission-factors upsert instead requires `expectedVersion: number | null`.
 Its form sends `null` when it loaded no row, so a row saved since (or a
 concurrent first save, serialized by the facility row lock) is refused as stale.

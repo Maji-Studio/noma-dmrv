@@ -1,4 +1,5 @@
 import { masterDataVersion } from "./helpers/master-data-version";
+import { productionVersion } from "./helpers/production-version";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -679,8 +680,8 @@ describe(
 
       const outcome = await archiveFacilityBeforeReferenceWrite(
         fixture,
-        () =>
-          updateProductionRun(ctx, fixture.existingProductionRunId, {
+        async () =>
+          updateProductionRun(ctx, fixture.existingProductionRunId, { expectedVersion: await productionVersion(ctx, "productionRuns", fixture.existingProductionRunId),
             facilityId: fixture.targetFacilityId,
             reactorId: fixture.targetReactorId,
           }),
@@ -780,7 +781,7 @@ describe(
       await db.transaction((tx) => updateFeedstockInTransaction(ctx, tx, fixture.unlocatedFeedstockId, { expectedVersion: 1,
         facilityId: fixture.targetFacilityId,
       }));
-      await updateProductionRun(ctx, fixture.existingProductionRunId, {
+      await updateProductionRun(ctx, fixture.existingProductionRunId, { expectedVersion: await productionVersion(ctx, "productionRuns", fixture.existingProductionRunId),
         facilityId: fixture.targetFacilityId,
         reactorId: fixture.targetReactorId,
       });

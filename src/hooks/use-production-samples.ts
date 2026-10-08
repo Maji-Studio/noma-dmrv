@@ -1,3 +1,5 @@
+import { patchArrayListCachesByPrefixWithSavedRow } from "./list-cache-utils";
+import { StaleVersionError, throwActionError } from "@/lib/stale-version";
 /**
  * Production Samples React Query Hooks
  * Client-side state management for in-process sample operations
@@ -7,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateProductionSampleData,
   UpdateProductionSampleData,
+  DeleteProductionSampleData,
 } from "@/schemas/production-samples";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
 import {
@@ -99,10 +102,11 @@ export function useUpdateProductionSample(
   return useMutation({
     mutationFn: async (data: UpdateProductionSampleData) => {
       const result = await updateProductionSampleFn(data);
-      if (!result.success) throw new Error(result.error);
+      if (!result.success) throwActionError(result);
       return result.data;
     },
     onSuccess: (data, variables) => {
+      patchArrayListCachesByPrefixWithSavedRow<ProductionSampleWithRelations>(queryClient, productionSampleKeys.lists(), data);
       queryClient.invalidateQueries({
         queryKey: productionSampleKeys.list(variables.productionRunId),
       });
@@ -121,14 +125,14 @@ export function useUpdateProductionSample(
  */
 export function useDeleteProductionSample(
   productionRunId: string | undefined,
-  callbacks?: MutationCallbacks<void, string>
+  callbacks?: MutationCallbacks<void, DeleteProductionSampleData>
 ) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (productionSampleId: string) => {
-      const result = await deleteProductionSampleFn({ productionSampleId });
-      if (!result.success) throw new Error(result.error);
+    mutationFn: async (data: DeleteProductionSampleData) => {
+      const result = await deleteProductionSampleFn(data);
+      if (!result.success) throwActionError(result);
     },
     onSuccess: (_data, variables) => {
       if (productionRunId) {
@@ -141,7 +145,10 @@ export function useDeleteProductionSample(
       });
       callbacks?.onSuccess?.(undefined, variables);
     },
-    onError: callbacks?.onError,
+    onError: (error, variables) => {
+      if (error instanceof StaleVersionError) queryClient.invalidateQueries({ queryKey: productionSampleKeys.lists() });
+      callbacks?.onError?.(error, variables);
+    },
     onSettled: callbacks?.onSettled,
   });
 }
