@@ -27,6 +27,7 @@ type ProblemOptions = {
   errors?: { pointer: string; code: string; detail: string; meta?: Record<string, unknown> }[];
   conflict?: ActionFailure["conflict"]; blockers?: ActionFailure["blockers"];
   retryAfterSeconds?: number;
+  current?: unknown;
 };
 export function problemResponse(options: ProblemOptions): Response {
   const { status, code, instance, requestId } = options;
@@ -42,6 +43,7 @@ export function problemResponse(options: ProblemOptions): Response {
     errors: internal ? [] : options.errors ?? [],
     ...(!internal && options.conflict ? { conflict: options.conflict } : {}),
     ...(!internal && options.blockers ? { blockers: options.blockers } : {}),
+    ...(!internal && options.current !== undefined ? { current: options.current } : {}),
   }, { status, headers });
 }
 

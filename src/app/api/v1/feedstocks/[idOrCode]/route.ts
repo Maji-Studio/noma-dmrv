@@ -1,0 +1,21 @@
+import { apiRoute } from "@/lib/api/route";
+import { readFeedstock } from "@/lib/api/feedstock-queries";
+import { mutateFeedstockResponse } from "@/lib/api/feedstock-mutations";
+import { feedstockEtag } from "@/lib/api/representations/feedstocks";
+import { parseApiQuery } from "@/lib/api/query";
+import { z } from "zod";
+
+export const runtime = "nodejs";
+export const maxDuration = 30;
+
+type Params = { idOrCode: string };
+export const GET = apiRoute<Params>("api.v1.feedstocks.get", "feedstocks:read", async (request, { ctx, headers }, { idOrCode }) => {
+  parseApiQuery(request, z.strictObject({}));
+  const data = await readFeedstock(ctx, idOrCode);
+  headers.set("ETag", feedstockEtag(data));
+  return Response.json({ data }, { headers });
+});
+export const PATCH = apiRoute<Params>("api.v1.feedstocks.update", "feedstocks:write", (request, context, { idOrCode }) =>
+  mutateFeedstockResponse(request, context, idOrCode, "PATCH"));
+export const DELETE = apiRoute<Params>("api.v1.feedstocks.delete", "feedstocks:delete", (request, context, { idOrCode }) =>
+  mutateFeedstockResponse(request, context, idOrCode, "DELETE"));
