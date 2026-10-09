@@ -27,7 +27,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 - `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/admin/*` is gated by the admin layout's `requireAdmin()`.
-- The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before session lookup. MCP and private REST routes resolve bearer API keys with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and lists only tools allowed by the credential scopes. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./architecture.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
+- Exact `/api/mcp`, `/api/v1`, and `/api/v1/*` bypass session lookup. The v1 method guard handles unsupported methods; supported methods keep their route handlers. MCP and private REST routes resolve bearer API keys with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read/write rate limits, and lists only tools allowed by the credential scopes. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`. See [MCP tools](./architecture.md#mcp-tools-on-api-keys) for write tools, requestKey, dryRun, server instructions and the in-MCP `api_writes_disabled` result.
 
 ### Public verifier report capability
 
@@ -203,10 +203,11 @@ checks the credential alone, and `hasRoleAndScope` intersects Owner/Admin with
 the requested scope. Operation/domain guards must still enforce the remaining
 operation permission.
 
-The proxy passes `/api/v1` and `/api/v1/*` through **before session lookup**,
-including requests carrying unverified cookies. `/api/v1x` stays protected.
-The existing exact `/api/mcp` exception is unchanged. Every private REST route
-must call the API resolver itself; no cookie-based route guard applies there.
+The proxy bypasses session lookup for `/api/v1` and `/api/v1/*`, including
+requests carrying unverified cookies. `/api/v1x` stays protected. The existing
+exact `/api/mcp` exception is unchanged. Private REST handlers and the shared
+unsupported-method guard call the API resolver; no cookie-based route guard
+applies there.
 
 `GET /api/v1/openapi.json` and `GET /api/v1/llms.txt` are public discovery routes.
 They do not call `resolveApiContext` or the rate-limit guards and cache publicly
@@ -237,6 +238,19 @@ return `credential_invalid`; expired credentials still present in storage
 return `credential_expired`. Owner demotion uses `credential_owner_removed`
 as required by the credential lifecycle contract, rather than the operation's
 403 `insufficient_role` refusal.
+
+The v1 proxy derives supported methods from the generated OpenAPI operations,
+including Next.js automatic HEAD (when GET exists) and OPTIONS. Supported
+methods keep their existing handlers and authentication order. An unsupported
+method returns 405 `method_not_allowed`, `Allow`, and a problem JSON body after
+the private API harness authenticates the bearer and checks permission for at
+least one operation on that path. The refusal uses read rate limits and does
+not run the write kill switch. Unknown paths and paths invisible to that key
+return the same 404 without `Allow`; missing or invalid credentials receive
+the normal authentication denial first. Public discovery paths return 405
+without authentication. Next.js automatic OPTIONS keeps its existing public
+204 response. The OpenAPI shared `Problem405` describes this path-level
+refusal; supported operation responses do not reference it.
 
 Organization API access is checked by `resolveApiContext` on every private API request.
 Disabled access returns 403 `api_access_disabled`; a missing

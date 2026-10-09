@@ -13,3 +13,16 @@ describe("strong representation ETags", () => {
     expect(() => parseIfMatch(tag)).toThrow(expect.objectContaining({ status: 400, code: "invalid_etag" }));
   });
 });
+
+it("publishes a pattern that covers exactly the positive safe integer bounds", async () => {
+  const { STRONG_ETAG_PATTERN } = await import("./etag");
+  for (const value of [1, 9, 10, 99, 100, Number.MAX_SAFE_INTEGER - 1, Number.MAX_SAFE_INTEGER]) {
+    const tag = representationEtag(value, value);
+    expect(STRONG_ETAG_PATTERN.test(tag)).toBe(true);
+    expect(parseIfMatch(tag)).toEqual({ version: value, revision: value });
+  }
+  for (const tag of ['"78.86753729017096108"', '"1.9007199254740992"', '"9007199254740992.1"']) {
+    expect(STRONG_ETAG_PATTERN.test(tag)).toBe(false);
+    expect(() => parseIfMatch(tag)).toThrow();
+  }
+});

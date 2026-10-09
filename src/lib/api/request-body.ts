@@ -31,16 +31,31 @@ export async function readBoundedBody(request: Request): Promise<Buffer<ArrayBuf
   return Buffer.concat(chunks);
 }
 
-export async function readJsonBody(request: Request): Promise<unknown> {
+function requireJsonMediaType(request: Request): void {
   if (request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
     throw new ApiHttpError(415, "unsupported_media_type", "Use Content-Type: application/json.");
   }
-  const bytes = await readBoundedBody(request);
+}
+
+function parseJsonBytes(bytes: Uint8Array): unknown {
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     throw new ApiHttpError(400, "malformed_json", "Send a valid JSON body.");
   }
+}
+
+export async function readJsonBody(request: Request): Promise<unknown> {
+  requireJsonMediaType(request);
+  return parseJsonBytes(await readBoundedBody(request));
+}
+
+/** A non-null stream can be empty. Inspect bounded bytes rather than framing headers. */
+export async function readOptionalJsonBody(request: Request): Promise<unknown> {
+  const bytes = await readBoundedBody(request);
+  if (bytes.byteLength === 0) return undefined;
+  requireJsonMediaType(request);
+  return parseJsonBytes(bytes);
 }
 
 export function readIdempotencyKey(request: Request, required: boolean): string | undefined {

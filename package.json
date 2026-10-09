@@ -40,6 +40,7 @@
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "openapi:client-check": "tsx scripts/check-openapi-client.ts",
     "eval:mcp": "tsx scripts/eval-mcp/run.ts",
+    "api:fuzz": "bash scripts/api-fuzz/run.sh",
     "docs:check": "node scripts/check-doc-references.mjs",
     "test": "vitest",
     "test:ui": "vitest --ui",
