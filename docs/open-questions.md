@@ -30,62 +30,6 @@ Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox
 probe — **never** from `docs/isometric/*`, which are non-authoritative local
 summaries. Do not close one of these from a local doc.
 
-## data/lock-order (opened 2026-10-09)
-
-`src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
-and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
-lock bins before the run row and certification lineage. Feedstock edits in
-`src/data-access/feedstocks.ts:updateFeedstockInTransaction` lock the intake row
-and lineage before bins, leaving a run-versus-feedstock deadlock cycle.
-
-Moving run rows and lineage ahead of bins would introduce other inversions:
-
-- `src/data-access/credit-batch-membership.ts:lockCreditBatchForUpdate` takes the
-  process scope before artifacts. Run attachment through
-  `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
-  can already hold artifact locks before requesting that scope.
-- `src/data-access/output-stock-post.ts:withOutputStockPosting` takes bins before
-  lineage or allocation foreign-key KEY SHARE locks on runs. A run writer holding
-  its row or lineage while waiting for a bin would reverse this order.
-- `src/data-access/production-runs/feedstock-draws.ts:replaceProductionRunFeedstockDraws`
-  inserts allocations into `productionRunFeedstocks`, taking foreign-key KEY SHARE
-  locks on intake rows. Prelocking prospective lineage on run create can wait on
-  `src/data-access/feedstocks.ts:updateFeedstockInTransaction`, which already holds
-  the intake row and waits on lineage.
-
-Run writers retain bins before rows and best-effort attachment. A global order
-must coordinate every writer, including implicit foreign-key locks.
-`src/lib/operations/runner.ts:runOperation` mitigates these cycles with bounded,
-jittered whole-transaction retries for deadlocks (40P01), serialization failures
-(40001) and operation lock-timeout aborts (55P03) before COMMIT, within the original
-deadline. Claims and writes roll back together. Exhausted attempts answer the
-retryable `concurrent_write_retry`; claim-lock waits answer
-`idempotency_in_progress`; spent deadlines answer `deadline_exceeded`.
-`src/data-access/owned-transaction.ts:runOwnedTransaction` rethrows COMMIT failures
-with SQLSTATE class 23 or 40, maps 25P04 to `deadline_exceeded`, and reports other
-COMMIT failures as `outcome_unknown`. The runner does not retry COMMIT failures.
-This mitigation does not establish a global order or add retries to callers that
-bypass the runner.
-
-Resolve with a cross-writer lock inventory, a documented order covering process
-scopes, artifacts, bins, parent rows and foreign keys, and deterministic races
-for run create/update/delete against intake edits, batch updates and output
-postings. Keep the runner retry even after the known inversions are removed.
-
-## Production-run readings and incidents on the API
-
-Production runs expose start, update and delete only. The readings batch from
-[data-entry API plan section 8](./plans/2026-10-06-data-entry-api.md#8-batches-and-offline-design-now-build-later)
-and incident endpoints are deferred by decision 39. The existing seams are
-`src/lib/operations/production-runs.ts:startProductionRun`,
-`src/data-access/production-runs/readings.ts:getProductionRunReadings` and
-`src/fn/production-incidents.ts:createProductionIncidentFn`.
-
-Resolve this with a scoped follow-up defining readings batch size, per-item
-outcomes and externalId replay semantics, plus incident operations, permissions,
-representations and outcome/BOLA tests. Reuse the reading import core and the
-shared operation runner before registering REST routes or MCP tools.
-
 ## Invariants an LLM must not violate
 
 Short, load-bearing rules that this file's entries assume. Each is enforced in
@@ -342,13 +286,68 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Instant input parsing until Phase 4 (`api/instant-input-parsing`, opened 2026-10-07)
 
-- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`),
+- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`)
   and sample `samplingTime` (`src/schemas/samples.ts:updateSampleSchema.samplingTime`)
   retain instant parsing until Phase 4's API input schemas. Only sample business
   dates use strict calendar-date parsing here.
 - **Resolve via:** Phase 4 API input schemas moving these fields onto the shared
   instant/calendar helpers, with schema tests proving the intended parsing for
   each field; then delete this entry.
+
+### Run writers, feedstock edits and output postings lock in different orders (`data/lock-order`, opened 2026-10-09)
+
+- `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
+  and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
+  lock bins before the run row and certification lineage. Feedstock edits in
+  `src/data-access/feedstocks.ts:updateFeedstockInTransaction` lock the intake
+  row and lineage before bins, leaving a run-versus-feedstock deadlock cycle.
+- Moving run rows and lineage ahead of bins would introduce other inversions:
+  - `src/data-access/credit-batch-membership.ts:lockCreditBatchForUpdate` takes
+    the process scope before artifacts. Run attachment through
+    `updateProductionRunInTransaction` can already hold artifact locks before
+    requesting that scope.
+  - `src/data-access/output-stock-post.ts:withOutputStockPosting` takes bins
+    before lineage or allocation foreign-key KEY SHARE locks on runs. A run
+    writer holding its row or lineage while waiting for a bin would reverse
+    this order.
+  - `src/data-access/production-runs/feedstock-draws.ts:replaceProductionRunFeedstockDraws`
+    inserts allocations into `productionRunFeedstocks`, taking foreign-key KEY
+    SHARE locks on intake rows. Prelocking prospective lineage on run create
+    can wait on `updateFeedstockInTransaction`, which already holds the intake
+    row and waits on lineage.
+- Run writers retain bins before rows and best-effort attachment. A global
+  order must coordinate every writer, including implicit foreign-key locks.
+- **Mitigation today:** `src/lib/operations/runner.ts:runOperation` retries the
+  whole transaction a bounded number of times, with jitter, on deadlocks
+  (40P01), serialization failures (40001) and operation lock-timeout aborts
+  (55P03) before COMMIT, within the original deadline. Claims and writes roll
+  back together. Exhausted attempts answer the retryable
+  `concurrent_write_retry`; claim-lock waits answer `idempotency_in_progress`;
+  spent deadlines answer `deadline_exceeded`.
+  `src/data-access/owned-transaction.ts:runOwnedTransaction` rethrows COMMIT
+  failures with SQLSTATE class 23 or 40, maps 25P04 to `deadline_exceeded`, and
+  reports other COMMIT failures as `outcome_unknown`. The runner does not retry
+  COMMIT failures. This does not establish a global order or add retries to
+  callers that bypass the runner.
+- **Resolve via:** a cross-writer lock inventory, a documented order covering
+  process scopes, artifacts, bins, parent rows and foreign keys, and
+  deterministic races for run create/update/delete against intake edits, batch
+  updates and output postings. Keep the runner retry even after the known
+  inversions are removed.
+
+### Production-run readings and incidents are not on the API (`api/production-run-readings-incidents`, opened 2026-10-09)
+
+- Production runs expose start, update and delete only. The readings batch from
+  [data-entry API plan section 8](./plans/2026-10-06-data-entry-api.md#8-batches-and-offline-design-now-build-later)
+  and incident endpoints are deferred by decision 39. The existing seams are
+  `src/lib/operations/production-runs.ts:startProductionRun`,
+  `src/data-access/production-runs/readings.ts:getProductionRunReadings` and
+  `src/fn/production-incidents.ts:createProductionIncidentFn`.
+- **Resolve via:** a scoped follow-up defining readings batch size, per-item
+  outcomes and externalId replay semantics, plus incident operations,
+  permissions, representations and outcome/BOLA tests. Reuse the reading import
+  core and the shared operation runner before registering REST routes or MCP
+  tools.
 
 ### Registry credentials can be replaced but not removed (`certification/credential-removal`, opened 2026-07-28)
 

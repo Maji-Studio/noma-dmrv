@@ -389,7 +389,7 @@ Decided 2026-10-09 (supervisor decision during Phase 4s, from the first Schemath
 Decided 2026-10-09 (supervisor decision during Phase 4a review):
 
 48. **Production-run responses carry UTC instants and reference ids only**, without facility codes or the facility time zone. A joined mutable field would change the response body under an unchanged strong ETag. Clients read the zone from `/facilities` or `whoami`.
-49. **The operation runner retries operations aborted before COMMIT** with a deadlock (40P01), serialization failure (40001) or lock timeout (55P03), up to a fixed attempt cap within the original deadline. Exhausted retries answer the retryable `concurrent_write_retry` (409). Claim-lock waits still answer `idempotency_in_progress`, and an exhausted deadline answers `deadline_exceeded`. See `data/lock-order` in [open questions](../open-questions.md#datalock-order-opened-2026-10-09).
+49. **The operation runner retries operations aborted before COMMIT** with a deadlock (40P01), serialization failure (40001) or lock timeout (55P03), up to a fixed attempt cap within the original deadline. Exhausted retries answer the retryable `concurrent_write_retry` (409). Claim-lock waits still answer `idempotency_in_progress`, and an exhausted deadline answers `deadline_exceeded`. See `data/lock-order` in [open questions](../open-questions.md#run-writers-feedstock-edits-and-output-postings-lock-in-different-orders-datalock-order-opened-2026-10-09).
 
 ## 14. What review changed
 

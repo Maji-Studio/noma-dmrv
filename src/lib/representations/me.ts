@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { API_SCOPES } from "@/lib/auth/api-scopes";
+import { LOCAL_TIME_PATTERN } from "@/schemas/helpers";
 
 /** Runtime permissions remain closed; the published response vocabulary can grow in v1. */
 export const apiScopeRepresentationSchema = z.enum(API_SCOPES)
@@ -15,7 +16,7 @@ export const meRepresentationSchema = z.object({
     code: z.string().describe("Human-readable facility code, plain text."),
     name: z.string().describe("Facility display name, plain text."),
     timeZone: z.string().describe("IANA facility time zone."),
-    localTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).describe("Current facility-local wall-clock time, HH:MM."),
+    localTime: z.string().regex(LOCAL_TIME_PATTERN).describe("Current facility-local wall-clock time, HH:MM."),
     today: z.iso.date().describe("Current facility-local business date, YYYY-MM-DD."),
   })).describe("Accessible active facilities and their current local dates and times."),
   role: z.enum(["owner", "admin"]).describe("Live organization role: owner owns the organization; admin administers it."),

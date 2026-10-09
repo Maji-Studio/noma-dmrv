@@ -14,6 +14,7 @@ const fixture = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const fields = {
   FACILITY: 'facility', SUPPLIER: 'supplier', FEEDSTOCK_TYPE: 'feedstockType',
   BIN: 'bin', DRIVER: 'driver', VEHICLE: 'vehicle', FEEDSTOCK: 'feedstock',
+  REACTOR: 'reactor', PRODUCTION_RUN: 'productionRun',
 };
 for (const [name, field] of Object.entries(fields)) {
   for (const suffix of ['Id', 'Code']) {
@@ -28,10 +29,16 @@ if (typeof fixture.supplierLocationId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(f
   throw new Error('Missing or invalid fixture field: supplierLocationId');
 }
 console.log(`API_FUZZ_SUPPLIER_LOCATION_ID=${fixture.supplierLocationId}`);
-if (typeof fixture.feedstockEtag !== 'string' || !/^"[1-9]\d*\.[1-9]\d*"$/.test(fixture.feedstockEtag)) {
-  throw new Error('Missing or invalid fixture field: feedstockEtag');
+if (typeof fixture.runBinId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(fixture.runBinId)) {
+  throw new Error('Missing or invalid fixture field: runBinId');
 }
-console.log(`API_FUZZ_FEEDSTOCK_ETAG=${fixture.feedstockEtag}`);
+console.log(`API_FUZZ_RUN_BIN_ID=${fixture.runBinId}`);
+for (const [name, field] of [['FEEDSTOCK', 'feedstockEtag'], ['PRODUCTION_RUN', 'productionRunEtag']]) {
+  if (typeof fixture[field] !== 'string' || !/^"[1-9]\d*\.[1-9]\d*"$/.test(fixture[field])) {
+    throw new Error(`Missing or invalid fixture field: ${field}`);
+  }
+  console.log(`API_FUZZ_${name}_ETAG=${fixture[field]}`);
+}
 JS
 )"
 while IFS='=' read -r name value; do

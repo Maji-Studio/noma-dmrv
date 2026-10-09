@@ -7,6 +7,10 @@ const FIXTURE_LABEL = "API fuzz fixture";
 const FACILITY_TIME_ZONE = "UTC";
 const INTAKE_WET_MASS_KG = 100;
 const INTAKE_MOISTURE_PERCENT = 20;
+const RUN_DRAW_WET_MASS_KG = 10;
+const SEEDED_RUN_START_HOURS_AGO = 3;
+const SEEDED_RUN_END_HOURS_AGO = 2;
+const MS_PER_HOUR = 3_600_000;
 const PRIVATE_FILE_MODE = 0o600;
 
 async function main(): Promise<void> {
@@ -29,6 +33,9 @@ async function main(): Promise<void> {
   const { createSupplierLocation } = await import("@/data-access/suppliers");
   const { createSupplier } = await import("@/data-access/suppliers");
   const { createFeedstockType } = await import("@/data-access/feedstock-types");
+  const { createReactor } = await import("@/data-access/reactors");
+  const { startProductionRun } = await import("@/lib/operations/production-runs");
+  const { productionRunEtag } = await import("@/lib/api/representation-etags");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
   const { createApiKey } = await import("@/data-access/api-keys");
   const { API_SCOPES } = await import("@/lib/auth/api-scopes");
@@ -60,6 +67,14 @@ async function main(): Promise<void> {
     code: "FUZZ-BIN", name: FIXTURE_LABEL, type: "feedstock_bin",
     facilityId: facility.id, feedstockTypeId: feedstockType.id,
   });
+  // The run draws from its own bin so the feedstock cases keep their stock.
+  const runBin = await createStorageLocation(ctx, {
+    code: "FUZZ-RUN-BIN", name: `${FIXTURE_LABEL} run bin`, type: "feedstock_bin",
+    facilityId: facility.id, feedstockTypeId: feedstockType.id,
+  });
+  const reactor = await createReactor(ctx, {
+    code: "FUZZ-RX", identifier: "FUZZ-RX-1", facilityId: facility.id, reactorType: "fixed-bed",
+  });
   const driver = await createDriver(ctx, { code: "FUZZ-DRV", name: FIXTURE_LABEL });
   const vehicle = await createVehicle(ctx, { code: "FUZZ-VEH", name: FIXTURE_LABEL, vehicleType: "truck" });
   const supplierLocation = await createSupplierLocation(ctx, { supplierId: supplier.id, name: FIXTURE_LABEL, country: "FR" });
@@ -71,6 +86,22 @@ async function main(): Promise<void> {
   });
   const feedstock = intake.data.feedstocks[0];
   if (!feedstock) throw new Error("API fuzz intake did not create a feedstock.");
+  await runOperation(logFeedstockDelivery, ctx, {
+    facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
+    deliveryDate: formatFacilityDate(new Date(), FACILITY_TIME_ZONE),
+    totalWetMassKg: INTAKE_WET_MASS_KG, moisturePercent: INTAKE_MOISTURE_PERCENT,
+    allocations: [{ storageLocationId: runBin.id, allocatedWetMassKg: INTAKE_WET_MASS_KG }],
+  });
+  // A closed draft window in the past. hooks.py builds its seeded create from a
+  // later window on the same reactor, so the overlap guard does not refuse it.
+  const now = Date.now();
+  const run = (await runOperation(startProductionRun, ctx, {
+    facilityId: facility.id, reactorId: reactor.id, status: "draft",
+    startTime: new Date(now - SEEDED_RUN_START_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    endTime: new Date(now - SEEDED_RUN_END_HOURS_AGO * MS_PER_HOUR).toISOString(),
+    feedstockDraws: [{ storageLocationId: runBin.id, wetMassKg: RUN_DRAW_WET_MASS_KG }],
+    feedstockMoisturePercent: INTAKE_MOISTURE_PERCENT,
+  })).data;
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
@@ -82,7 +113,9 @@ async function main(): Promise<void> {
     facilityId: facility.id, facilityCode: facility.code,
     supplierId: supplier.id, supplierCode: supplier.code,
     feedstockTypeId: feedstockType.id, feedstockTypeCode: feedstockType.code,
-    binId: bin.id, binCode: bin.code,
+    binId: bin.id, binCode: bin.code, runBinId: runBin.id,
+    reactorId: reactor.id, reactorCode: reactor.code,
+    productionRunId: run.id, productionRunCode: run.code, productionRunEtag: productionRunEtag(run),
     driverId: driver.id, driverCode: driver.code, vehicleId: vehicle.id, vehicleCode: vehicle.code,
     // Supplier locations have no code column or by-id API route.
     supplierLocationId: supplierLocation.id,

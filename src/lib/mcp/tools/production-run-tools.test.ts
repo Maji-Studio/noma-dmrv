@@ -23,6 +23,7 @@ vi.mock("@/lib/operations/production-runs", async () => {
 });
 vi.mock("@/lib/read-models/api-production-runs", () => ({ readApiProductionRun: mocks.read, readApiProductionRunList: vi.fn() }));
 vi.mock("@/lib/read-models/api-reactors", () => ({ readApiReactorList: vi.fn(), readApiReactor: vi.fn() }));
+vi.mock("@/lib/read-models/api-feedstocks", () => ({ readApiFeedstock: mocks.read, readApiFeedstockList: vi.fn() }));
 vi.mock("@/data-access/feedstocks", () => ({}));
 vi.mock("@/data-access/storage-object-deletions", () => ({}));
 
@@ -105,4 +106,20 @@ it.each(productionRunWriteTools.slice(0, 2))("re-renders JSONB key order for $na
   mocks.run.mockResolvedValueOnce({ data: reordered, dryRun: false, replayed: true });
   const replay = await tool.execute(context, { ...args(tool.name), requestKey: "write" });
   expect(JSON.stringify(replay.body)).toBe(JSON.stringify(original.body));
+});
+
+it.each(["get_production_run", "get_feedstock"])("answers not_found for a control character in %s idOrCode, as REST does", async (name) => {
+  const tool = readTools.find((candidate) => candidate.name === name)!;
+  mocks.read.mockClear();
+  for (const control of ["\u0000", "\n", "\u007f", "\u0085"]) {
+    await expect(tool.execute(context.ctx, { idOrCode: `PR-${control}` })).rejects.toMatchObject({ code: "not_found" });
+  }
+  expect(mocks.read).not.toHaveBeenCalled();
+});
+
+it("still rejects control characters in the list filters q, code and cursor", async () => {
+  const list = readTools.find((candidate) => candidate.name === "find_production_runs")!;
+  for (const field of ["q", "code", "cursor"]) {
+    await expect(async () => list.execute(context.ctx, { [field]: "bad\u0001value" })).rejects.toMatchObject({ status: 400, code: "invalid_query" });
+  }
 });

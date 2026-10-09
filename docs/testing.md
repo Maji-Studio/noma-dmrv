@@ -106,7 +106,9 @@ are removed on exit; `pnpm eval:mcp --keep` retains them and prints their ids.
 generated v1 OpenAPI document. It runs examples, coverage, fuzzing (25 examples
 per operation), and inferred stateful links (10 scenarios, at most 5 steps).
 [API fuzz CI](../.github/workflows/api-fuzz.yml) runs on PRs touching
-`src/lib/api/**`, `src/app/api/**`, `openapi/**`, or the harness files. It uses
+`src/lib/api/**`, `src/lib/operations/**`, `src/lib/representations/**`,
+`src/app/api/**`, `src/proxy.ts`, `src/config/env.ts`, `openapi/**`, or the harness
+files (the workflow, `scripts/api-fuzz/**` and `schemathesis.toml`). It uses
 CI Postgres and `pnpm build` plus `pnpm start`, limits the fuzz step to five
 minutes, and uploads `api-fuzz-report/junit.xml` even after test failures.
 
@@ -114,8 +116,10 @@ Locally, install `uv` and prepare an empty, migrated local database whose name
 contains a `test` or `e2e` segment. Export `DATABASE_URL` and the app environment
 before seeding; the seed does not load env files. Use the workflow's hermetic
 env block for production-build parity. The seed creates a verified Owner, the
-intake prerequisites, a driver, vehicle, supplier location and committed feedstock
-intake through the operation runner, and a key with all current scopes, including delete.
+intake prerequisites, a driver, vehicle, supplier location, committed feedstock
+intake, a reactor and a closed production run through the operation runner (the run
+draws from its own second bin, so the feedstock cases keep their stock), and a key with
+all current scopes, including delete.
 Its private JSON file contains the key and fixture ids; never upload that file.
 
 ```bash
@@ -141,7 +145,11 @@ The runner exports fixture ids and codes from that private file. Configured
 by-id parameters become deterministic examples only; coverage and fuzzing still
 generate random ids. PATCH and DELETE seeded examples use dry runs. POST also
 has a seeded dry-run example: the published intake body is rebound to fixture
-references and the UTC fixture facility date, with a fresh Idempotency-Key.
+references and the UTC fixture facility date, with a fresh Idempotency-Key. The
+production run create example is the published body rebound to the fixture facility,
+reactor and run bin, starting one hour ago after the seeded run's window. Every seeded
+positive example (by-id and create) must answer 2xx (`seeded_example_success`); the
+statuses allowed for generated cases never excuse it.
 Examples do not suppress phase-specific missing-data warnings when generated
 references repeatedly return 404 in coverage or fuzzing. Positive
 list requests omit opaque cursors because their binding cannot be generated from
