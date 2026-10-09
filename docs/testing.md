@@ -134,7 +134,11 @@ starting fixture state: `pnpm api:fuzz --seed 20261009` (the checked-in seed).
 Set `API_FUZZ_BASE_URL`, `API_FUZZ_KEY` and `API_FUZZ_FIXTURE` as above.
 The runner exports fixture ids and codes from that private file. Configured
 by-id parameters become deterministic examples only; coverage and fuzzing still
-generate random ids. PATCH and DELETE seeded examples use dry runs. Positive
+generate random ids. PATCH and DELETE seeded examples use dry runs. POST also
+has a seeded dry-run example: the published intake body is rebound to fixture
+references and the UTC fixture facility date, with a fresh Idempotency-Key.
+Examples do not suppress phase-specific missing-data warnings when generated
+references repeatedly return 404 in coverage or fuzzing. Positive
 list requests omit opaque cursors because their binding cannot be generated from
 JSON Schema; negative cursor probes remain enabled. Cursor unit tests cover
 valid continuations and organization/resource/filter mismatches.
@@ -142,8 +146,11 @@ The hooks treat 414 and 431 as pre-application transport refusals. Other status
 codes still undergo contract checks, and 400 is not allowed globally for positive
 requests. Deliberate missing or invalid authentication probes may return 401;
 a request carrying the configured fixture key that returns 401 fails a dedicated
-check. TRACE is omitted only from local unsupported-method probes because
-`next start` rejects it before app dispatch; other methods remain checked. The JUnit failure and terminal
+check. TRACE is omitted from unsupported-method probes because `next start` rejects
+it before app dispatch. QUERY is also omitted because the HTTP parser returns
+an empty 400 on both `next start` and Vercel. Other methods remain checked.
+Positive writes (POST, PATCH and DELETE) accept 422 for cross-field domain
+refusals that JSON Schema cannot express; positive reads still reject 422. The JUnit failure and terminal
 output include a minimized request; replace its sanitized bearer header with
 the private fixture key to replay it. After mutations, restore the starting
 throwaway fixture state before comparing runs. Fresh fixtures have new ids,

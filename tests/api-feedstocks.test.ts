@@ -98,14 +98,17 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
 
   it("requires a valid create key, while dry run rolls back stock and idempotency", async () => {
     await problem(await POST(request("POST", "", a.input())), 400, "idempotency_key_required");
+    await problem(await POST(request("POST", "?dryRun=true", a.input())), 400, "idempotency_key_required");
     await problem(await POST(request("POST", "", a.input(), { "idempotency-key": "contains space" })), 400, "idempotency_key_invalid");
-    const dryRunHeaders: Record<string, string>[] = [{}, { "idempotency-key": randomUUID() }];
+    const previewKey = randomUUID();
+    const dryRunHeaders = [{ "idempotency-key": previewKey }, { "idempotency-key": previewKey }];
     for (const headers of dryRunHeaders) {
       const response = await POST(request("POST", "?dryRun=true", a.input(), headers));
       expect(response.status).toBe(200);
       expect(response.headers.get("dry-run")).toBe("true");
       expect(response.headers.has("location")).toBe(false);
       expect(response.headers.has("etag")).toBe(false);
+      expect(response.headers.has("idempotent-replayed")).toBe(false);
       const body = await response.json();
       expect(body.preview).toEqual([{ feedstockId: body.data[0].id, storageLocationId: a.binId,
         allocatedWetMassKg: 4200, allocatedDryMassKg: 2835, stockDeltaWetKg: 4200 }]);
@@ -113,7 +116,7 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
       expect(await stock()).toBe(0);
       expect(await db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, a.ctx.organizationId))).toHaveLength(0);
     }
-    const saved = await create();
+    const saved = await create(a.input(), previewKey);
     await problem(await POST(request("POST", "?dryRun=true", a.input(), { "idempotency-key": saved.key })), 409, "key_already_used");
   });
 
@@ -282,6 +285,20 @@ describe("feedstock REST contract", { timeout: SUITE_TIMEOUT_MS }, () => {
     expect(await stock()).toBe(0);
   });
 
+  it.each(["text", "stream"])("accepts a zero-byte DELETE %s body without Content-Type", async (kind) => {
+    const saved = await create();
+    const body = kind === "text" ? "" : new ReadableStream({ start(controller) { controller.close(); } });
+    const req = new Request(`http://localhost:3100/api/v1/feedstocks/${saved.row.id}?dryRun=true`, {
+      method: "DELETE", headers: { authorization: `Bearer ${keyA}`, "if-match": saved.etag }, body, duplex: "half",
+    } as RequestInit);
+    req.headers.delete("content-type");
+    const response = await DELETE(req, params(saved.row.id));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("dry-run")).toBe("true");
+    expect(await feedstockCount(a)).toBe(1);
+    expect(await stock()).toBe(4200);
+  });
+
   it("rejects unknown top-level and nested properties with JSON Pointers", async () => {
     const body = { ...a.input(), extra: true, allocations: [{ storageLocationId: a.binId, allocatedWetMassKg: 100, "a/b~": true }] };
     const failure = await problem(await POST(request("POST", "", body, { "idempotency-key": randomUUID() })), 422, "validation_failed");
@@ -411,7 +428,7 @@ describe("feedstock REST guards and audit", { timeout: SUITE_TIMEOUT_MS }, () =>
   });
 
   it("adds no audit rows for dry runs or create, update and delete replays", async () => {
-    const dryCreate = await POST(request("POST", "?dryRun=true", a.input()));
+    const dryCreate = await POST(request("POST", "?dryRun=true", a.input(), { "idempotency-key": randomUUID() }));
     expect(dryCreate.status).toBe(200);
     expect(await auditRows()).toEqual([]);
     const created = await create();

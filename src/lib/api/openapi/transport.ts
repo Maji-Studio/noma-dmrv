@@ -52,7 +52,7 @@ export const targetParameter = (uuidOnly = false) => ({
 });
 export const idempotencyParameter = (required: boolean) => ({
   name: "Idempotency-Key", in: "header", required,
-  description: `Unique key per intended write, 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters. Reuse on retry; credential-scoped, retained for ${IDEMPOTENCY_RETENTION_DAYS} days. ${required ? "Required; also accepted on dry runs." : "Optional on this method."} Dry runs never consume or replay keys.`,
+  description: `Unique key per intended write, 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters. Reuse on retry; credential-scoped, retained for ${IDEMPOTENCY_RETENTION_DAYS} days. ${required ? "Required on every create, including dry runs; a dry run never consumes it." : "Optional on this method."} Dry runs never consume or replay keys.`,
   schema: { type: "string", minLength: 1, maxLength: API_IDEMPOTENCY_KEY_MAX_LENGTH, pattern: IDEMPOTENCY_KEY_PATTERN.source },
 });
 export const ifMatchParameter = {

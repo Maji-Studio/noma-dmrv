@@ -440,7 +440,7 @@
         "operationId": "log_feedstock_delivery",
         "parameters": [
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
-          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required; also accepted on dry runs. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required on every create, including dry runs; a dry run never consumes it. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
         "requestBody": {
           "content": {

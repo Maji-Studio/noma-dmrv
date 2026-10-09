@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -9,6 +10,8 @@ import schemathesis
 from hypothesis import given, settings
 from schemathesis.config import SchemathesisConfig
 from schemathesis.generation import GenerationMode
+from schemathesis.generation.drivers import ExamplesGenerator
+from schemathesis.generation.feedback import FeedbackSources
 from schemathesis.generation.meta import CaseMetadata, GenerationInfo, PhaseInfo, CoverageScenario
 from schemathesis.generation.overrides import for_operation
 from schemathesis.hooks import GLOBAL_HOOK_DISPATCHER, HookContext
@@ -28,6 +31,32 @@ def hook(name):
 
 
 class HarnessTests(unittest.TestCase):
+    def test_actual_examples_driver_reaches_all_seeded_targets_and_create(self):
+        seeded = []
+        for result in schema.get_all_operations():
+            operation = result.ok()
+            cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+            seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
+        self.assertEqual(len(seeded), 11)
+        create = next(case for case in seeded if case.operation.method.upper() == "POST")
+        self.assertEqual(create.query, {"dryRun": "true"})
+        self.assertTrue(create.headers["Idempotency-Key"])
+        self.assertTrue(create.meta.generation.mode.is_positive)
+        for field in ("facilityId", "supplierId", "feedstockTypeId"):
+            self.assertEqual(create.body[field], FIXTURE_ID)
+        self.assertEqual(create.body["allocations"][0]["storageLocationId"], FIXTURE_ID)
+        self.assertEqual(create.body["deliveryDate"], datetime.now(timezone.utc).date().isoformat())
+        self.assertEqual(create.body["totalWetMassKg"], sum(allocation["allocatedWetMassKg"] for allocation in create.body["allocations"]))
+        original = create.operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
+        self.assertNotEqual(original["facilityId"], FIXTURE_ID)
+
+    @settings(max_examples=5, database=None, deadline=None)
+    @given(schema["/feedstocks"]["POST"].as_strategy(generation_mode=GenerationMode.POSITIVE))
+    def test_seeded_create_does_not_pin_generated_references(self, case):
+        hook("before_call")(HookContext(operation=case.operation), case)
+        self.assertNotEqual(case.body["facilityId"], FIXTURE_ID)
+        self.assertFalse(for_operation(schema.config, operation=case.operation).query)
+
     def test_seeded_examples_do_not_pin_random_generation(self):
         count = 0
         for result in schema.get_all_operations():
@@ -77,7 +106,7 @@ class HarnessTests(unittest.TestCase):
                 self.assertEqual(check(None, SimpleNamespace(status_code=status), None), "checked")
             self.assertEqual(delegate.call_count, 5)
 
-    def test_428_scope_trace_exclusion_and_positive_statuses(self):
+    def test_428_scope_parser_method_exclusions_and_write_positive_statuses(self):
         for result in schema.get_all_operations():
             operation = result.ok()
             checks = schema.config.checks_config_for(operation=operation, phase="coverage")
@@ -88,7 +117,8 @@ class HarnessTests(unittest.TestCase):
             self.assertIn("431", checks.positive_data_acceptance.expected_statuses)
             coverage = schema.config.phases_for(operation=operation).coverage
             self.assertNotIn("trace", coverage.unexpected_methods)
-            self.assertIn("query", coverage.unexpected_methods)
+            self.assertNotIn("query", coverage.unexpected_methods)
+            self.assertEqual("422" in checks.positive_data_acceptance.expected_statuses, operation.method.upper() in {"POST", "PATCH", "DELETE"})
 
     def test_401_is_allowed_only_when_fixture_credential_is_absent(self):
         check = hook("after_load_schema").__globals__["configured_authentication"]

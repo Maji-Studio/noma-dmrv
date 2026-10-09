@@ -116,7 +116,7 @@ it("requires preconditions and requires create idempotency with possible respons
   }
   expect(document.paths["/feedstocks"].post.parameters).toContainEqual(expect.objectContaining({
     name: "Idempotency-Key", in: "header", required: true,
-    description: expect.stringContaining("Required; also accepted on dry runs"),
+    description: expect.stringContaining("Required on every create, including dry runs; a dry run never consumes it."),
   }));
   expect(Object.keys(document.paths["/feedstocks/{idOrCode}"].delete.responses).sort()).toEqual(["200", "204", "400", "401", "403", "404", "409", "412", "413", "415", "422", "428", "429", "500", "503"]);
   expect(Object.keys(document.paths["/me"].get.responses).sort()).toEqual(["200", "401", "403", "404", "429", "500"]);

@@ -78,3 +78,6 @@ docs/archive/qa/artifacts/**
 docs/archive/qa/artifacts/**/video/
 docs/archive/qa/artifacts/**/runtime/
 docs/archive/qa/artifacts/**/screenshots/
+
+# python
+__pycache__/
