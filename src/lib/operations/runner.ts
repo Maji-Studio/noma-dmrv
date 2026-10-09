@@ -24,8 +24,8 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
 import type { DbTransaction } from "@/db";
-import { pgErrorCode, PG_LOCK_NOT_AVAILABLE, PG_QUERY_CANCELED } from "@/db/errors";
-import { OPERATION_DEADLINE_MS } from "@/config/operations";
+import { pgErrorCode, PG_LOCK_NOT_AVAILABLE, PG_QUERY_CANCELED, PG_DEADLOCK_DETECTED, PG_SERIALIZATION_FAILURE } from "@/db/errors";
+import { OPERATION_DEADLINE_MS, OPERATION_MAX_ATTEMPTS, OPERATION_RETRY_MIN_DELAY_MS, OPERATION_RETRY_MAX_DELAY_MS } from "@/config/operations";
 import {
   assertIdempotencyKeyUnused,
   claimIdempotencyKey,
@@ -240,56 +240,80 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
   const hooks: Array<() => Promise<void> | void> = [];
   let committed: { data: Result; effect?: OperationEffect; stockEffects?: StockEffects; dryRun: boolean; replayed: boolean } | undefined;
   try {
-    const outcome = await runOwnedTransaction(ctx, deadlineAt, async (tx) => {
-      let recordId: string | undefined;
-      if (idempotency && dryRun) {
-        await assertIdempotencyKeyUnused(ctx, tx, idempotency.credentialId, idempotency.key);
-      } else if (idempotency) {
-        const claim = await claimIdempotencyKey(ctx, tx, {
-          credentialId: idempotency.credentialId,
-          key: idempotency.key,
-          operationId: operation.id,
-          fingerprint: requestFingerprint(operation.id, decoded, idempotency),
-        });
-        if (claim.kind === "replay") throw new ReplayRollback(claim.outcome, claim.effect);
-        recordId = claim.recordId;
-      }
+    for (let attempt = 1; attempt <= OPERATION_MAX_ATTEMPTS; attempt++) {
+      if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before starting");
+      // A rolled-back attempt must not leak hooks into the eventual commit.
+      hooks.length = 0;
+      const outcome = await runOwnedTransaction(ctx, deadlineAt, async (tx) => {
+        let recordId: string | undefined;
+        if (idempotency && dryRun) {
+          await assertIdempotencyKeyUnused(ctx, tx, idempotency.credentialId, idempotency.key);
+        } else if (idempotency) {
+          const claim = await claimIdempotencyKey(ctx, tx, {
+            credentialId: idempotency.credentialId,
+            key: idempotency.key,
+            operationId: operation.id,
+            fingerprint: requestFingerprint(operation.id, decoded, idempotency),
+          });
+          if (claim.kind === "replay") throw new ReplayRollback(claim.outcome, claim.effect);
+          recordId = claim.recordId;
+        }
 
-      let before: StockBalance[] | undefined;
-      const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
-        before = await readStockBalances(ctx, writerTx, ids);
-      } : undefined;
-      const output = await operation.execute({ ctx, tx, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
-      const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
-      const effect = operation.describe?.(decoded, output);
-      const result = represent(output);
-      if (options.audit && !dryRun && effect) {
-        await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
-      }
-      if (recordId) {
-        await recordIdempotencyOutcome(ctx, tx, recordId, result, effect);
-      }
+        let before: StockBalance[] | undefined;
+        const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
+          before = await readStockBalances(ctx, writerTx, ids);
+        } : undefined;
+        const output = await operation.execute({ ctx, tx, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+        const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
+        const effect = operation.describe?.(decoded, output);
+        const result = represent(output);
+        if (options.audit && !dryRun && effect) {
+          await writeApiAuditEvent(ctx, tx, { ...options.audit, operationId: operation.id, effect });
+        }
+        if (recordId) {
+          await recordIdempotencyOutcome(ctx, tx, recordId, result, effect);
+        }
 
-      if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
-      if (dryRun) throw new DryRunRollback(result, effect, stockEffects);
-      return { data: result, ...(effect ? { effect } : {}) };
-    }, options.pool);
+        if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
+        if (dryRun) throw new DryRunRollback(result, effect, stockEffects);
+        return { data: result, ...(effect ? { effect } : {}) };
+      }, options.pool);
 
-    if (outcome.kind === "committed") {
-      committed = { ...outcome.data, dryRun: false, replayed: false };
-    } else {
-      const failure = outcome.error;
-      if (failure instanceof DryRunRollback) {
-        return { data: failure.data as Result, ...(failure.stockEffects ? { stockEffects: failure.stockEffects } : {}), ...(failure.effect ? { effect: failure.effect } : {}), dryRun: true, replayed: false };
+      if (outcome.kind === "committed") {
+        committed = { ...outcome.data, dryRun: false, replayed: false };
+        break;
+      } else {
+        const failure = outcome.error;
+        if (failure instanceof DryRunRollback) {
+          return { data: failure.data as Result, ...(failure.stockEffects ? { stockEffects: failure.stockEffects } : {}), ...(failure.effect ? { effect: failure.effect } : {}), dryRun: true, replayed: false };
+        }
+        if (failure instanceof ReplayRollback) {
+          return { data: failure.outcome as Result, ...(failure.effect ? { effect: failure.effect } : {}), dryRun: false, replayed: true };
+        }
+        const code = pgErrorCode(failure);
+        if ((code === PG_QUERY_CANCELED || code === PG_LOCK_NOT_AVAILABLE) && remainingMs(deadlineAt) <= 0) {
+          throw deadlineExceeded("while saving");
+        }
+        // Claim waits have their own short budget and must remain "still running".
+        const claimLockTimeout = failure instanceof DomainError && failure.code === "idempotency_in_progress";
+        // Only callback_threw proves COMMIT was never sent and the claim rolled back.
+        if (code === PG_DEADLOCK_DETECTED || code === PG_SERIALIZATION_FAILURE ||
+          (code === PG_LOCK_NOT_AVAILABLE && !claimLockTimeout)) {
+          if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("while saving");
+          if (attempt === OPERATION_MAX_ATTEMPTS) {
+            throw new DomainError("concurrent_write_retry", "Concurrent changes prevented saving. Retry shortly.", { retryable: true });
+          }
+          const delayMs = OPERATION_RETRY_MIN_DELAY_MS + Math.floor(
+            Math.random() * (OPERATION_RETRY_MAX_DELAY_MS - OPERATION_RETRY_MIN_DELAY_MS + 1),
+          );
+          if (remainingMs(deadlineAt) <= delayMs) throw deadlineExceeded("before retrying");
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before retrying");
+          logger.warn({ operationId: operation.id, attempt: attempt + 1, sqlstate: code }, "operation transaction retry");
+          continue;
+        }
+        throw failure;
       }
-      if (failure instanceof ReplayRollback) {
-        return { data: failure.outcome as Result, ...(failure.effect ? { effect: failure.effect } : {}), dryRun: false, replayed: true };
-      }
-      const code = pgErrorCode(failure);
-      if ((code === PG_QUERY_CANCELED || code === PG_LOCK_NOT_AVAILABLE) && remainingMs(deadlineAt) <= 0) {
-        throw deadlineExceeded("while saving");
-      }
-      throw failure;
     }
   } finally {
     if (flightKey) inFlightKeys.delete(flightKey);

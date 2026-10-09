@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import {
   certifierProjects, certifierRemovals, creditBatchApplications,
   creditBatchProductionRuns, creditBatches, facilities, feedstocks,
@@ -93,15 +92,18 @@ async function expectCompletedWithoutMembership(runId: string) {
 beforeAll(() => ensureTestOrg());
 
 describe("production completion tolerates auto-attachment races", () => {
-  it("completes unattached while the matching batch is locked for a cohort change", async () => {
+  it("completes unattached when the matching batch leaves the cohort during the row-lock wait", async () => {
     const f = await fixture();
     const ready = deferred();
     const release = deferred();
+    let blockerPid = 0;
     const blocker = db.transaction(async (tx) => {
-      // The unlocked match still sees January, but attachment must skip
-      // this busy batch and allow completion before the cohort edit commits.
+      // Uncommitted move: the unlocked match still sees January. PostgreSQL
+      // rechecks the cohort predicate once the FOR UPDATE wait is released.
       await tx.update(creditBatches).set({ startDate: "2026-02-01", endDate: "2026-02-28" })
         .where(eq(creditBatches.id, f.creditBatchId));
+      const result = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      blockerPid = result.rows[0].pid;
       ready.resolve();
       await release.promise;
     });
@@ -109,9 +111,19 @@ describe("production completion tolerates auto-attachment races", () => {
     try {
       await Promise.race([ready.promise, blocker]);
       completion = f.complete();
-      let settled = false;
-      void completion.then(() => { settled = true; }, () => { settled = true; });
-      await expect.poll(() => settled, { timeout: BARRIER_TIMEOUT_MS }).toBe(true);
+      void completion.catch(() => undefined);
+      await expect.poll(async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1 from pg_stat_activity
+            where ${blockerPid} = any(pg_blocking_pids(pid))
+              and query ilike '%credit_batches%' and query ilike '%for update%'
+          ) as waiting
+        `);
+        return result.rows[0].waiting;
+      }, { timeout: BARRIER_TIMEOUT_MS }).toBe(true);
+      release.resolve();
+      await blocker;
       await completion;
       await expectCompletedWithoutMembership(f.run.id);
     } finally {
@@ -122,7 +134,7 @@ describe("production completion tolerates auto-attachment races", () => {
     }
   }, TEST_TIMEOUT_MS);
 
-  it.each(["row", "artifact"] as const)("completes unattached while a linked Removal %s remains locked", async (lockKind) => {
+  it("completes unattached while a linked Removal row remains locked", async () => {
     const f = await fixture();
     const chain = await createBiocharApplicationChain({ ...f, tag: `RACE-${f.runId}` });
     await db.insert(creditBatchApplications).values({
@@ -133,14 +145,8 @@ describe("production completion tolerates auto-attachment races", () => {
     const ready = deferred();
     const release = deferred();
     const blocker = db.transaction(async (tx) => {
-      if (lockKind === "row") {
-        await tx.select().from(certifierRemovals)
-          .where(eq(certifierRemovals.id, f.removalId)).for("update");
-      } else {
-        await acquireCertificationArtifactLocksSorted(tx, [{
-          provider: "isometric", localEntityType: "removal", localEntityId: f.removalId,
-        }]);
-      }
+      await tx.select().from(certifierRemovals)
+        .where(eq(certifierRemovals.id, f.removalId)).for("update");
       ready.resolve();
       await release.promise;
     });

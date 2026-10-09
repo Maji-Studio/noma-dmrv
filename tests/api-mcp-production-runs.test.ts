@@ -1,3 +1,4 @@
+import { productionRunEtag } from "@/lib/api/representation-etags";
 /** DB-backed MCP outcomes: not run, needs the supervisor. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -93,7 +94,7 @@ describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
     const row = created.structuredContent.data;
     const key = randomUUID();
     const rest = await (kind === "update" ? PATCH : DELETE)(request(kind === "update" ? "PATCH" : "DELETE", `/${row.id}`,
-      kind === "update" ? { electricityKwh: 12 } : undefined, { "if-match": '"1.1"', "idempotency-key": key }), params(row.id));
+      kind === "update" ? { electricityKwh: 12 } : undefined, { "if-match": productionRunEtag(row), "idempotency-key": key }), params(row.id));
     expect(rest.status).toBe(kind === "update" ? 200 : 204);
     const replay = await call(`${kind}_production_run`, { productionRunId: row.id, expectedVersion: 1, requestKey: key,
       ...(kind === "update" ? { electricityKwh: 12 } : {}) });

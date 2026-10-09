@@ -5,7 +5,7 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { creditBatchApplications } from "@/db/schema/credits";
-import { acquireCertificationArtifactLocksSorted, certificationArtifactLockKey } from "@/lib/certification/submission-lock";
+import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { formatCertificationLineageLockMessage } from "@/lib/certification/lineage-lock-message";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import type { OrgContext } from "@/lib/auth/server";
@@ -66,10 +66,9 @@ export async function lockCreditBatchArtifacts(
   ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
-  prelockedArtifacts?: ReadonlySet<string>,
 ): Promise<CreditBatchRemovals> {
   const removals = await readCreditBatchRemovals(ctx, tx, creditBatchId);
-  const artifacts = [
+  await acquireCertificationArtifactLocksSorted(tx, [
     ...removals.map((removal) => ({
       provider: CERTIFIER_PROVIDER,
       localEntityType: "removal",
@@ -82,15 +81,7 @@ export async function lockCreditBatchArtifacts(
         localEntityType: "ghgStatement",
         localEntityId: removal.ghgStatementId!,
       } as const)),
-  ];
-  if (prelockedArtifacts) {
-    // Run writers already hold bins. Never acquire new lineage locks here.
-    if (artifacts.some((artifact) => !prelockedArtifacts.has(certificationArtifactLockKey(artifact)))) {
-      throw new CreditBatchLineageChangedError();
-    }
-  } else {
-    await acquireCertificationArtifactLocksSorted(tx, artifacts);
-  }
+  ]);
 
   return removals;
 }

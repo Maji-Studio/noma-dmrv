@@ -30,6 +30,43 @@ Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox
 probe — **never** from `docs/isometric/*`, which are non-authoritative local
 summaries. Do not close one of these from a local doc.
 
+## data/lock-order (opened 2026-10-09)
+
+`src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
+and `src/data-access/production-runs/delete.ts:deleteProductionRunInTransaction`
+lock bins before the run row and certification lineage. Feedstock edits in
+`src/data-access/feedstocks.ts:updateFeedstockInTransaction` lock the intake row
+and lineage before bins, leaving a run-versus-feedstock deadlock cycle.
+
+The gpt-6.1-sol review of commit `f02e08c7`, final section of the supervisor's
+`4a-lockrevert/review.md` artifact, identified three cycles introduced by moving
+run and lineage locks before bins. The supervisor verified the first:
+
+- `src/data-access/credit-batch-membership.ts:lockCreditBatchForUpdate` takes the
+  process scope before artifacts, opposite to prospective run attachment.
+- `src/data-access/output-stock-post.ts:withOutputStockPosting` takes bins before
+  lineage or allocation foreign-key KEY SHARE locks on runs, opposite to the
+  proposed run row and lineage ordering.
+- Run allocation inserts into `productionRunFeedstocks` take foreign-key
+  KEY SHARE locks on intake rows. Prelocking prospective lineage on run create
+  can wait on an intake edit that already holds its row and waits on lineage.
+
+Phase 4a restores the previous ordering and best-effort attachment behavior.
+Coordinating every writer, including implicit foreign-key locks, is outside
+this API phase. `src/lib/operations/runner.ts:runOperation` mitigates the cycles
+with bounded, jittered whole-transaction retries for deadlocks (40P01),
+serialization failures (40001) and operation lock-timeout aborts (55P03) before
+COMMIT, within the original deadline. Claim-lock waits still answer
+`idempotency_in_progress`; spent deadlines answer `deadline_exceeded`.
+Claims and writes roll back together;
+commit-sent failures stay `outcome_unknown`. This does not establish a global
+order or add retries to callers that bypass the runner.
+
+Resolve with a cross-writer lock inventory, a documented order covering process
+scopes, artifacts, bins, parent rows and foreign keys, and deterministic races
+for run create/update/delete against intake edits, batch updates and output
+postings. Keep the runner retry even after the known inversions are removed.
+
 ## Production-run readings and incidents on the API
 
 Production runs expose start, update and delete only. The readings batch from

@@ -33,7 +33,7 @@ interface BiocharBinStockState {
   availableKg: number;
 }
 
-/** Lock the affected bins after the run row and certification lineage. */
+/** Discover the complete affected bin set and lock it before the run row. */
 export async function lockProductionRunUpdateStock(
   ctx: OrgContext,
   tx: DbTransaction,

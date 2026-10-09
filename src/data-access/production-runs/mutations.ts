@@ -62,7 +62,6 @@ import {
   isReactorStartUniqueViolation,
 } from "./overlap";
 import { assertProductionRunOutputBasisChange, getProductionRunDependentProduct } from "./product-dependencies";
-import { lockProductionRunLineage } from "./lineage-locks";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 
@@ -212,9 +211,6 @@ export async function createProductionRunInTransaction(
   try {
     await lockActiveFacilityReference(ctx, tx, data.facilityId);
 
-    // No existing run row on create. Lock prospective lineage before sorted bins.
-    const lineageLocks = await lockProductionRunLineage(ctx, tx, { facilityId: data.facilityId, status });
-
     await lockBinStocks(ctx, tx, [
       ...feedstockDraws.map((draw) => draw.storageLocationId),
       data.feedstockStorageLocationId,
@@ -302,7 +298,7 @@ export async function createProductionRunInTransaction(
       cancellationReason: data.cancellationReason ?? null,
     });
 
-    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id, lineageLocks);
+    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
 
     run = created;
   } catch (error) {
@@ -564,6 +560,16 @@ export async function updateProductionRunInTransaction(
       await lockActiveFacilityReference(ctx, tx, data.facilityId);
     }
 
+    await lockProductionRunUpdateStock(
+      ctx,
+      tx,
+      {
+        feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
+        biocharStorageLocationId: existing.biocharStorageLocationId,
+      },
+      { ...data, feedstockDraws: normalizedFeedstockDraws },
+    );
+
     const [locked] = await tx
       .select()
       .from(productionRuns)
@@ -583,27 +589,6 @@ export async function updateProductionRunInTransaction(
       expectedVersion: data.expectedVersion,
       actualVersion: locked.version,
     });
-    // Existing entity row -> sorted certification lineage -> sorted bin locks.
-    const lineageLocks = await lockProductionRunLineage(ctx, tx, {
-      productionRunId, facilityId: data.facilityId ?? locked.facilityId, status: data.status ?? locked.status,
-    });
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "productionRun", entityId: productionRunId },
-      "update",
-    );
-
-    await lockProductionRunUpdateStock(
-      ctx,
-      tx,
-      {
-        feedstockStorageLocationIds: existingFeedstockStorageLocationIds,
-        biocharStorageLocationId: existing.biocharStorageLocationId,
-      },
-      { ...data, feedstockDraws: normalizedFeedstockDraws },
-    );
-
     const lockedFeedstockStorageLocationIds =
       await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
     assertProductionRunStockSnapshot(
@@ -704,6 +689,13 @@ export async function updateProductionRunInTransaction(
         );
       }
     }
+
+    await assertCanMutateCertifiedLineage(
+      ctx,
+      tx,
+      { entityType: "productionRun", entityId: productionRunId },
+      "update",
+    );
 
     // A cancelled run frees its slot, so only an occupying run needs this guard.
     if (statusOccupiesReactor(lockedTargetStatus)) {
@@ -834,7 +826,6 @@ export async function updateProductionRunInTransaction(
       ctx,
       tx,
       productionRunId,
-      lineageLocks,
     );
       },
     );

@@ -10,6 +10,7 @@ const expectedActionStatuses = {
   validation_failed: 422,
   not_found: 404,
   stale_version: 412,
+  concurrent_write_retry: 409,
   conflict: 409,
   certification_locked: 409,
   insufficient_stock: 409,
@@ -135,4 +136,10 @@ it("keeps the documented problem shape aligned with optional domain extensions",
   const body = await response.json();
   expect(problemSchema.strict().parse(body)).toEqual(body);
   expect(body).toMatchObject({ conflict: ref, blockers: [ref], current: { version: 2 } });
+});
+
+it("exposes exhausted concurrent writes as a retryable 409", async () => {
+  const response = actionFailureResponse({ success: false, code: "concurrent_write_retry", error: "Retry shortly." }, "/api/v1/production-runs", "request");
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "concurrent_write_retry", retryable: true });
 });

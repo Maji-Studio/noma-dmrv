@@ -45,21 +45,6 @@ org-scoped reads or audit inserts.
 
 Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.
 
-### Production and feedstock lock order
-
-Writers that need all three lock kinds acquire the existing entity row first,
-then certification artifact advisory locks in sorted key order, then bin-stock
-advisory locks in sorted bin ID order. Do not wait for lineage locks while holding
-bin locks. Run create has no existing row; it locks prospective credit-batch
-lineage before bins using nonblocking lock attempts. Run completion locks its
-existing lineage, then tries prospective batch lineage without waiting, before
-locking bins. Automatic attachment skips busy batches, busy Removals and
-artifacts outside the prelocked set. The run completes unattached in these cases.
-
-Run update and delete retain the pre-lock stock discovery comparison against
-rows read under the run lock and bin locks. A changed discovery snapshot must
-still abort before stock is read or written.
-
 API production-run reads select the run and its explicit draws in one statement,
 so their row version and draw masses share a statement snapshot. The public run
 representation carries reference IDs; clients resolve codes and facility zones

@@ -94,7 +94,7 @@ describe("owned transaction timeout handling without a database", () => {
     expect(client.listenerCount("error")).toBe(0);
   });
 
-  it.each(["08006", "23505", "40001"])("preserves post-COMMIT classification after the deadline (%s)", async (sqlstate) => {
+  it.each(["08006", "23505", "40001", "40P01", "55P03"])("preserves post-COMMIT classification after the deadline (%s)", async (sqlstate) => {
     const { client, pool } = connection();
     const deadlineAt = Date.now() + BUDGET_MS;
     const error = Object.assign(new Error("commit failed"), { code: sqlstate });
@@ -104,16 +104,12 @@ describe("owned transaction timeout handling without a database", () => {
       throw error;
     });
     const result = runOwnedTransaction(ctx, deadlineAt, async () => "result", pool);
-    if (sqlstate === "08006") {
-      await expect(result).rejects.toMatchObject({ code: "outcome_unknown", cause: error });
-    } else {
-      await expect(result).rejects.toBe(error);
-    }
+    await expect(result).rejects.toMatchObject({ code: "outcome_unknown", cause: error });
     expect(client.release).toHaveBeenCalledWith(error);
   });
 
-  it("distinguishes a server timeout at COMMIT from a lost acknowledgement", async () => {
-    for (const [error, code] of [[timeoutError(), "deadline_exceeded"], [new Error("connection closed"), "outcome_unknown"]] as const) {
+  it("never promises rollback for a failure after COMMIT was sent", async () => {
+    for (const [error, code] of [[timeoutError(), "outcome_unknown"], [new Error("connection closed"), "outcome_unknown"]] as const) {
       const { client, pool } = connection();
       transaction.mockImplementation(async (callback) => { await callback({ execute }); throw error; });
       await expect(runOwnedTransaction(ctx, Date.now() + BUDGET_MS, async () => "result", pool)).rejects.toMatchObject({ code });

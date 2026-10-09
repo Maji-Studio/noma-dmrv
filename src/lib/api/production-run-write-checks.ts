@@ -5,7 +5,7 @@ import { API_PRODUCTION_RUN_MAX_DRAWS, PRODUCTION_RUN_REPRESENTATION_REVISION } 
 import { readApiProductionRun } from "@/lib/read-models/api-production-runs";
 import { DomainError } from "@/lib/domain-errors";
 import type { Operation, OperationResult, OperationScope } from "@/lib/operations/runner";
-import type { ProductionRunRepresentation } from "@/lib/representations/production-runs";
+import { representProductionRun, type ProductionRunRepresentation } from "@/lib/representations/production-runs";
 
 export function checkProductionRunDraws(body: unknown) {
   if (body && typeof body === "object" && "feedstockDraws" in body && Array.isArray(body.feedstockDraws) && body.feedstockDraws.length > API_PRODUCTION_RUN_MAX_DRAWS) {
@@ -67,5 +67,5 @@ export async function withCurrentOnStale<T>(ctx: ApiContext, id: string, fn: () 
 }
 
 export function productionRunBody(result: OperationResult<ProductionRunRepresentation>, dryRun: boolean) {
-  return { data: result.data, ...(dryRun ? { stockEffects: result.stockEffects } : {}) };
+  return { data: representProductionRun(result.data), ...(dryRun ? { stockEffects: result.stockEffects } : {}) };
 }

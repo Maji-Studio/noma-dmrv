@@ -631,7 +631,6 @@ export async function updateFeedstockInTransaction(
     actualVersion: locked.version,
   });
 
-  // Existing entity row -> sorted certification lineage -> sorted bin locks.
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
     ctx,
     tx,
@@ -772,7 +771,6 @@ export async function deleteFeedstockInTransaction(
     actualVersion: locked.version,
   });
 
-  // Existing entity row -> sorted certification lineage -> sorted bin locks.
   await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
     ctx,
     tx,

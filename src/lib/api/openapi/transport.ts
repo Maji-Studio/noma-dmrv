@@ -101,7 +101,7 @@ const errorDescriptions: Record<number, string> = {
   401: "Missing, invalid, expired or revoked bearer credential, or invalid credential owner.",
   403: "Insufficient scope/role or organization API access disabled.",
   404: "Target or referenced resource absent or outside the credential organization.",
-  409: "Business conflict, idempotency in progress, used dry-run key, or replay unavailable.",
+  409: "Business conflict, idempotency in progress, used dry-run key, replay unavailable, or concurrent_write_retry (retryable after bounded transaction retries).",
   412: "Stale row version or representation revision; current contains the latest representation.",
   413: "JSON request exceeds the configured body limit.",
   415: "JSON body requires Content-Type: application/json.",

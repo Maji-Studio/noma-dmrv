@@ -1,4 +1,6 @@
-import { openOperationBarrier, waitForBlockedOperations } from "./helpers/operation-barrier";
+import { z } from "zod";
+import { runOperation } from "@/lib/operations/runner";
+import { waitForBlockedOperations } from "./helpers/operation-barrier";
 import { createTestPool } from "./helpers/operation-fixture";
 import { assertCanMutateCertifiedLineage } from "@/data-access/certification-lineage-guards";
 import { updateProductionRunInTransaction } from "@/data-access/production-runs/mutations";
@@ -917,9 +919,9 @@ describe("certification lineage guards", () => {
 });
 
 // DB-backed regression: not run, needs the supervisor.
-it("serializes a run status update and feedstock edit on the same lineage and bin", async () => {
+it("commits a run status update and feedstock edit on the same lineage and bin with runner retries", async () => {
   const WRITER_AND_OBSERVER_CONNECTIONS = 3;
-  const RACE_LOCK_TIMEOUT_MS = 10_000;
+  const RACE_DEADLINE_MS = 20_000;
   const INITIAL_WET_KG = 1_000;
   const EDITED_WET_KG = 1_100;
   const DRAW_WET_KG = 10;
@@ -941,33 +943,45 @@ it("serializes a run status update and feedstock edit on the same lineage and bi
     await db.insert(creditBatchProductionRuns).values({ organizationId: TEST_ORG_ID,
       productionRunId: run.id, creditBatchId: fixture.batchId });
     const pool = createTestPool(WRITER_AND_OBSERVER_CONNECTIONS);
-    const feedstockWriter = await openOperationBarrier(pool);
-    const runWriter = await openOperationBarrier(pool);
+    let ready!: () => void;
+    const lineageHeld = new Promise<void>((resolve) => { ready = resolve; });
+    let feedstockAttempts = 0;
+    let runAttempts = 0;
     let updating: Promise<unknown> | undefined;
+    const editing = runOperation({ id: "test_feedstock_edit", input: z.object({}), supportsDryRun: true,
+      execute: async ({ tx }) => {
+        const [feedstock] = await tx.select().from(feedstocks)
+          .where(and(eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.id, fixture.feedstockId))).for("update");
+        await assertCanMutateCertifiedLineage(ctx, tx,
+          { entityType: "feedstock", entityId: fixture.feedstockId }, "update");
+        if (++feedstockAttempts === 1) {
+          const pid = (await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`)).rows[0].pid;
+          ready();
+          await waitForBlockedOperations(pool, pid, 1);
+          // The run holds the bin and waits on lineage; this edit closes the cycle.
+        }
+        return updateFeedstockInTransaction(ctx, tx, fixture.feedstockId,
+          { expectedVersion: feedstock.version, massWetKg: EDITED_WET_KG });
+      },
+    }, ctx, {}, { pool, deadlineMs: RACE_DEADLINE_MS });
+    void editing.catch(() => undefined);
     try {
-      await feedstockWriter.tx.execute(sql.raw(`set local lock_timeout = ${RACE_LOCK_TIMEOUT_MS}`));
-      await runWriter.tx.execute(sql.raw(`set local lock_timeout = ${RACE_LOCK_TIMEOUT_MS}`));
-      const [feedstock] = await feedstockWriter.tx.select().from(feedstocks)
-        .where(and(eq(feedstocks.organizationId, TEST_ORG_ID), eq(feedstocks.id, fixture.feedstockId))).for("update");
-      await assertCanMutateCertifiedLineage(ctx, feedstockWriter.tx,
-        { entityType: "feedstock", entityId: fixture.feedstockId }, "update");
-      updating = updateProductionRunInTransaction(ctx, runWriter.tx, run.id,
-        { expectedVersion: run.version, status: "running" })
-        .then(async (updated) => { await runWriter.commit(); return updated; })
-        .catch(async (error: unknown) => { await runWriter.rollback(); throw error; });
-      void updating.catch(() => undefined);
-      await waitForBlockedOperations(pool, feedstockWriter.pid, 1);
-      // Previously the run held the bin while waiting on our lineage lock.
-      // This real feedstock edit then waited on that bin, completing the cycle.
-      const edited = await updateFeedstockInTransaction(ctx, feedstockWriter.tx, fixture.feedstockId,
-        { expectedVersion: feedstock.version, massWetKg: EDITED_WET_KG });
-      await feedstockWriter.commit();
-      expect(edited.massWetKg).toBe(EDITED_WET_KG);
-      await expect(updating).resolves.toMatchObject({ status: "running", version: run.version + 1 });
+      await Promise.race([lineageHeld, editing]);
+      updating = runOperation({ id: "test_run_status", input: z.object({}), supportsDryRun: true,
+        execute: async ({ tx }) => {
+          runAttempts++;
+          return updateProductionRunInTransaction(ctx, tx, run.id,
+            { expectedVersion: run.version, status: "running" });
+        },
+      }, ctx, {}, { pool, deadlineMs: RACE_DEADLINE_MS });
+      const [edited, updated] = await Promise.all([editing, updating]);
+      expect(edited.data.massWetKg).toBe(EDITED_WET_KG);
+      expect(updated).toMatchObject({ data: { status: "running", version: run.version + 1 } });
+      expect(feedstockAttempts + runAttempts).toBeGreaterThan(2);
+      expect((await db.select().from(productionRuns).where(eq(productionRuns.id, run.id)))[0].status).toBe("running");
+      expect((await db.select().from(feedstocks).where(eq(feedstocks.id, fixture.feedstockId)))[0].massWetKg).toBe(EDITED_WET_KG);
     } finally {
-      await feedstockWriter.rollback();
-      if (updating) await Promise.allSettled([updating]);
-      await runWriter.rollback();
+      await Promise.allSettled([editing, ...(updating ? [updating] : [])]);
       await pool.end();
       await db.delete(creditBatchProductionRuns).where(eq(creditBatchProductionRuns.productionRunId, run.id));
       await db.delete(productionRunFeedstocks).where(eq(productionRunFeedstocks.productionRunId, run.id));

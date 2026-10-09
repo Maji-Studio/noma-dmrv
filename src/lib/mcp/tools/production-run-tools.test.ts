@@ -98,3 +98,11 @@ it("returns current on stale and rejects nested unknown fields", async () => {
   await expect(productionRunWriteTools[0].execute(context, { ...create, requestKey: "write", feedstockDraws: [{ storageLocationId: ID, wetMassKg: 100, guessed: true }] }))
     .rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["feedstockDraws", 0, "guessed"] }] });
 });
+
+it.each(productionRunWriteTools.slice(0, 2))("re-renders JSONB key order for $name replays", async (tool) => {
+  const original = await tool.execute(context, { ...args(tool.name), requestKey: "write" });
+  const reordered = Object.fromEntries(Object.entries(row).reverse());
+  mocks.run.mockResolvedValueOnce({ data: reordered, dryRun: false, replayed: true });
+  const replay = await tool.execute(context, { ...args(tool.name), requestKey: "write" });
+  expect(JSON.stringify(replay.body)).toBe(JSON.stringify(original.body));
+});
