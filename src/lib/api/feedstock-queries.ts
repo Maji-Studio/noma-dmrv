@@ -13,6 +13,6 @@ export async function readFeedstockListFromInput(ctx: ApiContext, input: z.outpu
   return readLookupPage(ctx, "feedstocks", { limit, cursor, filters }, readApiFeedstockList);
 }
 
-export async function readFeedstockFromInput(ctx: ApiContext, _input: z.output<typeof resourceQueries.feedstocks.get>, idOrCode: string) {
+export async function readFeedstock(ctx: ApiContext, idOrCode: string) {
   return readApiFeedstock(ctx, lookupIdentifier(idOrCode));
 }

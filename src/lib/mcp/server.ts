@@ -32,9 +32,21 @@ export function serveMcp(request: Request, context: ApiRouteContext): Promise<Re
     .map((tool) => [tool.name, tool]));
   const handler = createMcpHandler((server) => {
     for (const tool of tools.values()) {
+      const unionSchema = toToolSchema(z.union([tool.output, toolErrorSchema]));
+      const converters = unionSchema["~standard"].jsonSchema;
+      // Legacy MCP clients require an object root even for the success/error union.
+      const outputSchema: typeof unionSchema = {
+        "~standard": {
+          ...unionSchema["~standard"],
+          jsonSchema: {
+            input: (options) => ({ ...converters.input(options), type: "object" }),
+            output: (options) => ({ ...converters.output(options), type: "object" }),
+          },
+        },
+      };
       server.registerTool(tool.name, {
         description: tool.description, inputSchema: toToolSchema(tool.input),
-        outputSchema: toToolSchema(z.union([tool.output, toolErrorSchema])),
+        outputSchema,
         annotations: { readOnlyHint: true },
       }, async () => { throw new Error("The request dispatcher owns tool execution."); });
     }

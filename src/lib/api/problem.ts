@@ -63,6 +63,10 @@ export function apiDenialResponse(denial: ApiContextDenial, instance: string, re
   return problemResponse({ status, code: denial, detail: "The credential cannot authorize this request.", instance, requestId });
 }
 
+export function jsonPointer(path: readonly PropertyKey[]): string {
+  return path.length ? `/${path.map((part) => String(part).replaceAll("~", "~0").replaceAll("/", "~1")).join("/")}` : "";
+}
+
 export function actionFailureResponse(failure: ActionFailure, instance: string, requestId: string) {
   const code = failure.code ?? "internal_error";
   return problemResponse({
@@ -71,7 +75,7 @@ export function actionFailureResponse(failure: ActionFailure, instance: string, 
     retryable: ["deadline_exceeded", "outcome_unknown", "idempotency_in_progress"].includes(code),
     ...(code === "idempotency_in_progress" ? { retryAfterSeconds: IDEMPOTENCY_RETRY_AFTER_SECONDS } : {}),
     errors: failure.issues?.map((issue) => ({
-      pointer: issue.path.length ? `/${issue.path.map((part) => String(part).replaceAll("~", "~0").replaceAll("/", "~1")).join("/")}` : "",
+      pointer: jsonPointer(issue.path),
       code: issue.code, detail: issue.message, ...(issue.meta ? { meta: issue.meta } : {}),
     })),
     conflict: failure.conflict, blockers: failure.blockers,

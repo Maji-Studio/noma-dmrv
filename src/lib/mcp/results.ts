@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { problemSchema } from "@/lib/api/problem-schema";
-import { actionFailureResponse, problemResponse } from "@/lib/api/problem";
+import { actionFailureResponse, jsonPointer, problemResponse } from "@/lib/api/problem";
 import { ApiHttpError } from "@/lib/api/http-error";
-import { logApiError } from "@/lib/api/route-error";
+import { logApiError, shouldLogDomainError } from "@/lib/api/route-error";
 import type { ApiRouteContext } from "@/lib/api/route";
 import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
@@ -21,11 +21,11 @@ export async function toolFailure(error: unknown, context: ApiRouteContext, name
   if (error instanceof ApiHttpError) {
     response = problemResponse({ status: error.status, code: error.code, detail: error.message,
       errors: error.issues?.map((issue) => ({
-        pointer: issue.path.length ? `/${issue.path.map((part) => String(part).replaceAll("~", "~0").replaceAll("/", "~1")).join("/")}` : "",
+        pointer: jsonPointer(issue.path),
         code: issue.code, detail: issue.message,
       })), instance: context.instance, requestId: context.requestId });
   } else if (error instanceof DomainError) {
-    if (error.cause !== undefined || error.code === "deadline_exceeded") logApiError(error, name, context.requestId);
+    if (shouldLogDomainError(error)) logApiError(error, name, context.requestId);
     response = actionFailureResponse(toActionFailure(error, {
       fallbackMessage: "The request could not be completed.", log: { message: "MCP tool failed" }, logUnexpected: false,
     }), context.instance, context.requestId);

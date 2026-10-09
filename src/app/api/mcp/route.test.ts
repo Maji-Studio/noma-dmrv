@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPERATION_DEADLINE_MS } from "@/config/operations";
 import { API_BODY_MAX_BYTES, API_LIST_DEFAULT_LIMIT, API_LIST_MAX_LIMIT, API_VERSION } from "@/config/api-rest";
 import { API_SCOPES } from "@/lib/auth/api-scopes";
+import { serveMcp } from "@/lib/mcp/server";
 import { DomainError } from "@/lib/domain-errors";
 import { buildOpenApiDocument } from "@/lib/api/openapi/document";
 import { GET, POST, DELETE } from "./route";
 
 const mocks = vi.hoisted(() => ({ resolve: vi.fn(), pre: vi.fn(), post: vi.fn(), me: vi.fn(), log: vi.fn() }));
+vi.mock("@/lib/mcp/server", { spy: true });
 vi.mock("@/config/env", () => ({ env: { NODE_ENV: "production", NEXT_PUBLIC_APP_URL: "https://noma.example" } }));
 vi.mock("@/lib/auth/api-context", () => ({ resolveApiContext: mocks.resolve }));
 vi.mock("@/lib/api/guards", () => ({ preAuthGuard: mocks.pre, postAuthGuard: mocks.post }));
@@ -75,7 +77,27 @@ describe("authenticated MCP read route", () => {
     expect(find.inputSchema.additionalProperties).toBe(false);
     expect(find.inputSchema.properties.limit).toMatchObject({ type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT,
       description: `Page size, integer 1 to ${API_LIST_MAX_LIMIT}; defaults to ${API_LIST_DEFAULT_LIMIT}.` });
-    expect(find.outputSchema.anyOf).toHaveLength(2);
+    for (const tool of result.tools) {
+      expect(tool.outputSchema.type).toBe("object");
+      expect(tool.outputSchema.anyOf).toHaveLength(2);
+    }
+  });
+  it("refuses legacy batches before authenticated buckets or dispatch", async () => {
+    const request = rpc("tools/call", { name: "whoami", arguments: {} });
+    const message = await request.json();
+    const response = await POST(new Request(ENDPOINT, {
+      method: "POST", headers: request.headers,
+      body: JSON.stringify([message, { ...message, id: 2 }]),
+    }));
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toBe("application/problem+json");
+    expect(await response.json()).toMatchObject({
+      code: "batch_not_supported", detail: "Send one JSON-RPC message per request.",
+    });
+    expect(mocks.resolve).toHaveBeenCalledOnce();
+    expect(serveMcp).not.toHaveBeenCalled();
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(mocks.me).not.toHaveBeenCalled();
   });
   it.each(["declared", "chunked"])("bounds a %s body before authenticated buckets or dispatch", async (kind) => {
     const cancel = vi.fn();

@@ -747,7 +747,11 @@ requires the method/path (or `components`) and change description on each line.
 runs first; requests without Origin pass. The shared `lib/api/route.ts`
 admission wrapper starts the deadline before authentication, assigns a request
 id and applies the same API-key resolver and rate-limit buckets as REST.
-Every MCP request currently counts as a read; `lib/mcp/server.ts` owns the
+After authentication, the preparation hook bounds the body to `API_BODY_MAX_BYTES`
+and returns HTTP 413 `payload_too_large` if it exceeds that limit. JSON-RPC
+batch arrays return HTTP 400 `batch_not_supported`. Both refusals use
+`application/problem+json` and precede authenticated rate limiting and dispatch.
+Every admitted MCP request counts as a read; `lib/mcp/server.ts` owns the
 parsed-body classifier for future write tools.
 
 `src/lib/mcp/tools/read-tools.ts` defines whoami, the intake find tools and
@@ -761,8 +765,9 @@ The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
 Success structuredContent is exactly the matching REST GET body. Expected
 failures use the REST problem code and JSON Pointer errors, named `issues` in
-MCP, without HTTP metadata. REST query failures currently have empty issue
-arrays; MCP preserves that contract. Each output schema is a success/error
-union. Unexpected failures are generic JSON-RPC internal errors, logged with
+MCP, without HTTP metadata. MCP `invalid_query` results include Zod issues
+as JSON Pointer `issues`; REST query failures return an empty `errors` array.
+Each output schema is a success/error union with `type: "object"` at its root.
+Unexpected failures are generic JSON-RPC internal errors, logged with
 request id and tool name without raw input. The tool dispatcher checks the
 request deadline before each read. No write tools or sessions are exposed.

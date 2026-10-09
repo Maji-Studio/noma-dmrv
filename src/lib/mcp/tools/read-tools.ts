@@ -10,7 +10,7 @@ import { readFeedstockTypeListFromInput } from "@/lib/api/feedstock-types-querie
 import { readStorageLocationListFromInput } from "@/lib/api/storage-locations-queries";
 import { readVehicleListFromInput } from "@/lib/api/vehicles-queries";
 import { readDriverListFromInput } from "@/lib/api/drivers-queries";
-import { readFeedstockListFromInput, readFeedstockFromInput } from "@/lib/api/feedstock-queries";
+import { readFeedstockListFromInput, readFeedstock } from "@/lib/api/feedstock-queries";
 import { readApiMe } from "@/lib/read-models/api-me";
 import { itemEnvelopeSchema, listEnvelopeSchema } from "@/lib/representations/envelopes";
 import { meRepresentationSchema } from "@/lib/representations/me";
@@ -72,5 +72,5 @@ export const readTools: ReadTool[] = [
     description: `${readDescriptions.get} Call find_feedstocks first for an id or code. Masses are kilograms; moisture is percent of wet mass, 0 to 100. Delivery dates are facility-local YYYY-MM-DD.`,
     input: resourceQueries.feedstocks.get.extend({ idOrCode: z.string().describe("Resource UUID or exact human-readable code.") }),
     output: itemEnvelopeSchema(feedstockRepresentationSchema),
-  }, async (ctx, { idOrCode, ...input }) => ({ data: await readFeedstockFromInput(ctx, input, idOrCode) })),
+  }, async (ctx, { idOrCode }) => ({ data: await readFeedstock(ctx, idOrCode) })),
 ];

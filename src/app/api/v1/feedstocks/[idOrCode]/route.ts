@@ -1,5 +1,5 @@
 import { apiRoute } from "@/lib/api/route";
-import { readFeedstockFromInput } from "@/lib/api/feedstock-queries";
+import { readFeedstock } from "@/lib/api/feedstock-queries";
 import { mutateFeedstockResponse } from "@/lib/api/feedstock-mutations";
 import { feedstockEtag } from "@/lib/api/representation-etags";
 import { parseApiQuery } from "@/lib/api/query";
@@ -10,8 +10,8 @@ export const maxDuration = 30;
 
 type Params = { idOrCode: string };
 export const GET = apiRoute<Params>("api.v1.feedstocks.get", "feedstocks:read", async (request, { ctx, headers }, { idOrCode }) => {
-  const input = parseApiQuery(request, resourceQueries.feedstocks.get);
-  const data = await readFeedstockFromInput(ctx, input, idOrCode);
+  parseApiQuery(request, resourceQueries.feedstocks.get);
+  const data = await readFeedstock(ctx, idOrCode);
   headers.set("ETag", feedstockEtag(data));
   return Response.json({ data }, { headers });
 });
