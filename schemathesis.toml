@@ -32,11 +32,14 @@ enabled = true
 [checks.configured_authentication]
 enabled = true
 
+[checks.seeded_oversize_rejection]
+enabled = true
+
 [checks.positive_data_acceptance]
 expected-statuses = ["2xx", 401, 403, 404, 409, 414, 429, 431, "5xx"]
 
 [checks.negative_data_rejection]
-expected-statuses = [400, 401, 403, 404, 405, 406, 409, 414, 415, 422, 428, 429, 431, "5xx"]
+expected-statuses = [400, 401, 403, 404, 405, 406, 409, 413, 414, 415, 422, 428, 429, 431, "5xx"]
 
 [phases.examples]
 enabled = true
@@ -74,7 +77,7 @@ path = "api-fuzz-report/junit.xml"
 [[operations]]
 include-method = ["POST", "PATCH", "DELETE"]
 [operations.checks.positive_data_acceptance]
-expected-statuses = ["2xx", 401, 403, 404, 409, 414, 422, 429, 431, "5xx"]
+expected-statuses = ["2xx", 401, 403, 404, 409, 413, 414, 422, 429, 431, "5xx"]
 
 # 428 is valid only for the operations that require If-Match. The check has
 # operation-level scope but cannot scope expected statuses by header name.

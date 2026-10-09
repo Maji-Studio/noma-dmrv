@@ -11,6 +11,9 @@ from schemathesis.generation.meta import CaseMetadata, ExamplesPhaseData, Genera
 from schemathesis.specs.openapi.checks import status_code_conformance
 
 TRANSPORT_REJECTIONS = frozenset({414, 431})
+# Mirrored from src/config/api-rest.ts for the Python-only harness.
+API_BODY_MAX_BYTES = 256 * 1024
+OVERSIZE_EXAMPLE_DESCRIPTION = "Seeded fixture oversize create"
 SEEDED_TARGETS = {}
 SEEDED_ETAGS = {}
 SEEDED_CREATE_BODY = None
@@ -23,6 +26,13 @@ def application_status_code_conformance(ctx, response, case):
     if response.status_code in TRANSPORT_REJECTIONS:
         return None
     return status_code_conformance(ctx, response, case)
+
+
+@schemathesis.check
+def seeded_oversize_rejection(ctx, response, case):
+    if case.meta is not None and case.meta.phase.name == TestPhase.EXAMPLES and case.meta.phase.data.description == OVERSIZE_EXAMPLE_DESCRIPTION:
+        if response.status_code != 413:
+            raise AssertionError(f"Seeded oversize create must return 413, received {response.status_code}.")
 
 
 @schemathesis.check
@@ -99,6 +109,13 @@ def before_add_examples(ctx, examples):
     if operation.method.upper() in {"PATCH", "DELETE"}:
         kwargs.update(query={"dryRun": "true"}, headers={"If-Match": SEEDED_ETAGS[operation.label]}, body={}, media_type="application/json")
     examples.append(operation.Case(**kwargs))
+    if is_create:
+        oversize = deepcopy(kwargs)
+        oversize["body"]["notes"] = "x" * API_BODY_MAX_BYTES
+        oversize["headers"]["Idempotency-Key"] = str(uuid4())
+        oversize["_meta"].generation.mode = GenerationMode.NEGATIVE
+        oversize["_meta"].phase.data.description = OVERSIZE_EXAMPLE_DESCRIPTION
+        examples.append(operation.Case(**oversize))
 
 
 @schemathesis.hook

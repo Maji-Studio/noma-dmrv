@@ -1,5 +1,6 @@
 """Offline tests. Run with the same Schemathesis 4.29.3 Python environment."""
 
+import json
 import os
 import unittest
 from datetime import datetime, timezone
@@ -18,12 +19,15 @@ from schemathesis.hooks import GLOBAL_HOOK_DISPATCHER, HookContext
 from schemathesis.specs.openapi.coverage._operation import iter_coverage_cases
 
 FIXTURE_ID = "11111111-1111-4111-8111-111111111111"
+FIXTURE_NOW = datetime(2026, 10, 9, tzinfo=timezone.utc)
 TARGET_KINDS = ("FACILITY", "SUPPLIER", "FEEDSTOCK_TYPE", "BIN", "DRIVER", "VEHICLE", "FEEDSTOCK")
 for kind in TARGET_KINDS:
     os.environ[f"API_FUZZ_{kind}_ID"] = FIXTURE_ID
 os.environ.update(API_FUZZ_BASE_URL="http://localhost/api/v1", API_FUZZ_KEY="offline-placeholder", API_FUZZ_FEEDSTOCK_ETAG='"2.3"')
 config = SchemathesisConfig.from_path("schemathesis.toml")
-schema = schemathesis.openapi.from_path("openapi/v1.json", config=config)
+with patch("datetime.datetime", wraps=datetime) as fixture_clock:
+    fixture_clock.now.return_value = FIXTURE_NOW
+    schema = schemathesis.openapi.from_path("openapi/v1.json", config=config)
 
 
 def hook(name):
@@ -37,18 +41,39 @@ class HarnessTests(unittest.TestCase):
             operation = result.ok()
             cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
             seeded.extend(case for case in cases if case.meta.phase.data.description.startswith("Seeded fixture"))
-        self.assertEqual(len(seeded), 11)
-        create = next(case for case in seeded if case.operation.method.upper() == "POST")
+        self.assertEqual(len(seeded), 12)
+        create = next(case for case in seeded if case.operation.method.upper() == "POST" and case.meta.generation.mode.is_positive)
         self.assertEqual(create.query, {"dryRun": "true"})
         self.assertTrue(create.headers["Idempotency-Key"])
         self.assertTrue(create.meta.generation.mode.is_positive)
         for field in ("facilityId", "supplierId", "feedstockTypeId"):
             self.assertEqual(create.body[field], FIXTURE_ID)
         self.assertEqual(create.body["allocations"][0]["storageLocationId"], FIXTURE_ID)
-        self.assertEqual(create.body["deliveryDate"], datetime.now(timezone.utc).date().isoformat())
+        self.assertEqual(create.body["deliveryDate"], FIXTURE_NOW.date().isoformat())
         self.assertEqual(create.body["totalWetMassKg"], sum(allocation["allocatedWetMassKg"] for allocation in create.body["allocations"]))
         original = create.operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
         self.assertNotEqual(original["facilityId"], FIXTURE_ID)
+
+    def test_seeded_oversize_create_requires_413(self):
+        operation = schema["/feedstocks"]["POST"]
+        cases = ExamplesGenerator(operation=operation, as_strategy_kwargs={}, feedback=FeedbackSources(), fill_missing=False)
+        case = next(case for case in cases if case.meta.phase.data.description == "Seeded fixture oversize create")
+        self.assertTrue(case.meta.generation.mode.is_negative)
+        self.assertEqual(case.query, {"dryRun": "true"})
+        self.assertTrue(case.headers["Idempotency-Key"])
+        self.assertEqual(case.body["facilityId"], FIXTURE_ID)
+        serialized = case.as_transport_kwargs(headers=schema.config.headers)
+        check = hook("after_load_schema").__globals__["seeded_oversize_rejection"]
+        body_limit = check.__globals__["API_BODY_MAX_BYTES"]
+        self.assertGreater(len(json.dumps(serialized["json"]).encode("utf-8")), body_limit)
+        self.assertIsNone(check(None, SimpleNamespace(status_code=413), case))
+        for status in (201, 400, 414, 422, 500):
+            with self.assertRaisesRegex(AssertionError, "must return 413"):
+                check(None, SimpleNamespace(status_code=status), case)
+        ordinary = operation.Case(body={}, media_type="application/json")
+        self.assertIsNone(check(None, SimpleNamespace(status_code=201), ordinary))
+        original = operation.definition.raw["requestBody"]["content"]["application/json"]["example"]
+        self.assertLess(len(original.get("notes", "")), body_limit)
 
     @settings(max_examples=5, database=None, deadline=None)
     @given(schema["/feedstocks"]["POST"].as_strategy(generation_mode=GenerationMode.POSITIVE))
@@ -115,10 +140,12 @@ class HarnessTests(unittest.TestCase):
             self.assertNotIn("400", checks.positive_data_acceptance.expected_statuses)
             self.assertIn("414", checks.positive_data_acceptance.expected_statuses)
             self.assertIn("431", checks.positive_data_acceptance.expected_statuses)
+            self.assertIn("413", checks.negative_data_rejection.expected_statuses)
             coverage = schema.config.phases_for(operation=operation).coverage
             self.assertNotIn("trace", coverage.unexpected_methods)
             self.assertNotIn("query", coverage.unexpected_methods)
             self.assertEqual("422" in checks.positive_data_acceptance.expected_statuses, operation.method.upper() in {"POST", "PATCH", "DELETE"})
+            self.assertEqual("413" in checks.positive_data_acceptance.expected_statuses, operation.method.upper() in {"POST", "PATCH", "DELETE"})
 
     def test_401_is_allowed_only_when_fixture_credential_is_absent(self):
         check = hook("after_load_schema").__globals__["configured_authentication"]

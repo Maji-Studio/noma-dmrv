@@ -773,8 +773,9 @@ The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
 Success structuredContent uses the matching REST response envelope. Expected
 failures use the REST problem code and JSON Pointer errors, named `issues` in
-MCP, without HTTP metadata. MCP `invalid_query` results include Zod issues
-as JSON Pointer `issues`; REST query failures return an empty `errors` array.
+MCP, without HTTP metadata. Both transports include query validation issues
+with JSON Pointers: REST uses `errors` and MCP uses `issues`. Each issue carries
+`pointer`, `code` and `detail`.
 Each output schema is a success/error union with `type: "object"` at its root.
 Unexpected failures are generic JSON-RPC internal errors, logged with
 request id and tool name without raw input. The tool dispatcher checks the

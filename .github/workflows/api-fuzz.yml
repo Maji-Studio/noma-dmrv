@@ -5,6 +5,8 @@ on:
     paths:
       - src/lib/api/**
       - src/app/api/**
+      - src/proxy.ts
+      - src/config/env.ts
       - openapi/**
       - .github/workflows/api-fuzz.yml
       - scripts/api-fuzz/**

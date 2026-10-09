@@ -76,6 +76,6 @@ it.each(["\u0000", "\t", "\n", "\r", "\u001f", "\u007f", "\u0085", "\u009f"])("r
 it.each(["q", "code", "cursor"])("rejects controls in %s with a validation issue path", (field) => {
   for (const control of ["\u0000", "\t", "\n", "\r", "\u001f", "\u007f", "\u0085", "\u009f"]) {
     expect(() => parseApiQuery(request(`?${field}=bad${encodeURIComponent(control)}value`), lookupListSchema))
-      .toThrow(expect.objectContaining({ status: 400, code: "validation_failed", issues: [expect.objectContaining({ path: [field] })] }));
+      .toThrow(expect.objectContaining({ status: 400, code: "invalid_query", issues: [expect.objectContaining({ path: [field] })] }));
   }
 });

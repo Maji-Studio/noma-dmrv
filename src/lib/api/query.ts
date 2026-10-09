@@ -18,7 +18,7 @@ export function parseQueryInput<S extends z.ZodType>(values: unknown, schema: S)
     const issues: z.core.$ZodIssue[] = Object.entries(values)
       .filter(([, value]) => typeof value === "string" && !API_TEXT_PATTERN.test(value))
       .map(([key]) => ({ code: "custom", path: [key], message: "Query values must not contain control characters." }));
-    if (issues.length) throw new ApiHttpError(400, "validation_failed", "Send query values without control characters.", undefined, issues);
+    if (issues.length) throw new ApiHttpError(400, "invalid_query", "Send query values without control characters.", undefined, issues);
   }
   const parsed = schema.safeParse(values);
   if (!parsed.success) throw new ApiHttpError(400, "invalid_query", "Send valid query parameters.", undefined, parsed.error.issues);

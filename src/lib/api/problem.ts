@@ -5,6 +5,7 @@ import type { ActionFailure } from "@/fn/action-errors";
 import type { ApiContextDenial } from "@/lib/auth/api-context";
 import type { DomainErrorCode } from "@/lib/domain-errors";
 import { IDEMPOTENCY_RETRY_AFTER_SECONDS } from "@/config/operations";
+import type { ApiHttpError } from "./http-error";
 
 export const ACTION_STATUS = {
   validation_failed: 422, not_found: 404, stale_version: 412,
@@ -56,6 +57,13 @@ export function problemResponse(options: ProblemOptions): Response {
     ...(!internal && options.blockers ? { blockers: options.blockers } : {}),
     ...(!internal && options.current !== undefined ? { current: options.current } : {}),
   } satisfies z.infer<typeof problemSchema>, { status, headers });
+}
+
+export function apiHttpErrorResponse(error: ApiHttpError, instance: string, requestId: string): Response {
+  return problemResponse({
+    status: error.status, code: error.code, detail: error.message, current: error.current, instance, requestId,
+    errors: error.issues?.map((issue) => ({ pointer: jsonPointer(issue.path), code: issue.code, detail: issue.message })),
+  });
 }
 
 export function apiDenialResponse(denial: ApiContextDenial, instance: string, requestId: string) {
