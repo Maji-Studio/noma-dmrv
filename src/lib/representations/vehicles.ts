@@ -1,6 +1,4 @@
 import { z } from "zod";
-import { VEHICLE_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { representationEtag } from "../etag";
 import { lookupFields, lookupInstants, lookupVersion, type LookupRepresentationInput } from "./lookup-fields";
 
 export const vehicleRepresentationSchema = z.object({
@@ -14,8 +12,4 @@ export type VehicleRepresentationInput = LookupRepresentationInput<VehicleRepres
 
 export function representVehicle(row: VehicleRepresentationInput): VehicleRepresentation {
   return vehicleRepresentationSchema.parse({ ...row, ...lookupInstants(row) });
-}
-
-export function vehicleEtag(row: Pick<VehicleRepresentation, "version">): string {
-  return representationEtag(row.version, VEHICLE_REPRESENTATION_REVISION);
 }

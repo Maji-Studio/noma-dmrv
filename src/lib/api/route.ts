@@ -20,21 +20,28 @@ export interface ApiRouteContext {
 
 /** Scope checks precede the authenticated write switch and rate limits. */
 async function admitApiRequest(
-  request: Request, context: ApiRouteContext, scope: ApiScope | undefined, ipResult: RateLimitResult | null,
+  access: "read" | "write", context: ApiRouteContext, scope: ApiScope | undefined, ipResult: RateLimitResult | null,
 ) {
   if (scope && !hasRoleAndScope(context.ctx, scope)) {
     return { ok: false as const, response: apiDenialResponse("missing_scope", context.instance, context.requestId) };
   }
   return postAuthGuard(context.ctx, {
     requestId: context.requestId, instance: context.instance,
-    access: request.method === "GET" || request.method === "HEAD" ? "read" : "write",
+    access,
   }, ipResult);
+}
+
+interface ApiRouteOptions {
+  access?: (request: Request) => Promise<"read" | "write">;
+  /** MCP checks inside the tool so expiry is a structured tool result. */
+  deadlineInHandler?: boolean;
 }
 
 export function apiRoute<Params = Record<string, never>>(
   op: string,
   scope: ApiScope | undefined,
   handler: (request: Request, context: ApiRouteContext, params: Params) => Promise<Response>,
+  options: ApiRouteOptions = {},
 ) {
   return async (request: Request, route?: { params: Promise<Params> }): Promise<Response> => {
     const deadlineAt = Date.now() + OPERATION_DEADLINE_MS;
@@ -51,14 +58,16 @@ export function apiRoute<Params = Record<string, never>>(
       const resolution = await resolveApiContext(request);
       if (!resolution.ok) return apiDenialResponse(resolution.denial, instance, requestId);
       const context = { deadlineAt, ctx: resolution.ctx, requestId, instance, headers: apiResponseHeaders(requestId) };
-      const admission = await admitApiRequest(request, context, scope, preAuth.result);
+      const access = options.access ? await options.access(request) :
+        request.method === "GET" || request.method === "HEAD" ? "read" : "write";
+      const admission = await admitApiRequest(access, context, scope, preAuth.result);
       if (!admission.ok) return admission.response;
       for (const [name, value] of admission.headers) {
         headers.set(name, value);
         context.headers.set(name, value);
       }
       const params = route ? await route.params : {} as Params;
-      if (Date.now() >= deadlineAt) throw deadlineExceeded("before starting");
+      if (!options.deadlineInHandler && Date.now() >= deadlineAt) throw deadlineExceeded("before starting");
       const response = await handler(request, context, params);
       return finish(response);
     } catch (error) {

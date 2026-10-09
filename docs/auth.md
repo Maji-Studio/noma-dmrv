@@ -27,7 +27,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 - `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
 - Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
 - `/admin/*` is gated by the admin layout's `requireAdmin()`.
-- The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before session lookup. The development-only MCP spike checks no credential and returns 404 in production builds. Private REST routes resolve bearer credentials with `resolveApiContext`. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`.
+- The proxy lets exact `/api/mcp`, `/api/v1`, and `/api/v1/*` through before session lookup. MCP and private REST routes resolve bearer API keys with `resolveApiContext`. MCP validates Origin before admission, uses the shared pre-auth and authenticated read rate limits, and lists only tools allowed by the credential scopes. `/api/v1x`, `/api/mcpx` and `/api/mcp/tools` stay behind the session, covered by `tests/middleware.test.ts`.
 
 ### Public verifier report capability
 

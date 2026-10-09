@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { meRepresentationSchema } from "@/lib/api/representations/me";
+import type { meRepresentationSchema } from "@/lib/representations/me";
 import { getApiMeOrganization } from "@/data-access/api-me";
 import type { ApiContext } from "@/lib/auth/api-context";
 import { formatFacilityDate } from "@/lib/date-utils";

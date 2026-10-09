@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { feedstockCreateEnvelopeSchema } from "./representations/envelopes";
+import type { feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
 import { API_FEEDSTOCK_MAX_ALLOCATIONS, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
 import { readApiFeedstock } from "@/lib/read-models/api-feedstocks";
 import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
@@ -12,7 +12,8 @@ import { ApiHttpError } from "./http-error";
 import { mutationQuerySchema, parseApiQuery } from "./query";
 import { readIdempotencyKey, readJsonBody } from "./request-body";
 import { rejectUnknownFields } from "./unknown-fields";
-import { feedstockEtag, feedstockStockPreview, representFeedstock } from "./representations/feedstocks";
+import { feedstockStockPreview, representFeedstock } from "@/lib/representations/feedstocks";
+import { feedstockEtag } from "@/lib/api/representation-etags";
 
 const deleteBodySchema = z.strictObject({});
 const deleteContract = toOperationJsonSchema(deleteBodySchema);

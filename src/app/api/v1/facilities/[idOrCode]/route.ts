@@ -1,6 +1,6 @@
 import { apiRoute } from "@/lib/api/route";
 import { readFacility } from "@/lib/api/facilities-queries";
-import { facilityEtag } from "@/lib/api/representations/facilities";
+import { facilityEtag } from "@/lib/api/representation-etags";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;

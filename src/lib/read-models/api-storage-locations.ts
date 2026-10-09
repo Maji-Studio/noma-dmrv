@@ -1,7 +1,7 @@
 import { findApiStorageLocation, listApiStorageLocations } from "@/data-access/api-storage-locations";
 import type { ApiFacilityLookupFilters, ApiLookupIdentifier } from "@/data-access/api-lookup-filters";
 import type { OrgContext } from "@/lib/auth/server";
-import { representStorageLocation } from "@/lib/api/representations/storage-locations";
+import { representStorageLocation } from "@/lib/representations/storage-locations";
 import { readListPage, type ReadListQuery } from "./api-list";
 
 export function readApiStorageLocationList(ctx: OrgContext, query: ReadListQuery<ApiFacilityLookupFilters>) {

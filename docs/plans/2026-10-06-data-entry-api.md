@@ -358,6 +358,18 @@ Decided 2026-10-08 (Kenji, round 3, Phase 2b):
 27. **The audit log covers API writes only;** UI writes keep their existing history.
 28. **`oasdiff` fails CI on a breaking change;** a deliberate break updates the committed baseline in the same PR.
 
+Decided 2026-10-09 (Kenji, round 4, Phase 3):
+
+29. **Phase 3 ships as two PRs.** 3a: representations move, `/api/mcp` on API keys, `whoami` and the read tools, protocol and BOLA tests. 3b: the three feedstock write tools, three-way parity, the domain prompt and the agent evaluation.
+30. **Representations are transport-neutral** and live in `src/lib/representations/`; REST, MCP and the OpenAPI generator import them from there.
+31. **MCP results reuse the REST representations unchanged.** `structuredContent` is the REST body (list or item envelope), the success branch of `outputSchema` is the OpenAPI response schema, and a text line names the record.
+32. **`requestKey` is required on every MCP write tool** (dry runs excepted), with the `Idempotency-Key` format and the same per-credential idempotency records, so a key first used over REST replays over MCP.
+33. **Read tools:** `whoami`, `find_*` for all eight REST lists (facilities, suppliers, supplier locations, feedstock types, storage locations, vehicles, drivers, feedstocks) and `get_feedstock`. Lookups have no `get_*` tool; the exact `code` filter covers it.
+34. **Rate limits answer at HTTP** (429, same buckets as REST; a `tools/call` of a write tool counts as a write). **`API_WRITES_DISABLED` answers inside MCP** as an `isError` tool result with code `api_writes_disabled`, so reads keep working.
+35. **`api_audit_events` gains a `transport` column** (`rest` or `mcp`, default `rest`) in 3b.
+36. **The domain prompt is the server's `instructions`** on initialize, built from the same source as `llms.txt`.
+37. **The agent evaluation is a local script** (`pnpm eval:mcp`): app on the test database, seeded fixture organization, a fresh key, Claude Code headless (`claude -p`) with the MCP config on the subscription, scored by the rows written. Run before merge; results go in the PR.
+
 ## 14. What review changed
 
 | Change | Raised by |

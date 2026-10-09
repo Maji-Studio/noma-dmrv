@@ -1,3 +1,5 @@
+import { API_VERSION } from "@/config/api-rest";
+import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { z } from "zod";
 import { API_BODY_MAX_BYTES, API_FEEDSTOCK_MAX_ALLOCATIONS, API_DOCS_CACHE_SECONDS } from "@/config/api-rest";
 import { API_KEY_LIVE_PREFIX, API_KEY_TEST_PREFIX } from "@/config/api-keys";
@@ -7,10 +9,10 @@ import type { ApiScope } from "@/lib/auth/api-scopes";
 import { problemSchema } from "../problem-schema";
 import { mutationQuerySchema } from "../query";
 import { supplierLocationListSchema } from "../query-schemas";
-import { supplierLocationRepresentationSchema } from "../representations/supplier-locations";
-import { meRepresentationSchema } from "../representations/me";
-import { feedstockRepresentationSchema } from "../representations/feedstocks";
-import { itemEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "../representations/envelopes";
+import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
+import { meRepresentationSchema } from "@/lib/representations/me";
+import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
+import { itemEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
 import { resources } from "./resources";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
@@ -73,23 +75,23 @@ export function buildOpenApiDocument() {
   for (const resource of resources) {
     paths[`/${resource.path}`] = { get: privateOperation(
       `find_${resource.path.replaceAll("-", "_")}`, resource.scope,
-      "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported.",
+      readDescriptions.list,
       { ...problemResponses("facilityId" in resource.queries.list.shape ? [...READ_ERRORS, 404] : READ_ERRORS),
         "200": jsonResponse("Resource page.", publishOutput(listEnvelopeSchema(resource.schema))) },
       queryParameters(resource.queries.list),
     ) };
     paths[`/${resource.path}/{idOrCode}`] = { get: privateOperation(
-      `get_${resource.singular}`, resource.scope, "Read a stable resource representation by UUID or exact code; archived lookups remain readable.",
+      `get_${resource.singular}`, resource.scope, readDescriptions.get,
       { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Resource representation.", publishOutput(itemEnvelopeSchema(resource.schema)), etagHeader) },
       [targetParameter(), ...queryParameters(resource.queries.get)],
     ) };
   }
   paths["/suppliers/{idOrCode}/locations"] = { get: privateOperation(
-    "find_supplier_locations", "suppliers:read", "List supplier source locations by parent UUID only. Search matches a literal name prefix; the cursor also binds the parent.",
+    "find_supplier_locations", "suppliers:read", readDescriptions.supplierLocations,
     { ...problemResponses([...READ_ERRORS, 404]), "200": jsonResponse("Supplier location page.", publishOutput(listEnvelopeSchema(supplierLocationRepresentationSchema))) },
     [targetParameter(true), ...queryParameters(supplierLocationListSchema)],
   ) };
-  paths["/me"] = { get: privateOperation("whoami", undefined, "Read the credential organization, active facilities, local today dates, role, scopes and safe credential metadata.",
+  paths["/me"] = { get: privateOperation("whoami", undefined, readDescriptions.whoami,
     { ...problemResponses([401, 403, 404, 429, 500]), "200": jsonResponse("Credential context.", publishOutput(itemEnvelopeSchema(meRepresentationSchema))) }) };
 
   const createInput = operationInput(createFeedstockSchema);
@@ -141,7 +143,7 @@ export function buildOpenApiDocument() {
   }
   return {
     openapi: "3.1.0",
-    info: { title: "noma data-entry API", version: "1.0.0", description: "Organization-scoped feedstock intake and read-only lookups. Business dates are facility-local YYYY-MM-DD; event instants use RFC 3339 UTC. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers." },
+    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake and read-only lookups. Business dates are facility-local YYYY-MM-DD; event instants use RFC 3339 UTC. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
   };

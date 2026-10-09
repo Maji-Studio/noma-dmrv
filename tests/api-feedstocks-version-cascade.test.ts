@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFeedstockFn, deleteFeedstockFn, updateFeedstockFn } from "@/fn/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
-import { feedstockRepresentationSchema } from "@/lib/api/representations/feedstocks";
+import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
 import {
   binWetStock, committedFeedstocks, createApiFeedstockFixture, decodedIntake,
   deleteFeedstock, derivedFeedstockLegs, expectFeedstockProblem, getFeedstock,
