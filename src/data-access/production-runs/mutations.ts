@@ -4,11 +4,12 @@
  */
 
 import { db, type DbTransaction } from "@/db";
+import { assertRunOperator } from "../production-run-input";
+import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { isPgCheckViolation } from "@/db/errors";
 import {
   creditBatchProductionRuns,
   facilities,
-  operators,
   productionRuns,
   reactors,
   storageLocations,
@@ -42,7 +43,7 @@ import {
   lockProductionRunUpdateStock,
 } from "../production-run-stock-locks";
 import { assertRunAdditionAfterSplit } from "../output-bin-stock-mode";
-import { assertSameOrg, requireOrgScope } from "../utils";
+import { requireOrgScope } from "../utils";
 import {
   getProductionRunFeedstockDrawStorageIds,
   getProductionRunFeedstockDrawTotal,
@@ -95,7 +96,7 @@ async function validateBiocharStorageLocation(
       ),
     );
 
-  if (!loc) throw new SafeError(`${label} storage bin not found`);
+  if (!loc) throw runReferenceNotFound(`${label} storage bin not found`, ["biocharStorageLocationId"]);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
   if (loc.type !== "biochar_bin") throw new SafeError("Selected storage bin is not a biochar bin");
 }
@@ -136,17 +137,19 @@ export async function createProductionRunInTransaction(
   requireOrgScope(ctx);
   const now = options.now ?? new Date();
   assertProductionRunTimesNotFuture(data, now);
-  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId, tx);
+  if (data.operatorId) await assertRunOperator(ctx, tx, data.operatorId);
 
   // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await tx
-    .select({ id: facilities.id })
+    .select({ id: facilities.id, archivedAt: facilities.archivedAt })
     .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
+    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
-    throw new SafeError("Facility not found or archived");
+    throw runReferenceNotFound("Facility not found or archived", ["facilityId"]);
   }
+
+  if (facility.archivedAt) throw new SafeError("Facility not found or archived");
 
   // Verify reactor exists and belongs to facility
   const [reactor] = await tx
@@ -155,7 +158,7 @@ export async function createProductionRunInTransaction(
     .where(and(eq(reactors.id, data.reactorId), eq(reactors.organizationId, ctx.organizationId)));
 
   if (!reactor) {
-    throw new SafeError("Reactor not found");
+    throw runReferenceNotFound("Reactor not found", ["reactorId"]);
   }
 
   if (reactor.facilityId !== data.facilityId) {
@@ -235,6 +238,8 @@ export async function createProductionRunInTransaction(
         data.facilityId,
       );
     }
+
+    await options.snapshotStock?.(tx, [...feedstockDraws.map((draw) => draw.storageLocationId), data.biocharStorageLocationId]);
 
     const [created] = await tx
       .insert(productionRuns)
@@ -358,7 +363,7 @@ export async function updateProductionRunInTransaction(
     },
     now,
   );
-  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId, tx);
+  if (data.operatorId) await assertRunOperator(ctx, tx, data.operatorId);
 
   // Verify run exists
   const [existing] = await tx
@@ -367,7 +372,7 @@ export async function updateProductionRunInTransaction(
     .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!existing) {
-    throw new SafeError("Production run not found");
+    throw runReferenceNotFound("Production run not found");
   }
   const existingFeedstockStorageLocationIds =
     await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
@@ -415,13 +420,14 @@ export async function updateProductionRunInTransaction(
   // (no children move under an archived parent — mirrors createProductionRun).
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await tx
-      .select({ id: facilities.id })
+      .select({ id: facilities.id, archivedAt: facilities.archivedAt })
       .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
+      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
     if (!facility) {
-      throw new SafeError("Facility not found or archived");
+      throw runReferenceNotFound("Facility not found or archived", ["facilityId"]);
     }
+    if (facility.archivedAt) throw new SafeError("Facility not found or archived");
   }
 
   // Compute effective facility once — used for reactor + storage bin validation
@@ -436,7 +442,7 @@ export async function updateProductionRunInTransaction(
       .where(and(eq(reactors.id, effectiveReactorId), eq(reactors.organizationId, ctx.organizationId)));
 
     if (!reactor) {
-      throw new SafeError("Reactor not found");
+      throw runReferenceNotFound("Reactor not found", ["reactorId"]);
     }
 
     if (reactor.facilityId !== targetFacilityId) {
@@ -569,7 +575,7 @@ export async function updateProductionRunInTransaction(
       .for("update");
 
     if (!locked) {
-      throw new SafeError("Production run not found");
+      throw runReferenceNotFound("Production run not found");
     }
     assertRowVersion({
       entity: PRODUCTION_RUN_CONFLICT_ENTITY,
@@ -590,6 +596,12 @@ export async function updateProductionRunInTransaction(
       },
       { ...data, feedstockDraws: normalizedFeedstockDraws },
     );
+
+    await options.snapshotStock?.(tx, [
+      ...(normalizedFeedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined
+        ? [...lockedFeedstockStorageLocationIds, ...(normalizedFeedstockDraws?.map((draw) => draw.storageLocationId) ?? [])] : []),
+      locked.biocharStorageLocationId, data.biocharStorageLocationId,
+    ]);
 
     await assertProductionRunOutputBasisChange(ctx, tx, productionRunId, locked, data);
 

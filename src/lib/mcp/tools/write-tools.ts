@@ -11,7 +11,7 @@ import { validationFailed } from "@/lib/operations/errors";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
 import { runOperation } from "@/lib/operations/runner";
 import { toOperationJsonSchema, type JsonSchema } from "@/lib/operations/json-schema";
-import { feedstockCreateEnvelopeSchema, itemEnvelopeSchema } from "@/lib/representations/envelopes";
+import { feedstockCreateEnvelopeSchema, stockWriteEnvelopeSchema } from "@/lib/representations/envelopes";
 import { feedstockRepresentationSchema, representFeedstock } from "@/lib/representations/feedstocks";
 import { FEEDSTOCK_DATES, FEEDSTOCK_UNITS, REQUEST_KEY_RULE, UNTRUSTED_TEXT } from "@/lib/operations/agent-guidance";
 
@@ -26,7 +26,7 @@ const deleteInput = deleteFeedstock.input.safeExtend(controls.shape);
 const createContract = toOperationJsonSchema(createInput);
 const updateContract = toOperationJsonSchema(updateInput);
 const deleteContract = toOperationJsonSchema(deleteInput);
-const itemOutput = itemEnvelopeSchema(feedstockRepresentationSchema);
+const itemOutput = stockWriteEnvelopeSchema(feedstockRepresentationSchema);
 const deleteOutput = z.union([itemOutput, z.object({ deleted: z.object({ id: z.uuid(), code: z.string() }) })]);
 
 export interface WriteTool {
@@ -127,11 +127,11 @@ async function mutate(context: ApiRouteContext, raw: unknown, kind: "update" | "
     if (kind === "update") {
       const operation = representationCheckedUpdate(feedstockId, FEEDSTOCK_REPRESENTATION_REVISION);
       const result = await runOperation(operation, context.ctx, input, runOptions);
-      return { ...result, body: { data: representFeedstock(result.data) } };
+      return { ...result, body: { data: representFeedstock(result.data), ...(dryRun ? { stockEffects: result.stockEffects } : {}) } };
     }
     const operation = representationCheckedDelete(feedstockId, FEEDSTOCK_REPRESENTATION_REVISION);
     const result = await runOperation(operation, context.ctx, input, runOptions);
     const row = result.data;
-    return { ...result, body: dryRun ? { data: representFeedstock(row) } : { deleted: { id: row.id, code: row.code } } };
+    return { ...result, body: dryRun ? { data: representFeedstock(row), stockEffects: result.stockEffects } : { deleted: { id: row.id, code: row.code } } };
   });
 }

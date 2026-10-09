@@ -1,3 +1,4 @@
+import type { SnapshotStock } from "../stock-effects";
 import { DomainError } from "@/lib/domain-errors";
 import {
   formatProductionRunFutureTimeError,
@@ -6,6 +7,7 @@ import {
 } from "@/lib/production-runs/time-validation";
 
 export type ProductionRunMutationOptions = {
+  snapshotStock?: SnapshotStock;
   /** Injectable server clock for exact-boundary tests. */
   now?: Date;
 };

@@ -29,3 +29,9 @@ export function productionRunValidationError(message: string, path: (string | nu
     issues: [{ path, code: "validation_failed", message: new SafeError(message).message }],
   });
 }
+
+export function runReferenceNotFound(message: string, path?: (string | number)[]) {
+  return new DomainError("not_found", message, {
+    issues: path ? [{ path, code: "not_found", message }] : undefined,
+  });
+}

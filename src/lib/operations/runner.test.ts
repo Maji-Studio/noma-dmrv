@@ -5,7 +5,8 @@ import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 import { runOperation, runOperationInProcess, type Operation, type OperationScope, type RunOptions } from "./runner";
 
-const { owned, record, claim, warn } = vi.hoisted(() => ({ owned: vi.fn(), record: vi.fn(), claim: vi.fn(), warn: vi.fn() }));
+const { owned, record, claim, warn, balances } = vi.hoisted(() => ({ owned: vi.fn(), record: vi.fn(), claim: vi.fn(), warn: vi.fn(), balances: vi.fn() }));
+vi.mock("@/data-access/stock-effects", () => ({ readStockBalances: balances }));
 vi.mock("@/data-access/api-audit-events", () => ({ writeApiAuditEvent: vi.fn() }));
 vi.mock("@/data-access/owned-transaction", () => ({ runOwnedTransaction: owned }));
 vi.mock("@/data-access/api-idempotency-records", () => ({ recordIdempotencyOutcome: record, claimIdempotencyKey: claim, assertIdempotencyKeyUnused: vi.fn() }));
@@ -25,6 +26,24 @@ beforeEach(() => {
   });
 });
 describe("shared operation runner", () => {
+  it("snapshots through the writer transaction only on dry runs", async () => {
+    const bin = { storageLocationId: "bin", storageLocationCode: "B-1", stockKind: "feedstock_bin", balance: { wetKg: 100, dryKg: 70 } };
+    const savepoint = {} as OperationScope["tx"];
+    const stockOperation = { ...operation, execute: async (scope: OperationScope, input: { amount: number }) => {
+      await scope.snapshotStock?.(savepoint, ["bin"]);
+      return operation.execute(scope, input);
+    } };
+    balances.mockResolvedValueOnce([bin]).mockResolvedValueOnce([{ ...bin, balance: { wetKg: 50, dryKg: 35 } }]);
+    const result = await runOperation(stockOperation, ctx, { amount: 1 }, { dryRun: true });
+    expect(balances).toHaveBeenNthCalledWith(1, ctx, savepoint, ["bin"]);
+    expect(balances).toHaveBeenNthCalledWith(2, ctx, tx, ["bin"]);
+    expect(result.stockEffects).toMatchObject([{ delta: { wetKg: -50, dryKg: -35 } }]);
+    balances.mockClear();
+    expect(await runOperation(stockOperation, ctx, { amount: 1 })).not.toHaveProperty("stockEffects");
+    await runOperationInProcess(stockOperation, ctx, { amount: 1 });
+    expect(balances).not.toHaveBeenCalled();
+  });
+
   it("gives in-process unknown outcomes operator copy while keeping the API retry contract", async () => {
     const apiError = new DomainError(
       "outcome_unknown",

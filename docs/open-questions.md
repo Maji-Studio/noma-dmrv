@@ -286,8 +286,7 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Instant input parsing until Phase 4 (`api/instant-input-parsing`, opened 2026-10-07)
 
-- Production run `startTime` and `endTime` (`src/schemas/production-runs.ts:updateProductionRunSchema`),
-  incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`),
+- Incident time (`src/schemas/production-incidents.ts:productionIncidentFormSchema`),
   and sample `samplingTime` (`src/schemas/samples.ts:updateSampleSchema.samplingTime`)
   retain instant parsing until Phase 4's API input schemas. Only sample business
   dates use strict calendar-date parsing here.

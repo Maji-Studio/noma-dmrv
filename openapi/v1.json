@@ -194,6 +194,41 @@
         "required": ["organization", "facilities", "role", "scopes", "credential"],
         "type": "object"
       },
+      "stockEffects": {
+        "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms.",
+        "items": {
+          "additionalProperties": false,
+          "properties": {
+            "after": {
+              "additionalProperties": false,
+              "description": "Bin balance after the write, before rollback, in kilograms.",
+              "properties": {"dryKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Dry kilograms. Feedstock uses the existing intake-moisture estimate, null when its basis is unavailable; output bins use the established dry-layer balance, null for unresolved layers."}, "wetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet kilograms; null for output bins where wet stock is not tracked."}},
+              "required": ["wetKg", "dryKg"],
+              "type": "object"
+            },
+            "before": {
+              "additionalProperties": false,
+              "description": "Bin balance before the write, in kilograms.",
+              "properties": {"dryKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Dry kilograms. Feedstock uses the existing intake-moisture estimate, null when its basis is unavailable; output bins use the established dry-layer balance, null for unresolved layers."}, "wetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet kilograms; null for output bins where wet stock is not tracked."}},
+              "required": ["wetKg", "dryKg"],
+              "type": "object"
+            },
+            "delta": {
+              "additionalProperties": false,
+              "description": "After minus before, in kilograms; negative means stock removed.",
+              "properties": {"dryKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Dry kilograms. Feedstock uses the existing intake-moisture estimate, null when its basis is unavailable; output bins use the established dry-layer balance, null for unresolved layers."}, "wetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet kilograms; null for output bins where wet stock is not tracked."}},
+              "required": ["wetKg", "dryKg"],
+              "type": "object"
+            },
+            "stockKind": {"description": "Stock lane: feedstock bin, biochar output bin, or product output bin.", "enum": ["feedstock_bin", "biochar_bin", "product_bin"], "type": "string"},
+            "storageLocationCode": {"description": "Human-readable stock bin code.", "type": "string"},
+            "storageLocationId": {"description": "Stock bin identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}
+          },
+          "required": ["storageLocationId", "storageLocationCode", "stockKind", "before", "after", "delta"],
+          "type": "object"
+        },
+        "type": "array"
+      },
       "storage_location": {
         "additionalProperties": false,
         "properties": {
@@ -483,26 +518,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": false,
-                  "properties": {
-                    "data": {"description": "Created feedstocks, one per bin allocation; ids and codes are provisional in a dry run.", "items": {"$ref": "#/components/schemas/feedstock"}, "type": "array"},
-                    "preview": {
-                      "description": "Stock additions for a dry run only, in kilograms.",
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "allocatedDryMassKg": {"description": "Allocated dry mass in kilograms.", "type": "number"},
-                          "allocatedWetMassKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Allocated wet mass in kilograms, or null when unavailable."},
-                          "feedstockId": {"description": "Provisional feedstock identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
-                          "stockDeltaWetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet stock addition in kilograms; zero for incomplete rows, not the resulting bin balance."},
-                          "storageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Receiving bin identifier, UUID, or null when unspecified."}
-                        },
-                        "required": ["feedstockId", "storageLocationId", "allocatedWetMassKg", "allocatedDryMassKg", "stockDeltaWetKg"],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "warnings": {"description": "Non-fatal operator guidance, plain text.", "items": {"type": "string"}, "type": "array"}
-                  },
+                  "properties": {"data": {"description": "Created feedstocks, one per bin allocation; ids and codes are provisional in a dry run.", "items": {"$ref": "#/components/schemas/feedstock"}, "type": "array"}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}, "warnings": {"description": "Non-fatal operator guidance, plain text.", "items": {"type": "string"}, "type": "array"}},
                   "required": ["data"],
                   "type": "object"
                 }
@@ -516,26 +532,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": false,
-                  "properties": {
-                    "data": {"description": "Created feedstocks, one per bin allocation; ids and codes are provisional in a dry run.", "items": {"$ref": "#/components/schemas/feedstock"}, "type": "array"},
-                    "preview": {
-                      "description": "Stock additions for a dry run only, in kilograms.",
-                      "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                          "allocatedDryMassKg": {"description": "Allocated dry mass in kilograms.", "type": "number"},
-                          "allocatedWetMassKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Allocated wet mass in kilograms, or null when unavailable."},
-                          "feedstockId": {"description": "Provisional feedstock identifier, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"},
-                          "stockDeltaWetKg": {"anyOf": [{"type": "number"}, {"type": "null"}], "description": "Wet stock addition in kilograms; zero for incomplete rows, not the resulting bin balance."},
-                          "storageLocationId": {"anyOf": [{"format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}, {"type": "null"}], "description": "Receiving bin identifier, UUID, or null when unspecified."}
-                        },
-                        "required": ["feedstockId", "storageLocationId", "allocatedWetMassKg", "allocatedDryMassKg", "stockDeltaWetKg"],
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "warnings": {"description": "Non-fatal operator guidance, plain text.", "items": {"type": "string"}, "type": "array"}
-                  },
+                  "properties": {"data": {"description": "Created feedstocks, one per bin allocation; ids and codes are provisional in a dry run.", "items": {"$ref": "#/components/schemas/feedstock"}, "type": "array"}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}, "warnings": {"description": "Non-fatal operator guidance, plain text.", "items": {"type": "string"}, "type": "array"}},
                   "required": ["data"],
                   "type": "object"
                 }
@@ -581,7 +578,7 @@
         "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "Optional; when sent it must be an empty JSON object, maximum 262144 bytes.", "required": false},
         "responses": {
           "200": {
-            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}},
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock", "description": "Resource representation."}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["data"], "type": "object"}}},
             "description": "Dry-run deleted representation.",
             "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
           },
@@ -663,7 +660,7 @@
         },
         "responses": {
           "200": {
-            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock", "description": "Resource representation."}}, "required": ["data"], "type": "object"}}},
+            "content": {"application/json": {"schema": {"additionalProperties": false, "properties": {"data": {"$ref": "#/components/schemas/feedstock", "description": "Resource representation."}, "stockEffects": {"$ref": "#/components/schemas/stockEffects", "description": "Changed bin balances inside the dry-run transaction, before rollback. All masses are kilograms."}}, "required": ["data"], "type": "object"}}},
             "description": "Updated feedstock or dry-run representation. ETag is absent on dry runs.",
             "headers": {"Dry-Run": {"$ref": "#/components/headers/Dry-Run"}, "ETag": {"$ref": "#/components/headers/ETag"}, "Idempotent-Replayed": {"$ref": "#/components/headers/Idempotent-Replayed"}, "RateLimit-Limit": {"$ref": "#/components/headers/RateLimit-Limit"}, "RateLimit-Remaining": {"$ref": "#/components/headers/RateLimit-Remaining"}, "RateLimit-Reset": {"$ref": "#/components/headers/RateLimit-Reset"}, "X-Request-Id": {"$ref": "#/components/headers/X-Request-Id"}}
           },

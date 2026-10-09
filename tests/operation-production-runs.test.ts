@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 vi.hoisted(() => { process.env.DB_POOL_MAX = "1"; });
 import { db } from "@/db";
-import { productionRuns, productionRunFeedstockDraws, productionRunFeedstocks } from "@/db/schema";
+import { storageLocations, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks } from "@/db/schema";
 import { deriveFeedstockWetStockKg } from "@/data-access/feedstock-wet-stock";
 import { runOperation } from "@/lib/operations/runner";
 import { logFeedstockDelivery } from "@/lib/operations/feedstocks";
@@ -14,10 +14,15 @@ const NO_SELF_WAIT_MS = 3_000;
 const INTAKE_KG = 1000;
 const DRAW_KG = 100;
 const UPDATED_DRAW_KG = 150;
+const OUTPUT_KG = 20;
+const OUTPUT_MOISTURE = 10;
+const FEEDSTOCK_DRY_FRACTION = 0.675;
+let secondBinId: string;
+let outputBinId: string;
 let fixture: Awaited<ReturnType<typeof createProductionRunFixture>>;
 const input = () => ({
   facilityId: fixture.facilityId, reactorId: fixture.reactorId,
-  startDate: "2026-01-01", startTime: new Date("2026-01-01T10:00:00Z"),
+  startTime: new Date("2026-01-01T10:00:00Z"),
   endTime: new Date("2026-01-01T11:00:00Z"), status: "draft",
   feedstockDraws: [{ storageLocationId: fixture.binId, wetMassKg: DRAW_KG }],
 });
@@ -31,6 +36,13 @@ const rows = () => Promise.all([
 beforeAll(async () => {
   fixture = await createProductionRunFixture("production-runs");
   await runOperation(logFeedstockDelivery, fixture.ctx, fixture.input(INTAKE_KG));
+  const [second] = await db.insert(storageLocations).values({ organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
+    code: "FS-SECOND", name: "Second source", type: "feedstock_bin", feedstockTypeId: fixture.feedstockTypeId }).returning();
+  secondBinId = second.id;
+  const [output] = await db.insert(storageLocations).values({ organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
+    code: "BC-OUTPUT", name: "Run output", type: "biochar_bin" }).returning();
+  outputBinId = output.id;
+  await runOperation(logFeedstockDelivery, fixture.ctx, { ...fixture.input(INTAKE_KG), allocations: [{ storageLocationId: secondBinId, allocatedWetMassKg: INTAKE_KG }] });
 });
 afterAll(async () => { if (fixture) await removeIntakeFixture(fixture); });
 
@@ -41,6 +53,7 @@ describe("production operations at pool size one", { timeout: SUITE_TIMEOUT_MS }
     const created = await runOperation(startProductionRun, fixture.ctx, input());
     expect(created.data.code).toMatch(/^PR-\d{2}-\d{3,}$/);
     expect(created.data.version).toBe(1);
+    expect(created).not.toHaveProperty("stockEffects");
     expect(created.data.feedstockDraws).toHaveLength(1);
     expect(await stock()).toBe(INTAKE_KG - DRAW_KG);
     const updated = await runOperation(updateProductionRun, fixture.ctx, {
@@ -69,6 +82,43 @@ describe("production operations at pool size one", { timeout: SUITE_TIMEOUT_MS }
     expect(await stock()).toBe(beforeStock);
   });
 
+  it("reports source wet/dry loss and completed output dry gain before rollback", async () => {
+    const result = await runOperation(startProductionRun, fixture.ctx, {
+      ...input(), status: "complete", biocharStorageLocationId: outputBinId,
+      biocharOutputKg: OUTPUT_KG, biocharMoisturePercent: OUTPUT_MOISTURE, feedstockMoisturePercent: 32.5,
+    }, { dryRun: true });
+    expect(result.stockEffects).toHaveLength(2);
+    expect(result.stockEffects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ storageLocationId: fixture.binId, before: { wetKg: INTAKE_KG, dryKg: INTAKE_KG * FEEDSTOCK_DRY_FRACTION },
+        after: { wetKg: INTAKE_KG - DRAW_KG, dryKg: (INTAKE_KG - DRAW_KG) * FEEDSTOCK_DRY_FRACTION },
+        delta: { wetKg: -DRAW_KG, dryKg: -DRAW_KG * FEEDSTOCK_DRY_FRACTION } }),
+      expect.objectContaining({ storageLocationId: outputBinId, before: { wetKg: null, dryKg: 0 },
+        after: { wetKg: null, dryKg: OUTPUT_KG * (1 - OUTPUT_MOISTURE / 100) },
+        delta: { wetKg: null, dryKg: OUTPUT_KG * (1 - OUTPUT_MOISTURE / 100) } }),
+    ]));
+    expect(await stock()).toBe(INTAKE_KG);
+    expect(await rows()).toEqual([[], [], []]);
+  });
+
+  it("reports both bins when a dry-run update moves a draw", async () => {
+    const created = await runOperation(startProductionRun, fixture.ctx, input());
+    const target = { productionRunId: created.data.id, expectedVersion: created.data.version };
+    try {
+      const result = await runOperation(updateProductionRun, fixture.ctx, { ...target,
+        feedstockDraws: [{ storageLocationId: secondBinId, wetMassKg: DRAW_KG }],
+      }, { dryRun: true });
+      expect(result.stockEffects).toHaveLength(2);
+      expect(result.stockEffects).toEqual(expect.arrayContaining([
+        expect.objectContaining({ storageLocationId: fixture.binId, delta: { wetKg: DRAW_KG, dryKg: DRAW_KG * FEEDSTOCK_DRY_FRACTION } }),
+        expect.objectContaining({ storageLocationId: secondBinId, delta: { wetKg: -DRAW_KG, dryKg: -DRAW_KG * FEEDSTOCK_DRY_FRACTION } }),
+      ]));
+      expect(await stock()).toBe(INTAKE_KG - DRAW_KG);
+      expect(await deriveFeedstockWetStockKg(fixture.ctx, db, secondBinId)).toBe(INTAKE_KG);
+    } finally {
+      await runOperation(deleteProductionRun, fixture.ctx, target);
+    }
+  });
+
   it("rolls back update and delete previews, including versions and stock", async () => {
     const created = await runOperation(startProductionRun, fixture.ctx, input());
     try {
@@ -81,12 +131,27 @@ describe("production operations at pool size one", { timeout: SUITE_TIMEOUT_MS }
       expect(updated.data.version).toBe(created.data.version + 1);
       expect(await rows()).toEqual(before);
       expect(await stock()).toBe(beforeStock);
-      await runOperation(deleteProductionRun, fixture.ctx, target, { dryRun: true });
+      const deleted = await runOperation(deleteProductionRun, fixture.ctx, target, { dryRun: true });
+      expect(deleted.stockEffects).toMatchObject([{ storageLocationId: fixture.binId, delta: { wetKg: DRAW_KG, dryKg: DRAW_KG * FEEDSTOCK_DRY_FRACTION } }]);
       expect(await rows()).toEqual(before);
       expect(await stock()).toBe(beforeStock);
     } finally {
       await runOperation(deleteProductionRun, fixture.ctx, { productionRunId: created.data.id, expectedVersion: created.data.version });
     }
+  });
+
+  it.each(["facilityId", "reactorId", "operatorId", "biocharStorageLocationId", "feedstockDraws"] as const)("reports a missing %s with its field path", async (field) => {
+    const missing = "00000000-0000-4000-8000-000000000099";
+    const value = field === "feedstockDraws" ? [{ storageLocationId: missing, wetMassKg: DRAW_KG }] : missing;
+    await expect(runOperation(startProductionRun, fixture.ctx, { ...input(), [field]: value })).rejects.toMatchObject({
+      code: "not_found", issues: [expect.objectContaining({ path: field === "feedstockDraws" ? [field, 0, "storageLocationId"] : [field] })],
+    });
+  });
+
+  it.each(["update", "delete"] as const)("reports a missing run as plain not_found on %s", async (kind) => {
+    const missingInput = { productionRunId: "00000000-0000-4000-8000-000000000099", expectedVersion: 1 };
+    await expect(kind === "update" ? runOperation(updateProductionRun, fixture.ctx, missingInput) : runOperation(deleteProductionRun, fixture.ctx, missingInput))
+      .rejects.toMatchObject({ code: "not_found", issues: [] });
   });
 
   it("retains the overlap conflict code, message and typed reference", async () => {

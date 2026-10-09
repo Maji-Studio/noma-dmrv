@@ -1,3 +1,4 @@
+import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { and, eq, inArray, isNull, sum } from "drizzle-orm";
 import { z } from "zod";
 import type { DbTransaction } from "@/db";
@@ -167,9 +168,9 @@ export async function validateProductionRunFeedstockDrawSources(
     );
   const locationsById = new Map(locations.map((location) => [location.id, location]));
 
-  for (const draw of draws) {
+  for (const [index, draw] of draws.entries()) {
     const location = locationsById.get(draw.storageLocationId);
-    if (!location) throw drawValidationError("Feedstock storage bin not found or archived");
+    if (!location) throw runReferenceNotFound("Feedstock storage bin not found or archived", ["feedstockDraws", index, "storageLocationId"]);
     if (location.facilityId !== facilityId) {
       throw drawValidationError("Feedstock bin does not belong to the selected facility");
     }

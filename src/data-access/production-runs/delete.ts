@@ -1,9 +1,10 @@
+import type { SnapshotStock } from "../stock-effects";
+import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { DomainError } from "@/lib/domain-errors";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, creditBatchProductionRuns, incidentReports, productionRuns, productionRunFeedstockDraws, productionRunFeedstocks, productionRunReadings } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { conflictCode, type ConflictRef } from "@/lib/conflict-ref";
-import { SafeError } from "@/lib/errors";
 import { and, eq } from "drizzle-orm";
 import { assertRowVersion } from "../row-version";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
@@ -33,7 +34,8 @@ export async function deleteProductionRunInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,
   productionRunId: string,
-  expectedVersion: number
+  expectedVersion: number,
+  snapshotStock?: SnapshotStock,
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -48,7 +50,7 @@ export async function deleteProductionRunInTransaction(
     .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!existing) {
-    throw new SafeError("Production run not found");
+    throw runReferenceNotFound("Production run not found");
   }
   const existingFeedstockStorageLocationIds =
     await getProductionRunFeedstockDrawStorageIds(ctx, tx, productionRunId);
@@ -77,7 +79,7 @@ export async function deleteProductionRunInTransaction(
     .for("update");
 
   if (!locked) {
-    throw new SafeError("Production run not found");
+    throw runReferenceNotFound("Production run not found");
   }
   assertRowVersion({ entity: PRODUCTION_RUN_CONFLICT_ENTITY, id: productionRunId, expectedVersion, actualVersion: locked.version });
   const lockedFeedstockStorageLocationIds =
@@ -98,6 +100,8 @@ export async function deleteProductionRunInTransaction(
       biocharOutputKg: locked.biocharOutputKg,
     },
   );
+
+  await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
 
   await assertCanMutateCertifiedLineage(
     ctx,

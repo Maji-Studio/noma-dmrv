@@ -1,3 +1,4 @@
+import { stockEffectsSchema } from "@/lib/representations/stock-effects";
 import { API_VERSION } from "@/config/api-rest";
 import { readDescriptions } from "@/lib/operations/read-descriptions";
 import { z } from "zod";
@@ -12,7 +13,7 @@ import { supplierLocationListSchema } from "../query-schemas";
 import { supplierLocationRepresentationSchema } from "@/lib/representations/supplier-locations";
 import { meRepresentationSchema } from "@/lib/representations/me";
 import { feedstockRepresentationSchema } from "@/lib/representations/feedstocks";
-import { itemEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
+import { itemEnvelopeSchema, stockWriteEnvelopeSchema, listEnvelopeSchema, feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
 import { resources } from "./resources";
 import { outputSchema, queryParameters, targetParameter, idempotencyParameter, ifMatchParameter, privateHeaders, requestIdHeader, etagHeader, writeHeaders, locationHeader, problemResponses, jsonResponse, headerComponents, problemResponseComponents } from "./transport";
 
@@ -55,6 +56,7 @@ export function buildOpenApiDocument() {
   const representations: Record<string, z.ZodType> = Object.fromEntries(resources.map((resource) => [resource.singular, resource.schema]));
   representations.supplier_location = supplierLocationRepresentationSchema;
   representations.me = meRepresentationSchema;
+  representations.stockEffects = stockEffectsSchema;
   const publishOutput = (schema: z.ZodType) => outputSchema(schema, representations);
   const schemas: Record<string, JsonSchema> = {
     ...Object.fromEntries(Object.entries(representations).map(([name, schema]) => [name, outputSchema(schema)])),
@@ -114,7 +116,7 @@ export function buildOpenApiDocument() {
   };
   paths["/feedstocks/{idOrCode}"].patch = {
     ...privateOperation("update_feedstock", "feedstocks:write", "Update by UUID using a strong If-Match. Omitted fields stay unchanged, null clears clearable fields, zero stays zero. Wet/dry mass and moisture are validated against locked merged state. Dry runs roll back. Replays precede version rechecking.",
-      { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse, "200": jsonResponse("Updated feedstock or dry-run representation. ETag is absent on dry runs.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
+      { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse, "200": jsonResponse("Updated feedstock or dry-run representation. ETag is absent on dry runs.", publishOutput(stockWriteEnvelopeSchema(feedstockRepresentationSchema)), { ...etagHeader, ...writeHeaders }) },
       [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: requestBody(patchInput, { massWetKg: 4250, notes: "Corrected weighbridge wet mass for bin B2." }),
   };
@@ -122,7 +124,7 @@ export function buildOpenApiDocument() {
     ...privateOperation("delete_feedstock", "feedstocks:delete", "Delete by UUID using a strong If-Match. Locked domain guards may refuse deletion. Dry runs return the would-be deleted representation and roll back. The request body may be omitted; any supplied body must be an empty JSON object. Malformed JSON returns 400; unknown fields and other JSON values return 422.",
     { ...problemResponses([...WRITE_ERRORS, 412, 413, 415, 428]), ...feedstockPreconditionResponse,
       "204": { description: "Deleted, or replay of a committed deletion; no body.", headers: { ...privateHeaders, ...writeHeaders } },
-      "200": jsonResponse("Dry-run deleted representation.", publishOutput(itemEnvelopeSchema(feedstockRepresentationSchema)), writeHeaders) },
+      "200": jsonResponse("Dry-run deleted representation.", publishOutput(stockWriteEnvelopeSchema(feedstockRepresentationSchema)), writeHeaders) },
     [targetParameter(true), ...queryParameters(mutationQuerySchema), ifMatchParameter, idempotencyParameter(false)]),
     requestBody: {
       required: false,

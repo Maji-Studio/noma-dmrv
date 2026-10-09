@@ -18,6 +18,8 @@
  *    once. The runner never promises a rollback it cannot prove.
  */
 
+import { readStockBalances, type SnapshotStock } from "@/data-access/stock-effects";
+import { diffStockBalances, type StockBalance, type StockEffects } from "@/lib/representations/stock-effects";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -44,6 +46,8 @@ export type { OperationEffect } from "@/lib/operation-effect";
 const API_CONTRACT_VERSION = "v1";
 
 export interface OperationScope {
+  /** Dry-run observer; once per attempt, after locks, before stock changes. */
+  snapshotStock?: SnapshotStock;
   ctx: OrgContext;
   tx: DbTransaction;
   /** Work to trigger after the real commit; never after a dry run or rollback. */
@@ -82,12 +86,13 @@ export interface RunOptions {
 export interface OperationResult<Output> {
   data: Jsonified<Output>;
   effect?: OperationEffect;
+  stockEffects?: StockEffects;
   dryRun: boolean;
   replayed: boolean;
 }
 
 class DryRunRollback<Output> {
-  constructor(readonly data: Output, readonly effect?: OperationEffect) {}
+  constructor(readonly data: Output, readonly effect?: OperationEffect, readonly stockEffects?: StockEffects) {}
 }
 
 class ReplayRollback {
@@ -210,7 +215,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
   input: unknown,
   options: RunOptions,
   represent: (data: Output) => Result,
-): Promise<{ data: Result; effect?: OperationEffect; dryRun: boolean; replayed: boolean }> {
+): Promise<{ data: Result; effect?: OperationEffect; stockEffects?: StockEffects; dryRun: boolean; replayed: boolean }> {
   const deadlineAt = Date.now() + (options.deadlineMs ?? OPERATION_DEADLINE_MS);
   const dryRun = options.dryRun ?? false;
   const { idempotency } = options;
@@ -233,7 +238,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
   }
 
   const hooks: Array<() => Promise<void> | void> = [];
-  let committed: { data: Result; effect?: OperationEffect; dryRun: boolean; replayed: boolean } | undefined;
+  let committed: { data: Result; effect?: OperationEffect; stockEffects?: StockEffects; dryRun: boolean; replayed: boolean } | undefined;
   try {
     const outcome = await runOwnedTransaction(ctx, deadlineAt, async (tx) => {
       let recordId: string | undefined;
@@ -250,7 +255,12 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
         recordId = claim.recordId;
       }
 
-      const output = await operation.execute({ ctx, tx, afterCommit: (hook) => hooks.push(hook) }, decoded);
+      let before: StockBalance[] | undefined;
+      const snapshotStock: SnapshotStock | undefined = dryRun ? async (writerTx, ids) => {
+        before = await readStockBalances(ctx, writerTx, ids);
+      } : undefined;
+      const output = await operation.execute({ ctx, tx, snapshotStock, afterCommit: (hook) => hooks.push(hook) }, decoded);
+      const stockEffects = before ? diffStockBalances(before, await readStockBalances(ctx, tx, before.map((bin) => bin.storageLocationId))) : undefined;
       const effect = operation.describe?.(decoded, output);
       const result = represent(output);
       if (options.audit && !dryRun && effect) {
@@ -261,7 +271,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
       }
 
       if (remainingMs(deadlineAt) <= 0) throw deadlineExceeded("before saving");
-      if (dryRun) throw new DryRunRollback(result, effect);
+      if (dryRun) throw new DryRunRollback(result, effect, stockEffects);
       return { data: result, ...(effect ? { effect } : {}) };
     }, options.pool);
 
@@ -270,7 +280,7 @@ async function runOperationCore<Input extends z.ZodType, Output, Result>(
     } else {
       const failure = outcome.error;
       if (failure instanceof DryRunRollback) {
-        return { data: failure.data as Result, ...(failure.effect ? { effect: failure.effect } : {}), dryRun: true, replayed: false };
+        return { data: failure.data as Result, ...(failure.stockEffects ? { stockEffects: failure.stockEffects } : {}), ...(failure.effect ? { effect: failure.effect } : {}), dryRun: true, replayed: false };
       }
       if (failure instanceof ReplayRollback) {
         return { data: failure.outcome as Result, ...(failure.effect ? { effect: failure.effect } : {}), dryRun: false, replayed: true };

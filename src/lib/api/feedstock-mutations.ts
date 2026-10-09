@@ -62,7 +62,7 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
       if (!dryRun) headers.set("ETag", feedstockEtag(data));
       if (result.replayed) headers.set("Idempotent-Replayed", "true");
       if (dryRun) headers.set("Dry-Run", "true");
-      return Response.json({ data }, { headers });
+      return Response.json({ data, ...(dryRun ? { stockEffects: result.stockEffects } : {}) }, { headers });
     }
     if (request.body !== null) {
       const body = await readJsonBody(request);
@@ -75,7 +75,7 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
     if (result.replayed) headers.set("Idempotent-Replayed", "true");
     if (dryRun && result.data) {
       headers.set("Dry-Run", "true");
-      return Response.json({ data: representFeedstock(result.data) }, { headers });
+      return Response.json({ data: representFeedstock(result.data), stockEffects: result.stockEffects }, { headers });
     }
     return new Response(null, { status: 204, headers });
   });

@@ -76,7 +76,11 @@ export async function createProductionRunFn(
   data: z.infer<typeof createProductionRunSchema>
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   return withAction(
-    (ctx) => runOperationInProcess(startProductionRun, ctx, data),
+    (ctx) => {
+      const { startDate, endDate, feedstockWetMassKg, feedstockStorageLocationId, ...input } = createProductionRunSchema.parse(data);
+      void startDate; void endDate; void feedstockWetMassKg; void feedstockStorageLocationId;
+      return runOperationInProcess(startProductionRun, ctx, input);
+    },
     {
       fallbackMessage: "Failed to create production run",
       log: logFor("production-run:create"),
@@ -95,7 +99,11 @@ export async function updateProductionRunFn(
   data: z.infer<typeof updateProductionRunSchema>
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   return withAction(
-    (ctx) => runOperationInProcess(updateProductionRun, ctx, data),
+    (ctx) => {
+      const { feedstockWetMassKg, feedstockStorageLocationId, ...input } = updateProductionRunSchema.parse(data);
+      void feedstockWetMassKg; void feedstockStorageLocationId;
+      return runOperationInProcess(updateProductionRun, ctx, input);
+    },
     {
       fallbackMessage: "Failed to update production run",
       log: logFor("production-run:update"),
@@ -114,7 +122,7 @@ export async function deleteProductionRunFn(
   data: z.infer<typeof deleteProductionRunSchema>
 ): Promise<ActionResult<void>> {
   return withAction(
-    (ctx) => runOperationInProcess(deleteProductionRun, ctx, data),
+    (ctx) => runOperationInProcess(deleteProductionRun, ctx, deleteProductionRunSchema.parse(data)),
     {
       fallbackMessage: "Failed to delete production run",
       log: logFor("production-run:delete"),

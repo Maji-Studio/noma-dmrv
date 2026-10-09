@@ -1,3 +1,4 @@
+import type { SnapshotStock } from "./stock-effects";
 /**
  * Feedstock Data Access Layer
  * Unified CRUD for the combined delivery + bin allocation workflow.
@@ -452,6 +453,7 @@ export async function createFeedstockInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,
   data: CreateFeedstockInput,
+  snapshotStock?: SnapshotStock,
 ): Promise<CreateFeedstockResult> {
   requireOrgScope(ctx);
   await withFeedstockErrors(() => assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId, tx), "not_found", ["feedstockTypeId"]);
@@ -497,6 +499,8 @@ export async function createFeedstockInTransaction(
     data.feedstockTypeId,
     (index) => ["allocations", index, "storageLocationId"],
   );
+
+  await snapshotStock?.(tx, binIds);
 
   const items = await withAutoCodes(
     ctx,
@@ -589,6 +593,7 @@ export async function updateFeedstockInTransaction(
   tx: DbTransaction,
   feedstockId: string,
   data: UpdateFeedstockInput,
+  snapshotStock?: SnapshotStock,
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
   const {
@@ -688,6 +693,8 @@ export async function updateFeedstockInTransaction(
     );
   }
 
+  await snapshotStock?.(tx, stockDerivationChanged || storageReferenceNeedsValidation ? [locked.storageLocationId, effectiveStorageLocationId] : []);
+
   await tx
     .update(feedstocks)
     .set({
@@ -733,7 +740,8 @@ export async function deleteFeedstockInTransaction(
   ctx: OrgContext,
   tx: DbTransaction,
   feedstockId: string,
-  expectedVersion: number
+  expectedVersion: number,
+  snapshotStock?: SnapshotStock,
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -785,6 +793,8 @@ export async function deleteFeedstockInTransaction(
   if (locked.status === "complete") {
     await lockBinStocks(ctx, tx, [locked.storageLocationId]);
   }
+
+  await snapshotStock?.(tx, locked.status === "complete" ? [locked.storageLocationId] : []);
 
   const transportLegDocuments = await deleteTransportLegsForEntity(
     ctx,

@@ -42,7 +42,7 @@ export async function lockProductionRunUpdateStock(
 ): Promise<void> {
   requireOrgScope(ctx);
   const feedstockStockChanged =
-    data.feedstockDraws !== undefined || data.facilityId !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined;
 
   await lockBinStocks(ctx, tx, [
     ...(feedstockStockChanged
@@ -64,7 +64,7 @@ export function assertProductionRunStockSnapshot(
   data: ProductionRunStockUpdate,
 ): void {
   const feedstockStockChanged =
-    data.feedstockDraws !== undefined || data.facilityId !== undefined;
+    data.feedstockDraws !== undefined || data.facilityId !== undefined || data.status !== undefined;
 
   assertStockLockSnapshot(
     (!feedstockStockChanged ||

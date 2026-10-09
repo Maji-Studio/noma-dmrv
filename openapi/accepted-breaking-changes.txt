@@ -1,0 +1,6 @@
+# Phase 4a: pre-production replacement of feedstock create preview with stockEffects.
+# oasdiff v1.32.1 classifies optional response property removals as INFO, so these
+# need no ERR suppression. Exact singleline descriptions retained for review:
+# info at openapi/v1.json, in API POST /feedstocks removed the optional property `preview` from the response with the `200` status [response-optional-property-removed].
+# info at openapi/v1.json, in API POST /feedstocks removed the optional property `preview` from the response with the `201` status [response-optional-property-removed].
+# Remove these acceptances once this contract reaches the base branch.

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { feedstockStockPreview, representFeedstock } from "./feedstocks";
+import { representFeedstock } from "./feedstocks";
 
 const id = "4d766880-6bb2-4dcb-ad62-e00c04bcbb4b";
 const row = {
@@ -20,10 +20,8 @@ it("maps Dates and stored JSON to byte-identical date-only and instant fields", 
   expect(first).not.toHaveProperty("supplierName");
   expect(first).not.toHaveProperty("organizationId");
 });
-it("preserves null and zero, and derives the stock preview only for complete rows", () => {
+it("preserves null and zero", () => {
   const data = representFeedstock({ ...row, deliveryDate: null, moistureContentPercent: 0 });
   expect(data.deliveryDate).toBeNull();
   expect(data.moistureContentPercent).toBe(0);
-  expect(feedstockStockPreview([data])[0]).toMatchObject({ allocatedWetMassKg: 100, allocatedDryMassKg: 67.5, stockDeltaWetKg: 100 });
-  expect(feedstockStockPreview([{ ...data, status: "missing_data" }])[0].stockDeltaWetKg).toBe(0);
 });

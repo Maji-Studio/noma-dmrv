@@ -588,6 +588,24 @@ code (`created`, `updated`, `deleted`), entity type and ids, versions before and
 after, and changed field names. It contains no field values. The runner returns
 this transport-neutral effect alongside data.
 
+Dry-run stock writes also return `stockEffects` beside `data`. The runner supplies
+an optional `OperationScope.snapshotStock` observer, passed to transaction writers.
+Writers declare the affected old and new bins after their normal locks and before
+the first mutation. The runner reads the balances again after execution, inside
+the same transaction, and returns one before/after/delta entry per changed bin.
+Real writes and the UI have no observer and pay no snapshot reads. Feedstock
+wet kilograms use the existing stock derivation; dry kilograms are its
+intake-moisture estimate, nullable when unavailable. Output bins use the guard's
+all-layer dry balance (null for unresolved layers) and leave wet kilograms null. This contract replaces the
+feedstock-create additions-only `preview` and is shared by create, PATCH and
+DELETE in REST and MCP. Future output-stock operations can pass the same observer.
+
+Production-run operation inputs accept offset date-time strings or facility-local
+`{ date, time }` objects. Local times resolve through the transaction's effective
+facility, including a new facility on update. Native Dates are an in-process
+convenience and do not appear as a third published shape. UI actions validate
+the form contract before passing only operation fields to the runner.
+
 The `audit` run option supplies request id, credential id and optional OAuth
 client id for API writes only. Audited operations must implement `describe`.
 `src/data-access/api-audit-events.ts:writeApiAuditEvent` records the effect and
