@@ -2,10 +2,13 @@ import { z } from "zod";
 import type { ApiContext } from "@/lib/auth/api-context";
 import { decodeCursor, encodeCursor, type CursorPosition } from "./cursor";
 import { parseApiQuery } from "./query";
+import { DomainError } from "@/lib/domain-errors";
+import { API_TEXT_PATTERN } from "./input-text";
 
 export { lookupListSchema, lookupGetSchema, facilityLookupListSchema, facilityLookupGetSchema, supplierLocationListSchema } from "./query-schemas";
 
 export function lookupIdentifier(idOrCode: string) {
+  if (!API_TEXT_PATTERN.test(idOrCode)) throw new DomainError("not_found", "Resource was not found.");
   return z.uuid().safeParse(idOrCode).success ? { id: idOrCode } : { code: idOrCode };
 }
 

@@ -29,27 +29,27 @@ function formatSafeErrorMessage(message: string): string {
   const trimmed = message.trim();
 
   const missingInOrganization =
-    /^(.+?) not found in this organization\.?$/i.exec(trimmed);
+    /^(.+?)(?: was)? not found in this organization\.?$/i.exec(trimmed);
   if (missingInOrganization) {
     return `${sentenceCase(missingInOrganization[1])} was not found in this Organization.`;
   }
 
-  const missingOrArchived = /^(.+?) not found or archived\.?$/i.exec(trimmed);
+  const missingOrArchived = /^(.+?)(?: was)? not found or archived\.?$/i.exec(trimmed);
   if (missingOrArchived) {
     return `${sentenceCase(missingOrArchived[1])} was not found or is archived.`;
   }
 
-  const missingForRecord = /^(.+?) not found for (.+?)\.?$/i.exec(trimmed);
+  const missingForRecord = /^(.+?)(?: was)? not found for (.+?)\.?$/i.exec(trimmed);
   if (missingForRecord) {
     return missingRecordMessage(missingForRecord[1]);
   }
 
-  const missingWithInternalId = /^(.+?) not found:\s*.+$/i.exec(trimmed);
+  const missingWithInternalId = /^(.+?)(?: was)? not found:\s*.+$/i.exec(trimmed);
   if (missingWithInternalId) {
     return `${sentenceCase(missingWithInternalId[1])} was not found.`;
   }
 
-  const missing = /^(.+?) not found\.?$/i.exec(trimmed);
+  const missing = /^(.+?)(?: was)? not found\.?$/i.exec(trimmed);
   if (missing) {
     return missingRecordMessage(missing[1]);
   }

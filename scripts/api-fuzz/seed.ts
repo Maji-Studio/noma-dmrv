@@ -5,6 +5,8 @@ import { assertThrowawayTestDatabase } from "../../tests/helpers/throwaway-datab
 
 const FIXTURE_LABEL = "API fuzz fixture";
 const FACILITY_TIME_ZONE = "UTC";
+const INTAKE_WET_MASS_KG = 100;
+const INTAKE_MOISTURE_PERCENT = 20;
 const PRIVATE_FILE_MODE = 0o600;
 
 async function main(): Promise<void> {
@@ -19,6 +21,12 @@ async function main(): Promise<void> {
   const { db } = await import("@/db");
   const { organizations, users, members, facilities } = await import("@/db/schema");
   const { createFacility } = await import("@/data-access/facilities");
+  const { createDriver, createVehicle } = await import("@/data-access/quick-add");
+  const { feedstockEtag } = await import("@/lib/api/representation-etags");
+  const { runOperation } = await import("@/lib/operations/runner");
+  const { logFeedstockDelivery } = await import("@/lib/operations/feedstocks");
+  const { formatFacilityDate } = await import("@/lib/date-utils");
+  const { createSupplierLocation } = await import("@/data-access/suppliers");
   const { createSupplier } = await import("@/data-access/suppliers");
   const { createFeedstockType } = await import("@/data-access/feedstock-types");
   const { createStorageLocation } = await import("@/data-access/storage-locations");
@@ -52,6 +60,17 @@ async function main(): Promise<void> {
     code: "FUZZ-BIN", name: FIXTURE_LABEL, type: "feedstock_bin",
     facilityId: facility.id, feedstockTypeId: feedstockType.id,
   });
+  const driver = await createDriver(ctx, { code: "FUZZ-DRV", name: FIXTURE_LABEL });
+  const vehicle = await createVehicle(ctx, { code: "FUZZ-VEH", name: FIXTURE_LABEL, vehicleType: "truck" });
+  const supplierLocation = await createSupplierLocation(ctx, { supplierId: supplier.id, name: FIXTURE_LABEL, country: "FR" });
+  const intake = await runOperation(logFeedstockDelivery, ctx, {
+    facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id,
+    deliveryDate: formatFacilityDate(new Date(), FACILITY_TIME_ZONE),
+    totalWetMassKg: INTAKE_WET_MASS_KG, moisturePercent: INTAKE_MOISTURE_PERCENT,
+    allocations: [{ storageLocationId: bin.id, allocatedWetMassKg: INTAKE_WET_MASS_KG }],
+  });
+  const feedstock = intake.data.feedstocks[0];
+  if (!feedstock) throw new Error("API fuzz intake did not create a feedstock.");
   const credential = await createApiKey(ctx, {
     name: FIXTURE_LABEL, scopes: [...API_SCOPES], expiresIn: API_KEY_DEFAULT_EXPIRY_SECONDS,
   });
@@ -60,7 +79,14 @@ async function main(): Promise<void> {
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::add-mask::${credential.key}`);
   await writeFile(outputPath, JSON.stringify({
     key: credential.key, credentialId: credential.id, organizationId, userId,
-    facilityId: facility.id, supplierId: supplier.id, feedstockTypeId: feedstockType.id, binId: bin.id,
+    facilityId: facility.id, facilityCode: facility.code,
+    supplierId: supplier.id, supplierCode: supplier.code,
+    feedstockTypeId: feedstockType.id, feedstockTypeCode: feedstockType.code,
+    binId: bin.id, binCode: bin.code,
+    driverId: driver.id, driverCode: driver.code, vehicleId: vehicle.id, vehicleCode: vehicle.code,
+    // Supplier locations have no code column or by-id API route.
+    supplierLocationId: supplierLocation.id,
+    feedstockId: feedstock.id, feedstockCode: feedstock.code, feedstockEtag: feedstockEtag(feedstock),
   }, null, 2) + "\n", { mode: PRIVATE_FILE_MODE, flag: "wx" });
   console.log(`API_FUZZ_FIXTURE=${outputPath}`);
   console.log(`ORGANIZATION_ID=${organizationId}`);

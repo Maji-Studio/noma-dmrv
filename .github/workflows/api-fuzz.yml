@@ -94,7 +94,7 @@ jobs:
           node --input-type=module <<'JS'
           import { readFileSync, appendFileSync } from 'node:fs';
           const fixture = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/api-fuzz-fixture.json`, 'utf8'));
-          appendFileSync(process.env.GITHUB_ENV, `API_FUZZ_KEY=${fixture.key}\n`);
+          appendFileSync(process.env.GITHUB_ENV, `API_FUZZ_KEY=${fixture.key}\nAPI_FUZZ_FIXTURE=${process.env.RUNNER_TEMP}/api-fuzz-fixture.json\n`);
           JS
 
       - name: Build production bundle

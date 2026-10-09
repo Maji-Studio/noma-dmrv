@@ -65,3 +65,17 @@ it("rejects a cursor bound to another resource, organization, filter or parent b
   }
   expect(list).not.toHaveBeenCalled();
 });
+
+it.each(["\u0000", "\t", "\n", "\r", "\u001f", "\u007f", "\u0085", "\u009f"])("rejects identifiers containing control characters before a reader is called (%j)", async (control) => {
+  const read = vi.fn();
+  const resolveAndRead = async () => read(ctx, lookupIdentifier(`FAC-${control}`));
+  await expect(resolveAndRead()).rejects.toMatchObject({ code: "not_found" });
+  expect(read).not.toHaveBeenCalled();
+});
+
+it.each(["q", "code", "cursor"])("rejects controls in %s with a validation issue path", (field) => {
+  for (const control of ["\u0000", "\t", "\n", "\r", "\u001f", "\u007f", "\u0085", "\u009f"]) {
+    expect(() => parseApiQuery(request(`?${field}=bad${encodeURIComponent(control)}value`), lookupListSchema))
+      .toThrow(expect.objectContaining({ status: 400, code: "validation_failed", issues: [expect.objectContaining({ path: [field] })] }));
+  }
+});

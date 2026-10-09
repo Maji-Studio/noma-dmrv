@@ -140,3 +140,26 @@ it("bounds a streamed DELETE body before running the operation", async () => {
   expect(await response.json()).toMatchObject({ code: "payload_too_large" });
   expect(mocks.run).not.toHaveBeenCalled();
 });
+
+it("accepts a create idempotency key on a dry run", async () => {
+  const response = await apiRoute("test", "feedstocks:write", createFeedstockResponse)(new Request(
+    "https://example.test/api/v1/feedstocks?dryRun=true", {
+      method: "POST", headers: { "content-type": "application/json", "idempotency-key": "dry-run-key" }, body: "{}",
+    },
+  ));
+  // The mocked operation stops after admission. This proves the adapter accepts
+  // the key and forwards dryRun rather than rejecting the header.
+  expect(response.status).toBe(404);
+  expect(mocks.run).toHaveBeenCalledOnce();
+  expect(mocks.run.mock.calls[0][3]).toMatchObject({ dryRun: true, idempotency: { key: "dry-run-key" } });
+});
+
+it.each(["PATCH", "DELETE"] as const)("%s rejects a NUL target before running the operation", async (method) => {
+  const response = await apiRoute("test", method === "DELETE" ? "feedstocks:delete" : "feedstocks:write", (req, context) =>
+    mutateFeedstockResponse(req, context, "bad\u0000id", method))(new Request("https://example.test/api/v1/feedstocks/bad%00id", {
+    method, headers: { "if-match": '\"1.1\"' },
+  }));
+  expect(response.status).toBe(404);
+  expect(await response.json()).toMatchObject({ code: "not_found" });
+  expect(mocks.run).not.toHaveBeenCalled();
+});

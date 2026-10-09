@@ -171,3 +171,16 @@ it("does not prepare an unauthenticated request", async () => {
   expect(mocks.post).not.toHaveBeenCalled();
   expect(handler).not.toHaveBeenCalled();
 });
+
+
+it("preserves query validation issue pointers in 400 responses", async () => {
+  const { parseApiQuery } = await import("./query");
+  const { lookupListSchema } = await import("./query-schemas");
+  const handler = apiRoute("test", undefined, async (req) => {
+    parseApiQuery(req, lookupListSchema);
+    return Response.json({});
+  });
+  const response = await handler(new Request("https://example.test/api/v1/facilities?q=bad%00value"));
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: "validation_failed", errors: [{ pointer: "/q", code: "custom" }] });
+});

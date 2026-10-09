@@ -3,6 +3,11 @@ base-url = "${API_FUZZ_BASE_URL}"
 seed = 20261009
 workers = 1
 request-timeout = 10
+hooks = "scripts/api-fuzz/hooks.py"
+
+# Consumed by hooks as a positive-only omission, not an all-phase override.
+[parameters]
+"query.cursor" = ""
 
 [headers]
 Authorization = "Bearer ${API_FUZZ_KEY}"
@@ -16,11 +21,31 @@ database = "none"
 [checks]
 enabled = true
 
+# 4.29.3 has no expected-statuses setting for status_code_conformance.
+# The replacement skips only pre-application URI/header transport rejections.
+[checks.status_code_conformance]
+enabled = false
+
+[checks.application_status_code_conformance]
+enabled = true
+
+[checks.configured_authentication]
+enabled = true
+
+[checks.positive_data_acceptance]
+expected-statuses = ["2xx", 401, 403, 404, 409, 414, 429, 431, "5xx"]
+
+[checks.negative_data_rejection]
+expected-statuses = [400, 401, 403, 404, 405, 406, 409, 414, 415, 422, 428, 429, 431, "5xx"]
+
 [phases.examples]
 enabled = true
 
 [phases.coverage]
 enabled = true
+# next start's undici Request rejects TRACE before app code (500); Vercel
+# returns 405. Keep every other default unsupported-method probe.
+unexpected-methods = ["GET", "PUT", "POST", "DELETE", "OPTIONS", "PATCH", "QUERY"]
 
 [phases.fuzzing]
 enabled = true
@@ -42,3 +67,65 @@ enabled = true
 
 [reports.junit]
 path = "api-fuzz-report/junit.xml"
+
+# 428 is valid only for the operations that require If-Match. The check has
+# operation-level scope but cannot scope expected statuses by header name.
+[[operations]]
+include-operation-id = ["update_feedstock", "delete_feedstock"]
+[operations.checks.missing_required_header]
+expected-statuses = [400, 401, 403, 406, 415, 422, 428]
+
+# Hooks add one deterministic seeded example and release these scalar overrides
+# for the other phases, so random identifiers are still exercised.
+
+[[operations]]
+include-operation-id = "get_facility"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FACILITY_ID}"
+
+[[operations]]
+include-operation-id = "get_supplier"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_SUPPLIER_ID}"
+
+[[operations]]
+include-operation-id = "get_feedstock_type"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_TYPE_ID}"
+
+[[operations]]
+include-operation-id = "get_storage_location"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_BIN_ID}"
+
+[[operations]]
+include-operation-id = "get_driver"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_DRIVER_ID}"
+
+[[operations]]
+include-operation-id = "get_vehicle"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_VEHICLE_ID}"
+
+[[operations]]
+include-operation-id = "get_feedstock"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_ID}"
+
+[[operations]]
+include-operation-id = "update_feedstock"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_ID}"
+"header.If-Match" = "${API_FUZZ_FEEDSTOCK_ETAG}"
+
+[[operations]]
+include-operation-id = "delete_feedstock"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_FEEDSTOCK_ID}"
+"header.If-Match" = "${API_FUZZ_FEEDSTOCK_ETAG}"
+
+[[operations]]
+include-operation-id = "find_supplier_locations"
+[operations.parameters]
+"path.idOrCode" = "${API_FUZZ_SUPPLIER_ID}"

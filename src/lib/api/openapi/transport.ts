@@ -3,6 +3,7 @@ import { API_CURSOR_MAX_LENGTH, API_IDEMPOTENCY_KEY_MAX_LENGTH, API_LIST_DEFAULT
 import { IDEMPOTENCY_RETENTION_DAYS } from "@/config/operations";
 import type { JsonSchema } from "@/lib/operations/json-schema";
 import { IDEMPOTENCY_KEY_PATTERN } from "../request-body";
+import { API_CURSOR_PATTERN } from "../input-text";
 import { STRONG_ETAG_PATTERN } from "../etag";
 
 export function outputSchema(schema: z.ZodType, representations: Record<string, z.ZodType> = {}): JsonSchema {
@@ -39,7 +40,7 @@ export function queryParameters(schema: z.ZodType) {
       ? { description: field.description, type: "integer", minimum: 1, maximum: API_LIST_MAX_LIMIT, default: API_LIST_DEFAULT_LIMIT }
       : { ...field };
     // Cursor length is enforced by decodeCursor rather than the query schema.
-    if (name === "cursor") wire.maxLength = API_CURSOR_MAX_LENGTH;
+    if (name === "cursor") Object.assign(wire, { minLength: 1, maxLength: API_CURSOR_MAX_LENGTH, pattern: API_CURSOR_PATTERN.source });
     return { name, in: "query", required: generated.required?.includes(name) ?? false, description: wire.description, schema: wire };
   });
 }
@@ -51,12 +52,12 @@ export const targetParameter = (uuidOnly = false) => ({
 });
 export const idempotencyParameter = (required: boolean) => ({
   name: "Idempotency-Key", in: "header", required,
-  description: `Unique key per intended write, 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters. Reuse on retry; credential-scoped, retained for ${IDEMPOTENCY_RETENTION_DAYS} days. Required for creates unless dryRun=true; dry runs never consume or replay keys.`,
+  description: `Unique key per intended write, 1 to ${API_IDEMPOTENCY_KEY_MAX_LENGTH} visible ASCII characters. Reuse on retry; credential-scoped, retained for ${IDEMPOTENCY_RETENTION_DAYS} days. ${required ? "Required; also accepted on dry runs." : "Optional on this method."} Dry runs never consume or replay keys.`,
   schema: { type: "string", minLength: 1, maxLength: API_IDEMPOTENCY_KEY_MAX_LENGTH, pattern: IDEMPOTENCY_KEY_PATTERN.source },
 });
 export const ifMatchParameter = {
   name: "If-Match", in: "header", required: true,
-  description: 'One strong ETag from the resource read, for example "3.1". Wildcards and weak tags are refused. A mismatch returns the current representation.',
+  description: `One strong ETag from the resource read: "version.revision", each a positive decimal safe integer (1 to ${Number.MAX_SAFE_INTEGER}), without leading zeros, for example "3.1". Wildcards and weak tags are refused. A mismatch returns the current representation.`,
   schema: { type: "string", pattern: STRONG_ETAG_PATTERN.source },
 };
 

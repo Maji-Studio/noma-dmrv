@@ -2,7 +2,14 @@
   "components": {
     "headers": {
       "Dry-Run": {"description": "true when validation and domain guards ran but the transaction rolled back.", "schema": {"description": "true when validation and domain guards ran but the transaction rolled back.", "enum": ["true"], "type": "string"}},
-      "ETag": {"description": "Strong row-version and representation-revision tag, for example \"3.1\".", "schema": {"description": "Strong row-version and representation-revision tag, for example \"3.1\".", "pattern": "^\"([1-9]\\d*)\\.([1-9]\\d*)\"$", "type": "string"}},
+      "ETag": {
+        "description": "Strong row-version and representation-revision tag, for example \"3.1\".",
+        "schema": {
+          "description": "Strong row-version and representation-revision tag, for example \"3.1\".",
+          "pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$",
+          "type": "string"
+        }
+      },
       "Idempotent-Replayed": {"description": "true when returning a previously committed outcome.", "schema": {"description": "true when returning a previously committed outcome.", "enum": ["true"], "type": "string"}},
       "Location": {"description": "Relative URL of the first created feedstock; absent on dry runs.", "schema": {"description": "Relative URL of the first created feedstock; absent on dry runs.", "type": "string"}},
       "RateLimit-Limit": {"description": "Request capacity of the tightest rate-limit bucket, integer encoded as decimal text.", "schema": {"description": "Request capacity of the tightest rate-limit bucket, integer encoded as decimal text.", "type": "string"}},
@@ -270,9 +277,9 @@
         "operationId": "find_drivers",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -316,9 +323,9 @@
         "operationId": "find_facilities",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -362,9 +369,9 @@
         "operationId": "find_feedstock_types",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -408,9 +415,9 @@
         "operationId": "find_feedstocks",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on feedstock code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on feedstock code.", "maxLength": 255, "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on feedstock code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on feedstock code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
           {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}
         ],
         "responses": {
@@ -433,7 +440,7 @@
         "operationId": "log_feedstock_delivery",
         "parameters": [
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
-          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required; also accepted on dry runs. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": true, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
         "requestBody": {
           "content": {
@@ -575,8 +582,17 @@
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
-          {"description": "One strong ETag from the resource read, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"([1-9]\\d*)\\.([1-9]\\d*)\"$", "type": "string"}},
-          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+          {
+            "description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$",
+              "type": "string"
+            }
+          },
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
         "requestBody": {"content": {"application/json": {"example": {}, "schema": {"additionalProperties": false, "properties": {}, "type": "object"}}}, "description": "Optional; when sent it must be an empty JSON object, maximum 262144 bytes.", "required": false},
         "responses": {
@@ -630,8 +646,17 @@
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
           {"description": "true validates and previews the write then rolls back; false commits the write (default).", "in": "query", "name": "dryRun", "required": false, "schema": {"description": "true validates and previews the write then rolls back; false commits the write (default).", "enum": ["true", "false"], "type": "string"}},
-          {"description": "One strong ETag from the resource read, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.", "in": "header", "name": "If-Match", "required": true, "schema": {"pattern": "^\"([1-9]\\d*)\\.([1-9]\\d*)\"$", "type": "string"}},
-          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Required for creates unless dryRun=true; dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
+          {
+            "description": "One strong ETag from the resource read: \"version.revision\", each a positive decimal safe integer (1 to 9007199254740991), without leading zeros, for example \"3.1\". Wildcards and weak tags are refused. A mismatch returns the current representation.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\\.((?:[1-9]\\d{0,14}|[1-8]\\d{15}|900[0-6]\\d{12}|90070\\d{11}|90071[0-8]\\d{10}|900719[0-8]\\d{9}|9007199[0-1]\\d{8}|90071992[0-4]\\d{7}|900719925[0-3]\\d{6}|9007199254[0-6]\\d{5}|90071992547[0-3]\\d{4}|9007199254740[0-8]\\d{2}|90071992547409[0-8]\\d{1}|9007199254740990\\d{0}|9007199254740991))\"$",
+              "type": "string"
+            }
+          },
+          {"description": "Unique key per intended write, 1 to 255 visible ASCII characters. Reuse on retry; credential-scoped, retained for 7 days. Optional on this method. Dry runs never consume or replay keys.", "in": "header", "name": "Idempotency-Key", "required": false, "schema": {"maxLength": 255, "minLength": 1, "pattern": "^[\\x21-\\x7e]+$", "type": "string"}}
         ],
         "requestBody": {
           "content": {
@@ -720,9 +745,9 @@
         "operationId": "find_storage_locations",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}},
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
           {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}}
         ],
         "responses": {
@@ -771,9 +796,9 @@
         "operationId": "find_suppliers",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -818,8 +843,8 @@
         "parameters": [
           {"description": "Target identifier, UUID; codes are not accepted on this method.", "in": "path", "name": "idOrCode", "required": true, "schema": {"format": "uuid", "type": "string"}},
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on source location name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on source location name.", "maxLength": 255, "type": "string"}}
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on source location name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on source location name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
         ],
         "responses": {
           "200": {
@@ -843,9 +868,9 @@
         "operationId": "find_vehicles",
         "parameters": [
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
-          {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
-          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "type": "string"}},
-          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "type": "string"}}
+          {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque base64url continuation cursor bound to organization, resource and filters. Use only nextCursor from the same list and filters.", "maxLength": 4096, "minLength": 1, "pattern": "^[A-Za-z0-9_-]+$", "type": "string"}},
+          {"description": "Case-insensitive literal prefix search on code or name.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on code or name.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}},
+          {"description": "Exact human-readable resource code.", "in": "query", "name": "code", "required": false, "schema": {"description": "Exact human-readable resource code.", "maxLength": 255, "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f]*$(?![\\s\\S])", "type": "string"}}
         ],
         "responses": {
           "200": {

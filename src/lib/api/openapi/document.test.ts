@@ -107,7 +107,7 @@ it("publishes pagination and search bounds on every list route", () => {
   }
 });
 
-it("requires preconditions and documents conditional create idempotency with possible response statuses and headers", () => {
+it("requires preconditions and requires create idempotency with possible response statuses and headers", () => {
   for (const method of ["patch", "delete"]) {
     const op = document.paths["/feedstocks/{idOrCode}"][method];
     expect(op.parameters).toContainEqual(expect.objectContaining({ name: "If-Match", in: "header", required: true }));
@@ -115,8 +115,8 @@ it("requires preconditions and documents conditional create idempotency with pos
     expect(op.parameters).toContainEqual(expect.objectContaining({ name: "dryRun", in: "query" }));
   }
   expect(document.paths["/feedstocks"].post.parameters).toContainEqual(expect.objectContaining({
-    name: "Idempotency-Key", in: "header", required: false,
-    description: expect.stringContaining("Required for creates unless dryRun=true"),
+    name: "Idempotency-Key", in: "header", required: true,
+    description: expect.stringContaining("Required; also accepted on dry runs"),
   }));
   expect(Object.keys(document.paths["/feedstocks/{idOrCode}"].delete.responses).sort()).toEqual(["200", "204", "400", "401", "403", "404", "409", "412", "413", "415", "422", "428", "429", "500", "503"]);
   expect(Object.keys(document.paths["/me"].get.responses).sort()).toEqual(["200", "401", "403", "404", "429", "500"]);
@@ -175,7 +175,7 @@ it("publishes the runtime header patterns and idempotency length bound", () => {
   expect(ifMatch.pattern).toBe(STRONG_ETAG_PATTERN.source);
   expect(document.components.headers.ETag.schema).toMatchObject({ pattern: STRONG_ETAG_PATTERN.source });
   const etagPattern = new RegExp(ifMatch.pattern as string);
-  for (const tag of [representationEtag(42, 3), '"0.1"', '"01.1"', '"1.0"', 'W/"1.1"', "*", '"1.1", "2.1"']) {
+  for (const tag of [representationEtag(42, 3), '"0.1"', '"01.1"', '"1.0"', 'W/"1.1"', "*", '"1.1", "2.1"', '"78.86753729017096108"', '"9007199254740992.1"']) {
     if (etagPattern.test(tag)) expect(parseIfMatch(tag)).toEqual({ version: 42, revision: 3 });
     else expect(() => parseIfMatch(tag)).toThrow();
   }
