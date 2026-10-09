@@ -92,3 +92,11 @@ it("bypasses limits only outside production and never bypasses the write switch"
   await preAuthGuard(new Request("http://localhost"), info);
   expect(mocks.consume).toHaveBeenCalledOnce();
 });
+
+it("lets an opted-in handler answer the write switch after charging write buckets", async () => {
+  mocks.env.API_WRITES_DISABLED = true;
+  expect((await postAuthGuard(ctx, { ...info, access: "write", writesDisabledInHandler: true }, null)).ok).toBe(true);
+  expect(mocks.consume.mock.calls.map(([bucket]) => bucket.key)).toEqual([
+    "credential:credential:write", "organization:organization:write",
+  ]);
+});

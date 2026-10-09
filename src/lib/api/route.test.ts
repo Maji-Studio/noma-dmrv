@@ -152,7 +152,9 @@ it("prepares once after authentication and passes the replacement request to the
   const handler = vi.fn(async (received: Request) => new Response(await received.text()));
   const response = await apiRoute("test", undefined, handler, { prepare })(original);
   expect(await response.text()).toBe("prepared");
-  expect(prepare).toHaveBeenCalledExactlyOnceWith(original);
+  expect(prepare).toHaveBeenCalledExactlyOnceWith(original, expect.objectContaining({
+    ctx: { orgRole: "admin", scopes: ["feedstocks:write"] },
+  }));
   expect(handler).toHaveBeenCalledWith(replacement, expect.any(Object), {});
   expect(mocks.post).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({ access: "read" }), null);
   const order = [mocks.resolve, prepare, mocks.post, handler].map((mock) => mock.mock.invocationCallOrder[0]);

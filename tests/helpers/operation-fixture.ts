@@ -31,23 +31,25 @@ export interface IntakeFixture {
   input: (wetMassKg?: number) => Record<string, unknown>;
 }
 
-export async function createIntakeFixture(label: string): Promise<IntakeFixture> {
+export async function createIntakeFixture(
+  label: string, executor: Pick<typeof db, "insert"> = db,
+): Promise<IntakeFixture> {
   const tag = crypto.randomUUID().slice(0, 8);
   const organizationId = `org_op_${label}_${tag}`;
-  await db.insert(organizations).values({
+  await executor.insert(organizations).values({
     id: organizationId,
     name: `Operation ${label} ${tag}`,
     slug: `operation-${label}-${tag}`.toLowerCase(),
   });
-  const [facility] = await db
+  const [facility] = await executor
     .insert(facilities)
     .values({ organizationId, code: `FAC-${tag}`, name: `Intake Facility ${tag}` })
     .returning({ id: facilities.id });
-  const [supplier] = await db
+  const [supplier] = await executor
     .insert(suppliers)
     .values({ organizationId, code: `SUP-${tag}`, name: `Wood Chip Supplier ${tag}` })
     .returning({ id: suppliers.id });
-  const [feedstockType] = await db
+  const [feedstockType] = await executor
     .insert(feedstockTypes)
     .values({
       organizationId,
@@ -57,7 +59,7 @@ export async function createIntakeFixture(label: string): Promise<IntakeFixture>
       usage: "pyrolysis" as const,
     })
     .returning({ id: feedstockTypes.id });
-  const [bin] = await db
+  const [bin] = await executor
     .insert(storageLocations)
     .values({
       organizationId,

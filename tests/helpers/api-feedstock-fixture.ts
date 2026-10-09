@@ -73,7 +73,7 @@ export function feedstockRequest(
 const params = (id: string) => ({ params: Promise.resolve({ idOrCode: id }) });
 
 /** The only date encoding here is the canonical encoding of the decoded command. */
-export function postFeedstock(fixture: ApiFeedstockFixture, command = decodedIntake(fixture), key = randomUUID()) {
+export function postFeedstock(fixture: ApiFeedstockFixture, command = decodedIntake(fixture), key: string = randomUUID()) {
   return POST(feedstockRequest(fixture, "POST", "", {
     ...command, deliveryDate: command.deliveryDate.toISOString().split("T")[0],
   }, { "idempotency-key": key }));

@@ -79,6 +79,22 @@ echo "TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/noma_dmrv_
 Re-run the migrate line after pulling new migrations. A worktree made with
 `scripts/worktree.sh` gets its own test database.
 
+## Agent evaluation
+
+`pnpm eval:mcp` runs two feedstock intake requests through headless Claude Code
+and the local MCP server. It needs Docker with the test database schema ready,
+the worktree's `.env.test`, and a logged-in Claude Code subscription. It refuses
+non-test databases, creates a fresh organization and API key per case, and scores
+the stored rows, bin stock, audit transport and tool-call count. Case 2 follows
+the published schema: ask for moisture when required, otherwise log without it.
+
+This is a local check before merge, not a CI gate. Paste its Markdown table into
+the PR. Transcripts, the dev server log, Markdown and JSON scores are saved in
+the printed temporary run directory with keys redacted. Fixture organizations
+are removed on exit; `pnpm eval:mcp --keep` retains them and prints their ids.
+`EVAL_MCP_MODEL` selects a model. Port, timeouts, budget and Claude flags live in
+`scripts/eval-mcp/config.ts`.
+
 ## Worktrees
 
 Parallel sessions each work in their own worktree, one writer per worktree.

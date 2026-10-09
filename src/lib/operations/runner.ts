@@ -70,7 +70,7 @@ export interface IdempotencyOptions {
 }
 
 export interface RunOptions {
-  audit?: { requestId: string; credentialId: string; oauthClientId?: string | null };
+  audit?: { transport: "rest" | "mcp"; requestId: string; credentialId: string; oauthClientId?: string | null };
   dryRun?: boolean;
   idempotency?: IdempotencyOptions;
   /** Whole-operation budget in ms; defaults to `OPERATION_DEADLINE_MS`. */

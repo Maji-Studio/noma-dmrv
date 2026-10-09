@@ -8,7 +8,8 @@
  * is inserted at the start of the write's transaction, which is the claim: a
  * concurrent duplicate waits on the uncommitted row and cannot see it.
  */
-import { boolean, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, doublePrecision, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { organizations } from "./auth";
 
 export const apiIdempotencyRecords = pgTable(
@@ -54,8 +55,13 @@ export const apiAuditEvents = pgTable("api_audit_events", {
   versionAfter: integer("version_after"),
   requestId: text("request_id").notNull(),
   outcomeCode: text("outcome_code").notNull(),
+  /** The API surface that carried the write: `rest` (/api/v1) or `mcp` (/api/mcp). */
+  transport: text("transport", { enum: ["rest", "mcp"] }).notNull().default("rest"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [index("api_audit_events_org_created_idx").on(table.organizationId, table.createdAt)]);
+}, (table) => [
+  index("api_audit_events_org_created_idx").on(table.organizationId, table.createdAt),
+  check("api_audit_events_transport", sql`${table.transport} in ('rest', 'mcp')`),
+]);
 
 export const apiRateLimitBuckets = pgTable("api_rate_limit_buckets", {
   bucketKey: text("bucket_key").primaryKey(),

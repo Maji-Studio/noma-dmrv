@@ -109,8 +109,9 @@ Non-obvious semantics only:
   deletes expired records lazily when their keys are reused; idle rate-limit
   buckets have no scheduled staging cleanup.
 - **`API_WRITES_DISABLED`** — `true` or `false`, defaults to `false`. API write
-  guards return retryable 503 while enabled, including for dry runs; reads keep
-  working. Organization API access defaults to enabled and only Platform Admins
+  guards return retryable 503 while enabled, including for dry runs. MCP returns
+  an `isError` tool result with code `api_writes_disabled`; reads keep working.
+  Organization API access defaults to enabled and only Platform Admins
   can toggle it at `/admin/organizations`; disabled organizations receive
   403 `api_access_disabled` on API requests. This does not revoke their keys.
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +

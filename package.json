@@ -39,6 +39,7 @@
     "check:ux-copy": "tsx scripts/check-ux-copy.ts",
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "openapi:client-check": "tsx scripts/check-openapi-client.ts",
+    "eval:mcp": "tsx scripts/eval-mcp/run.ts",
     "docs:check": "node scripts/check-doc-references.mjs",
     "test": "vitest",
     "test:ui": "vitest --ui",

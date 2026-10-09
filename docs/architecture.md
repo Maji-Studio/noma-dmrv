@@ -740,7 +740,7 @@ impact in the PR and remove stale entries after the change reaches the base.
 The [oasdiff ignore-file format](https://github.com/oasdiff/oasdiff/blob/v1.32.1/docs/BREAKING-CHANGES.md#ignoring-specific-breaking-changes)
 requires the method/path (or `components`) and change description on each line.
 
-### MCP read tools on API keys
+### MCP tools on API keys
 
 `src/app/api/mcp/route.ts` serves stateless JSON-RPC POSTs through the pinned
 `mcp-handler` and MCP server SDK. GET and DELETE return 405. Origin validation
@@ -751,11 +751,15 @@ After authentication, the preparation hook bounds the body to `API_BODY_MAX_BYTE
 and returns HTTP 413 `payload_too_large` if it exceeds that limit. JSON-RPC
 batch arrays return HTTP 400 `batch_not_supported`. Both refusals use
 `application/problem+json` and precede authenticated rate limiting and dispatch.
-Every admitted MCP request counts as a read; `lib/mcp/server.ts` owns the
-parsed-body classifier for future write tools.
+`lib/mcp/server.ts` classifies calls to write tools as writes, including dry runs;
+other admitted MCP requests count as reads.
 
 `src/lib/mcp/tools/read-tools.ts` defines whoami, the intake find tools and
 get_feedstock. Each request captures its resolved context in a fresh server.
+`src/lib/mcp/tools/write-tools.ts` adds log_feedstock_delivery, update_feedstock
+and delete_feedstock through the same operation runner as REST. Each write needs
+one requestKey reused on retry; dryRun previews may omit it. Updates and deletes
+take expectedVersion from get_feedstock. Audit rows record transport `mcp`.
 Only tools authorized by `hasRoleAndScope` are registered or callable. Tool
 schemas reuse REST query schemas and transport-neutral `lib/representations/`
 output envelopes. Numeric limits accept JSON numbers as well as REST strings.
@@ -763,11 +767,14 @@ HTTP-only ETag builders live in `lib/api/representation-etags.ts`.
 
 The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
-Success structuredContent is exactly the matching REST GET body. Expected
+Success structuredContent uses the matching REST response envelope. Expected
 failures use the REST problem code and JSON Pointer errors, named `issues` in
 MCP, without HTTP metadata. MCP `invalid_query` results include Zod issues
 as JSON Pointer `issues`; REST query failures return an empty `errors` array.
 Each output schema is a success/error union with `type: "object"` at its root.
 Unexpected failures are generic JSON-RPC internal errors, logged with
 request id and tool name without raw input. The tool dispatcher checks the
-request deadline before each read. No write tools or sessions are exposed.
+request deadline before each tool. `API_WRITES_DISABLED` returns an in-MCP
+`isError` result with code `api_writes_disabled`; reads keep working. No sessions
+are exposed. Initialize returns short server instructions built from the domain
+section shared with `llms.txt`, plus MCP grounding and retry guidance.

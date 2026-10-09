@@ -34,11 +34,11 @@ export async function preAuthGuard(
 
 export async function postAuthGuard(
   ctx: ApiContext,
-  options: RequestInfo & { access: "read" | "write" },
+  options: RequestInfo & { access: "read" | "write"; writesDisabledInHandler?: boolean },
   ipResult: RateLimitResult | null,
 ): Promise<{ ok: false; response: Response } | { ok: true; headers: Headers }> {
   const { access } = options;
-  if (access === "write" && env.API_WRITES_DISABLED) {
+  if (access === "write" && env.API_WRITES_DISABLED && !options.writesDisabledInHandler) {
     return { ok: false, response: problemResponse({
       ...options, status: 503, code: "api_writes_disabled", detail: "API writes are temporarily disabled.", retryable: true,
     }) };
