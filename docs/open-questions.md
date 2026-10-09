@@ -38,29 +38,34 @@ lock bins before the run row and certification lineage. Feedstock edits in
 `src/data-access/feedstocks.ts:updateFeedstockInTransaction` lock the intake row
 and lineage before bins, leaving a run-versus-feedstock deadlock cycle.
 
-The gpt-6.1-sol review of commit `f02e08c7`, final section of the supervisor's
-`4a-lockrevert/review.md` artifact, identified three cycles introduced by moving
-run and lineage locks before bins. The supervisor verified the first:
+Moving run rows and lineage ahead of bins would introduce other inversions:
 
 - `src/data-access/credit-batch-membership.ts:lockCreditBatchForUpdate` takes the
-  process scope before artifacts, opposite to prospective run attachment.
+  process scope before artifacts. Run attachment through
+  `src/data-access/production-runs/mutations.ts:updateProductionRunInTransaction`
+  can already hold artifact locks before requesting that scope.
 - `src/data-access/output-stock-post.ts:withOutputStockPosting` takes bins before
-  lineage or allocation foreign-key KEY SHARE locks on runs, opposite to the
-  proposed run row and lineage ordering.
-- Run allocation inserts into `productionRunFeedstocks` take foreign-key
-  KEY SHARE locks on intake rows. Prelocking prospective lineage on run create
-  can wait on an intake edit that already holds its row and waits on lineage.
+  lineage or allocation foreign-key KEY SHARE locks on runs. A run writer holding
+  its row or lineage while waiting for a bin would reverse this order.
+- `src/data-access/production-runs/feedstock-draws.ts:replaceProductionRunFeedstockDraws`
+  inserts allocations into `productionRunFeedstocks`, taking foreign-key KEY SHARE
+  locks on intake rows. Prelocking prospective lineage on run create can wait on
+  `src/data-access/feedstocks.ts:updateFeedstockInTransaction`, which already holds
+  the intake row and waits on lineage.
 
-Phase 4a restores the previous ordering and best-effort attachment behavior.
-Coordinating every writer, including implicit foreign-key locks, is outside
-this API phase. `src/lib/operations/runner.ts:runOperation` mitigates the cycles
-with bounded, jittered whole-transaction retries for deadlocks (40P01),
-serialization failures (40001) and operation lock-timeout aborts (55P03) before
-COMMIT, within the original deadline. Claim-lock waits still answer
+Run writers retain bins before rows and best-effort attachment. A global order
+must coordinate every writer, including implicit foreign-key locks.
+`src/lib/operations/runner.ts:runOperation` mitigates these cycles with bounded,
+jittered whole-transaction retries for deadlocks (40P01), serialization failures
+(40001) and operation lock-timeout aborts (55P03) before COMMIT, within the original
+deadline. Claims and writes roll back together. Exhausted attempts answer the
+retryable `concurrent_write_retry`; claim-lock waits answer
 `idempotency_in_progress`; spent deadlines answer `deadline_exceeded`.
-Claims and writes roll back together;
-commit-sent failures stay `outcome_unknown`. This does not establish a global
-order or add retries to callers that bypass the runner.
+`src/data-access/owned-transaction.ts:runOwnedTransaction` rethrows COMMIT failures
+with SQLSTATE class 23 or 40, maps 25P04 to `deadline_exceeded`, and reports other
+COMMIT failures as `outcome_unknown`. The runner does not retry COMMIT failures.
+This mitigation does not establish a global order or add retries to callers that
+bypass the runner.
 
 Resolve with a cross-writer lock inventory, a documented order covering process
 scopes, artifacts, bins, parent rows and foreign keys, and deterministic races

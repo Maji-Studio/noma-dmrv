@@ -561,6 +561,7 @@
         "description": "List a page ordered newest first by (createdAt, id). Cursors bind organization and filters; no totals or include. Lookup lists exclude archived rows where supported. Required scope: production-runs:read.",
         "operationId": "find_production_runs",
         "parameters": [
+          {"description": "Case-insensitive literal prefix search on production run code.", "in": "query", "name": "q", "required": false, "schema": {"description": "Case-insensitive literal prefix search on production run code.", "maxLength": 255, "type": "string"}},
           {"description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "in": "query", "name": "limit", "required": false, "schema": {"default": 50, "description": "Page size as a decimal integer string; defaults to 50, maximum 200.", "maximum": 200, "minimum": 1, "type": "integer"}},
           {"description": "Opaque continuation cursor bound to organization, resource and filters.", "in": "query", "name": "cursor", "required": false, "schema": {"description": "Opaque continuation cursor bound to organization, resource and filters.", "maxLength": 4096, "type": "string"}},
           {"description": "Receiving facility filter, UUID.", "in": "query", "name": "facilityId", "required": false, "schema": {"description": "Receiving facility filter, UUID.", "format": "uuid", "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$", "type": "string"}},

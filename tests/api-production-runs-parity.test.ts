@@ -1,4 +1,3 @@
-/** Real actions, REST, MCP and Postgres. Not run, needs the supervisor. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as MCP } from "@/app/api/mcp/route";

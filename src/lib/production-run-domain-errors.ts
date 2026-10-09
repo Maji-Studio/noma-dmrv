@@ -1,3 +1,4 @@
+import { StockOverdrawError } from "@/data-access/stock-overdraw-error";
 import { DomainError } from "@/lib/domain-errors";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 
@@ -10,6 +11,12 @@ export async function withProductionRunErrors<T>(
     return await work();
   } catch (error) {
     if (error instanceof DomainError) throw error;
+    if (error instanceof StockOverdrawError && error.details) {
+      throw new DomainError("insufficient_stock", error.message, {
+        issues: [{ path: path ?? ["feedstockDraws"], code: "insufficient_stock", message: error.message,
+          meta: { ...error.details, unit: "kg" } }],
+      });
+    }
     if (error instanceof ActionConflictError) {
       throw new DomainError("conflict", error.message, { conflict: error.conflict, blockers: error.blockers });
     }

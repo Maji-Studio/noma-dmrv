@@ -1,5 +1,4 @@
 import { productionRunEtag } from "@/lib/api/representation-etags";
-/** DB-backed MCP outcomes: not run, needs the supervisor. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -77,6 +76,10 @@ describe("production MCP tools", { timeout: TIMEOUT_MS }, () => {
     }
     const list = await RUNS(request("GET", `?reactorId=${a.reactorId}&status=running`));
     expect((await call("find_production_runs", { reactorId: a.reactorId, status: "running" })).structuredContent).toEqual(await list.json());
+    expect((await call("find_production_runs", { q: row.code.toLowerCase() })).structuredContent.data).toEqual([row]);
+    for (const q of ["%", "_", "\\"]) {
+      expect((await call("find_production_runs", { q })).structuredContent.data).toEqual([]);
+    }
     const reactors = await REACTORS(new Request(`http://localhost:3100/api/v1/reactors?facilityId=${a.facilityId}`, { headers: { authorization: `Bearer ${a.key}` } }));
     expect((await call("find_reactors", { facilityId: a.facilityId })).structuredContent).toEqual(await reactors.json());
     const updated = await call("update_production_run", { productionRunId: row.id, expectedVersion: row.version, electricityKwh: 0, requestKey: randomUUID() });

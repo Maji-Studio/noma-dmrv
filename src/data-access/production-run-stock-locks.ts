@@ -1,4 +1,4 @@
-import { productionRunValidationError } from "@/lib/production-run-domain-errors";
+import { DomainError } from "@/lib/domain-errors";
 import { requireOrgScope } from "./utils";
 import type { DbTransaction } from "@/db";
 import { getOutputBinAllLayersDryKg } from "./output-stock";
@@ -151,7 +151,13 @@ export async function assertProductionRunBiocharStockNotOverdrawn(
       additionalDrawKg > 0 &&
       isOverdraw(additionalDrawKg, previous.availableKg)
     ) {
-      throw productionRunValidationError(overdrawError("biochar").message, ["biocharOutputKg"]);
+      const message = overdrawError("biochar").message;
+      throw new DomainError("insufficient_stock", message, {
+        issues: [{ path: ["biocharOutputKg"], code: "insufficient_stock", message, meta: {
+          storageLocationId: previous.storageLocationId,
+          availableDryKg: previous.availableKg, requestedDryKg: additionalDrawKg, unit: "kg",
+        } }],
+      });
     }
   }
 }

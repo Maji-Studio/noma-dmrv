@@ -1,4 +1,3 @@
-/** DB-backed outcomes: not run, needs the supervisor. */
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -166,8 +165,11 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
     const nextPage = await (await LIST(request("GET", `?limit=1&cursor=${firstPage.nextCursor}`))).json();
     expect(nextPage.data.map((row: { id: string }) => row.id)).toEqual([first.row.id]);
     expect(nextPage.nextCursor).toBeNull();
-    for (const query of [`facilityId=${a.facilityId}&reactorId=${a.reactorId}&status=running`, `code=${first.row.code}`]) {
+    for (const query of [`facilityId=${a.facilityId}&reactorId=${a.reactorId}&status=running`, `code=${first.row.code}`, `q=${first.row.code.toLowerCase()}`]) {
       expect((await (await LIST(request("GET", `?${query}`))).json()).data).toEqual([first.row]);
+    }
+    for (const q of ["%", "_", "\\"]) {
+      expect((await (await LIST(request("GET", `?q=${encodeURIComponent(q)}`))).json()).data).toEqual([]);
     }
     await problem(await LIST(request("GET", `?status=running&cursor=${firstPage.nextCursor}`)), 400, "invalid_cursor");
     await problem(await LIST(request("GET", `?cursor=${firstPage.nextCursor}`, undefined, {}, b)), 400, "invalid_cursor");
@@ -214,6 +216,22 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
 });
 
 describe("production run review regressions", { timeout: TIMEOUT_MS }, () => {
+  it("refuses a failed create with the status pointer", async () => {
+    const refusal = await problem(await POST(request("POST", "", { ...productionRunInput(a), status: "failed" },
+      { "idempotency-key": randomUUID() })), 422, "validation_failed");
+    expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/status" }));
+    expect(await rows()).toHaveLength(0);
+  });
+
+  it.each([{ biocharOutputKg: 300 }, { feedingRateKgHr: 100 }])("refuses edits to terminal runs without feedstock: %j", async (body) => {
+    const saved = await create({ ...productionRunInput(a), feedstockDraws: [], feedstockMoisturePercent: null });
+    await db.update(productionRuns).set({ status: "complete", endTime: new Date("2026-10-06T11:00:00Z"),
+      biocharOutputKg: 200, biocharMoisturePercent: 2 }).where(eq(productionRuns.id, saved.row.id));
+    const refusal = await problem(await patch(saved.row.id, body, saved.etag), 422, "validation_failed");
+    expect(refusal.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws" }));
+    expect(await rows()).toMatchObject([{ version: 1, biocharOutputKg: 200 }]);
+  });
+
   it("rejects terminal create without draws or moisture using the form field messages", async () => {
     const body = { ...productionRunInput(a), status: "complete", endTime: "2026-10-06T11:00:00Z",
       biocharOutputKg: 200, biocharMoisturePercent: 2, feedstockMoisturePercent: null, feedstockDraws: [] };

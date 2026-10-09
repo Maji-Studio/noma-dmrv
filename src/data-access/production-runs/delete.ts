@@ -1,3 +1,4 @@
+import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 import type { SnapshotStock } from "../stock-effects";
 import { runReferenceNotFound } from "@/lib/production-run-domain-errors";
 import { DomainError } from "@/lib/domain-errors";
@@ -103,12 +104,12 @@ export async function deleteProductionRunInTransaction(
 
   await snapshotStock?.(tx, [...lockedFeedstockStorageLocationIds, locked.biocharStorageLocationId]);
 
-  await assertCanMutateCertifiedLineage(
+  await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
     ctx,
     tx,
     { entityType: "productionRun", entityId: productionRunId },
     "delete",
-  );
+  ), "certification_locked");
 
   const dependentProduct = await getProductionRunDependentProduct(
     ctx,

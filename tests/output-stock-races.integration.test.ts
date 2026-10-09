@@ -134,15 +134,15 @@ describe('output stock dependency races', () => {
     { biocharOutputKg: 1100 },
     { biocharStorageLocationId: null },
     { feedingRateKgHr: 100 },
-  ])('preserves legacy terminal prerequisites for an unrelated edit: %j', async (patch) => {
+  ])('accepts edits to terminal runs with valid feedstock: %j', async (patch) => {
     const f = await parents();
     const updated = await updateProductionRun(f.ctx, f.runs[0].id, {
       expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), ...patch,
     });
-    expect(updated).toMatchObject({ ...patch, status: 'complete', feedstockWetMassKg: null, feedstockMoisturePercent: null });
+    expect(updated).toMatchObject({ ...patch, status: 'complete', feedstockWetMassKg: 3000, feedstockMoisturePercent: 10 });
     await expect(updateProductionRun(f.ctx, f.runs[0].id, {
       expectedVersion: await productionVersion(f.ctx, "productionRuns", f.runs[0].id), status: 'complete',
-    })).rejects.toThrow('Add at least one feedstock source.');
+    })).resolves.toMatchObject({ status: 'complete' });
   });
 
   it('blocks ordinary source changes after a count with no allocation rows', async () => {

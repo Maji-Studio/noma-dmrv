@@ -34,6 +34,7 @@ export const feedstockListSchema = facilityLookupListSchema.extend({
 });
 
 export const productionRunListSchema = z.strictObject({
+  q: prefixSchema.describe("Case-insensitive literal prefix search on production run code."),
   ...paginationShape, facilityId: facilityIdSchema, code: codeSchema,
   reactorId: z.uuid().optional().describe("Reactor filter, UUID."),
   status: z.enum(PRODUCTION_RUN_STATUSES).optional().describe("Production run status filter."),

@@ -1,3 +1,4 @@
+import { overdrawError } from "@/data-access/stock-overdraw-error";
 import { expect, it, vi } from "vitest";
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/log", () => ({ logger: { error: vi.fn(), warn: vi.fn(), child: vi.fn() } }));
@@ -47,4 +48,11 @@ it("gives future-time refusals their field paths without changing the message", 
 it("leaves unexpected failures for the runner to sanitize", async () => {
   const error = new Error("internal failure");
   await expect(withProductionRunErrors(async () => { throw error; })).rejects.toBe(error);
+});
+
+it("exposes a stock shortage with bin, wet kilograms and the submitted draw pointer", async () => {
+  const details = { storageLocationId: "bin-id", availableWetKg: 50, requestedWetKg: 100 };
+  const path = ["feedstockDraws", 1, "storageLocationId"];
+  await expect(withProductionRunErrors(async () => { throw overdrawError("feedstock", details); }, path))
+    .rejects.toMatchObject({ code: "insufficient_stock", issues: [{ path, code: "insufficient_stock", meta: { ...details, unit: "kg" } }] });
 });

@@ -110,7 +110,10 @@ export function assertProductionRunTransition(
   to: ProductionRunStatus,
 ): void {
   if (ALLOWED_TRANSITIONS[from].includes(to)) return;
-  throw new SafeError(`Production run cannot move from ${from} to ${to}`);
+  const message = `Production run cannot move from ${from} to ${to}`;
+  throw new DomainError("validation_failed", message, {
+    issues: [{ path: ["status"], code: "validation_failed", message }],
+  });
 }
 
 export function getProductionRunOutcomeViolations(
@@ -190,7 +193,6 @@ export function assertProductionRunOutcome(
   input: ProductionRunOutcomeInput,
   options: {
     only?: readonly ProductionRunOutcomeViolation["code"][];
-    skipFeedstockRequired?: boolean;
   } = {},
 ): void {
   const violations = getProductionRunOutcomeViolations(input);
@@ -200,7 +202,6 @@ export function assertProductionRunOutcome(
     ? ["end-not-after-start", "feedstock-required", ...MUTATION_VIOLATION_PRIORITY] as const
     : MUTATION_VIOLATION_PRIORITY;
   const violation = priority
-    .filter((code) => !(options.skipFeedstockRequired && code === "feedstock-required"))
     .filter((code) => !options.only || options.only.includes(code))
     .map((code) => violations.find((candidate) => candidate.code === code))
     .find((candidate) => candidate !== undefined);

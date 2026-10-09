@@ -6,9 +6,9 @@ import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 import { DomainError } from "@/lib/domain-errors";
 import { requireOrgScope, type Executor } from "./utils";
 import { findApiReactor } from "./api-reactors";
-import { requireApiLookupFacility, lookupCursorCreatedAt, lookupPosition, type ApiLookupIdentifier, type ApiLookupPosition } from "./api-lookup-filters";
+import { lookupSearch, requireApiLookupFacility, lookupCursorCreatedAt, lookupPosition, type ApiLookupIdentifier, type ApiLookupPosition } from "./api-lookup-filters";
 
-export interface ApiProductionRunFilters { facilityId?: string; reactorId?: string; status?: ProductionRunStatus; code?: string }
+export interface ApiProductionRunFilters { q?: string; facilityId?: string; reactorId?: string; status?: ProductionRunStatus; code?: string }
 function runFields(ctx: OrgContext) {
   requireOrgScope(ctx);
   return {
@@ -75,6 +75,7 @@ export async function listApiProductionRuns(ctx: OrgContext, filters: ApiProduct
     filters.reactorId ? eq(productionRuns.reactorId, filters.reactorId) : undefined,
     filters.status ? eq(productionRuns.status, filters.status) : undefined,
     filters.code !== undefined ? eq(productionRuns.code, filters.code) : undefined,
+    lookupSearch({ name: productionRuns.code }, filters.q),
     lookupPosition(productionRuns, cursor),
   )).orderBy(desc(productionRuns.createdAt), desc(productionRuns.id)).limit(limit + 1);
   return rows;

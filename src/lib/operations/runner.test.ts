@@ -207,6 +207,14 @@ describe("transaction retries", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it.each(["23505", "40P01", "40001"])("rethrows proven rollback at COMMIT without retrying %s", async (code) => {
+    const failure = Object.assign(new Error("COMMIT refused"), { code });
+    owned.mockRejectedValue(failure);
+    await expect(runOperation(operation, ctx, { amount: 1 })).rejects.toBe(failure);
+    expect(owned).toHaveBeenCalledOnce();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it.each(["expired", "backoff", "overslept"])("does not start another attempt when the budget is %s", async (scenario) => {
     const budget = OPERATION_RETRY_MAX_DELAY_MS * 2;
     const start = Date.now();

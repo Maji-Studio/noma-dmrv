@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { expect, it } from "vitest";
-/** DB-backed lookup outcomes: not run, needs the supervisor. */
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { reactors } from "@/db/schema";

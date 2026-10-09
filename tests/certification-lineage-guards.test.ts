@@ -502,7 +502,7 @@ describe("certification lineage guards", () => {
         updateProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, { expectedVersion: await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId),
           feedstockMoisturePercent: 11,
         }),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining(LOCKED_COPY) });
     });
   });
 
@@ -510,7 +510,7 @@ describe("certification lineage guards", () => {
     await withFixture(async (fixture) => {
       await expect(
         deleteProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, await productionVersion(makeTestOrgContext(TEST_USER_ID), "productionRuns", fixture.productionRunId)),
-      ).rejects.toThrow(LOCKED_COPY);
+      ).rejects.toMatchObject({ code: "certification_locked", message: expect.stringContaining(LOCKED_COPY) });
     });
   });
 
@@ -918,7 +918,6 @@ describe("certification lineage guards", () => {
   });
 });
 
-// DB-backed regression: not run, needs the supervisor.
 it("commits a run status update and feedstock edit on the same lineage and bin with runner retries", async () => {
   const WRITER_AND_OBSERVER_CONNECTIONS = 3;
   const RACE_DEADLINE_MS = 20_000;

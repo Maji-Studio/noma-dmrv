@@ -1,3 +1,4 @@
+import { withFeedstockErrors } from "@/lib/feedstock-domain-errors";
 /**
  * Production-run create / update / delete operations, including bin-based
  * feedstock allocation and storage-location validation.
@@ -417,11 +418,6 @@ export async function updateProductionRunInTransaction(
       ? undefined
       : normalizeProductionRunFeedstockDraws(inputFeedstockDraws);
 
-  // Existing terminal records may predate required draws/moisture. Unrelated
-  // edits preserve those inputs; explicit prerequisite edits must validate them.
-  const preservesFeedstockPrerequisites = data.status === undefined &&
-    normalizedFeedstockDraws === undefined && data.feedstockMoisturePercent === undefined;
-
   // Moving the run to another facility requires that facility to be active
   // (no children move under an archived parent — mirrors createProductionRun).
   if (data.facilityId && data.facilityId !== existing.facilityId) {
@@ -524,7 +520,7 @@ export async function updateProductionRunInTransaction(
         drawCount: effectiveFeedstockDrawCount,
       },
     },
-    { only: PREFLIGHT_OUTCOME_VIOLATIONS, skipFeedstockRequired: preservesFeedstockPrerequisites },
+    { only: PREFLIGHT_OUTCOME_VIOLATIONS },
   );
   if (normalizedFeedstockDraws !== undefined || data.feedstockMoisturePercent !== undefined) {
     updateData.feedstockMassDryKg =
@@ -655,7 +651,7 @@ export async function updateProductionRunInTransaction(
             lockedFeedstockStorageLocationIds.length,
         },
       },
-      { only: PREFLIGHT_OUTCOME_VIOLATIONS, skipFeedstockRequired: preservesFeedstockPrerequisites },
+      { only: PREFLIGHT_OUTCOME_VIOLATIONS },
     );
 
     if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
@@ -690,12 +686,12 @@ export async function updateProductionRunInTransaction(
       }
     }
 
-    await assertCanMutateCertifiedLineage(
+    await withFeedstockErrors(() => assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "productionRun", entityId: productionRunId },
       "update",
-    );
+    ), "certification_locked");
 
     // A cancelled run frees its slot, so only an occupying run needs this guard.
     if (statusOccupiesReactor(lockedTargetStatus)) {
@@ -821,7 +817,7 @@ export async function updateProductionRunInTransaction(
         consumedFeedstockWetKg,
       },
       cancellationReason: lockedTargetCancellationReason,
-    }, { skipFeedstockRequired: preservesFeedstockPrerequisites });
+    });
     await attachProductionRunToMatchingCreditBatch(
       ctx,
       tx,

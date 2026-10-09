@@ -23,7 +23,11 @@ export function diffStockBalances(before: StockBalance[], after: StockBalance[])
   return before.flatMap(({ balance, ...bin }) => {
     const next = after.find((row) => row.storageLocationId === bin.storageLocationId)?.balance
       ?? { wetKg: null, dryKg: null };
-    if (next.dryKg !== null && next.wetKg === balance.wetKg && next.dryKg === balance.dryKg) return [];
+    const observationFailed = (next.wetKg === null && next.dryKg === null) ||
+      (balance.wetKg === null && balance.dryKg === null);
+    const knownValueChanged = (next.wetKg !== null && balance.wetKg !== null && next.wetKg !== balance.wetKg) ||
+      (next.dryKg !== null && balance.dryKg !== null && next.dryKg !== balance.dryKg);
+    if (!observationFailed && !knownValueChanged) return [];
     return [{ ...bin, before: balance, after: next, delta: {
       wetKg: next.wetKg === null || balance.wetKg === null ? null : next.wetKg - balance.wetKg,
       dryKg: next.dryKg === null || balance.dryKg === null ? null : next.dryKg - balance.dryKg,

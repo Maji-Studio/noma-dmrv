@@ -9,6 +9,12 @@ import type { OrgContext } from "@/lib/auth/server";
 import { DomainError, deadlineExceeded } from "@/lib/domain-errors";
 import { requireOrgScope } from "./utils";
 
+const DEFINITE_ROLLBACK_SQLSTATE_CLASSES = ["23", "40"];
+function isDefiniteRollback(error: unknown): boolean {
+  const code = pgErrorCode(error);
+  return code !== undefined && DEFINITE_ROLLBACK_SQLSTATE_CLASSES.some((prefix) => code.startsWith(prefix));
+}
+
 function outcomeUnknown(cause: unknown): DomainError {
   return new DomainError(
     "outcome_unknown",
@@ -111,9 +117,13 @@ export async function runOwnedTransaction<T>(
       // BEGIN, ROLLBACK or COMMIT failed; never return an uncertain client.
       discardClient = error instanceof Error ? error : new Error(String(error));
     }
-    // Drizzle sends COMMIT after the callback returns. Never retry that phase,
-    // even when the server supplies a transaction-failure SQLSTATE.
-    if (state.callback === "returned") throw outcomeUnknown(error);
+    // Throw COMMIT failures instead of returning callback_threw: the runner
+    // retries only work aborted before COMMIT, including its idempotency claim.
+    if (state.callback === "returned") {
+      if (transactionTimeout) throw deadlineExceeded("while saving", transactionTimeout);
+      if (isDefiniteRollback(error)) throw error;
+      throw outcomeUnknown(error);
+    }
     if (transactionTimeout) throw deadlineExceeded("while saving", transactionTimeout);
     // A savepoint rollback can mask 25P04 with a generic disconnect. Before
     // the callback returns, Drizzle cannot have sent COMMIT. Only infer a

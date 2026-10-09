@@ -89,7 +89,7 @@ The draft proposed separate canonical and form schemas; review measured that at 
 
 ### 3.3 Structured failures
 
-- A typed `DomainError` family with stable codes: `validation_failed`, `not_found`, `stale_version`, `conflict`, `certification_locked`, `insufficient_stock`, `forbidden`, `reference_not_found`, `reference_ambiguous`. Errors are thrown with a code, never classified from message text.
+- A typed `DomainError` family with stable codes: `validation_failed`, `not_found`, `stale_version`, `conflict`, `certification_locked`, `insufficient_stock`, `forbidden`, `reference_not_found`, `reference_ambiguous`, `concurrent_write_retry` (retryable after bounded pre-COMMIT retries, decision 49). Errors are thrown with a code, never classified from message text.
 - `ActionResult` failure gains `code` and `issues?: { path, code, message, meta? }[]`; `error` (prose) stays, so current UI consumers are unaffected and forms can start highlighting by path. `meta` carries non-sensitive limits (`max`, `unit`, allowed enum values), never the rejected value.
 - Business conflicts carry actionable detail: `insufficient_stock` returns bin id, available and requested mass; `conflict`/`blockers` refs (`src/types/actions.ts:31`) pass through.
 
@@ -117,7 +117,7 @@ Existing stock previews (`previewProductStock`, `previewOutputStock`) stay for d
 
 **Time.** Two kinds of field, documented on each:
 - *business dates* (`deliveryDate`): date-only, facility-local, never converted;
-- *event instants*: accepted as RFC 3339 with offset, or as facility-local `{ date, time }` resolved in the facility time zone. Responses return the instant plus the facility time zone.
+- *event instants*: accepted as RFC 3339 with offset, or as facility-local `{ date, time }` resolved in the facility time zone. Production-run responses return UTC instants and reference ids only, without facility codes or the facility time zone (decision 48). Clients read the zone from `/facilities` or `whoami`.
 Facility reads include `timeZone`. "Today" for a client comes from `GET /api/v1/me`, not the device or model clock.
 
 **Discovery.** `GET /api/v1/me` returns organization, accessible facilities with time zones, role, scopes, and the server's current date per facility. Enum values ship in OpenAPI with descriptions.
@@ -130,7 +130,7 @@ Facility reads include `timeZone`. "Today" for a client comes from `GET /api/v1/
 | Missing or invalid credential (`WWW-Authenticate`) | 401 |
 | Valid credential, missing scope or role | 403 |
 | Target absent or in another organization | 404 |
-| Business conflict (stock, lineage, certification lock, uniqueness); idempotent request still running (`Retry-After`) | 409 |
+| Business conflict (stock, lineage, certification lock, uniqueness); idempotent request still running (`Retry-After`); exhausted pre-COMMIT retries (`concurrent_write_retry`, retryable) | 409 |
 | `If-Match` does not match | 412 |
 | Validation failed; unresolved reference; idempotency key reused with a different payload | 422 |
 | `If-Match` missing on PATCH or DELETE | 428 |
@@ -381,6 +381,11 @@ Decided 2026-10-09 (Kenji, round 5, Phase 4):
 44. **Stock corrections need their own scope,** `stock-corrections:write` (hyphenated like the existing scopes): off by default, granted per key like deletes, annotated destructive. Losses and counts need `biochar-products:write`.
 45. **Product create takes an optional `basisFingerprint`** from a dry run; if stock moved since, it answers 409 `stock_basis_changed` with the new preview.
 46. **Stock effects on dry runs land with runs:** feedstock PATCH and DELETE and every run write return the stock-effects shape in 4a; 4b reuses it. Schemathesis runs in CI against a production build on the CI Postgres, path-filtered to the API, with a bounded example count.
+
+Decided 2026-10-09 (supervisor decision during Phase 4a review):
+
+48. **Production-run responses carry UTC instants and reference ids only**, without facility codes or the facility time zone. A joined mutable field would change the response body under an unchanged strong ETag. Clients read the zone from `/facilities` or `whoami`.
+49. **The operation runner retries operations aborted before COMMIT** with a deadlock (40P01), serialization failure (40001) or lock timeout (55P03), up to a fixed attempt cap within the original deadline. Exhausted retries answer the retryable `concurrent_write_retry` (409). Claim-lock waits still answer `idempotency_in_progress`, and an exhausted deadline answers `deadline_exceeded`. See `data/lock-order` in [open questions](../open-questions.md#datalock-order-opened-2026-10-09).
 
 ## 14. What review changed
 

@@ -1,4 +1,3 @@
-/** Real, separate PostgreSQL connections. Not run, needs the supervisor. */
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -121,7 +120,7 @@ describe("production run REST stock races", { timeout: TIMEOUT_MS }, () => {
     expect(responses.filter((response) => response.ok)).toHaveLength(1);
     const loser = responses.find((response) => !response.ok)!;
     // Draw validation and intake stock protection retain their established codes.
-    await problem(loser, responses[0].ok ? 409 : 422, responses[0].ok ? "insufficient_stock" : "validation_failed");
+    await problem(loser, 409, "insufficient_stock");
     const state = await captureProductionRunState(fixture);
     const currentIntake = await readFeedstock(fixture, intake.row.id);
     if (responses[0].ok) {
@@ -143,7 +142,9 @@ describe("production run REST stock races", { timeout: TIMEOUT_MS }, () => {
     const responses = await race([fixture.reactorId, otherReactorId].map((reactorId) =>
       () => postProductionRun(fixture, { ...productionRunInput(fixture), reactorId, feedstockDraws: draw })));
     expect(responses.filter((response) => response.status === 201)).toHaveLength(1);
-    await problem(responses.find((response) => response.status !== 201)!, 422, "validation_failed");
+    const shortage = await problem(responses.find((response) => response.status !== 201)!, 409, "insufficient_stock");
+    expect(shortage.errors).toContainEqual(expect.objectContaining({ pointer: "/feedstockDraws/0/storageLocationId",
+      meta: { storageLocationId: fixture.binId, availableWetKg: 0, requestedWetKg: RACE_INTAKE_KG, unit: "kg" } }));
     const state = await captureProductionRunState(fixture);
     expect(state.runs).toHaveLength(1); expect(state.draws).toHaveLength(1); expect(state.allocations).toHaveLength(1);
     expect(state.draws[0]).toMatchObject({ wetMassKg: RACE_INTAKE_KG });

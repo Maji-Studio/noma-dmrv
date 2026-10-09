@@ -104,12 +104,16 @@ describe("owned transaction timeout handling without a database", () => {
       throw error;
     });
     const result = runOwnedTransaction(ctx, deadlineAt, async () => "result", pool);
-    await expect(result).rejects.toMatchObject({ code: "outcome_unknown", cause: error });
+    if (["23", "40"].includes(sqlstate.slice(0, 2))) {
+      await expect(result).rejects.toBe(error);
+    } else {
+      await expect(result).rejects.toMatchObject({ code: "outcome_unknown", cause: error });
+    }
     expect(client.release).toHaveBeenCalledWith(error);
   });
 
-  it("never promises rollback for a failure after COMMIT was sent", async () => {
-    for (const [error, code] of [[timeoutError(), "outcome_unknown"], [new Error("connection closed"), "outcome_unknown"]] as const) {
+  it("distinguishes a proven transaction timeout from an unknown COMMIT outcome", async () => {
+    for (const [error, code] of [[timeoutError(), "deadline_exceeded"], [new Error("connection closed"), "outcome_unknown"]] as const) {
       const { client, pool } = connection();
       transaction.mockImplementation(async (callback) => { await callback({ execute }); throw error; });
       await expect(runOwnedTransaction(ctx, Date.now() + BUDGET_MS, async () => "result", pool)).rejects.toMatchObject({ code });

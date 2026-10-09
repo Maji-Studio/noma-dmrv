@@ -1,4 +1,3 @@
-/** Real database suites: not run by the implementation agent; needs the supervisor. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";

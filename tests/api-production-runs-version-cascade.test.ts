@@ -1,4 +1,3 @@
-/** DB-backed version and ETag contracts. Not run, needs the supervisor. */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";

@@ -70,3 +70,23 @@ it("reports the missing source field even when terminal output exceeds an empty 
   ] });
   expect(state.insert).not.toHaveBeenCalled();
 });
+
+it("refuses API-shaped failed creation before writing with a status pointer", async () => {
+  const state = preflightTransaction([[{ id: "facility", archivedAt: null }], [{ id: "reactor", facilityId: "facility" }]]);
+  await expect(createProductionRunInTransaction(ctx, state.tx, {
+    code: "PR-26-001", facilityId: "facility", reactorId: "reactor", status: "failed", startTime: START, endTime: END,
+    feedstockDraws: [{ storageLocationId: BIN_ID, wetMassKg: DRAW_KG }], feedstockMoisturePercent: 20,
+  }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [{ path: ["status"] }] });
+  expect(state.insert).not.toHaveBeenCalled();
+});
+
+it.each(["complete", "failed"] as const)("refuses output edits on %s without feedstock", async (status) => {
+  const state = preflightTransaction([[{ id: "run", facilityId: "facility", reactorId: "reactor", status,
+    startTime: START, endTime: END, feedstockWetMassKg: null, feedstockMoisturePercent: null }], []]);
+  await expect(updateProductionRunInTransaction(ctx, state.tx, "run", {
+    expectedVersion: 1, biocharOutputKg: OUTPUT_KG,
+  }, { now: NOW })).rejects.toMatchObject({ code: "validation_failed", issues: [
+    { path: ["feedstockDraws"] }, { path: ["feedstockMoisturePercent"] },
+  ] });
+  expect(state.update).not.toHaveBeenCalled();
+});

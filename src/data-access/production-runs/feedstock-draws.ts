@@ -213,7 +213,7 @@ export async function replaceProductionRunFeedstockDraws(
       requestedWetKg: draw.wetMassKg,
       excludeRunId: params.productionRunId,
       binLockAlreadyHeld: true,
-    }), ["feedstockDraws", index, "wetMassKg"]);
+    }), ["feedstockDraws", index, "storageLocationId"]);
   }
 
   await tx.delete(productionRunFeedstocks).where(
@@ -246,7 +246,7 @@ export async function replaceProductionRunFeedstockDraws(
       tx,
       draw.storageLocationId,
       draw.wetMassKg,
-    ), ["feedstockDraws", index, "wetMassKg"]);
+    ), ["feedstockDraws", index, "storageLocationId"]);
     await tx.insert(productionRunFeedstocks).values(
       allocations.map((allocation) => ({
         organizationId: ctx.organizationId,

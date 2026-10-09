@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { db as database } from '@/db';
-import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, customers, users, organizations } from '@/db/schema';
+import { facilities, formulations, formulationIngredients, feedstockTypes, storageLocations, reactors, productionRuns, feedstocks, productionRunFeedstocks, productionRunFeedstockDraws, customers, users, organizations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 
 /** Real DB parents shared by FIFO integration and browser fixtures. No auth bypass. */
@@ -19,10 +19,17 @@ export async function seedOutputStockParents(db: typeof database, options: { org
   const [source] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, code: `E2E-FIFO-S-${tag}`, name: `E2E Source ${tag}`, type: 'biochar_bin' }).returning();
   const [bin] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, formulationId: recipe.id, code: `E2E-FIFO-B-${tag}`, name: `E2E Mix bin ${tag}`, type: 'product_bin' }).returning();
   const [reactor] = await db.insert(reactors).values({ organizationId, facilityId: facility.id, code: `E2E-FIFO-R-${tag}`, identifier: `E2E Reactor ${tag}`, reactorType: 'auger' }).returning();
+  const [fuelType] = await db.insert(feedstockTypes).values({ organizationId, code: `E2E-FIFO-FUEL-${tag}`, name: `E2E Fuel ${tag}`, category: 'forestry', usage: 'pyrolysis' }).returning();
+  const [fuelBin] = await db.insert(storageLocations).values({ organizationId, facilityId: facility.id, feedstockTypeId: fuelType.id,
+    code: `E2E-FIFO-FUEL-${tag}`, name: `E2E Fuel ${tag}`, type: 'feedstock_bin' }).returning();
+  const [intake] = await db.insert(feedstocks).values({ organizationId, facilityId: facility.id, feedstockTypeId: fuelType.id,
+    storageLocationId: fuelBin.id, code: `E2E-FIFO-FS-${tag}`, status: 'complete', massWetKg: 6000, moistureContentPercent: 10, massDryKg: 5400 }).returning();
   const runs = await db.insert(productionRuns).values([
-    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R1-${tag}`, status: 'complete' as const, startTime: new Date('2026-09-09T08:00:00Z'), endTime: new Date('2026-09-09T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 1000, biocharMoisturePercent: 10, biocharDryMassKg: 900 },
-    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R2-${tag}`, status: 'complete' as const, startTime: new Date('2026-09-11T08:00:00Z'), endTime: new Date('2026-09-11T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 750, biocharMoisturePercent: 20, biocharDryMassKg: 600 },
+    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R1-${tag}`, status: 'complete' as const, feedstockWetMassKg: 3000, feedstockMoisturePercent: 10, feedstockMassDryKg: 2700, startTime: new Date('2026-09-09T08:00:00Z'), endTime: new Date('2026-09-09T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 1000, biocharMoisturePercent: 10, biocharDryMassKg: 900 },
+    { organizationId, facilityId: facility.id, reactorId: reactor.id, code: `E2E-FIFO-R2-${tag}`, status: 'complete' as const, feedstockWetMassKg: 3000, feedstockMoisturePercent: 10, feedstockMassDryKg: 2700, startTime: new Date('2026-09-11T08:00:00Z'), endTime: new Date('2026-09-11T12:00:00Z'), biocharStorageLocationId: source.id, biocharOutputKg: 750, biocharMoisturePercent: 20, biocharDryMassKg: 600 },
   ]).returning();
+  await db.insert(productionRunFeedstockDraws).values(runs.map(run => ({ organizationId, productionRunId: run.id, storageLocationId: fuelBin.id, wetMassKg: 3000 })));
+  await db.insert(productionRunFeedstocks).values(runs.map(run => ({ organizationId, productionRunId: run.id, feedstockId: intake.id, wetMassUsedKg: 3000 })));
   const [customer] = await db.insert(customers).values({ organizationId, code: `E2E-FIFO-C-${tag}`, name: `E2E Customer ${tag}` }).returning();
   return { tag, ctx, facility, recipe, pure, ingredientType, ingredient, source, bin, runs, customer };
 }
