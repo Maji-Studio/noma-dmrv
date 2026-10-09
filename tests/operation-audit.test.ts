@@ -11,7 +11,7 @@ import { createIntakeFixture, feedstockCount, removeIntakeFixture, type IntakeFi
 let fixture: IntakeFixture;
 beforeEach(async () => { fixture = await createIntakeFixture("audit"); });
 afterEach(async () => { vi.restoreAllMocks(); await removeIntakeFixture(fixture); });
-const audit = () => ({ requestId: crypto.randomUUID(), credentialId: "audit-credential" });
+const audit = () => ({ transport: "rest" as const, requestId: crypto.randomUUID(), credentialId: "audit-credential" });
 const rows = () => db.select().from(apiAuditEvents).where(eq(apiAuditEvents.organizationId, fixture.ctx.organizationId));
 const records = () => db.select().from(apiIdempotencyRecords).where(eq(apiIdempotencyRecords.organizationId, fixture.ctx.organizationId));
 

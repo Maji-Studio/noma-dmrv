@@ -1,3 +1,4 @@
+import { rpc, rpcBody } from "./helpers/mcp";
 /** Real keys and handlers. Not run by the implementation agent; needs the supervisor. */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -27,16 +28,6 @@ let b: LookupFixture;
 let rows: { id: string; code: string }[];
 let foreignRows: { id: string; code: string }[];
 
-function rpc(key: string, method: string, params: Record<string, unknown> = {}) {
-  return new Request("http://localhost:3100/api/mcp", { method: "POST", headers: {
-    authorization: `Bearer ${key}`, "content-type": "application/json", accept: "application/json, text/event-stream",
-    "mcp-protocol-version": "2025-06-18",
-  }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-}
-async function rpcBody(response: Response) {
-  const text = await response.text();
-  return JSON.parse(text.trim().startsWith("{") ? text : text.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice("data:".length)).join(""));
-}
 async function call(name: string, args: Record<string, unknown> = {}, key = a.key) {
   const response = await POST(rpc(key, "tools/call", { name, arguments: args }));
   expect(response.status).toBe(200);
@@ -89,7 +80,7 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     const rest = await response.json();
     const { result } = await call("whoami");
     expect(result.structuredContent).toEqual(rest);
-    expect(result.content).toEqual([{ type: "text", text: `Organization ${rest.data.organization.name}, ${rest.data.facilities.length} facilities, role ${rest.data.role}.` }]);
+    expect(result.content).toEqual([{ type: "text", text: `Organization ${rest.data.organization.name}, ${rest.data.facilities.length} ${rest.data.facilities.length === 1 ? "facility" : "facilities"}, role ${rest.data.role}.` }]);
   });
   it.each(collections)("matches $name filtered pages and shares cursors in both directions", async ({ resource, name, get }) => {
     const args = { q: PREFIX, limit: PAGE_SIZE };
@@ -99,7 +90,7 @@ describe("MCP reads with real API keys", { timeout: LOOKUP_SUITE_TIMEOUT_MS }, (
     expect(first.data).toHaveLength(PAGE_SIZE);
     expect(first.nextCursor).toBeTruthy();
     const { result } = await call(name, args);
-    expect(result.content).toEqual([{ type: "text", text: `${PAGE_SIZE} ${resource.replaceAll("-", " ")}. More results: pass nextCursor.` }]);
+    expect(result.content).toEqual([{ type: "text", text: `${PAGE_SIZE} ${resource === "facilities" ? "facility" : resource.replaceAll("-", " ").slice(0, -1)}. More results: pass nextCursor.` }]);
     const mcpFirst = result.structuredContent;
     expect(mcpFirst).toEqual(first);
     const nextArgs = { ...args, cursor: first.nextCursor };

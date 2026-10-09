@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { problemSchema } from "@/lib/api/problem-schema";
 import { actionFailureResponse, jsonPointer, problemResponse } from "@/lib/api/problem";
@@ -9,7 +10,7 @@ import { DomainError } from "@/lib/domain-errors";
 import { toActionFailure } from "@/fn/action-errors";
 
 /** REST's `errors` become MCP `issues`; HTTP metadata does not cross transports. */
-export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, retryable: true, conflict: true, blockers: true })
+export const toolErrorSchema = problemSchema.pick({ code: true, detail: true, retryable: true, conflict: true, blockers: true, current: true })
   .extend({ issues: problemSchema.shape.errors });
 
 export function toolSuccess(structuredContent: Record<string, unknown>, text: string) {
@@ -20,6 +21,7 @@ export async function toolFailure(error: unknown, context: ApiRouteContext, name
   let response: Response;
   if (error instanceof ApiHttpError) {
     response = problemResponse({ status: error.status, code: error.code, detail: error.message,
+      current: error.current, retryable: error.code === "api_writes_disabled",
       errors: error.issues?.map((issue) => ({
         pointer: jsonPointer(issue.path),
         code: issue.code, detail: issue.message,
@@ -36,4 +38,20 @@ export async function toolFailure(error: unknown, context: ApiRouteContext, name
   const problem: z.infer<typeof problemSchema> = await response.json();
   const structuredContent = toolErrorSchema.parse({ ...problem, issues: problem.errors });
   return { ...toolSuccess(structuredContent, problem.detail), isError: true };
+}
+
+
+/** Legacy MCP clients require an object root for the success/error union. */
+export function toolOutputSchema(output: z.ZodType) {
+  const union = toToolSchema(z.union([output, toolErrorSchema]));
+  const converters = union["~standard"].jsonSchema;
+  return {
+    "~standard": {
+      ...union["~standard"],
+      jsonSchema: {
+        input: (options: Parameters<typeof converters.input>[0]) => ({ ...converters.input(options), type: "object" as const }),
+        output: (options: Parameters<typeof converters.output>[0]) => ({ ...converters.output(options), type: "object" as const }),
+      },
+    },
+  };
 }

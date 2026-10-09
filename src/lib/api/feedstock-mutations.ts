@@ -1,10 +1,10 @@
 import { z } from "zod";
 import type { feedstockCreateEnvelopeSchema } from "@/lib/representations/envelopes";
-import { API_FEEDSTOCK_MAX_ALLOCATIONS, FEEDSTOCK_REPRESENTATION_REVISION } from "@/config/api-rest";
+import { checkFeedstockAllocations, checkRepresentation, remainingDeadlineMs } from "./feedstock-write-checks";
 import { readApiFeedstock } from "@/lib/read-models/api-feedstocks";
-import { deadlineExceeded, DomainError } from "@/lib/domain-errors";
+import { DomainError } from "@/lib/domain-errors";
 import { logFeedstockDelivery, updateFeedstock, deleteFeedstock } from "@/lib/operations/feedstocks";
-import { runOperation, type Operation, type OperationScope } from "@/lib/operations/runner";
+import { runOperation, type Operation } from "@/lib/operations/runner";
 import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import type { ApiRouteContext } from "./route";
 import { parseIfMatch } from "./etag";
@@ -20,26 +20,15 @@ const deleteContract = toOperationJsonSchema(deleteBodySchema);
 const createContract = toOperationJsonSchema(logFeedstockDelivery.input);
 const patchContract = toOperationJsonSchema(updateFeedstock.input.omit({ feedstockId: true, expectedVersion: true }));
 
-function remainingDeadlineMs(deadlineAt: number): number {
-  const remaining = deadlineAt - Date.now();
-  if (remaining <= 0) throw deadlineExceeded("before starting");
-  return remaining;
-}
-
 export async function createFeedstockResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext) {
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
   const key = readIdempotencyKey(request, !dryRun);
   const body = await readJsonBody(request);
   rejectUnknownFields(body, createContract);
-  if (body && typeof body === "object" && "allocations" in body &&
-    Array.isArray(body.allocations) && body.allocations.length > API_FEEDSTOCK_MAX_ALLOCATIONS) {
-    throw new DomainError("validation_failed", "Split this intake into smaller requests.", {
-      issues: [{ path: ["allocations"], code: "too_big", message: "Too many bin allocations.", meta: { maximum: API_FEEDSTOCK_MAX_ALLOCATIONS } }],
-    });
-  }
+  checkFeedstockAllocations(body);
   const result = await runOperation(logFeedstockDelivery, ctx, body, {
     deadlineMs: remainingDeadlineMs(deadlineAt),
-    audit: { requestId, credentialId: ctx.credentialId },
+    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key } : undefined,
   });
   const data = result.data.feedstocks.map(representFeedstock);
@@ -53,13 +42,6 @@ export async function createFeedstockResponse(request: Request, { ctx, headers, 
   } satisfies z.infer<typeof feedstockCreateEnvelopeSchema>, { status: dryRun ? 200 : 201, headers });
 }
 
-/** Runs after the idempotency claim/replay, before any domain write. */
-async function checkRepresentation(scope: OperationScope, id: string, revision: number) {
-  const row = await readApiFeedstock(scope.ctx, { id }, scope.tx);
-  if (revision !== FEEDSTOCK_REPRESENTATION_REVISION) throw new DomainError("stale_version", "The representation has changed.");
-  return row;
-}
-
 export async function mutateFeedstockResponse(request: Request, context: ApiRouteContext, id: string, method: "PATCH" | "DELETE") {
   const { ctx, headers, deadlineAt, requestId } = context;
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
@@ -68,7 +50,7 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
   if (!z.uuid().safeParse(id).success) throw new DomainError("not_found", "Feedstock was not found.");
   const key = readIdempotencyKey(request, false);
   const options = {
-    audit: { requestId, credentialId: ctx.credentialId },
+    audit: { requestId, credentialId: ctx.credentialId, transport: "rest" as const },
     dryRun, idempotency: key ? { credentialId: ctx.credentialId, key, target: id, precondition: precondition! } : undefined,
   };
   try {
@@ -101,13 +83,14 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
     }
     // DELETE has no surviving representation. A dry run returns the version
     // that would be deleted; the operation still checks it while locked.
-    const operation: Operation<typeof deleteFeedstock.input, Awaited<ReturnType<typeof readApiFeedstock>> | null> = {
+    // Retain that row in stored outcomes so MCP can name a replayed deletion.
+    const operation: Operation<typeof deleteFeedstock.input, Awaited<ReturnType<typeof readApiFeedstock>>> = {
       ...deleteFeedstock,
       describe: (input) => deleteFeedstock.describe!(input, undefined),
       execute: async (scope, input) => {
         const row = await checkRepresentation(scope, id, revision);
         await deleteFeedstock.execute(scope, input);
-        return dryRun ? row : null;
+        return row;
       },
     };
     const result = await runOperation(operation, ctx, { feedstockId: id, expectedVersion: version }, { ...options, deadlineMs: remainingDeadlineMs(deadlineAt) });
