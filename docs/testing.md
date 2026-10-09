@@ -100,6 +100,67 @@ are removed on exit; `pnpm eval:mcp --keep` retains them and prints their ids.
 `EVAL_MCP_MODEL` selects a model. Port, timeouts, budget and Claude flags live in
 `scripts/eval-mcp/config.ts`.
 
+## API schema fuzzing
+
+`pnpm api:fuzz` runs Schemathesis 4.29.3 against every operation in the freshly
+generated v1 OpenAPI document. It runs examples, coverage, fuzzing (25 examples
+per operation), and inferred stateful links (10 scenarios, at most 5 steps).
+[API fuzz CI](../.github/workflows/api-fuzz.yml) runs on PRs touching
+`src/lib/api/**`, `src/app/api/**`, `openapi/**`, or the harness files. It uses
+CI Postgres and `pnpm build` plus `pnpm start`, limits the fuzz step to five
+minutes, and uploads `api-fuzz-report/junit.xml` even after test failures.
+
+Locally, install `uv` and prepare an empty, migrated local database whose name
+contains a `test` or `e2e` segment. Export `DATABASE_URL` and the app environment
+before seeding; the seed does not load env files. Use the workflow's hermetic
+env block for production-build parity. The seed creates a verified Owner, the
+intake prerequisites, a driver, vehicle, supplier location and committed feedstock
+intake through the operation runner, and a key with all current scopes, including delete.
+Its private JSON file contains the key and fixture ids; never upload that file.
+
+```bash
+fixture_dir=$(mktemp -d)
+pnpm tsx scripts/api-fuzz/seed.ts "$fixture_dir/fixture.json"
+export API_FUZZ_FIXTURE="$fixture_dir/fixture.json"
+export API_FUZZ_KEY=$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).key' "$fixture_dir/fixture.json")
+# Build and start the app separately with the same DATABASE_URL and auth secret.
+API_FUZZ_BASE_URL=http://127.0.0.1:3100/api/v1 pnpm api:fuzz
+```
+
+Fuzzing writes and deletes data, so use only a throwaway fixture organization.
+For a production bundle, `API_FUZZ_DISABLE_RATE_LIMIT=true` bypasses only API
+token buckets and is refused unless `CI=true` (or `1`),
+`NOMA_HERMETIC_CI=true`, and `NEXT_PUBLIC_APP_URL` is an HTTP(S) loopback URL.
+Authentication, scopes, and the write kill switch still apply. Keep this flag
+out of deployment environments.
+
+Reproduce a run with the same Schemathesis version, generated schema, and
+starting fixture state: `pnpm api:fuzz --seed 20261009` (the checked-in seed).
+Set `API_FUZZ_BASE_URL`, `API_FUZZ_KEY` and `API_FUZZ_FIXTURE` as above.
+The runner exports fixture ids and codes from that private file. Configured
+by-id parameters become deterministic examples only; coverage and fuzzing still
+generate random ids. PATCH and DELETE seeded examples use dry runs. POST also
+has a seeded dry-run example: the published intake body is rebound to fixture
+references and the UTC fixture facility date, with a fresh Idempotency-Key.
+Examples do not suppress phase-specific missing-data warnings when generated
+references repeatedly return 404 in coverage or fuzzing. Positive
+list requests omit opaque cursors because their binding cannot be generated from
+JSON Schema; negative cursor probes remain enabled. Cursor unit tests cover
+valid continuations and organization/resource/filter mismatches.
+The hooks treat 414 and 431 as pre-application transport refusals. Other status
+codes still undergo contract checks, and 400 is not allowed globally for positive
+requests. Deliberate missing or invalid authentication probes may return 401;
+a request carrying the configured fixture key that returns 401 fails a dedicated
+check. TRACE is omitted from unsupported-method probes because `next start` rejects
+it before app dispatch. QUERY is also omitted because the HTTP parser returns
+an empty 400 on both `next start` and Vercel. Other methods remain checked.
+Positive writes (POST, PATCH and DELETE) accept 422 for cross-field domain
+refusals that JSON Schema cannot express; positive reads still reject 422. The JUnit failure and terminal
+output include a minimized request; replace its sanitized bearer header with
+the private fixture key to replay it. After mutations, restore the starting
+throwaway fixture state before comparing runs. Fresh fixtures have new ids,
+so rebind ids in a saved request when using a new seed fixture.
+
 ## Worktrees
 
 Parallel sessions each work in their own worktree, one writer per worktree.

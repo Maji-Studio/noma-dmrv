@@ -118,7 +118,7 @@ export function buildOpenApiDocument() {
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
         "201": jsonResponse("Intake committed, or replayed.", publishOutput(feedstockCreateEnvelopeSchema), { ...etagHeader, ...locationHeader, ...writeHeaders }),
         "200": jsonResponse("Dry-run intake preview.", publishOutput(feedstockCreateEnvelopeSchema), writeHeaders) },
-      [...queryParameters(mutationQuerySchema), idempotencyParameter(false)]),
+      [...queryParameters(mutationQuerySchema), idempotencyParameter(true)]),
     requestBody: requestBody(createInput, {
       facilityId: "df2795a4-886b-4a89-bbdd-532c6b1b8e45", deliveryDate: "2026-10-08",
       supplierId: "ea31ace1-5b30-4443-adb4-26b43bfa5599", feedstockTypeId: "b54b7b81-9b54-4757-ae1b-99fb28ea1c7f",
@@ -154,7 +154,7 @@ export function buildOpenApiDocument() {
       { ...problemResponses([...WRITE_ERRORS, 413, 415]),
         "201": jsonResponse("Production run committed, or replayed.", publishOutput(stockWriteEnvelopeSchema(productionRunRepresentationSchema)), { ...etagHeader, ...locationHeader, ...writeHeaders }),
         "200": jsonResponse("Dry-run production run preview.", publishOutput(stockWriteEnvelopeSchema(productionRunRepresentationSchema)), writeHeaders) },
-      [...queryParameters(mutationQuerySchema), idempotencyParameter(false)]),
+      [...queryParameters(mutationQuerySchema), idempotencyParameter(true)]),
     requestBody: requestBody(runCreateInput, { facilityId: "df2795a4-886b-4a89-bbdd-532c6b1b8e45", reactorId: "ea31ace1-5b30-4443-adb4-26b43bfa5599", status: "running", startTime: { date: "2026-10-08", time: "09:30" } }),
   };
   const runPatchInput = operationInput(updateProductionRunInput.omit({ productionRunId: true, expectedVersion: true }));
@@ -187,7 +187,7 @@ export function buildOpenApiDocument() {
   }
   return {
     openapi: "3.1.0",
-    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs and read-only lookups. Business dates are facility-local YYYY-MM-DD; event instants use RFC 3339 UTC. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers." },
+    info: { title: "noma data-entry API", version: API_VERSION, description: "Organization-scoped feedstock intake, production runs and read-only lookups. Business dates are facility-local YYYY-MM-DD; event instants use RFC 3339 UTC. Additive changes remain in v1; breaking versions use v2 with Deprecation and Sunset headers. Unsupported methods on visible paths return Problem405 with Allow listing supported methods, including automatic HEAD and OPTIONS. Private refusals follow bearer authentication and path visibility checks; unknown or invisible paths return 404 without Allow. Public discovery paths need no credential. This response is a path-level refusal, not a response of a published operation." },
     servers: [{ url: "/api/v1" }], security: [{ bearerAuth: [] }], paths,
     components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "API key", description: `Authorization: Bearer <key> only. Keys use ${API_KEY_LIVE_PREFIX} or ${API_KEY_TEST_PREFIX} prefixes and bind exactly one organization; cookies and x-api-key cannot authorize requests.` } }, schemas, headers: headerComponents, responses },
   };

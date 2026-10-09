@@ -46,6 +46,9 @@ next-env.d.ts
 # testing
 playwright-report
 test-results
+api-fuzz-report/
+.schemathesis/
+.storage-api-fuzz/
 
 # pdf
 .tmp_pdf
@@ -75,3 +78,6 @@ docs/archive/qa/artifacts/**
 docs/archive/qa/artifacts/**/video/
 docs/archive/qa/artifacts/**/runtime/
 docs/archive/qa/artifacts/**/screenshots/
+
+# python
+__pycache__/

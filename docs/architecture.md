@@ -660,6 +660,9 @@ ids are not feedstock columns. Percent values use 0–100. Business dates use
 `POST /api/v1/feedstocks` records an intake that may split across bins, so
 `data` is always an array of the created feedstock representations, including
 for one allocation. The REST adapter caps each intake at 200 allocations.
+Every REST create requires `Idempotency-Key`, including dry runs. A dry run
+never claims, consumes or replays the key; a committed key returns 409
+`key_already_used`. MCP dry-run tools may still omit `requestKey`.
 `Location` and `ETag` identify the first returned feedstock;
 each array member also has its own id and version. GET detail and PATCH return
 one object. All mutation responses map the runner's JSON outcome, keeping
@@ -677,7 +680,8 @@ with wet/dry kilograms and the stock contribution. These are additions, not
 projected bin balances; only complete intake rows contribute to the wet stock
 lane. DELETE dry runs return the representation that would be removed, and
 run the same locked deletion guards before rolling back. Bodyless DELETE is
-accepted; supplied bodies use the bounded JSON reader and must be empty objects.
+accepted, including zero-byte streams without Content-Type. Non-empty bodies
+use the bounded JSON reader, require application/json and must be empty objects.
 Stock-lane refusals return `insufficient_stock` with the bin and blockers plus
 `errors[].meta`: `storageLocationId`, `availableWetKg`, `requestedWetKg` and
 `unit: "kg"`. For post-write integrity, available mass is the proposed intake
@@ -788,8 +792,9 @@ The SDK publishes schemas through `toToolSchema`. A low-level tools/call
 handler owns argument parsing so validation failures remain structured.
 Success structuredContent uses the matching REST response envelope. Expected
 failures use the REST problem code and JSON Pointer errors, named `issues` in
-MCP, without HTTP metadata. MCP `invalid_query` results include Zod issues
-as JSON Pointer `issues`; REST query failures return an empty `errors` array.
+MCP, without HTTP metadata. Both transports include query validation issues
+with JSON Pointers: REST uses `errors` and MCP uses `issues`. Each issue carries
+`pointer`, `code` and `detail`.
 Each output schema is a success/error union with `type: "object"` at its root.
 Unexpected failures are generic JSON-RPC internal errors, logged with
 request id and tool name without raw input. The tool dispatcher checks the

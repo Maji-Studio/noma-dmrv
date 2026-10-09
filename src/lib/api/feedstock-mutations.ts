@@ -7,7 +7,7 @@ import { toOperationJsonSchema } from "@/lib/operations/json-schema";
 import type { ApiRouteContext } from "./route";
 import { parseIfMatch } from "./etag";
 import { mutationQuerySchema, parseApiQuery } from "./query";
-import { readIdempotencyKey, readJsonBody } from "./request-body";
+import { readIdempotencyKey, readJsonBody, readOptionalJsonBody } from "./request-body";
 import { rejectUnknownFields } from "./unknown-fields";
 import { representFeedstock } from "@/lib/representations/feedstocks";
 import { feedstockEtag } from "@/lib/api/representation-etags";
@@ -19,7 +19,7 @@ const patchContract = toOperationJsonSchema(updateFeedstock.input.omit({ feedsto
 
 export async function createFeedstockResponse(request: Request, { ctx, headers, deadlineAt, requestId }: ApiRouteContext) {
   const { dryRun } = parseApiQuery(request, mutationQuerySchema);
-  const key = readIdempotencyKey(request, !dryRun);
+  const key = readIdempotencyKey(request, true);
   const body = await readJsonBody(request);
   rejectUnknownFields(body, createContract);
   checkFeedstockAllocations(body);
@@ -64,8 +64,8 @@ export async function mutateFeedstockResponse(request: Request, context: ApiRout
       if (dryRun) headers.set("Dry-Run", "true");
       return Response.json({ data, ...(dryRun ? { stockEffects: result.stockEffects } : {}) }, { headers });
     }
-    if (request.body !== null) {
-      const body = await readJsonBody(request);
+    const body = await readOptionalJsonBody(request);
+    if (body !== undefined) {
       rejectUnknownFields(body, deleteContract);
       const parsed = deleteBodySchema.safeParse(body);
       if (!parsed.success) throw new DomainError("validation_failed", "DELETE accepts only an empty JSON object.");

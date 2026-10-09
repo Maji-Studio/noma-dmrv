@@ -111,7 +111,10 @@ describe("production run REST outcomes", { timeout: TIMEOUT_MS }, () => {
   });
 
   it("previews create, update and delete with stockEffects and no persisted change", async () => {
-    const preview = await POST(request("POST", "?dryRun=true", productionRunInput(a)));
+    const keyless = await POST(request("POST", "?dryRun=true", productionRunInput(a)));
+    expect(keyless.status).toBe(400);
+    expect((await keyless.json()).code).toBe("idempotency_key_required");
+    const preview = await POST(request("POST", "?dryRun=true", productionRunInput(a), { "idempotency-key": "run-preview" }));
     expect(preview.status).toBe(200);
     expect(preview.headers.get("dry-run")).toBe("true");
     expect(preview.headers.has("etag")).toBe(false);

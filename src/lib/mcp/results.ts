@@ -2,7 +2,7 @@ import { z } from "zod";
 import { toToolSchema } from "@/lib/operations/mcp-schema";
 import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import { problemSchema } from "@/lib/api/problem-schema";
-import { actionFailureResponse, jsonPointer, problemResponse } from "@/lib/api/problem";
+import { actionFailureResponse, apiHttpErrorResponse } from "@/lib/api/problem";
 import { ApiHttpError } from "@/lib/api/http-error";
 import { logApiError, shouldLogDomainError } from "@/lib/api/route-error";
 import type { ApiRouteContext } from "@/lib/api/route";
@@ -27,12 +27,7 @@ export function writesDisabledResult() {
 export async function toolFailure(error: unknown, context: ApiRouteContext, name: string) {
   let response: Response;
   if (error instanceof ApiHttpError) {
-    response = problemResponse({ status: error.status, code: error.code, detail: error.message,
-      current: error.current,
-      errors: error.issues?.map((issue) => ({
-        pointer: jsonPointer(issue.path),
-        code: issue.code, detail: issue.message,
-      })), instance: context.instance, requestId: context.requestId });
+    response = apiHttpErrorResponse(error, context.instance, context.requestId);
   } else if (error instanceof DomainError) {
     if (shouldLogDomainError(error)) logApiError(error, name, context.requestId);
     response = actionFailureResponse(toActionFailure(error, {

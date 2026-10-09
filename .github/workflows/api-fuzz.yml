@@ -1,0 +1,159 @@
+name: API fuzz
+
+on:
+  pull_request:
+    paths:
+      - src/lib/api/**
+      - src/app/api/**
+      - src/proxy.ts
+      - src/config/env.ts
+      - openapi/**
+      - .github/workflows/api-fuzz.yml
+      - scripts/api-fuzz/**
+      - schemathesis.toml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schemathesis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: noma_dmrv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_test
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      API_FUZZ_BASE_URL: http://127.0.0.1:3100/api/v1
+      CI: "true"
+      NOMA_HERMETIC_CI: "true"
+      API_FUZZ_DISABLE_RATE_LIMIT: "true"
+      ALLOW_SELF_SIGNUP: "false"
+      STORAGE_PROVIDER: local-fs
+      STORAGE_LOCAL_FS_ROOT: .storage-api-fuzz
+      STORAGE_SIGNING_SECRET: local-storage-signing-secret-local-32
+      CREDENTIALS_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      # No Isometric sandbox credentials, mail provider, or external geo keys.
+      ISOMETRIC_ENVIRONMENT: sandbox
+      GEO_PROVIDER: stub
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@2ddd2b9cb38ad8efd50337e8ab201519a34c9f24 # v7.1.1
+        with:
+          version: "0.8.22"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate ephemeral auth secret
+        shell: bash
+        run: |
+          secret=$(openssl rand -hex 32)
+          echo "::add-mask::$secret"
+          echo "BETTER_AUTH_SECRET=$secret" >> "$GITHUB_ENV"
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Seed API organization and credential
+        env:
+          NODE_ENV: test
+        shell: bash
+        run: |
+          pnpm tsx scripts/api-fuzz/seed.ts "$RUNNER_TEMP/api-fuzz-fixture.json"
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const fixture = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/api-fuzz-fixture.json`, 'utf8'));
+          appendFileSync(process.env.GITHUB_ENV, `API_FUZZ_KEY=${fixture.key}\nAPI_FUZZ_FIXTURE=${process.env.RUNNER_TEMP}/api-fuzz-fixture.json\n`);
+          JS
+
+      - name: Build production bundle
+        run: pnpm build
+
+      - name: Start production server and wait for readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          readonly READINESS_ATTEMPTS=60
+          readonly READINESS_INTERVAL_SECONDS=2
+          readonly REQUEST_TIMEOUT_SECONDS=2
+          pnpm start --hostname 127.0.0.1 --port 3100 > "$RUNNER_TEMP/api-fuzz-server.log" 2>&1 &
+          server_pid=$!
+          echo "$server_pid" > "$RUNNER_TEMP/api-fuzz-server.pid"
+          for ((attempt=0; attempt<READINESS_ATTEMPTS; attempt++)); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "Production server exited before readiness."
+              exit 1
+            fi
+            # Authenticated readiness also proves the seeded key can reach DB.
+            if curl --fail --silent --output /dev/null --max-time "$REQUEST_TIMEOUT_SECONDS" \
+              --header "Authorization: Bearer $API_FUZZ_KEY" "$API_FUZZ_BASE_URL/me"; then
+              exit 0
+            fi
+            sleep "$READINESS_INTERVAL_SECONDS"
+          done
+          echo "Production server did not become ready."
+          exit 1
+
+      - name: Run Schemathesis
+        timeout-minutes: 5
+        run: pnpm api:fuzz
+
+      - name: Upload Schemathesis report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-fuzz-report
+          path: api-fuzz-report/junit.xml
+          if-no-files-found: ignore
+
+      - name: Print server log tail on failure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          readonly SERVER_LOG_TAIL_LINES=200
+          if [[ -f "$RUNNER_TEMP/api-fuzz-server.log" ]]; then
+            tail -n "$SERVER_LOG_TAIL_LINES" "$RUNNER_TEMP/api-fuzz-server.log"
+          else
+            echo "Server log unavailable; server startup was not reached."
+          fi
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/api-fuzz-server.pid" ]]; then
+            kill "$(cat "$RUNNER_TEMP/api-fuzz-server.pid")" 2>/dev/null || true
+          fi
