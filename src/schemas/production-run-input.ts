@@ -12,15 +12,37 @@ export const productionRunInstantSchema = z.union([z.date(), offsetInstant, loca
 const { productionRunId, expectedVersion, code, feedstockWetMassKg, feedstockStorageLocationId, ...fields } = updateProductionRunSchema.shape;
 void feedstockWetMassKg;
 void feedstockStorageLocationId;
+const drawShape = fields.feedstockDraws.unwrap().element.shape;
+publishedJsonSchemas.add(drawShape.storageLocationId, { jsonSchema: { ...z.toJSONSchema(drawShape.storageLocationId), description: "Source feedstock bin UUID in the run facility." } });
+publishedJsonSchemas.add(drawShape.wetMassKg, { jsonSchema: { ...z.toJSONSchema(drawShape.wetMassKg), description: "Explicit wet mass drawn from this bin in kilograms." } });
+
+const describedFields = {
+  facilityId: fields.facilityId.describe("Owning facility identifier, UUID."),
+  reactorId: fields.reactorId.describe("Reactor UUID in the effective facility."),
+  status: fields.status.describe("Run state: draft, running, complete, failed or cancelled."),
+  cancellationReason: fields.cancellationReason.describe("Cancellation reason, untrusted plain text; required when cancelling."),
+  operatorId: fields.operatorId.describe("Operator UUID, or null to clear."),
+  feedstockDraws: fields.feedstockDraws.describe("Explicit source feedstock bin draws; each wet mass is in kilograms."),
+  feedstockMoisturePercent: fields.feedstockMoisturePercent.describe("Feedstock water as percent of wet mass, 0 to 100."),
+  feedingRateKgHr: fields.feedingRateKgHr.describe("Feed rate in kilograms per hour."),
+  residenceTimeMinutes: fields.residenceTimeMinutes.describe("Residence time in minutes."),
+  dieselOperationLiters: fields.dieselOperationLiters.describe("Operational diesel in litres."),
+  dieselGensetLiters: fields.dieselGensetLiters.describe("Generator diesel in litres."),
+  preprocessingFuelLiters: fields.preprocessingFuelLiters.describe("Preprocessing fuel in litres."),
+  electricityKwh: fields.electricityKwh.describe("Electricity in kilowatt hours."),
+  biocharOutputKg: fields.biocharOutputKg.describe("Wet biochar output in kilograms."),
+  biocharMoisturePercent: fields.biocharMoisturePercent.describe("Biochar water as percent of wet mass, 0 to 100."),
+  biocharStorageLocationId: fields.biocharStorageLocationId.describe("Output bin UUID in the effective facility, or null to clear."),
+};
 export const createProductionRunInput = z.strictObject({
-  ...fields,
-  facilityId: z.uuid(), reactorId: z.uuid(),
-  status: fields.status.unwrap().default("draft"),
+  ...describedFields,
+  facilityId: z.uuid().describe("Owning facility UUID."), reactorId: z.uuid().describe("Reactor UUID in the facility."),
+  status: fields.status.unwrap().default("draft").describe("Initial run state: draft, running, complete or cancelled."),
   startTime: productionRunInstantSchema,
-  endTime: productionRunInstantSchema.nullable().optional(),
+  endTime: productionRunInstantSchema.nullable().optional().describe("End instant or facility-local date/time; null leaves the run open."),
 });
 export const updateProductionRunInput = z.strictObject({
-  ...fields, productionRunId, expectedVersion, code,
-  startTime: productionRunInstantSchema.optional(),
-  endTime: productionRunInstantSchema.nullable().optional(),
+  ...describedFields, productionRunId: productionRunId.describe("Target production run UUID."), expectedVersion: expectedVersion.describe("Version from get_production_run."), code: code.describe("Human-readable production run code."),
+  startTime: productionRunInstantSchema.optional().describe("Start instant or facility-local date/time."),
+  endTime: productionRunInstantSchema.nullable().optional().describe("End instant or facility-local date/time; null leaves the run open."),
 });

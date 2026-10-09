@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { API_SCOPES } from "@/lib/auth/api-scopes";
 
+/** Runtime permissions remain closed; the published response vocabulary can grow in v1. */
+export const apiScopeRepresentationSchema = z.enum(API_SCOPES)
+  .describe("Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards. Additional resource scopes may be introduced in v1.");
+
 export const meRepresentationSchema = z.object({
   organization: z.object({
     id: z.string().describe("Credential-bound organization identifier, opaque string."),
@@ -11,10 +15,11 @@ export const meRepresentationSchema = z.object({
     code: z.string().describe("Human-readable facility code, plain text."),
     name: z.string().describe("Facility display name, plain text."),
     timeZone: z.string().describe("IANA facility time zone."),
+    localTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).describe("Current facility-local wall-clock time, HH:MM."),
     today: z.iso.date().describe("Current facility-local business date, YYYY-MM-DD."),
-  })).describe("Accessible active facilities and their current local dates."),
+  })).describe("Accessible active facilities and their current local dates and times."),
   role: z.enum(["owner", "admin"]).describe("Live organization role: owner owns the organization; admin administers it."),
-  scopes: z.array(z.enum(API_SCOPES).describe("Per-resource permission: read lists and retrieves, write creates and updates, delete removes; no wildcards.")).describe("Credential scopes intersected with the live membership role."),
+  scopes: z.array(apiScopeRepresentationSchema).describe("Credential scopes intersected with the live membership role."),
   credential: z.object({
     id: z.string().describe("Credential identifier, opaque string."),
     name: z.string().nullable().describe("Credential display name, plain text, or null when unspecified."),

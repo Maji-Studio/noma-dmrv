@@ -1,3 +1,5 @@
+import { productionRunRepresentationSchema } from "@/lib/representations/production-runs";
+import { reactorRepresentationSchema } from "@/lib/representations/reactors";
 import { facilityRepresentationSchema } from "@/lib/representations/facilities";
 import { supplierRepresentationSchema } from "@/lib/representations/suppliers";
 import { feedstockTypeRepresentationSchema } from "@/lib/representations/feedstock-types";
@@ -10,6 +12,8 @@ import type { ApiScope } from "@/lib/auth/api-scopes";
 
 /** Route-specific seams without importing handlers or their database dependencies. */
 export const resources = ([
+  { path: "production-runs", singular: "production_run", schema: productionRunRepresentationSchema },
+  { path: "reactors", singular: "reactor", schema: reactorRepresentationSchema },
   { path: "feedstocks", singular: "feedstock", schema: feedstockRepresentationSchema },
   { path: "facilities", singular: "facility", schema: facilityRepresentationSchema },
   { path: "suppliers", singular: "supplier", schema: supplierRepresentationSchema },

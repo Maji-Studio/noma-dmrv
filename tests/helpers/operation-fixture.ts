@@ -138,9 +138,13 @@ export async function createProductionRunFixture(label: string): Promise<IntakeF
   const fixture = await createIntakeFixture(label);
   await db.update(storageLocations).set({ feedstockTypeId: fixture.feedstockTypeId })
     .where(eq(storageLocations.organizationId, fixture.ctx.organizationId));
+  return { ...fixture, reactorId: await addFixtureReactor(fixture, label) };
+}
+
+export async function addFixtureReactor(fixture: IntakeFixture, label: string): Promise<string> {
   const [reactor] = await db.insert(reactors).values({
     organizationId: fixture.ctx.organizationId, facilityId: fixture.facilityId,
     code: `R-${label}`, identifier: `Reactor ${label}`, reactorType: "auger",
   }).returning({ id: reactors.id });
-  return { ...fixture, reactorId: reactor.id };
+  return reactor.id;
 }
