@@ -14,6 +14,7 @@ const expectedActionStatuses = {
   conflict: 409,
   certification_locked: 409,
   insufficient_stock: 409,
+  stock_basis_changed: 409,
   forbidden: 403,
   reference_not_found: 422,
   reference_ambiguous: 422,
@@ -142,4 +143,27 @@ it("exposes exhausted concurrent writes as a retryable 409", async () => {
   const response = actionFailureResponse({ success: false, code: "concurrent_write_retry", error: "Retry shortly." }, "/api/v1/production-runs", "request");
   expect(response.status).toBe(409);
   expect(await response.json()).toMatchObject({ code: "concurrent_write_retry", retryable: true });
+});
+
+it("renders a changed stock basis as a non-retryable 409 with the bin and the fresh preview", async () => {
+  const conflict = { entity: "storageLocation", id: "bin-id", code: conflictCode("BC-01") };
+  const preview = { basisFingerprint: "fresh-basis", stockEffects: [{
+    storageLocationId: "00000000-0000-4000-8000-000000000001", storageLocationCode: "BC-01", stockKind: "biochar_bin" as const,
+    before: { wetKg: null, dryKg: 120 }, after: { wetKg: null, dryKg: 100 }, delta: { wetKg: null, dryKg: -20 },
+  }] };
+  const response = actionFailureResponse({
+    success: false, code: "stock_basis_changed", error: "Stock changed since this preview. Refresh the preview and try again.", conflict, preview,
+  }, "/api/v1/biochar-products", "request-id");
+  expect(response.status).toBe(409);
+  const body = await response.json();
+  expect(problemSchema.strict().parse(body)).toEqual(body);
+  expect(body).toMatchObject({ type: "urn:noma:problem:stock_basis_changed", code: "stock_basis_changed", retryable: false, conflict, preview });
+});
+
+it("omits the preview when none was computed and never shows it on a server failure", async () => {
+  const preview = { basisFingerprint: "fresh-basis", stockEffects: [] };
+  const withoutPreview = await actionFailureResponse({ success: false, code: "stock_basis_changed", error: "Stock changed." }, "/api/v1/biochar-products", "id").json();
+  expect(withoutPreview).not.toHaveProperty("preview");
+  const internal = await problemResponse({ status: 500, code: "internal_error", detail: "x", instance: "/api/v1/biochar-products", requestId: "id", preview }).json();
+  expect(internal).not.toHaveProperty("preview");
 });

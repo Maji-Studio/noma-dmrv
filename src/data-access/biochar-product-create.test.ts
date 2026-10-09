@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { conflictCode } from "@/lib/conflict-ref";
-import { ActionConflictError } from '@/lib/errors';
+import { ActionConflictError, SafeError } from '@/lib/errors';
+import { OutputStockShortageError } from './output-stock-errors';
 
 const mocks = vi.hoisted(() => ({
   posting: vi.fn(), revalidate: vi.fn(), persist: vi.fn(), insert: vi.fn(), select: vi.fn(),
@@ -54,5 +55,23 @@ describe('locked product preview revalidation', () => {
     await expect(createBiocharProduct(ctx, data)).resolves.toEqual({ id: 'product' });
     expect(mocks.revalidate.mock.invocationCallOrder[0]).toBeLessThan(mocks.insert.mock.invocationCallOrder[0]);
     expect(mocks.persist).toHaveBeenCalledWith({ targetBiocharProductId: 'product', basisFingerprint: 'source-only' });
+  });
+  it('refuses a short source with the planner message, typed as a shortage, before any writes', async () => {
+    const message = 'Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.';
+    const blocking = { kind: 'insufficient_stock', storageLocationId: 'source', availableSolidsKg: 80, requestedSolidsKg: 90 };
+    mocks.revalidate.mockResolvedValue({ composition: { ingredients: [] }, source: { preview: { basisFingerprint: 'source-only', blockingMessage: message, allocations: [] }, plan: null, blocking, layers: [], input: {} } });
+    const refusal = await createBiocharProduct(ctx, data).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(OutputStockShortageError);
+    expect(refusal).toMatchObject({ message, details: { storageLocationId: 'source', availableSolidsKg: 80, requestedSolidsKg: 90 } });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.persist).not.toHaveBeenCalled();
+  });
+  it('keeps a source refusal that is not a shortage a plain refusal', async () => {
+    const message = 'This load is used up before it reaches RUN-2. Untick RUN-2.';
+    mocks.revalidate.mockResolvedValue({ composition: { ingredients: [] }, source: { preview: { basisFingerprint: 'source-only', blockingMessage: message, allocations: [] }, plan: null, blocking: { kind: 'invalid_request' }, layers: [], input: {} } });
+    const refusal = await createBiocharProduct(ctx, data).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(SafeError);
+    expect(refusal).not.toBeInstanceOf(OutputStockShortageError);
+    expect(refusal).toMatchObject({ message });
   });
 });

@@ -2,9 +2,7 @@ import { assertRowVersion, nextVersion } from "./row-version";
 import { db, type DbTransaction } from '@/db';
 import { biocharProducts, binMovements, deliveries, outputStockAllocations, outputStockMoistureReadings, outputStockRunAllocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
-import { conflictCode } from '@/lib/conflict-ref';
-import { STOCK_CONFLICT_ENTITY } from '@/lib/stock-conflict-entities';
-import { ActionConflictError, SafeError } from '@/lib/errors';
+import { SafeError } from '@/lib/errors';
 import { add, decimal, grams, GRAMS_PER_KG, kilograms, multiply, rational, readRational, round, storeRational } from '@/lib/output-stock';
 import { outputStockPostSchema } from '@/schemas/output-stock';
 import type { OutputStockPostInput } from '@/types/output-stock';
@@ -13,6 +11,7 @@ import { findMovementRequest, lockMovementRequest } from './bin-movement-request
 import { assertCanMutateCertifiedLineage } from './certification-lineage-guards';
 import { lockDeliveryOrderAndAssertBalance } from './delivery-order-balance';
 import { lockBinStocks } from './lock-bin-stocks';
+import { blockedOutputStockError, StockBasisChangedError } from './output-stock-errors';
 import { postedMoisturePercent, prepareOutputStock, stockFingerprint } from './output-stock-operations';
 import { lockBiocharTransportRouteTopology, syncBiocharProductTransportLegs } from './transport-legs';
 import { requireOrgScope } from './utils';
@@ -73,8 +72,8 @@ async function persistOutputStock(ctx: OrgContext, tx: DbTransaction, input: Sto
   }
   const prepared = await prepareOutputStock(ctx, input, tx);
   const { plan, preview, correction } = prepared;
-  if (preview.basisFingerprint !== input.basisFingerprint) throw new ActionConflictError('Stock changed since this preview. Refresh the preview and try again.', { entity: STOCK_CONFLICT_ENTITY.storageLocation, id: input.storageLocationId, code: conflictCode(prepared.bin.code) });
-  if (!plan || preview.blockingMessage) throw new SafeError(preview.blockingMessage ?? 'Stock cannot be allocated.');
+  if (preview.basisFingerprint !== input.basisFingerprint) throw new StockBasisChangedError({ id: input.storageLocationId, code: prepared.bin.code });
+  if (!plan || preview.blockingMessage) throw blockedOutputStockError(prepared.blocking, preview.blockingMessage ?? 'Stock cannot be allocated.');
   const productIds = new Set<string>();
   for (const layer of prepared.layers.filter(l => plan.allocations.some(a => a.layerId === l.id) || correction?.allocations.some(a => (a.biocharProductId ?? a.productionRunId) === l.id))) {
     if (correction || ['loss', 'count'].includes(input.kind)) await assertCanMutateCertifiedLineage(ctx, tx, { entityType: prepared.lane === 'product' ? 'biocharProduct' : 'productionRun', entityId: layer.id }, 'update');

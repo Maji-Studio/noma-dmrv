@@ -8,6 +8,7 @@ import { assertCompositionIngredientDrawsWithinStock, deriveCompositionSourceBio
 import { insertBiocharProductSourceAllocations } from './biochar-product-source-allocations';
 import { revalidateProductStock } from './product-stock-preview';
 import { assertAdditionAfterSplit } from './output-bin-stock-mode';
+import { blockedOutputStockError } from './output-stock-errors';
 import { withOutputStockPosting } from './output-stock-post';
 import { postedMoisturePercent } from './output-stock-operations';
 import { requireOrgScope } from './utils';
@@ -69,7 +70,7 @@ export async function createBiocharProduct(ctx: OrgContext, data: CreateBiocharP
     }, tx, data.basisFingerprint);
     const { composition, source: prepared } = productBasis;
     await assertCompositionIngredientDrawsWithinStock(ctx, tx, composition);
-    if (!prepared.plan || prepared.preview.blockingMessage) throw new SafeError(prepared.preview.blockingMessage ?? 'Source stock is unavailable.');
+    if (!prepared.plan || prepared.preview.blockingMessage) throw blockedOutputStockError(prepared.blocking, prepared.preview.blockingMessage ?? 'Source stock is unavailable.');
     // The production date is the oldest lot drawn, whatever order the operator emptied them in.
     const drawnLayers = prepared.plan.allocations.map(a => prepared.layers.find(l => l.id === a.layerId)!);
     const firstLayer = drawnLayers.reduce((oldest, layer) => layer.placedAt < oldest.placedAt ? layer : oldest);

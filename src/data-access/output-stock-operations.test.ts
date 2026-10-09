@@ -104,3 +104,24 @@ it('reads every matching bin in one stock batch and keeps an unresolved bin in t
   expect(mocks.stocks.mock.calls[0][1]).toEqual(['bin', 'broken']);
   expect(mocks.state).not.toHaveBeenCalled();
 });
+
+it('keeps the operator blocking message and adds the typed shortage for API callers', async () => {
+  const binId = '00000000-0000-4000-8000-000000000001';
+  const layers = [{ id: 'run', placedAt: '2026-09-01T12:00:00.000Z', postingSequence: BigInt(1), establishedDryBiocharKg: '100', ingredientDrySolidsKg: '0', remainingDryBiocharKg: '100', remainingSolidsKg: rational(BigInt(100)), runs: [{ productionRunId: 'run', establishedDryKg: '100', remainingDryKg: '100' }] }];
+  const ctx = { userId: 'operator', organizationId: 'org', orgRole: 'admin' as const, isPlatformAdmin: false };
+  const prepare = (wetMassKg: number, moisturePercent: number) => {
+    // Bin, its mode changes (none), its movements (none), then layer and run codes.
+    mocks.reads = [[{ id: binId, type: 'biochar_bin', name: 'Source', code: 'BC-001', formulationId: null }], [], [], [{ id: 'run', code: 'RUN-001' }], [{ id: 'run', code: 'RUN-001' }]];
+    mocks.state.mockResolvedValue({ layers });
+    return prepareOutputStock(ctx, { storageLocationId: binId, facilityId: '00000000-0000-4000-8000-000000000002', occurredAt: '2026-09-14T12:00:00.000Z', kind: 'loss', wetMassKg, moisturePercent });
+  };
+  // 200 kg wet at 10% is 180 kg solids against 100 kg held.
+  const short = await prepare(200, 10);
+  expect(short.plan).toBeNull();
+  expect(short.preview.blockingMessage).toBe('Not enough dry biochar in the selected bin for this wet mass at this moisture. Reduce the wet mass or choose another bin.');
+  expect(short.blocking).toEqual({ kind: 'insufficient_stock', storageLocationId: binId, availableSolidsKg: 100, requestedSolidsKg: 180 });
+  expect(short.preview).not.toHaveProperty('blocking');
+  const fits = await prepare(50, 10);
+  expect(fits.blocking).toBeNull();
+  expect(fits.preview.blockingMessage).toBeNull();
+});

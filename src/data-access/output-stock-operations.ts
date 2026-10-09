@@ -2,7 +2,7 @@ import { db, type DbTransaction } from '@/db';
 import { binMovements, biocharProducts, formulations, productionRuns, storageLocations } from '@/db/schema';
 import type { OrgContext } from '@/lib/auth/server';
 import { ActionConflictError, SafeError } from '@/lib/errors';
-import { add, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, PRO_RATA_POLICY, type DrawPolicy, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
+import { add, classifyPlannerFailure, compare, decimal, divide, grams, kilograms, multiply, operatorStockMessage, planOutputStock, rational, readRational, rationalToNumber, SubBinOverdrawError, subtract, UntickSubBinError, PRO_RATA_POLICY, type DrawPolicy, type OutputStockBlocking, type OutputStockLayer, type OutputStockRequest } from '@/lib/output-stock';
 import { mixPileName, outputStockEventLabel } from '@/lib/output-stock/labels';
 import { stockModeAt, type OutputStockMode, type StockModeChange } from '@/lib/output-stock/stock-mode';
 import { estimateStock, planReadings, planWetRemovals, withMovement, type LayerMoistureBasis, type PlannedReading } from '@/lib/output-stock/moisture-estimate';
@@ -70,6 +70,8 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
   const before = planOutputStock(layers, input.occurredAt, { kind: 'count', wetKg: 0 });
   let plan: ReturnType<typeof planOutputStock> | null = null;
   let blockingMessage: string | null = null;
+  // Typed twin of blockingMessage for API callers: a shortage, or a request to change.
+  let blocking: OutputStockBlocking | null = null;
   const request: OutputStockRequest = input.kind === 'count'
     ? { kind: 'count', wetKg: input.wetMassKg, moisturePercent: input.moisturePercent ?? undefined }
     : sources ? { kind: 'ordered', wetKg: input.wetMassKg, sources }
@@ -82,6 +84,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
     const held = planningLayers.filter(l => l.placedAt <= input.occurredAt && l.remainingSolidsKg && l.remainingSolidsKg.numerator > BigInt(0));
     const drawsWholeBin = Boolean(sources) && held.every(l => sources!.some(s => s.layerId === l.id));
     blockingMessage = (drawsWholeBin && error instanceof SubBinOverdrawError ? null : subBinMessage(error, codeMap)) ?? operatorStockMessage(error instanceof SubBinOverdrawError ? 'Insufficient exact dry solids' : error.message);
+    blocking = classifyPlannerFailure(error, { storageLocationId: bin.id, drawsWholeBin });
   }
   if (correction && plan) await prepareOutputCorrection(ctx, input, state.layers, reader, plan.allocations.map(a => a.layerId));
   const beforeDryKg = Number(kilograms(layers.filter(l => l.placedAt <= input.occurredAt).reduce((sum, l) => sum + grams(l.remainingDryBiocharKg), BigInt(0))));
@@ -133,7 +136,7 @@ export async function prepareOutputStock(ctx: OrgContext, raw: OutputStockPrevie
       dryMassKg: Number(a.dryKg), wetMassKg: a.wetShareKg ? rationalNumber(a.wetShareKg) : null,
       runs: a.runs.map(r => ({ productionRunId: r.productionRunId, code: runMap.get(r.productionRunId) ?? r.productionRunId, dryMassKg: Number(r.dryKg) })) })) ?? [], blockingMessage,
   };
-  return { input, bin, lane, layers, plan, preview, correction, sources, readings, policy };
+  return { input, bin, lane, layers, plan, preview, blocking, correction, sources, readings, policy };
 }
 
 const REMOVAL_KINDS: ReadonlySet<string> = new Set(['delivery', 'loss', 'count', 'production_draw', 'product_draw', 'replacement']);

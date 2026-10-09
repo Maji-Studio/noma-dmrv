@@ -118,6 +118,7 @@ export function toActionFailure(
       ...(error.issues.length ? { issues: error.issues } : {}),
       ...(error.conflict ? { conflict: error.conflict } : {}),
       ...(error.blockers ? { blockers: error.blockers } : {}),
+      ...(error.preview ? { preview: error.preview } : {}),
     };
   }
   if (error instanceof ZodError) {

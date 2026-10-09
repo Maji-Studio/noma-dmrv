@@ -64,7 +64,7 @@ export function buildOpenApiDocument() {
   const publishOutput = (schema: z.ZodType) => outputSchema(schema, representations);
   const schemas: Record<string, JsonSchema> = {
     ...Object.fromEntries(Object.entries(representations).map(([name, schema]) => [name, outputSchema(schema)])),
-    Problem: outputSchema(problemSchema),
+    Problem: publishOutput(problemSchema),
     FeedstockPreconditionProblem: {
       allOf: [
         { $ref: "#/components/schemas/Problem" },

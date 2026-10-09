@@ -1,9 +1,15 @@
 import { z } from "zod";
+import { stockEffectsSchema } from "@/lib/representations/stock-effects";
 
 const conflictRefSchema = z.object({
   entity: z.string().describe("Conflicting resource kind, plain text."),
   id: z.string().describe("Conflicting resource identifier, opaque string."),
   code: z.string().describe("Operator-readable conflict label, plain text."),
+});
+
+const stockPreviewSchema = z.object({
+  basisFingerprint: z.string().describe("Stock basis of the fresh dry run, opaque string; send it back to write against that stock."),
+  stockEffects: stockEffectsSchema,
 });
 
 /** Wire shape emitted by problemResponse; open metadata carries safe domain limits. */
@@ -24,4 +30,5 @@ export const problemSchema = z.object({
   conflict: conflictRefSchema.optional().describe("Visible record that blocks the write."),
   blockers: z.array(conflictRefSchema).optional().describe("Further visible blocking records, in display order."),
   current: z.unknown().optional().describe("Current resource representation after a failed version precondition."),
+  preview: stockPreviewSchema.optional().describe("Fresh dry run after stock_basis_changed: the current basis fingerprint and stock effects. Absent when no preview could be computed."),
 });
