@@ -370,6 +370,18 @@ Decided 2026-10-09 (Kenji, round 4, Phase 3):
 36. **The domain prompt is the server's `instructions`** on initialize, built from the same source as `llms.txt`.
 37. **The agent evaluation is a local script** (`pnpm eval:mcp`): app on the test database, seeded fixture organization, a fresh key, Claude Code headless (`claude -p`) with the MCP config on the subscription, scored by the rows written. Run before merge; results go in the PR.
 
+Decided 2026-10-09 (Kenji, round 5, Phase 4):
+
+38. **Phase 4 ships as three PRs.** 4a: production runs (operation move, API input schema, REST, MCP, stock effects on dry runs, eval). 4s: Schemathesis, in parallel with 4a. 4b: biochar products and output-bin stock movements, started once 4a is in review.
+39. **Runs expose create, update and delete only.** Completing, failing and cancelling are a PATCH of `status`. The readings batch (section 8) and incidents are deferred (`docs/open-questions.md`).
+40. **Run times take both shapes:** an RFC 3339 instant with an explicit offset, or facility-local `{ date, time }`. A date-time without an offset is refused, and a DST fall-back stays refused (decision 7). The legacy `feedstockWetMassKg` is dropped from the API.
+41. **"Now" comes from `whoami`:** `whoami` and `/me` report each facility's current local time next to `today`, and the domain prompt tells agents to use it.
+42. **The run evaluation passes when no draw mass is invented.** The chained case passes on a running run with no draw where the agent says the mass is still needed, or on nothing saved where the agent asks for it; any draw mass fails. A second case that names the mass is scored on the run, the draw and the bin's stock.
+43. **Products take POST and PATCH (code, status, density), no DELETE.** Output-bin loss, count and correction go through `POST /storage-locations/{id}/stock-movements` (MCP `record_output_stock_movement`).
+44. **Stock corrections need their own scope,** `stock-corrections:write` (hyphenated like the existing scopes): off by default, granted per key like deletes, annotated destructive. Losses and counts need `biochar-products:write`.
+45. **Product create takes an optional `basisFingerprint`** from a dry run; if stock moved since, it answers 409 `stock_basis_changed` with the new preview.
+46. **Stock effects on dry runs land with runs:** feedstock PATCH and DELETE and every run write return the stock-effects shape in 4a; 4b reuses it. Schemathesis runs in CI against a production build on the CI Postgres, path-filtered to the API, with a bounded example count.
+
 ## 14. What review changed
 
 | Change | Raised by |
